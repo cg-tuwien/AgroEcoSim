@@ -1,0 +1,14 @@
+[gd_scene load_steps=3 format=2]
+
+[ext_resource path="res://addons/goutte.camera.trackball/trackball_camera.gd" type="Script" id=1]
+[ext_resource path="res://addons/multiagent_system/MultiagentSystem.cs" type="Script" id=2]
+
+[node name="Spatial" type="Spatial"]
+
+[node name="TrackballCamera" type="Camera" parent="."]
+transform = Transform( 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 2 )
+script = ExtResource( 1 )
+stabilize_horizon = true
+
+[node name="MultiagentSystem" type="Spatial" parent="."]
+script = ExtResource( 2 )
