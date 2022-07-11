@@ -15,7 +15,7 @@ public class MultiagentSystem : Spatial
 	// Called when the node enters the scene tree for the first time.
 	public override void _Ready()
 	{
-#if DEBUG
+#if GODOT
 		GD.Print("GODOT is defined properly.");
 #else
 		GD.Print("ERROR: GODOT is not defined!");

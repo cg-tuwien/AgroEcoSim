@@ -214,7 +214,12 @@ public partial class PlantFormation : IFormation
 #if GODOT				
 				for(var i = UnderGroundDeaths.Count - 1; i >= 0; --i)
 					GodotRemoveUnderGroundSprite(UnderGroundDeaths[i]);
-#endif				
+#endif
+
+				foreach(var index in UnderGroundDeaths)  //must run before copying to underGround
+					if (UnderGround[index].Parent >= 0)
+						UnderGround[UnderGround[index].Parent].RemoveChild(index);
+
 				for(int i = UnderGround.Length - 1, d = UnderGroundDeaths.Count - 1; i >= 0; --i)
 				{
 					if (d >= 0 && UnderGroundDeaths[d] == i)
@@ -234,10 +239,6 @@ public partial class PlantFormation : IFormation
 				GodotAddUnderGroundSprite(a);
 #endif				
 			}
-			
-			foreach(var index in UnderGroundDeaths)
-				if (UnderGround[index].Parent >= 0)
-					UnderGround[UnderGround[index].Parent].RemoveChild(index);
 
 			UnderGroundBirths.Clear();
 
@@ -273,6 +274,10 @@ public partial class PlantFormation : IFormation
 				for(var i = AboveGroundDeaths.Count - 1; i >=0; --i)
 					GodotRemoveAboveGroundSprite(AboveGroundDeaths[i]);
 #endif
+				foreach(var index in AboveGroundDeaths) //must run before copying to aboveGround
+					if (AboveGround[index].Parent >= 0)
+						AboveGround[AboveGround[index].Parent].RemoveChild(index);
+
 				for(int i = AboveGround.Length - 1, d = AboveGroundDeaths.Count - 1; i >= 0; --i)
 				{
 					if (d >= 0 && AboveGroundDeaths[d] == i)
@@ -283,10 +288,6 @@ public partial class PlantFormation : IFormation
 						aboveGround[a++] = AboveGround[i];
 					}
 				}
-				
-				foreach(var index in AboveGroundDeaths)
-					if (AboveGround[index].Parent >= 0)
-						AboveGround[AboveGround[index].Parent].RemoveChild(index);
 
 				AboveGroundDeaths.Clear();
 
