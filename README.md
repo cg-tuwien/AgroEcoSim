@@ -9,8 +9,10 @@ This is both a standalone CLI application as well as a Godot project. Very early
 
 Make sure to set telemetry opt-outs for both `.NET` and `VS Code` if you desire to protect your usage data.
 
-* For running the stand-alone application either call `dotnet run -f net6.0 --project Agro/Agro.csproj` or launch the solution form VS Code.
-* For running inside of Godot: launch Godot, select and load the project, the hit play or F5. Note that the first build will fail due to async deletion of extra files. Further builds will run fine.
+Also make sure to select `dotnet CLI` for Godot builds under Editor > Mono > Builds > Build Tool.
+
+* For running the stand-alone `cd whatever_path/AgroGodot` application either call `dotnet run -f net6.0 --project Agro/Agro.csproj` or open the `AgroGodot` folder in VS Code and hit F5 to launch it. Standalone version targets net6.0.
+* For running inside of Godot: launch Godot, select and load the project, the hit play or F5. Note that the first build will fail due to async deletion of extra files. Further builds should run fine. In case of any strange errors (like access denied, lots of declaration or symbol missing errors and similar) delete the whole `.mono` subfolder. Godot 3 only supports .NET 4.7.2 or .NET Core 3.1 (partially), but at least some of the new language features are carried over using `<LangVersion>latest</LangVersion>` in the csproj. Reading JSON files is tricky, it needs explicit installation of `System.Text.JSON` from NUGet and net472 as target.
 
 ## Usage
 Most settings are currently exposed in the following two files: `Agro/Initialize.cs` and `Agro/AgroWorld.cs`. They are shared for both CLI and Godot. There is no GUI so far.
