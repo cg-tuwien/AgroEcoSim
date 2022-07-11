@@ -156,7 +156,7 @@ public record struct AboveGroundAgent : IAgent
 
 		//TODO perhaps growth should somehow reflect temperature
 		var lr = Length * Radius;
-		var lifeSupportPerHour = lr * (Organ == OrganTypes.Leaf ? LeafThickness*1e10f : Radius);
+		var lifeSupportPerHour = lr * (Organ == OrganTypes.Leaf ? LeafThickness : Radius);
 		var lifeSupportPerTick = lifeSupportPerHour / AgroWorld.TicksPerHour;
 		Energy -= lifeSupportPerTick; //life support
 
@@ -206,9 +206,13 @@ public record struct AboveGroundAgent : IAgent
 			{
 				var airTemp = AgroWorld.GetTemperature(timestep);
 				var surface = Length * Radius * (Organ == OrganTypes.Leaf ? 2f : TwoPi);
-				var possibleAmountByLight = surface * approxLight;
-				var possibleAmountByWater = Water;
-				var possibleAmountByCO2 = airTemp >= formation.VegetativeHighTemperature.Y ? 0f : (airTemp <= formation.VegetativeHighTemperature.X ? float.MaxValue : surface * (airTemp - formation.VegetativeHighTemperature.X) / (formation.VegetativeHighTemperature.Y - formation.VegetativeHighTemperature.X)); //TODO respiratory cycle
+				var possibleAmountByLight = surface * approxLight * mPhotoFactor;
+				var possibleAmountByWater = Water * (Organ == OrganTypes.Stem ? 0.7f : 1f);
+				var possibleAmountByCO2 = airTemp >= formation.VegetativeHighTemperature.Y 
+					? 0f 
+					: (airTemp <= formation.VegetativeHighTemperature.X 
+						? float.MaxValue
+						: surface * (airTemp - formation.VegetativeHighTemperature.X) / (formation.VegetativeHighTemperature.Y - formation.VegetativeHighTemperature.X)); //TODO respiratory cycle
 
 				var energyGain = Math.Min(possibleAmountByLight, Math.Min(possibleAmountByWater, possibleAmountByCO2));
 
@@ -232,10 +236,10 @@ public record struct AboveGroundAgent : IAgent
 		}
 
 		var waterCapacity = lifeSupportPerHour * 0.7f;
-		if (Water < lifeSupportPerHour * 0.7f) //TODO different coefficients for different organs and different state (amount of wood)
+		if (Water < waterCapacity) //TODO different coefficients for different organs and different state (amount of wood)
 		{
 			if (Parent >= 0)
-				formation.Send(Parent, new AboveGroundWaterRequestMsg(formation, Parent, Math.Min(Radius * Radius / AgroWorld.TicksPerHour, waterCapacity - Water)));
+				formation.Send(Parent, new AboveGroundWaterRequestMsg(formation, formationID, Math.Min(Radius * Radius / AgroWorld.TicksPerHour, waterCapacity - Water)));
 		}
 	}
 

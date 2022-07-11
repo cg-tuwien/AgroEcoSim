@@ -173,7 +173,9 @@ public struct UnderGroundAgent : IUnderGround
         var lr = Length * Radius;
         var lifeSupportPerHour = lr * Radius;
         var lifeSupportPerTick = lifeSupportPerHour / AgroWorld.TicksPerHour;
-        Energy -= lifeSupportPerTick; //life support
+
+        //life support
+        Energy -= lifeSupportPerTick;
 
         //Growth
         if (Energy > lifeSupportPerHour * 36) //maybe make it a factor storedEnergy/lifeSupport so that it grows fast when it has full storage        
@@ -225,7 +227,7 @@ public struct UnderGroundAgent : IUnderGround
                     {
                         if (soilTemperature < vegetativeTemp.Y)
                             amount *= (soilTemperature - vegetativeTemp.X) / (vegetativeTemp.Y - vegetativeTemp.X);
-                        soil.Send(sources[0], new SeedWaterRequestToSoilMsg(amount / AgroWorld.TicksPerHour, formation, formationID)); //TODO change to tube surface!
+                        soil.Send(sources[0], new UnderGroundWaterRequestToSoilMsg(formation, amount / AgroWorld.TicksPerHour, formationID)); //TODO change to tube surface!
                     }
                 }
             }
