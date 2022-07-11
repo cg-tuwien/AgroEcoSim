@@ -68,7 +68,7 @@ export var zoom_enabled = true
 export var zoom_invert = false
 export var zoom_strength = 1.0
 # As distances between the camera and its target
-export var zoom_minimum = 3
+export var zoom_minimum = 0.3
 export var zoom_maximum = 90.0
 export(float, 0.0, 1.0, 0.000001) var zoomInertiaTreshold = 0.0001
 
@@ -111,7 +111,8 @@ var _cameraUp = Vector3.UP
 var _cameraRight = Vector3.RIGHT
 var _mouseDragStart
 var _mouseDragPosition
-var _dragInertia = Vector2.ZERO
+var _turnInertia = Vector2.ZERO
+var _moveInertia = Vector2.ZERO
 var _zoomInertia = 0.0
 var _referenceTransform
 
@@ -154,10 +155,13 @@ func handle_mouse_input(event):
 			_mouseDragStart = get_mouse_position()
 		else:
 			_mouseDragStart = null
+
 		_mouseDragPosition = _mouseDragStart
 	if (mouse_move_mode) and (event is InputEventMouseMotion):
-		add_inertia(event.relative * mouse_strength * 0.00005)
-
+		if Input.is_mouse_button_pressed(BUTTON_LEFT):
+			add_turn_inertia(event.relative * mouse_strength * 0.00005)
+		elif Input.is_mouse_button_pressed(BUTTON_RIGHT):
+			add_move_inertia(event.relative * mouse_strength * 0.00005)
 
 func _process(delta):
 	process_mouse(delta)
@@ -165,16 +169,22 @@ func _process(delta):
 	process_joystick(delta)
 	process_actions(delta)
 	process_zoom(delta)
-	process_drag_inertia(delta)
+	process_turn_inertia(delta)
+	process_move_inertia(delta)
 	process_zoom_inertia(delta)
 
 
 func process_mouse(delta):
 	if mouse_enabled and _mouseDragPosition != null:
 		var _currentDragPosition = get_mouse_position()
-		add_inertia(
-			(_currentDragPosition - _mouseDragPosition) \
-			* mouse_strength * (-0.1 if mouse_invert else 0.1))
+		if Input.is_mouse_button_pressed(BUTTON_LEFT):
+			add_turn_inertia(
+				(_currentDragPosition - _mouseDragPosition) \
+				* mouse_strength * (-0.1 if mouse_invert else 0.1))
+		elif Input.is_mouse_button_pressed(BUTTON_RIGHT):
+			add_move_inertia(
+				(_currentDragPosition - _mouseDragPosition) \
+				* mouse_strength * (-0.1 if mouse_invert else 0.1))			
 		_mouseDragPosition = _currentDragPosition
 
 
@@ -182,15 +192,22 @@ func process_keyboard(delta):  # deprecated, use actions
 	if keyboard_enabled:
 		var key_i = -1 if keyboard_invert else 1
 		var key_s = keyboard_strength / 1000.0	# exported floats get truncated
-		if Input.is_key_pressed(KEY_LEFT):
-			add_inertia(Vector2(key_i * key_s, 0))
-		if Input.is_key_pressed(KEY_RIGHT):
-			add_inertia(Vector2(-1 * key_i * key_s, 0))
-		if Input.is_key_pressed(KEY_UP):
-			add_inertia(Vector2(0, key_i * key_s))
-		if Input.is_key_pressed(KEY_DOWN):
-			add_inertia(Vector2(0, -1 * key_i * key_s))
-
+		if Input.is_key_pressed(KEY_LEFT) and not Input.is_key_pressed(KEY_CONTROL):
+			add_turn_inertia(Vector2(key_i * key_s, 0))
+		if Input.is_key_pressed(KEY_RIGHT) and not Input.is_key_pressed(KEY_CONTROL):
+			add_turn_inertia(Vector2(-1 * key_i * key_s, 0))
+		if Input.is_key_pressed(KEY_UP) and not Input.is_key_pressed(KEY_CONTROL):
+			add_turn_inertia(Vector2(0, key_i * key_s))
+		if Input.is_key_pressed(KEY_DOWN) and not Input.is_key_pressed(KEY_CONTROL):
+			add_turn_inertia(Vector2(0, -1 * key_i * key_s))
+		if Input.is_key_pressed(KEY_LEFT) and Input.is_key_pressed(KEY_CONTROL):
+			add_move_inertia(Vector2(key_i * key_s, 0))
+		if Input.is_key_pressed(KEY_RIGHT) and Input.is_key_pressed(KEY_CONTROL):
+			add_move_inertia(Vector2(-1 * key_i * key_s, 0))
+		if Input.is_key_pressed(KEY_UP) and Input.is_key_pressed(KEY_CONTROL):
+			add_move_inertia(Vector2(0, key_i * key_s))
+		if Input.is_key_pressed(KEY_DOWN) and Input.is_key_pressed(KEY_CONTROL):
+			add_move_inertia(Vector2(0, -1 * key_i * key_s))
 
 func process_joystick(delta):  # deprecated, use actions
 	if joystick_enabled:
@@ -200,9 +217,10 @@ func process_joystick(delta):  # deprecated, use actions
 		var joy_s = joystick_strength / 1000.0	# exported floats are truncated
 
 		if abs(joy_h) > joystick_threshold:
-			add_inertia(Vector2(joy_i * joy_h * joy_h * sign(joy_h) * joy_s, 0))
+			add_turn_inertia(Vector2(joy_i * joy_h * joy_h * sign(joy_h) * joy_s, 0))
 		if abs(joy_v) > joystick_threshold:
-			add_inertia(Vector2(0, joy_i * joy_v * joy_v * sign(joy_v) * joy_s))
+			add_turn_inertia(Vector2(0, joy_i * joy_v * joy_v * sign(joy_v) * joy_s))
+		#TODO add strafe motion
 
 
 func process_actions(delta):
@@ -212,17 +230,17 @@ func process_actions(delta):
 		var act_i = -1 if action_invert else 1
 		if Input.is_action_pressed(action_up):
 			act_s = Input.get_action_strength(action_up) * action_strength / 1000.0
-			add_inertia(Vector2(0, act_i * act_s))
+			add_turn_inertia(Vector2(0, act_i * act_s))
 		if Input.is_action_pressed(action_down):
 			act_s = Input.get_action_strength(action_down) * action_strength / 1000.0
-			add_inertia(Vector2(0, act_i * act_s * -1))
+			add_turn_inertia(Vector2(0, act_i * act_s * -1))
 		if Input.is_action_pressed(action_left):
 			act_s = Input.get_action_strength(action_left) * action_strength / 1000.0
-			add_inertia(Vector2(act_i * act_s, 0))
+			add_turn_inertia(Vector2(act_i * act_s, 0))
 		if Input.is_action_pressed(action_right):
 			act_s = Input.get_action_strength(action_right) * action_strength / 1000.0
-			add_inertia(Vector2(act_i * act_s * -1, 0))
-
+			add_turn_inertia(Vector2(act_i * act_s * -1, 0))
+		#TODO add strafe motion
 
 func process_zoom(delta):
 	if zoom_enabled:
@@ -234,14 +252,23 @@ func process_zoom(delta):
 			add_zoom_inertia(zoo_i * zoo_s * -1)
 
 
-func process_drag_inertia(delta):
-	var inertia = _dragInertia.length()
+func process_turn_inertia(delta):
+	var inertia = _turnInertia.length()
 	if inertia > inertiaTreshold:
-		apply_rotation_from_tangent(_dragInertia * inertia_strength)
-		_dragInertia = _dragInertia * (1 - friction)
+		apply_rotation_from_tangent(_turnInertia * inertia_strength)
+		_turnInertia = _turnInertia * (1 - friction)
 	elif inertia > 0:
-		_dragInertia.x = 0
-		_dragInertia.y = 0
+		_turnInertia.x = 0
+		_turnInertia.y = 0
+
+func process_move_inertia(delta):
+	var inertia = _moveInertia.length()
+	if inertia > inertiaTreshold:
+		apply_movement_from_tangent(_moveInertia * inertia_strength)
+		_moveInertia = _moveInertia * (1 - friction)
+	elif inertia > 0:
+		_moveInertia.x = 0
+		_moveInertia.y = 0
 
 
 func process_zoom_inertia(delta):
@@ -272,18 +299,19 @@ func process_zoom_inertia(delta):
 #	prints("Reference Quat Normalized", Quat(_referenceTransform.basis).normalized())
 
 
-func add_inertia(inertia):
+func add_turn_inertia(inertia):
 	"""
 	Move the camera around.
 	inertia:
 		a Vector2 in the normalized right-handed x/y of the screen. Y is up.
 	"""
-	_dragInertia += inertia
+	_turnInertia += inertia
 
+func add_move_inertia(intertia):
+	_moveInertia += 10 * intertia
 
 func add_zoom_inertia(inertia):
 	_zoomInertia += inertia
-
 
 func apply_zoom(amount):
 	translate(ZOOM_IN * amount)
@@ -313,11 +341,11 @@ func apply_pitch_constraint(on_transform):
 		limit_will = -1
 		limit_over = dxd
 	if 0 != limit_will:
-		_dragInertia.y = 0.0
-#		_dragInertia *= 0.618
+		_turnInertia.y = 0.0
+#		_turnInertia *= 0.618
 		var resistance_strength = (((1 - limit_over) * (1 - limit_over)) - 1)
 		
-		add_inertia((
+		add_turn_inertia((
 			limit_will * Vector2.UP  # direction
 			* 0.00282  # role: yield a sane behavior with defaults
 			* resistance_strength  # grows as the trespassing intensifies
@@ -355,6 +383,11 @@ func apply_rotation_from_tangent(tangent):
 	var rotated_transform = Transform(upQuat * rgQuat) * tr
 	set_transform(apply_constraints(rotated_transform))
 
+func apply_movement_from_tangent(tangent):
+	var tr = get_transform()
+	var left = tr.basis.xform(Vector3.LEFT).normalized()
+	var up = tr.basis.xform(Vector3.UP).normalized()	
+	global_translate(tangent.x * left + tangent.y * up)
 
 func get_mouse_position():
 	return (
