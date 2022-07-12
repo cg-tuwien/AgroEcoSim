@@ -3,13 +3,13 @@ using System.Collections.Generic;
 using System.Runtime.InteropServices;
 
 namespace AgentsSystem;
-public interface IMessage<T> where T : IAgent
+public interface IMessage<T> where T : struct, IAgent
 {
     void Receive(ref T agent);
 }
 
 [StructLayout(LayoutKind.Auto)]
-public readonly struct MessageWrapper<T> where T : IAgent
+public readonly struct MessageWrapper<T> where T : struct, IAgent
 {
     readonly IMessage<T> Message;
     readonly IEnumerable<int>? Recipients;

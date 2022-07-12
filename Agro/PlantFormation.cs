@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Numerics;
 using AgentsSystem;
+using Utils;
 
 namespace Agro;
 
@@ -9,6 +10,7 @@ public partial class PlantFormation : IFormation
 {
 	Vector3 Position;
 	bool ReadTMP = false;
+	bool WriteTMP => !ReadTMP;
 	internal SoilFormation Soil;
 	protected SeedAgent[] Seed = new SeedAgent[1]; //must be an array due to messaging compaatibility
 	protected readonly SeedAgent[] SeedTMP = new SeedAgent[1];
@@ -28,26 +30,41 @@ public partial class PlantFormation : IFormation
 	protected List<int> AboveGroundDeaths = new();
 	bool DeathSeed = false;
 
+	internal const float RootSegmentLength = 0.1f;
+
 	internal readonly Vector2 VegetativeLowTemperature = new(10, 15);
 	internal readonly Vector2 VegetativeHighTemperature = new(35, 40);
 
-	public PlantFormation(SoilFormation soil, SeedAgent seed) : base()
+	/// <summary>
+	/// Random numbers generator
+	/// </summary>
+	internal Pcg RNG;
+
+	public PlantFormation(SoilFormation soil, SeedAgent seed, Pcg parentRNG)
 	{
 		Soil = soil;
 		Seed[0] = seed;
 		Position = seed.Center;
+
+		RNG = parentRNG.NextRNG();
 	}
 
 	public int UnderGroundBirth(UnderGroundAgent agent)
 	{
 		UnderGroundBirths.Add(agent);
-		if (agent.Parent >= 0)
-		{
-			if (agent.Parent < UnderGround.Length)
-				UnderGround[agent.Parent].AddChild(UnderGround.Length + UnderGroundBirths.Count - 1);
-			else
-				UnderGroundBirths[agent.Parent - UnderGround.Length].AddChild(UnderGround.Length + UnderGroundBirths.Count - 1);
-		}
+		// if (agent.Parent >= 0)
+		// {
+		// 	if (agent.Parent < UnderGround.Length)
+		// 	{
+		// 		var data = ReadTMP ? UnderGroundTMP : UnderGround;
+		// 		data[agent.Parent] = data[agent.Parent].AddChild(UnderGround.Length + UnderGroundBirths.Count - 1);
+		// 	}
+		// 	else
+		// 	{
+		// 		var index = agent.Parent - UnderGround.Length;
+		// 		UnderGroundBirths[index] = UnderGroundBirths[index].AddChild(UnderGround.Length + UnderGroundBirths.Count - 1);
+		// 	}
+		// }
 		return UnderGround.Length + UnderGroundBirths.Count - 1;
 	}
 
@@ -57,7 +74,10 @@ public partial class PlantFormation : IFormation
 		if (agent.Parent >= 0)
 		{
 			if (agent.Parent < AboveGround.Length)
-				AboveGround[agent.Parent] = AboveGround[agent.Parent].AddChild(AboveGround.Length + AboveGroundBirths.Count - 1);
+			{
+				var data = ReadTMP ? AboveGroundTMP : AboveGround;
+				data[agent.Parent] = data[agent.Parent].AddChild(AboveGround.Length + AboveGroundBirths.Count - 1);
+			}
 			else
 			{
 				var index = agent.Parent - AboveGround.Length;
@@ -81,7 +101,7 @@ public partial class PlantFormation : IFormation
 		while (buffer.Count > 0)
 		{
 			var i = buffer.Dequeue();
-			var children = ReadTMP ? UnderGroundTMP[i].Children : UnderGround[i].Children;
+			var children = GetUnderGroundChildren(i);
 			if (children != null)
 				foreach(var child in children)
 				{
@@ -202,11 +222,11 @@ public partial class PlantFormation : IFormation
 			}
 
 			var diff = UnderGroundBirths.Count - UnderGroundDeaths.Count;
-			UnderGroundAgent[] undergrounds;
+			UnderGroundAgent[] underground;
 			if (diff != 0)
-				undergrounds = new UnderGroundAgent[UnderGround.Length + diff];
+				underground = new UnderGroundAgent[UnderGround.Length + diff];
 			else
-				undergrounds = UnderGround;
+				underground = UnderGround;
 
 			int a = 0;
 			if (UnderGroundDeaths.Count > 0)
@@ -216,25 +236,28 @@ public partial class PlantFormation : IFormation
 					GodotRemoveUnderGroundSprite(UnderGroundDeaths[i]);
 #endif
 
-				foreach(var index in UnderGroundDeaths)  //must run before copying to underGround
-					if (UnderGround[index].Parent >= 0)
-						UnderGround[UnderGround[index].Parent].RemoveChild(index);
+				// foreach(var index in UnderGroundDeaths)  //must run before copying to underGround
+				// 	if (UnderGround[index].Parent >= 0)
+				// 		UnderGround[UnderGround[index].Parent].RemoveChild(index);
 
 				for(int i = UnderGround.Length - 1, d = UnderGroundDeaths.Count - 1; i >= 0; --i)
 				{
 					if (d >= 0 && UnderGroundDeaths[d] == i)
 						--d;
 					else
-						undergrounds[a++] = UnderGround[i];                    
+						underground[a++] = UnderGround[i];
 				}
 				UnderGroundDeaths.Clear();
 			}
 			else
+			{
+				Array.Copy(UnderGround, underground, UnderGround.Length);
 				a = UnderGround.Length;
+			}
 
 			for(int i = 0; i < UnderGroundBirths.Count; ++i, ++a)
 			{				
-				undergrounds[a] = UnderGroundBirths[i];
+				underground[a] = UnderGroundBirths[i];
 #if GODOT
 				GodotAddUnderGroundSprite(a);
 #endif				
@@ -242,7 +265,7 @@ public partial class PlantFormation : IFormation
 
 			UnderGroundBirths.Clear();
 
-			UnderGround = undergrounds;
+			UnderGround = underground;
 			UnderGroundTMP = new UnderGroundAgent[UnderGround.Length];                
 		}
 
@@ -295,7 +318,10 @@ public partial class PlantFormation : IFormation
 					indexMap[AboveGround.Length + i] = a + i;
 			}
 			else
+			{
+				Array.Copy(AboveGround, aboveGround, AboveGround.Length);
 				a = AboveGround.Length;
+			}
 
 			for(int i = 0; i < AboveGroundBirths.Count; ++i, ++a)
 			{
@@ -365,50 +391,90 @@ public partial class PlantFormation : IFormation
 		// 	Console.WriteLine("R: {0}x{1} E: {2} W: {3}", UnderGround[0].Radius, UnderGround[0].Length, UnderGround[0].Energy, UnderGround[0].Water);
 	}
 
-	public float GetUnderGroundEnergy(int index) => ReadTMP 
+	///////////////////////////
+	#region READ METHODS
+	///////////////////////////
+
+	public List<int> GetUnderGroundChildren(int index)
+	{
+		//TODO 1: precompute at the beginning of each step  O(n²) -> O(n)
+		//TODO 2: keep between steps if not births or deaths happen
+		var result = new List<int>();
+		var src = ReadTMP ? UnderGroundTMP : UnderGround;
+		for(int i = index + 1; i < src.Length; ++i)
+			if (src[i].Parent == index)
+				result.Add(i);
+		return result;
+	}
+
+	internal float GetEnergyCapacity_UG(int index) => ReadTMP 
+		? (UnderGroundTMP.Length > index ? UnderGroundTMP[index].EnergyCapacity : 0f)
+		: (UnderGround.Length > index ? UnderGround[index].EnergyCapacity : 0f);
+
+	internal float GetWaterCapacity_UG(int index) => ReadTMP 
+		? (UnderGroundTMP.Length > index ? UnderGroundTMP[index].WaterCapacity : 0f)
+		: (UnderGround.Length > index ? UnderGround[index].WaterCapacity : 0f);
+
+	internal float GetEnergyCapacity_AG(int index) => ReadTMP 
+		? (AboveGroundTMP.Length > index ? AboveGroundTMP[index].EnergyCapacity : 0f)
+		: (AboveGround.Length > index ? AboveGround[index].EnergyCapacity : 0f);
+
+	internal float GetWaterCapacity_AG(int index) => ReadTMP 
+		? (AboveGroundTMP.Length > index ? AboveGroundTMP[index].WaterCapacity : 0f)
+		: (AboveGround.Length > index ? AboveGround[index].WaterCapacity : 0f);
+
+	public float GetEnergy_UG(int index) => ReadTMP 
 		? (UnderGroundTMP.Length > index ? UnderGroundTMP[index].Energy : 0f)
 		: (UnderGround.Length > index ? UnderGround[index].Energy : 0f);
 
-	public float GetAboveGroundEnergy(int index) => ReadTMP
+	public float GetEnergy_AG(int index) => ReadTMP
 		? (AboveGroundTMP.Length > index ? AboveGroundTMP[index].Energy : 0f)
 		: (AboveGround.Length > index ? AboveGround[index].Energy : 0f);
+
+	public float GetEnergyFlow_PerTick_UG(int index) => ReadTMP
+		? (UnderGroundTMP.Length > index ? UnderGroundTMP[index].EnergyFlowToParentPerTick : 0f)
+		: (UnderGround.Length > index ? UnderGround[index].EnergyFlowToParentPerTick : 0f);
+
+	public float GetEnergyFlow_PerTick_AG(int index) => ReadTMP
+		? (AboveGroundTMP.Length > index ? AboveGroundTMP[index].EnergyFlowToParentPerTick : 0f)
+		: (AboveGround.Length > index ? AboveGround[index].EnergyFlowToParentPerTick : 0f);
 	
-	public float GetUnderGroundWater(int index) => ReadTMP
+	public float GetWater_UG(int index) => ReadTMP
 		? (UnderGroundTMP.Length > index ? UnderGroundTMP[index].Water : 0f)
 		: (UnderGround.Length > index ? UnderGround[index].Water : 0f);
 	
-	public float GetAboveGroundWater(int index) => ReadTMP
+	public float GetWater_AG(int index) => ReadTMP
 		? (AboveGroundTMP.Length > index ? AboveGroundTMP[index].Water : 0f)
 		: (AboveGround.Length > index ? AboveGround[index].Water : 0f);
 	
-	public float GetUnderGroundBaseRadius(int index) => ReadTMP 
+	public float GetBaseRadius_UG(int index) => ReadTMP 
 		? (UnderGroundTMP.Length > index ? UnderGroundTMP[index].Radius : 0f)
 		: (UnderGround.Length > index ? UnderGround[index].Radius : 0f);
-	public float GetAboveGroundBaseRadius(int index) => ReadTMP 
+	public float GetBaseRadius_AG(int index) => ReadTMP 
 		? (AboveGroundTMP.Length > index ? AboveGroundTMP[index].Radius : 0f)
 		: (AboveGround.Length > index ? AboveGround[index].Radius : 0f);
 	
-	public float GetUnderGroundLength(int index) => ReadTMP 
+	public float GetLength_UG(int index) => ReadTMP 
 		? (UnderGroundTMP.Length > index ? UnderGroundTMP[index].Length : 0f)
 		: (UnderGround.Length > index ? UnderGround[index].Length : 0f);
-	public float GetAboveGroundLength(int index) => ReadTMP 
+	public float GetLength_AG(int index) => ReadTMP 
 		? (AboveGroundTMP.Length > index ? AboveGroundTMP[index].Length : 0f)
 		: (AboveGround.Length > index ? AboveGround[index].Length : 0f);
 	
-	public Quaternion GetUnderGroundDirection(int index) => ReadTMP 
-		? (UnderGroundTMP.Length > index ? UnderGroundTMP[index].Direction : Quaternion.Identity)
-		: (UnderGround.Length > index ? UnderGround[index].Direction : Quaternion.Identity);
-	public Quaternion GetAboveGroundDirection(int index) => ReadTMP 
+	public Quaternion GetDirection_UG(int index) => ReadTMP 
+		? (UnderGroundTMP.Length > index ? UnderGroundTMP[index].Orientation : Quaternion.Identity)
+		: (UnderGround.Length > index ? UnderGround[index].Orientation : Quaternion.Identity);
+	public Quaternion GetDirection_AG(int index) => ReadTMP 
 		? (AboveGroundTMP.Length > index ? AboveGroundTMP[index].Direction : Quaternion.Identity)
 		: (AboveGround.Length > index ? AboveGround[index].Direction : Quaternion.Identity);
 
-	public OrganTypes GetUnderGroundOrgan(int index) => OrganTypes.Root;
+	public OrganTypes GetOrgan_UG(int index) => OrganTypes.Root;
 
-	public OrganTypes GetAboveGroundOrgan(int index) => ReadTMP
+	public OrganTypes GetOrgan_AG(int index) => ReadTMP
 		? (AboveGroundTMP.Length > index ? AboveGroundTMP[index].Organ : OrganTypes.Stem)
 		: (AboveGround.Length > index ? AboveGround[index].Organ : OrganTypes.Stem);
 
-	public Vector3 GetUnderGroundBaseCenter(int index)
+	public Vector3 GetBaseCenter_UG(int index)
 	{
 		if (ReadTMP ? UnderGroundTMP.Length <= index : UnderGround.Length <= index)
 			return Vector3.Zero;
@@ -424,15 +490,15 @@ public partial class PlantFormation : IFormation
 		var result = Position;
 		if (ReadTMP)
 			for(int i = parents.Count - 2; i > 0; --i)
-				result += Vector3.Transform(Vector3.UnitX, UnderGroundTMP[parents[i]].Direction) * UnderGroundTMP[parents[i]].Length;
+				result += Vector3.Transform(Vector3.UnitX, UnderGroundTMP[parents[i]].Orientation) * UnderGroundTMP[parents[i]].Length;
 		else
 			for(int i = parents.Count - 2; i > 0; --i)
-				result += Vector3.Transform(Vector3.UnitX, UnderGround[parents[i]].Direction) * UnderGround[parents[i]].Length;
+				result += Vector3.Transform(Vector3.UnitX, UnderGround[parents[i]].Orientation) * UnderGround[parents[i]].Length;
 
 		return result;
 	}
 
-	public Vector3 GetAboveGroundBaseCenter(int index)
+	public Vector3 GetBaseCenter_AG(int index)
 	{
 		if (ReadTMP ? AboveGroundTMP.Length <= index : AboveGround.Length <= index)
 			return Vector3.Zero;
@@ -455,4 +521,67 @@ public partial class PlantFormation : IFormation
 
 		return result;
 	}
+	#endregion
+
+	///////////////////////////
+	#region WRITE METHODS
+	///////////////////////////
+
+	internal void IncEnergy_UG(int index, float amount)
+	{
+		if (WriteTMP)
+		{
+			if (UnderGroundTMP.Length > index)
+				UnderGroundTMP[index].IncEnergy(amount);
+		}
+		else
+		{
+			if (UnderGround.Length > index)
+				UnderGround[index].IncEnergy(amount);
+		}
+	}
+	internal void IncWater_UG(int index, float amount)
+	{
+		if (WriteTMP)
+		{
+			if (UnderGroundTMP.Length > index)
+				UnderGroundTMP[index].IncWater(amount);
+		}
+		else
+		{
+			if (UnderGround.Length > index)
+				UnderGround[index].IncWater(amount);
+		}
+	}
+
+	internal void IncWater_AG(int index, float amount)
+	{
+		if (WriteTMP)
+		{
+			if (AboveGroundTMP.Length > index)
+				AboveGroundTMP[index].IncWater(amount);
+		}
+		else
+		{
+			if (AboveGround.Length > index)
+				AboveGround[index].IncWater(amount);
+		}
+	}
+
+	internal float TryDecWater_UG(int index, float amount)
+	{
+		if (WriteTMP)
+		{
+			if (UnderGroundTMP.Length > index)
+				return UnderGroundTMP[index].TryDecWater(amount);
+		}
+		else
+		{
+			if (UnderGround.Length > index)
+				return UnderGroundTMP[index].TryDecWater(amount);
+		}
+
+		return 0f;
+	}
+	#endregion
 }

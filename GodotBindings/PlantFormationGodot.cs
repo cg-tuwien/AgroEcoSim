@@ -43,26 +43,26 @@ public partial class PlantFormation
 
 	void UpdateUnderGroundTransformation(MeshInstance sprite, int index)
 	{
-		var radius = GetUnderGroundBaseRadius(index);
-		var direction = GetUnderGroundDirection(index);
-		var length = GetUnderGroundLength(index) * 0.5f; //x0.5f because its the radius of the cube!
+		var radius = GetBaseRadius_UG(index);
+		var direction = GetDirection_UG(index);
+		var length = GetLength_UG(index) * 0.5f; //x0.5f because its the radius of the cube!
 		var stableScale = System.Numerics.Vector3.Transform(new System.Numerics.Vector3(length, 0f, 0f), direction);
 		
 		var basis = new Basis(direction.ToGodot());
-		sprite.Transform = new Transform(basis, (GetUnderGroundBaseCenter(index) + stableScale).ToGodot());
+		sprite.Transform = new Transform(basis, (GetBaseCenter_UG(index) + stableScale).ToGodot());
 		sprite.Scale = new Vector3(length, radius, radius);
 	}
 
 	void UpdateAboveGroundTransformation(MeshInstance sprite, int index)
 	{
-		var radius = GetAboveGroundBaseRadius(index);
-		var direction = GetAboveGroundDirection(index);
-		var length = GetAboveGroundLength(index) * 0.5f; //x0.5f because its the radius of the cube!
+		var radius = GetBaseRadius_AG(index);
+		var direction = GetDirection_AG(index);
+		var length = GetLength_AG(index) * 0.5f; //x0.5f because its the radius of the cube!
 		var stableScale = System.Numerics.Vector3.Transform(new System.Numerics.Vector3(length, 0f, 0f), direction);
 
 		var basis = new Basis(direction.ToGodot());
-		sprite.Transform = new Transform(basis, (GetAboveGroundBaseCenter(index) + stableScale).ToGodot());
-		if (GetAboveGroundOrgan(index) == OrganTypes.Leaf)
+		sprite.Transform = new Transform(basis, (GetBaseCenter_AG(index) + stableScale).ToGodot());
+		if (GetOrgan_AG(index) == OrganTypes.Leaf)
 			sprite.Scale = new Vector3(length, radius, 0.0001f);
 		else
 			sprite.Scale = new Vector3(length, radius, radius);

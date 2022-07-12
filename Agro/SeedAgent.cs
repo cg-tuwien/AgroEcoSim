@@ -109,9 +109,9 @@ public struct SeedAgent : ISeed
 		{
 			if (mEnergyStored >= mAwakeThreshold)
 			{
-				formation.UnderGroundBirth(new UnderGroundAgent(-1, default, -Vector3.UnitY, 0.0001f, 0.0002f, mEnergyStored * 0.4f));
+				formation.UnderGroundBirth(new UnderGroundAgent(-1, default, -Vector3.UnitY, mEnergyStored * 0.4f));
 				formation.AboveGroundBirth(new AboveGroundAgent(-1, OrganTypes.Stem, default, Vector3.UnitY, 0.0001f, 0.0002f, mEnergyStored * 0.4f));
-				formation.AboveGroundBirth(new AboveGroundAgent(0, OrganTypes.Leaf, formation.GetAboveGroundDirection(0), Vector3.UnitY, 0.0001f, 0.0003f, mEnergyStored * 0.2f));
+				formation.AboveGroundBirth(new AboveGroundAgent(0, OrganTypes.Leaf, formation.GetDirection_AG(0), Vector3.UnitY, 0.0001f, 0.0003f, mEnergyStored * 0.2f));
 				formation.SeedDeath();
 				mEnergyStored = 0f;
 			}

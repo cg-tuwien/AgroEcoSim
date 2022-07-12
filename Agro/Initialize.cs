@@ -23,7 +23,7 @@ public static class Initialize
                                                     AgroWorld.FieldSize.Y * AgroWorld.RNG.NextFloat()),
                                         AgroWorld.RNG.NextFloat(0.02f),
                                         new Vector2(minVegTemp, minVegTemp + AgroWorld.RNG.NextFloat(8f, 14f)));
-            plantsFormation[x] = new PlantFormation(soil, seed);
+            plantsFormation[x] = new PlantFormation(soil, seed, rnd);
         }
         world.AddRange(plantsFormation);
 

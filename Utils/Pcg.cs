@@ -212,6 +212,8 @@ public class Pcg
 		return resultA;
 	}
 
+	public ulong NextULong() => (((ulong)NextUInt()) << 32) | NextUInt();
+
 	public float NextFloat() => (float)(NextUInt() * ToDouble01);
 
 	public float NextFloat(float maxInclusive)
@@ -406,6 +408,8 @@ public class Pcg
 		_state = original._state;
 		_increment = original._increment;
 	}
+
+	public Pcg NextRNG() => new(_state, (NextULong() << 1) | 1);
 
 	void Initialize(ulong seed, ulong initseq)
 	{

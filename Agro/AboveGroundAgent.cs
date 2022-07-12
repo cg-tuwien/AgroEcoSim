@@ -10,30 +10,40 @@ namespace Agro;
 //  There should never be forced resource push since it may not be able to fit into the available storage.
 //TODO Create properties computing the respective storages for water and energy. Just for clarity.
 
-public readonly struct WaterFromUnderGroundMsg : IMessage<AboveGroundAgent>
+public readonly struct Water_UG_PushTo_AG : IMessage<AboveGroundAgent>
 {
 	public readonly float Amount;
-	public WaterFromUnderGroundMsg (float amount) => Amount = amount;
-	public void Receive(ref AboveGroundAgent agent) => agent.IncWater(Amount);
-}
-
-public readonly struct AboveGroundWaterRequestMsg : IMessage<AboveGroundAgent>
-{
-	public readonly float Amount;
-	public readonly PlantFormation Formation;
-	public readonly int Index;
-	public AboveGroundWaterRequestMsg(PlantFormation formation, int index, float amount)
+	public readonly PlantFormation SrcFormation;
+	public readonly int SrcIndex;
+	public Water_UG_PushTo_AG (PlantFormation srcFormation, float amount, int srcIndex)
 	{
 		Amount = amount;
-		Formation = formation;
-		Index = index;
+		SrcFormation = srcFormation;
+		SrcIndex = srcIndex;
+	}
+	public void Receive(ref AboveGroundAgent dstAgent) 
+	{
+		var water = SrcFormation.TryDecWater_UG(SrcIndex, Math.Min(Amount, dstAgent.WaterCapacity));
+		dstAgent.IncWater(water);
+	}
+}
+
+public readonly struct Water_AG_PullFrom_AG : IMessage<AboveGroundAgent>
+{
+	public readonly float Amount;
+	public readonly PlantFormation SrcFormation;
+	public readonly int SrcIndex;
+	public Water_AG_PullFrom_AG(PlantFormation srcFormation, float amount, int srcIndex)
+	{
+		Amount = amount;
+		SrcFormation = srcFormation;
+		SrcIndex = srcIndex;
 	}
 
-	public void Receive(ref AboveGroundAgent agent)
+	public void Receive(ref AboveGroundAgent srcAgent)
 	{
-		var water = agent.TryDecWater(Amount);
-		if (water > 0)
-			Formation.Send(Index, new WaterFromUnderGroundMsg(water));
+		var energy = srcAgent.TryDecWater(Math.Min(Amount, SrcFormation.GetWaterCapacity_AG(SrcIndex)));
+		SrcFormation.IncWater_AG(SrcIndex, energy);
 	}
 }
 
@@ -107,6 +117,50 @@ public record struct AboveGroundAgent : IAgent
 
 	public int Parent { get; private set; }
 	public int[] Children { get; private set; }
+
+	public const float EnergyTransportRatio = 2f;
+	public const float WaterTransportRatio = 2f;
+	public float WaterFlowToParentPerHour
+	{
+		get
+		{
+			var d = Radius * 2f;
+			return d * d * WaterTransportRatio;
+		}
+	}
+
+	public float WaterFlowToParentPerTick => WaterFlowToParentPerHour / AgroWorld.TicksPerHour;
+
+	public float EnergyFlowToParentPerHour
+	{
+		get
+		{
+			var d = Radius * 2f;
+			return d * d * WaterTransportRatio;
+		}
+	}
+	public float EnergyFlowToParentPerTick => EnergyFlowToParentPerHour / AgroWorld.TicksPerHour;
+
+	public float EnergyCapacity
+	{
+		get
+		{
+			var d = Radius * 2f;
+			return d * d * Length * (1f - WaterCapacityRatio);
+		}
+	}
+
+	const float WaterCapacityRatio = 0.75f;
+
+	public float WaterCapacity
+	{
+		get
+		{
+			var d = Radius * 2f;
+			return d * d * Length * WaterCapacityRatio;
+		}
+	}
+
 
 	public AboveGroundAgent(int parent, OrganTypes organ, Quaternion parentDir, Vector3 unitDirection, float radius, float length, float initialEnergy)
 	{
@@ -187,7 +241,7 @@ public record struct AboveGroundAgent : IAgent
 			if (Children != null && Children.Length > 0)
 				foreach(var child in Children)
 				{
-					var childEnergy = formation.GetAboveGroundEnergy(child);
+					var childEnergy = formation.GetEnergy_AG(child);
 					if (childEnergy > Energy)
 						formation.Send(child, new AboveGroundEnergyRequestToAboveGround(formation, 2f * Radius * Radius / AgroWorld.TicksPerHour, formationID));
 				}
@@ -224,22 +278,21 @@ public record struct AboveGroundAgent : IAgent
 		//Transport energy        
 		if (Parent >= 0)
 		{
-			var parentEnergy = formation.GetAboveGroundEnergy(Parent);
+			var parentEnergy = formation.GetEnergy_AG(Parent);
 			if (parentEnergy > Energy)
 				formation.Send(Parent, new AboveGroundEnergyRequestToAboveGround(formation, lifeSupportPerTick, formationID)); //TODO make requests based on own need and the need of children
 		}
 		else
 		{
-			var parentEnergy = formation.GetUnderGroundEnergy(0);
+			var parentEnergy = formation.GetEnergy_UG(0);
 			if (parentEnergy > Energy)
-				formation.Send(0, new UnderGroundEnergyRequestToAboveGround(formation, lifeSupportPerTick, formationID)); //TODO make requests based on own need and the need of children
+				formation.Send(0, new Energy_UG_PullFrom_AG(formation, lifeSupportPerTick, formationID)); //TODO make requests based on own need and the need of children
 		}
 
-		var waterCapacity = lifeSupportPerHour * 0.7f;
-		if (Water < waterCapacity) //TODO different coefficients for different organs and different state (amount of wood)
+		if (Water < WaterCapacity) //TODO different coefficients for different organs and different state (amount of wood)
 		{
 			if (Parent >= 0)
-				formation.Send(Parent, new AboveGroundWaterRequestMsg(formation, formationID, Math.Min(Radius * Radius / AgroWorld.TicksPerHour, waterCapacity - Water)));
+				formation.Send(Parent, new Water_AG_PullFrom_AG(formation, Math.Min(WaterFlowToParentPerTick, WaterCapacity - Water), formationID));
 		}
 	}
 
