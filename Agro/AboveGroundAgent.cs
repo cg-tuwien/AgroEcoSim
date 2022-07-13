@@ -14,66 +14,9 @@ namespace Agro;
 
 public enum OrganTypes { Unspecified = 0, Seed = 1, Root = 2, Stem = 4, Sooth = 8, Leaf = 16, Fruit = 32 };
 
-public record struct AboveGroundAgent : IAgent
+[StructLayout(LayoutKind.Auto)]
+public partial struct AboveGroundAgent : IAgent
 {
-	[StructLayout(LayoutKind.Auto)]
-	public readonly struct WaterInc : IMessage<AboveGroundAgent>
-	{
-		public readonly float Amount;
-		public WaterInc(float amount) => Amount = amount;
-		public void Receive(ref AboveGroundAgent dstAgent) => dstAgent.IncWater(Amount);
-	}
-
-	[StructLayout(LayoutKind.Auto)]
-	public readonly struct EnergyInc : IMessage<AboveGroundAgent>
-	{
-		public readonly float Amount;
-		public EnergyInc(float amount) => Amount = amount;
-		public void Receive(ref AboveGroundAgent agent) => agent.IncEnergy(Amount);
-	}
-
-	[StructLayout(LayoutKind.Auto)]
-	public readonly struct Water_AG_PullFrom_AG : IMessage<AboveGroundAgent>
-	{
-		public readonly float Amount;
-		public readonly PlantFormation DstFormation;
-		public readonly int DstIndex;
-		public Water_AG_PullFrom_AG(PlantFormation dstFormation, float amount, int dstIndex)
-		{
-			Amount = amount;
-			DstFormation = dstFormation;
-			DstIndex = dstIndex;
-		}
-
-		public void Receive(ref AboveGroundAgent srcAgent)
-		{
-			var freeCapacity = DstFormation.GetWaterCapacityPerTick_AG(DstIndex) - DstFormation.GetWater_AG(DstIndex);
-			var water = srcAgent.TryDecWater(Math.Min(Amount, freeCapacity));
-			if (water > 0) DstFormation.Send(DstIndex, new WaterInc(water));
-		}
-	}
-
-	[StructLayout(LayoutKind.Auto)]
-	public readonly struct Energy_AG_PullFrom_AG: IMessage<AboveGroundAgent>
-	{
-		public readonly float Amount;
-		public readonly PlantFormation DstFormation;
-		public readonly int DstIndex;
-		public Energy_AG_PullFrom_AG(PlantFormation dstFormation, float amount, int dstIndex)
-		{
-			Amount = amount;
-			DstFormation = dstFormation;
-			DstIndex = dstIndex;
-		}
-
-		public void Receive(ref AboveGroundAgent agent)
-		{
-			var freeCapacity = DstFormation.GetEnergyCapacity_AG(DstIndex) - DstFormation.GetEnergy_AG(DstIndex);
-			var energy = agent.TryDecEnergy(Math.Min(Amount, freeCapacity));
-			if (energy > 0) DstFormation.Send(DstIndex, new EnergyInc(energy));
-		}
-	}
-
 	/// <summary>
 	/// Orientation with respect to the parent. If there is no parent, this is the initial orientation.
 	/// </summary>
@@ -203,6 +146,9 @@ public record struct AboveGroundAgent : IAgent
 		Children = null;
 	}
 
+	/// <summary>
+	/// If the plant structure changes (agents added or removed), parent entries need to be reindexed according to the map
+	/// </summary>
 	public static void Reindex(AboveGroundAgent[] src, int[] map)
 	{
 		for(int i = 0; i < src.Length; ++i)
