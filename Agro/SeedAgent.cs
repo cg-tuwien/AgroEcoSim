@@ -81,6 +81,9 @@ public struct SeedAgent : ISeed
 	/// Amount of energy currrently stored
 	/// </summary>    
 	public float StoredEnergy => mEnergyStored;
+	/// <summary>
+	/// Ratio ∈ [0, 1] of the required energy to start growing roots and stems
+	/// </summary>
 	public float EnergyAccumulationProgress => mEnergyStored / mAwakeThreshold;
 	
 	public SeedAgent(Vector3 center, float radius, Vector2 vegetativeTemperature, float energy = -1f)

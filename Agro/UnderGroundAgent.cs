@@ -8,14 +8,6 @@ using AgentsSystem;
 
 namespace Agro;
 
-public interface IUnderGround : IAgent
-{
-    /// <summary>
-    /// Water volume in m³
-    /// </summary>
-    void IncWater(float amount);
-}
-
 [StructLayout(LayoutKind.Auto)]
 public readonly struct Water_UG_PullFrom_Soil : IMessage<SoilAgent>
 {
@@ -104,7 +96,7 @@ public readonly struct Water_UG_PushTo_UG : IMessage<UnderGroundAgent>
 }
 
 [StructLayout(LayoutKind.Auto)]
-public struct UnderGroundAgent : IUnderGround
+public struct UnderGroundAgent : IAgent
 {   
     /// <summary>
     /// Orientation with respect to the parent. If there is no parent, this is the initial orientation.
@@ -129,7 +121,7 @@ public struct UnderGroundAgent : IUnderGround
     public float Water { get; private set; }
 
     /// <summary>
-    /// Inverse woodyness \in [0, 1]. The more woody (towards 0) the less water the root can absorb. 
+    /// Inverse woodyness ∈ [0, 1]. The more woody (towards 0) the less water the root can absorb. 
     /// </summary>
     float WaterAbsorbtionFactor; //factor 0 .. 1
 
@@ -163,8 +155,8 @@ public struct UnderGroundAgent : IUnderGround
     /// </summary>
     public float WaterAbsorbtionPerTick => WaterAbsorbtionPerHour / AgroWorld.TicksPerHour;
 
-    public const float EnergyTransportRatio = 2f;
-    public const float WaterTransportRatio = 2f;
+    public const float EnergyTransportRatio = 4f;
+    public const float WaterTransportRatio = 4f;
 
     /// <summary>
     /// Water volume in m³ which can be passed to the parent per hour
@@ -193,17 +185,8 @@ public struct UnderGroundAgent : IUnderGround
     }
     public float EnergyFlowToParentPerTick => EnergyFlowToParentPerHour / AgroWorld.TicksPerHour;
 
-    public float EnergyCapacity
-    {
-        get
-        {
-            var d = Radius * 2f;
-            return d * d * Length * (1f - WaterCapacityRatio);
-        }
-    }
-
     /// <summary>
-    /// Volume ratio \in [0, 1] of the agent that can used for storing water
+    /// Volume ratio ∈ [0, 1] of the agent that can used for storing water
     /// </summary>
     const float WaterCapacityRatio = 0.75f;
 
@@ -218,6 +201,22 @@ public struct UnderGroundAgent : IUnderGround
             return d * d * Length * WaterCapacityRatio;
         }
     }
+
+    /// <summary>
+    /// Timespan for which 1 unit of energy can feed 1m³ of plant tissue
+    /// </summary>
+    //Assuming the energy units are chosen s.t. a plant need an amount of energy per hour
+    //equal to its volume, then this coefficient expresses how long it can survive
+    //without any energy gains if its storage is initially full
+    const float EnergyStorageCoef = 24 * 31 * 3; //3 months
+
+    static float EnergyCapacityFunc(float radius, float length)
+    {
+        var d = radius * 2f;
+        return d * d * length * (1f - WaterCapacityRatio) * EnergyStorageCoef;
+    }
+
+    public float EnergyCapacity => EnergyCapacityFunc(Radius, Length);
 
     public UnderGroundAgent(int parent, Quaternion parentDir, Vector3 unitDirection, float initialEnergy, float initialWater = 0f, float initialWaterIntake = 1f, float radius = InitialRadius, float length = InitialLength)
     {
@@ -257,6 +256,9 @@ public struct UnderGroundAgent : IUnderGround
         WaterAbsorbtionFactor = 1f;
     }
 
+    /// <summary>
+    /// If the plant structure changes (agents added or removed), parent entries need to be reindexed according to the map
+    /// </summary>
 	public static void Reindex(UnderGroundAgent[] src, int[] map)
 	{
 		for(int i = 0; i < src.Length; ++i)
@@ -268,26 +270,35 @@ public struct UnderGroundAgent : IUnderGround
         var formation = (PlantFormation)_formation;
 
         //TODO perhaps it should somehow reflect temperature
-        var lr = Length * Radius;
-        var lifeSupportPerHour = lr * Radius;
+        var diameter = 2f * Radius;
+        var lr = Length * diameter;
+        var lifeSupportPerHour = lr * diameter;
         var lifeSupportPerTick = lifeSupportPerHour / AgroWorld.TicksPerHour;
 
         //life support
         Energy -= lifeSupportPerTick;
 
         var children = formation.GetUnderGroundChildren(formationID);
-        //Growth
+
+        ///////////////////////////
+        #region Growth
+        ///////////////////////////
         if (Energy > lifeSupportPerHour * 36) //maybe make it a factor storedEnergy/lifeSupport so that it grows fast when it has full storage        
         {
-            var childrenCount = children.Count + 1;
-            childrenCount *= childrenCount;
-            var lengthGrowth = 1e-4f / (AgroWorld.TicksPerHour * childrenCount * MathF.Pow(lr * Length, 0.1f));
+            var childrenCount = MathF.Pow(children.Count + 1, 4);
+            var lengthGrowth = 2e-4f / (AgroWorld.TicksPerHour * childrenCount * MathF.Pow(lr * Length, 0.1f));
             var widthGrowth = 1e-5f / (AgroWorld.TicksPerHour * childrenCount * MathF.Pow(lifeSupportPerHour, 0.1f)); //just optimized the number of multiplications
             
             Length += lengthGrowth;
             Radius += widthGrowth;
 
-            //Console.WriteLine($"{timestep} x {formationID}: dl={lengthGrowth} dr={widthGrowth} L={Length} R={Radius}");
+            //if (Parent == 2)
+            //    Console.WriteLine($"{timestep} x {formationID}: ch={(int)childrenCount} dl={lengthGrowth} dr={widthGrowth} L={Length} R={Radius}");
+            // {
+            //     var er = Energy / EnergyCapacity;
+            //     if (er > 0.99f)
+            //         Console.WriteLine($"{timestep} x {formationID}: e={Energy} cl={EnergyCapacity}");
+            // }
 
             WaterAbsorbtionFactor -= widthGrowth * childrenCount;  //become wood faste with children
             if (WaterAbsorbtionFactor < 0f)
@@ -295,12 +306,13 @@ public struct UnderGroundAgent : IUnderGround
 
             if (children.Count == 0 && Length > PlantFormation.RootSegmentLength * 0.5f + formation.RNG.NextFloat(PlantFormation.RootSegmentLength * 0.5f))
             {
-                var q1 = Quaternion.CreateFromAxisAngle(Vector3.UnitY, formation.RNG.NextFloat(MathF.PI * 0.04f));
-                var q2 = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, formation.RNG.NextFloat(MathF.PI * 0.04f));
-                var q = Quaternion.Concatenate(q1, q2);
-                formation.UnderGroundBirth(new UnderGroundAgent(formationID, Quaternion.Concatenate(Orientation, q), Energy * 0.01f));
-                Energy *= 0.98f;
-                Console.WriteLine($"New root child of {formationID} at time {timestep}");
+                var qy = Quaternion.CreateFromAxisAngle(Vector3.UnitY, formation.RNG.NextFloat(MathF.PI));
+                var qz = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, formation.RNG.NextFloat(MathF.PI * 0.1f));
+                var q = Quaternion.Concatenate(qy, qz);
+                var e = EnergyCapacityFunc(InitialRadius, InitialLength);
+                formation.UnderGroundBirth(new UnderGroundAgent(formationID, Quaternion.Concatenate(Orientation, q), e));
+                Energy -= 2f * e; //twice because some energy is needed for the birth itself
+                //Console.WriteLine($"New root child of {formationID} at time {timestep}");
             }
 
             //Branching work in progress
@@ -334,10 +346,11 @@ public struct UnderGroundAgent : IUnderGround
         }
         else //Without energy the part dies
         {
-            Console.WriteLine($"Root {formationID} depleeted at time {timestep}");
+            //Console.WriteLine($"Root {formationID} depleeted at time {timestep}");
             formation.UnderGroundDeath(formationID);
             return;
         }
+        #endregion
 
         ///////////////////////////
         #region Absorb WATER from soil

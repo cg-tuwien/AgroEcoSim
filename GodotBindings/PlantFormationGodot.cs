@@ -51,6 +51,23 @@ public partial class PlantFormation
 		var basis = new Basis(direction.ToGodot());
 		sprite.Transform = new Transform(basis, (GetBaseCenter_UG(index) + stableScale).ToGodot());
 		sprite.Scale = new Vector3(length, radius, radius);
+
+		const string vis = "energyRatio";
+		Color c;
+		switch (vis)
+		{
+			case "energyRatio":
+			{
+				var r = GetEnergy_UG(index) / GetEnergyCapacity_UG(index);
+				c = new Color(r, r * 0.5f, 0f);
+				break;
+			}
+			default:
+				c = Colors.Brown;
+				break;
+		}
+
+		((SpatialMaterial)sprite.GetSurfaceMaterial(0)).AlbedoColor = c;
 	}
 
 	void UpdateAboveGroundTransformation(MeshInstance sprite, int index)
@@ -127,8 +144,7 @@ public partial class PlantFormation
 	}
 	
 	public void GodotProcess(uint timestep)
-	{		
-		//GD.Print(Agents.Select(x => x.Water).Sum());
+	{
 		if (ShowOrgans.HasFlag(DisplayOptions.Seed))
 		{
 			if (Seed.Length == 1)
