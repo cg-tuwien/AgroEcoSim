@@ -52,14 +52,27 @@ public partial class PlantFormation
 		sprite.Transform = new Transform(basis, (GetBaseCenter_UG(index) + stableScale).ToGodot());
 		sprite.Scale = new Vector3(length, radius, radius);
 
-		const string vis = "energyRatio";
+		const string vis = "waterRatio";
 		Color c;
 		switch (vis)
 		{
 			case "energyRatio":
 			{
-				var r = GetEnergy_UG(index) / GetEnergyCapacity_UG(index);
-				c = new Color(r, r * 0.5f, 0f);
+				var r = Math.Min(1f, GetEnergy_UG(index) / GetEnergyCapacity_UG(index));
+				if (r >= 0f)
+					c = new Color(r, r * 0.5f, 0f);
+				else
+					c = Colors.Red;
+				break;
+			}
+			case "waterRatio":
+			{
+				var rs = Math.Min(1f, GetWater_UG(index) / GetWaterStorageCapacity_UG(index));
+				var rt = Math.Min(1f, GetWater_UG(index) / GetWaterCapacityPerTick_UG(index));
+				if (rs >= 0f)
+					c = new Color(rt, rt, rs);
+				else
+					c = Colors.Red;
 				break;
 			}
 			default:

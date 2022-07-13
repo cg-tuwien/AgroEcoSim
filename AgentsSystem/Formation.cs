@@ -60,8 +60,14 @@ public abstract class Formation<T> : IFormation where T : struct, IAgent
 
 		Array.Copy(Agents, AgentsTMP, Agents.Length);
 		//for(int i = 0; i < AgentsTMP.Length; ++i)
-		Parallel.For(0, AgentsTMP.Length, i =>
-			AgentsTMP[i].Tick(world, this, i, timestep));
+#if !DEBUG
+		if (AgentsTMP.Length > Environment.ProcessorCount)
+			Parallel.For(0, AgentsTMP.Length, i =>
+				AgentsTMP[i].Tick(world, this, i, timestep));
+		else
+#endif
+		for(int i = 0; i < AgentsTMP.Length; ++i)
+			AgentsTMP[i].Tick(world, this, i, timestep);
 		ReadTMP = true;
 	}
 

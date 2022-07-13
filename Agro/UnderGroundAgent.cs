@@ -9,95 +9,133 @@ using AgentsSystem;
 namespace Agro;
 
 [StructLayout(LayoutKind.Auto)]
-public readonly struct Water_UG_PullFrom_Soil : IMessage<SoilAgent>
-{
-    /// <summary>
-    /// Water volume in m³
-    /// </summary>
-    public readonly float Amount;
-    public readonly PlantFormation DstFormation;
-    public readonly int DstIndex;
-    public Water_UG_PullFrom_Soil(PlantFormation dstFormation, float amount, int dstIndex)
-    {
-        Amount = amount;
-        DstFormation = dstFormation;
-        DstIndex = dstIndex;
-    }
-    public void Receive(ref SoilAgent srcAgent)
-    {
-        var water = srcAgent.TryDecWater(Math.Min(Amount, DstFormation.GetWaterCapacity_UG(DstIndex)));
-        DstFormation.IncWater_UG(DstIndex, water);
-    }
-}
-
-[StructLayout(LayoutKind.Auto)]
-public readonly struct Energy_UG_PullFrom_UG: IMessage<UnderGroundAgent>
-{
-    public readonly float Amount;
-    public readonly PlantFormation DstFormation;
-    public readonly int DstIndex;
-    public Energy_UG_PullFrom_UG(PlantFormation dstFormation, float amount, int dstIndex)
-    {
-        Amount = amount;
-        DstFormation = dstFormation;
-        DstIndex = dstIndex;
-    }
-
-    public void Receive(ref UnderGroundAgent srcAgent)
-    {
-        var capacity = DstFormation.GetEnergyCapacity_UG(DstIndex);
-        var energy = srcAgent.TryDecEnergy(Math.Min(capacity, Amount));
-
-        if (energy > 0)
-            DstFormation.IncEnergy_UG(DstIndex, energy);
-    }
-}
-
-[StructLayout(LayoutKind.Auto)]
-public readonly struct Energy_UG_PullFrom_AG: IMessage<AboveGroundAgent>
-{
-    public readonly float Amount;
-    public readonly PlantFormation DstFormation;
-    public readonly int DstIndex;
-    public Energy_UG_PullFrom_AG(PlantFormation dstFormation, float amount, int dstIndex)
-    {
-        Amount = amount;
-        DstFormation = dstFormation;
-        DstIndex = dstIndex;
-    }
-
-    public void Receive(ref AboveGroundAgent srcAgent)
-    {
-        var energy = srcAgent.TryDecEnergy(Math.Min(Amount, DstFormation.GetEnergyCapacity_UG(DstIndex)));
-        DstFormation.IncEnergy_UG(DstIndex, energy);
-    }
-}
-
-[StructLayout(LayoutKind.Auto)]
-public readonly struct Water_UG_PushTo_UG : IMessage<UnderGroundAgent>
-{
-    /// <summary>
-    /// Water volume in m³
-    /// </summary>    
-    public readonly float Amount;
-    public readonly PlantFormation SrcFormation;
-    public readonly int SrcIndex;
-    public Water_UG_PushTo_UG(PlantFormation srcFormation, float amount, int srcIndex)
-    {
-        Amount = amount;
-        SrcFormation = srcFormation;
-        SrcIndex = srcIndex;
-    }
-    public void Receive(ref UnderGroundAgent dstAgent)
-    {
-        var water = SrcFormation.TryDecWater_UG(SrcIndex, Math.Min(Amount, dstAgent.WaterCapacity));
-        dstAgent.IncWater(water);
-    }
-}
-
-[StructLayout(LayoutKind.Auto)]
 public struct UnderGroundAgent : IAgent
-{   
+{
+    [StructLayout(LayoutKind.Auto)]
+    public readonly struct WaterInc : IMessage<UnderGroundAgent>
+    {
+        public readonly float Amount;
+        public WaterInc(float amount) => Amount = amount;
+        public void Receive(ref UnderGroundAgent dstAgent) => dstAgent.IncWater(Amount);
+    }
+
+    [StructLayout(LayoutKind.Auto)]
+    public readonly struct EnergyInc : IMessage<UnderGroundAgent>
+    {
+        public readonly float Amount;
+        public EnergyInc(float amount) => Amount = amount;
+        public void Receive(ref UnderGroundAgent dstAgent) => dstAgent.IncEnergy(Amount);
+    }
+
+
+    [StructLayout(LayoutKind.Auto)]
+    public readonly struct Water_UG_PullFrom_Soil : IMessage<SoilAgent>
+    {
+        /// <summary>
+        /// Water volume in m³
+        /// </summary>
+        public readonly float Amount;
+        public readonly PlantFormation DstFormation;
+        public readonly int DstIndex;
+        public Water_UG_PullFrom_Soil(PlantFormation dstFormation, float amount, int dstIndex)
+        {
+            Amount = amount;
+            DstFormation = dstFormation;
+            DstIndex = dstIndex;
+        }
+        public void Receive(ref SoilAgent srcAgent)
+        {
+            var freeCapacity = DstFormation.GetWaterCapacityPerTick_UG(DstIndex) - DstFormation.GetWater_UG(DstIndex);
+            var water = srcAgent.TryDecWater(Math.Min(Amount, freeCapacity));
+            //Writing actions from other formations must not be implemented directly, but over messages
+            if (water > 0) DstFormation.Send(DstIndex, new WaterInc(water));
+        }
+    }
+
+    [StructLayout(LayoutKind.Auto)]
+    public readonly struct Energy_UG_PullFrom_UG: IMessage<UnderGroundAgent>
+    {
+        public readonly float Amount;
+        public readonly PlantFormation DstFormation;
+        public readonly int DstIndex;
+        public Energy_UG_PullFrom_UG(PlantFormation dstFormation, float amount, int dstIndex)
+        {
+            Amount = amount;
+            DstFormation = dstFormation;
+            DstIndex = dstIndex;
+        }
+
+        public void Receive(ref UnderGroundAgent srcAgent)
+        {
+            var freeCapacity = DstFormation.GetEnergyCapacity_UG(DstIndex) - DstFormation.GetEnergy_UG(DstIndex);
+            var energy = srcAgent.TryDecEnergy(Math.Min(freeCapacity, Amount));
+            if (energy > 0) DstFormation.Send(DstIndex, new EnergyInc(energy));
+        }
+    }
+
+    [StructLayout(LayoutKind.Auto)]
+    public readonly struct Energy_AG_PullFrom_UG: IMessage<AboveGroundAgent>
+    {
+        public readonly float Amount;
+        public readonly PlantFormation DstFormation;
+        public readonly int DstIndex;
+        public Energy_AG_PullFrom_UG(PlantFormation dstFormation, float amount, int dstIndex)
+        {
+            Amount = amount;
+            DstFormation = dstFormation;
+            DstIndex = dstIndex;
+        }
+
+        public void Receive(ref AboveGroundAgent srcAgent)
+        {
+            var freeCapacity = DstFormation.GetEnergyCapacity_UG(DstIndex) - DstFormation.GetEnergy_UG(DstIndex);
+            var energy = srcAgent.TryDecEnergy(Math.Min(Amount, freeCapacity));
+            if (energy > 0) DstFormation.Send(DstIndex, new EnergyInc(energy));
+        }
+    }
+
+    [StructLayout(LayoutKind.Auto)]
+    public readonly struct Water_UG_PullFrom_UG : IMessage<UnderGroundAgent>
+    {
+        /// <summary>
+        /// Water volume in m³
+        /// </summary>
+        public readonly float Amount;
+        public readonly PlantFormation DstFormation;
+        public readonly int DstIndex;
+        public Water_UG_PullFrom_UG(PlantFormation dstFormation, float amount, int dstIndex)
+        {
+            Amount = amount;
+            DstFormation = dstFormation;
+            DstIndex = dstIndex;
+        }
+        public void Receive(ref UnderGroundAgent srcAgent)
+        {
+            var freeCapacity = DstFormation.GetWaterCapacityPerTick_UG(DstIndex) - DstFormation.GetWater_UG(DstIndex);
+            var energy = srcAgent.TryDecWater(Math.Min(freeCapacity, Amount));
+            if (energy > 0) DstFormation.Send(DstIndex, new WaterInc(energy));
+        }
+    }
+
+    public readonly struct Water_AG_PullFrom_UG : IMessage<UnderGroundAgent>
+    {
+        public readonly float Amount;
+        public readonly PlantFormation DstFormation;
+        public readonly int DstIndex;
+        public Water_AG_PullFrom_UG (PlantFormation dstFormation, float amount, int dstIndex)
+        {
+            Amount = amount;
+            DstFormation = dstFormation;
+            DstIndex = dstIndex;
+        }
+        public void Receive(ref UnderGroundAgent srcAgent)
+        {
+            var capacity = DstFormation.GetWaterCapacityPerTick_AG(DstIndex) - DstFormation.GetWater_AG(DstIndex);
+            var water = srcAgent.TryDecWater(Math.Min(Amount, capacity));
+            if (water > 0) DstFormation.Send(DstIndex, new AboveGroundAgent.WaterInc(water));
+        }
+    }
+
     /// <summary>
     /// Orientation with respect to the parent. If there is no parent, this is the initial orientation.
     /// </summary>
@@ -156,33 +194,24 @@ public struct UnderGroundAgent : IAgent
     public float WaterAbsorbtionPerTick => WaterAbsorbtionPerHour / AgroWorld.TicksPerHour;
 
     public const float EnergyTransportRatio = 4f;
-    public const float WaterTransportRatio = 4f;
+
+    //Let's assume (I might be fully wrong) that the plan can push the water 0.5mm in 1s, then in 1h it can push it 0.001 * 30 * 60 = 1.8m
+    //also see - interestingly it states that while pholem is not photosensitive, xylem is
+    //https://www.researchgate.net/publication/238417831_Simultaneous_measurement_of_water_flow_velocity_and_solute_transport_in_xylem_and_phloem_of_adult_plants_of_Ricinus_communis_during_day_time_course_by_nuclear_magnetic_resonance_NMR_spectrometry
+    public const float WaterTransportRatio = 1.8f;
 
     /// <summary>
     /// Water volume in m³ which can be passed to the parent per hour
     /// </summary>
-    public float WaterFlowToParentPerHour
-    {
-        get
-        {
-            var d = Radius * 2f;
-            return d * d * WaterTransportRatio;
-        }
-    }
+    public float WaterFlowToParentPerHour => 4f * Radius * Radius * WaterTransportRatio;
 
     /// <summary>
     /// Water volume in m³ which can be passed to the parent per timestep
     /// </summary>
     public float WaterFlowToParentPerTick => WaterFlowToParentPerHour / AgroWorld.TicksPerHour;
 
-    public float EnergyFlowToParentPerHour
-    {
-        get
-        {
-            var d = Radius * 2f;
-            return d * d * WaterTransportRatio;
-        }
-    }
+    public float EnergyFlowToParentPerHour => 4f * Radius * Radius * WaterTransportRatio;
+
     public float EnergyFlowToParentPerTick => EnergyFlowToParentPerHour / AgroWorld.TicksPerHour;
 
     /// <summary>
@@ -193,14 +222,17 @@ public struct UnderGroundAgent : IAgent
     /// <summary>
     /// Water volume in m³ which can be stored in this agent
     /// </summary>
-    public float WaterCapacity
-    {
-        get
-        {
-            var d = Radius * 2f;
-            return d * d * Length * WaterCapacityRatio;
-        }
-    }
+    public float WaterStorageCapacity => 4f * Radius * Radius * Length * WaterCapacityRatio;
+
+    /// <summary>
+    /// Water volume in m³ which can flow through per hour, or can be stored in this agent
+    /// </summary>
+    public float WaterCapacityPerHour => 4f * Radius * Radius * (Length * WaterCapacityRatio + WaterTransportRatio);
+
+    /// <summary>
+    /// Water volume in m³ which can flow through per tick, or can be stored in this agent
+    /// </summary>
+    public float WaterCapacityPerTick => WaterCapacityPerHour / AgroWorld.TicksPerHour;
 
     /// <summary>
     /// Timespan for which 1 unit of energy can feed 1m³ of plant tissue
@@ -210,11 +242,7 @@ public struct UnderGroundAgent : IAgent
     //without any energy gains if its storage is initially full
     const float EnergyStorageCoef = 24 * 31 * 3; //3 months
 
-    static float EnergyCapacityFunc(float radius, float length)
-    {
-        var d = radius * 2f;
-        return d * d * length * (1f - WaterCapacityRatio) * EnergyStorageCoef;
-    }
+    static float EnergyCapacityFunc(float radius, float length) => 4f * radius * radius * length * (1f - WaterCapacityRatio) * EnergyStorageCoef;
 
     public float EnergyCapacity => EnergyCapacityFunc(Radius, Length);
 
@@ -267,6 +295,7 @@ public struct UnderGroundAgent : IAgent
 
     public void Tick(SimulationWorld world, IFormation _formation, int formationID, uint timestep)
     {
+        Console.WriteLine($"{timestep} x {formationID}: w={Water} e={Energy}");
         var formation = (PlantFormation)_formation;
 
         //TODO perhaps it should somehow reflect temperature
@@ -357,7 +386,7 @@ public struct UnderGroundAgent : IAgent
         ///////////////////////////
         if (WaterAbsorbtionFactor > 0f)
         {
-            if (Water < WaterCapacity)
+            if (Water < WaterStorageCapacity)
             {
                 var soil = formation.Soil;
                 var baseCenter = formation.GetBaseCenter_UG(formationID);
@@ -396,7 +425,7 @@ public struct UnderGroundAgent : IAgent
         {
             var parentEnergy = formation.GetEnergy_AG(0);
             if (parentEnergy > Energy)
-                formation.Send(0, new Energy_UG_PullFrom_AG(formation, Math.Min(formation.GetEnergyFlow_PerTick_AG(0), (parentEnergy - Energy) * 0.5f), formationID)); //TODO make requests based on own need and the need of children
+                formation.Send(0, new Energy_AG_PullFrom_UG(formation, Math.Min(formation.GetEnergyFlow_PerTick_AG(0), (parentEnergy - Energy) * 0.5f), formationID)); //TODO make requests based on own need and the need of children
         }
         #endregion
 
@@ -406,17 +435,18 @@ public struct UnderGroundAgent : IAgent
         if (Water > 0f)
         {
             if (Parent >= 0)
-                formation.Send(Parent, new Water_UG_PushTo_UG(formation, WaterFlowToParentPerTick, formationID));
+                //formation.Send(Parent, new Water_UG_PushTo_UG(formation, WaterFlowToParentPerTick, formationID));
+                formation.Send(formationID, new Water_UG_PullFrom_UG(formation, WaterFlowToParentPerTick, Parent));
             else
-                formation.Send(0, new Water_UG_PushTo_AG(formation, WaterFlowToParentPerTick, formationID));
+                formation.Send(0, new Water_AG_PullFrom_UG(formation, WaterFlowToParentPerTick, formationID));
         }
         #endregion
     }
 
-    public void IncWater(float amount) => Water += amount;
-    public void IncEnergy(float amount) => Energy += amount;
+    void IncWater(float amount) => Water += amount;
+    void IncEnergy(float amount) => Energy += amount;
 
-    internal float TryDecWater(float amount)
+    float TryDecWater(float amount)
     {
         if (Water > amount)
         {
@@ -431,7 +461,7 @@ public struct UnderGroundAgent : IAgent
         }
     }
 
-    internal float TryDecEnergy(float amount)
+    float TryDecEnergy(float amount)
     {
         if (Energy > amount)
         {

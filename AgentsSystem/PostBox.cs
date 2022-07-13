@@ -25,9 +25,11 @@ public class PostBox<T> where T : struct, IAgent
         while (src.Count > 0)
         {
             WriteTMP = !WriteTMP;
+#if !DEBUG
             if (src.Count > Environment.ProcessorCount)
                 Parallel.ForEach(src, msg => msg.Process(agents));
             else
+#endif
                 foreach(var msg in src) msg.Process(agents);
             src.Clear();
             src = WriteTMP ? BufferTMP : Buffer;

@@ -10,7 +10,6 @@ public partial class PlantFormation : IFormation
 {
 	Vector3 Position;
 	bool ReadTMP = false;
-	bool WriteTMP => !ReadTMP;
 	internal SoilFormation Soil;
 	protected SeedAgent[] Seed = new SeedAgent[1]; //must be an array due to messaging compaatibility
 	protected readonly SeedAgent[] SeedTMP = new SeedAgent[1];
@@ -407,21 +406,29 @@ public partial class PlantFormation : IFormation
 		return result;
 	}
 
-	internal float GetEnergyCapacity_UG(int index) => ReadTMP 
+	internal float GetEnergyCapacity_UG(int index) => ReadTMP
 		? (UnderGroundTMP.Length > index ? UnderGroundTMP[index].EnergyCapacity : 0f)
 		: (UnderGround.Length > index ? UnderGround[index].EnergyCapacity : 0f);
 
-	internal float GetWaterCapacity_UG(int index) => ReadTMP 
-		? (UnderGroundTMP.Length > index ? UnderGroundTMP[index].WaterCapacity : 0f)
-		: (UnderGround.Length > index ? UnderGround[index].WaterCapacity : 0f);
-
-	internal float GetEnergyCapacity_AG(int index) => ReadTMP 
+	internal float GetEnergyCapacity_AG(int index) => ReadTMP
 		? (AboveGroundTMP.Length > index ? AboveGroundTMP[index].EnergyCapacity : 0f)
 		: (AboveGround.Length > index ? AboveGround[index].EnergyCapacity : 0f);
 
-	internal float GetWaterCapacity_AG(int index) => ReadTMP 
-		? (AboveGroundTMP.Length > index ? AboveGroundTMP[index].WaterCapacity : 0f)
-		: (AboveGround.Length > index ? AboveGround[index].WaterCapacity : 0f);
+	internal float GetWaterStorageCapacity_UG(int index) => ReadTMP
+		? (UnderGroundTMP.Length > index ? UnderGroundTMP[index].WaterStorageCapacity : 0f)
+		: (UnderGround.Length > index ? UnderGround[index].WaterStorageCapacity : 0f);
+
+	internal float GetWaterStorageCapacity_AG(int index) => ReadTMP
+		? (AboveGroundTMP.Length > index ? AboveGroundTMP[index].WaterStorageCapacity : 0f)
+		: (AboveGround.Length > index ? AboveGround[index].WaterStorageCapacity : 0f);
+
+	internal float GetWaterCapacityPerTick_UG(int index) => ReadTMP
+		? (UnderGroundTMP.Length > index ? UnderGroundTMP[index].WaterCapacityPerTick : 0f)
+		: (UnderGround.Length > index ? UnderGround[index].WaterCapacityPerTick : 0f);
+
+	internal float GetWaterCapacityPerTick_AG(int index) => ReadTMP
+		? (AboveGroundTMP.Length > index ? AboveGroundTMP[index].WaterCapacityPerTick : 0f)
+		: (AboveGround.Length > index ? AboveGround[index].WaterCapacityPerTick : 0f);
 
 	public float GetEnergy_UG(int index) => ReadTMP 
 		? (UnderGroundTMP.Length > index ? UnderGroundTMP[index].Energy : 0f)
@@ -465,8 +472,8 @@ public partial class PlantFormation : IFormation
 		? (UnderGroundTMP.Length > index ? UnderGroundTMP[index].Orientation : Quaternion.Identity)
 		: (UnderGround.Length > index ? UnderGround[index].Orientation : Quaternion.Identity);
 	public Quaternion GetDirection_AG(int index) => ReadTMP 
-		? (AboveGroundTMP.Length > index ? AboveGroundTMP[index].Direction : Quaternion.Identity)
-		: (AboveGround.Length > index ? AboveGround[index].Direction : Quaternion.Identity);
+		? (AboveGroundTMP.Length > index ? AboveGroundTMP[index].Orientation : Quaternion.Identity)
+		: (AboveGround.Length > index ? AboveGround[index].Orientation : Quaternion.Identity);
 
 	public OrganTypes GetOrgan_UG(int index) => OrganTypes.Root;
 
@@ -514,10 +521,10 @@ public partial class PlantFormation : IFormation
 		var result = Position;
 		if (ReadTMP)
 			for(int i = parents.Count - 2; i > 0; --i)
-				result += Vector3.Transform(Vector3.UnitX, AboveGroundTMP[parents[i]].Direction) * AboveGroundTMP[parents[i]].Length;
+				result += Vector3.Transform(Vector3.UnitX, AboveGroundTMP[parents[i]].Orientation) * AboveGroundTMP[parents[i]].Length;
 		else
 			for(int i = parents.Count - 2; i > 0; --i)
-				result += Vector3.Transform(Vector3.UnitX, AboveGround[parents[i]].Direction) * AboveGround[parents[i]].Length;
+				result += Vector3.Transform(Vector3.UnitX, AboveGround[parents[i]].Orientation) * AboveGround[parents[i]].Length;
 
 		return result;
 	}
@@ -527,61 +534,7 @@ public partial class PlantFormation : IFormation
 	#region WRITE METHODS
 	///////////////////////////
 
-	internal void IncEnergy_UG(int index, float amount)
-	{
-		if (WriteTMP)
-		{
-			if (UnderGroundTMP.Length > index)
-				UnderGroundTMP[index].IncEnergy(amount);
-		}
-		else
-		{
-			if (UnderGround.Length > index)
-				UnderGround[index].IncEnergy(amount);
-		}
-	}
-	internal void IncWater_UG(int index, float amount)
-	{
-		if (WriteTMP)
-		{
-			if (UnderGroundTMP.Length > index)
-				UnderGroundTMP[index].IncWater(amount);
-		}
-		else
-		{
-			if (UnderGround.Length > index)
-				UnderGround[index].IncWater(amount);
-		}
-	}
+	//THERE ARE NO WRITE METHODS ALLOWED.
 
-	internal void IncWater_AG(int index, float amount)
-	{
-		if (WriteTMP)
-		{
-			if (AboveGroundTMP.Length > index)
-				AboveGroundTMP[index].IncWater(amount);
-		}
-		else
-		{
-			if (AboveGround.Length > index)
-				AboveGround[index].IncWater(amount);
-		}
-	}
-
-	internal float TryDecWater_UG(int index, float amount)
-	{
-		if (WriteTMP)
-		{
-			if (UnderGroundTMP.Length > index)
-				return UnderGroundTMP[index].TryDecWater(amount);
-		}
-		else
-		{
-			if (UnderGround.Length > index)
-				return UnderGroundTMP[index].TryDecWater(amount);
-		}
-
-		return 0f;
-	}
 	#endregion
 }

@@ -3,163 +3,176 @@ using System.Linq;
 using System.Diagnostics;
 using System.Numerics;
 using AgentsSystem;
+using System.Runtime.InteropServices;
 
 namespace Agro;
 
 //TODO IMPORTANT All resource transport should be request-confirm messages, i.e. pull-policy.
 //  There should never be forced resource push since it may not be able to fit into the available storage.
 //TODO Create properties computing the respective storages for water and energy. Just for clarity.
-
-public readonly struct Water_UG_PushTo_AG : IMessage<AboveGroundAgent>
-{
-	public readonly float Amount;
-	public readonly PlantFormation SrcFormation;
-	public readonly int SrcIndex;
-	public Water_UG_PushTo_AG (PlantFormation srcFormation, float amount, int srcIndex)
-	{
-		Amount = amount;
-		SrcFormation = srcFormation;
-		SrcIndex = srcIndex;
-	}
-	public void Receive(ref AboveGroundAgent dstAgent) 
-	{
-		var water = SrcFormation.TryDecWater_UG(SrcIndex, Math.Min(Amount, dstAgent.WaterCapacity));
-		dstAgent.IncWater(water);
-	}
-}
-
-public readonly struct Water_AG_PullFrom_AG : IMessage<AboveGroundAgent>
-{
-	public readonly float Amount;
-	public readonly PlantFormation SrcFormation;
-	public readonly int SrcIndex;
-	public Water_AG_PullFrom_AG(PlantFormation srcFormation, float amount, int srcIndex)
-	{
-		Amount = amount;
-		SrcFormation = srcFormation;
-		SrcIndex = srcIndex;
-	}
-
-	public void Receive(ref AboveGroundAgent srcAgent)
-	{
-		var energy = srcAgent.TryDecWater(Math.Min(Amount, SrcFormation.GetWaterCapacity_AG(SrcIndex)));
-		SrcFormation.IncWater_AG(SrcIndex, energy);
-	}
-}
-
-public readonly struct EnergyBetweenAboveGroundsMsg : IMessage<AboveGroundAgent>
-{
-	public readonly float Amount;
-	public EnergyBetweenAboveGroundsMsg(float amount) => Amount = amount;
-	public void Receive(ref AboveGroundAgent agent) => agent.IncEnergy(Amount);
-}
-
-public readonly struct AboveGroundEnergyRequestToAboveGround: IMessage<AboveGroundAgent>
-{
-	public readonly float Amount;
-	public readonly PlantFormation Formation;
-	public readonly int Index;
-	public AboveGroundEnergyRequestToAboveGround(PlantFormation formation, float amount, int index)
-	{
-		Amount = amount;
-		Formation = formation;
-		Index = index;
-	}
-
-	public void Receive(ref AboveGroundAgent agent)
-	{
-		var energy = agent.TryDecEnergy(Amount);
-		if (energy > 0)
-			Formation.Send(Index, new EnergyBetweenAboveGroundsMsg(energy));
-	}
-}
-
-public readonly struct AboveGroundEnergyRequestToUnderGround: IMessage<AboveGroundAgent>
-{
-	public readonly float Amount;
-	public readonly PlantFormation Formation;
-	public readonly int Index;
-	public AboveGroundEnergyRequestToUnderGround(PlantFormation formation, float amount, int index)
-	{
-		Amount = amount;
-		Formation = formation;
-		Index = index;
-	}
-
-	public void Receive(ref AboveGroundAgent agent)
-	{
-		var energy = agent.TryDecEnergy(Amount);
-		if (energy > 0)
-			Formation.Send(Index, new EnergyBetweenAboveGroundsMsg(energy));
-	}
-}
-
-
 //[Flags]  //flags are not needed anymore
+
 public enum OrganTypes { Unspecified = 0, Seed = 1, Root = 2, Stem = 4, Sooth = 8, Leaf = 16, Fruit = 32 };
 
 public record struct AboveGroundAgent : IAgent
 {
-	public Quaternion Direction  { get; private set; }
-	public float Radius { get; private set; }
+	[StructLayout(LayoutKind.Auto)]
+	public readonly struct WaterInc : IMessage<AboveGroundAgent>
+	{
+		public readonly float Amount;
+		public WaterInc(float amount) => Amount = amount;
+		public void Receive(ref AboveGroundAgent dstAgent) => dstAgent.IncWater(Amount);
+	}
+
+	[StructLayout(LayoutKind.Auto)]
+	public readonly struct EnergyInc : IMessage<AboveGroundAgent>
+	{
+		public readonly float Amount;
+		public EnergyInc(float amount) => Amount = amount;
+		public void Receive(ref AboveGroundAgent agent) => agent.IncEnergy(Amount);
+	}
+
+	[StructLayout(LayoutKind.Auto)]
+	public readonly struct Water_AG_PullFrom_AG : IMessage<AboveGroundAgent>
+	{
+		public readonly float Amount;
+		public readonly PlantFormation DstFormation;
+		public readonly int DstIndex;
+		public Water_AG_PullFrom_AG(PlantFormation dstFormation, float amount, int dstIndex)
+		{
+			Amount = amount;
+			DstFormation = dstFormation;
+			DstIndex = dstIndex;
+		}
+
+		public void Receive(ref AboveGroundAgent srcAgent)
+		{
+			var freeCapacity = DstFormation.GetWaterCapacityPerTick_AG(DstIndex) - DstFormation.GetWater_AG(DstIndex);
+			var water = srcAgent.TryDecWater(Math.Min(Amount, freeCapacity));
+			if (water > 0) DstFormation.Send(DstIndex, new WaterInc(water));
+		}
+	}
+
+	[StructLayout(LayoutKind.Auto)]
+	public readonly struct Energy_AG_PullFrom_AG: IMessage<AboveGroundAgent>
+	{
+		public readonly float Amount;
+		public readonly PlantFormation DstFormation;
+		public readonly int DstIndex;
+		public Energy_AG_PullFrom_AG(PlantFormation dstFormation, float amount, int dstIndex)
+		{
+			Amount = amount;
+			DstFormation = dstFormation;
+			DstIndex = dstIndex;
+		}
+
+		public void Receive(ref AboveGroundAgent agent)
+		{
+			var freeCapacity = DstFormation.GetEnergyCapacity_AG(DstIndex) - DstFormation.GetEnergy_AG(DstIndex);
+			var energy = agent.TryDecEnergy(Math.Min(Amount, freeCapacity));
+			if (energy > 0) DstFormation.Send(DstIndex, new EnergyInc(energy));
+		}
+	}
+
+	/// <summary>
+	/// Orientation with respect to the parent. If there is no parent, this is the initial orientation.
+	/// </summary>
+	public Quaternion Orientation { get; private set; }
+
+	/// <summary>
+	/// Length of the agent in m.
+	/// </summary>
 	public float Length { get; private set; }
 
+	/// <summary>
+	/// Radius of the bottom face in m.
+	/// </summary>
+	public float Radius { get; private set; }
+
+
 	public float Energy { get; private set; }
-	//float mEnergyPassingDown;
-	//float mEnergyPassignUp;
 
+	/// <summary>
+	/// Water volume in m³
+	/// </summary>
 	public float Water { get; private set; }
-	//float mWaterPassingUp;
 
-	float mPhotoFactor; //Capability of photosynthesis
+	/// <summary>
+	/// Inverse woodyness ∈ [0, 1]. The more woody (towards 0) the less photosynthesis can be achieved. 
+	/// </summary>
+	float mPhotoFactor;
 
+	/// <summary>
+	/// Plant organ, e.g. stem, leaft, fruit
+	/// </summary>
 	public OrganTypes Organ { get; private set; }
 
+	/// <summary>
+	/// Index of the parent agent. -1 represents the root of the hierarchy.
+	/// </summary>
 	public int Parent { get; private set; }
 	public int[] Children { get; private set; }
 
-	public const float EnergyTransportRatio = 2f;
-	public const float WaterTransportRatio = 2f;
-	public float WaterFlowToParentPerHour
-	{
-		get
-		{
-			var d = Radius * 2f;
-			return d * d * WaterTransportRatio;
-		}
-	}
 
+	/// <summary>
+	/// Recommended initial length of the agent at birth in m.
+	/// </summary>
+	public const float InitialLength = 1e-5f;
+
+	/// <summary>
+	/// Recommended initial bottom face radius of the agent at birth in m.
+	/// </summary>
+	public const float InitialRadius = 0.2e-5f;
+
+	public const float EnergyTransportRatio = 4f;
+	//So far same as for undergrounds
+	public const float WaterTransportRatio = 1.8f;
+
+	/// <summary>
+	/// Water volume in m³ which can be passed to the parent per hour
+	/// </summary>
+	public float WaterFlowToParentPerHour => 4f * Radius * Radius * WaterTransportRatio;
+
+	/// <summary>
+	/// Water volume in m³ which can be passed to the parent per timestep
+	/// </summary>
 	public float WaterFlowToParentPerTick => WaterFlowToParentPerHour / AgroWorld.TicksPerHour;
 
-	public float EnergyFlowToParentPerHour
-	{
-		get
-		{
-			var d = Radius * 2f;
-			return d * d * WaterTransportRatio;
-		}
-	}
+	public float EnergyFlowToParentPerHour => 4f * Radius * Radius * WaterTransportRatio;
+
 	public float EnergyFlowToParentPerTick => EnergyFlowToParentPerHour / AgroWorld.TicksPerHour;
 
-	public float EnergyCapacity
-	{
-		get
-		{
-			var d = Radius * 2f;
-			return d * d * Length * (1f - WaterCapacityRatio);
-		}
-	}
-
+	/// <summary>
+	/// Volume ratio ∈ [0, 1] of the agent that can used for storing water
+	/// </summary>
 	const float WaterCapacityRatio = 0.75f;
 
-	public float WaterCapacity
-	{
-		get
-		{
-			var d = Radius * 2f;
-			return d * d * Length * WaterCapacityRatio;
-		}
-	}
+	/// <summary>
+	/// Water volume in m³ which can be stored in this agent
+	/// </summary>
+	public float WaterStorageCapacity => 4f * Radius * Radius * Length * WaterCapacityRatio;
+
+	/// <summary>
+	/// Water volume in m³ which can flow through per hour, or can be stored in this agent
+	/// </summary>
+	public float WaterCapacityPerHour => 4f * Radius * Radius * (Length * WaterCapacityRatio + WaterTransportRatio);
+
+	/// <summary>
+	/// Water volume in m³ which can flow through per tick, or can be stored in this agent
+	/// </summary>
+	public float WaterCapacityPerTick => WaterCapacityPerHour / AgroWorld.TicksPerHour;
+
+	/// <summary>
+	/// Timespan for which 1 unit of energy can feed 1m³ of plant tissue
+	/// </summary>
+	//Assuming the energy units are chosen s.t. a plant need an amount of energy per hour
+	//equal to its volume, then this coefficient expresses how long it can survive
+	//without any energy gains if its storage is initially full
+	const float EnergyStorageCoef = 24 * 31 * 3; //3 months
+
+	static float EnergyCapacityFunc(float radius, float length) => 4f * radius * radius * length * (1f - WaterCapacityRatio) * EnergyStorageCoef;
+
+	public float EnergyCapacity => EnergyCapacityFunc(Radius, Length);
 
 
 	public AboveGroundAgent(int parent, OrganTypes organ, Quaternion parentDir, Vector3 unitDirection, float radius, float length, float initialEnergy)
@@ -176,7 +189,7 @@ public record struct AboveGroundAgent : IAgent
 			parentVec.X, parentVec.Y, parentVec.Z, 0f,
 			zVec.X, zVec.Y, zVec.Z, 0f,
 			0f, 0f, 0f, 1f);
-		Direction = Quaternion.CreateFromRotationMatrix(mat);
+		Orientation = Quaternion.CreateFromRotationMatrix(mat);
 
 		Organ = organ;
 
@@ -243,7 +256,7 @@ public record struct AboveGroundAgent : IAgent
 				{
 					var childEnergy = formation.GetEnergy_AG(child);
 					if (childEnergy > Energy)
-						formation.Send(child, new AboveGroundEnergyRequestToAboveGround(formation, 2f * Radius * Radius / AgroWorld.TicksPerHour, formationID));
+						formation.Send(child, new Energy_AG_PullFrom_AG(formation, 2f * Radius * Radius / AgroWorld.TicksPerHour, formationID));
 				}
 		}
 		else //Without energy the part dies
@@ -280,24 +293,25 @@ public record struct AboveGroundAgent : IAgent
 		{
 			var parentEnergy = formation.GetEnergy_AG(Parent);
 			if (parentEnergy > Energy)
-				formation.Send(Parent, new AboveGroundEnergyRequestToAboveGround(formation, lifeSupportPerTick, formationID)); //TODO make requests based on own need and the need of children
+				formation.Send(Parent, new Energy_AG_PullFrom_AG(formation, lifeSupportPerTick, formationID)); //TODO make requests based on own need and the need of children
 		}
 		else
 		{
 			var parentEnergy = formation.GetEnergy_UG(0);
 			if (parentEnergy > Energy)
-				formation.Send(0, new Energy_UG_PullFrom_AG(formation, lifeSupportPerTick, formationID)); //TODO make requests based on own need and the need of children
+				formation.Send(0, new UnderGroundAgent.Energy_AG_PullFrom_UG(formation, lifeSupportPerTick, formationID)); //TODO make requests based on own need and the need of children
 		}
 
-		if (Water < WaterCapacity) //TODO different coefficients for different organs and different state (amount of wood)
+		var freeCapacity = WaterCapacityPerTick - Water;
+		if (freeCapacity > 0) //TODO different coefficients for different organs and different state (amount of wood)
 		{
 			if (Parent >= 0)
-				formation.Send(Parent, new Water_AG_PullFrom_AG(formation, Math.Min(WaterFlowToParentPerTick, WaterCapacity - Water), formationID));
+				formation.Send(Parent, new Water_AG_PullFrom_AG(formation, Math.Min(WaterFlowToParentPerTick, freeCapacity), formationID));
 		}
 	}
 
 	public void IncWater(float amount) => Water += amount;
-	public void IncEnergy(float amount) => Energy += amount * 0.99f;
+	public void IncEnergy(float amount) => Energy += amount;
 
 	internal float TryDecWater(float amount)
 	{
@@ -332,7 +346,7 @@ public record struct AboveGroundAgent : IAgent
 	internal AboveGroundAgent AddChild(int index)
 	{
 		var result = default(AboveGroundAgent);
-		result.Direction = Direction;
+		result.Orientation = Orientation;
 		result.Radius = Radius;
 		result.Length = Length;
 		result.Energy = Energy;
