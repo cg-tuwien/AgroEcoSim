@@ -1,15 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Numerics;
 using System.Runtime.InteropServices;
 using AgentsSystem;
 
 namespace Agro;
-
-public interface ISeed : IAgent
-{
-	void ReceiveWater(float amount);
-}
 
 [StructLayout(LayoutKind.Auto)]
 public readonly struct SoilWaterToSeedMsg : IMessage<SeedAgent>
@@ -20,36 +16,16 @@ public readonly struct SoilWaterToSeedMsg : IMessage<SeedAgent>
 	public readonly float Amount;
 
 	public SoilWaterToSeedMsg(float amount) => Amount = amount;
+	public Transaction Type => Transaction.Increase;
 
-	public void Receive(ref SeedAgent agent) => agent.ReceiveWater(Amount);
+	public void Receive(ref SeedAgent agent) => agent.IncWater(Amount);
 }
-
-[StructLayout(LayoutKind.Auto)]
-public readonly struct SeedWaterRequestToSoilMsg : IMessage<SoilAgent>
-{
-	public readonly float Amount;
-	public readonly PlantFormation Formation;
-	public readonly int Index;
-	public SeedWaterRequestToSoilMsg(float amount, PlantFormation formation, int index)
-	{
-		Amount = amount;
-		Formation = formation;
-		Index = index;
-	}
-	public void Receive(ref SoilAgent agent)
-	{
-		var w = agent.TryDecWater(Amount);
-		if (w > 0)
-			Formation.Send(Index, new SoilWaterToSeedMsg(w));
-	}
-}
-
 
 /// <summary>
-/// Approximated by a sphere
+/// Plant seed, approximated by a sphere
 /// </summary>
 [StructLayout(LayoutKind.Auto)]
-public struct SeedAgent : ISeed
+public struct SeedAgent : IAgent
 {
 	const float Pi4 = MathF.PI * 4f;
 	const float PiV = 3f * 0.001f * 0.1f / Pi4;
@@ -133,15 +109,16 @@ public struct SeedAgent : ISeed
 							amount *= (soilTemperature - mVegetativeTemperature.X) / (mVegetativeTemperature.Y - mVegetativeTemperature.X);
 						mEnergyStored += amount * 0.7f; //store most of the energy, 0.2f are losses
 						mRadius = MathF.Pow(Radius * Radius * Radius + amount * PiV, Third); //use the rest for growth
-						soil.Send(sources[0], new SeedWaterRequestToSoilMsg(amount / AgroWorld.TicksPerHour, formation, formationID));                        
+						soil.Send(sources[0], new SoilAgent.SeedWaterRequestToSoilMsg(amount / AgroWorld.TicksPerHour, formation, formationID));
 					}
 				}
 			}
 		}
 	}
 
-	public void ReceiveWater(float amount)
+	public void IncWater(float amount)
 	{
+		Debug.Assert(amount >= 0f);
 		mEnergyStored += amount * 0.7f; //store most of the energy, 0.2f are losses
 		mRadius = MathF.Pow(Radius * Radius * Radius + amount * PiV, Third); //use the rest for growth
 	}

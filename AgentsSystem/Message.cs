@@ -3,9 +3,12 @@ using System.Collections.Generic;
 using System.Runtime.InteropServices;
 
 namespace AgentsSystem;
+
+public enum Transaction { Unknown = 0, Increase = 1, Decrease = 2}
 public interface IMessage<T> where T : struct, IAgent
 {
     void Receive(ref T agent);
+    Transaction Type { get; }
 }
 
 [StructLayout(LayoutKind.Auto)]
@@ -13,6 +16,7 @@ public readonly struct MessageWrapper<T> where T : struct, IAgent
 {
     readonly IMessage<T> Message;
     readonly IEnumerable<int>? Recipients;
+    public Transaction Type => Message.Type;
 
     public MessageWrapper(IMessage<T> msg)
     {
@@ -34,9 +38,11 @@ public readonly struct MessageWrapper<T> where T : struct, IAgent
     public void Process(T[] agents)
     {
         if (Recipients == null)
+        {
             for(int i = 0; i < agents.Length; ++i)
                 //agents[i] = Message.Receive(agents[i]);
                 Message.Receive(ref agents[i]);
+        }
         else
             foreach(var recipient in Recipients)
                 //agents[recipient] = Message.Receive(agents[recipient]);

@@ -256,11 +256,20 @@ public partial struct AboveGroundAgent : IAgent
 		}
 	}
 
-	public void IncWater(float amount) => Water += amount;
-	public void IncEnergy(float amount) => Energy += amount;
+	public void IncWater(float amount)
+	{
+		Debug.Assert(amount >= 0f);
+		Water += amount;
+	}
+	public void IncEnergy(float amount)
+	{
+		Debug.Assert(amount >= 0f);
+		Energy += amount;
+	}
 
 	internal float TryDecWater(float amount)
 	{
+		Debug.Assert(amount >= 0f);
 		if (Water > amount)
 		{
 			Water -= amount;
@@ -276,6 +285,7 @@ public partial struct AboveGroundAgent : IAgent
 
 	internal float TryDecEnergy(float amount)
 	{
+		Debug.Assert(amount >= 0f);
 		if (Energy > amount)
 		{
 			Energy -= amount;

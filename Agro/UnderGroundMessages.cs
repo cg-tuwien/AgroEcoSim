@@ -15,6 +15,7 @@ public partial struct UnderGroundAgent : IAgent
     {
         public readonly float Amount;
         public WaterInc(float amount) => Amount = amount;
+        public Transaction Type => Transaction.Increase;
         public void Receive(ref UnderGroundAgent dstAgent) => dstAgent.IncWater(Amount);
     }
 
@@ -23,32 +24,8 @@ public partial struct UnderGroundAgent : IAgent
     {
         public readonly float Amount;
         public EnergyInc(float amount) => Amount = amount;
+        public Transaction Type => Transaction.Increase;
         public void Receive(ref UnderGroundAgent dstAgent) => dstAgent.IncEnergy(Amount);
-    }
-
-
-    [StructLayout(LayoutKind.Auto)]
-    public readonly struct Water_UG_PullFrom_Soil : IMessage<SoilAgent>
-    {
-        /// <summary>
-        /// Water volume in m³
-        /// </summary>
-        public readonly float Amount;
-        public readonly PlantFormation DstFormation;
-        public readonly int DstIndex;
-        public Water_UG_PullFrom_Soil(PlantFormation dstFormation, float amount, int dstIndex)
-        {
-            Amount = amount;
-            DstFormation = dstFormation;
-            DstIndex = dstIndex;
-        }
-        public void Receive(ref SoilAgent srcAgent)
-        {
-            var freeCapacity = DstFormation.GetWaterCapacityPerTick_UG(DstIndex) - DstFormation.GetWater_UG(DstIndex);
-            var water = srcAgent.TryDecWater(Math.Min(Amount, freeCapacity));
-            //Writing actions from other formations must not be implemented directly, but over messages
-            if (water > 0) DstFormation.Send(DstIndex, new WaterInc(water));
-        }
     }
 
     [StructLayout(LayoutKind.Auto)]
@@ -63,10 +40,11 @@ public partial struct UnderGroundAgent : IAgent
             DstFormation = dstFormation;
             DstIndex = dstIndex;
         }
+        public Transaction Type => Transaction.Decrease;
 
         public void Receive(ref UnderGroundAgent srcAgent)
         {
-            var freeCapacity = DstFormation.GetEnergyCapacity_UG(DstIndex) - DstFormation.GetEnergy_UG(DstIndex);
+            var freeCapacity = Math.Max(0f, DstFormation.GetEnergyCapacity_UG(DstIndex) - DstFormation.GetEnergy_UG(DstIndex));
             var energy = srcAgent.TryDecEnergy(Math.Min(freeCapacity, Amount));
             if (energy > 0) DstFormation.Send(DstIndex, new EnergyInc(energy));
         }
@@ -84,10 +62,11 @@ public partial struct UnderGroundAgent : IAgent
             DstFormation = dstFormation;
             DstIndex = dstIndex;
         }
+        public Transaction Type => Transaction.Decrease;
 
         public void Receive(ref AboveGroundAgent srcAgent)
         {
-            var freeCapacity = DstFormation.GetEnergyCapacity_UG(DstIndex) - DstFormation.GetEnergy_UG(DstIndex);
+            var freeCapacity = Math.Max(0f, DstFormation.GetEnergyCapacity_UG(DstIndex) - DstFormation.GetEnergy_UG(DstIndex));
             var energy = srcAgent.TryDecEnergy(Math.Min(Amount, freeCapacity));
             if (energy > 0) DstFormation.Send(DstIndex, new EnergyInc(energy));
         }
@@ -108,9 +87,11 @@ public partial struct UnderGroundAgent : IAgent
             DstFormation = dstFormation;
             DstIndex = dstIndex;
         }
+        public Transaction Type => Transaction.Decrease;
+
         public void Receive(ref UnderGroundAgent srcAgent)
         {
-            var freeCapacity = DstFormation.GetWaterCapacityPerTick_UG(DstIndex) - DstFormation.GetWater_UG(DstIndex);
+            var freeCapacity = Math.Max(0f, DstFormation.GetWaterCapacityPerTick_UG(DstIndex) - DstFormation.GetWater_UG(DstIndex));
             var energy = srcAgent.TryDecWater(Math.Min(freeCapacity, Amount));
             if (energy > 0) DstFormation.Send(DstIndex, new WaterInc(energy));
         }
@@ -127,10 +108,12 @@ public partial struct UnderGroundAgent : IAgent
             DstFormation = dstFormation;
             DstIndex = dstIndex;
         }
+        public Transaction Type => Transaction.Decrease;
+
         public void Receive(ref UnderGroundAgent srcAgent)
         {
-            var capacity = DstFormation.GetWaterCapacityPerTick_AG(DstIndex) - DstFormation.GetWater_AG(DstIndex);
-            var water = srcAgent.TryDecWater(Math.Min(Amount, capacity));
+            var freeCapacity = Math.Max(0f, DstFormation.GetWaterCapacityPerTick_AG(DstIndex) - DstFormation.GetWater_AG(DstIndex));
+            var water = srcAgent.TryDecWater(Math.Min(Amount, freeCapacity));
             if (water > 0) DstFormation.Send(DstIndex, new AboveGroundAgent.WaterInc(water));
         }
     }

@@ -64,6 +64,11 @@ public partial struct UnderGroundAgent : IAgent
     public const float InitialRadius = 0.2e-5f;
 
     /// <summary>
+    /// The growth rate is reduced exponentially wrt. children count, i.e. childrenCount^GrowthDeclineByExpChildren
+    /// </summary>
+    public const float GrowthDeclineByExpChildren = 4;
+
+    /// <summary>
     /// Water volume in m³ that can be absorbed per m² of root surface per hour
     /// </summary>
     public const float WaterAbsortionRatio = 1f;
@@ -182,7 +187,7 @@ public partial struct UnderGroundAgent : IAgent
 
     public void Tick(SimulationWorld world, IFormation _formation, int formationID, uint timestep)
     {
-        Console.WriteLine($"{timestep} x {formationID}: w={Water} e={Energy}");
+        //Console.WriteLine($"{timestep} x {formationID}: w={Water} e={Energy} waf={WaterAbsorbtionFactor}");
         var formation = (PlantFormation)_formation;
 
         //TODO perhaps it should somehow reflect temperature
@@ -201,9 +206,9 @@ public partial struct UnderGroundAgent : IAgent
         ///////////////////////////
         if (Energy > lifeSupportPerHour * 36) //maybe make it a factor storedEnergy/lifeSupport so that it grows fast when it has full storage        
         {
-            var childrenCount = MathF.Pow(children.Count + 1, 4);
-            var lengthGrowth = 2e-4f / (AgroWorld.TicksPerHour * childrenCount * MathF.Pow(lr * Length, 0.1f));
-            var widthGrowth = 1e-5f / (AgroWorld.TicksPerHour * childrenCount * MathF.Pow(lifeSupportPerHour, 0.1f)); //just optimized the number of multiplications
+            var childrenCount = children.Count + 1;
+            var lengthGrowth = 2e-4f / (AgroWorld.TicksPerHour * MathF.Pow(childrenCount, GrowthDeclineByExpChildren + 1) * MathF.Pow(lr * Length, 0.1f));
+            var widthGrowth = 1e-5f / (AgroWorld.TicksPerHour * MathF.Pow(childrenCount, GrowthDeclineByExpChildren) * MathF.Pow(lifeSupportPerHour, 0.1f)); //just optimized the number of multiplications
             
             Length += lengthGrowth;
             Radius += widthGrowth;
@@ -257,7 +262,7 @@ public partial struct UnderGroundAgent : IAgent
             {
                 var childEnergy = formation.GetEnergy_UG(child);
                 if (childEnergy > Energy)
-                    formation.Send(child, new Energy_UG_PullFrom_UG(formation, Math.Min(formation.GetEnergyFlow_PerTick_UG(child), (Energy - childEnergy) * 0.5f), formationID));
+                    formation.Send(child, new Energy_UG_PullFrom_UG(formation, Math.Min(formation.GetEnergyFlow_PerTick_UG(child), (childEnergy - Energy) * 0.5f), formationID));
             }
         }
         else //Without energy the part dies
@@ -273,7 +278,8 @@ public partial struct UnderGroundAgent : IAgent
         ///////////////////////////
         if (WaterAbsorbtionFactor > 0f)
         {
-            if (Water < WaterStorageCapacity)
+            var waterCapacity = WaterAbsorbtionPerTick;
+            if (Water < waterCapacity)
             {
                 var soil = formation.Soil;
                 var baseCenter = formation.GetBaseCenter_UG(formationID);
@@ -284,13 +290,13 @@ public partial struct UnderGroundAgent : IAgent
                 
                 if (sources.Count > 0) //TODO this is a rough approximation taking only the first intersected soil cell
                 {
-                    var amount = WaterAbsorbtionPerTick;
+                    var amount = waterCapacity;
                     var soilTemperature = soil.GetTemperature(sources[0]);
                     if (soilTemperature > vegetativeTemp.X)
                     {
                         if (soilTemperature < vegetativeTemp.Y)
                             amount *= (soilTemperature - vegetativeTemp.X) / (vegetativeTemp.Y - vegetativeTemp.X);
-                        soil.Send(sources[0], new Water_UG_PullFrom_Soil(formation, amount, formationID)); //TODO change to tube surface!
+                        soil.Send(sources[0], new SoilAgent.Water_UG_PullFrom_Soil(formation, amount, formationID)); //TODO change to tube surface!
                     }
                 }
             }
@@ -330,11 +336,20 @@ public partial struct UnderGroundAgent : IAgent
         #endregion
     }
 
-    void IncWater(float amount) => Water += amount;
-    void IncEnergy(float amount) => Energy += amount;
+    void IncWater(float amount)
+    {
+        Debug.Assert(amount >= 0f);
+        Water += amount;
+    }
+    void IncEnergy(float amount)
+    {
+        Debug.Assert(amount >= 0f);
+        Energy += amount;
+    }
 
     float TryDecWater(float amount)
     {
+        Debug.Assert(amount >= 0f);
         if (Water > amount)
         {
             Water -= amount;
@@ -350,6 +365,7 @@ public partial struct UnderGroundAgent : IAgent
 
     float TryDecEnergy(float amount)
     {
+        Debug.Assert(amount >= 0f);
         if (Energy > amount)
         {
             Energy -= amount;

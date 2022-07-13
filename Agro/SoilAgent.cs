@@ -7,24 +7,71 @@ using Utils;
 namespace Agro;
 
 [StructLayout(LayoutKind.Auto)]
-public readonly struct WaterDiffusionMsg : IMessage<SoilAgent>
-{
-	public readonly float Amount;
-	public WaterDiffusionMsg(float amount) => Amount = amount;
-	public void Receive(ref SoilAgent agent) => agent.IncWater(Amount);
-}
-
-[StructLayout(LayoutKind.Auto)]
-public readonly struct SteamDiffusionMsg : IMessage<SoilAgent>
-{
-	public readonly float Amount;
-	public SteamDiffusionMsg(float amount) => Amount = amount;
-	public void Receive(ref SoilAgent agent) => agent.IncSteam(Amount);
-}
-
-[StructLayout(LayoutKind.Auto)]
 public struct SoilAgent : IAgent
 {
+	[StructLayout(LayoutKind.Auto)]
+	public readonly struct WaterDiffusionMsg : IMessage<SoilAgent>
+	{
+		public readonly float Amount;
+		public WaterDiffusionMsg(float amount) => Amount = amount;
+		public Transaction Type => Transaction.Increase;
+		public void Receive(ref SoilAgent agent) => agent.IncWater(Amount);
+	}
+
+	[StructLayout(LayoutKind.Auto)]
+	public readonly struct SteamDiffusionMsg : IMessage<SoilAgent>
+	{
+		public readonly float Amount;
+		public SteamDiffusionMsg(float amount) => Amount = amount;
+		public Transaction Type => Transaction.Increase;
+		public void Receive(ref SoilAgent agent) => agent.IncSteam(Amount);
+	}
+
+	[StructLayout(LayoutKind.Auto)]
+	public readonly struct Water_UG_PullFrom_Soil : IMessage<SoilAgent>
+	{
+		/// <summary>
+		/// Water volume in m³
+		/// </summary>
+		public readonly float Amount;
+		public readonly PlantFormation DstFormation;
+		public readonly int DstIndex;
+		public Water_UG_PullFrom_Soil(PlantFormation dstFormation, float amount, int dstIndex)
+		{
+			Amount = amount;
+			DstFormation = dstFormation;
+			DstIndex = dstIndex;
+		}
+		public Transaction Type => Transaction.Decrease;
+		public void Receive(ref SoilAgent srcAgent)
+		{
+			var freeCapacity = Math.Max(0f, DstFormation.GetWaterCapacityPerTick_UG(DstIndex) - DstFormation.GetWater_UG(DstIndex));
+			var water = srcAgent.TryDecWater(Math.Min(Amount, freeCapacity));
+			//Writing actions from other formations must not be implemented directly, but over messages
+			if (water > 0) DstFormation.Send(DstIndex, new UnderGroundAgent.WaterInc(water));
+		}
+	}
+
+	[StructLayout(LayoutKind.Auto)]
+	public readonly struct SeedWaterRequestToSoilMsg : IMessage<SoilAgent>
+	{
+		public readonly float Amount;
+		public readonly PlantFormation Formation;
+		public readonly int Index;
+		public SeedWaterRequestToSoilMsg(float amount, PlantFormation formation, int index)
+		{
+			Amount = amount;
+			Formation = formation;
+			Index = index;
+		}
+		public Transaction Type => Transaction.Decrease;
+		public void Receive(ref SoilAgent agent)
+		{
+			var w = agent.TryDecWater(Amount);
+			if (w > 0) Formation.Send(Index, new SoilWaterToSeedMsg(w));
+		}
+	}
+
 	public const float FieldCellSurface = AgroWorld.FieldResolution * AgroWorld.FieldResolution;
 
 	internal const float SoilDiffusionCoefPerTick = 0.1f / AgroWorld.TicksPerHour;
@@ -100,10 +147,10 @@ public struct SoilAgent : IAgent
 		}
 
 	}
-	public void IncWater(float amount) => mWater += amount;
-	public void IncSteam(float amount) => mSteam += amount;
+	void IncWater(float amount) => mWater += amount;
+	void IncSteam(float amount) => mSteam += amount;
 
-	internal float TryDecWater(float amount)
+	float TryDecWater(float amount)
 	{
 		if (mWater > amount)
 		{
