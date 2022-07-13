@@ -221,15 +221,17 @@ public partial class PlantFormation : IFormation
 			}
 
 			var diff = UnderGroundBirths.Count - UnderGroundDeaths.Count;
-			UnderGroundAgent[] underground;
+			UnderGroundAgent[] underGround;
 			if (diff != 0)
-				underground = new UnderGroundAgent[UnderGround.Length + diff];
+				underGround = new UnderGroundAgent[UnderGround.Length + diff];
 			else
-				underground = UnderGround;
+				underGround = UnderGround;
 
 			int a = 0;
+			int[] indexMap = null;
 			if (UnderGroundDeaths.Count > 0)
 			{
+				indexMap = new int[UnderGround.Length + UnderGroundBirths.Count];
 #if GODOT				
 				for(var i = UnderGroundDeaths.Count - 1; i >= 0; --i)
 					GodotRemoveUnderGroundSprite(UnderGroundDeaths[i]);
@@ -239,24 +241,36 @@ public partial class PlantFormation : IFormation
 				// 	if (UnderGround[index].Parent >= 0)
 				// 		UnderGround[UnderGround[index].Parent].RemoveChild(index);
 
-				for(int i = UnderGround.Length - 1, d = UnderGroundDeaths.Count - 1; i >= 0; --i)
+				var dc = UnderGroundDeaths.Count;
+				for(int i = 0, d = 0; i < UnderGround.Length; ++i)
 				{
-					if (d >= 0 && UnderGroundDeaths[d] == i)
-						--d;
+					if (UnderGroundDeaths[d] == i)
+					{
+						if (++d == dc && i + 1 < UnderGround.Length)
+						{
+							Array.Copy(UnderGround, i + 1, underGround, a, UnderGround.Length - i - 1);
+							for(int j = i + 1; j < UnderGround.Length; ++j)
+								indexMap[j] = a++;
+							break;
+						}
+					}
 					else
-						underground[a++] = UnderGround[i];
+					{
+						indexMap[i] = a;
+						underGround[a++] = UnderGround[i];
+					}
 				}
 				UnderGroundDeaths.Clear();
 			}
 			else
 			{
-				Array.Copy(UnderGround, underground, UnderGround.Length);
+				Array.Copy(UnderGround, underGround, UnderGround.Length);
 				a = UnderGround.Length;
 			}
 
 			for(int i = 0; i < UnderGroundBirths.Count; ++i, ++a)
 			{				
-				underground[a] = UnderGroundBirths[i];
+				underGround[a] = UnderGroundBirths[i];
 #if GODOT
 				GodotAddUnderGroundSprite(a);
 #endif				
@@ -264,11 +278,13 @@ public partial class PlantFormation : IFormation
 
 			UnderGroundBirths.Clear();
 
-			UnderGround = underground;
+			if (indexMap != null)
+				UnderGroundAgent.Reindex(underGround, indexMap);			
+
+			UnderGround = underGround;
 			UnderGroundTMP = new UnderGroundAgent[UnderGround.Length];                
 		}
 
-		//TODO Reindex if RootsDeaths.Count!
 		if (AboveGroundBirths.Count > 0 || AboveGroundDeaths.Count > 0)
 		{
 			if (AboveGroundDeaths.Count > 0)
@@ -300,10 +316,19 @@ public partial class PlantFormation : IFormation
 					if (AboveGround[index].Parent >= 0)
 						AboveGround[AboveGround[index].Parent].RemoveChild(index);
 
-				for(int i = AboveGround.Length - 1, d = AboveGroundDeaths.Count - 1; i >= 0; --i)
+				var dc = UnderGroundDeaths.Count;
+				for(int i = 0, d = 0; i < AboveGround.Length; ++i)
 				{
-					if (d >= 0 && AboveGroundDeaths[d] == i)
-						--d;
+					if (AboveGroundDeaths[d] == i)
+					{
+						if(++d == dc && i + 1 < AboveGround.Length)
+						{
+							Array.Copy(AboveGround, i + 1, aboveGround, a, AboveGround.Length - i - 1);
+							for(int j = i + 1; j < AboveGround.Length; ++j)
+								indexMap[j] = a++;
+							break;
+						}
+					}
 					else
 					{
 						indexMap[i] = a;
