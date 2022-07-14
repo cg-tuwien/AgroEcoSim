@@ -73,6 +73,7 @@ public struct SoilAgent : IAgent
 	}
 
 	public const float FieldCellSurface = AgroWorld.FieldResolution * AgroWorld.FieldResolution;
+	public const float FieldCellVolume = FieldCellSurface * AgroWorld.FieldResolution;
 
 	internal const float SoilDiffusionCoefPerTick = 0.1f / AgroWorld.TicksPerHour;
 	internal const float GravitationDiffusionCoefPerTick = 0.1f * SoilDiffusionCoefPerTick;
