@@ -319,6 +319,9 @@ public class Formation3iTransformed<T> : Formation3i<T> where T : struct, IAgent
 
 		var iCenter = new Vector3i(center);
 
-		return new List<int>{Index(iCenter)};
+		if (iCenter.X >= 0 && iCenter.Y >= 0 && iCenter.Z >= 0 && iCenter.X < SizeX && iCenter.Y < SizeY && iCenter.Z < SizeZ)
+			return new List<int>{Index(iCenter)};
+		else
+			return new List<int>();
 	}
 }
