@@ -48,6 +48,21 @@ public partial class PlantFormation : IFormation
 		RNG = parentRNG.NextRNG();
 	}
 
+	/// <summary>
+	/// An ordered tuple of the double data-buffer entries ready for swap.
+	/// </summary>
+	(SeedAgent[], SeedAgent[]) SrcDst_Seed() => ReadTMP ? (SeedTMP, Seed) : (Seed, SeedTMP);
+
+	/// <summary>
+	/// An ordered tuple of the double data-buffer entries ready for swap.
+	/// </summary>
+	(UnderGroundAgent[], UnderGroundAgent[]) SrcDst_UG() => ReadTMP ? (UnderGroundTMP, UnderGround) : (UnderGround, UnderGroundTMP);
+
+	/// <summary>
+	/// An ordered tuple of the double data-buffer entries ready for swap.
+	/// </summary>
+	(AboveGroundAgent[], AboveGroundAgent[]) SrcDst_AG() => ReadTMP ? (AboveGroundTMP, AboveGround) : (AboveGround, AboveGroundTMP);
+
 	public int UnderGroundBirth(UnderGroundAgent agent)
 	{
 		UnderGroundBirths.Add(agent);
@@ -70,19 +85,19 @@ public partial class PlantFormation : IFormation
 	public int AboveGroundBirth(AboveGroundAgent agent)
 	{
 		AboveGroundBirths.Add(agent);
-		if (agent.Parent >= 0)
-		{
-			if (agent.Parent < AboveGround.Length)
-			{
-				var data = ReadTMP ? AboveGroundTMP : AboveGround;
-				data[agent.Parent] = data[agent.Parent].AddChild(AboveGround.Length + AboveGroundBirths.Count - 1);
-			}
-			else
-			{
-				var index = agent.Parent - AboveGround.Length;
-				AboveGroundBirths[index] = AboveGroundBirths[index].AddChild(AboveGround.Length + AboveGroundBirths.Count - 1);
-			}
-		}
+		// if (agent.Parent >= 0)
+		// {
+		// 	if (agent.Parent < AboveGround.Length)
+		// 	{
+		// 		var data = ReadTMP ? AboveGroundTMP : AboveGround;
+		// 		data[agent.Parent] = data[agent.Parent].AddChild(AboveGround.Length + AboveGroundBirths.Count - 1);
+		// 	}
+		// 	else
+		// 	{
+		// 		var index = agent.Parent - AboveGround.Length;
+		// 		AboveGroundBirths[index] = AboveGroundBirths[index].AddChild(AboveGround.Length + AboveGroundBirths.Count - 1);
+		// 	}
+		// }
 		return AboveGround.Length + AboveGroundBirths.Count - 1;
 	}
 
@@ -100,7 +115,7 @@ public partial class PlantFormation : IFormation
 		while (buffer.Count > 0)
 		{
 			var i = buffer.Dequeue();
-			var children = GetUnderGroundChildren(i);
+			var children = GetChildren_UG(i);
 			if (children != null)
 				foreach(var child in children)
 				{
@@ -118,7 +133,8 @@ public partial class PlantFormation : IFormation
 		while (buffer.Count > 0)
 		{
 			var i = buffer.Dequeue();
-			var children = ReadTMP ? AboveGroundTMP[i].Children : AboveGround[i].Children;
+			//var children = ReadTMP ? AboveGroundTMP[i].Children : AboveGround[i].Children;
+			var children = GetChildren_AG(i);
 			if (children != null)
 				foreach(var child in children)
 				{
@@ -209,6 +225,10 @@ public partial class PlantFormation : IFormation
 		// if (StemsBirths.Count > 0)
 		//     Stems.AddRange(StemsBirths);
 
+		var (srcSeed, dstSeed) = SrcDst_Seed();
+		var (srcUG, dstUG) = SrcDst_UG();
+		var (srcAG, dstAG) = SrcDst_AG();
+
 		if (UnderGroundBirths.Count > 0 || UnderGroundDeaths.Count > 0)
 		{
 			if (UnderGroundDeaths.Count > 0)
@@ -223,15 +243,15 @@ public partial class PlantFormation : IFormation
 			var diff = UnderGroundBirths.Count - UnderGroundDeaths.Count;
 			UnderGroundAgent[] underGround;
 			if (diff != 0)
-				underGround = new UnderGroundAgent[UnderGround.Length + diff];
+				underGround = new UnderGroundAgent[srcUG.Length + diff];
 			else
-				underGround = UnderGround;
+				underGround = srcUG;
 
 			int a = 0;
 			int[] indexMap = null;
 			if (UnderGroundDeaths.Count > 0)
 			{
-				indexMap = new int[UnderGround.Length + UnderGroundBirths.Count];
+				indexMap = new int[srcUG.Length + UnderGroundBirths.Count];
 #if GODOT				
 				for(var i = UnderGroundDeaths.Count - 1; i >= 0; --i)
 					GodotRemoveUnderGroundSprite(UnderGroundDeaths[i]);
@@ -242,14 +262,14 @@ public partial class PlantFormation : IFormation
 				// 		UnderGround[UnderGround[index].Parent].RemoveChild(index);
 
 				var dc = UnderGroundDeaths.Count;
-				for(int i = 0, d = 0; i < UnderGround.Length; ++i)
+				for(int i = 0, d = 0; i < srcUG.Length; ++i)
 				{
 					if (UnderGroundDeaths[d] == i)
 					{
-						if (++d == dc && i + 1 < UnderGround.Length)
+						if (++d == dc && i + 1 < srcUG.Length)
 						{
-							Array.Copy(UnderGround, i + 1, underGround, a, UnderGround.Length - i - 1);
-							for(int j = i + 1; j < UnderGround.Length; ++j)
+							Array.Copy(srcUG, i + 1, underGround, a, srcUG.Length - i - 1);
+							for(int j = i + 1; j < srcUG.Length; ++j)
 								indexMap[j] = a++;
 							break;
 						}
@@ -257,15 +277,15 @@ public partial class PlantFormation : IFormation
 					else
 					{
 						indexMap[i] = a;
-						underGround[a++] = UnderGround[i];
+						underGround[a++] = srcUG[i];
 					}
 				}
 				UnderGroundDeaths.Clear();
 			}
 			else
 			{
-				Array.Copy(UnderGround, underGround, UnderGround.Length);
-				a = UnderGround.Length;
+				Array.Copy(srcUG, underGround, srcUG.Length);
+				a = srcUG.Length;
 			}
 
 			for(int i = 0; i < UnderGroundBirths.Count; ++i, ++a)
@@ -281,8 +301,17 @@ public partial class PlantFormation : IFormation
 			if (indexMap != null)
 				UnderGroundAgent.Reindex(underGround, indexMap);			
 
-			UnderGround = underGround;
-			UnderGroundTMP = new UnderGroundAgent[UnderGround.Length];                
+			if (ReadTMP)
+			{
+				UnderGround = new UnderGroundAgent[underGround.Length];
+				UnderGroundTMP = underGround;
+			}
+			else
+			{
+				UnderGround = underGround;
+				UnderGroundTMP = new UnderGroundAgent[underGround.Length];
+			}
+			(srcUG, dstUG) = SrcDst_UG();
 		}
 
 		if (AboveGroundBirths.Count > 0 || AboveGroundDeaths.Count > 0)
@@ -299,32 +328,32 @@ public partial class PlantFormation : IFormation
 			var diff = AboveGroundBirths.Count - AboveGroundDeaths.Count;
 			AboveGroundAgent[] aboveGround;
 			if (diff != 0)
-				aboveGround = new AboveGroundAgent[AboveGround.Length + diff];
+				aboveGround = new AboveGroundAgent[srcAG.Length + diff];
 			else
-				aboveGround = AboveGround;
+				aboveGround = srcAG;
 
 			int a = 0;
 			int[] indexMap = null;
 			if (AboveGroundDeaths.Count > 0)
 			{
-				indexMap = new int[AboveGround.Length + AboveGroundBirths.Count];
+				indexMap = new int[srcAG.Length + AboveGroundBirths.Count];
 #if GODOT
 				for(var i = AboveGroundDeaths.Count - 1; i >=0; --i)
 					GodotRemoveAboveGroundSprite(AboveGroundDeaths[i]);
 #endif
-				foreach(var index in AboveGroundDeaths) //must run before copying to aboveGround
-					if (AboveGround[index].Parent >= 0)
-						AboveGround[AboveGround[index].Parent].RemoveChild(index);
+				// foreach(var index in AboveGroundDeaths) //must run before copying to aboveGround
+				// 	if (AboveGround[index].Parent >= 0)
+				// 		AboveGround[AboveGround[index].Parent].RemoveChild(index);
 
-				var dc = UnderGroundDeaths.Count;
-				for(int i = 0, d = 0; i < AboveGround.Length; ++i)
+				var dc = AboveGroundDeaths.Count;
+				for(int i = 0, d = 0; i < srcAG.Length; ++i)
 				{
 					if (AboveGroundDeaths[d] == i)
 					{
-						if(++d == dc && i + 1 < AboveGround.Length)
+						if(++d == dc && i + 1 < srcAG.Length)
 						{
-							Array.Copy(AboveGround, i + 1, aboveGround, a, AboveGround.Length - i - 1);
-							for(int j = i + 1; j < AboveGround.Length; ++j)
+							Array.Copy(srcAG, i + 1, aboveGround, a, srcAG.Length - i - 1);
+							for(int j = i + 1; j < srcAG.Length; ++j)
 								indexMap[j] = a++;
 							break;
 						}
@@ -332,19 +361,19 @@ public partial class PlantFormation : IFormation
 					else
 					{
 						indexMap[i] = a;
-						aboveGround[a++] = AboveGround[i];
+						aboveGround[a++] = srcAG[i];
 					}
 				}
 
 				AboveGroundDeaths.Clear();
 
 				for(int i = 0; i < AboveGroundBirths.Count; ++i)
-					indexMap[AboveGround.Length + i] = a + i;
+					indexMap[srcAG.Length + i] = a + i;
 			}
 			else
 			{
-				Array.Copy(AboveGround, aboveGround, AboveGround.Length);
-				a = AboveGround.Length;
+				Array.Copy(srcAG, aboveGround, srcAG.Length);
+				a = srcAG.Length;
 			}
 
 			for(int i = 0; i < AboveGroundBirths.Count; ++i, ++a)
@@ -360,13 +389,22 @@ public partial class PlantFormation : IFormation
 			if (indexMap != null)
 				AboveGroundAgent.Reindex(aboveGround, indexMap);
 
-			AboveGround = aboveGround;
-			AboveGroundTMP = new AboveGroundAgent[AboveGround.Length];
+			if (ReadTMP)
+			{
+				AboveGround = new AboveGroundAgent[aboveGround.Length];
+				AboveGroundTMP = aboveGround;
+			}
+			else
+			{
+				AboveGround = aboveGround;
+				AboveGroundTMP = new AboveGroundAgent[aboveGround.Length];
+			}
+			(srcAG, dstAG) = SrcDst_AG();
 		}
 
 		
-		Array.Copy(AboveGround, AboveGroundTMP, AboveGround.Length);
-		Array.Copy(UnderGround, UnderGroundTMP, UnderGround.Length);
+		Array.Copy(srcAG, dstAG, srcAG.Length);
+		Array.Copy(srcUG, dstUG, dstUG.Length);
 		// RootsTMP.Clear();
 		// RootsTMP.AddRange(Roots);
 		// StemsTMP.Clear();
@@ -375,39 +413,47 @@ public partial class PlantFormation : IFormation
 		//We know there is just a single seed (if any)
 		if (Seed.Length > 0)
 		{
-			Array.Copy(Seed, SeedTMP, Seed.Length);
-			SeedTMP[0].Tick(world, this, 0, timestep);
+			Array.Copy(srcSeed, dstSeed, srcSeed.Length);
+			dstSeed[0].Tick(world, this, 0, timestep);
 		}
 		
-		for(int i = 0; i < UnderGroundTMP.Length; ++i)
+		for(int i = 0; i < dstUG.Length; ++i)
 		//Parallel.For(0, RootsTMP.Length, i =>
-			UnderGroundTMP[i].Tick(world, this, i, timestep);
+			dstUG[i].Tick(world, this, i, timestep);
 		//);
-		for(int i = 0; i < AboveGroundTMP.Length; ++i)
+		for(int i = 0; i < dstAG.Length; ++i)
 		//Parallel.For(0, StemsTMP.Length, i =>
-			AboveGroundTMP[i].Tick(world, this, i, timestep);
+			dstAG[i].Tick(world, this, i, timestep);
 		//);
-		ReadTMP = true;
+		ReadTMP = !ReadTMP;
 	}
 
 	public void DeliverPost()
 	{
 		if (Seed.Length > 0)
 		{
-			Array.Copy(SeedTMP, Seed, SeedTMP.Length);
-			PostboxSeed.Process(Seed);
+			var (src, dst) = SrcDst_Seed();
+			Array.Copy(src, dst, src.Length);
+			PostboxSeed.Process(dst);
 		}
 
 		// Roots.Clear();
 		// Roots.AddRange(RootsTMP);
-		Array.Copy(UnderGroundTMP, UnderGround, UnderGroundTMP.Length);
-		PostboxUnderGround.Process(UnderGround);
+		{
+			var (src, dst) = SrcDst_UG();
+			Array.Copy(src, dst, src.Length);
+			PostboxUnderGround.Process(dst);
+		}
 
 		// Stems.Clear();
 		// Stems.AddRange(StemsTMP);
-		Array.Copy(AboveGroundTMP, AboveGround, AboveGroundTMP.Length);
-		PostboxAboveGround.Process(AboveGround);
-		ReadTMP = false;
+		{
+			var (src, dst) = SrcDst_AG();
+			Array.Copy(src, dst, src.Length);
+			PostboxAboveGround.Process(dst);
+		}
+
+		ReadTMP = !ReadTMP;
 
 		// if (!DeathSeed)
 		// 	Console.WriteLine("R: {0} E: {1}", Seed[0].Radius, Seed[0].StoredEnergy);
@@ -415,16 +461,30 @@ public partial class PlantFormation : IFormation
 		// 	Console.WriteLine("R: {0}x{1} E: {2} W: {3}", UnderGround[0].Radius, UnderGround[0].Length, UnderGround[0].Energy, UnderGround[0].Water);
 	}
 
+	public bool HasUndeliveredPost => PostboxSeed.AnyMessages || PostboxUnderGround.AnyMessages || PostboxAboveGround.AnyMessages;
+
 	///////////////////////////
 	#region READ METHODS
 	///////////////////////////
 
-	public List<int> GetUnderGroundChildren(int index)
+	public List<int> GetChildren_UG(int index)
 	{
 		//TODO 1: precompute at the beginning of each step  O(n²) -> O(n)
 		//TODO 2: keep between steps if not births or deaths happen
 		var result = new List<int>();
 		var src = ReadTMP ? UnderGroundTMP : UnderGround;
+		for(int i = index + 1; i < src.Length; ++i)
+			if (src[i].Parent == index)
+				result.Add(i);
+		return result;
+	}
+
+	public List<int> GetChildren_AG(int index)
+	{
+		//TODO 1: precompute at the beginning of each step  O(n²) -> O(n)
+		//TODO 2: keep between steps if not births or deaths happen
+		var result = new List<int>();
+		var src = ReadTMP ? AboveGroundTMP : AboveGround;
 		for(int i = index + 1; i < src.Length; ++i)
 			if (src[i].Parent == index)
 				result.Add(i);

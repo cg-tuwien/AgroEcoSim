@@ -12,7 +12,7 @@ namespace Agro;
 //TODO Create properties computing the respective storages for water and energy. Just for clarity.
 //[Flags]  //flags are not needed anymore
 
-public enum OrganTypes { Unspecified = 0, Seed = 1, Root = 2, Stem = 4, Sooth = 8, Leaf = 16, Fruit = 32 };
+public enum OrganTypes { Unspecified = 0, Seed = 1, Shoot = 2, Root = 4, Stem = 8, Sooth = 16, Leaf = 32, Fruit = 64 };
 
 [StructLayout(LayoutKind.Auto)]
 public partial struct AboveGroundAgent : IAgent
@@ -54,7 +54,7 @@ public partial struct AboveGroundAgent : IAgent
 	/// Index of the parent agent. -1 represents the root of the hierarchy.
 	/// </summary>
 	public int Parent { get; private set; }
-	public int[] Children { get; private set; }
+	//public int[] Children { get; private set; }
 
 
 	/// <summary>
@@ -118,32 +118,21 @@ public partial struct AboveGroundAgent : IAgent
 	public float EnergyCapacity => EnergyCapacityFunc(Radius, Length);
 
 
-	public AboveGroundAgent(int parent, OrganTypes organ, Quaternion parentDir, Vector3 unitDirection, float radius, float length, float initialEnergy)
+	public AboveGroundAgent(int parent, OrganTypes organ, Quaternion orientation, float initialEnergy, float radius = InitialRadius, float length = InitialLength)
 	{
 		Parent = parent;
 		Radius = radius;
 		Length = length;
-
-		Debug.Assert(Math.Abs(unitDirection.LengthSquared() - 1f) < 1e-6f);
-		var parentVec = Vector3.Transform(Vector3.UnitX, parentDir);        
-		var zVec = Vector3.Cross(Vector3.Dot(unitDirection, parentVec) > 0.999f ? unitDirection + new Vector3(0.5f, 0.5f, 0.5f) : unitDirection, parentVec);
-		var mat = new Matrix4x4(
-			unitDirection.X, unitDirection.Y, unitDirection.Z, 0f,
-			parentVec.X, parentVec.Y, parentVec.Z, 0f,
-			zVec.X, zVec.Y, zVec.Z, 0f,
-			0f, 0f, 0f, 1f);
-		Orientation = Quaternion.CreateFromRotationMatrix(mat);
+		Orientation = orientation;
 
 		Organ = organ;
 
 		Energy = initialEnergy;
 		mPhotoFactor = 1f;
-		// EnergyPassingDown = 0f;
-		// EnergyPassignUp = 0f;
 
 		Water = 0f;
 
-		Children = null;
+		//Children = null;
 	}
 
 	/// <summary>
@@ -154,9 +143,9 @@ public partial struct AboveGroundAgent : IAgent
 		for(int i = 0; i < src.Length; ++i)
 		{
 			src[i].Parent = src[i].Parent == -1 ? -1 : map[src[i].Parent];
-			if (src[i].Children != null)
-				for(int j = 0; j < src[i].Children.Length; ++j)
-					src[i].Children[j] = map[src[i].Children[j]];
+			// if (src[i].Children != null)
+			// 	for(int j = 0; j < src[i].Children.Length; ++j)
+			// 		src[i].Children[j] = map[src[i].Children[j]];
 		}
 	}
 
@@ -173,32 +162,38 @@ public partial struct AboveGroundAgent : IAgent
 		var lifeSupportPerTick = lifeSupportPerHour / AgroWorld.TicksPerHour;
 		Energy -= lifeSupportPerTick; //life support
 
+		var children = formation.GetChildren_AG(formationID);
+
 		//Growth
 		if (Energy > lifeSupportPerHour * 36) //maybe make it a factor storedEnergy/lifeSupport so that it grows fast when it has full storage        
 		{
-			var widthFactor = Organ switch
+			if (Organ != OrganTypes.Shoot)
 			{
-				OrganTypes.Leaf => 1e-4f,
-				_ => 1e-5f,
-			};
-			var childrenCount = (Children?.Length ?? 0) + 1;
-			var lengthGrowth = (1e-4f / AgroWorld.TicksPerHour) / MathF.Pow(lr * Length * childrenCount, 0.1f);
-			var widthGrowth = (widthFactor / AgroWorld.TicksPerHour) / MathF.Pow(lifeSupportPerHour * childrenCount, 0.1f); //just optimized the number of multiplications
+				var factor = Organ switch
+				{
+					OrganTypes.Leaf => new Vector2(1e-5f, 2e-6f),
+					_ => new Vector2(1e-4f, 4e-6f),
+				};
+				var childrenCount = children.Count + 1;
+				var lengthGrowth = factor.X / (MathF.Pow(lr * Length * childrenCount, 0.1f) * AgroWorld.TicksPerHour);
+				var widthGrowth = factor.Y / (MathF.Pow(lifeSupportPerHour * childrenCount, 0.1f) * AgroWorld.TicksPerHour); //just optimized the number of multiplications
 
-			Length += lengthGrowth;
-			Radius += widthGrowth;
+				Length += lengthGrowth;
+				Radius += widthGrowth;
 
-			if (Organ == OrganTypes.Stem)
-			{
-				mPhotoFactor -= widthGrowth * childrenCount; //become wood faste with children
-				if (mPhotoFactor < 0f)
-					mPhotoFactor = 0f;
+				if (Organ == OrganTypes.Stem)
+				{
+					mPhotoFactor -= widthGrowth * childrenCount; //become wood faste with children
+					if (mPhotoFactor < 0f)
+						mPhotoFactor = 0f;
+				}
+				//Console.WriteLine($"{formationID}x{timestep}: l={Length} r={Radius} OK={Length > Radius}");
 			}
 		}
 		else if (Energy > 0) //if running out of energy, balance it by thaking it away from children
 		{            
-			if (Children != null && Children.Length > 0)
-				foreach(var child in Children)
+			if (children != null && children.Count > 0)
+				foreach(var child in children)
 				{
 					var childEnergy = formation.GetEnergy_AG(child);
 					if (childEnergy > Energy)
@@ -212,6 +207,7 @@ public partial struct AboveGroundAgent : IAgent
 		}
 		
 		//Photosynthesis
+		var photosynthesizedEnergy = 0f;
 		if ((Organ == OrganTypes.Stem || Organ == OrganTypes.Leaf) && Water > 0f)
 		{
 			var approxLight = AgroWorld.GetAmbientLight(timestep);
@@ -227,34 +223,53 @@ public partial struct AboveGroundAgent : IAgent
 						? float.MaxValue
 						: surface * (airTemp - formation.VegetativeHighTemperature.X) / (formation.VegetativeHighTemperature.Y - formation.VegetativeHighTemperature.X)); //TODO respiratory cycle
 
-				var energyGain = Math.Min(possibleAmountByLight, Math.Min(possibleAmountByWater, possibleAmountByCO2));
+				photosynthesizedEnergy = Math.Min(possibleAmountByLight, Math.Min(possibleAmountByWater, possibleAmountByCO2));
 
-				Water -= energyGain;
-				Energy += energyGain;
+				Water -= photosynthesizedEnergy;
+				Energy += photosynthesizedEnergy;
 			}
 		}
 
-		//Transport energy        
-		if (Parent >= 0)
+		if (Organ != OrganTypes.Shoot)
 		{
-			var parentEnergy = formation.GetEnergy_AG(Parent);
-			if (parentEnergy > Energy)
-				formation.Send(Parent, new Energy_AG_PullFrom_AG(formation, lifeSupportPerTick, formationID)); //TODO make requests based on own need and the need of children
-		}
-		else
-		{
-			var parentEnergy = formation.GetEnergy_UG(0);
-			if (parentEnergy > Energy)
-				formation.Send(0, new UnderGroundAgent.Energy_AG_PullFrom_UG(formation, lifeSupportPerTick, formationID)); //TODO make requests based on own need and the need of children
-		}
-
-		var freeCapacity = WaterCapacityPerTick - Water;
-		if (freeCapacity > 0) //TODO different coefficients for different organs and different state (amount of wood)
-		{
+			///////////////////////////
+			#region Transport ENERGY
+			///////////////////////////
 			if (Parent >= 0)
-				formation.Send(Parent, new Water_AG_PullFrom_AG(formation, Math.Min(WaterFlowToParentPerTick, freeCapacity), formationID));
+			{
+				var parentEnergy = formation.GetEnergy_AG(Parent);
+				if (parentEnergy < Energy)
+				{
+					var amount = EnergyForParent(photosynthesizedEnergy, lifeSupportPerTick, parentEnergy);
+					formation.Send(Parent, new Energy_AG_PullFrom_AG(formation, Math.Min(amount, EnergyFlowToParentPerTick), formationID)); //TODO make requests based on own need and the need of children
+				}
+			}
+			else
+			{
+				var parentEnergy = formation.GetEnergy_UG(0);
+				if (parentEnergy < Energy)
+				{
+					var amount = EnergyForParent(photosynthesizedEnergy, lifeSupportPerTick, parentEnergy);
+					formation.Send(formationID, new UnderGroundAgent.Energy_UG_PullFrom_AG(formation, Math.Min(amount, EnergyFlowToParentPerTick), 0)); //TODO make requests based on own need and the need of children
+				}
+			}
+			#endregion
+
+			///////////////////////////
+			#region Transport WATER
+			///////////////////////////
+			var freeCapacity = WaterCapacityPerTick - Water;
+			if (freeCapacity > 0) //TODO different coefficients for different organs and different state (amount of wood)
+			{
+				if (Parent >= 0)
+					formation.Send(Parent, new Water_AG_PullFrom_AG(formation, Math.Min(WaterFlowToParentPerTick, freeCapacity), formationID));
+			}
+			#endregion
 		}
 	}
+
+	float EnergyForParent(float photosynthesizedEnergy, float lifeSupportPerTick, float parentEnergy) => 
+		photosynthesizedEnergy > lifeSupportPerTick ? Energy - lifeSupportPerTick * 2f : Math.Min((Energy - parentEnergy) * 0.5f, Energy - lifeSupportPerTick * 2f);
 
 	public void IncWater(float amount)
 	{
@@ -299,43 +314,43 @@ public partial struct AboveGroundAgent : IAgent
 		}
 	}
 
-	internal AboveGroundAgent AddChild(int index)
-	{
-		var result = default(AboveGroundAgent);
-		result.Orientation = Orientation;
-		result.Radius = Radius;
-		result.Length = Length;
-		result.Energy = Energy;
-		result.Water = Water;
-		result.mPhotoFactor = mPhotoFactor;
-		result.Organ = Organ;
-		result.Parent = Parent;
+	// internal AboveGroundAgent AddChild(int index)
+	// {
+	// 	var result = default(AboveGroundAgent);
+	// 	result.Orientation = Orientation;
+	// 	result.Radius = Radius;
+	// 	result.Length = Length;
+	// 	result.Energy = Energy;
+	// 	result.Water = Water;
+	// 	result.mPhotoFactor = mPhotoFactor;
+	// 	result.Organ = Organ;
+	// 	result.Parent = Parent;
 
-		if (Children == null)
-			result.Children = new int[]{index};
-		else
-		{
-			var children = new int[Children.Length];
-			Array.Copy(Children, children, Children.Length);
-			children[^1] = index;
-			result.Children = children;
-		}
+	// 	if (Children == null)
+	// 		result.Children = new int[]{index};
+	// 	else
+	// 	{
+	// 		var children = new int[Children.Length];
+	// 		Array.Copy(Children, children, Children.Length);
+	// 		children[^1] = index;
+	// 		result.Children = children;
+	// 	}
 		
-		return result;
-	}
+	// 	return result;
+	// }
 
-	internal void RemoveChild(int index)
-	{
-		Debug.Assert(Children.Contains(index));
-		if (Children.Length == 1)
-			Children = null;
-		else
-		{
-			var children = new int[Children.Length - 1];
-			for(int s = 0, t = 0; s < Children.Length; ++s)
-				if (Children[s] != index)
-					children[t++] = Children[s];
-			Children = children;
-		}
-	}
+	// internal void RemoveChild(int index)
+	// {
+	// 	Debug.Assert(Children.Contains(index));
+	// 	if (Children.Length == 1)
+	// 		Children = null;
+	// 	else
+	// 	{
+	// 		var children = new int[Children.Length - 1];
+	// 		for(int s = 0, t = 0; s < Children.Length; ++s)
+	// 			if (Children[s] != index)
+	// 				children[t++] = Children[s];
+	// 		Children = children;
+	// 	}
+	// }
 }
