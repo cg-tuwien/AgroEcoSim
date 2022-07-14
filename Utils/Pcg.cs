@@ -149,7 +149,7 @@ public class Pcg
 	{
 		if (!maxExclusive) ++max;
 
-		uint threshold = (uint)(-max) % max;
+		uint threshold = (uint)(-max) % max; //What is this? I don't remember anymore :(
 
 		while (true)
 		{

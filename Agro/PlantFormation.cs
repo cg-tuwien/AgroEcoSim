@@ -493,9 +493,11 @@ public partial class PlantFormation : IFormation
 		? (AboveGroundTMP.Length > index ? AboveGroundTMP[index].Length : 0f)
 		: (AboveGround.Length > index ? AboveGround[index].Length : 0f);
 	
+	//TODO accumulate from root
 	public Quaternion GetDirection_UG(int index) => ReadTMP 
 		? (UnderGroundTMP.Length > index ? UnderGroundTMP[index].Orientation : Quaternion.Identity)
 		: (UnderGround.Length > index ? UnderGround[index].Orientation : Quaternion.Identity);
+	//TODO accumulate from root
 	public Quaternion GetDirection_AG(int index) => ReadTMP 
 		? (AboveGroundTMP.Length > index ? AboveGroundTMP[index].Orientation : Quaternion.Identity)
 		: (AboveGround.Length > index ? AboveGround[index].Orientation : Quaternion.Identity);

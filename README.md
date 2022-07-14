@@ -5,7 +5,7 @@ This is both a standalone CLI application as well as a Godot project. Very early
 ## Setup
 1. Install [.NET 6](https://dotnet.microsoft.com/en-us/download/dotnet/6.0)
 2. Optionally install [VS Code](https://code.visualstudio.com/)
-3. Download and extract [Godot](https://godotengine.org/download)
+3. Download and extract [Godot](https://godotengine.org/download) with mono support
 
 Make sure to set telemetry opt-outs for both `.NET` and `VS Code` if you desire to protect your usage data.
 
