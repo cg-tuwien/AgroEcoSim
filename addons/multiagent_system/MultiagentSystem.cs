@@ -7,6 +7,8 @@ using Agro;
 
 public class MultiagentSystem : Spatial
 {
+	bool paused = false;
+	bool pressed = false;
 	List<MeshInstance> Sprites = new List<MeshInstance>();
 	
 	SimulationWorld World;
@@ -30,13 +32,27 @@ public class MultiagentSystem : Spatial
 //  // Called every frame. 'delta' is the elapsed time since the previous frame.
 	public override void _Process(float delta)
 	{
-		Time += delta;
-		if (World.Timestep < AgroWorld.TimestepsTotal)
-		{
-			World.Run(1);
-		
-			if (World.Timestep == AgroWorld.TimestepsTotal - 1)
-				GD.Print($"Simulation successfully finished after {AgroWorld.TimestepsTotal} timesteps.");
+		solve_input();
+
+		if(!paused){
+			Time += delta;
+			if (World.Timestep < AgroWorld.TimestepsTotal)
+			{
+				World.Run(1);
+			
+				if (World.Timestep == AgroWorld.TimestepsTotal - 1)
+					GD.Print($"Simulation successfully finished after {AgroWorld.TimestepsTotal} timesteps.");
+			}
+		}
+	}
+
+	private void solve_input(){
+		if(Input.IsActionPressed("stop") && !pressed){
+			paused = !paused;
+			pressed = true;
+		}
+		else if(!Input.IsActionPressed("stop") && pressed){
+			pressed = false;
 		}
 	}
 }
