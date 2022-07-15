@@ -71,4 +71,21 @@ public partial class SimulationWorld
                 }
         }
     }
+
+    #if HISTORY_LOG
+    public string HistoryToJSON()
+    {
+        var sb = new System.Text.StringBuilder();
+        //assuming all formations are present all the time (no additions or removals)
+        sb.Append("{ \"Formations\": [ ");
+        for(int i = 0; i < Formations.Count; ++i)
+        {
+            sb.Append(Formations[i].HistoryToJSON());
+            if (i < Formations.Count - 1)
+                sb.Append(", ");
+        }
+        sb.Append("] }");
+        return sb.ToString();
+    }
+    #endif
 }

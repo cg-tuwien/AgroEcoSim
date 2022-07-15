@@ -216,6 +216,12 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 		//Parallel.For(0, RootsTMP.Length, i =>
 			dst[i].Tick(world, this, i, timestep);
 		//);
+
+		#if HISTORY_LOG
+		var state = new T[dst.Length];
+		Array.Copy(dst, state, dst.Length);
+		StatesHistory.Add(state);
+		#endif
 		ReadTMP = !ReadTMP;
 	}
 
@@ -249,18 +255,18 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 	}
 
 	internal float GetEnergyCapacity(int index) => ReadTMP
-		? (AgentsTMP.Length > index ? AgentsTMP[index].EnergyCapacity : 0f)
-		: (Agents.Length > index ? Agents[index].EnergyCapacity : 0f);
+		? (AgentsTMP.Length > index ? AgentsTMP[index].EnergyStorageCapacity : 0f)
+		: (Agents.Length > index ? Agents[index].EnergyStorageCapacity : 0f);
 
 	internal float GetWaterStorageCapacity(int index) => ReadTMP
 		? (AgentsTMP.Length > index ? AgentsTMP[index].WaterStorageCapacity : 0f)
 		: (Agents.Length > index ? Agents[index].WaterStorageCapacity : 0f);
 
 	internal float GetWaterCapacityPerTick(int index) => ReadTMP
-		? (AgentsTMP.Length > index ? AgentsTMP[index].WaterCapacityPerTick : 0f)
-		: (Agents.Length > index ? Agents[index].WaterCapacityPerTick : 0f);
+		? (AgentsTMP.Length > index ? AgentsTMP[index].WaterTotalCapacityPerTick : 0f)
+		: (Agents.Length > index ? Agents[index].WaterTotalCapacityPerTick : 0f);
 
-	public float GetEnergy(int index) => ReadTMP 
+	public float GetEnergy(int index) => ReadTMP
 		? (AgentsTMP.Length > index ? AgentsTMP[index].Energy : 0f)
 		: (Agents.Length > index ? Agents[index].Energy : 0f);
 
@@ -272,16 +278,16 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 		? (AgentsTMP.Length > index ? AgentsTMP[index].Water : 0f)
 		: (Agents.Length > index ? Agents[index].Water : 0f);
 
-	public float GetBaseRadius(int index) => ReadTMP 
+	public float GetBaseRadius(int index) => ReadTMP
 		? (AgentsTMP.Length > index ? AgentsTMP[index].Radius : 0f)
 		: (Agents.Length > index ? Agents[index].Radius : 0f);
 
-	public float GetLength(int index) => ReadTMP 
+	public float GetLength(int index) => ReadTMP
 		? (AgentsTMP.Length > index ? AgentsTMP[index].Length : 0f)
 		: (Agents.Length > index ? Agents[index].Length : 0f);
 
 	//TODO accumulate from root
-	public Quaternion GetDirection(int index) => ReadTMP 
+	public Quaternion GetDirection(int index) => ReadTMP
 		? (AgentsTMP.Length > index ? AgentsTMP[index].Orientation : Quaternion.Identity)
 		: (Agents.Length > index ? Agents[index].Orientation : Quaternion.Identity);
 
@@ -320,5 +326,14 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 
 	//THERE ARE NO WRITE METHODS ALLOWED.
 
+	#endregion
+
+	///////////////////////////
+	#region LOG
+	///////////////////////////
+	#if HISTORY_LOG
+	List<T[]> StatesHistory = new();
+	public string HistoryToJSON() => Utils.Export.Json(StatesHistory);
+	#endif
 	#endregion
 }

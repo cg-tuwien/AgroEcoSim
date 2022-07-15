@@ -36,9 +36,9 @@ public interface IPlantAgent : IAgent
 	/// </summary>
 	int Parent { get; }
 
-	float EnergyCapacity { get; }
+	float EnergyStorageCapacity { get; }
 	float WaterStorageCapacity { get; }
-	float WaterCapacityPerTick { get; }
+	float WaterTotalCapacityPerTick { get; }
 	float EnergyFlowToParentPerTick { get; }
 
 	static void Reindex(IPlantAgent[] data, int[] map) => throw new NotImplementedException();

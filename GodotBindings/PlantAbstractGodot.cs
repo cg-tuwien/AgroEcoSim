@@ -18,6 +18,10 @@ public abstract class PlantAbstractGodot<T> where T : struct, IPlantAgent
 
 	protected abstract void UpdateTransformation(MeshInstance sprite, int index);
 
+	static Color DefaultColor = new Color(0.7f, 0.7f, 0.7f);
+
+	protected virtual Color FormationColor => DefaultColor;
+
 	public void AddSprite(int index)
 	{
 		if (GodotShow)
@@ -28,8 +32,8 @@ public abstract class PlantAbstractGodot<T> where T : struct, IPlantAgent
 			if (sprite.GetSurfaceMaterial(0) == null) //TODO if not visualizing, use a common material for all
 			{
 				var m = new SpatialMaterial();
-				m.AlbedoColor = new Color(0, 1, 0);
-				sprite.SetSurfaceMaterial(0, m);
+				m.AlbedoColor = new Color(0.7f, 0.7f, 0.7f);
+				sprite.SetSurfaceMaterial(0, new SpatialMaterial{ AlbedoColor = FormationColor });
 			}
 
 			UpdateTransformation(sprite, index);

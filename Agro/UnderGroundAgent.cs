@@ -5,6 +5,7 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using AgentsSystem;
+using System.Text.Json.Serialization;
 
 namespace Agro;
 
@@ -18,6 +19,7 @@ public partial struct UnderGroundAgent : IPlantAgent
 	/// <summary>
 	/// Orientation with respect to the parent. If there is no parent, this is the initial orientation.
 	/// </summary>
+	[JsonIgnore]
 	public Quaternion Orientation { get; private set; }
 
 	/// <summary>
@@ -40,7 +42,12 @@ public partial struct UnderGroundAgent : IPlantAgent
 	/// <summary>
 	/// Inverse woodyness ∈ [0, 1]. The more woody (towards 0) the less water the root can absorb. 
 	/// </summary>
-	float WaterAbsorbtionFactor; //factor 0 .. 1
+	float WaterAbsorbtionFactor //factor 0 .. 1
+#if HISTORY_LOG
+	{ get; set; }
+#else
+	;
+#endif
 
 	public OrganTypes Organ => OrganTypes.Root;
 
@@ -83,6 +90,7 @@ public partial struct UnderGroundAgent : IPlantAgent
 	/// <summary>
 	/// Water volume in m³ which can be absorbed from soil per timestep
 	/// </summary>
+	[JsonIgnore]
 	public float WaterAbsorbtionPerTick => WaterAbsorbtionPerHour / AgroWorld.TicksPerHour;
 
 	public const float EnergyTransportRatio = 4f;
@@ -100,10 +108,12 @@ public partial struct UnderGroundAgent : IPlantAgent
 	/// <summary>
 	/// Water volume in m³ which can be passed to the parent per timestep
 	/// </summary>
+	[JsonIgnore]
 	public float WaterFlowToParentPerTick => WaterFlowToParentPerHour / AgroWorld.TicksPerHour;
 
 	public float EnergyFlowToParentPerHour => 4f * Radius * Radius * WaterTransportRatio;
 
+	[JsonIgnore]
 	public float EnergyFlowToParentPerTick => EnergyFlowToParentPerHour / AgroWorld.TicksPerHour;
 
 	/// <summary>
@@ -119,12 +129,13 @@ public partial struct UnderGroundAgent : IPlantAgent
 	/// <summary>
 	/// Water volume in m³ which can flow through per hour, or can be stored in this agent
 	/// </summary>
-	public float WaterCapacityPerHour => 4f * Radius * Radius * (Length * WaterCapacityRatio + WaterTransportRatio);
+	public float WaterTotalCapacityPerHour => 4f * Radius * Radius * (Length * WaterCapacityRatio + WaterTransportRatio);
 
 	/// <summary>
 	/// Water volume in m³ which can flow through per tick, or can be stored in this agent
 	/// </summary>
-	public float WaterCapacityPerTick => WaterCapacityPerHour / AgroWorld.TicksPerHour;
+	[JsonIgnore]
+	public float WaterTotalCapacityPerTick => WaterTotalCapacityPerHour / AgroWorld.TicksPerHour;
 
 	/// <summary>
 	/// Timespan for which 1 unit of energy can feed 1m³ of plant tissue
@@ -136,7 +147,7 @@ public partial struct UnderGroundAgent : IPlantAgent
 
 	static float EnergyCapacityFunc(float radius, float length) => 4f * radius * radius * length * (1f - WaterCapacityRatio) * EnergyStorageCoef;
 
-	public float EnergyCapacity => EnergyCapacityFunc(Radius, Length);
+	public float EnergyStorageCapacity => EnergyCapacityFunc(Radius, Length);
 
 
 	public static Quaternion OrientationDown = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, -MathF.PI * 0.5f);
@@ -401,4 +412,13 @@ public partial struct UnderGroundAgent : IPlantAgent
 	// 		Children = children;
 	// 	}
 	// }
+
+	///////////////////////////
+	#region LOG
+	///////////////////////////
+	#if HISTORY_LOG
+	public readonly ulong ID { get; } = Utils.UID.Next();
+	public Utils.Quat OrienTaTion => new Utils.Quat(Orientation);
+	#endif
+	#endregion
 }

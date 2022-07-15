@@ -10,6 +10,9 @@ namespace Agro;
 public partial class Plant_AG_Godot : PlantAbstractGodot<AboveGroundAgent>
 {
 	public Plant_AG_Godot(PlantSubFormation<AboveGroundAgent> formation) : base(formation) { }
+
+	protected override Color FormationColor => Colors.Green;
+
 	protected override void UpdateTransformation(MeshInstance sprite, int index)
 	{
 		var radius = Formation.GetBaseRadius(index);

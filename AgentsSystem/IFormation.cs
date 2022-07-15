@@ -10,6 +10,9 @@ public interface IFormation
     void Tick(SimulationWorld world, uint timestep);
     void DeliverPost();
     bool HasUndeliveredPost { get; }
+#if HISTORY_LOG
+    string HistoryToJSON();
+#endif
 #if GODOT
     void GodotReady();
 	void GodotProcess(uint timestep);

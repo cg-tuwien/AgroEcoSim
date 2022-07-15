@@ -140,6 +140,10 @@ public partial class PlantFormation : IFormation
 			Array.Copy(srcSeed, dstSeed, srcSeed.Length);
 			dstSeed[0].Tick(world, this, 0, timestep);
 		}
+		#if HISTORY_LOG
+		if (dstSeed.Length > 0)
+			StatesHistory.Add(dstSeed[0]);
+		#endif
 		ReadTMP = !ReadTMP;
 
 		UG.Tick(world, timestep);
@@ -166,4 +170,13 @@ public partial class PlantFormation : IFormation
 	}
 
 	public bool HasUndeliveredPost => PostboxSeed.AnyMessages || UG.AnyMessages || AG.AnyMessages;
+
+	///////////////////////////
+	#region LOG
+	///////////////////////////
+	#if HISTORY_LOG
+	List<SeedAgent> StatesHistory = new();
+	public string HistoryToJSON() => $" \"Seeds\" : {Utils.Export.Json(StatesHistory)}, \"UnderGround\" : {UG.HistoryToJSON()}, AboveGround : {AG.HistoryToJSON()}";
+	#endif
+	#endregion
 }

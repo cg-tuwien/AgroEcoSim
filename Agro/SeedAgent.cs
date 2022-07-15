@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Numerics;
 using System.Runtime.InteropServices;
+using System.Text.Json.Serialization;
 using AgentsSystem;
 
 namespace Agro;
@@ -40,7 +41,7 @@ public struct SeedAgent : IAgent
 	/// <summary>
 	/// Amount of energy currrently stored
 	/// </summary>
-	float Water;
+	public float Water { get; private set; }
 
 	readonly Vector2 mVegetativeTemperature;
 
@@ -120,4 +121,12 @@ public struct SeedAgent : IAgent
 		Water += amount * 0.7f; //store most of the energy, 0.2f are losses
 		Radius = MathF.Pow(Radius * Radius * Radius + amount * PiV, Third); //use the rest for growth
 	}
+
+	///////////////////////////
+	#region LOG
+	///////////////////////////
+	#if HISTORY_LOG
+	public readonly ulong ID { get; } = Utils.UID.Next();
+	#endif
+	#endregion
 }
