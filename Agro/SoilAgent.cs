@@ -34,9 +34,9 @@ public struct SoilAgent : IAgent
 		/// Water volume in m³
 		/// </summary>
 		public readonly float Amount;
-		public readonly PlantFormation DstFormation;
+		public readonly PlantSubFormation<UnderGroundAgent> DstFormation;
 		public readonly int DstIndex;
-		public Water_UG_PullFrom_Soil(PlantFormation dstFormation, float amount, int dstIndex)
+		public Water_UG_PullFrom_Soil(PlantSubFormation<UnderGroundAgent> dstFormation, float amount, int dstIndex)
 		{
 			Amount = amount;
 			DstFormation = dstFormation;
@@ -45,10 +45,10 @@ public struct SoilAgent : IAgent
 		public Transaction Type => Transaction.Decrease;
 		public void Receive(ref SoilAgent srcAgent)
 		{
-			var freeCapacity = Math.Max(0f, DstFormation.GetWaterCapacityPerTick_UG(DstIndex) - DstFormation.GetWater_UG(DstIndex));
+			var freeCapacity = Math.Max(0f, DstFormation.GetWaterCapacityPerTick(DstIndex) - DstFormation.GetWater(DstIndex));
 			var water = srcAgent.TryDecWater(Math.Min(Amount, freeCapacity));
 			//Writing actions from other formations must not be implemented directly, but over messages
-			if (water > 0) DstFormation.Send(DstIndex, new UnderGroundAgent.WaterInc(water));
+			if (water > 0) DstFormation.SendProtected(DstIndex, new UnderGroundAgent.WaterInc(water));
 		}
 	}
 

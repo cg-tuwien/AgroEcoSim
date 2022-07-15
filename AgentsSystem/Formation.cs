@@ -26,43 +26,72 @@ public abstract class Formation<T> : IFormation where T : struct, IAgent
 	/// </summary>
 	(T[], T[]) SrcDst() => ReadTMP ? (AgentsTMP, Agents) : (Agents, AgentsTMP);
 
-	public virtual void Tick(SimulationWorld world, uint timestep)
+	public void Census()
 	{
 		if (Births.Count > 0 || Deaths.Count > 0)
 		{
+			var src =  ReadTMP ? AgentsTMP : Agents;
+			if (Deaths.Count > 0)
+			{
+				Deaths.Sort();
+				//remove duplicates
+				for(int i = Deaths.Count - 2; i >= 0; --i)
+					if (Deaths[i] == Deaths[i + 1])
+						Deaths.RemoveAt(i + 1);
+			}
+
 			var diff = Births.Count - Deaths.Count;
-			T[] agents;
+			T[] underGround;
 			if (diff != 0)
-				agents = new T[Agents.Length + diff];
+				underGround = new T[src.Length + diff];
 			else
-				agents = Agents;
+				underGround = src;
 
 			int a = 0;
 			if (Deaths.Count > 0)
 			{
-				Deaths.Sort();
-			
-				for(int i = Agents.Length - 1, d = Deaths.Count - 1; i >= 0; --i)
+				var dc = Deaths.Count;
+				for(int i = 0, d = 0; i < src.Length; ++i)
 				{
-					if (d >= 0 && Deaths[d] == i)
-						--d;
+					if (Deaths[d] == i)
+					{
+						if (++d == dc && i + 1 < src.Length)
+						{
+							Array.Copy(src, i + 1, underGround, a, src.Length - i - 1);
+							break;
+						}
+					}
 					else
-						agents[a++] = Agents[i];                    
+						underGround[a++] = src[i];
 				}
 				Deaths.Clear();
 			}
 			else
-				a = Agents.Length;
+			{
+				Array.Copy(src, underGround, src.Length);
+				a = src.Length;
+			}
 
-			for(int i = 0; i < Births.Count; ++i)
-				agents[a++] = Births[i];
+			for(int i = 0; i < Births.Count; ++i, ++a)
+				underGround[a] = Births[i];
 
 			Births.Clear();
 
-			Agents = agents;
-			AgentsTMP = new T[Agents.Length];                
+			if (ReadTMP)
+			{
+				Agents = new T[underGround.Length];
+				AgentsTMP = underGround;
+			}
+			else
+			{
+				Agents = underGround;
+				AgentsTMP = new T[underGround.Length];
+			}
 		}
+	}
 
+	public virtual void Tick(SimulationWorld world, uint timestep)
+	{
 		var (src, dst) = SrcDst();
 
 		Array.Copy(src, dst, src.Length);
@@ -87,11 +116,11 @@ public abstract class Formation<T> : IFormation where T : struct, IAgent
 	/// <summary>
 	/// Private targeted messaging
 	/// </summary>
-	public bool Send(int dst, IMessage<T> msg) 
+	public bool Send(int recipient, IMessage<T> msg)
 	{
-		if (dst < Agents.Length)
+		if (recipient < Agents.Length)
 		{
-			Postbox.Add(new (msg, dst));
+			Postbox.Add(new (msg, recipient));
 			return true;
 		}
 		else

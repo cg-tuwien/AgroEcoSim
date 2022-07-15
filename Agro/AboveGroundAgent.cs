@@ -15,7 +15,7 @@ namespace Agro;
 public enum OrganTypes { Unspecified = 0, Seed = 1, Shoot = 2, Root = 4, Stem = 8, Leaf = 16, Fruit = 32 };
 
 [StructLayout(LayoutKind.Auto)]
-public partial struct AboveGroundAgent : IAgent
+public partial struct AboveGroundAgent : IPlantAgent
 {
 	/// <summary>
 	/// Orientation with respect to the parent. If there is no parent, this is the initial orientation.
@@ -154,7 +154,8 @@ public partial struct AboveGroundAgent : IAgent
 
 	public void Tick(SimulationWorld world, IFormation _formation, int formationID, uint timestep)
 	{
-		var formation = (PlantFormation)_formation;
+		var formation = (PlantSubFormation<AboveGroundAgent>)_formation;
+		var plant = formation.Plant;
 
 		//TODO perhaps growth should somehow reflect temperature
 		var lr = Length * Radius;
@@ -162,7 +163,7 @@ public partial struct AboveGroundAgent : IAgent
 		var lifeSupportPerTick = lifeSupportPerHour / AgroWorld.TicksPerHour;
 		Energy -= lifeSupportPerTick; //life support
 
-		var children = formation.GetChildren_AG(formationID);
+		var children = formation.GetChildren(formationID);
 
 		//Growth
 		if (Energy > lifeSupportPerHour * 36) //maybe make it a factor storedEnergy/lifeSupport so that it grows fast when it has full storage        
@@ -170,7 +171,7 @@ public partial struct AboveGroundAgent : IAgent
 			if (Organ != OrganTypes.Shoot)
 			{
 				Vector2 factor;
-				var isLeafStem = children.Count == 1 && formation.GetOrgan_AG(children[0]) == OrganTypes.Leaf;
+				var isLeafStem = children.Count == 1 && formation.GetOrgan(children[0]) == OrganTypes.Leaf;
 				switch(Organ)
 				{
 					case OrganTypes.Leaf: factor.X = 4e-5f; factor.Y = 8e-6f; break;
@@ -199,10 +200,10 @@ public partial struct AboveGroundAgent : IAgent
 				}
 
 				//Chaining
-				if (false && Organ == OrganTypes.Stem && !isLeafStem && Length > PlantFormation.RootSegmentLength * 0.5f + formation.RNG.NextFloat(PlantFormation.RootSegmentLength * 0.5f))
+				if (false && Organ == OrganTypes.Stem && !isLeafStem && Length > PlantFormation.RootSegmentLength * 0.5f + plant.RNG.NextFloat(PlantFormation.RootSegmentLength * 0.5f))
 				{
 					//split this stem into two parts
-					var lowerIndex = formation.AboveGroundBirth(new AboveGroundAgent(Parent, OrganTypes.Stem, Orientation, Energy * 0.5f, Radius, Length * 0.5f){ Water = Water * 0.5f, mPhotoFactor = mPhotoFactor });
+					var lowerIndex = formation.Birth(new AboveGroundAgent(Parent, OrganTypes.Stem, Orientation, Energy * 0.5f, Radius, Length * 0.5f){ Water = Water * 0.5f, mPhotoFactor = mPhotoFactor });
 					Parent = lowerIndex;
 					Energy *= 0.5f;
 					Water *= 0.5f;
@@ -212,18 +213,19 @@ public partial struct AboveGroundAgent : IAgent
 			}
 		}
 		else if (Energy > 0) //if running out of energy, balance it by thaking it away from children
-		{            
-			if (children != null && children.Count > 0)
-				foreach(var child in children)
-				{
-					var childEnergy = formation.GetEnergy_AG(child);
-					if (childEnergy > Energy)
-						formation.Send(child, new Energy_AG_PullFrom_AG(formation, 2f * Radius * Radius / AgroWorld.TicksPerHour, formationID));
-				}
+		{
+			//TODO
+			// if (children != null && children.Count > 0)
+			// 	foreach(var child in children)
+			// 	{
+			// 		var childEnergy = formation.GetEnergy(child);
+			// 		if (childEnergy > Energy)
+			// 			plant.Send(child, new Energy_PullFrom(formation, 2f * Radius * Radius / AgroWorld.TicksPerHour, formationID));
+			// 	}
 		}
 		else //Without energy the part dies
 		{
-			formation.AboveGroundDeath(formationID);
+			formation.Death(formationID);
 			return;
 		}
 		
@@ -238,11 +240,11 @@ public partial struct AboveGroundAgent : IAgent
 				var surface = Length * Radius * (Organ == OrganTypes.Leaf ? 2f : TwoPi);
 				var possibleAmountByLight = surface * approxLight * mPhotoFactor;
 				var possibleAmountByWater = Water * (Organ == OrganTypes.Stem ? 0.7f : 1f);
-				var possibleAmountByCO2 = airTemp >= formation.VegetativeHighTemperature.Y 
+				var possibleAmountByCO2 = airTemp >= plant.VegetativeHighTemperature.Y 
 					? 0f 
-					: (airTemp <= formation.VegetativeHighTemperature.X 
+					: (airTemp <= plant.VegetativeHighTemperature.X 
 						? float.MaxValue
-						: surface * (airTemp - formation.VegetativeHighTemperature.X) / (formation.VegetativeHighTemperature.Y - formation.VegetativeHighTemperature.X)); //TODO respiratory cycle
+						: surface * (airTemp - plant.VegetativeHighTemperature.X) / (plant.VegetativeHighTemperature.Y - plant.VegetativeHighTemperature.X)); //TODO respiratory cycle
 
 				photosynthesizedEnergy = Math.Min(possibleAmountByLight, Math.Min(possibleAmountByWater, possibleAmountByCO2));
 
@@ -258,22 +260,22 @@ public partial struct AboveGroundAgent : IAgent
 			///////////////////////////
 			if (Parent >= 0)
 			{
-				var parentEnergy = formation.GetEnergy_AG(Parent);
+				var parentEnergy = formation.GetEnergy(Parent);
 				if (parentEnergy < Energy)
 				{
 					var amount = EnergyForParent(photosynthesizedEnergy, lifeSupportPerTick, parentEnergy);
 					if (amount > 0)
-						formation.Send(Parent, new Energy_AG_PullFrom_AG(formation, Math.Min(amount, EnergyFlowToParentPerTick), formationID)); //TODO make requests based on own need and the need of children
+						plant.Send(formationID, new Energy_PullFrom(formation, Math.Min(amount, EnergyFlowToParentPerTick), Parent)); //TODO make requests based on own need and the need of children
 				}
 			}
 			else
 			{
-				var parentEnergy = formation.GetEnergy_UG(0);
+				var parentEnergy = formation.GetEnergy(0);
 				if (parentEnergy < Energy)
 				{
 					var amount = EnergyForParent(photosynthesizedEnergy, lifeSupportPerTick, parentEnergy);
 					if (amount > 0)
-						formation.Send(formationID, new UnderGroundAgent.Energy_UG_PullFrom_AG(formation, Math.Min(amount, EnergyFlowToParentPerTick), 0)); //TODO make requests based on own need and the need of children
+						plant.Send(formationID, new UnderGroundAgent.Energy_PullFrom_AG(plant.UG, Math.Min(amount, EnergyFlowToParentPerTick), 0)); //TODO make requests based on own need and the need of children
 				}
 			}
 			#endregion
@@ -285,7 +287,7 @@ public partial struct AboveGroundAgent : IAgent
 			if (freeCapacity > 0) //TODO different coefficients for different organs and different state (amount of wood)
 			{
 				if (Parent >= 0)
-					formation.Send(Parent, new Water_AG_PullFrom_AG(formation, Math.Min(WaterFlowToParentPerTick, freeCapacity), formationID));
+					plant.Send(Parent, new Water_PullFrom(formation, Math.Min(WaterFlowToParentPerTick, freeCapacity), formationID));
 			}
 			#endregion
 		}

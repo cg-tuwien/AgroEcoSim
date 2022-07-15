@@ -34,6 +34,7 @@ public partial class SimulationWorld
     {
         for(uint i = 0U; i < simulationLength; ++i, ++Timestep)
         {
+            Census();
             Tick(Timestep);
             DeliverPost();
 #if GODOT
@@ -41,6 +42,12 @@ public partial class SimulationWorld
                 item.GodotProcess(Timestep);
 #endif
         }
+    }
+
+    void Census()
+    {
+        for(int i = 0; i < Formations.Count; ++i)
+            Formations[i].Census();
     }
 
     void Tick(uint timestep)

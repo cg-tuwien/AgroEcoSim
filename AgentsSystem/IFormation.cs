@@ -6,6 +6,7 @@ namespace AgentsSystem;
 
 public interface IFormation
 {
+    void Census();
     void Tick(SimulationWorld world, uint timestep);
     void DeliverPost();
     bool HasUndeliveredPost { get; }

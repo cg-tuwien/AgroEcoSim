@@ -29,12 +29,12 @@ public partial struct UnderGroundAgent : IAgent
     }
 
     [StructLayout(LayoutKind.Auto)]
-    public readonly struct Energy_UG_PullFrom_UG: IMessage<UnderGroundAgent>
+    public readonly struct Energy_PullFrom: IMessage<UnderGroundAgent>
     {
         public readonly float Amount;
-        public readonly PlantFormation DstFormation;
+        public readonly PlantSubFormation<UnderGroundAgent> DstFormation;
         public readonly int DstIndex;
-        public Energy_UG_PullFrom_UG(PlantFormation dstFormation, float amount, int dstIndex)
+        public Energy_PullFrom(PlantSubFormation<UnderGroundAgent> dstFormation, float amount, int dstIndex)
         {
             Amount = amount;
             DstFormation = dstFormation;
@@ -44,19 +44,19 @@ public partial struct UnderGroundAgent : IAgent
 
         public void Receive(ref UnderGroundAgent srcAgent)
         {
-            var freeCapacity = Math.Max(0f, DstFormation.GetEnergyCapacity_UG(DstIndex) - DstFormation.GetEnergy_UG(DstIndex));
+            var freeCapacity = Math.Max(0f, DstFormation.GetEnergyCapacity(DstIndex) - DstFormation.GetEnergy(DstIndex));
             var energy = srcAgent.TryDecEnergy(Math.Min(freeCapacity, Amount));
-            if (energy > 0) DstFormation.Send(DstIndex, new EnergyInc(energy));
+            if (energy > 0) DstFormation.SendProtected(DstIndex, new EnergyInc(energy));
         }
     }
 
     [StructLayout(LayoutKind.Auto)]
-    public readonly struct Energy_UG_PullFrom_AG: IMessage<AboveGroundAgent>
+    public readonly struct Energy_PullFrom_AG: IMessage<AboveGroundAgent>
     {
         public readonly float Amount;
-        public readonly PlantFormation DstFormation;
+        public readonly PlantSubFormation<UnderGroundAgent> DstFormation;
         public readonly int DstIndex;
-        public Energy_UG_PullFrom_AG(PlantFormation dstFormation, float amount, int dstIndex)
+        public Energy_PullFrom_AG(PlantSubFormation<UnderGroundAgent> dstFormation, float amount, int dstIndex)
         {
             Amount = amount;
             DstFormation = dstFormation;
@@ -66,22 +66,22 @@ public partial struct UnderGroundAgent : IAgent
 
         public void Receive(ref AboveGroundAgent srcAgent)
         {
-            var freeCapacity = Math.Max(0f, DstFormation.GetEnergyCapacity_UG(DstIndex) - DstFormation.GetEnergy_UG(DstIndex));
+            var freeCapacity = Math.Max(0f, DstFormation.GetEnergyCapacity(DstIndex) - DstFormation.GetEnergy(DstIndex));
             var energy = srcAgent.TryDecEnergy(Math.Min(Amount, freeCapacity));
-            if (energy > 0) DstFormation.Send(DstIndex, new EnergyInc(energy));
+            if (energy > 0) DstFormation.SendProtected(DstIndex, new EnergyInc(energy));
         }
     }
 
     [StructLayout(LayoutKind.Auto)]
-    public readonly struct Water_UG_PullFrom_UG : IMessage<UnderGroundAgent>
+    public readonly struct Water_PullFrom : IMessage<UnderGroundAgent>
     {
         /// <summary>
         /// Water volume in m³
         /// </summary>
         public readonly float Amount;
-        public readonly PlantFormation DstFormation;
+        public readonly PlantSubFormation<UnderGroundAgent> DstFormation;
         public readonly int DstIndex;
-        public Water_UG_PullFrom_UG(PlantFormation dstFormation, float amount, int dstIndex)
+        public Water_PullFrom(PlantSubFormation<UnderGroundAgent> dstFormation, float amount, int dstIndex)
         {
             Amount = amount;
             DstFormation = dstFormation;
@@ -91,18 +91,18 @@ public partial struct UnderGroundAgent : IAgent
 
         public void Receive(ref UnderGroundAgent srcAgent)
         {
-            var freeCapacity = Math.Max(0f, DstFormation.GetWaterCapacityPerTick_UG(DstIndex) - DstFormation.GetWater_UG(DstIndex));
+            var freeCapacity = Math.Max(0f, DstFormation.GetWaterCapacityPerTick(DstIndex) - DstFormation.GetWater(DstIndex));
             var energy = srcAgent.TryDecWater(Math.Min(freeCapacity, Amount));
-            if (energy > 0) DstFormation.Send(DstIndex, new WaterInc(energy));
+            if (energy > 0) DstFormation.SendProtected(DstIndex, new WaterInc(energy));
         }
     }
 
     public readonly struct Water_AG_PullFrom_UG : IMessage<UnderGroundAgent>
     {
         public readonly float Amount;
-        public readonly PlantFormation DstFormation;
+        public readonly PlantSubFormation<AboveGroundAgent> DstFormation;
         public readonly int DstIndex;
-        public Water_AG_PullFrom_UG (PlantFormation dstFormation, float amount, int dstIndex)
+        public Water_AG_PullFrom_UG(PlantSubFormation<AboveGroundAgent> dstFormation, float amount, int dstIndex)
         {
             Amount = amount;
             DstFormation = dstFormation;
@@ -112,9 +112,9 @@ public partial struct UnderGroundAgent : IAgent
 
         public void Receive(ref UnderGroundAgent srcAgent)
         {
-            var freeCapacity = Math.Max(0f, DstFormation.GetWaterCapacityPerTick_AG(DstIndex) - DstFormation.GetWater_AG(DstIndex));
+            var freeCapacity = Math.Max(0f, DstFormation.GetWaterCapacityPerTick(DstIndex) - DstFormation.GetWater(DstIndex));
             var water = srcAgent.TryDecWater(Math.Min(Amount, freeCapacity));
-            if (water > 0) DstFormation.Send(DstIndex, new AboveGroundAgent.WaterInc(water));
+            if (water > 0) DstFormation.SendProtected(DstIndex, new AboveGroundAgent.WaterInc(water));
         }
     }
 }
