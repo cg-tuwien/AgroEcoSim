@@ -56,6 +56,8 @@ public partial class SoilFormation
             MarkerInstances[index].RotateX(rotation_offset[0,i]);
             MarkerInstances[index].RotateY(rotation_offset[1,i]);
             MarkerInstances[index].RotateZ(rotation_offset[2,i]);
+
+            MarkerInstances[index].SetSurfaceMaterial(0,parameters.MarkerMaterial);
         }
         
     }
@@ -69,15 +71,19 @@ public partial class SoilFormation
         SoilCellInstances[Index(x,y,z)].Translation = new Vector3(x,-z,y) * AgroWorld.FieldResolution;
         SoilCellInstances[Index(x,y,z)].Scale = Vector3.One * parameters.SoilCellScale * AgroWorld.FieldResolution;
 
-        
+        SoilCellInstances[Index(x,y,z)].SetSurfaceMaterial(0,parameters.SoilCellMaterial);
     }
 
-    private void AnimateCells(){
+    private void AnimateCells(){ //Todo: Animate scale
         
     }
 
     private void AnimateMarkers(){
-
+        float full_water = 30; //Todo: Change
+        for(int i = 0; i < SoilCellInstances.Length; i++){
+            float size_multiplier = Math.Min(full_water,Math.Max(0,Agents[i].Water))/full_water;
+            SoilCellInstances[i].Scale = Vector3.One * parameters.SoilCellScale * AgroWorld.FieldResolution * size_multiplier;
+        }
     }
 
 }
