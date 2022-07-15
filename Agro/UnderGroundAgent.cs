@@ -140,44 +140,16 @@ public partial struct UnderGroundAgent : IAgent
 
 	#endregion
 
-	public UnderGroundAgent(int parent, Quaternion parentDir, Vector3 unitDirection, float initialEnergy, float initialWater = 0f, float initialWaterIntake = 1f, float radius = InitialRadius, float length = InitialLength)
+	public UnderGroundAgent(int parent, Quaternion orientation, float initialEnergy, float initialWater = 0f, float initialWaterIntake = 1f, float radius = InitialRadius, float length = InitialLength)
 	{
 		Parent = parent;
 		Radius = radius;
 		Length = length;
-
-		Debug.Assert(Math.Abs(unitDirection.LengthSquared() - 1f) < 1e-6f);
-		var parentVec = parentDir.LengthSquared() == 0f ? -Vector3.UnitY : Vector3.Transform(Vector3.UnitX, parentDir);
-		if (Vector3.Dot(unitDirection, parentVec) > 0.999f)
-			parentVec = Vector3.Normalize(parentVec + new Vector3(0.5f, 0.5f, 0.5f));
-
-		var zVec = Vector3.Normalize(Vector3.Cross(unitDirection, parentVec));
-		parentVec = Vector3.Normalize(Vector3.Cross(zVec, unitDirection));
-
-		var mat = new Matrix4x4(
-			unitDirection.X, unitDirection.Y, unitDirection.Z, 0f,
-			parentVec.X, parentVec.Y, parentVec.Z, 0f,
-			zVec.X, zVec.Y, zVec.Z, 0f,
-			0f, 0f, 0f, 1f);
-		Orientation = Quaternion.CreateFromRotationMatrix(mat);
+		Orientation = orientation;
 
 		Energy = initialEnergy;
 		Water = initialWater;
 		WaterAbsorbtionFactor = initialWaterIntake;
-	}
-
-	public UnderGroundAgent(int parent, Quaternion dir, float initialEnergy)
-	{
-		Parent = parent;
-		Radius = InitialRadius;
-		Length = InitialLength;
-		Orientation = dir;
-
-		//Console.WriteLine($"p={Parent} y={Vector3.Transform(Vector3.UnitX, Orientation).Y}");
-
-		Energy = initialEnergy;
-		Water = 0f;
-		WaterAbsorbtionFactor = 1f;
 	}
 
 	/// <summary>
@@ -196,23 +168,24 @@ public partial struct UnderGroundAgent : IAgent
 
 		//TODO perhaps it should somehow reflect temperature
 		var diameter = 2f * Radius;
-		var lr = Length * diameter;
-		var lifeSupportPerHour = lr * diameter;
+		var lr = Length * diameter; //area of the side face
+		var lifeSupportPerHour = lr * diameter; //also this is the volume
 		var lifeSupportPerTick = lifeSupportPerHour / AgroWorld.TicksPerHour;
 
 		//life support
 		Energy -= lifeSupportPerTick;
 
-		var children = formation.GetUnderGroundChildren(formationID);
+		var children = formation.GetChildren_UG(formationID);
 
+		var waterFactor = Math.Clamp(Water / WaterStorageCapacity, 0f, 1f);
 		///////////////////////////
 		#region Growth
 		///////////////////////////
 		if (Energy > lifeSupportPerHour * 36) //maybe make it a factor storedEnergy/lifeSupport so that it grows fast when it has full storage        
 		{
 			var childrenCount = children.Count + 1;
-			var lengthGrowth = 2e-4f / (AgroWorld.TicksPerHour * MathF.Pow(childrenCount, GrowthDeclineByExpChildren + 1) * MathF.Pow(lr * Length, 0.1f));
-			var widthGrowth = 2e-5f / (AgroWorld.TicksPerHour * MathF.Pow(childrenCount, GrowthDeclineByExpChildren / 2) * MathF.Pow(lifeSupportPerHour, 0.1f)); //just optimized the number of multiplications
+			var lengthGrowth = waterFactor * 2e-4f / (AgroWorld.TicksPerHour * MathF.Pow(childrenCount, GrowthDeclineByExpChildren + 1) * MathF.Pow(lr * Length, 0.1f));
+			var widthGrowth = waterFactor * 2e-5f / (AgroWorld.TicksPerHour * MathF.Pow(childrenCount, GrowthDeclineByExpChildren / 2) * MathF.Pow(lifeSupportPerHour, 0.1f)); //just optimized the number of multiplications
 			
 			Length += lengthGrowth;
 			Radius += widthGrowth;
@@ -231,51 +204,34 @@ public partial struct UnderGroundAgent : IAgent
 				var az = formation.RNG.NextFloat(-MathF.PI * zFactor, MathF.PI * zFactor);
 				var qz = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, az);
 				//var q = qz * qx * Orientation;
-				var q = Orientation * qx * qz;
-				var y = Vector3.Transform(Vector3.UnitX, q).Y;
+				var orientation = Orientation * qx * qz;
+				var y = Vector3.Transform(Vector3.UnitX, orientation).Y;
 				if (y > 0)
-					q = Quaternion.Slerp(q, OrientationDown, formation.RNG.NextFloat(y));
+					orientation = Quaternion.Slerp(orientation, OrientationDown, formation.RNG.NextFloat(y));
 				else
-					q = Quaternion.Slerp(q, OrientationDown, formation.RNG.NextFloat(0.2f / AgroWorld.TicksPerHour));
-				var e = EnergyCapacityFunc(InitialRadius, InitialLength);
-				formation.UnderGroundBirth(new UnderGroundAgent(formationID, q, e));
-				Energy -= 2f * e; //twice because some energy is needed for the birth itself
+					orientation = Quaternion.Slerp(orientation, OrientationDown, formation.RNG.NextFloat(0.2f / AgroWorld.TicksPerHour));
+				var energy = EnergyCapacityFunc(InitialRadius, InitialLength);
+				formation.UnderGroundBirth(new UnderGroundAgent(formationID, orientation, energy));
+				Energy -= 2f * energy; //twice because some energy is needed for the birth itself
 				//Console.WriteLine($"New root chained to {formationID} at time {timestep}");
 			}
 
 			//Branching
-			if(children.Count > 0)
+			if(children.Count > 0 )
 			{
-				var pool = MathF.Pow(childrenCount + 1, childrenCount << 2) * AgroWorld.TicksPerHour;
-				if (pool < uint.MaxValue && formation.RNG.NextUInt((uint)pool) == 1)
+				var pool = MathF.Pow(childrenCount, childrenCount << 2) * AgroWorld.TicksPerHour;
+				if (pool < uint.MaxValue && formation.RNG.NextUInt((uint)pool) == 1 && waterFactor > formation.RNG.NextFloat())
 				{
 					var qx = Quaternion.CreateFromAxisAngle(Vector3.UnitX, formation.RNG.NextFloat(-MathF.PI * yFactor, MathF.PI * yFactor));
 					var qz = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, formation.RNG.NextFloat(MathF.PI * zFactor, MathF.PI * zFactor * 2f));
 					//var q = qz * qx * Orientation;
-					var q = Orientation * qx * qz;
-					var e = EnergyCapacityFunc(InitialRadius, InitialLength);
-					formation.UnderGroundBirth(new UnderGroundAgent(formationID, q, e));
-					Energy -= 2f * e; //twice because some energy is needed for the birth itself
+					var orientation = Orientation * qx * qz;
+					var energy = EnergyCapacityFunc(InitialRadius, InitialLength);
+					formation.UnderGroundBirth(new UnderGroundAgent(formationID, orientation, energy));
+					Energy -= 2f * energy; //twice because some energy is needed for the birth itself
 					//Console.WriteLine($"New root branched to {formationID} at time {timestep}");
 				}
 			}
-			//     //TODO this is box based, should be pyramid or cone based
-			//     const float length = 0.49f;
-			//     const float complLength = 1f - 2f * length;
-
-			//     const float ratio = 0.49f;
-			//     const float complRatio = (1f - 3f * ratio) / 3f;
-			//     var dir = Vector3.Transform(Vector3.UnitX, Direction);
-			//     var childDir = Vector3.Normalize((dir + 0.1f * new Vector3(0.1f, 0.2f, 0.1f)));
-
-			//     var nodeID = formation.UnderGroundBirth(new UnderGroundAgent(formationID, Direction, dir, 0.0001f, Length * complLength, Energy * complRatio));
-			//     formation.UnderGroundBirth(new UnderGroundAgent(nodeID, Direction, childDir, 0.0001f, 0.0001f, Energy * complRatio));
-
-			//     formation.UnderGroundBirth(new UnderGroundAgent(nodeID, Direction, dir, 0.0001f, Length * ratio, Energy * ratio));
-
-			//     Length *= 0.49f;
-			// }
-
 		}
 		else if (Energy > 0) //if running out of energy, balance it by taking it away from children
 		{
@@ -284,7 +240,10 @@ public partial struct UnderGroundAgent : IAgent
 			{
 				var childEnergy = formation.GetEnergy_UG(child);
 				if (childEnergy > Energy)
-					formation.Send(child, new Energy_UG_PullFrom_UG(formation, Math.Min(formation.GetEnergyFlow_PerTick_UG(child), (childEnergy - Energy) * 0.5f), formationID));
+				{
+					var amount = Math.Min(formation.GetEnergyFlow_PerTick_UG(child), Math.Min(formation.GetEnergyFlow_PerTick_UG(child), (childEnergy - Energy) * 0.5f));
+					formation.Send(child, new Energy_UG_PullFrom_UG(formation, amount, formationID));
+				}
 			}
 		}
 		else //Without energy the part dies
@@ -318,7 +277,7 @@ public partial struct UnderGroundAgent : IAgent
 					{
 						if (soilTemperature < vegetativeTemp.Y)
 							amount *= (soilTemperature - vegetativeTemp.X) / (vegetativeTemp.Y - vegetativeTemp.X);
-						soil.Send(sources[0], new SoilAgent.Water_UG_PullFrom_Soil(formation, amount, formationID)); //TODO change to tube surface!
+						soil.Send(sources[0], new SoilAgent.Water_UG_PullFrom_Soil(formation, Math.Min(waterCapacity - Water, amount), formationID)); //TODO change to tube surface!
 					}
 				}
 			}
@@ -340,7 +299,7 @@ public partial struct UnderGroundAgent : IAgent
 		{
 			var parentEnergy = formation.GetEnergy_AG(0);
 			if (parentEnergy > Energy)
-				formation.Send(0, new Energy_AG_PullFrom_UG(formation, Math.Min(formation.GetEnergyFlow_PerTick_AG(0), (parentEnergy - Energy) * 0.5f), formationID)); //TODO make requests based on own need and the need of children
+				formation.Send(0, new Energy_UG_PullFrom_AG(formation, Math.Min(formation.GetEnergyFlow_PerTick_AG(0), (parentEnergy - Energy) * 0.5f), formationID)); //TODO make requests based on own need and the need of children
 		}
 		#endregion
 

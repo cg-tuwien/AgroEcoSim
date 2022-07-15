@@ -8,6 +8,7 @@ public interface IFormation
 {
     void Tick(SimulationWorld world, uint timestep);
     void DeliverPost();
+    bool HasUndeliveredPost { get; }
 #if GODOT
     void GodotReady();
 	void GodotProcess(uint timestep);

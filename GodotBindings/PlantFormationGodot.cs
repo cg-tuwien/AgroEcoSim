@@ -44,15 +44,15 @@ public partial class PlantFormation
 	void UpdateUnderGroundTransformation(MeshInstance sprite, int index)
 	{
 		var radius = GetBaseRadius_UG(index);
-		var direction = GetDirection_UG(index);
+		var orientation = GetDirection_UG(index);
 		var length = GetLength_UG(index) * 0.5f; //x0.5f because its the radius of the cube!
-		var stableScale = System.Numerics.Vector3.Transform(new System.Numerics.Vector3(length, 0f, 0f), direction);
+		var stableScale = System.Numerics.Vector3.Transform(new System.Numerics.Vector3(length, 0f, 0f), orientation);
 		
-		var basis = new Basis(direction.ToGodot());
+		var basis = new Basis(orientation.ToGodot());
 		sprite.Transform = new Transform(basis, (GetBaseCenter_UG(index) + stableScale).ToGodot());
 		sprite.Scale = new Vector3(length, radius, radius);
 
-		const string vis = "waterRatio";
+		const string vis = "energyRatio";
 		Color c;
 		switch (vis)
 		{
@@ -86,14 +86,14 @@ public partial class PlantFormation
 	void UpdateAboveGroundTransformation(MeshInstance sprite, int index)
 	{
 		var radius = GetBaseRadius_AG(index);
-		var direction = GetDirection_AG(index);
+		var orientation = GetDirection_AG(index);
 		var length = GetLength_AG(index) * 0.5f; //x0.5f because its the radius of the cube!
-		var stableScale = System.Numerics.Vector3.Transform(new System.Numerics.Vector3(length, 0f, 0f), direction);
+		var stableScale = System.Numerics.Vector3.Transform(new System.Numerics.Vector3(length, 0f, 0f), orientation);
 
-		var basis = new Basis(direction.ToGodot());
+		var basis = new Basis(orientation.ToGodot());
 		sprite.Transform = new Transform(basis, (GetBaseCenter_AG(index) + stableScale).ToGodot());
 		if (GetOrgan_AG(index) == OrganTypes.Leaf)
-			sprite.Scale = new Vector3(length, radius, 0.0001f);
+			sprite.Scale = new Vector3(length, 0.0001f, radius);
 		else
 			sprite.Scale = new Vector3(length, radius, radius);
 	}
@@ -163,7 +163,7 @@ public partial class PlantFormation
 			if (Seed.Length == 1)
 			{
 				GodotSeedSprite.Scale = Vector3.One * Seed[0].Radius;
-				var seedColor = 0.5f * Seed[0].EnergyAccumulationProgress + 0.5f;
+				var seedColor = 0.5f * Seed[0].GerminationProgress + 0.5f;
 				((SpatialMaterial)GodotSeedSprite.GetSurfaceMaterial(0)).AlbedoColor = new Color(seedColor, seedColor, seedColor);
 			}
 			else if (GodotSeedSprite != null)

@@ -21,6 +21,11 @@ public abstract class Formation<T> : IFormation where T : struct, IAgent
 	readonly List<T> Births = new();
 	readonly List<int> Deaths = new();
 
+	/// <summary>
+	/// An ordered tuple of the double data-buffer entries ready for swap.
+	/// </summary>
+	(T[], T[]) SrcDst() => ReadTMP ? (AgentsTMP, Agents) : (Agents, AgentsTMP);
+
 	public virtual void Tick(SimulationWorld world, uint timestep)
 	{
 		if (Births.Count > 0 || Deaths.Count > 0)
@@ -58,17 +63,20 @@ public abstract class Formation<T> : IFormation where T : struct, IAgent
 			AgentsTMP = new T[Agents.Length];                
 		}
 
-		Array.Copy(Agents, AgentsTMP, Agents.Length);
+		var (src, dst) = SrcDst();
+
+		Array.Copy(src, dst, src.Length);
 		//for(int i = 0; i < AgentsTMP.Length; ++i)
 #if !DEBUG
-		if (AgentsTMP.Length > Environment.ProcessorCount)
-			Parallel.For(0, AgentsTMP.Length, i =>
-				AgentsTMP[i].Tick(world, this, i, timestep));
+		if (dst.Length > Environment.ProcessorCount)
+			Parallel.For(0, dst.Length, i =>
+				dst[i].Tick(world, this, i, timestep));
 		else
 #endif
-		for(int i = 0; i < AgentsTMP.Length; ++i)
-			AgentsTMP[i].Tick(world, this, i, timestep);
-		ReadTMP = true;
+		for(int i = 0; i < dst.Length; ++i)
+			dst[i].Tick(world, this, i, timestep);
+
+		ReadTMP = !ReadTMP;
 	}
 
 	/// <summary>
@@ -102,10 +110,13 @@ public abstract class Formation<T> : IFormation where T : struct, IAgent
 
 	public virtual void DeliverPost()
 	{
-		Array.Copy(AgentsTMP, Agents, Agents.Length);
-		Postbox.Process(Agents);
-		ReadTMP = false;
+		var (src, dst) = SrcDst();
+		Array.Copy(src, dst, dst.Length);
+		Postbox.Process(dst);
+		ReadTMP = !ReadTMP;
 	}
+
+	public virtual bool HasUndeliveredPost => Postbox.AnyMessages;
 
 #if GODOT
 	public virtual void GodotReady() {}
@@ -133,7 +144,11 @@ public class FormationTree<T> : Formation<T> where T : struct, IAgent
 		}
 
 		var newIndex = Count++;
-		Agents[newIndex] = node;
+		if (ReadTMP)
+			AgentsTMP[newIndex] = node;
+		else
+			Agents[newIndex] = node;
+
 		Parents.Add(parent);
 
 		return newIndex;
@@ -182,7 +197,7 @@ public class Formation3i<T> : Formation<T> where T : struct, IAgent
 	{
 		if (CheckCoords(coords))
 		{
-			result = Agents[Index(coords)];
+			result = ReadTMP ? AgentsTMP[Index(coords)] : Agents[Index(coords)];
 			return true;
 		}
 		else
@@ -214,9 +229,6 @@ public class Formation3i<T> : Formation<T> where T : struct, IAgent
 		else
 			return false;
 	}
-
-	public void UpdatePopulation()
-	{}
 }
 
 [Flags]

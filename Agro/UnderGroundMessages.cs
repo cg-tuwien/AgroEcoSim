@@ -51,12 +51,12 @@ public partial struct UnderGroundAgent : IAgent
     }
 
     [StructLayout(LayoutKind.Auto)]
-    public readonly struct Energy_AG_PullFrom_UG: IMessage<AboveGroundAgent>
+    public readonly struct Energy_UG_PullFrom_AG: IMessage<AboveGroundAgent>
     {
         public readonly float Amount;
         public readonly PlantFormation DstFormation;
         public readonly int DstIndex;
-        public Energy_AG_PullFrom_UG(PlantFormation dstFormation, float amount, int dstIndex)
+        public Energy_UG_PullFrom_AG(PlantFormation dstFormation, float amount, int dstIndex)
         {
             Amount = amount;
             DstFormation = dstFormation;

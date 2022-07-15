@@ -4,9 +4,6 @@ using System.Collections.Generic;
 namespace AgentsSystem;
 public partial class SimulationWorld
 {
-    //public static readonly Dictionary<string, List<Agent>> Agents;
-    //public static readonly Dictionary<string, List<Formation>> Formations;
-
     internal readonly List<IFormation> Formations = new();
     public uint Timestep { get; private set; }
 
@@ -49,13 +46,22 @@ public partial class SimulationWorld
     void Tick(uint timestep)
     {
         //Console.WriteLine($"TIMESTEP: {timestep}");
-        for(int i = 0; i < Formations.Count; ++i)            
-            Formations[i].Tick(this, timestep);            
+        for(int i = 0; i < Formations.Count; ++i)
+            Formations[i].Tick(this, timestep);
     }
 
     public void DeliverPost()
     {
-        for(int i = 0; i < Formations.Count; ++i)
-            Formations[i].DeliverPost();
+        var anyDelivered = true;
+        while(anyDelivered)
+        {
+            anyDelivered = false;
+            for(int i = 0; i < Formations.Count; ++i)
+                if (Formations[i].HasUndeliveredPost)
+                {
+                    Formations[i].DeliverPost();
+                    anyDelivered = true;
+                }
+        }
     }
 }

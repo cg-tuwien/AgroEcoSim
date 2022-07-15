@@ -10,6 +10,7 @@ public class PostBox<T> where T : struct, IAgent
     readonly List<MessageWrapper<T>> BufferTMP = new();
     bool WriteTMP = false;
 
+    public bool AnyMessages => (WriteTMP ? BufferTMP.Count : Buffer.Count) > 0;
     public void Add(MessageWrapper<T> msg)
     {
         if (WriteTMP)
