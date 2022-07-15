@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
 using System.Numerics;
 using AgentsSystem;
 using Utils;
@@ -252,6 +254,7 @@ public partial class PlantFormation : IFormation
 			if (UnderGroundDeaths.Count > 0)
 			{
 				indexMap = new int[srcUG.Length + UnderGroundBirths.Count];
+				Array.Fill(indexMap, -1);
 #if GODOT				
 				for(var i = UnderGroundDeaths.Count - 1; i >= 0; --i)
 					GodotRemoveUnderGroundSprite(UnderGroundDeaths[i]);
@@ -296,10 +299,11 @@ public partial class PlantFormation : IFormation
 #endif				
 			}
 
-			UnderGroundBirths.Clear();
-
 			if (indexMap != null)
 				UnderGroundAgent.Reindex(underGround, indexMap);			
+
+			Debug.Assert(Enumerable.Range(0, underGround.Length).All(i => underGround[i].Parent < i));
+			UnderGroundBirths.Clear();
 
 			if (ReadTMP)
 			{
@@ -337,6 +341,7 @@ public partial class PlantFormation : IFormation
 			if (AboveGroundDeaths.Count > 0)
 			{
 				indexMap = new int[srcAG.Length + AboveGroundBirths.Count];
+				Array.Fill(indexMap, -1);
 #if GODOT
 				for(var i = AboveGroundDeaths.Count - 1; i >=0; --i)
 					GodotRemoveAboveGroundSprite(AboveGroundDeaths[i]);
@@ -384,10 +389,11 @@ public partial class PlantFormation : IFormation
 #endif	
 			}
 
-			AboveGroundBirths.Clear();
-
 			if (indexMap != null)
 				AboveGroundAgent.Reindex(aboveGround, indexMap);
+
+			Debug.Assert(Enumerable.Range(0, aboveGround.Length).All(i => aboveGround[i].Parent < i));
+			AboveGroundBirths.Clear();
 
 			if (ReadTMP)
 			{

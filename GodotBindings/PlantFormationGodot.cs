@@ -93,7 +93,7 @@ public partial class PlantFormation
 		var basis = new Basis(orientation.ToGodot());
 		sprite.Transform = new Transform(basis, (GetBaseCenter_AG(index) + stableScale).ToGodot());
 		if (GetOrgan_AG(index) == OrganTypes.Leaf)
-			sprite.Scale = new Vector3(length, radius, 0.0001f);
+			sprite.Scale = new Vector3(length, 0.0001f, radius);
 		else
 			sprite.Scale = new Vector3(length, radius, radius);
 	}
