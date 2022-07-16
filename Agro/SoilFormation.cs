@@ -31,9 +31,13 @@ public partial class SoilFormation : Formation3iTransformed<SoilAgent>
 		//Console.WriteLine(Agents.Where((x, i) => Coords(i).Z == 2 && Coords(i).X == 1).Select(x => x.Water).Sum());
 	}
 
-	public float GetWater(int index) => ReadTMP ? AgentsTMP[index].Water : Agents[index].Water;
+	public float GetWater(int index) => index >= 0 && index < Agents.Length
+		? (ReadTMP ? AgentsTMP[index].Water : Agents[index].Water)
+		: 0f;
 	public float GetWater(Vector3i index) => GetWater(Index(index));
-	public float GetWaterCapacity(int index) => ReadTMP ? AgentsTMP[index].WaterCapacity : Agents[index].WaterCapacity;
+	public float GetWaterCapacity(int index) => index >= 0 && index < Agents.Length
+		? (ReadTMP ? AgentsTMP[index].WaterCapacity : Agents[index].WaterCapacity)
+		: 0f;
 	public float GetWaterCapacity(Vector3i index) => GetWaterCapacity(Index(index));
 
 	public float GetTemperature(int index) => ReadTMP ? AgentsTMP[index].Temperature : Agents[index].Temperature;

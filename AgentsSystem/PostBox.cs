@@ -26,20 +26,9 @@ public class PostBox<T> where T : struct, IAgent
         while (src.Count > 0)
         {
             WriteTMP = !WriteTMP;
-#if !DEBUG
-            if (src.Count > 2 * Environment.ProcessorCount)
+            //Handle all increases first to create enough buffer for later decreasing
+            lock(src)
             {
-                //Parallel.ForEach(src, msg => msg.Process(agents));
-
-                //Handle all increases first to create enough buffer for later decreasing
-                Parallel.ForEach(src, msg => { if (msg.Type == Transaction.Increase) msg.Process(agents, timestep); });
-                //only then handle decreases
-                Parallel.ForEach(src, msg => { if (msg.Type != Transaction.Increase) msg.Process(agents, timestep); });
-            }
-            else
-#endif
-            {
-                //Handle all increases first to create enough buffer for later decreasing
                 foreach(var msg in src)
                     if (msg.Type == Transaction.Increase)
                         msg.Process(agents, timestep);
@@ -47,8 +36,8 @@ public class PostBox<T> where T : struct, IAgent
                 foreach(var msg in src)
                     if (msg.Type != Transaction.Increase)
                         msg.Process(agents, timestep);
+                src.Clear();
             }
-            src.Clear();
             src = WriteTMP ? BufferTMP : Buffer;
         }
     }

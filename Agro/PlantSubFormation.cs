@@ -213,9 +213,7 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 		// StemsTMP.AddRange(Stems);
 
 		for(int i = 0; i < dst.Length; ++i)
-		//Parallel.For(0, RootsTMP.Length, i =>
 			dst[i].Tick(world, this, i, timestep);
-		//);
 
 		#if HISTORY_LOG
 		var state = new T[dst.Length];

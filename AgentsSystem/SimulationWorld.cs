@@ -32,11 +32,21 @@ public partial class SimulationWorld
 
     public void Run(uint simulationLength)
     {
+#if !DEBUG
+        if (Formations.Count > Environment.ProcessorCount)
+            RunParallel(simulationLength);
+        else
+#endif
+            RunSequential(simulationLength);
+    }
+
+    public void RunSequential(uint simulationLength)
+    {
         for(uint i = 0U; i < simulationLength; ++i, ++Timestep)
         {
-            Census();
-            Tick(Timestep);
-            DeliverPost(Timestep);
+            CensusSequential();
+            TickSequential(Timestep);
+            DeliverPostSequential(Timestep);
 #if GODOT
             foreach(var item in Formations)
                 item.GodotProcess(Timestep);
@@ -44,20 +54,38 @@ public partial class SimulationWorld
         }
     }
 
-    void Census()
+    public void RunParallel(uint simulationLength)
+    {
+        for(uint i = 0U; i < simulationLength; ++i, ++Timestep)
+        {
+            CensusParallel();
+            TickParallel(Timestep);
+            DeliverPostParallel(Timestep);
+#if GODOT
+            foreach(var item in Formations)
+                item.GodotProcess(Timestep);
+#endif
+        }
+    }
+
+    void CensusSequential()
     {
         for(int i = 0; i < Formations.Count; ++i)
             Formations[i].Census();
     }
 
-    void Tick(uint timestep)
+    void CensusParallel() => Parallel.For(0, Formations.Count, i => Formations[i].Census());
+
+    void TickSequential(uint timestep)
     {
         //Console.WriteLine($"TIMESTEP: {timestep}");
         for(int i = 0; i < Formations.Count; ++i)
             Formations[i].Tick(this, timestep);
     }
 
-    public void DeliverPost(uint timestep)
+    void TickParallel(uint timestep) => Parallel.For(0, Formations.Count, i => Formations[i].Tick(this, timestep));
+
+    public void DeliverPostSequential(uint timestep)
     {
         var anyDelivered = true;
         while(anyDelivered)
@@ -69,6 +97,22 @@ public partial class SimulationWorld
                     Formations[i].DeliverPost(timestep);
                     anyDelivered = true;
                 }
+        }
+    }
+
+    public void DeliverPostParallel(uint timestep)
+    {
+        var anyDelivered = true;
+        while(anyDelivered)
+        {
+            anyDelivered = false;
+            Parallel.For(0, Formations.Count, i => {
+                if (Formations[i].HasUndeliveredPost)
+                {
+                    Formations[i].DeliverPost(timestep);
+                    anyDelivered = true;
+                }
+            });
         }
     }
 
