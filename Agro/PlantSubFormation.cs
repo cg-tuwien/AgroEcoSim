@@ -102,21 +102,6 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 		// if (RootsBirths.Count > 0)
 		//     Roots.AddRange(RootsBirths);
 
-		// if (StemsDeaths.Count > 0)
-		// {
-		//     StemsDeaths.Sort();
-		//     for(int i = 1; i < StemsDeaths.Count; ++i)
-		//         for(int r = StemsDeaths[i - 1]; r < StemsDeaths[i]; ++r)
-		//             Stems[r - i] = Stems[r];
-		//     for(int r = StemsDeaths[^1]; r < Stems.Count; ++r)
-		//         Stems[r - StemsDeaths.Count] = Stems[r];
-		//     Stems.RemoveRange(Stems.Count - StemsDeaths.Count, StemsDeaths.Count); //todo can be done instead of the last for cycle
-		//     //TODO reindex children if any deaths
-		// }
-
-		// if (StemsBirths.Count > 0)
-		//     Stems.AddRange(StemsBirths);
-
 		if (Births.Count > 0 || Deaths.Count > 0)
 		{
 			var (src, dst) = SrcDst();
@@ -130,11 +115,11 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 			}
 
 			var diff = Births.Count - Deaths.Count;
-			T[] underGround;
+			T[] tmp;
 			if (diff != 0)
-				underGround = new T[src.Length + diff];
+				tmp = new T[src.Length + diff];
 			else
-				underGround = src;
+				tmp = src;
 
 			int a = 0;
 			int[] indexMap = null;
@@ -158,7 +143,7 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 					{
 						if (++d == dc && i + 1 < src.Length)
 						{
-							Array.Copy(src, i + 1, underGround, a, src.Length - i - 1);
+							Array.Copy(src, i + 1, tmp, a, src.Length - i - 1);
 							for(int j = i + 1; j < src.Length; ++j)
 								indexMap[j] = a++;
 							break;
@@ -167,34 +152,34 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 					else
 					{
 						indexMap[i] = a;
-						underGround[a++] = src[i];
+						tmp[a++] = src[i];
 					}
 				}
 				Deaths.Clear();
 			}
 			else
 			{
-				Array.Copy(src, underGround, src.Length);
+				Array.Copy(src, tmp, src.Length);
 				a = src.Length;
 			}
 
 			for(int i = 0; i < Births.Count; ++i, ++a)
-				underGround[a] = Births[i];
+				tmp[a] = Births[i];
 
 			if (indexMap != null)
-				Reindex(underGround, indexMap);
+				Reindex(tmp, indexMap);
 
-			Debug.Assert(Enumerable.Range(0, underGround.Length).All(i => underGround[i].Parent < i));
+			Debug.Assert(Enumerable.Range(0, tmp.Length).All(i => tmp[i].Parent < i));
 
 			if (ReadTMP)
 			{
-				Agents = new T[underGround.Length];
-				AgentsTMP = underGround;
+				Agents = new T[tmp.Length];
+				AgentsTMP = tmp;
 			}
 			else
 			{
-				Agents = underGround;
-				AgentsTMP = new T[underGround.Length];
+				Agents = tmp;
+				AgentsTMP = new T[tmp.Length];
 			}
 
 #if GODOT

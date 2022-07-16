@@ -25,7 +25,7 @@ public partial struct UnderGroundAgent : IAgent
         {
             dstAgent.IncWater(Amount);
 			#if HISTORY_LOG
-			TransactionsHistory.Add(new(timestep, ID, dstAgent.ID, Amount));
+			lock(TransactionsHistory) TransactionsHistory.Add(new(timestep, ID, dstAgent.ID, Amount));
 			#endif
         }
     }
@@ -45,7 +45,7 @@ public partial struct UnderGroundAgent : IAgent
         {
             dstAgent.IncEnergy(Amount);
 			#if HISTORY_LOG
-			TransactionsHistory.Add(new(timestep, ID, dstAgent.ID, Amount));
+			lock(TransactionsHistory) TransactionsHistory.Add(new(timestep, ID, dstAgent.ID, Amount));
 			#endif
         }
     }
@@ -75,7 +75,7 @@ public partial struct UnderGroundAgent : IAgent
             var energy = srcAgent.TryDecEnergy(Math.Min(freeCapacity, Amount));
             if (energy > 0) DstFormation.SendProtected(DstIndex, new EnergyInc(energy));
 			#if HISTORY_LOG
-			TransactionsHistory.Add(new(timestep, ID, srcAgent.ID, DstFormation.GetID(DstIndex), energy));
+			lock(TransactionsHistory) TransactionsHistory.Add(new(timestep, ID, srcAgent.ID, DstFormation.GetID(DstIndex), energy));
 			#endif
         }
     }
@@ -105,7 +105,7 @@ public partial struct UnderGroundAgent : IAgent
             var energy = srcAgent.TryDecEnergy(Math.Min(Amount, freeCapacity));
             if (energy > 0) DstFormation.SendProtected(DstIndex, new EnergyInc(energy));
 			#if HISTORY_LOG
-			TransactionsHistory.Add(new(timestep, ID, srcAgent.ID, DstFormation.GetID(DstIndex), energy));
+			lock(TransactionsHistory) TransactionsHistory.Add(new(timestep, ID, srcAgent.ID, DstFormation.GetID(DstIndex), energy));
 			#endif
         }
     }
@@ -138,7 +138,7 @@ public partial struct UnderGroundAgent : IAgent
             var water = srcAgent.TryDecWater(Math.Min(freeCapacity, Amount));
             if (water > 0) DstFormation.SendProtected(DstIndex, new WaterInc(water));
 			#if HISTORY_LOG
-			TransactionsHistory.Add(new(timestep, ID, srcAgent.ID, DstFormation.GetID(DstIndex), water));
+			lock(TransactionsHistory) TransactionsHistory.Add(new(timestep, ID, srcAgent.ID, DstFormation.GetID(DstIndex), water));
 			#endif
         }
     }
@@ -167,7 +167,7 @@ public partial struct UnderGroundAgent : IAgent
             var water = srcAgent.TryDecWater(Math.Min(Amount, freeCapacity));
             if (water > 0) DstFormation.SendProtected(DstIndex, new AboveGroundAgent.WaterInc(water));
 			#if HISTORY_LOG
-			TransactionsHistory.Add(new(timestep, ID, srcAgent.ID, DstFormation.GetID(DstIndex), water));
+			lock(TransactionsHistory) TransactionsHistory.Add(new(timestep, ID, srcAgent.ID, DstFormation.GetID(DstIndex), water));
 			#endif
         }
     }

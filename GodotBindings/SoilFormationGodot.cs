@@ -42,7 +42,7 @@ public partial class SoilFormation
 		if (SpriteShow)
 			for(int i = 0; i < GodotSprites.Length; ++i)
 			{
-				((SpatialMaterial)GodotSprites[i].GetSurfaceMaterial(0)).AlbedoColor = new Color(0, 0f, Math.Min(Agents[i].Water * 0.01f / SoilAgent.FieldCellSurface, 1f));
+				((SpatialMaterial)GodotSprites[i].GetSurfaceMaterial(0)).AlbedoColor = new Color(0, 0f, Math.Clamp(Agents[i].Water / Agents[i].WaterMaxCapacity, 0f, 1f));
 			}
 	}
 }

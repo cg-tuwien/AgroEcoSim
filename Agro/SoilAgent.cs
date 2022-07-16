@@ -12,17 +12,18 @@ public partial struct SoilAgent : IAgent
 {
 	public const float FieldCellSurface = AgroWorld.FieldResolution * AgroWorld.FieldResolution;
 
-	internal const float SoilDiffusionCoefPerTick = 0.1f / AgroWorld.TicksPerHour;
-	internal const float GravitationDiffusionCoefPerTick = 0.1f * SoilDiffusionCoefPerTick;
+	internal const float SoilDiffusionCoefPerTick = 0.2f / AgroWorld.TicksPerHour;
+	internal const float GravitationDiffusionCoefPerTick = 1.5f * SoilDiffusionCoefPerTick;
 
 	public float Water { get; private set; }
 	public float Steam { get; private set; }
 	public float Temperature { get; private set; }
 
 	public const float WaterCapacityRatio = 0.5f;
+	public const float WaterSaturationRatio = 0.01f;
 
-	[JsonIgnore]
-	public float WaterCapacity => FieldCellSurface * AgroWorld.FieldResolution * WaterCapacityRatio;
+	public float WaterMaxCapacity => FieldCellSurface * AgroWorld.FieldResolution * WaterCapacityRatio;
+	public float WaterMinSaturation => FieldCellSurface * AgroWorld.FieldResolution * WaterSaturationRatio;
 
 	internal static readonly Vector3i[] LateralNeighborhood = new []{ new Vector3i(-1, 0, 0), new Vector3i(1, 0, 0), new Vector3i(0, -1, 0), new Vector3i(0, 1, 0) };
 
@@ -38,12 +39,12 @@ public partial struct SoilAgent : IAgent
 		var formation = (SoilFormation)_formation;
 		var coords = formation.Coords(formationID);
 
-		if (coords.Z == 0)
+		if (coords.Z == 0) // cells at z = 0 are above the ground, infinitely tall so no capacity restrictions for them
 			Water += AgroWorld.GetWater(timestep) * FieldCellSurface;
 
-		if (Water > 1e-3f)
+		if (Water > WaterMinSaturation)
 		{
-			float LateralDiffusionCoef = (coords.Z == 0 ? 0.4f : 0.03f) * SoilDiffusionCoefPerTick;
+			float LateralDiffusionCoef = (coords.Z == 0 ? 0.4f : 0.03f) * SoilDiffusionCoefPerTick; //lateral flow above the ground is very strong
 
 			var downDiffusion = Water * GravitationDiffusionCoefPerTick;
 			var sideDiffusion = Water * LateralDiffusionCoef;
@@ -72,18 +73,10 @@ public partial struct SoilAgent : IAgent
 						lateralFlow[i] *= lateralSum;
 						formation.Send(formationID, new Water_PullFrom(formation, lateralFlow[i], coords + LateralNeighborhood[i]));
 					}
-				//Water -= sideDiffusion;
 			}
 
 			formation.Send(formationID, new Water_PullFrom(formation, downDiffusion, coords.X, coords.Y, coords.Z + 1));
-				//Water -= downDiffusion;
 		}
-		else if (Water > 0f)
-		{
-			formation.Send(formationID, new Water_PullFrom(formation, Water, coords.X, coords.Y, coords.Z + 1));
-				//Water = 0f;
-		}
-
 	}
 	void IncWater(float amount) => Water += amount;
 	void IncSteam(float amount) => Steam += amount;

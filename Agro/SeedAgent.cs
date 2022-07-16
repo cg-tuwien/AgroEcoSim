@@ -31,7 +31,7 @@ public struct SeedAgent : IAgent
 		{
 			dstAgent.IncWater(Amount);
 			#if HISTORY_LOG
-			TransactionsHistory.Add(new(timestep, ID, dstAgent.ID, Amount));
+			lock(TransactionsHistory) TransactionsHistory.Add(new(timestep, ID, dstAgent.ID, Amount));
 			#endif
 		}
 	}

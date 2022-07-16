@@ -4,9 +4,9 @@ public interface IAgent
 {
 	void Tick(SimulationWorld world, IFormation formation, int formationID, uint timestep);
 	#if HISTORY_LOG
-    /// <summary>
-    /// Unique ID of the agent
-    /// </summary>
+	/// <summary>
+	/// Unique ID of the agent
+	/// </summary>
 	ulong ID { get; }
 	#endif
 }

@@ -36,7 +36,7 @@ public partial class SoilFormation : Formation3iTransformed<SoilAgent>
 		: 0f;
 	public float GetWater(Vector3i index) => GetWater(Index(index));
 	public float GetWaterCapacity(int index) => index >= 0 && index < Agents.Length
-		? (ReadTMP ? AgentsTMP[index].WaterCapacity : Agents[index].WaterCapacity)
+		? (ReadTMP ? AgentsTMP[index].WaterMaxCapacity : Agents[index].WaterMaxCapacity)
 		: 0f;
 	public float GetWaterCapacity(Vector3i index) => GetWaterCapacity(Index(index));
 

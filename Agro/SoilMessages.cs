@@ -23,7 +23,7 @@ public partial struct SoilAgent : IAgent
 		{
 			dstAgent.IncWater(Amount);
 			#if HISTORY_LOG
-			TransactionsHistory.Add(new(timestep, ID, dstAgent.ID, Amount));
+			lock(TransactionsHistory) TransactionsHistory.Add(new(timestep, ID, dstAgent.ID, Amount));
 			#endif
 		}
 	}
@@ -58,7 +58,7 @@ public partial struct SoilAgent : IAgent
 			var water = srcAgent.TryDecWater(Math.Min(Amount, freeCapacity));
 			if (water > 0) DstFormation.Send(DstIndex, new WaterInc(water));
 			#if HISTORY_LOG
-			TransactionsHistory.Add(new(timestep, ID, srcAgent.ID, DstFormation.GetID(DstIndex), water));
+			lock(TransactionsHistory) TransactionsHistory.Add(new(timestep, ID, srcAgent.ID, DstFormation.GetID(DstIndex), water));
 			#endif
 		}
 	}
@@ -100,7 +100,7 @@ public partial struct SoilAgent : IAgent
 			//Writing actions from other formations must not be implemented directly, but over messages
 			if (water > 0) DstFormation.SendProtected(DstIndex, new UnderGroundAgent.WaterInc(water));
 			#if HISTORY_LOG
-			TransactionsHistory.Add(new(timestep, ID, srcAgent.ID, DstFormation.GetID(DstIndex), water));
+			lock(TransactionsHistory) TransactionsHistory.Add(new(timestep, ID, srcAgent.ID, DstFormation.GetID(DstIndex), water));
 			#endif
 		}
 	}
@@ -128,7 +128,7 @@ public partial struct SoilAgent : IAgent
 			var water = srcAgent.TryDecWater(Amount);
 			if (water > 0) DstFormation.Send(0, new SeedAgent.WaterInc(water));
 			#if HISTORY_LOG
-			TransactionsHistory.Add(new(timestep, ID, srcAgent.ID, DstFormation.GetID(), water));
+			lock(TransactionsHistory) TransactionsHistory.Add(new(timestep, ID, srcAgent.ID, DstFormation.GetID(), water));
 			#endif
 		}
 	}
