@@ -23,7 +23,6 @@
                 "${workspaceFolder}/Agro/Agro.csproj",
                 "/property:GenerateFullPaths=true",
                 "/consoleloggerparameters:NoSummary",
-                "/O2",
                 "-c",
                 "Release"
             ],
