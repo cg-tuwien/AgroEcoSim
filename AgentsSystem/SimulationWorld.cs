@@ -10,7 +10,7 @@ public partial class SimulationWorld
     public SimulationWorld()
     {
         Formations = new List<IFormation>();
-		Timestep = 0;        
+		Timestep = 0;
     }
 
     public void Add(IFormation formation)
@@ -36,7 +36,7 @@ public partial class SimulationWorld
         {
             Census();
             Tick(Timestep);
-            DeliverPost();
+            DeliverPost(Timestep);
 #if GODOT
             foreach(var item in Formations)
                 item.GodotProcess(Timestep);
@@ -57,7 +57,7 @@ public partial class SimulationWorld
             Formations[i].Tick(this, timestep);
     }
 
-    public void DeliverPost()
+    public void DeliverPost(uint timestep)
     {
         var anyDelivered = true;
         while(anyDelivered)
@@ -66,7 +66,7 @@ public partial class SimulationWorld
             for(int i = 0; i < Formations.Count; ++i)
                 if (Formations[i].HasUndeliveredPost)
                 {
-                    Formations[i].DeliverPost();
+                    Formations[i].DeliverPost(timestep);
                     anyDelivered = true;
                 }
         }

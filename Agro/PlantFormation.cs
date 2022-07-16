@@ -49,7 +49,7 @@ public partial class PlantFormation : IFormation
 		AG = new(this, AboveGroundAgent.Reindex
 #if GODOT
 		, i => AG_Godot.RemoveSprite(i), i => AG_Godot.AddSprite(i)
-#endif	
+#endif
 );
 	}
 
@@ -67,7 +67,7 @@ public partial class PlantFormation : IFormation
 	//     }
 	//     else
 	//         return false;
-	// } 
+	// }
 
 	public bool Send(int recipient, IMessage<SeedAgent> msg)
 	{
@@ -100,7 +100,7 @@ public partial class PlantFormation : IFormation
 	{
 		if (DeathSeed && !UG.Alive && !AG.Alive)
 			return;
-			
+
 		//Ready for List and Span combination
 
 		// if (RootsDeaths.Count > 0)
@@ -127,7 +127,7 @@ public partial class PlantFormation : IFormation
 		//     for(int r = StemsDeaths[^1]; r < Stems.Count; ++r)
 		//         Stems[r - StemsDeaths.Count] = Stems[r];
 		//     Stems.RemoveRange(Stems.Count - StemsDeaths.Count, StemsDeaths.Count); //todo can be done instead of the last for cycle
-		//     //TODO reindex children if any deaths        
+		//     //TODO reindex children if any deaths
 		// }
 
 		// if (StemsBirths.Count > 0)
@@ -150,18 +150,18 @@ public partial class PlantFormation : IFormation
 		AG.Tick(world, timestep);
 	}
 
-	public void DeliverPost()
+	public void DeliverPost(uint timestep)
 	{
 		if (Seed.Length > 0)
 		{
 			var (src, dst) = SrcDst_Seed();
 			Array.Copy(src, dst, src.Length);
-			PostboxSeed.Process(dst);
+			PostboxSeed.Process(timestep, dst);
 		}
 		ReadTMP = !ReadTMP;
 
-		UG.DeliverPost();
-		AG.DeliverPost();
+		UG.DeliverPost(timestep);
+		AG.DeliverPost(timestep);
 
 		// if (!DeathSeed)
 		// 	Console.WriteLine("R: {0} E: {1}", Seed[0].Radius, Seed[0].StoredEnergy);
@@ -177,6 +177,7 @@ public partial class PlantFormation : IFormation
 	#if HISTORY_LOG
 	List<SeedAgent> StatesHistory = new();
 	public string HistoryToJSON() => $" \"Seeds\" : {Utils.Export.Json(StatesHistory)}, \"UnderGround\" : {UG.HistoryToJSON()}, AboveGround : {AG.HistoryToJSON()}";
+	public ulong GetID() => Seed.Length > 0 ? Seed[0].ID : ulong.MaxValue;
 	#endif
 	#endregion
 }

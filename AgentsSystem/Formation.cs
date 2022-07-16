@@ -138,24 +138,24 @@ public abstract class Formation<T> : IFormation where T : struct, IAgent
 		Deaths.Add(index);
 	}
 
-	public virtual void DeliverPost()
+	public virtual void DeliverPost(uint timestep)
 	{
 		var (src, dst) = SrcDst();
 		Array.Copy(src, dst, dst.Length);
-		Postbox.Process(dst);
+		Postbox.Process(timestep, dst);
 		ReadTMP = !ReadTMP;
 	}
 
 	public virtual bool HasUndeliveredPost => Postbox.AnyMessages;
 
-	///////////////////////////
-	#region LOG
-	///////////////////////////
-	#if HISTORY_LOG
+#if HISTORY_LOG
 	List<T[]> StatesHistory = new();
 	public string HistoryToJSON() => Utils.Export.Json(StatesHistory);
-	#endif
-	#endregion
+
+	public ulong GetID(int index) => ReadTMP
+		? (AgentsTMP.Length > index ? AgentsTMP[index].ID : ulong.MaxValue)
+		: (Agents.Length > index ? Agents[index].ID : ulong.MaxValue);
+#endif
 
 #if GODOT
 	public virtual void GodotReady() {}

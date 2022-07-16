@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 namespace AgentsSystem;
 
 public class PostBox<T> where T : struct, IAgent
-{ 
+{
     readonly List<MessageWrapper<T>> Buffer = new();
     readonly List<MessageWrapper<T>> BufferTMP = new();
     bool WriteTMP = false;
@@ -20,7 +20,7 @@ public class PostBox<T> where T : struct, IAgent
     }
 
     //There MUST NOT be a non-array Process method. Otherwise refs will not work
-    public void Process(T[] agents)
+    public void Process(uint timestep, T[] agents)
     {
         var src = WriteTMP ? BufferTMP : Buffer;
         while (src.Count > 0)
@@ -32,9 +32,9 @@ public class PostBox<T> where T : struct, IAgent
                 //Parallel.ForEach(src, msg => msg.Process(agents));
 
                 //Handle all increases first to create enough buffer for later decreasing
-                Parallel.ForEach(src, msg => { if (msg.Type == Transaction.Increase) msg.Process(agents); });
+                Parallel.ForEach(src, msg => { if (msg.Type == Transaction.Increase) msg.Process(agents, timestep); });
                 //only then handle decreases
-                Parallel.ForEach(src, msg => { if (msg.Type != Transaction.Increase) msg.Process(agents); });
+                Parallel.ForEach(src, msg => { if (msg.Type != Transaction.Increase) msg.Process(agents, timestep); });
             }
             else
 #endif
@@ -42,14 +42,14 @@ public class PostBox<T> where T : struct, IAgent
                 //Handle all increases first to create enough buffer for later decreasing
                 foreach(var msg in src)
                     if (msg.Type == Transaction.Increase)
-                        msg.Process(agents);
+                        msg.Process(agents, timestep);
                 //only then handle decreases
                 foreach(var msg in src)
                     if (msg.Type != Transaction.Increase)
-                        msg.Process(agents);
+                        msg.Process(agents, timestep);
             }
             src.Clear();
             src = WriteTMP ? BufferTMP : Buffer;
         }
-    }    
+    }
 }

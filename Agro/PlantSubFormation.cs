@@ -225,13 +225,13 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 		ReadTMP = !ReadTMP;
 	}
 
-	public void DeliverPost()
+	public void DeliverPost(uint timestep)
 	{
 		// Roots.Clear();
 		// Roots.AddRange(RootsTMP);
 		var (src, dst) = SrcDst();
 		Array.Copy(src, dst, src.Length);
-		Post.Process(dst);
+		Post.Process(timestep, dst);
 
 		ReadTMP = !ReadTMP;
 	}
@@ -334,6 +334,10 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 	#if HISTORY_LOG
 	List<T[]> StatesHistory = new();
 	public string HistoryToJSON() => Utils.Export.Json(StatesHistory);
+
+	public ulong GetID(int index) => ReadTMP
+		? (AgentsTMP.Length > index ? AgentsTMP[index].ID : ulong.MaxValue)
+		: (Agents.Length > index ? Agents[index].ID : ulong.MaxValue);
 	#endif
 	#endregion
 }

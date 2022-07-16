@@ -40,7 +40,7 @@ public partial struct UnderGroundAgent : IPlantAgent
 	public float Water { get; private set; }
 
 	/// <summary>
-	/// Inverse woodyness ∈ [0, 1]. The more woody (towards 0) the less water the root can absorb. 
+	/// Inverse woodyness ∈ [0, 1]. The more woody (towards 0) the less water the root can absorb.
 	/// </summary>
 	float WaterAbsorbtionFactor //factor 0 .. 1
 #if HISTORY_LOG
@@ -85,13 +85,13 @@ public partial struct UnderGroundAgent : IPlantAgent
 	/// <summary>
 	/// Water volume in m³ which can be absorbed from soil per hour
 	/// </summary>
-	public float WaterAbsorbtionPerHour => Radius * 8f * Length * WaterAbsortionRatio;
+	public readonly float WaterAbsorbtionPerHour => Radius * 8f * Length * WaterAbsortionRatio;
 
 	/// <summary>
 	/// Water volume in m³ which can be absorbed from soil per timestep
 	/// </summary>
 	[JsonIgnore]
-	public float WaterAbsorbtionPerTick => WaterAbsorbtionPerHour / AgroWorld.TicksPerHour;
+	public readonly float WaterAbsorbtionPerTick => WaterAbsorbtionPerHour / AgroWorld.TicksPerHour;
 
 	public const float EnergyTransportRatio = 4f;
 
@@ -103,18 +103,18 @@ public partial struct UnderGroundAgent : IPlantAgent
 	/// <summary>
 	/// Water volume in m³ which can be passed to the parent per hour
 	/// </summary>
-	public float WaterFlowToParentPerHour => 4f * Radius * Radius * WaterTransportRatio;
+	public readonly float WaterFlowToParentPerHour => 4f * Radius * Radius * WaterTransportRatio;
 
 	/// <summary>
 	/// Water volume in m³ which can be passed to the parent per timestep
 	/// </summary>
 	[JsonIgnore]
-	public float WaterFlowToParentPerTick => WaterFlowToParentPerHour / AgroWorld.TicksPerHour;
+	public readonly float WaterFlowToParentPerTick => WaterFlowToParentPerHour / AgroWorld.TicksPerHour;
 
-	public float EnergyFlowToParentPerHour => 4f * Radius * Radius * WaterTransportRatio;
+	public readonly float EnergyFlowToParentPerHour => 4f * Radius * Radius * WaterTransportRatio;
 
 	[JsonIgnore]
-	public float EnergyFlowToParentPerTick => EnergyFlowToParentPerHour / AgroWorld.TicksPerHour;
+	public readonly float EnergyFlowToParentPerTick => EnergyFlowToParentPerHour / AgroWorld.TicksPerHour;
 
 	/// <summary>
 	/// Volume ratio ∈ [0, 1] of the agent that can used for storing water
@@ -124,18 +124,18 @@ public partial struct UnderGroundAgent : IPlantAgent
 	/// <summary>
 	/// Water volume in m³ which can be stored in this agent
 	/// </summary>
-	public float WaterStorageCapacity => 4f * Radius * Radius * Length * WaterCapacityRatio;
+	public readonly float WaterStorageCapacity => 4f * Radius * Radius * Length * WaterCapacityRatio;
 
 	/// <summary>
 	/// Water volume in m³ which can flow through per hour, or can be stored in this agent
 	/// </summary>
-	public float WaterTotalCapacityPerHour => 4f * Radius * Radius * (Length * WaterCapacityRatio + WaterTransportRatio);
+	public readonly float WaterTotalCapacityPerHour => 4f * Radius * Radius * (Length * WaterCapacityRatio + WaterTransportRatio);
 
 	/// <summary>
 	/// Water volume in m³ which can flow through per tick, or can be stored in this agent
 	/// </summary>
 	[JsonIgnore]
-	public float WaterTotalCapacityPerTick => WaterTotalCapacityPerHour / AgroWorld.TicksPerHour;
+	public readonly float WaterTotalCapacityPerTick => WaterTotalCapacityPerHour / AgroWorld.TicksPerHour;
 
 	/// <summary>
 	/// Timespan for which 1 unit of energy can feed 1m³ of plant tissue
@@ -147,7 +147,7 @@ public partial struct UnderGroundAgent : IPlantAgent
 
 	static float EnergyCapacityFunc(float radius, float length) => 4f * radius * radius * length * (1f - WaterCapacityRatio) * EnergyStorageCoef;
 
-	public float EnergyStorageCapacity => EnergyCapacityFunc(Radius, Length);
+	public readonly float EnergyStorageCapacity => EnergyCapacityFunc(Radius, Length);
 
 
 	public static Quaternion OrientationDown = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, -MathF.PI * 0.5f);
@@ -196,12 +196,12 @@ public partial struct UnderGroundAgent : IPlantAgent
 		///////////////////////////
 		#region Growth
 		///////////////////////////
-		if (Energy > lifeSupportPerHour * 36) //maybe make it a factor storedEnergy/lifeSupport so that it grows fast when it has full storage        
+		if (Energy > lifeSupportPerHour * 36) //maybe make it a factor storedEnergy/lifeSupport so that it grows fast when it has full storage
 		{
 			var childrenCount = children.Count + 1;
 			var lengthGrowth = waterFactor * 2e-4f / (AgroWorld.TicksPerHour * MathF.Pow(childrenCount, GrowthDeclineByExpChildren + 1) * MathF.Pow(lr * Length, 0.1f));
 			var widthGrowth = waterFactor * 2e-5f / (AgroWorld.TicksPerHour * MathF.Pow(childrenCount, GrowthDeclineByExpChildren / 2) * MathF.Pow(lifeSupportPerHour, 0.1f)); //just optimized the number of multiplications
-			
+
 			Length += lengthGrowth;
 			Radius += widthGrowth;
 
@@ -281,9 +281,9 @@ public partial struct UnderGroundAgent : IPlantAgent
 				var baseCenter = formation.GetBaseCenter(formationID);
 				//find all soild cells that the shpere intersects
 				var sources = soil.IntersectSphere(baseCenter + Vector3.Transform(Vector3.UnitX, Orientation) * Length * 0.75f, Length * 0.25f); //TODO make a tube intersection
-		
+
 				var vegetativeTemp = plant.VegetativeLowTemperature;
-				
+
 				if (sources.Count > 0) //TODO this is a rough approximation taking only the first intersected soil cell
 				{
 					var amount = waterCapacity;

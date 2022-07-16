@@ -112,6 +112,11 @@ public class Formation3i<T> : Formation<T> where T : struct, IAgent
 		else
 			return false;
 	}
+
+#if HISTORY_LOG
+	public ulong GetID(Vector3i index) => GetID(Index(index));
+	public ulong GetID(int x, int y, int z) => GetID(Index(x, y, z));
+#endif
 }
 
 [Flags]

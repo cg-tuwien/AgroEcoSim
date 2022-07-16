@@ -81,18 +81,18 @@ public partial struct AboveGroundAgent : IPlantAgent
 	/// <summary>
 	/// Water volume in m³ which can be passed to the parent per hour
 	/// </summary>
-	public float WaterFlowToParentPerHour => 4f * Radius * Radius * WaterTransportRatio;
+	public readonly float WaterFlowToParentPerHour => 4f * Radius * Radius * WaterTransportRatio;
 
 	/// <summary>
 	/// Water volume in m³ which can be passed to the parent per timestep
 	/// </summary>
 	[JsonIgnore]
-	public float WaterFlowToParentPerTick => WaterFlowToParentPerHour / AgroWorld.TicksPerHour;
+	public readonly float WaterFlowToParentPerTick => WaterFlowToParentPerHour / AgroWorld.TicksPerHour;
 
-	public float EnergyFlowToParentPerHour => 4f * Radius * Radius * WaterTransportRatio;
+	public readonly float EnergyFlowToParentPerHour => 4f * Radius * Radius * WaterTransportRatio;
 
 	[JsonIgnore]
-	public float EnergyFlowToParentPerTick => EnergyFlowToParentPerHour / AgroWorld.TicksPerHour;
+	public readonly float EnergyFlowToParentPerTick => EnergyFlowToParentPerHour / AgroWorld.TicksPerHour;
 
 	/// <summary>
 	/// Volume ratio ∈ [0, 1] of the agent that can used for storing water
@@ -102,18 +102,18 @@ public partial struct AboveGroundAgent : IPlantAgent
 	/// <summary>
 	/// Water volume in m³ which can be stored in this agent
 	/// </summary>
-	public float WaterStorageCapacity => 4f * Radius * Radius * Length * WaterCapacityRatio;
+	public readonly float WaterStorageCapacity => 4f * Radius * Radius * Length * WaterCapacityRatio;
 
 	/// <summary>
 	/// Water volume in m³ which can flow through per hour, or can be stored in this agent
 	/// </summary>
-	public float WaterTotalCapacityPerHour => 4f * Radius * Radius * (Length * WaterCapacityRatio + WaterTransportRatio);
+	public readonly float WaterTotalCapacityPerHour => 4f * Radius * Radius * (Length * WaterCapacityRatio + WaterTransportRatio);
 
 	/// <summary>
 	/// Water volume in m³ which can flow through per tick, or can be stored in this agent
 	/// </summary>
 	[JsonIgnore]
-	public float WaterTotalCapacityPerTick => WaterTotalCapacityPerHour / AgroWorld.TicksPerHour;
+	public readonly float WaterTotalCapacityPerTick => WaterTotalCapacityPerHour / AgroWorld.TicksPerHour;
 
 	/// <summary>
 	/// Timespan for which 1 unit of energy can feed 1m³ of plant tissue
@@ -125,7 +125,7 @@ public partial struct AboveGroundAgent : IPlantAgent
 
 	static float EnergyCapacityFunc(float radius, float length) => 4f * radius * radius * length * (1f - WaterCapacityRatio) * EnergyStorageCoef;
 
-	public float EnergyStorageCapacity => EnergyCapacityFunc(Radius, Length);
+	public readonly float EnergyStorageCapacity => EnergyCapacityFunc(Radius, Length);
 
 
 	public AboveGroundAgent(int parent, OrganTypes organ, Quaternion orientation, float initialEnergy, float radius = InitialRadius, float length = InitialLength)
@@ -303,7 +303,7 @@ public partial struct AboveGroundAgent : IPlantAgent
 		}
 	}
 
-	float EnergyForParent(float photosynthesizedEnergy, float lifeSupportPerTick, float parentEnergy) =>
+	readonly float EnergyForParent(float photosynthesizedEnergy, float lifeSupportPerTick, float parentEnergy) =>
 		Math.Max(0f, photosynthesizedEnergy > lifeSupportPerTick ? Energy - lifeSupportPerTick * 2f : Math.Min((Energy - parentEnergy) * 0.5f, Energy - lifeSupportPerTick * 2f));
 
 	public void IncWater(float amount)
