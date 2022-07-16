@@ -74,15 +74,48 @@ public partial class SoilFormation
         SoilCellInstances[Index(x,y,z)].SetSurfaceMaterial(0,parameters.SoilCellMaterial);
     }
 
-    private void AnimateCells(){ //Todo: Animate scale
-        
+    private void AnimateCells(){
+        for(int i = 0; i < SoilCellInstances.Length; i++){
+            float multiplier = Math.Min(parameters.CellCapacity,Math.Max(0,Agents[i].Water))/parameters.CellCapacity;
+
+            SoilCellInstances[i].Scale = Vector3.One * parameters.SoilCellScale * AgroWorld.FieldResolution * multiplier;
+            // ((SpatialMaterial)SoilCellInstances[i].GetSurfaceMaterial(0)).AlbedoColor = multiplier*parameters.FullCellColor + (1-multiplier)*parameters.EmptyCellColor;
+        }
     }
 
     private void AnimateMarkers(){
-        float full_water = 30; //Todo: Change
+        
+    }
+
+    private void SolveVisibility(){
+        if(parameters.MarkerVisibility == visibility.visible){
+            SetMarkersVisibility(true);
+            parameters.MarkerVisibility = visibility.visible_waiting;
+        }
+        else if(parameters.MarkerVisibility == visibility.invisible){
+            SetMarkersVisibility(false);
+            parameters.MarkerVisibility = visibility.invisible_waiting;
+        }
+
+        if(parameters.SoilCellsVisibility == visibility.visible){
+            SetCellsVisibility(true);
+            parameters.SoilCellsVisibility = visibility.visible_waiting;
+        }
+        else if(parameters.SoilCellsVisibility == visibility.invisible){
+            SetCellsVisibility(false);
+            parameters.SoilCellsVisibility = visibility.invisible_waiting;
+        }
+    }
+
+    private void SetMarkersVisibility(bool flag){
+        for(int i = 0; i < MarkerInstances.Length; i++){
+            MarkerInstances[i].Visible = flag;
+        }
+    }
+
+    private void SetCellsVisibility(bool flag){
         for(int i = 0; i < SoilCellInstances.Length; i++){
-            float size_multiplier = Math.Min(full_water,Math.Max(0,Agents[i].Water))/full_water;
-            SoilCellInstances[i].Scale = Vector3.One * parameters.SoilCellScale * AgroWorld.FieldResolution * size_multiplier;
+            SoilCellInstances[i].Visible = flag;
         }
     }
 

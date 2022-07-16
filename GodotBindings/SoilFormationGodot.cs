@@ -12,7 +12,7 @@ public partial class SoilFormation
 	SoilVisualisationSettings parameters = new SoilVisualisationSettings();
 	
 
-	//Todo: Speed of the visualisation could be improved by replacing Mesh with MultiMesh!!!
+	//Todo: Speed of the visualisation could be improved by replacing Mesh with MultiMesh (leveraging identical geo)!!!
 	MeshInstance[] SoilCellInstances;
 	MeshInstance[] MarkerInstances;
 
@@ -26,9 +26,9 @@ public partial class SoilFormation
 	public override void GodotProcess(uint timestep)
 	{
 		if(parameters.Visualise){
-			AnimateCells();
-			AnimateMarkers();
+			SolveVisibility();
+			if(parameters.MarkerVisibility == visibility.visible_waiting) AnimateMarkers();
+			if(parameters.SoilCellsVisibility == visibility.visible_waiting) AnimateCells();
 		}
-
 	}
 }
