@@ -12,6 +12,7 @@ public partial class Plant_AG_Godot : PlantAbstractGodot<AboveGroundAgent>
 	public Plant_AG_Godot(PlantSubFormation<AboveGroundAgent> formation) : base(formation) { }
 
 	protected override Color FormationColor => Colors.Green;
+	protected override ColorCodingType FormationColorCoding => ColorCodingType.MixedRatio;
 
 	protected override void UpdateTransformation(MeshInstance sprite, int index)
 	{
@@ -26,5 +27,7 @@ public partial class Plant_AG_Godot : PlantAbstractGodot<AboveGroundAgent>
 			sprite.Scale = new Vector3(length, 0.0001f, radius);
 		else
 			sprite.Scale = new Vector3(length, radius, radius);
+
+		((SpatialMaterial)sprite.GetSurfaceMaterial(0)).AlbedoColor = ColorCoding(index, FormationColorCoding);
 	}
 }
