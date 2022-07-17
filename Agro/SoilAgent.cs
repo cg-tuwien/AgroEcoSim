@@ -100,6 +100,10 @@ public struct SoilAgent : IAgent
 	{
 		var formation = (SoilFormation)_formation;
 		var coords = formation.Coords(formationID);        
+
+		var water_flow = formation.water_flow;
+		var steam_flow = formation.steam_flow;
+	
 		
 		if (coords.Z == 0)
 			mWater += AgroWorld.GetWater(timestep) * FieldCellSurface;
@@ -136,10 +140,16 @@ public struct SoilAgent : IAgent
 						formation.Send(coords + LateralNeighborhood[i], new WaterDiffusionMsg(lateralFlow[i]));
 					}
 				mWater -= sideDiffusion;
+				water_flow[formation.Index(coords),0] = lateralFlow[0];//Todo: Temp solution, write actual values
+				water_flow[formation.Index(coords),2] = lateralFlow[0];
+				water_flow[formation.Index(coords),3] = lateralFlow[0];
+				water_flow[formation.Index(coords),5] = lateralFlow[0];
 			}
 
-			if (formation.Send(coords.X, coords.Y, coords.Z + 1, new WaterDiffusionMsg(downDiffusion)))
+			if (formation.Send(coords.X, coords.Y, coords.Z + 1, new WaterDiffusionMsg(downDiffusion))){
 				mWater -= downDiffusion;
+				water_flow[formation.Index(coords),4] = downDiffusion;
+			}
 		}
 		else if (mWater > 0f)
 		{

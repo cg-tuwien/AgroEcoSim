@@ -14,7 +14,14 @@ public partial class SoilFormation
 
 	//Todo: Speed of the visualisation could be improved by replacing Mesh with MultiMesh (leveraging identical geo)!!!
 	MeshInstance[] SoilCellInstances;
-	MeshInstance[] MarkerInstances;
+	MeshInstance[,,] MarkerInstancesX;
+	MeshInstance[,,] MarkerInstancesY;
+	MeshInstance[,,] MarkerInstancesZ;
+
+	List<MarkerData> MarkerDataStorage;
+
+
+	float[] FlowTracking;
 
 	public override void GodotReady()
 	{
