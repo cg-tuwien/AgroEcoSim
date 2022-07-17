@@ -42,12 +42,9 @@ public partial struct UnderGroundAgent : IPlantAgent
 	/// <summary>
 	/// Inverse woodyness ∈ [0, 1]. The more woody (towards 0) the less water the root can absorb.
 	/// </summary>
-	float WaterAbsorbtionFactor //factor 0 .. 1
-#if HISTORY_LOG
-	{ get; set; }
-#else
-	;
-#endif
+	float mWaterAbsorbtionFactor;
+
+	public float WoodRatio => 1f - mWaterAbsorbtionFactor;
 
 	public OrganTypes Organ => OrganTypes.Root;
 
@@ -163,7 +160,7 @@ public partial struct UnderGroundAgent : IPlantAgent
 
 		Energy = initialEnergy;
 		Water = initialWater;
-		WaterAbsorbtionFactor = initialWaterIntake;
+		mWaterAbsorbtionFactor = initialWaterIntake;
 	}
 
 	/// <summary>
@@ -174,6 +171,11 @@ public partial struct UnderGroundAgent : IPlantAgent
 		for(int i = 0; i < src.Length; ++i)
 			src[i].Parent = src[i].Parent == -1 ? -1 : map[src[i].Parent];
 	}
+
+	///<summary>
+	/// Use with caution, call only from census! Updates the Parent value after splitting an agent.
+	///</summary>
+	public void CensusUpdateParent(int newParent) => Parent = newParent;
 
 	public void Tick(SimulationWorld world, IFormation _formation, int formationID, uint timestep)
 	{
@@ -205,9 +207,9 @@ public partial struct UnderGroundAgent : IPlantAgent
 			Length += lengthGrowth;
 			Radius += widthGrowth;
 
-			WaterAbsorbtionFactor -= widthGrowth * childrenCount;  //become wood faster with children
-			if (WaterAbsorbtionFactor < 0f)
-				WaterAbsorbtionFactor = 0f;
+			mWaterAbsorbtionFactor -= widthGrowth * childrenCount;  //become wood faster with children
+			if (mWaterAbsorbtionFactor < 0f)
+				mWaterAbsorbtionFactor = 0f;
 
 			const float yFactor = 0.5f;
 			const float zFactor = 0.2f;
@@ -232,7 +234,7 @@ public partial struct UnderGroundAgent : IPlantAgent
 			}
 
 			//Branching
-			if(children.Count > 0 )
+			if (children.Count > 0)
 			{
 				var pool = MathF.Pow(childrenCount, childrenCount << 2) * AgroWorld.TicksPerHour;
 				if (pool < uint.MaxValue && plant.RNG.NextUInt((uint)pool) == 1 && waterFactor > plant.RNG.NextFloat())
@@ -256,7 +258,7 @@ public partial struct UnderGroundAgent : IPlantAgent
 				var childEnergy = formation.GetEnergy(child);
 				if (childEnergy > Energy)
 				{
-					var amount = Math.Min(formation.GetEnergyFlow_PerTick(child), Math.Min(formation.GetEnergyFlow_PerTick(child), (childEnergy - Energy) * 0.5f));
+					var amount = Math.Min(formation.GetEnergyFlow_PerTick(child), Math.Min(formation.GetEnergyFlow_PerTick(child), childEnergy));
 					plant.Send(child, new Energy_PullFrom(formation, amount, formationID));
 				}
 			}
@@ -272,7 +274,7 @@ public partial struct UnderGroundAgent : IPlantAgent
 		///////////////////////////
 		#region Absorb WATER from soil
 		///////////////////////////
-		if (WaterAbsorbtionFactor > 0f)
+		if (mWaterAbsorbtionFactor > 0f)
 		{
 			var waterCapacity = WaterAbsorbtionPerTick;
 			if (Water < waterCapacity)
@@ -298,7 +300,7 @@ public partial struct UnderGroundAgent : IPlantAgent
 			}
 		}
 		else
-			WaterAbsorbtionFactor = 0f;
+			mWaterAbsorbtionFactor = 0f;
 		#endregion
 
 		///////////////////////////
@@ -308,13 +310,17 @@ public partial struct UnderGroundAgent : IPlantAgent
 		{
 			var parentEnergy = formation.GetEnergy(Parent);
 			if (parentEnergy > Energy)
-				plant.Send(Parent, new Energy_PullFrom(formation, Math.Min(EnergyFlowToParentPerTick, (parentEnergy - Energy) * 0.5f), formationID)); //TODO make requests based on own need and the need of children
+				plant.Send(Parent, new Energy_PullFrom(formation, EnergyFlowToParentPerTick, formationID)); //TODO make requests based on own need and the need of children
 		}
 		else
 		{
-			var parentEnergy = formation.GetEnergy(0);
-			if (parentEnergy > Energy)
-				plant.Send(0, new Energy_PullFrom_AG(formation, Math.Min(formation.GetEnergyFlow_PerTick(0), (parentEnergy - Energy) * 0.5f), formationID)); //TODO make requests based on own need and the need of children
+			var roots = plant.AG.GetRoots();
+			foreach(var root in roots)
+			{
+				var rootEnergy = plant.AG.GetEnergy(root);
+				if (rootEnergy > Energy)
+					plant.Send(root, new Energy_PullFrom_AG(formation, plant.AG.GetEnergyFlow_PerTick(root), formationID)); //TODO make requests based on own need and the need of children
+			}
 		}
 		#endregion
 
@@ -326,7 +332,11 @@ public partial struct UnderGroundAgent : IPlantAgent
 			if (Parent >= 0)
 				plant.Send(formationID, new Water_PullFrom(formation, WaterFlowToParentPerTick, Parent));
 			else
-				plant.Send(formationID, new Water_AG_PullFrom_UG(plant.AG, WaterFlowToParentPerTick, 0));
+			{
+				var roots = plant.AG.GetRoots();
+				foreach(var root in roots)
+					plant.Send(formationID, new Water_AG_PullFrom_UG(plant.AG, WaterFlowToParentPerTick, root));
+			}
 		}
 		#endregion
 	}

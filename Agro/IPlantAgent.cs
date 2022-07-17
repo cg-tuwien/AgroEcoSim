@@ -41,5 +41,11 @@ public interface IPlantAgent : IAgent
 	float WaterTotalCapacityPerTick { get; }
 	float EnergyFlowToParentPerTick { get; }
 
+	float WoodRatio { get; }
+
+	///<summary>
+	/// Use with caution, call only from census! Updates the Parent value after splitting an agent.
+	///</summary>
+	void CensusUpdateParent(int newParent);
 	static void Reindex(IPlantAgent[] data, int[] map) => throw new NotImplementedException();
 }
