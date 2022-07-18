@@ -14,9 +14,8 @@ public partial class SoilFormation
 
 	//Todo: Speed of the visualisation could be improved by replacing Mesh with MultiMesh (leveraging identical geo)!!!
 	MeshInstance[] SoilCellInstances;
-	MeshInstance[,,] MarkerInstancesX;
-	MeshInstance[,,] MarkerInstancesY;
-	MeshInstance[,,] MarkerInstancesZ;
+
+	Tuple<MeshInstance[,,],MeshInstance[,,],MeshInstance[,,]> MarkerInstances;
 
 	List<MarkerData> MarkerDataStorage;
 

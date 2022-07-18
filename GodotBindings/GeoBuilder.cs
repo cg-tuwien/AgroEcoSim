@@ -39,6 +39,7 @@ public static class GeoBuilder{
         st.GenerateNormals();
         st.Commit(temp);
 
+
         return temp;
     }
 

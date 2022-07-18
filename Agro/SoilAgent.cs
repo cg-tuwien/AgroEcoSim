@@ -140,10 +140,13 @@ public struct SoilAgent : IAgent
 						formation.Send(coords + LateralNeighborhood[i], new WaterDiffusionMsg(lateralFlow[i]));
 					}
 				mWater -= sideDiffusion;
-				water_flow[formation.Index(coords),0] = lateralFlow[0];//Todo: Temp solution, write actual values
-				water_flow[formation.Index(coords),2] = lateralFlow[0];
+
+				//This is hardcoded solution for lateral neighborhood with 4 neighbors
+				//internal static readonly Vector3i[] LateralNeighborhood = new []{ new Vector3i(-1, 0, 0), new Vector3i(1, 0, 0), new Vector3i(0, -1, 0), new Vector3i(0, 1, 0) };
 				water_flow[formation.Index(coords),3] = lateralFlow[0];
-				water_flow[formation.Index(coords),5] = lateralFlow[0];
+				water_flow[formation.Index(coords),0] = lateralFlow[1];
+				water_flow[formation.Index(coords),5] = lateralFlow[2];
+				water_flow[formation.Index(coords),2] = lateralFlow[3];
 			}
 
 			if (formation.Send(coords.X, coords.Y, coords.Z + 1, new WaterDiffusionMsg(downDiffusion))){
