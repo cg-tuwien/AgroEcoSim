@@ -12,28 +12,55 @@ public partial struct AboveGroundAgent : IAgent
 	[StructLayout(LayoutKind.Auto)]
 	public readonly struct WaterInc : IMessage<AboveGroundAgent>
 	{
+		#if HISTORY_LOG
+		public readonly static List<SimpleMsgLog> TransactionsHistory = new();
+		public readonly ulong ID { get; } = Utils.UID.Next();
+		#endif
+
 		public readonly float Amount;
 		public WaterInc(float amount) => Amount = amount;
 		public Transaction Type => Transaction.Increase;
-		public void Receive(ref AboveGroundAgent dstAgent) => dstAgent.IncWater(Amount);
+		public void Receive(ref AboveGroundAgent dstAgent, uint timestep)
+		{
+			dstAgent.IncWater(Amount);
+			#if HISTORY_LOG
+			lock(TransactionsHistory) TransactionsHistory.Add(new(timestep, ID, dstAgent.ID, Amount));
+			#endif
+		}
 	}
 
 	[StructLayout(LayoutKind.Auto)]
 	public readonly struct EnergyInc : IMessage<AboveGroundAgent>
 	{
+		#if HISTORY_LOG
+		public readonly static List<SimpleMsgLog> TransactionsHistory = new();
+		public readonly ulong ID { get; } = Utils.UID.Next();
+		#endif
+
 		public readonly float Amount;
 		public EnergyInc(float amount) => Amount = amount;
 		public Transaction Type => Transaction.Increase;
-		public void Receive(ref AboveGroundAgent agent) => agent.IncEnergy(Amount);
+		public void Receive(ref AboveGroundAgent dstAgent, uint timestep)
+		{
+			dstAgent.IncEnergy(Amount);
+			#if HISTORY_LOG
+			lock(TransactionsHistory) TransactionsHistory.Add(new(timestep, ID, dstAgent.ID, Amount));
+			#endif
+		}
 	}
 
 	[StructLayout(LayoutKind.Auto)]
-	public readonly struct Water_AG_PullFrom_AG : IMessage<AboveGroundAgent>
+	public readonly struct Water_PullFrom : IMessage<AboveGroundAgent>
 	{
+		#if HISTORY_LOG
+		public readonly static List<PullMsgLog> TransactionsHistory = new();
+		public readonly ulong ID { get; } = Utils.UID.Next();
+		#endif
+
 		public readonly float Amount;
-		public readonly PlantFormation DstFormation;
+		public readonly PlantSubFormation<AboveGroundAgent> DstFormation;
 		public readonly int DstIndex;
-		public Water_AG_PullFrom_AG(PlantFormation dstFormation, float amount, int dstIndex)
+		public Water_PullFrom(PlantSubFormation<AboveGroundAgent> dstFormation, float amount, int dstIndex)
 		{
 			Amount = amount;
 			DstFormation = dstFormation;
@@ -41,21 +68,29 @@ public partial struct AboveGroundAgent : IAgent
 		}
 		public Transaction Type => Transaction.Decrease;
 
-		public void Receive(ref AboveGroundAgent srcAgent)
+		public void Receive(ref AboveGroundAgent srcAgent, uint timestep)
 		{
-			var freeCapacity = Math.Max(0f, DstFormation.GetWaterCapacityPerTick_AG(DstIndex) - DstFormation.GetWater_AG(DstIndex));
+			var freeCapacity = Math.Max(0f, DstFormation.GetWaterCapacityPerTick(DstIndex) - DstFormation.GetWater(DstIndex));
 			var water = srcAgent.TryDecWater(Math.Min(Amount, freeCapacity));
-			if (water > 0) DstFormation.Send(DstIndex, new WaterInc(water));
+			if (water > 0) DstFormation.SendProtected(DstIndex, new WaterInc(water));
+			#if HISTORY_LOG
+			lock(TransactionsHistory) TransactionsHistory.Add(new(timestep, ID, srcAgent.ID, DstFormation.GetID(DstIndex), water));
+			#endif
 		}
 	}
 
 	[StructLayout(LayoutKind.Auto)]
-	public readonly struct Energy_AG_PullFrom_AG: IMessage<AboveGroundAgent>
+	public readonly struct Energy_PullFrom: IMessage<AboveGroundAgent>
 	{
+		#if HISTORY_LOG
+		public readonly static List<PullMsgLog> TransactionsHistory = new();
+		public readonly ulong ID { get; } = Utils.UID.Next();
+		#endif
+
 		public readonly float Amount;
-		public readonly PlantFormation DstFormation;
+		public readonly PlantSubFormation<AboveGroundAgent> DstFormation;
 		public readonly int DstIndex;
-		public Energy_AG_PullFrom_AG(PlantFormation dstFormation, float amount, int dstIndex)
+		public Energy_PullFrom(PlantSubFormation<AboveGroundAgent> dstFormation, float amount, int dstIndex)
 		{
 			Amount = amount;
 			DstFormation = dstFormation;
@@ -63,11 +98,14 @@ public partial struct AboveGroundAgent : IAgent
 		}
 		public Transaction Type => Transaction.Decrease;
 
-		public void Receive(ref AboveGroundAgent agent)
+		public void Receive(ref AboveGroundAgent srcAgent, uint timestep)
 		{
-			var freeCapacity = Math.Max(0f, DstFormation.GetEnergyCapacity_AG(DstIndex) - DstFormation.GetEnergy_AG(DstIndex));
-			var energy = agent.TryDecEnergy(Math.Min(Amount, freeCapacity));
-			if (energy > 0) DstFormation.Send(DstIndex, new EnergyInc(energy));
+			var freeCapacity = Math.Max(0f, DstFormation.GetEnergyCapacity(DstIndex) - DstFormation.GetEnergy(DstIndex));
+			var energy = srcAgent.TryDecEnergy(Math.Min(Amount, freeCapacity));
+			if (energy > 0) DstFormation.SendProtected(DstIndex, new EnergyInc(energy));
+			#if HISTORY_LOG
+			lock(TransactionsHistory) TransactionsHistory.Add(new(timestep, ID, srcAgent.ID, DstFormation.GetID(DstIndex), energy));
+			#endif
 		}
 	}
 }

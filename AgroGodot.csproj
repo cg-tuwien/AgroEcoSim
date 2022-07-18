@@ -5,7 +5,7 @@
   </PropertyGroup>
 
   <PropertyGroup>
-    <DefineConstants>GODOT</DefineConstants>
+    <DefineConstants>$(DefineConstants);GODOT</DefineConstants>
   </PropertyGroup>
 
   <!-- TODO for win something like here https://superuser.com/questions/1580436/how-to-delete-matching-directories-recursively-using-windows-command -->

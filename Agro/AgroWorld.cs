@@ -27,7 +27,7 @@ public readonly struct WeatherStats
     }
 }
 
-public static class AgroWorld {    
+public static class AgroWorld {
     public const int TicksPerHour = 1;
     //public const int TotalHours = 24 * 365 * 10;
     public const int TotalHours = 24 * 31 * 3;
@@ -35,7 +35,7 @@ public static class AgroWorld {
     //public static readonly Vector3 FieldSize = new(6f, 4f, 2f);
     //public const float FieldResolution = 0.1f;
 
-    public static readonly Vector3 FieldSize = new(12f, 8f, 3f); //2D size and the last component is depth 
+    public static readonly Vector3 FieldSize = new(12f, 8f, 3f); //2D size and the last component is depth
     public const float FieldResolution = 0.5f;
 
     public const float Latitude = 48.208333f;
@@ -55,10 +55,10 @@ public static class AgroWorld {
         var sunnyDays = new float[]{3.2f, 3.3f, 5.8f, 7.6f, 8.2f, 8.6f, 11.8f, 12.6f, 10.5f, 9.7f, 4.3f, 4.1f}; //clouds factor 0 to 0.25
         var cloudyDays = new float[]{12.3f, 12.6f, 14.6f, 15.3f, 17.2f, 16.6f, 15.1f, 13.7f, 13.2f, 13.6f, 12.4f, 12.1f}; //clouds factor 0.25 to 0.5
         var dullDays = new float[]{15.5f, 12.4f, 10.6f, 7.1f, 5.6f, 4.8f, 4f, 4.6f, 6.3f, 7.7f, 13.3f, 14.8f}; //clouds factor 0.5 to 1
-    
+
         //dry, 0-2mm, 2-5mm, 5-10mm, 10-20mm, 20-50mm, 50-100mm
         var dailyPrecipitation = new[] {
-            new float[]{21.6f, 4.9f, 2.8f, 1.2f, 0.6f, 0f, 0f}, 
+            new float[]{21.6f, 4.9f, 2.8f, 1.2f, 0.6f, 0f, 0f},
             new float[]{19.1f, 5f, 2f, 1.4f, 0.5f, 0.1f, 0f},
             new float[]{21.4f, 5.1f, 2.5f, 1.3f, 0.5f, 0.2f, 0f},
             new float[]{21f, 4.9f, 2.4f, 1f, 0.6f, 0.1f, 0f},
@@ -71,9 +71,9 @@ public static class AgroWorld {
             new float[]{20.8f, 4.5f, 2.6f, 1.4f, 0.5f, 0.1f, 0f},
             new float[]{20.9f, 5.5f, 2.6f, 1.3f, 0.5f, 0.1f, 0f}
         };
-    
+
         var precipitationMM = new []{29, 28, 33, 30, 43, 46, 44, 37, 42, 26, 31, 31};
-    
+
         var maxTemperature_10_5Days = new []{0.7, 0.8, 0.1, 0, 0, 0, 0, 0, 0, 0, 0, 0.4};
         var maxTemperature_5_0Days = new []{7.5, 4.7, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0.7, 5.2};
         var maxTemperature0_5Days = new[]{11.6, 8.4, 4.5, 0.3, 0, 0, 0, 0, 0, 0.1, 5.2, 12.8};
@@ -84,12 +84,12 @@ public static class AgroWorld {
         var maxTemperature25_30Days = new []{0, 0, 0, 0.7, 4.7, 8.3, 11.9, 12.4, 6.6, 0.9, 0, 0};
         var maxTemperature30_35Days = new []{0, 0, 0, 0, 0.3, 2.5, 5.8, 5.8, 0.5, 0, 0, 0};
         var maxTemperature35_40Days = new []{0, 0, 0, 0, 0, 0.1, 0.5, 0.9, 0, 0, 0, 0};
-    
+
         var avgHotDayTemperature = new float[]{10, 12, 19, 24, 28, 32, 34, 34, 29, 25, 17, 11};
         var avgHighTemperature = new float[]{3, 5, 10, 16, 21, 24, 26, 26, 22, 16, 9, 4};
         var avgLowTemperature = new float []{-2, -2, 1, 5, 9, 12, 14, 14, 11, 6, 2, -1};
         var avgColdNightTemperature = new float[]{-10, -8, -5, -2, 2 ,5, 9, 8, 5, -2, -4, -8};
-    
+
         Weather = new WeatherStats[TimestepsTotal];
         var tsRemain = TimestepsTotal;
         var tsCounter = 0;
@@ -198,7 +198,7 @@ public static class AgroWorld {
             sunIntervals[i] = tmp;
             sunHours += tmp;
         }
-        
+
         var cloudIntervalsRaw = RNG.NextDoublesScaled(sun_cloud_intervalsLength, hoursInMonth - dullHours - sunHoursTarget);
         var cloudIntervals = new int[sun_cloud_intervalsLength];
         var cloudHours = 0;
@@ -208,14 +208,14 @@ public static class AgroWorld {
             cloudIntervals[i] = tmp;
             cloudHours += tmp;
         }
-        
+
         var sunTurn = true;
         var tmpLimit = sunHours + cloudHours + dullHours - hoursInMonth;
         var elegibleSunIndexes = new List<int>(sunIntervals.Length);
         for(int i = 0; i < sunIntervals.Length; ++i)
             if (sunIntervals[i] > 1)
                 elegibleSunIndexes.Add(i);
-        
+
         var elegibleCloudIndexes = new List<int>(cloudIntervals.Length);
         for(int i = 0; i < cloudIntervals.Length; ++i)
             if (cloudIntervals[i] > 1)
@@ -241,7 +241,7 @@ public static class AgroWorld {
             }
             sunTurn = !sunTurn;
         }
-            
+
         tmpLimit = hoursInMonth - dullHours - cloudHours - sunHours;
         for(int i = 0; i < tmpLimit; ++i)
         {
@@ -255,7 +255,7 @@ public static class AgroWorld {
         var sun_cloud_intervals = new List<int[]>();
         for(int i = 0; i < sunIntervals.Length; ++i)
             sun_cloud_intervals.Add(DistributeSunAndClouds(sunIntervals[i], cloudIntervals[i]));
-        
+
         var targetPrecipitation = (float)Math.Max(0, RNG.NextNormal(precipitation, 0.25 * precipitation));
         //normalize maxPrecipitationStats
         var maxPrecipitationSum = maxPrecipitationStats.Sum();
@@ -263,8 +263,8 @@ public static class AgroWorld {
         precipitationStrengthPrefixSum[0] = maxPrecipitationStats[0] / maxPrecipitationSum;
         for(int i = 1; i < maxPrecipitationStats.Length; ++i)
             precipitationStrengthPrefixSum[i] = precipitationStrengthPrefixSum[i - 1] + maxPrecipitationStats[i] / maxPrecipitationSum;
-        
-        var randomVector = RNG.NextFloats(dullIntervals.Count);        
+
+        var randomVector = RNG.NextFloats(dullIntervals.Count);
         var rainInDulls = new float[randomVector.Length];
         var rainInDullsSum = 0.0f;
         for(int i = 0; i < randomVector.Length; ++i)
@@ -280,7 +280,7 @@ public static class AgroWorld {
         rainInDullsSum = 1e3f * targetPrecipitation / rainInDullsSum;
         for(int i = 0; i < rainInDulls.Length; ++i)
             rainInDulls[i] *= rainInDullsSum;
-        
+
         // Debug.WriteLine($"m: {month}, h: {hoursInMonth} = {cloudIntervals.Sum() + sunIntervals.Sum() + dullIntervals.Sum()} = {dullIntervals.Sum() + sun_cloud_intervals.Sum(x => x.Sum(y => Math.Abs(y)))}");
         // Debug.WriteLine($"sun: {sunHoursTarget} -> {sunIntervals.Sum()}, intervals: {sunIntervals.Length}");
         // Debug.WriteLine($"clouds: {cloudHoursTarget} -> {cloudIntervals.Sum()}, intervals: {cloudIntervals.Length}");
@@ -332,7 +332,7 @@ public static class AgroWorld {
             }
             dullTurn = !dullTurn;
         }
-        
+
         return result;
     }
 }

@@ -3,21 +3,10 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Numerics;
 using System.Runtime.InteropServices;
+using System.Text.Json.Serialization;
 using AgentsSystem;
 
 namespace Agro;
-
-[StructLayout(LayoutKind.Auto)]
-public readonly struct SoilWaterToSeedMsg : IMessage<SeedAgent>
-{
-	/// <summary>
-	/// Water volume in m³
-	/// </summary>    
-	public readonly float Amount;
-	public SoilWaterToSeedMsg(float amount) => Amount = amount;
-	public Transaction Type => Transaction.Increase;
-	public void Receive(ref SeedAgent agent) => agent.IncWater(Amount);
-}
 
 /// <summary>
 /// Plant seed, approximated by a sphere
@@ -25,6 +14,28 @@ public readonly struct SoilWaterToSeedMsg : IMessage<SeedAgent>
 [StructLayout(LayoutKind.Auto)]
 public struct SeedAgent : IAgent
 {
+	[StructLayout(LayoutKind.Auto)]
+	public readonly struct WaterInc : IMessage<SeedAgent>
+	{
+		#if HISTORY_LOG
+		public readonly static List<SimpleMsgLog> TransactionsHistory = new();
+		public readonly ulong ID { get; } = Utils.UID.Next();
+		#endif
+		/// <summary>
+		/// Water volume in m³
+		/// </summary>
+		public readonly float Amount;
+		public WaterInc(float amount) => Amount = amount;
+		public Transaction Type => Transaction.Increase;
+		public void Receive(ref SeedAgent dstAgent, uint timestep)
+		{
+			dstAgent.IncWater(Amount);
+			#if HISTORY_LOG
+			lock(TransactionsHistory) TransactionsHistory.Add(new(timestep, ID, dstAgent.ID, Amount));
+			#endif
+		}
+	}
+
 	const float Pi4 = MathF.PI * 4f;
 	const float PiV = 3f * 0.001f * 0.1f / Pi4;
 	const float Third = 1f/3f;
@@ -40,7 +51,7 @@ public struct SeedAgent : IAgent
 	/// <summary>
 	/// Amount of energy currrently stored
 	/// </summary>
-	float Water;
+	public float Water { get; private set; }
 
 	readonly Vector2 mVegetativeTemperature;
 
@@ -53,7 +64,7 @@ public struct SeedAgent : IAgent
 	/// Ratio ∈ [0, 1] of the required energy to start growing roots and stems
 	/// </summary>
 	public float GerminationProgress => Water / GerminationThreshold;
-	
+
 	public SeedAgent(Vector3 center, float radius, Vector2 vegetativeTemperature, float energy = -1f)
 	{
 		Center = center;
@@ -62,7 +73,7 @@ public struct SeedAgent : IAgent
 			Water = radius * radius * radius * 100f;
 		else
 			Water = energy;
-		
+
 		GerminationThreshold = Water * 500f + 100f*radius;
 		mVegetativeTemperature = vegetativeTemperature;
 	}
@@ -81,14 +92,14 @@ public struct SeedAgent : IAgent
 			if (Water >= GerminationThreshold) //GERMINATION
 			{
 				var initialYaw = Quaternion.CreateFromAxisAngle(Vector3.UnitY, formation.RNG.NextFloat(-MathF.PI, MathF.PI));
-				formation.UnderGroundBirth(new UnderGroundAgent(-1, initialYaw * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, -0.5f * MathF.PI), Water * 0.4f));
+				formation.UG.Birth(new UnderGroundAgent(-1, initialYaw * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, -0.5f * MathF.PI), Water * 0.4f));
 
 				var baseStemOrientation = initialYaw * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, 0.5f * MathF.PI);
-				formation.AboveGroundBirth(new AboveGroundAgent(-1, OrganTypes.Stem, baseStemOrientation, Water * 0.4f)); //base stem
-				formation.AboveGroundBirth(new AboveGroundAgent(0, OrganTypes.Shoot, baseStemOrientation, Water * 0.4f)); //base shoot on top of the base stem
+				formation.AG.Birth(new AboveGroundAgent(-1, OrganTypes.Stem, baseStemOrientation, Water * 0.4f)); //base stem
+				formation.AG.Birth(new AboveGroundAgent(0, OrganTypes.Shoot, baseStemOrientation, Water * 0.4f)); //base shoot on top of the base stem
 				var leafStemOrientation = initialYaw * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, formation.RNG.NextFloat(0.3f * MathF.PI));
-				formation.AboveGroundBirth(new AboveGroundAgent(0, OrganTypes.Stem, leafStemOrientation, Water * 0.4f)); //leaf stem
-				formation.AboveGroundBirth(new AboveGroundAgent(2, OrganTypes.Leaf, initialYaw * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, -formation.RNG.NextFloat(0.25f) * MathF.PI), Water * 0.2f)); //leaf
+				formation.AG.Birth(new AboveGroundAgent(0, OrganTypes.Stem, leafStemOrientation, Water * 0.4f)); //leaf stem
+				formation.AG.Birth(new AboveGroundAgent(2, OrganTypes.Leaf, initialYaw * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, -formation.RNG.NextFloat(0.25f) * MathF.PI), Water * 0.2f)); //leaf
 				formation.SeedDeath();
 				Water = 0f;
 			}
@@ -107,17 +118,25 @@ public struct SeedAgent : IAgent
 							amount *= (soilTemperature - mVegetativeTemperature.X) / (mVegetativeTemperature.Y - mVegetativeTemperature.X);
 						Water += amount * 0.7f; //store most of the energy, 0.2f are losses
 						Radius = MathF.Pow(Radius * Radius * Radius + amount * PiV, Third); //use the rest for growth
-						soil.Send(sources[0], new SoilAgent.SeedWaterRequestToSoilMsg(amount / AgroWorld.TicksPerHour, formation, formationID));
+						soil.Send(sources[0], new SoilAgent.Water_Seed_PullFrom_Soil(formation, amount / AgroWorld.TicksPerHour));
 					}
 				}
 			}
 		}
 	}
 
-	public void IncWater(float amount)
+	void IncWater(float amount)
 	{
 		Debug.Assert(amount >= 0f);
 		Water += amount * 0.7f; //store most of the energy, 0.2f are losses
 		Radius = MathF.Pow(Radius * Radius * Radius + amount * PiV, Third); //use the rest for growth
 	}
+
+	///////////////////////////
+	#region LOG
+	///////////////////////////
+	#if HISTORY_LOG
+	public readonly ulong ID { get; } = Utils.UID.Next();
+	#endif
+	#endregion
 }

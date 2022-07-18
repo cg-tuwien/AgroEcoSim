@@ -10,6 +10,21 @@
                 "${workspaceFolder}/Agro/Agro.csproj",
                 "/property:GenerateFullPaths=true",
                 "/consoleloggerparameters:NoSummary"
+                //,"/p:DefineConstants=HISTORY_LOG"
+            ],
+            "problemMatcher": "$msCompile",
+        },
+        {
+            "label": "build Release",
+            "command": "dotnet",
+            "type": "process",
+            "args": [
+                "build",
+                "${workspaceFolder}/Agro/Agro.csproj",
+                "/property:GenerateFullPaths=true",
+                "/consoleloggerparameters:NoSummary",
+                "-c",
+                "Release"
             ],
             "problemMatcher": "$msCompile"
         },
@@ -36,6 +51,6 @@
                 "${workspaceFolder}/Agro/Agro.csproj"
             ],
             "problemMatcher": "$msCompile"
-        }
+        },
     ]
 }

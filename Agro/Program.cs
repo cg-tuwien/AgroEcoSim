@@ -11,5 +11,9 @@ internal class Program
         world.Run(AgroWorld.TimestepsTotal);
         var stop = DateTime.UtcNow.Ticks;
         Console.WriteLine($"Simulation time: {(stop - start) / TimeSpan.TicksPerMillisecond} ms");
+#if HISTORY_LOG
+        //var exported = world.HistoryToJSON();
+        //File.WriteAllText("export.json", exported.Replace("},", "},\n"));
+#endif
     }
 }
