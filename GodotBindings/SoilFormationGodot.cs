@@ -15,7 +15,7 @@ public partial class SoilFormation
 	//Todo: Speed of the visualisation could be improved by replacing Mesh with MultiMesh (leveraging identical geo)!!!
 	MeshInstance[] SoilCellInstances;
 
-	Tuple<MeshInstance[,,],MeshInstance[,,],MeshInstance[,,]> MarkerInstances;
+	MeshInstance[,] MarkerInstances;
 
 	List<MarkerData> MarkerDataStorage;
 
@@ -27,6 +27,9 @@ public partial class SoilFormation
 		if(parameters.Visualise){ //Todo: Check whether the previous condition wasn't dependent on something besides this file
 			InitializeVisualisation();
 		}
+
+		// parameters.CellCapacity = Agro.SoilAgent.
+
 	}
 
 	public override void GodotProcess(uint timestep)

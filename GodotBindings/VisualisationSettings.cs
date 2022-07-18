@@ -10,28 +10,32 @@ public class SoilVisualisationSettings{
 
     // VISIBILITY SETTINGS
     public visibility MarkerVisibility = visibility.visible_waiting;
-    public visibility LateralMarkerVisibility = visibility.visible_waiting;
-    public visibility DownwardMarkerVisibility = visibility.visible_waiting;
+    public visibility[] IndividualMarkerDirectionVisibility = new visibility[]{
+        visibility.visible_waiting, //X+
+        visibility.visible_waiting, //Y+
+        visibility.visible_waiting, //Z+
+        visibility.visible_waiting, //X-
+        visibility.visible_waiting, //Y-
+        visibility.visible_waiting //Z-
+        }; 
     public visibility SoilCellsVisibility = visibility.visible_waiting;
 
     // ANIMATION VISIBILITY SETTINGS
     public bool AnimateSoilCellSize = true;
-    public bool AnimateDownwardMarkerSize = true;
-    public bool AnimateLateralMarkerSize = false;
+    public bool AnimateMarkerSize = false;
     public bool AnimateSoilCellColor = true;
     public bool AnimateDownwardMarkerColor = true;
     public bool AnimateLateralMarkerColor = true;
 
 
     // CAPACITY SETTINGS
-    public float CellCapacity = 15; //Todo: Temporary solution, this attribute should be accessible from the simulation itself
     public float WaterFlowCapacity = 0.2f;
     public float SteamFlowCapacity = 0.1f;
     
     // MATERIAL SETTINGS
     public SpatialMaterial SoilCellMaterial = new SpatialMaterial {AlbedoColor = new Color(0.5f,0.5f,0.5f)};
 
-    public SpatialMaterial MarkerMaterial = new SpatialMaterial {AlbedoColor = new Color(0f,0.2f,6f)};
+    public SpatialMaterial MarkerMaterial = new SpatialMaterial {AlbedoColor = new Color(0f,0.2f,0.6f)};
 
 
     // COLOR SETTINGS
@@ -41,12 +45,12 @@ public class SoilVisualisationSettings{
     public Color NoFlowColor = new Color(0.2f,0.2f,0.2f);
     public Color FullFlowColor = new Color(0.2f,0.2f,1f);
 
-    public Mesh SoilCellShape = GeoBuilder.UnitCube();
+    // SHAPES (SHOULD BE UNIT-SIZED)
+    public Mesh SoilCellShape = GeoBuilder.UnitCube(); 
     public Mesh MarkerShape = GeoBuilder.UnitPyramid4();
 
     // SCALE SETTINGS
     public float SoilCellScale = 0.25f;
-    public float DownwardMarkerScale = 0.25f;
-    public float LateralMarkerScale = 0.05f;
+    public float MarkerScale = 0.75f;
     
 }
