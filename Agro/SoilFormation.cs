@@ -8,8 +8,25 @@ namespace Agro;
 
 public partial class SoilFormation : Formation3iTransformed<SoilAgent>
 {
+	/* Flow directions
+	Note: y is up
+	0 ... [1,0,0]
+	1 ... [0,1,0]
+	2 ... [0,0,1]
+	3 ... [-1,0,0]
+	4 ... [0,-1,0]
+	5 ... [0,0,-1]
+	*/
+
+	//TODO: Should I add IF GODOT to prevent computations of the directional flow when not visualising?
+	public float[,] steam_flow;// = new float[Agents.Length,6]; //Might save some space by having only 5 elements in the nested array, but I am keeping 6 for better indexing
+	public float[,] water_flow;// = new float[Agents.Length,6];
+
 	public SoilFormation(Vector3i size, Vector3 fieldSize, uint timestep) : base(size.X, size.Y, size.Z)
 	{
+		steam_flow = new float[Agents.Length,6];
+		water_flow = new float[Agents.Length,6];
+
 		const float coldFactor = 0.75f; //earth gets 1 degree colder each x meters (where x is the value of this constant)
 		var airTemp = AgroWorld.GetTemperature(timestep);
 		var bottomTemp = airTemp > 4f ? Math.Max(4f, airTemp - fieldSize.Z * coldFactor) : Math.Min(4f, airTemp + fieldSize.Z * coldFactor);
@@ -27,7 +44,6 @@ public partial class SoilFormation : Formation3iTransformed<SoilAgent>
 	public override void DeliverPost(uint timestep)
 	{
 		base.DeliverPost(timestep);
-
 		//Console.WriteLine(Agents.Where((x, i) => Coords(i).Z == 2 && Coords(i).X == 1).Select(x => x.Water).Sum());
 	}
 

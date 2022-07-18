@@ -6,43 +6,35 @@ using AgentsSystem;
 
 namespace Agro;
 
+
 public partial class SoilFormation
 {
-	const bool SpriteShow = true;
-	const float SpriteScale = 0.2f;
-	MeshInstance[] GodotSprites;
+	SoilVisualisationSettings parameters = new SoilVisualisationSettings();
+	
+
+	//Todo: Speed of the visualisation could be improved by replacing Mesh with MultiMesh (leveraging identical geo)!!!
+	MeshInstance[] SoilCellInstances;
+
+	Tuple<MeshInstance[,,],MeshInstance[,,],MeshInstance[,,]> MarkerInstances;
+
+	List<MarkerData> MarkerDataStorage;
+
+
+	float[] FlowTracking;
+
 	public override void GodotReady()
 	{
-		if (SpriteShow)
-		{
-			GodotSprites = new MeshInstance[SizeX * SizeY * SizeZ];
-			var cubePrimitive = new CubeMesh();
-			for( int x = 0; x < SizeX; ++x)
-				for( int y = 0; y < SizeY; ++y)
-					for( int z = 0; z < SizeZ; ++z)
-					{
-						var sprite = new MeshInstance(); // Create a new Sprite.
-						SimulationWorld.GodotAddChild(sprite); // Add it as a child of this node.
-						GodotSprites[Index(x, y, z)] = sprite;
-						sprite.Mesh = cubePrimitive;
-						if (sprite.GetSurfaceMaterial(0) == null)
-						{
-							var m = new SpatialMaterial();
-							m.AlbedoColor = new Color(1, 0, 0);
-							sprite.SetSurfaceMaterial(0, m);
-						}
-						sprite.Translation = new Vector3(x, -z, y) * AgroWorld.FieldResolution;
-						sprite.Scale = Vector3.One * (AgroWorld.FieldResolution * 0.5f * SpriteScale);
-					}
+		if(parameters.Visualise){ //Todo: Check whether the previous condition wasn't dependent on something besides this file
+			InitializeVisualisation();
 		}
 	}
 
 	public override void GodotProcess(uint timestep)
 	{
-		if (SpriteShow)
-			for(int i = 0; i < GodotSprites.Length; ++i)
-			{
-				((SpatialMaterial)GodotSprites[i].GetSurfaceMaterial(0)).AlbedoColor = new Color(0, 0f, Math.Clamp(Agents[i].Water / Agents[i].WaterMaxCapacity, 0f, 1f));
-			}
+		if(parameters.Visualise){
+			SolveVisibility();
+			if(parameters.MarkerVisibility == visibility.visible_waiting) AnimateMarkers();
+			if(parameters.SoilCellsVisibility == visibility.visible_waiting) AnimateCells();
+		}
 	}
 }

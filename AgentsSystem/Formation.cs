@@ -20,6 +20,7 @@ public abstract class Formation<T> : IFormation where T : struct, IAgent
 	/// <summary>
 	/// An ordered tuple of the double data-buffer entries ready for swap.
 	/// </summary>
+	
 	(T[], T[]) SrcDst() => ReadTMP ? (AgentsTMP, Agents) : (Agents, AgentsTMP);
 
 	public void Census()
