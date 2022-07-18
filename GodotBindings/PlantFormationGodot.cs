@@ -3,7 +3,7 @@ using System;
 using System.Linq;
 using System.Collections.Generic;
 using AgentsSystem;
-using GodotHelpers;
+using NumericHelpers;
 
 namespace Agro;
 
@@ -46,7 +46,7 @@ public partial class PlantFormation
 		UG_Godot.GodotReady();
 		AG_Godot.GodotReady();
 	}
-	
+
 	public void GodotProcess(uint timestep)
 	{
 		if (ShowOrgans.HasFlag(DisplayOptions.Seed))
@@ -63,7 +63,7 @@ public partial class PlantFormation
 				GodotSeedSprite = null;
 			}
 		}
-		
+
 		UG_Godot.GodotProcess(timestep);
 		AG_Godot.GodotProcess(timestep);
 	}

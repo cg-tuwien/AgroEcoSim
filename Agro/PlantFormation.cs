@@ -4,6 +4,8 @@ using System.Diagnostics;
 using System.Linq;
 using System.Numerics;
 using AgentsSystem;
+using glTFLoader.Schema;
+using NumericHelpers;
 using Utils;
 
 namespace Agro;
@@ -148,6 +150,10 @@ public partial class PlantFormation : IFormation
 
 		UG.Tick(world, timestep);
 		AG.Tick(world, timestep);
+
+		//Just testing
+		var gltf = GlftHelper.Create(AG.ExportToGLTF());
+		GlftHelper.Export(gltf, $"T{timestep}.gltf");
 	}
 
 	public void DeliverPost(uint timestep)
@@ -179,5 +185,11 @@ public partial class PlantFormation : IFormation
 	public string HistoryToJSON() => $" \"Seeds\" : {Utils.Export.Json(StatesHistory)}, \"UnderGround\" : {UG.HistoryToJSON()}, AboveGround : {AG.HistoryToJSON()}";
 	public ulong GetID() => Seed.Length > 0 ? Seed[0].ID : ulong.MaxValue;
 	#endif
+	#endregion
+
+	///////////////////////////
+	#region glTF EXPORT
+	///////////////////////////
+	public List<Node> ExportToGLTF() => AG.ExportToGLTF();
 	#endregion
 }

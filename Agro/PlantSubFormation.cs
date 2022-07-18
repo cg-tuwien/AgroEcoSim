@@ -4,7 +4,10 @@ using System.Diagnostics;
 using System.Linq;
 using System.Numerics;
 using AgentsSystem;
+using glTFLoader.Schema;
 using Utils;
+using NumericHelpers;
+
 
 namespace Agro;
 
@@ -98,78 +101,6 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 			return false;
 	}
 
-// 	bool TestTreeSort(T[] data)
-// 	{
-// 		return true;
-// 		var result = true;
-// 		for(int i = 0; result && i < data.Length; ++i)
-// 			result = data[i].Parent < i;
-// 		return result;
-// 	}
-
-// 	void PartialTreeSort(T[] data)
-// 	{
-// 		var inits = new List<int>(); //for the case of a multi-root tree
-// 		var mapA = new int[data.Length];
-// 		var mapB = new int[data.Length];
-// 		var bwdMap = new int[data.Length];
-
-// 		for(int i = 0; i < data.Length; ++i)
-// 			if (data[i].Parent < 0)
-// 				inits.Add(i);
-
-// 		for(int m = 0, i = 0, j = inits.Count; m < mapA.Length; ++m)
-// 			mapA[i < inits.Count && m == inits[i] ? i++ : j++] = m;
-
-// 		var readA = true;
-// 		var done = inits.Count;
-
-// 		bool IsCorrect(int[] read, int index) => bwdMap[data[read[index]].Parent] < index;
-// 		bool IsWrong(int[] read, int index) => bwdMap[data[read[index]].Parent] > index;
-// 		do
-// 		{
-// 			var (readMap, writeMap) = readA ? (mapA, mapB) : (mapB, mapA);
-// 			for(int i = 0; i < readMap.Length; ++i)
-// 				bwdMap[readMap[i]] = i;
-
-// 			while (done < readMap.Length && IsCorrect(readMap, done))
-// 				++done; //pass through correct ones
-
-// 			Array.Copy(readMap, writeMap, done);
-// 			if (done < readMap.Length)
-// 			{
-// 				var wrongEnd = done + 1; //because IsCorrect failed, so element at correctEnd must be IsWrong
-// 				while(wrongEnd < readMap.Length && IsWrong(readMap, wrongEnd))
-// 					++wrongEnd;
-
-// 				Debug.Assert(wrongEnd > done);
-// 				Debug.Assert(wrongEnd < readMap.Length); //if there is no correct stuff at the end, then this algorithm is wrong
-
-// 				var correctEnd = wrongEnd + 1; //because IsWrong failed, so element at correctEnd must be IsCorrect
-// 				--wrongEnd;
-// 				while (correctEnd < readMap.Length && IsCorrect(readMap, correctEnd))
-// 					++correctEnd;
-
-// 				--correctEnd;
-// 				Debug.Assert(wrongEnd < correctEnd);
-
-// 				Array.Copy(readMap, wrongEnd + 1, writeMap, done, correctEnd - wrongEnd); //correct reads later comes first
-// 				Array.Copy(readMap, done, writeMap, done + correctEnd - wrongEnd, wrongEnd - done + 1); //wrong read first comes later
-// 				Array.Copy(readMap, correctEnd + 1, writeMap, correctEnd + 1, readMap.Length - correctEnd - 1); //unchanged rest
-// 				readA = !readA;
-// 			}
-// 		}
-// 		while (done < data.Length);
-
-// 		//var finalMap = readA ? mapA : mapB;
-// 		Reindex(data, bwdMap);
-// 		Array.Sort(bwdMap, data);
-// 		Debug.Assert(TestTreeSort(data));
-// #if GODOT
-// 		GodotReorderSprites(bwdMap);
-// #endif
-// 	}
-
 	public void Census()
 	{
 		//Ready for List and Span combination
@@ -197,10 +128,6 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 				DeathsHelper.Clear();
 				DeathsHelper.AddRange(Deaths);
 				DeathsHelper.Sort();
-				//remove duplicates
-				// for(int i = Deaths.Count - 2; i >= 0; --i)
-				// 	if (Deaths[i] == Deaths[i + 1])
-				// 		Deaths.RemoveAt(i + 1);
 			}
 
 			//filter out addidions to death parts
@@ -320,11 +247,6 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 					tmp[a] = Inserts[i];
 			}
 
-			// if (!TestTreeSort(tmp))
-			// 	PartialTreeSort(tmp);
-
-			//Debug.Assert(Enumerable.Range(0, tmp.Length).All(i => tmp[i].Parent < i));
-
 			if (ReadTMP)
 			{
 				Agents = new T[tmp.Length];
@@ -344,13 +266,6 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 			Inserts.Clear();
 			InsertAncestors.Clear();
 		}
-		// else if (ParentUpdates)
-		// {
-		// 	var src = Src();
-		// 	if (!TestTreeSort(src))
-		// 		PartialTreeSort(src);
-		// 	ParentUpdates = false;
-		// }
 	}
 
 	public void Tick(SimulationWorld world, uint timestep)
@@ -483,6 +398,10 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 
 		return result;
 	}
+
+	public Vector3 GetScale(int index) => ReadTMP
+		? (AgentsTMP.Length > index ? AgentsTMP[index].Scale : Vector3.Zero)
+		: (Agents.Length > index ? Agents[index].Scale : Vector3.Zero);
 	#endregion
 
 	///////////////////////////
@@ -504,5 +423,28 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 		? (AgentsTMP.Length > index ? AgentsTMP[index].ID : ulong.MaxValue)
 		: (Agents.Length > index ? Agents[index].ID : ulong.MaxValue);
 	#endif
+	#endregion
+
+	///////////////////////////
+	#region glTF EXPORT
+	///////////////////////////
+	public List<Node> ExportToGLTF()
+	{
+		var src = Src();
+		var nodes = new List<Node>(src.Length);
+		for(int i = 0; i < src.Length; ++i)
+		{
+			var baseCenter = GetBaseCenter(i);
+
+			nodes[i] = new(){
+				Name = $"{GetOrgan(i)}_{i}",
+				Mesh = 0,
+				Rotation = GetDirection(i).ToArray(),
+				Translation = baseCenter.ToArray(),
+				Scale = null
+			};
+		}
+		return nodes;
+	}
 	#endregion
 }
