@@ -82,7 +82,7 @@ public partial struct AboveGroundAgent : IAgent
 		{
 			var freeCapacity = Math.Max(0f, DstFormation.GetWaterCapacityPerTick(DstIndex) - DstFormation.GetWater(DstIndex));
 			var water = srcAgent.TryDecWater(Math.Min(Amount, freeCapacity));
-			if (f)
+			if (water > 0f)
 			{
 				DstFormation.SendProtected(DstIndex, new WaterInc(water));
 				#if HISTORY_LOG || TICK_LOG

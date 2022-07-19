@@ -44,10 +44,11 @@ public partial struct SoilAgent : IAgent
 		if (coords.Z == 0 && coords.X == 0 && coords.Y == 0) // cells at z = 0 are above the ground, infinitely tall so no capacity restrictions for them
 			Water += AgroWorld.GetWater(timestep) * FieldCellSurface;
 
-		if (Water > WaterMinSaturation)
+		//if (Water > WaterMinSaturation)
 		{
-			var downDiffusion = Water * GravitationDiffusionCoefPerTick;
-			var sideDiffusion = coords.Z > 0 ? (Water - downDiffusion) * SoilDiffusionCoefPerTick : Water - downDiffusion; //lateral flow above the ground is very strong
+			var availableForDiffusion = Water * 0.5f;
+			var downDiffusion = availableForDiffusion * GravitationDiffusionCoefPerTick;
+			var sideDiffusion = coords.Z > 0 ? (availableForDiffusion - downDiffusion) * SoilDiffusionCoefPerTick : availableForDiffusion - downDiffusion; //lateral flow above the ground is very strong
 
 			var lateralFlow = new float[LateralNeighborhood.Length];
 			var lateralSum = 0f;
