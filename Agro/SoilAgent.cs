@@ -19,7 +19,7 @@ public partial struct SoilAgent : IAgent
 	public float Steam { get; private set; }
 	public float Temperature { get; private set; }
 
-	public const float WaterCapacityRatio = 0.5f;
+	public const float WaterCapacityRatio = 1f;
 	public const float WaterSaturationRatio = 0.01f;
 
 	public float WaterMaxCapacity => FieldCellSurface * AgroWorld.FieldResolution * WaterCapacityRatio;
@@ -39,15 +39,16 @@ public partial struct SoilAgent : IAgent
 		var formation = (SoilFormation)_formation;
 		var coords = formation.Coords(formationID);
 
-		if (coords.Z == 0) // cells at z = 0 are above the ground, infinitely tall so no capacity restrictions for them
+		//CodeReview: I used this trick to better visualize the lateral flow.
+		//  Now only one corner cell gets water, so in order to spread it needs the lateral flow
+		if (coords.Z == 0 && coords.X == 0 && coords.Y == 0) // cells at z = 0 are above the ground, infinitely tall so no capacity restrictions for them
 			Water += AgroWorld.GetWater(timestep) * FieldCellSurface;
 
-		if (Water > WaterMinSaturation)
+		//if (Water > WaterMinSaturation)
 		{
-			float LateralDiffusionCoef = (coords.Z == 0 ? 0.4f : 0.03f) * SoilDiffusionCoefPerTick; //lateral flow above the ground is very strong
-
-			var downDiffusion = Water * GravitationDiffusionCoefPerTick;
-			var sideDiffusion = Water * LateralDiffusionCoef;
+			var availableForDiffusion = Water * 0.5f;
+			var downDiffusion = availableForDiffusion * GravitationDiffusionCoefPerTick;
+			var sideDiffusion = coords.Z > 0 ? (availableForDiffusion - downDiffusion) * SoilDiffusionCoefPerTick : availableForDiffusion - downDiffusion; //lateral flow above the ground is very strong
 
 			var lateralFlow = new float[LateralNeighborhood.Length];
 			var lateralSum = 0f;
@@ -57,7 +58,7 @@ public partial struct SoilAgent : IAgent
 				{
 					if (neighbor.Water < Water)
 					{
-						var diff = Water - neighbor.Water;
+						var diff = (Water - neighbor.Water) * 0.5f;
 						lateralFlow[i] = diff;
 						lateralSum += diff;
 						anyLateral = true;
@@ -99,7 +100,7 @@ public partial struct SoilAgent : IAgent
 	///////////////////////////
 	#region LOG
 	///////////////////////////
-	#if HISTORY_LOG
+	#if HISTORY_LOG || TICK_LOG
 	public readonly ulong ID { get; } = Utils.UID.Next();
 	#endif
 	#endregion

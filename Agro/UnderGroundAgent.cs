@@ -253,7 +253,7 @@ public partial struct UnderGroundAgent : IPlantAgent
 				}
 			}
 		}
-		else if (Energy > 0) //if running out of energy, balance it by taking it away from children
+		else if (Energy > 0f) //if running out of energy, balance it by taking it away from children
 		{
 			//Console.WriteLine($"Root {formationID} starving at time {timestep}");
 			foreach(var child in children)
@@ -429,9 +429,9 @@ public partial struct UnderGroundAgent : IPlantAgent
 	///////////////////////////
 	#region LOG
 	///////////////////////////
-	#if HISTORY_LOG
+	#if HISTORY_LOG || TICK_LOG
 	public readonly ulong ID { get; } = Utils.UID.Next();
-	public Utils.Quat OrienTaTion => new Utils.Quat(Orientation);
+	public Utils.QuatData OrienTaTion => new(Orientation);
 	#endif
 	#endregion
 }

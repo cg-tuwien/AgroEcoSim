@@ -28,7 +28,7 @@ public readonly struct WeatherStats
 }
 
 public static class AgroWorld {
-    public const int TicksPerHour = 1;
+    public const int TicksPerHour = 10;
     //public const int TotalHours = 24 * 365 * 10;
     public const int TotalHours = 24 * 31 * 3;
 

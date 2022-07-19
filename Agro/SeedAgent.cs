@@ -15,10 +15,12 @@ namespace Agro;
 public struct SeedAgent : IAgent
 {
 	[StructLayout(LayoutKind.Auto)]
+	[Message]
 	public readonly struct WaterInc : IMessage<SeedAgent>
 	{
-		#if HISTORY_LOG
+		#if HISTORY_LOG || TICK_LOG
 		public readonly static List<SimpleMsgLog> TransactionsHistory = new();
+		public static void ClearHistory() => TransactionsHistory.Clear();
 		public readonly ulong ID { get; } = Utils.UID.Next();
 		#endif
 		/// <summary>
@@ -26,11 +28,12 @@ public struct SeedAgent : IAgent
 		/// </summary>
 		public readonly float Amount;
 		public WaterInc(float amount) => Amount = amount;
+		public bool Valid => Amount > 0f;
 		public Transaction Type => Transaction.Increase;
 		public void Receive(ref SeedAgent dstAgent, uint timestep)
 		{
 			dstAgent.IncWater(Amount);
-			#if HISTORY_LOG
+			#if HISTORY_LOG || TICK_LOG
 			lock(TransactionsHistory) TransactionsHistory.Add(new(timestep, ID, dstAgent.ID, Amount));
 			#endif
 		}
@@ -135,7 +138,7 @@ public struct SeedAgent : IAgent
 	///////////////////////////
 	#region LOG
 	///////////////////////////
-	#if HISTORY_LOG
+	#if HISTORY_LOG || TICK_LOG
 	public readonly ulong ID { get; } = Utils.UID.Next();
 	#endif
 	#endregion

@@ -12,7 +12,7 @@ public static class Initialize
         var soil = new SoilFormation(new Vector3i(AgroWorld.FieldSize / AgroWorld.FieldResolution), AgroWorld.FieldSize, 0);
         world.Add(soil);
 
-        const int plantsCount = 200;
+        const int plantsCount = 0;
         var rnd = AgroWorld.RNG;
         var plantsFormation = new PlantFormation[plantsCount];
         for (int x = 0; x < plantsCount; ++x)

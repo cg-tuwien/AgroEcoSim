@@ -48,7 +48,7 @@ public class FormationTree<T> : Formation<T> where T : struct, IAgent
 
 public class Formation3i<T> : Formation<T> where T : struct, IAgent
 {
-	protected readonly int SizeX, SizeY, SizeZ;
+	public readonly int SizeX, SizeY, SizeZ;
 	protected readonly int SizeXY;
 
 
@@ -113,7 +113,7 @@ public class Formation3i<T> : Formation<T> where T : struct, IAgent
 			return false;
 	}
 
-#if HISTORY_LOG
+#if HISTORY_LOG || TICK_LOG
 	public ulong GetID(Vector3i index) => GetID(Index(index));
 	public ulong GetID(int x, int y, int z) => GetID(Index(x, y, z));
 #endif

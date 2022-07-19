@@ -1,4 +1,6 @@
 using System;
+using System.Linq;
+using System.Reflection;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
@@ -8,10 +10,26 @@ public partial class SimulationWorld
 	internal readonly List<IFormation> Formations = new();
 	public uint Timestep { get; private set; }
 
+	#if TICK_LOG
+	List<MethodInfo> MessageLogClears = new();
+	#endif
+
 	public SimulationWorld()
 	{
 		Formations = new List<IFormation>();
 		Timestep = 0;
+		#if TICK_LOG
+		foreach(var assembly in AppDomain.CurrentDomain.GetAssemblies().ToArray()) //ToArray is required for NET6
+			foreach(var type in assembly.GetTypes())
+				if (type.IsDefined(typeof(MessageAttribute), false))
+				{
+					var method = type.GetMethod("ClearHistory", BindingFlags.Public | BindingFlags.Static);
+					if (method != null)
+						MessageLogClears.Add(method);
+					else
+						throw new Exception($"{type.FullName} is marked with [Message] attribute but it does not proivde a public static ClearHistory method.");
+				}
+		#endif
 	}
 
 	public void Add(IFormation formation)
@@ -88,6 +106,10 @@ public partial class SimulationWorld
 
 	public void DeliverPostSequential(uint timestep)
 	{
+		#if TICK_LOG
+		foreach(var clear in MessageLogClears)
+			clear.Invoke(null, null);
+		#endif
 		var anyDelivered = true;
 		while(anyDelivered)
 		{
@@ -103,6 +125,10 @@ public partial class SimulationWorld
 
 	public void DeliverPostParallel(uint timestep)
 	{
+		#if TICK_LOG
+		foreach(var clear in MessageLogClears)
+			clear.Invoke(null, null);
+		#endif
 		var anyDelivered = true;
 		while(anyDelivered)
 		{
@@ -117,7 +143,7 @@ public partial class SimulationWorld
 		}
 	}
 
-	#if HISTORY_LOG
+	#if HISTORY_LOG || TICK_LOG
 	public string HistoryToJSON()
 	{
 		var sb = new System.Text.StringBuilder();
@@ -129,7 +155,20 @@ public partial class SimulationWorld
 			if (i < Formations.Count - 1)
 				sb.Append(", ");
 		}
-		sb.Append("] }");
+		sb.Append("], \"Transactions\": {");
+
+		var anyMessagesType = false;
+		foreach(var assembly in AppDomain.CurrentDomain.GetAssemblies().ToArray()) //ToArray is required for NET6
+			foreach(var type in assembly.GetTypes())
+				if (type.IsDefined(typeof(MessageAttribute), false))
+				{
+					anyMessagesType = true;
+					sb.Append($"\"{type.FullName}\": ");
+					sb.Append(Utils.Export.Json(type.GetField("TransactionsHistory", BindingFlags.Public | BindingFlags.Static).GetValue(null)));
+					sb.Append(", ");
+				}
+
+		sb.Append($"{(anyMessagesType ? "\"_\": []" : "")} }} }}");
 		return sb.ToString();
 	}
 	#endif

@@ -13,10 +13,13 @@ public class PostBox<T> where T : struct, IAgent
     public bool AnyMessages => (WriteTMP ? BufferTMP.Count : Buffer.Count) > 0;
     public void Add(MessageWrapper<T> msg)
     {
-        if (WriteTMP)
-            lock(BufferTMP) BufferTMP.Add(msg);
-        else
-            lock(Buffer) Buffer.Add(msg);
+        if (msg.Valid)
+        {
+            if (WriteTMP)
+                lock(BufferTMP) BufferTMP.Add(msg);
+            else
+                lock(Buffer) Buffer.Add(msg);
+        }
     }
 
     //There MUST NOT be a non-array Process method. Otherwise refs will not work
