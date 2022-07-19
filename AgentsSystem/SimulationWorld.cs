@@ -1,4 +1,6 @@
 using System;
+using System.Linq;
+using System.Reflection;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
@@ -117,7 +119,7 @@ public partial class SimulationWorld
 		}
 	}
 
-	#if HISTORY_LOG
+	#if HISTORY_LOG || TICK_LOG
 	public string HistoryToJSON()
 	{
 		var sb = new System.Text.StringBuilder();
@@ -129,7 +131,19 @@ public partial class SimulationWorld
 			if (i < Formations.Count - 1)
 				sb.Append(", ");
 		}
-		sb.Append("] }");
+		sb.Append("], \"Transactions\": {");
+
+
+		foreach(var assembly in AppDomain.CurrentDomain.GetAssemblies().ToArray()) //ToArray is required for NET6
+			foreach(var type in assembly.GetTypes())
+				if (type.IsDefined(typeof(MessageAttribute), false))
+				{
+					sb.Append($"\"{type.FullName}\": ");
+					sb.Append(Utils.Export.Json(type.GetField("TransactionsHistory", BindingFlags.Public | BindingFlags.Static).GetValue(null)));
+					sb.Append(", ");
+				}
+
+		sb.Append("} }");
 		return sb.ToString();
 	}
 	#endif

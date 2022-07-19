@@ -31,6 +31,8 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 		Reindex = reindex;
 	}
 
+	public bool CheckIndex(int index) => index < Agents.Length;
+
 	public bool Alive => Agents.Length > 0 || Births.Count > 0 || Inserts.Count > 0;
 	public bool AnyMessages => Post.AnyMessages;
 
@@ -363,7 +365,10 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 		for(int i = 0; i < dst.Length; ++i)
 			dst[i].Tick(world, this, i, timestep);
 
-		#if HISTORY_LOG
+		#if TICK_LOG
+		StatesHistory.Clear();
+		#endif
+		#if HISTORY_LOG || TICK_LOG
 		var state = new T[dst.Length];
 		Array.Copy(dst, state, dst.Length);
 		StatesHistory.Add(state);
@@ -496,7 +501,7 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 	///////////////////////////
 	#region LOG
 	///////////////////////////
-	#if HISTORY_LOG
+	#if HISTORY_LOG || TICK_LOG
 	List<T[]> StatesHistory = new();
 	public string HistoryToJSON() => Utils.Export.Json(StatesHistory);
 

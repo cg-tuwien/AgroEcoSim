@@ -39,7 +39,9 @@ public partial struct SoilAgent : IAgent
 		var formation = (SoilFormation)_formation;
 		var coords = formation.Coords(formationID);
 
-		if (coords.Z == 0) // cells at z = 0 are above the ground, infinitely tall so no capacity restrictions for them
+		//CodeReview: I used this trick to better visualize the lateral flow.
+		//  Now only one corner cell gets water, so in order to spread it needs the lateral flow
+		if (coords.Z == 0 && coords.X == 0 && coords.Y == 0) // cells at z = 0 are above the ground, infinitely tall so no capacity restrictions for them
 			Water += AgroWorld.GetWater(timestep) * FieldCellSurface;
 
 		if (Water > WaterMinSaturation)
@@ -47,10 +49,7 @@ public partial struct SoilAgent : IAgent
 			float LateralDiffusionCoef = (coords.Z == 0 ? 0.4f : 0.03f) * SoilDiffusionCoefPerTick; //lateral flow above the ground is very strong
 
 			var downDiffusion = Water * GravitationDiffusionCoefPerTick;
-			var sideDiffusion = Water * LateralDiffusionCoef;
-			
-			formation.water_flow[formation.Index(coords),4] = downDiffusion; 
-
+			var sideDiffusion = coords.Z > 0 ? (Water - downDiffusion) * SoilDiffusionCoefPerTick : Water - downDiffusion;
 
 			var lateralFlow = new float[LateralNeighborhood.Length];
 			var lateralSum = 0f;
@@ -61,7 +60,7 @@ public partial struct SoilAgent : IAgent
 					if (neighbor.Water < Water)
 					{
 						//Note: Should't lateral flow be half of the diff?
-						var diff = Water - neighbor.Water;
+						var diff = (Water - neighbor.Water) * 0.5f;
 						lateralFlow[i] = diff;
 						lateralSum += diff;
 						anyLateral = true;
@@ -76,23 +75,9 @@ public partial struct SoilAgent : IAgent
 					{
 						lateralFlow[i] *= lateralSum;
 						formation.Send(formationID, new Water_PullFrom(formation, lateralFlow[i], coords + LateralNeighborhood[i]));
-						switch(i){
-							case 0:
-								formation.water_flow[formation.Index(coords),3] = lateralFlow[i];
-								break;
-							case 1:
-								formation.water_flow[formation.Index(coords),0] = lateralFlow[i];
-								break;
-							case 2:
-								formation.water_flow[formation.Index(coords),4] = lateralFlow[i];
-								break;
-							case 3:
-								formation.water_flow[formation.Index(coords),2] = lateralFlow[i];
-								break;
-						}
 					}
 			}
-
+			if (coords.Z + 1 < formation.SizeZ)
 			formation.Send(formationID, new Water_PullFrom(formation, downDiffusion, coords.X, coords.Y, coords.Z + 1));
 		}
 	}
@@ -117,7 +102,7 @@ public partial struct SoilAgent : IAgent
 	///////////////////////////
 	#region LOG
 	///////////////////////////
-	#if HISTORY_LOG
+	#if HISTORY_LOG || TICK_LOG
 	public readonly ulong ID { get; } = Utils.UID.Next();
 	#endif
 	#endregion

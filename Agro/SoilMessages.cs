@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Numerics;
 using System.Runtime.InteropServices;
 using AgentsSystem;
@@ -9,29 +10,32 @@ namespace Agro;
 public partial struct SoilAgent : IAgent
 {
 	[StructLayout(LayoutKind.Auto)]
+	[Message]
 	public readonly struct WaterInc : IMessage<SoilAgent>
 	{
-		#if HISTORY_LOG
+		#if HISTORY_LOG || TICK_LOG
 		public readonly static List<SimpleMsgLog> TransactionsHistory = new();
 		public readonly ulong ID { get; } = Utils.UID.Next();
 		#endif
 
 		public readonly float Amount;
 		public WaterInc(float amount) => Amount = amount;
+		public bool Valid => Amount > 0f;
 		public Transaction Type => Transaction.Increase;
 		public void Receive(ref SoilAgent dstAgent, uint timestep)
 		{
 			dstAgent.IncWater(Amount);
-			#if HISTORY_LOG
+			#if HISTORY_LOG || TICK_LOG
 			lock(TransactionsHistory) TransactionsHistory.Add(new(timestep, ID, dstAgent.ID, Amount));
 			#endif
 		}
 	}
 
 	[StructLayout(LayoutKind.Auto)]
+	[Message]
 	public readonly struct Water_PullFrom : IMessage<SoilAgent>
 	{
-        #if HISTORY_LOG
+        #if HISTORY_LOG || TICK_LOG
 		public readonly static List<PullMsgLog> TransactionsHistory = new();
 		public readonly ulong ID { get; } = Utils.UID.Next();
 		#endif
@@ -51,15 +55,19 @@ public partial struct SoilAgent : IAgent
 			Amount = amount;
 			DstIndex = new Vector3i(dstX, dstY, dstZ);
 		}
+		public bool Valid => Amount > 0f && DstFormation.CheckCoords(DstIndex);
 		public Transaction Type => Transaction.Decrease;
 		public void Receive(ref SoilAgent srcAgent, uint timestep)
 		{
 			var freeCapacity = Math.Max(0f, DstFormation.GetWaterCapacity(DstIndex) - DstFormation.GetWater(DstIndex));
 			var water = srcAgent.TryDecWater(Math.Min(Amount, freeCapacity));
-			if (water > 0) DstFormation.Send(DstIndex, new WaterInc(water));
-			#if HISTORY_LOG
-			lock(TransactionsHistory) TransactionsHistory.Add(new(timestep, ID, srcAgent.ID, DstFormation.GetID(DstIndex), water));
-			#endif
+			if (water > 0)
+			{
+				DstFormation.Send(DstIndex, new WaterInc(water));
+				#if HISTORY_LOG || TICK_LOG
+				lock(TransactionsHistory) TransactionsHistory.Add(new(timestep, ID, srcAgent.ID, DstFormation.GetID(DstIndex), water));
+				#endif
+			}
 		}
 	}
 
@@ -73,9 +81,10 @@ public partial struct SoilAgent : IAgent
 	// }
 
 	[StructLayout(LayoutKind.Auto)]
+	[Message]
 	public readonly struct Water_UG_PullFrom_Soil : IMessage<SoilAgent>
 	{
-        #if HISTORY_LOG
+        #if HISTORY_LOG || TICK_LOG
 		public readonly static List<PullMsgLog> TransactionsHistory = new();
 		public readonly ulong ID { get; } = Utils.UID.Next();
 		#endif
@@ -92,23 +101,28 @@ public partial struct SoilAgent : IAgent
 			DstFormation = dstFormation;
 			DstIndex = dstIndex;
 		}
+		public bool Valid => Amount > 0f && DstFormation.CheckIndex(DstIndex);
 		public Transaction Type => Transaction.Decrease;
 		public void Receive(ref SoilAgent srcAgent, uint timestep)
 		{
 			var freeCapacity = Math.Max(0f, DstFormation.GetWaterCapacityPerTick(DstIndex) - DstFormation.GetWater(DstIndex));
 			var water = srcAgent.TryDecWater(Math.Min(Amount, freeCapacity));
 			//Writing actions from other formations must not be implemented directly, but over messages
-			if (water > 0) DstFormation.SendProtected(DstIndex, new UnderGroundAgent.WaterInc(water));
-			#if HISTORY_LOG
-			lock(TransactionsHistory) TransactionsHistory.Add(new(timestep, ID, srcAgent.ID, DstFormation.GetID(DstIndex), water));
-			#endif
+			if (water > 0)
+			{
+				DstFormation.SendProtected(DstIndex, new UnderGroundAgent.WaterInc(water));
+				#if HISTORY_LOG || TICK_LOG
+				lock(TransactionsHistory) TransactionsHistory.Add(new(timestep, ID, srcAgent.ID, DstFormation.GetID(DstIndex), water));
+				#endif
+			}
 		}
 	}
 
 	[StructLayout(LayoutKind.Auto)]
+	[Message]
 	public readonly struct Water_Seed_PullFrom_Soil : IMessage<SoilAgent>
 	{
-		#if HISTORY_LOG
+		#if HISTORY_LOG || TICK_LOG
 		public readonly static List<PullMsgLog> TransactionsHistory = new();
 		public readonly ulong ID { get; } = Utils.UID.Next();
 		#endif
@@ -122,14 +136,18 @@ public partial struct SoilAgent : IAgent
 			Amount = amount;
 			DstFormation = dstFormation;
 		}
+		public bool Valid => Amount > 0f && DstFormation.SeedAlive;
 		public Transaction Type => Transaction.Decrease;
 		public void Receive(ref SoilAgent srcAgent, uint timestep)
 		{
 			var water = srcAgent.TryDecWater(Amount);
-			if (water > 0) DstFormation.Send(0, new SeedAgent.WaterInc(water));
-			#if HISTORY_LOG
-			lock(TransactionsHistory) TransactionsHistory.Add(new(timestep, ID, srcAgent.ID, DstFormation.GetID(), water));
-			#endif
+			if (water > 0)
+			{
+				DstFormation.Send(0, new SeedAgent.WaterInc(water)); //there is always just one seed
+				#if HISTORY_LOG || TICK_LOG
+				lock(TransactionsHistory) TransactionsHistory.Add(new(timestep, ID, srcAgent.ID, DstFormation.GetID(), water));
+				#endif
+			}
 		}
 	}
 }

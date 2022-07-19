@@ -9,8 +9,15 @@ namespace Agro;
 
 public partial class SoilFormation
 {
-	SoilVisualisationSettings parameters = new SoilVisualisationSettings();
-	
+	SoilVisualisationSettings parameters = new()
+	{
+		FullCellColor = Colors.Blue,
+		EmptyCellColor = Colors.Black,
+		FullFlowColor = Colors.Blue,
+		NoFlowColor = Colors.Black,
+		AnimateMarkerSize = true
+	};
+
 
 	//Todo: Speed of the visualisation could be improved by replacing Mesh with MultiMesh (leveraging identical geo)!!!
 	MeshInstance[] SoilCellInstances;
@@ -34,7 +41,8 @@ public partial class SoilFormation
 
 	public override void GodotProcess(uint timestep)
 	{
-		if(parameters.Visualise){
+		if(parameters.Visualise)
+		{
 			SolveVisibility();
 			if(parameters.MarkerVisibility == visibility.visible_waiting) AnimateMarkers();
 			if(parameters.SoilCellsVisibility == visibility.visible_waiting) AnimateCells();

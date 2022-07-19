@@ -10,7 +10,7 @@
                 "${workspaceFolder}/Agro/Agro.csproj",
                 "/property:GenerateFullPaths=true",
                 "/consoleloggerparameters:NoSummary"
-                //,"/p:DefineConstants=HISTORY_LOG"
+                ,"/p:DefineConstants=HISTORY_LOG"
             ],
             "problemMatcher": "$msCompile",
         },

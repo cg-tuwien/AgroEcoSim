@@ -8,6 +8,7 @@ public enum Transaction { Unknown = 0, Increase = 1, Decrease = 2}
 public interface IMessage<T> where T : struct, IAgent
 {
     void Receive(ref T agent, uint timestep);
+    bool Valid { get; }
     Transaction Type { get; }
 }
 
@@ -16,6 +17,7 @@ public readonly struct MessageWrapper<T> where T : struct, IAgent
 {
     readonly IMessage<T> Message;
     readonly IEnumerable<int>? Recipients;
+    public bool Valid => Message.Valid;
     public Transaction Type => Message.Type;
 
     public MessageWrapper(IMessage<T> msg)
@@ -50,35 +52,41 @@ public readonly struct MessageWrapper<T> where T : struct, IAgent
     }
 }
 
-	#if HISTORY_LOG
-    //TODO make readonly struct records for net6.0
+	#if HISTORY_LOG || TICK_LOG
 	[StructLayout(LayoutKind.Auto)] public readonly struct SimpleMsgLog
 	{
-		public readonly uint TimeStep;
-		public readonly ulong MsgID;
-		public readonly ulong RecipientID;
-		public readonly float Amount;
+        #if !TICK_LOG
+		public readonly uint TimeStep { get; }
+        #endif
+		public readonly ulong MsgID { get; }
+		public readonly ulong RecipientID { get; }
+		public readonly float Amount { get; }
         public SimpleMsgLog(uint timestep, ulong msgID, ulong recipientID, float amount)
         {
+            #if !TICK_LOG
             TimeStep = timestep;
+            #endif
             MsgID = msgID;
             RecipientID = recipientID;
             Amount = amount;
         }
 	}
 
-    //TODO make readonly struct records for net6.0
 	[StructLayout(LayoutKind.Auto)] public readonly struct PullMsgLog
 	{
-		public readonly uint TimeStep;
-		public readonly ulong MsgID;
-		public readonly ulong SourceID;
-		public readonly ulong TargetID;
-		public readonly float Amount;
+		#if !TICK_LOG
+		public readonly uint TimeStep { get; }
+        #endif
+		public readonly ulong MsgID { get; }
+		public readonly ulong SourceID { get; }
+		public readonly ulong TargetID { get; }
+		public readonly float Amount { get; }
 
         public PullMsgLog(uint timestep, ulong msgID, ulong sourceID, ulong targetID, float amount)
         {
+            #if !TICK_LOG
             TimeStep = timestep;
+            #endif
             MsgID = msgID;
             SourceID = sourceID;
             TargetID = targetID;

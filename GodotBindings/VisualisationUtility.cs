@@ -2,7 +2,7 @@ using Godot;
 using System;
 
 
-enum direction{
+enum Direction{
     right,
     up,
     forward,
@@ -12,13 +12,13 @@ enum direction{
 }
 
 class MarkerData{
-    public direction pointing_direction;
+    public Direction PointingDirection;
     public Vector3 InitialPosition;
-    public int MarkerOwnerID;
+    public int CellIndex;
 
-    public MarkerData(direction dir, Vector3 init_pos, int owner_id){
-        pointing_direction = dir;
+    public MarkerData(Direction dir, Vector3 init_pos, int owner_index){
+        PointingDirection = dir;
         InitialPosition = init_pos;
-        MarkerOwnerID = owner_id;
+        CellIndex = owner_index;
     }
 }

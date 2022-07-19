@@ -438,9 +438,9 @@ public partial struct AboveGroundAgent : IPlantAgent
 	///////////////////////////
 	#region LOG
 	///////////////////////////
-	#if HISTORY_LOG
+	#if HISTORY_LOG || TICK_LOG
 	public readonly ulong ID { get; } = Utils.UID.Next();
-	public Utils.Quat OrienTaTion => new Utils.Quat(Orientation);
+	public Utils.QuatData OrienTaTion => new(Orientation);
 	#endif
 	#endregion
 }

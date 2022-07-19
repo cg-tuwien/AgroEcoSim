@@ -90,6 +90,8 @@ public partial class PlantFormation : IFormation
 		Seed = Array.Empty<SeedAgent>();
 	}
 
+	public bool SeedAlive => Seed.Length == 1;
+
 	public void Census()
 	{
 		UG.Census();
@@ -140,7 +142,10 @@ public partial class PlantFormation : IFormation
 			Array.Copy(srcSeed, dstSeed, srcSeed.Length);
 			dstSeed[0].Tick(world, this, 0, timestep);
 		}
-		#if HISTORY_LOG
+		#if TICK_LOG
+		StatesHistory.Clear();
+		#endif
+		#if HISTORY_LOG || TICK_LOG
 		if (dstSeed.Length > 0)
 			StatesHistory.Add(dstSeed[0]);
 		#endif
@@ -174,7 +179,7 @@ public partial class PlantFormation : IFormation
 	///////////////////////////
 	#region LOG
 	///////////////////////////
-	#if HISTORY_LOG
+	#if HISTORY_LOG || TICK_LOG
 	List<SeedAgent> StatesHistory = new();
 	public string HistoryToJSON() => $" \"Seeds\" : {Utils.Export.Json(StatesHistory)}, \"UnderGround\" : {UG.HistoryToJSON()}, AboveGround : {AG.HistoryToJSON()}";
 	public ulong GetID() => Seed.Length > 0 ? Seed[0].ID : ulong.MaxValue;

@@ -20,7 +20,7 @@ public abstract class Formation<T> : IFormation where T : struct, IAgent
 	/// <summary>
 	/// An ordered tuple of the double data-buffer entries ready for swap.
 	/// </summary>
-	
+
 	(T[], T[]) SrcDst() => ReadTMP ? (AgentsTMP, Agents) : (Agents, AgentsTMP);
 
 	public void Census()
@@ -96,7 +96,10 @@ public abstract class Formation<T> : IFormation where T : struct, IAgent
 		for(int i = 0; i < dst.Length; ++i)
 			dst[i].Tick(world, this, i, timestep);
 
-		#if HISTORY_LOG
+		#if TICK_LOG
+		StatesHistory.Clear();
+		#endif
+		#if HISTORY_LOG || TICK_LOG
 		var states = new T[dst.Length];
 		Array.Copy(dst, states, dst.Length);
 		StatesHistory.Add(states);
@@ -143,7 +146,7 @@ public abstract class Formation<T> : IFormation where T : struct, IAgent
 
 	public virtual bool HasUndeliveredPost => Postbox.AnyMessages;
 
-#if HISTORY_LOG
+#if HISTORY_LOG || TICK_LOG
 	List<T[]> StatesHistory = new();
 	public string HistoryToJSON() => Utils.Export.Json(StatesHistory);
 

@@ -8,25 +8,8 @@ namespace Agro;
 
 public partial class SoilFormation : Formation3iTransformed<SoilAgent>
 {
-	/* Flow directions
-	Note: y is up
-	0 ... [1,0,0]
-	1 ... [0,1,0]
-	2 ... [0,0,1]
-	3 ... [-1,0,0]
-	4 ... [0,-1,0]
-	5 ... [0,0,-1]
-	*/
-
-	//TODO: Should I add IF GODOT to prevent computations of the directional flow when not visualising?
-	public float[,] steam_flow;// = new float[Agents.Length,6]; //Might save some space by having only 5 elements in the nested array, but I am keeping 6 for better indexing
-	public float[,] water_flow;// = new float[Agents.Length,6];
-
 	public SoilFormation(Vector3i size, Vector3 fieldSize, uint timestep) : base(size.X, size.Y, size.Z)
 	{
-		steam_flow = new float[Agents.Length,6];
-		water_flow = new float[Agents.Length,6];
-
 		const float coldFactor = 0.75f; //earth gets 1 degree colder each x meters (where x is the value of this constant)
 		var airTemp = AgroWorld.GetTemperature(timestep);
 		var bottomTemp = airTemp > 4f ? Math.Max(4f, airTemp - fieldSize.Z * coldFactor) : Math.Min(4f, airTemp + fieldSize.Z * coldFactor);
@@ -50,10 +33,13 @@ public partial class SoilFormation : Formation3iTransformed<SoilAgent>
 	public float GetWater(int index) => index >= 0 && index < Agents.Length
 		? (ReadTMP ? AgentsTMP[index].Water : Agents[index].Water)
 		: 0f;
+
 	public float GetWater(Vector3i index) => GetWater(Index(index));
+
 	public float GetWaterCapacity(int index) => index >= 0 && index < Agents.Length
 		? (ReadTMP ? AgentsTMP[index].WaterMaxCapacity : Agents[index].WaterMaxCapacity)
 		: 0f;
+
 	public float GetWaterCapacity(Vector3i index) => GetWaterCapacity(Index(index));
 
 	public float GetTemperature(int index) => ReadTMP ? AgentsTMP[index].Temperature : Agents[index].Temperature;
