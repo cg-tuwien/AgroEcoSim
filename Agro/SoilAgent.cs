@@ -77,7 +77,7 @@ public partial struct SoilAgent : IAgent
 						formation.Send(formationID, new Water_PullFrom(formation, lateralFlow[i], coords + LateralNeighborhood[i]));
 					}
 			}
-			if (coords.Z + 1 < formation.SizeZ)
+
 			formation.Send(formationID, new Water_PullFrom(formation, downDiffusion, coords.X, coords.Y, coords.Z + 1));
 		}
 	}

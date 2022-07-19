@@ -34,6 +34,11 @@ public partial struct AboveGroundAgent : IPlantAgent
 	/// </summary>
 	public float Radius { get; private set; }
 
+	[JsonIgnore]
+	public Vector3 Scale => Organ switch {
+		OrganTypes.Leaf => new(Length, 0.0001f, 2f * Radius),
+		_ => new(Length, 2f * Radius, 2f * Radius)
+	};
 
 	public float Energy { get; private set; }
 
@@ -59,7 +64,6 @@ public partial struct AboveGroundAgent : IPlantAgent
 	/// </summary>
 	public int Parent { get; private set; }
 	//public int[] Children { get; private set; }
-
 
 	/// <summary>
 	/// Recommended initial length of the agent at birth in m.

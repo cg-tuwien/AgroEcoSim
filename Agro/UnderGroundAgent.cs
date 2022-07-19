@@ -32,6 +32,9 @@ public partial struct UnderGroundAgent : IPlantAgent
 	/// </summary>
 	public float Radius { get; private set; }
 
+	[JsonIgnore]
+	public Vector3 Scale => new(Length, 2f * Radius, 2f * Radius);
+
 	public float Energy { get; private set; }
 
 	/// <summary>

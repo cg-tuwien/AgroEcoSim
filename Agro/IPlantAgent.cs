@@ -43,6 +43,8 @@ public interface IPlantAgent : IAgent
 
 	float WoodRatio { get; }
 
+	Vector3 Scale { get; }
+
 	///<summary>
 	/// Use with caution, call only from census! Updates the Parent value after splitting an agent.
 	///</summary>

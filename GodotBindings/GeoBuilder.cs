@@ -8,14 +8,14 @@ public static class GeoBuilder{
         var st = new SurfaceTool();
         st.Begin(Mesh.PrimitiveType.Triangles);
 
-        st.AddVertex(new Vector3(-0.5f,-0.5f,0.5f));
-        st.AddVertex(new Vector3(0.5f,-0.5f,0.5f));
-        st.AddVertex(new Vector3(0.5f,-0.5f,-0.5f));
-        st.AddVertex(new Vector3(-0.5f,-0.5f,-0.5f));
-        st.AddVertex(new Vector3(-0.5f,0.5f,0.5f));
-        st.AddVertex(new Vector3(0.5f,0.5f,0.5f));
-        st.AddVertex(new Vector3(0.5f,0.5f,-0.5f));
-        st.AddVertex(new Vector3(-0.5f,0.5f,-0.5f));
+        st.AddVertex(new Vector3(-0.5f, -0.5f, 0.5f));
+        st.AddVertex(new Vector3(0.5f, -0.5f, 0.5f));
+        st.AddVertex(new Vector3(0.5f, -0.5f, -0.5f));
+        st.AddVertex(new Vector3(-0.5f, -0.5f, -0.5f));
+        st.AddVertex(new Vector3(-0.5f, 0.5f, 0.5f));
+        st.AddVertex(new Vector3(0.5f, 0.5f, 0.5f));
+        st.AddVertex(new Vector3(0.5f, 0.5f, -0.5f));
+        st.AddVertex(new Vector3(-0.5f, 0.5f, -0.5f));
 
 
         st.AddIndex(5); st.AddIndex(1); st.AddIndex(0);
@@ -48,11 +48,11 @@ public static class GeoBuilder{
         var st = new SurfaceTool();
         st.Begin(Mesh.PrimitiveType.Triangles);
 
-        st.AddVertex(new Vector3(-0.5f,-0.5f,0.5f));
-        st.AddVertex(new Vector3(0.5f,-0.5f,0.5f));
-        st.AddVertex(new Vector3(0.5f,-0.5f,-0.5f));
-        st.AddVertex(new Vector3(-0.5f,-0.5f,-0.5f));
-        st.AddVertex(new Vector3(0f,0.5f,0f));
+        st.AddVertex(new Vector3(-0.5f, -0.5f, 0.5f));
+        st.AddVertex(new Vector3(0.5f, -0.5f, 0.5f));
+        st.AddVertex(new Vector3(0.5f, -0.5f, -0.5f));
+        st.AddVertex(new Vector3(-0.5f, -0.5f, -0.5f));
+        st.AddVertex(new Vector3(0f, 0.5f, 0f));
 
         st.AddIndex(0); st.AddIndex(1); st.AddIndex(2);
         st.AddIndex(2); st.AddIndex(3); st.AddIndex(0);

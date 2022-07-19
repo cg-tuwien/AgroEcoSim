@@ -113,9 +113,9 @@ public partial class SoilFormation
 		var marker = new MeshInstance() {
 			Translation = parent_pos + MarkerOffsets[dirIndex],
 			Rotation = Rotations[dirIndex],
-			Mesh = parameters.MarkerShape
+			Mesh = Parameters.MarkerShape
 		};
-		marker.SetSurfaceMaterial(0, (SpatialMaterial)parameters.MarkerMaterial.Duplicate());
+		marker.SetSurfaceMaterial(0, (SpatialMaterial)Parameters.MarkerMaterial.Duplicate());
 
 		//CodeReview: This is the correct order. Otherwise you make one unnecessary array lookup.
 		MarkerInstances[parent_index, dirIndex] = marker;
@@ -128,11 +128,11 @@ public partial class SoilFormation
 	private void InitializeCell(int x, int y, int z){
 		var mesh = new MeshInstance()
 		{
-			Mesh = parameters.SoilCellShape,
+			Mesh = Parameters.SoilCellShape,
 			Translation = new Vector3(x, -z, y) * AgroWorld.FieldResolution,
-			Scale = Vector3.One * (parameters.SoilCellScale * AgroWorld.FieldResolution),
+			Scale = Vector3.One * (Parameters.SoilCellScale * AgroWorld.FieldResolution),
 		};
-		mesh.SetSurfaceMaterial(0, (SpatialMaterial)parameters.SoilCellMaterial.Duplicate());
+		mesh.SetSurfaceMaterial(0, (SpatialMaterial)Parameters.SoilCellMaterial.Duplicate());
 
 		SoilCellInstances[Index(x, y, z)] = mesh;
 		SimulationWorld.GodotAddChild(mesh);
@@ -144,8 +144,8 @@ public partial class SoilFormation
 		{
 			var multiplier = Math.Clamp(Agents[i].Water / Agents[i].WaterMaxCapacity, 0f, 1f);
 
-			SoilCellInstances[i].Scale = Vector3.One * (parameters.SoilCellScale * AgroWorld.FieldResolution * multiplier);
-			((SpatialMaterial)SoilCellInstances[i].GetSurfaceMaterial(0)).AlbedoColor = multiplier * parameters.FullCellColor + (1f - multiplier) * parameters.EmptyCellColor;
+			SoilCellInstances[i].Scale = Vector3.One * (Parameters.SoilCellScale * AgroWorld.FieldResolution * multiplier);
+			((SpatialMaterial)SoilCellInstances[i].GetSurfaceMaterial(0)).AlbedoColor = multiplier * Parameters.FullCellColor + (1f - multiplier) * Parameters.EmptyCellColor;
 		}
 	}
 
@@ -173,14 +173,14 @@ public partial class SoilFormation
 		float marker_scale = 0f;
 		var dir = (int)marker.PointingDirection;
 
-		var cell_scale = parameters.SoilCellScale * AgroWorld.FieldResolution * Math.Clamp(Agents[marker.CellIndex].Water/Agents[marker.CellIndex].WaterMaxCapacity, 0f, 1f);
+		var cell_scale = Parameters.SoilCellScale * AgroWorld.FieldResolution * Math.Clamp(Agents[marker.CellIndex].Water/Agents[marker.CellIndex].WaterMaxCapacity, 0f, 1f);
 
 		var flow = WaterFlow[marker.CellIndex * 6 + dir];
 		var appearance_multiplier = Math.Clamp(flow / (Agents[marker.CellIndex].WaterMaxCapacity * SoilAgent.SoilDiffusionCoefPerTick * 5f), 0f, 1f);
 
 		var mesh = MarkerInstances[marker.CellIndex, dir];
 		//CodeReview: Many markers will be zero! Perhaps just use the else branch to hide them
-		if (parameters.AnimateMarkerSize && flow == 0f)
+		if (Parameters.AnimateMarkerSize && flow == 0f)
 		{
 			mesh.Visible = false;
 			mesh.Scale = Vector3.Zero;
@@ -188,66 +188,66 @@ public partial class SoilFormation
 		else
 		{
 			//CodeReview: for simple conditions better use ? : then if else
-			marker_scale = cell_scale * (parameters.AnimateMarkerSize ? parameters.MarkerScale * appearance_multiplier : parameters.MarkerScale);
+			marker_scale = cell_scale * (Parameters.AnimateMarkerSize ? Parameters.MarkerScale * appearance_multiplier : Parameters.MarkerScale);
 			//CodeReview: this way you can save one division
 			var offset_multiplier = (cell_scale + marker_scale) * 0.5f;
 			mesh.Translation = marker.InitialPosition + MarkerOffsets[dir] * offset_multiplier;
 			mesh.Scale = Vector3.One * marker_scale;
 			mesh.Visible = true;
 
-			((SpatialMaterial)mesh.GetSurfaceMaterial(0)).AlbedoColor = appearance_multiplier * parameters.FullFlowColor + (1f - appearance_multiplier) * parameters.NoFlowColor;
+			((SpatialMaterial)mesh.GetSurfaceMaterial(0)).AlbedoColor = appearance_multiplier * Parameters.FullFlowColor + (1f - appearance_multiplier) * Parameters.NoFlowColor;
 		}
 	}
 
 	private void SolveVisibility(){
-		if(parameters.MarkerVisibility == visibility.visible){
+		if(Parameters.MarkerVisibility == visibility.Visible){
 			SetMarkersVisibility(true);
-			parameters.MarkerVisibility = visibility.visible_waiting;
+			Parameters.MarkerVisibility = visibility.Waiting;
 		}
-		else if(parameters.MarkerVisibility == visibility.invisible){
+		else if(Parameters.MarkerVisibility == visibility.Invisible){
 			SetMarkersVisibility(false);
-			parameters.MarkerVisibility = visibility.invisible_waiting;
+			Parameters.MarkerVisibility = visibility.Waiting;
 		}
 
-		if(parameters.SoilCellsVisibility == visibility.visible){
+		if(Parameters.SoilCellsVisibility == visibility.Visible){
 			SetCellsVisibility(true);
-			parameters.SoilCellsVisibility = visibility.visible_waiting;
+			Parameters.SoilCellsVisibility = visibility.Waiting;
 		}
-		else if(parameters.SoilCellsVisibility == visibility.invisible){
+		else if(Parameters.SoilCellsVisibility == visibility.Invisible){
 			SetCellsVisibility(false);
-			parameters.SoilCellsVisibility = visibility.invisible_waiting;
+			Parameters.SoilCellsVisibility = visibility.Waiting;
 		}
 
 		for(int i = 0; i < 6; i++){
-			if(parameters.IndividualMarkerDirectionVisibility[i] == visibility.visible){
+			if(Parameters.IndividualMarkerDirectionVisibility[i] == visibility.Visible){
 				SetMarkersVisibility(true,(Direction)i);
-				parameters.IndividualMarkerDirectionVisibility[i] = visibility.visible_waiting;
+				Parameters.IndividualMarkerDirectionVisibility[i] = visibility.Waiting;
 			}
-			else if(parameters.IndividualMarkerDirectionVisibility[i] == visibility.invisible){
+			else if(Parameters.IndividualMarkerDirectionVisibility[i] == visibility.Invisible){
 				SetMarkersVisibility(false,(Direction)i);
-				parameters.IndividualMarkerDirectionVisibility[i] = visibility.invisible_waiting;
+				Parameters.IndividualMarkerDirectionVisibility[i] = visibility.Waiting;
 			}
 		}
 
 	}
 
-	private void SetMarkersVisibility(bool flag)
-	{
-		for(int i = 0; i < 6; i++)
+	private void SetMarkersVisibility(bool flag){
+		for(int i = 0; i < 6; i++){
 			SetMarkersVisibility(flag,(Direction)i);
+		}
 	}
 
-	private void SetMarkersVisibility(bool flag, Direction dir)
-	{
-		for(int i = 0; i < SoilCellInstances.Length; i++)
+	private void SetMarkersVisibility(bool flag, Direction dir){
+		for(int i = 0; i < SoilCellInstances.Length; i++){
 			MarkerInstances[i,(int)dir].Visible = flag;
+		}
 	}
 
 
-	private void SetCellsVisibility(bool flag)
-	{
-		for(int i = 0; i < SoilCellInstances.Length; i++)
+	private void SetCellsVisibility(bool flag){
+		for(int i = 0; i < SoilCellInstances.Length; i++){
 			SoilCellInstances[i].Visible = flag;
+		}
 	}
 
 }

@@ -21,7 +21,7 @@ Most settings are currently exposed in the following two files: `Agro/Initialize
 The first set of projects contains the simulation core:
 * **AgentsSystem** contains general and abstract data structures, interfaces etc.
 * **Agro** inherits from AgentsSystem, overrides and adds much of functionality specific for the agricultural use-case. It also contains an executable stand-alone program.
-* **Utils** just a few useful utilities: `Pcg` a well controlable random numbers generator, `Vector3i` an integer vector struct, `GodotHelpers` extension methods for conversion of common .NEt geometry types to Grodot's own.
+* **Utils** just a few useful utilities: `Pcg` a well controlable random numbers generator, `Vector3i` an integer vector struct, `NumericHelpers` extension methods for conversion of common .NEt geometry types to Godot's own.
 
 The following folders are related to the Godot rendering:
 * **.mono** is the build folder for Godot. No need to touch it.
