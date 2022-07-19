@@ -20,6 +20,7 @@ public struct SeedAgent : IAgent
 	{
 		#if HISTORY_LOG || TICK_LOG
 		public readonly static List<SimpleMsgLog> TransactionsHistory = new();
+		public static void ClearHistory() => TransactionsHistory.Clear();
 		public readonly ulong ID { get; } = Utils.UID.Next();
 		#endif
 		/// <summary>

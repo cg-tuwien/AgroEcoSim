@@ -46,10 +46,8 @@ public partial struct SoilAgent : IAgent
 
 		if (Water > WaterMinSaturation)
 		{
-			float LateralDiffusionCoef = (coords.Z == 0 ? 0.4f : 0.03f) * SoilDiffusionCoefPerTick; //lateral flow above the ground is very strong
-
 			var downDiffusion = Water * GravitationDiffusionCoefPerTick;
-			var sideDiffusion = coords.Z > 0 ? (Water - downDiffusion) * SoilDiffusionCoefPerTick : Water - downDiffusion;
+			var sideDiffusion = coords.Z > 0 ? (Water - downDiffusion) * SoilDiffusionCoefPerTick : Water - downDiffusion; //lateral flow above the ground is very strong
 
 			var lateralFlow = new float[LateralNeighborhood.Length];
 			var lateralSum = 0f;
@@ -59,7 +57,6 @@ public partial struct SoilAgent : IAgent
 				{
 					if (neighbor.Water < Water)
 					{
-						//Note: Should't lateral flow be half of the diff?
 						var diff = (Water - neighbor.Water) * 0.5f;
 						lateralFlow[i] = diff;
 						lateralSum += diff;

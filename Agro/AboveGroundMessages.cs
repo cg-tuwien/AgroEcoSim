@@ -16,6 +16,7 @@ public partial struct AboveGroundAgent : IAgent
 	{
 		#if HISTORY_LOG || TICK_LOG
 		public readonly static List<SimpleMsgLog> TransactionsHistory = new();
+		public static void ClearHistory() => TransactionsHistory.Clear();
 		public readonly ulong ID { get; } = Utils.UID.Next();
 		#endif
 
@@ -38,6 +39,7 @@ public partial struct AboveGroundAgent : IAgent
 	{
 		#if HISTORY_LOG || TICK_LOG
 		public readonly static List<SimpleMsgLog> TransactionsHistory = new();
+		public static void ClearHistory() => TransactionsHistory.Clear();
 		public readonly ulong ID { get; } = Utils.UID.Next();
 		#endif
 
@@ -60,6 +62,7 @@ public partial struct AboveGroundAgent : IAgent
 	{
 		#if HISTORY_LOG || TICK_LOG
 		public readonly static List<PullMsgLog> TransactionsHistory = new();
+		public static void ClearHistory() => TransactionsHistory.Clear();
 		public readonly ulong ID { get; } = Utils.UID.Next();
 		#endif
 
@@ -79,7 +82,7 @@ public partial struct AboveGroundAgent : IAgent
 		{
 			var freeCapacity = Math.Max(0f, DstFormation.GetWaterCapacityPerTick(DstIndex) - DstFormation.GetWater(DstIndex));
 			var water = srcAgent.TryDecWater(Math.Min(Amount, freeCapacity));
-			if (water > 0)
+			if (f)
 			{
 				DstFormation.SendProtected(DstIndex, new WaterInc(water));
 				#if HISTORY_LOG || TICK_LOG
@@ -95,6 +98,7 @@ public partial struct AboveGroundAgent : IAgent
 	{
 		#if HISTORY_LOG || TICK_LOG
 		public readonly static List<PullMsgLog> TransactionsHistory = new();
+		public static void ClearHistory() => TransactionsHistory.Clear();
 		public readonly ulong ID { get; } = Utils.UID.Next();
 		#endif
 
@@ -114,7 +118,7 @@ public partial struct AboveGroundAgent : IAgent
 		{
 			var freeCapacity = Math.Max(0f, DstFormation.GetEnergyCapacity(DstIndex) - DstFormation.GetEnergy(DstIndex));
 			var energy = srcAgent.TryDecEnergy(Math.Min(Amount, freeCapacity));
-			if (energy > 0)
+			if (energy > 0f)
 			{
 				DstFormation.SendProtected(DstIndex, new EnergyInc(energy));
 				#if HISTORY_LOG || TICK_LOG

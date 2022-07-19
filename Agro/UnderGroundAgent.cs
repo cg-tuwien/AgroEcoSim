@@ -253,7 +253,7 @@ public partial struct UnderGroundAgent : IPlantAgent
 				}
 			}
 		}
-		else if (Energy > 0) //if running out of energy, balance it by taking it away from children
+		else if (Energy > 0f) //if running out of energy, balance it by taking it away from children
 		{
 			//Console.WriteLine($"Root {formationID} starving at time {timestep}");
 			foreach(var child in children)

@@ -271,7 +271,7 @@ public partial struct AboveGroundAgent : IPlantAgent
 				//Console.WriteLine($"{formationID}x{timestep}: l={Length} r={Radius} OK={Length > Radius}");
 			}
 		}
-		else if (Energy > 0) //if running out of energy, balance it by thaking it away from parent instead of sending it
+		else if (Energy > 0f) //if running out of energy, balance it by thaking it away from parent instead of sending it
 		{
 			if (Parent >= 0)
 			{

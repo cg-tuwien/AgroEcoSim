@@ -15,6 +15,7 @@ public partial struct SoilAgent : IAgent
 	{
 		#if HISTORY_LOG || TICK_LOG
 		public readonly static List<SimpleMsgLog> TransactionsHistory = new();
+		public static void ClearHistory() => TransactionsHistory.Clear();
 		public readonly ulong ID { get; } = Utils.UID.Next();
 		#endif
 
@@ -37,6 +38,7 @@ public partial struct SoilAgent : IAgent
 	{
         #if HISTORY_LOG || TICK_LOG
 		public readonly static List<PullMsgLog> TransactionsHistory = new();
+		public static void ClearHistory() => TransactionsHistory.Clear();
 		public readonly ulong ID { get; } = Utils.UID.Next();
 		#endif
 
@@ -61,7 +63,7 @@ public partial struct SoilAgent : IAgent
 		{
 			var freeCapacity = Math.Max(0f, DstFormation.GetWaterCapacity(DstIndex) - DstFormation.GetWater(DstIndex));
 			var water = srcAgent.TryDecWater(Math.Min(Amount, freeCapacity));
-			if (water > 0)
+			if (water > 0f)
 			{
 				DstFormation.Send(DstIndex, new WaterInc(water));
 				#if HISTORY_LOG || TICK_LOG
@@ -86,6 +88,7 @@ public partial struct SoilAgent : IAgent
 	{
         #if HISTORY_LOG || TICK_LOG
 		public readonly static List<PullMsgLog> TransactionsHistory = new();
+		public static void ClearHistory() => TransactionsHistory.Clear();
 		public readonly ulong ID { get; } = Utils.UID.Next();
 		#endif
 
@@ -108,7 +111,7 @@ public partial struct SoilAgent : IAgent
 			var freeCapacity = Math.Max(0f, DstFormation.GetWaterCapacityPerTick(DstIndex) - DstFormation.GetWater(DstIndex));
 			var water = srcAgent.TryDecWater(Math.Min(Amount, freeCapacity));
 			//Writing actions from other formations must not be implemented directly, but over messages
-			if (water > 0)
+			if (water > 0f)
 			{
 				DstFormation.SendProtected(DstIndex, new UnderGroundAgent.WaterInc(water));
 				#if HISTORY_LOG || TICK_LOG
@@ -124,6 +127,7 @@ public partial struct SoilAgent : IAgent
 	{
 		#if HISTORY_LOG || TICK_LOG
 		public readonly static List<PullMsgLog> TransactionsHistory = new();
+		public static void ClearHistory() => TransactionsHistory.Clear();
 		public readonly ulong ID { get; } = Utils.UID.Next();
 		#endif
 
@@ -141,7 +145,7 @@ public partial struct SoilAgent : IAgent
 		public void Receive(ref SoilAgent srcAgent, uint timestep)
 		{
 			var water = srcAgent.TryDecWater(Amount);
-			if (water > 0)
+			if (water > 0f)
 			{
 				DstFormation.Send(0, new SeedAgent.WaterInc(water)); //there is always just one seed
 				#if HISTORY_LOG || TICK_LOG

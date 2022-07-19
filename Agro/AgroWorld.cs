@@ -30,13 +30,12 @@ public readonly struct WeatherStats
 public static class AgroWorld {
     public const int TicksPerHour = 10;
     //public const int TotalHours = 24 * 365 * 10;
-    //public const int TotalHours = 24 * 31 * 3;
-    public const int TotalHours = 6;
+    public const int TotalHours = 24 * 31 * 3;
 
     //public static readonly Vector3 FieldSize = new(6f, 4f, 2f);
     //public const float FieldResolution = 0.1f;
 
-    public static readonly Vector3 FieldSize = new(1f, 1f, 3f); //2D size and the last component is depth
+    public static readonly Vector3 FieldSize = new(12f, 8f, 3f); //2D size and the last component is depth
     public const float FieldResolution = 0.5f;
 
     public const float Latitude = 48.208333f;
