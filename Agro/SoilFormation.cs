@@ -19,13 +19,13 @@ public partial class SoilFormation : Formation3iTransformed<SoilAgent>
 	*/
 
 	//TODO: Should I add IF GODOT to prevent computations of the directional flow when not visualising?
-	public float[,] steam_flow;// = new float[Agents.Length,6]; //Might save some space by having only 5 elements in the nested array, but I am keeping 6 for better indexing
-	public float[,] water_flow;// = new float[Agents.Length,6];
+	public float[,] SteamFlow;// = new float[Agents.Length,6]; //Might save some space by having only 5 elements in the nested array, but I am keeping 6 for better indexing
+	public float[,] WaterFlow;// = new float[Agents.Length,6];
 
 	public SoilFormation(Vector3i size, Vector3 fieldSize, uint timestep) : base(size.X, size.Y, size.Z)
 	{
-		steam_flow = new float[Agents.Length,6];
-		water_flow = new float[Agents.Length,6];
+		SteamFlow = new float[Agents.Length,6];
+		WaterFlow = new float[Agents.Length,6];
 
 		const float coldFactor = 0.75f; //earth gets 1 degree colder each x meters (where x is the value of this constant)
 		var airTemp = AgroWorld.GetTemperature(timestep);

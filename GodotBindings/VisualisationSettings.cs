@@ -1,24 +1,24 @@
 using Godot;
 using System;
 
-enum marker_mode{steam,water,sum};
+enum marker_mode{Steam,Water,Sum};
 
-public enum visibility{visible,invisible,visible_waiting,invisible_waiting}; //Logic is that when is the state changed to visible/invisible all components are affected and the state is then set to waiting
+public enum visibility{Visible,Invisible,Waiting}; //Waiting state is used to prevent visibility changes once set to desired visibility
 
 public class SoilVisualisationSettings{
     public bool Visualise = true; //This can turn on/off the entire visualisation
 
     // VISIBILITY SETTINGS
-    public visibility MarkerVisibility = visibility.visible_waiting;
+    public visibility MarkerVisibility = visibility.Visible;
     public visibility[] IndividualMarkerDirectionVisibility = new visibility[]{
-        visibility.visible_waiting, //X+
-        visibility.visible_waiting, //Y+
-        visibility.visible_waiting, //Z+
-        visibility.visible_waiting, //X-
-        visibility.visible_waiting, //Y-
-        visibility.visible_waiting //Z-
+        visibility.Visible, //X+
+        visibility.Visible, //Y+
+        visibility.Visible, //Z+
+        visibility.Visible, //X-
+        visibility.Visible, //Y-
+        visibility.Visible //Z-
         }; 
-    public visibility SoilCellsVisibility = visibility.visible_waiting;
+    public visibility SoilCellsVisibility = visibility.Waiting;
 
     // ANIMATION VISIBILITY SETTINGS
     public bool AnimateSoilCellSize = true;
@@ -29,7 +29,7 @@ public class SoilVisualisationSettings{
 
 
     // CAPACITY SETTINGS
-    public float WaterFlowCapacity = 0.2f;
+    public float WaterFlowCapacity = 0.1f;
     public float SteamFlowCapacity = 0.1f;
     
     // MATERIAL SETTINGS

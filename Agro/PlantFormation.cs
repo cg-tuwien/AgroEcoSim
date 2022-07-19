@@ -152,8 +152,8 @@ public partial class PlantFormation : IFormation
 		AG.Tick(world, timestep);
 
 		//Just testing
-		var gltf = GlftHelper.Create(AG.ExportToGLTF());
-		GlftHelper.Export(gltf, $"T{timestep}.gltf");
+		// var gltf = GlftHelper.Create(AG.ExportToGLTF());
+		// GlftHelper.Export(gltf, $"T{timestep}.gltf");
 	}
 
 	public void DeliverPost(uint timestep)

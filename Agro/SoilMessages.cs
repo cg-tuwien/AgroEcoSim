@@ -4,6 +4,8 @@ using System.Runtime.InteropServices;
 using AgentsSystem;
 using Utils;
 
+// using Godot; //Todo: remove this
+
 namespace Agro;
 
 public partial struct SoilAgent : IAgent
@@ -39,24 +41,39 @@ public partial struct SoilAgent : IAgent
 		public readonly SoilFormation DstFormation;
 		public readonly float Amount;
 		public readonly Vector3i DstIndex;
-		public Water_PullFrom(SoilFormation dstFormation, float amount, Vector3i dstID)
+
+		public readonly int SenderFormationID;
+		public readonly direction TransactionDirection;
+		public Water_PullFrom(SoilFormation dstFormation,direction transactionDirection, int formationID, float amount, Vector3i dstID)
 		{
 			DstFormation = dstFormation;
 			Amount = amount;
 			DstIndex = dstID;
+			SenderFormationID = formationID;
+			TransactionDirection = transactionDirection;
 		}
-		public Water_PullFrom(SoilFormation dstFormation, float amount, int dstX, int dstY, int dstZ)
+		public Water_PullFrom(SoilFormation dstFormation,direction transactionDirection, int formationID, float amount, int dstX, int dstY, int dstZ)
 		{
 			DstFormation = dstFormation;
 			Amount = amount;
 			DstIndex = new Vector3i(dstX, dstY, dstZ);
+			SenderFormationID = formationID;
+			TransactionDirection = transactionDirection;
 		}
 		public Transaction Type => Transaction.Decrease;
 		public void Receive(ref SoilAgent srcAgent, uint timestep)
 		{
 			var freeCapacity = Math.Max(0f, DstFormation.GetWaterCapacity(DstIndex) - DstFormation.GetWater(DstIndex));
 			var water = srcAgent.TryDecWater(Math.Min(Amount, freeCapacity));
-			if (water > 0) DstFormation.Send(DstIndex, new WaterInc(water));
+
+			// Vis what could be flowing
+			// DstFormation.WaterFlow[SenderFormationID,(int)TransactionDirection] = Amount;
+
+			if (water > 0){
+				DstFormation.Send(DstIndex, new WaterInc(water));
+				//Vis what is flowing
+				DstFormation.WaterFlow[SenderFormationID,(int)TransactionDirection] = water;
+			}
 			#if HISTORY_LOG
 			lock(TransactionsHistory) TransactionsHistory.Add(new(timestep, ID, srcAgent.ID, DstFormation.GetID(DstIndex), water));
 			#endif

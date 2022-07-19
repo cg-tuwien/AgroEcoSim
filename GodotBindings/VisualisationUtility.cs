@@ -2,7 +2,7 @@ using Godot;
 using System;
 
 
-enum direction{
+public enum direction{
     right,
     up,
     forward,
@@ -12,13 +12,13 @@ enum direction{
 }
 
 class MarkerData{
-    public direction pointing_direction;
+    public direction PointingDirection;
     public Vector3 InitialPosition;
-    public int MarkerOwnerID;
+    public int MarkerOwnerID; //This id is reffering to index in array of soil cell instances
 
-    public MarkerData(direction dir, Vector3 init_pos, int owner_id){
-        pointing_direction = dir;
-        InitialPosition = init_pos;
-        MarkerOwnerID = owner_id;
+    public MarkerData(direction dir, Vector3 initialPosition, int ownerID){
+        PointingDirection = dir;
+        InitialPosition = initialPosition;
+        MarkerOwnerID = ownerID;
     }
 }

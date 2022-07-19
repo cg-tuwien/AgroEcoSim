@@ -49,7 +49,7 @@ public partial struct SoilAgent : IAgent
 			var downDiffusion = Water * GravitationDiffusionCoefPerTick;
 			var sideDiffusion = Water * LateralDiffusionCoef;
 			
-			formation.water_flow[formation.Index(coords),4] = downDiffusion; 
+			// formation.WaterFlow[formation.Index(coords),4] = downDiffusion; 
 
 
 			var lateralFlow = new float[LateralNeighborhood.Length];
@@ -60,7 +60,6 @@ public partial struct SoilAgent : IAgent
 				{
 					if (neighbor.Water < Water)
 					{
-						//Note: Should't lateral flow be half of the diff?
 						var diff = Water - neighbor.Water;
 						lateralFlow[i] = diff;
 						lateralSum += diff;
@@ -71,29 +70,16 @@ public partial struct SoilAgent : IAgent
 			if (anyLateral)
 			{
 				lateralSum = sideDiffusion / lateralSum;
+				direction[] directionMapping = {direction.left,direction.right,direction.forward,direction.backward};
 				for(int i = 0; i < LateralNeighborhood.Length; ++i)
 					if (lateralFlow[i] > 0f)
 					{
 						lateralFlow[i] *= lateralSum;
-						formation.Send(formationID, new Water_PullFrom(formation, lateralFlow[i], coords + LateralNeighborhood[i]));
-						switch(i){
-							case 0:
-								formation.water_flow[formation.Index(coords),3] = lateralFlow[i];
-								break;
-							case 1:
-								formation.water_flow[formation.Index(coords),0] = lateralFlow[i];
-								break;
-							case 2:
-								formation.water_flow[formation.Index(coords),4] = lateralFlow[i];
-								break;
-							case 3:
-								formation.water_flow[formation.Index(coords),2] = lateralFlow[i];
-								break;
-						}
+						formation.Send(formationID, new Water_PullFrom(formation, directionMapping[i], formationID, lateralFlow[i], coords + LateralNeighborhood[i]));
 					}
 			}
 
-			formation.Send(formationID, new Water_PullFrom(formation, downDiffusion, coords.X, coords.Y, coords.Z + 1));
+			formation.Send(formationID, new Water_PullFrom(formation,direction.down, formationID, downDiffusion, coords.X, coords.Y, coords.Z + 1));
 		}
 	}
 	void IncWater(float amount) => Water += amount;

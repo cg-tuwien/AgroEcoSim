@@ -9,35 +9,29 @@ namespace Agro;
 
 public partial class SoilFormation
 {
-	SoilVisualisationSettings parameters = new SoilVisualisationSettings();
-	
-
+	public SoilVisualisationSettings Parameters = new SoilVisualisationSettings();
 	//Todo: Speed of the visualisation could be improved by replacing Mesh with MultiMesh (leveraging identical geo)!!!
-	MeshInstance[] SoilCellInstances;
+	public MeshInstance[] SoilCellInstances;
 
-	MeshInstance[,] MarkerInstances;
+	public MeshInstance[,] MarkerInstances;
 
-	List<MarkerData> MarkerDataStorage;
+	private List<MarkerData> MarkerDataStorage;
 
-
-	float[] FlowTracking;
+	// float[] FlowTracking;
 
 	public override void GodotReady()
 	{
-		if(parameters.Visualise){ //Todo: Check whether the previous condition wasn't dependent on something besides this file
+		if(Parameters.Visualise){ //Todo: Check whether the previous condition wasn't dependent on something besides this file
 			InitializeVisualisation();
 		}
-
-		// parameters.CellCapacity = Agro.SoilAgent.
-
 	}
 
 	public override void GodotProcess(uint timestep)
 	{
-		if(parameters.Visualise){
+		if(Parameters.Visualise){
 			SolveVisibility();
-			if(parameters.MarkerVisibility == visibility.visible_waiting) AnimateMarkers();
-			if(parameters.SoilCellsVisibility == visibility.visible_waiting) AnimateCells();
+			if(Parameters.MarkerVisibility == visibility.Waiting) AnimateMarkers();
+			if(Parameters.SoilCellsVisibility == visibility.Waiting) AnimateCells();
 		}
 	}
 }

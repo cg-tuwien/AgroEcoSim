@@ -6,18 +6,6 @@ using AgentsSystem;
 
 namespace Agro;
 
-
-/*
-TASKS:
-- Cleanup the code
-- Gather lateral diffusion data
-- Fix color issue with the markers
-- Add lateral markers
-- Add full cell outlines
-- Create godot HUD 
-*/
-
-
 public partial class SoilFormation
 {
 
@@ -67,38 +55,44 @@ public partial class SoilFormation
 
     }
 
-    private void InitializeMarker(int parent_index, Vector3 rotation, direction dir){
-        Vector3 parent_pos = SoilCellInstances[parent_index].Translation;
-        MarkerInstances[parent_index,(int) dir] = new MeshInstance();
-        MeshInstance marker = MarkerInstances[parent_index,(int) dir];
-        marker.Translation = parent_pos;
-        marker.Mesh = parameters.MarkerShape;
-        marker.RotateX(rotation.x);
-        marker.RotateY(rotation.y);
-        marker.RotateZ(rotation.z);
-        marker.SetSurfaceMaterial(0,(SpatialMaterial)parameters.MarkerMaterial.Duplicate());
+    private void InitializeMarker(int parentIndex, Vector3 rotation, direction dir){
+        var parentPos = SoilCellInstances[parentIndex].Translation;
 
-        SimulationWorld.GodotAddChild(marker);
+        MarkerInstances[parentIndex,(int) dir] = new MeshInstance();
 
-        MarkerDataStorage.Add(new MarkerData(dir,parent_pos,parent_index));
+        var markerInstance = MarkerInstances[parentIndex,(int) dir];
+
+        markerInstance.Translation = parentPos;
+        markerInstance.Mesh = Parameters.MarkerShape;
+        markerInstance.RotateX(rotation.x);
+        markerInstance.RotateY(rotation.y);
+        markerInstance.RotateZ(rotation.z);
+        markerInstance.SetSurfaceMaterial(0,(SpatialMaterial)Parameters.MarkerMaterial.Duplicate());
+
+        SimulationWorld.GodotAddChild(markerInstance);
+
+        MarkerDataStorage.Add(new MarkerData(dir,parentPos,parentIndex));
     }
 
     private void InitializeCell(int x, int y, int z){
         SoilCellInstances[Index(x,y,z)] = new MeshInstance();
-        SoilCellInstances[Index(x,y,z)].Mesh = parameters.SoilCellShape;
-        SoilCellInstances[Index(x,y,z)].Translation = new Vector3(x,-z,y) * AgroWorld.FieldResolution;
-        SoilCellInstances[Index(x,y,z)].Scale = Vector3.One * parameters.SoilCellScale * AgroWorld.FieldResolution;
-        SoilCellInstances[Index(x,y,z)].SetSurfaceMaterial(0,(SpatialMaterial)parameters.SoilCellMaterial.Duplicate());
 
-        SimulationWorld.GodotAddChild(SoilCellInstances[Index(x,y,z)]);
+        var cellInstance = SoilCellInstances[Index(x,y,z)];
+
+        cellInstance.Mesh = Parameters.SoilCellShape;
+        cellInstance.Translation = new Vector3(x,-z,y) * AgroWorld.FieldResolution;
+        cellInstance.Scale = Vector3.One * Parameters.SoilCellScale * AgroWorld.FieldResolution;
+        cellInstance.SetSurfaceMaterial(0,(SpatialMaterial)Parameters.SoilCellMaterial.Duplicate());
+
+        SimulationWorld.GodotAddChild(cellInstance);
     }
 
     private void AnimateCells(){
         for(int i = 0; i < SoilCellInstances.Length; ++i){
-            float multiplier = Math.Min(Agents[i].WaterMaxCapacity,Math.Max(0,Agents[i].Water))/Agents[i].WaterMaxCapacity;
+            var multiplier = Math.Clamp(Agents[i].Water,0f,Agents[i].WaterMaxCapacity)/Agents[i].WaterMaxCapacity;
 
-            SoilCellInstances[i].Scale = Vector3.One * parameters.SoilCellScale * AgroWorld.FieldResolution * multiplier;
-            ((SpatialMaterial)SoilCellInstances[i].GetSurfaceMaterial(0)).AlbedoColor = multiplier*parameters.FullCellColor + (1-multiplier)*parameters.EmptyCellColor;
+            SoilCellInstances[i].Scale = Vector3.One * Parameters.SoilCellScale * AgroWorld.FieldResolution * multiplier;
+            ((SpatialMaterial)SoilCellInstances[i].GetSurfaceMaterial(0)).AlbedoColor = multiplier*Parameters.FullCellColor + (1-multiplier)*Parameters.EmptyCellColor;
         }
     }
 
@@ -109,57 +103,54 @@ public partial class SoilFormation
     }
 
     private void AnimateMarker(MarkerData marker){
-        float marker_scale = 0f;
+        float markerScale;
 
+        Vector3[] offset  = {Vector3.Right,Vector3.Up,Vector3.Forward,Vector3.Left,Vector3.Down,Vector3.Back};
 
-
-        Vector3[] offset = {Vector3.Right,Vector3.Up,Vector3.Forward,Vector3.Left,Vector3.Down,Vector3.Back};
-        float cell_scale = parameters.SoilCellScale * AgroWorld.FieldResolution * Math.Min(Agents[marker.MarkerOwnerID].WaterMaxCapacity,Math.Max(0,Agents[marker.MarkerOwnerID].Water))/Agents[marker.MarkerOwnerID].WaterMaxCapacity;
+        float cellScale = Parameters.SoilCellScale * AgroWorld.FieldResolution * Math.Min(Agents[marker.MarkerOwnerID].WaterMaxCapacity,Math.Max(0,Agents[marker.MarkerOwnerID].Water))/Agents[marker.MarkerOwnerID].WaterMaxCapacity;
         
-        float flow = water_flow[marker.MarkerOwnerID,(int)marker.pointing_direction];
-        float appearance_multiplier = Math.Max(0,Math.Min(parameters.WaterFlowCapacity,flow))/parameters.WaterFlowCapacity;
+        var flow = WaterFlow[marker.MarkerOwnerID,(int)marker.PointingDirection];
+        var appearanceMultiplier = Math.Max(0,Math.Min(Parameters.WaterFlowCapacity,flow))/Parameters.WaterFlowCapacity;
 
-        if(parameters.AnimateMarkerSize){
-            marker_scale = cell_scale*parameters.MarkerScale*appearance_multiplier;
-        }
-        else{
-            marker_scale = cell_scale*parameters.MarkerScale;
-        }
+        if(Parameters.AnimateMarkerSize) markerScale = cellScale*Parameters.MarkerScale*appearanceMultiplier;
+        else markerScale = cellScale*Parameters.MarkerScale;
 
-        float offset_multiplier = cell_scale/2 + marker_scale/2;
-        var mesh = MarkerInstances[marker.MarkerOwnerID,(int)marker.pointing_direction];
-        mesh.Translation = marker.InitialPosition + offset[(int)marker.pointing_direction]*offset_multiplier;
-        mesh.Scale = Vector3.One * marker_scale;
-        ((SpatialMaterial)mesh.GetSurfaceMaterial(0)).AlbedoColor = appearance_multiplier*parameters.FullFlowColor + (1-appearance_multiplier)*parameters.NoFlowColor;
+        var offsetMultiplier = cellScale/2 + markerScale/2;
+
+        var mesh = MarkerInstances[marker.MarkerOwnerID,(int)marker.PointingDirection];
+        mesh.Translation = marker.InitialPosition + offset[(int)marker.PointingDirection]*offsetMultiplier;
+        mesh.Scale = Vector3.One * markerScale;
+
+        ((SpatialMaterial)mesh.GetSurfaceMaterial(0)).AlbedoColor = appearanceMultiplier*Parameters.FullFlowColor + (1-appearanceMultiplier)*Parameters.NoFlowColor;
     }
 
     private void SolveVisibility(){
-        if(parameters.MarkerVisibility == visibility.visible){
+        if(Parameters.MarkerVisibility == visibility.Visible){
             SetMarkersVisibility(true);
-            parameters.MarkerVisibility = visibility.visible_waiting;
+            Parameters.MarkerVisibility = visibility.Waiting;
         }
-        else if(parameters.MarkerVisibility == visibility.invisible){
+        else if(Parameters.MarkerVisibility == visibility.Invisible){
             SetMarkersVisibility(false);
-            parameters.MarkerVisibility = visibility.invisible_waiting;
+            Parameters.MarkerVisibility = visibility.Waiting;
         }
 
-        if(parameters.SoilCellsVisibility == visibility.visible){
+        if(Parameters.SoilCellsVisibility == visibility.Visible){
             SetCellsVisibility(true);
-            parameters.SoilCellsVisibility = visibility.visible_waiting;
+            Parameters.SoilCellsVisibility = visibility.Waiting;
         }
-        else if(parameters.SoilCellsVisibility == visibility.invisible){
+        else if(Parameters.SoilCellsVisibility == visibility.Invisible){
             SetCellsVisibility(false);
-            parameters.SoilCellsVisibility = visibility.invisible_waiting;
+            Parameters.SoilCellsVisibility = visibility.Waiting;
         }
 
         for(int i = 0; i < 6; i++){
-            if(parameters.IndividualMarkerDirectionVisibility[i] == visibility.visible){
+            if(Parameters.IndividualMarkerDirectionVisibility[i] == visibility.Visible){
                 SetMarkersVisibility(true,(direction)i);
-                parameters.IndividualMarkerDirectionVisibility[i] = visibility.visible_waiting;
+                Parameters.IndividualMarkerDirectionVisibility[i] = visibility.Waiting;
             }
-            else if(parameters.IndividualMarkerDirectionVisibility[i] == visibility.invisible){
+            else if(Parameters.IndividualMarkerDirectionVisibility[i] == visibility.Invisible){
                 SetMarkersVisibility(false,(direction)i);
-                parameters.IndividualMarkerDirectionVisibility[i] = visibility.invisible_waiting;
+                Parameters.IndividualMarkerDirectionVisibility[i] = visibility.Waiting;
             }
         }
 
