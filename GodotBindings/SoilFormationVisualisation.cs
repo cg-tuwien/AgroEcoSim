@@ -43,7 +43,7 @@ public partial class SoilFormation
 		new Vector3(-MathF.PI/2, 0, 0),
 		new Vector3(0, 0, MathF.PI/2),
 		new Vector3(0, 0, MathF.PI),
-		new Vector3(MathF.PI/2,0,0)
+		new Vector3(MathF.PI/2, 0, 0)
 	};
 
 	//CodeReview: This is used frequently in AnimateMaker, but there is no noeed to recompute it for each marker in each frame
@@ -54,12 +54,12 @@ public partial class SoilFormation
 		var coordsDiff = Coords(dstIndex) - Coords(srcIndex);
 		return coordsDiff switch
 		{
-			Vector3i(1, 0, 0) => 3, //CodeReview: this is really strange, didn't find the reason yet
-			Vector3i(0, 1, 0) => 2,
-			Vector3i(0, 0, 1) => 1,
-			Vector3i(-1, 0, 0) => 0,
-			Vector3i(0, -1, 0) => 5,
-			Vector3i(0, 0, -1) => 4,
+			Vector3i(1, 0, 0) => 0,
+			Vector3i(0, 1, 0) => 5, //CodeReview: this is really strange, didn't find the reason for 5-1 instead of 1-5 yet
+			Vector3i(0, 0, 1) => 4,
+			Vector3i(-1, 0, 0) => 3,
+			Vector3i(0, -1, 0) => 2,
+			Vector3i(0, 0, -1) => 1,
 			_ => throw new Exception("Cells passed to GetDir are no direct neighbors.")
 		};
 	}
@@ -160,8 +160,8 @@ public partial class SoilFormation
 			var srcIndex = IDToIndex[transactions[i].SourceID - MinID];
 			var dstIndex = IDToIndex[transactions[i].TargetID - MinID];
 			var dir = GetDir(srcIndex, dstIndex);
-			WaterFlow[srcIndex * 6 + dir] -= amount;
-			WaterFlow[dstIndex * 6 + InvertDir(dir)] += amount;
+			WaterFlow[srcIndex * 6 + dir] += amount;
+			WaterFlow[dstIndex * 6 + InvertDir(dir)] -= amount;
 		}
 
 		foreach(var marker in MarkerDataStorage)
