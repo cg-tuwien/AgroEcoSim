@@ -42,7 +42,7 @@ public partial class SoilFormation
 		Vector3.Zero,
 		new Vector3(-MathF.PI/2, 0, 0),
 		new Vector3(0, 0, MathF.PI/2),
-		new Vector3(0, 0, MathF.PI),
+		new Vector3(MathF.PI, 0, 0),
 		new Vector3(MathF.PI/2, 0, 0)
 	};
 
