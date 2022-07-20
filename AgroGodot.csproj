@@ -17,7 +17,7 @@
 
   <Target Name="Clean60" BeforeTargets="GenerateTargetFrameworkMonikerAttribute">
     <Message Importance="normal" Text="Removing build files" />
-    <Exec Command="rm -rf `find . -type d -regex '^\.\/[^\.].*bin$'`" Timeout="100"/>
-    <Exec Command="rm -rf `find . -type d -regex '^\.\/[^\.].*obj$'`" Timeout="100"/>
+    <Exec Command="rm -rf `find . -type d -regex '^\.\/[^\.].*bin$'`"/>
+    <Exec Command="rm -rf `find . -type d -regex '^\.\/[^\.].*obj$'`"/>
   </Target>
 </Project>

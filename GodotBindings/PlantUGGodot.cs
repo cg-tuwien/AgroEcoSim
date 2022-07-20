@@ -23,7 +23,7 @@ public class Plant_UG_Godot  : PlantAbstractGodot<UnderGroundAgent>
 
 		var basis = new Basis(orientation.ToGodot());
 		sprite.Transform = new Transform(basis, (Formation.GetBaseCenter(index) + stableScale).ToGodot());
-		sprite.Scale = new Vector3(length, radius, radius);
+		sprite.Scale = Formation.GetScale(index).ToGodot();
 
 		((SpatialMaterial)sprite.GetSurfaceMaterial(0)).AlbedoColor = ColorCoding(index, FormationColorCoding);
 	}

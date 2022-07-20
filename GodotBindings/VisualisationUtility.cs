@@ -3,12 +3,12 @@ using System;
 
 
 enum Direction{
-    right,
-    up,
-    forward,
-    left,
-    down,
-    backward
+    Right,
+    Up,
+    Forward,
+    Left,
+    Down,
+    Backward
 }
 
 class MarkerData{
@@ -16,9 +16,9 @@ class MarkerData{
     public Vector3 InitialPosition;
     public int CellIndex;
 
-    public MarkerData(Direction dir, Vector3 init_pos, int owner_index){
+    public MarkerData(Direction dir, Vector3 initialPosition, int ownerIndex){
         PointingDirection = dir;
-        InitialPosition = init_pos;
-        CellIndex = owner_index;
+        InitialPosition = initialPosition;
+        CellIndex = ownerIndex;
     }
 }

@@ -6,7 +6,6 @@ using AgentsSystem;
 
 namespace Agro;
 
-
 public partial class SoilFormation
 {
 	SoilVisualisationSettings Parameters = new()
@@ -25,13 +24,10 @@ public partial class SoilFormation
 
 	private List<MarkerData> MarkerDataStorage;
 
-	// float[] FlowTracking;
-
 	public override void GodotReady()
 	{
-		if(Parameters.Visualise){ //Todo: Check whether the previous condition wasn't dependent on something besides this file
+		if(Parameters.Visualise) //Todo: Check whether the previous condition wasn't dependent on something besides this file
 			InitializeVisualisation();
-		}
 	}
 
 	public override void GodotProcess(uint timestep)
@@ -39,8 +35,8 @@ public partial class SoilFormation
 		if(Parameters.Visualise)
 		{
 			SolveVisibility();
-			if(Parameters.MarkerVisibility == visibility.Waiting) AnimateMarkers();
-			if(Parameters.SoilCellsVisibility == visibility.Waiting) AnimateCells();
+			if(Parameters.MarkerVisibility == Visibility.Waiting) AnimateMarkers();
+			if(Parameters.SoilCellsVisibility == Visibility.Waiting) AnimateCells();
 		}
 	}
 }

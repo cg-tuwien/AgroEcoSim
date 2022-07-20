@@ -23,10 +23,7 @@ public partial class Plant_AG_Godot : PlantAbstractGodot<AboveGroundAgent>
 
 		var basis = new Basis(orientation.ToGodot());
 		sprite.Transform = new Transform(basis, (Formation.GetBaseCenter(index) + stableScale).ToGodot());
-		if (Formation.GetOrgan(index) == OrganTypes.Leaf)
-			sprite.Scale = new Vector3(length, 0.0001f, radius);
-		else
-			sprite.Scale = new Vector3(length, radius, radius);
+		sprite.Scale = Formation.GetScale(index).ToGodot();
 
 		((SpatialMaterial)sprite.GetSurfaceMaterial(0)).AlbedoColor = ColorCoding(index, FormationColorCoding);
 	}

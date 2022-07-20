@@ -92,8 +92,8 @@ public partial class SoilFormation
 		MarkerInstances = new MeshInstance[Agents.Length, 6];
 
 		var maxID = ulong.MinValue;
-		foreach(Direction dir in Enum.GetValues(typeof(Direction))) //CodeReview: this iterates an array, not sure if it is created each time GetValues is called, so I make it the outer loop
-			for (int a = 0; a < Agents.Length; a++) //CodeReview: no need for 3 for cycles + Index()
+		foreach(Direction dir in Enum.GetValues(typeof(Direction)))
+			for (int a = 0; a < Agents.Length; a++)
 			{
 				InitializeMarker(a, dir);
 				var id = Agents[a].ID;
@@ -110,6 +110,7 @@ public partial class SoilFormation
 	private void InitializeMarker(int parent_index, Direction dir){
 		var parent_pos = SoilCellInstances[parent_index].Translation;
 		var dirIndex = (int)dir;
+
 		var marker = new MeshInstance() {
 			Translation = parent_pos + MarkerOffsets[dirIndex],
 			Rotation = Rotations[dirIndex],
@@ -117,9 +118,8 @@ public partial class SoilFormation
 		};
 		marker.SetSurfaceMaterial(0, (SpatialMaterial)Parameters.MarkerMaterial.Duplicate());
 
-		//CodeReview: This is the correct order. Otherwise you make one unnecessary array lookup.
-		MarkerInstances[parent_index, dirIndex] = marker;
 
+		MarkerInstances[parent_index, dirIndex] = marker;
 		SimulationWorld.GodotAddChild(marker);
 
 		MarkerDataStorage.Add(new(dir, parent_pos, parent_index));
@@ -200,32 +200,32 @@ public partial class SoilFormation
 	}
 
 	private void SolveVisibility(){
-		if(Parameters.MarkerVisibility == visibility.Visible){
+		if(Parameters.MarkerVisibility == Visibility.Visible){
 			SetMarkersVisibility(true);
-			Parameters.MarkerVisibility = visibility.Waiting;
+			Parameters.MarkerVisibility = Visibility.Waiting;
 		}
-		else if(Parameters.MarkerVisibility == visibility.Invisible){
+		else if(Parameters.MarkerVisibility == Visibility.Invisible){
 			SetMarkersVisibility(false);
-			Parameters.MarkerVisibility = visibility.Waiting;
+			Parameters.MarkerVisibility = Visibility.Waiting;
 		}
 
-		if(Parameters.SoilCellsVisibility == visibility.Visible){
+		if(Parameters.SoilCellsVisibility == Visibility.Visible){
 			SetCellsVisibility(true);
-			Parameters.SoilCellsVisibility = visibility.Waiting;
+			Parameters.SoilCellsVisibility = Visibility.Waiting;
 		}
-		else if(Parameters.SoilCellsVisibility == visibility.Invisible){
+		else if(Parameters.SoilCellsVisibility == Visibility.Invisible){
 			SetCellsVisibility(false);
-			Parameters.SoilCellsVisibility = visibility.Waiting;
+			Parameters.SoilCellsVisibility = Visibility.Waiting;
 		}
 
 		for(int i = 0; i < 6; i++){
-			if(Parameters.IndividualMarkerDirectionVisibility[i] == visibility.Visible){
+			if(Parameters.IndividualMarkerDirectionVisibility[i] == Visibility.Visible){
 				SetMarkersVisibility(true,(Direction)i);
-				Parameters.IndividualMarkerDirectionVisibility[i] = visibility.Waiting;
+				Parameters.IndividualMarkerDirectionVisibility[i] = Visibility.Waiting;
 			}
-			else if(Parameters.IndividualMarkerDirectionVisibility[i] == visibility.Invisible){
+			else if(Parameters.IndividualMarkerDirectionVisibility[i] == Visibility.Invisible){
 				SetMarkersVisibility(false,(Direction)i);
-				Parameters.IndividualMarkerDirectionVisibility[i] = visibility.Waiting;
+				Parameters.IndividualMarkerDirectionVisibility[i] = Visibility.Waiting;
 			}
 		}
 
