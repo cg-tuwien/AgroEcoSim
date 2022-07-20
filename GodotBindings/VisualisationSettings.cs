@@ -3,29 +3,31 @@ using System;
 
 enum marker_mode{Steam,Water,Sum};
 
-public enum visibility{Visible,Invisible,Waiting}; //Waiting state is used to prevent visibility changes once set to desired visibility
+public enum visibility{Visible,Invisible,VisibleWaiting,InivisibleWaiting}; //Waiting state is used to prevent visibility changes once set to desired visibility
 
 public class SoilVisualisationSettings{
     public bool Visualise = true; //This can turn on/off the entire visualisation
 
     // VISIBILITY SETTINGS
-    public visibility MarkerVisibility = visibility.Visible;
+    public visibility MarkerVisibility = visibility.VisibleWaiting;
     public visibility[] IndividualMarkerDirectionVisibility = new visibility[]{
-        visibility.Visible, //X+
-        visibility.Visible, //Y+
-        visibility.Visible, //Z+
-        visibility.Visible, //X-
-        visibility.Visible, //Y-
-        visibility.Visible //Z-
+        visibility.VisibleWaiting, //X+
+        visibility.VisibleWaiting, //Y+
+        visibility.VisibleWaiting, //Z+
+        visibility.VisibleWaiting, //X-
+        visibility.VisibleWaiting, //Y-
+        visibility.VisibleWaiting //Z-
         };
-    public visibility SoilCellsVisibility = visibility.Waiting;
+    public visibility SoilCellsVisibility = visibility.VisibleWaiting;
 
     // ANIMATION VISIBILITY SETTINGS
     public bool AnimateSoilCellSize = true;
     public bool AnimateMarkerSize = false;
     public bool AnimateSoilCellColor = true;
-    public bool AnimateDownwardMarkerColor = true;
-    public bool AnimateLateralMarkerColor = true;
+
+    public bool AnimateMarkerColor = true;
+    // public bool AnimateDownwardMarkerColor = true;
+    // public bool AnimateLateralMarkerColor = true;
 
     // MATERIAL SETTINGS
     public SpatialMaterial SoilCellMaterial = new SpatialMaterial {AlbedoColor = new(0.5f,0.5f,0.5f)};

@@ -7,8 +7,11 @@ using Agro;
 
 public class MultiagentSystem : Spatial
 {
+	[Export]
+	public PackedScene HudScene;
 	bool paused = false;
-	bool pressed = false;
+
+	HUD hud;
 	List<MeshInstance> Sprites = new List<MeshInstance>();
 	
 	SimulationWorld World;
@@ -26,13 +29,19 @@ public class MultiagentSystem : Spatial
 		SimulationWorld.GodotRemoveChild = node => RemoveChild(node);
 		Translation = new Vector3(-0.5f * AgroWorld.FieldSize.X, 0f, -0.5f * AgroWorld.FieldSize.Z);
 
-		World = Initialize.World();	
+		World = Initialize.World();
+
+		hud = (HUD)HudScene.Instance();
+		hud.Load((SoilVisualisationSettings)((SoilFormation)World.Formations[0]).Parameters);
+		AddChild(hud);
+
+		// GetNode<HUD>("HUD").Load((SoilVisualisationSettings)((SoilFormation)World.Formations[0]).Parameters);
 	}
 
 //  // Called every frame. 'delta' is the elapsed time since the previous frame.
 	public override void _Process(float delta)
 	{
-		solve_input();
+		paused = hud.Paused;
 
 		if(!paused){
 			Time += delta;
@@ -44,15 +53,13 @@ public class MultiagentSystem : Spatial
 					GD.Print($"Simulation successfully finished after {AgroWorld.TimestepsTotal} timesteps.");
 			}
 		}
+		if(hud.RecentChange){
+			((SoilFormation)World.Formations[0]).GodotProcess(0);
+			hud.RecentChange = false;
+			GD.Print("test");
+		}
+
 	}
 
-	private void solve_input(){
-		if(Input.IsActionPressed("stop") && !pressed){
-			paused = !paused;
-			pressed = true;
-		}
-		else if(!Input.IsActionPressed("stop") && pressed){
-			pressed = false;
-		}
-	}
+	
 }

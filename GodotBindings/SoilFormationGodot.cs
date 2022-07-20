@@ -9,7 +9,7 @@ namespace Agro;
 
 public partial class SoilFormation
 {
-	SoilVisualisationSettings Parameters = new()
+	public SoilVisualisationSettings Parameters = new()
 	{
 		FullCellColor = Colors.Blue,
 		EmptyCellColor = Colors.Black,
@@ -32,6 +32,8 @@ public partial class SoilFormation
 		if(Parameters.Visualise){ //Todo: Check whether the previous condition wasn't dependent on something besides this file
 			InitializeVisualisation();
 		}
+
+		// SetMarkersVisibility(false);
 	}
 
 	public override void GodotProcess(uint timestep)
@@ -39,8 +41,10 @@ public partial class SoilFormation
 		if(Parameters.Visualise)
 		{
 			SolveVisibility();
-			if(Parameters.MarkerVisibility == visibility.Waiting) AnimateMarkers();
-			if(Parameters.SoilCellsVisibility == visibility.Waiting) AnimateCells();
+			//if(Parameters.MarkerVisibility == visibility.VisibleWaiting) 
+			AnimateMarkers();
+			//if(Parameters.SoilCellsVisibility == visibility.VisibleWaiting) 
+			AnimateCells();
 		}
 	}
 }

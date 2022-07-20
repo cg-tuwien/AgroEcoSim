@@ -22,7 +22,7 @@ driver="Dummy"
 
 [editor_plugins]
 
-enabled=PoolStringArray( "res://addons/goutte.camera.trackball/plugin.cfg", "res://addons/multiagent_system/plugin.cfg" )
+enabled=PoolStringArray(  )
 
 [input]
 
