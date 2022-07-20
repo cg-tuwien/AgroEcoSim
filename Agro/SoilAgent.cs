@@ -41,7 +41,7 @@ public partial struct SoilAgent : IAgent
 
 		//CodeReview: I used this trick to better visualize the lateral flow.
 		//  Now only one corner cell gets water, so in order to spread it needs the lateral flow
-		if (coords.Z == 0 && coords.X == 0 && coords.Y == 0) // cells at z = 0 are above the ground, infinitely tall so no capacity restrictions for them
+		if (coords.Z == 0 /*&& coords.X == 0 && coords.Y == 0*/) // cells at z = 0 are above the ground, infinitely tall so no capacity restrictions for them
 			Water += AgroWorld.GetWater(timestep) * FieldCellSurface;
 
 		//if (Water > WaterMinSaturation)
