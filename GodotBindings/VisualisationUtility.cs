@@ -2,7 +2,7 @@ using Godot;
 using System;
 
 
-enum Direction{
+public enum Direction{
     right,
     up,
     forward,

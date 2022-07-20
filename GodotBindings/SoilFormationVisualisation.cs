@@ -7,16 +7,6 @@ using Utils;
 
 namespace Agro;
 
-/*
-TASKS:
-- Cleanup the code
-- Gather lateral diffusion data
-- Fix color issue with the markers
-- Add lateral markers
-- Add full cell outlines
-- Create godot HUD
-*/
-
 /* Flow directions
 Note: y is up
 0 ... [1,0,0]
@@ -183,17 +173,15 @@ public partial class SoilFormation
 
 	private void AnimateMarker(MarkerData marker)
 	{
-		float marker_scale = 0f;
+		var markerScale = 0f;
 		var dir = (int)marker.PointingDirection;
-
-		var cell_scale = ComputeCellScale(ComputeCellMultiplier(marker.CellIndex));
-
-		// var cell_scale = Parameters.SoilCellScale * AgroWorld.FieldResolution * Math.Clamp(Agents[marker.CellIndex].Water/Agents[marker.CellIndex].WaterMaxCapacity, 0f, 1f);
+		var cellScale = ComputeCellScale(ComputeCellMultiplier(marker.CellIndex));
 
 		var flow = WaterFlow[marker.CellIndex * 6 + dir];
-		var appearance_multiplier = Math.Clamp(flow / (Agents[marker.CellIndex].WaterMaxCapacity * SoilAgent.SoilDiffusionCoefPerTick * 5f), 0f, 1f);
+		var appearanceMultiplier = Math.Clamp(flow / (Agents[marker.CellIndex].WaterMaxCapacity * SoilAgent.SoilDiffusionCoefPerTick * 5f), 0f, 1f);
 
 		var mesh = MarkerInstances[marker.CellIndex, dir];
+
 		//CodeReview: Many markers will be zero! Perhaps just use the else branch to hide them
 		// if (Parameters.AnimateMarkerSize && flow == 0f)
 		// {
@@ -203,53 +191,39 @@ public partial class SoilFormation
 		// }
 
 		//CodeReview: for simple conditions better use ? : then if else
-		marker_scale = cell_scale * (Parameters.AnimateMarkerSize ? Parameters.MarkerScale * appearance_multiplier : Parameters.MarkerScale);
+
+		markerScale = cellScale * (Parameters.AnimateMarkerSize ? Parameters.MarkerScale * appearanceMultiplier : Parameters.MarkerScale);
 		//CodeReview: this way you can save one division
-		var offset_multiplier = (cell_scale + marker_scale) * 0.5f;
-		mesh.Translation = marker.InitialPosition + MarkerOffsets[dir] * offset_multiplier;
-		mesh.Scale = Vector3.One * marker_scale;
+		var offsetMultiplier = (cellScale + markerScale) * 0.5f;
+		mesh.Translation = marker.InitialPosition + MarkerOffsets[dir] * offsetMultiplier;
+		mesh.Scale = Vector3.One * markerScale;
 		// mesh.Visible = true;
 
 		if(Parameters.AnimateMarkerColor)
-			((SpatialMaterial)mesh.GetSurfaceMaterial(0)).AlbedoColor = appearance_multiplier * Parameters.FullFlowColor + (1f - appearance_multiplier) * Parameters.NoFlowColor;
+			((SpatialMaterial)mesh.GetSurfaceMaterial(0)).AlbedoColor = appearanceMultiplier * Parameters.FullFlowColor + (1f - appearanceMultiplier) * Parameters.NoFlowColor;
 		else
 			((SpatialMaterial)mesh.GetSurfaceMaterial(0)).AlbedoColor = Parameters.FullFlowColor;
 
+		if(Parameters.MarkerVisibility == visibility.VisibleWaiting)
+			SolveAnimationMarkerVisibility(mesh,dir,flow == 0f);
 
 		if(flow == 0f){
 			mesh.Scale = Vector3.Zero;
 		}
 	}
 
+	public void SolveAnimationMarkerVisibility(MeshInstance mesh, int direction, bool vis){
+		if(vis && Parameters.IndividualMarkerDirectionVisibility[direction] == visibility.VisibleWaiting){
+			mesh.Visible = false;
+		}
+		else if(Parameters.IndividualMarkerDirectionVisibility[direction] == visibility.VisibleWaiting){
+			mesh.Visible = true;
+		}
+	}
+
 	public void SolveVisibility(){
 		SolveCellVisibility();
 		SolveMarkerVisibility();
-
-		
-		
-		
-		
-		// if(Parameters.MarkerVisibility == visibility.Visible){
-		// 	SetMarkersVisibility(true);
-		// 	Parameters.MarkerVisibility = visibility.Waiting;
-		// }
-		// else if(Parameters.MarkerVisibility == visibility.Invisible){
-		// 	SetMarkersVisibility(false);
-		// 				GD.Print("asdasdasfasdfasdfasdf");
-		// 	Parameters.MarkerVisibility = visibility.Waiting;
-		// }
-
-		// for(int i = 0; i < 6; i++){
-		// 	if(Parameters.IndividualMarkerDirectionVisibility[i] == visibility.Visible){
-		// 		SetMarkersVisibility(true,(Direction)i);
-		// 		Parameters.IndividualMarkerDirectionVisibility[i] = visibility.VisibleWaiting;
-		// 	}
-		// 	else if(Parameters.IndividualMarkerDirectionVisibility[i] == visibility.Invisible){
-		// 		SetMarkersVisibility(false,(Direction)i);
-		// 		Parameters.IndividualMarkerDirectionVisibility[i] = visibility.InivisibleWaiting;
-		// 	}
-		// }
-
 	}
 
 	private void SolveMarkerVisibility(){
@@ -292,8 +266,6 @@ public partial class SoilFormation
 			Parameters.SoilCellsVisibility = visibility.InivisibleWaiting;
 		}
 	}
-
-
 
 	private void SetMarkersVisibility(bool flag){
 		for(int i = 0; i < 6; i++){
