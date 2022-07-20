@@ -4,11 +4,26 @@ using System;
 using System.Collections.Generic;
 using AgentsSystem;
 using Agro;
+
+public enum MenuStatus{
+    EnteredWaiting,
+    LeftWaiting,
+    Left,
+    Entered
+}
 public class HUD : CanvasLayer
 {
+	// [Signal]
+	// public delegate void EnteredMenu();
+
+	// [Signal]
+	// public delegate void LeftMenu();
+
     private SoilVisualisationSettings Parameters;
     public bool Paused = false;
     public bool RecentChange = false;
+
+    public MenuStatus MenuState = MenuStatus.LeftWaiting;
 
     public override void _Ready()
     {
@@ -113,6 +128,16 @@ public class HUD : CanvasLayer
     public void MarkerEmptyColor(Color color){
         Parameters.NoFlowColor = color;
         RecentChange = true;
+    }
+
+    public void MenuEntered(){
+        if(MenuState == MenuStatus.LeftWaiting)
+            MenuState = MenuStatus.Entered;
+    }
+
+    public void MenuLeft(){
+        if(MenuState == MenuStatus.EnteredWaiting)
+            MenuState = MenuStatus.Left;
     }
 
 }

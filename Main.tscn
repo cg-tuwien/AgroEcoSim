@@ -14,3 +14,6 @@ stabilize_horizon = true
 [node name="MultiagentSystem" type="Spatial" parent="."]
 script = ExtResource( 2 )
 HudScene = ExtResource( 3 )
+
+[connection signal="EnteredMenu" from="MultiagentSystem" to="TrackballCamera" method="_on_MultiagentSystem_EnteredMenu"]
+[connection signal="LeftMenu" from="MultiagentSystem" to="TrackballCamera" method="_on_MultiagentSystem_LeftMenu"]

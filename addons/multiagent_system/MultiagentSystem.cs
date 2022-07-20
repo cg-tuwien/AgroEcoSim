@@ -9,7 +9,16 @@ public class MultiagentSystem : Spatial
 {
 	[Export]
 	public PackedScene HudScene;
-	bool paused = false;
+
+	[Signal]
+	public delegate void EnteredMenu();
+
+	[Signal]
+	public delegate void LeftMenu();
+
+
+	bool Paused = false;
+	bool Notified = false;
 
 	HUD hud;
 	List<MeshInstance> Sprites = new List<MeshInstance>();
@@ -20,6 +29,7 @@ public class MultiagentSystem : Spatial
 	// Called when the node enters the scene tree for the first time.
 	public override void _Ready()
 	{
+		// EmitSignal("LeftMenu");
 #if GODOT
 		GD.Print("GODOT is defined properly.");
 #else
@@ -41,9 +51,17 @@ public class MultiagentSystem : Spatial
 //  // Called every frame. 'delta' is the elapsed time since the previous frame.
 	public override void _Process(float delta)
 	{
-		paused = hud.Paused;
+		Paused = hud.Paused;
+		if(hud.MenuState == MenuStatus.Entered){
+			EmitSignal("EnteredMenu");
+			hud.MenuState = MenuStatus.EnteredWaiting;
+		}
+		else if(hud.MenuState == MenuStatus.Left){
+			EmitSignal("LeftMenu");
+			hud.MenuState = MenuStatus.LeftWaiting;
+		}
 
-		if(!paused){
+		if(!Paused){
 			Time += delta;
 			if (World.Timestep < AgroWorld.TimestepsTotal)
 			{
@@ -56,7 +74,6 @@ public class MultiagentSystem : Spatial
 		if(hud.RecentChange){
 			((SoilFormation)World.Formations[0]).GodotProcess(0);
 			hud.RecentChange = false;
-			GD.Print("test");
 		}
 
 	}
