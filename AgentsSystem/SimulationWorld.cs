@@ -65,11 +65,11 @@ public partial class SimulationWorld
 		{
 			TickSequential(Timestep);
 			DeliverPostSequential(Timestep);
+			CensusSequential();
 #if GODOT
 			foreach(var item in Formations)
 				item.GodotProcess(Timestep);
 #endif
-			CensusSequential();
 		}
 	}
 
@@ -79,11 +79,11 @@ public partial class SimulationWorld
 		{
 			TickParallel(Timestep);
 			DeliverPostParallel(Timestep);
+			CensusParallel();
 #if GODOT
 			foreach(var item in Formations)
 				item.GodotProcess(Timestep);
 #endif
-			CensusParallel();
 		}
 	}
 
