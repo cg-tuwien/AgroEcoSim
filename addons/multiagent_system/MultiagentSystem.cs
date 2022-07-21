@@ -7,13 +7,14 @@ using Agro;
 
 public class MultiagentSystem : Spatial
 {
-	bool paused = false;
-	bool pressed = false;
+	bool Paused = false;
+	bool Pressed = false;
+	bool SingleStep = false;
 	List<MeshInstance> Sprites = new List<MeshInstance>();
-	
+
 	SimulationWorld World;
-	
-	float Time = 0f;
+
+	//float Time = 0f;
 	// Called when the node enters the scene tree for the first time.
 	public override void _Ready()
 	{
@@ -21,38 +22,47 @@ public class MultiagentSystem : Spatial
 		GD.Print("GODOT is defined properly.");
 #else
 		GD.Print("ERROR: GODOT is not defined!");
-#endif		
+#endif
 		SimulationWorld.GodotAddChild = node => AddChild(node);
 		SimulationWorld.GodotRemoveChild = node => RemoveChild(node);
 		Translation = new Vector3(-0.5f * AgroWorld.FieldSize.X, 0f, -0.5f * AgroWorld.FieldSize.Z);
 
-		World = Initialize.World();	
+		World = Initialize.World();
 	}
 
-//  // Called every frame. 'delta' is the elapsed time since the previous frame.
+	/// <summary>
+	/// Called every frame
+	/// </summay>
+	/// <param name="delta">'Elapsed time since the previous frame</param>
 	public override void _Process(float delta)
 	{
-		solve_input();
+		SolveInput();
 
-		if(!paused){
-			Time += delta;
+		if(!Paused)
+		{
+			//Time += delta;
 			if (World.Timestep < AgroWorld.TimestepsTotal)
 			{
 				World.Run(1);
-			
+
 				if (World.Timestep == AgroWorld.TimestepsTotal - 1)
 					GD.Print($"Simulation successfully finished after {AgroWorld.TimestepsTotal} timesteps.");
 			}
+			Paused = SingleStep;
 		}
 	}
 
-	private void solve_input(){
-		if(Input.IsActionPressed("stop") && !pressed){
-			paused = !paused;
-			pressed = true;
+	private void SolveInput()
+	{
+		if(Input.IsActionPressed("stop") && !Pressed)
+		{
+			if (Paused)
+				SingleStep = Input.IsActionPressed("ctrl");
+
+			Paused = !Paused;
+			Pressed = true;
 		}
-		else if(!Input.IsActionPressed("stop") && pressed){
-			pressed = false;
-		}
+		else if(!Input.IsActionPressed("stop") && Pressed)
+			Pressed = false;
 	}
 }
