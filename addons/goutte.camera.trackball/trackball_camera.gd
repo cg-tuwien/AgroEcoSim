@@ -131,6 +131,14 @@ func ready():
 	set_process_input(true)
 	set_process(true)
 
+	print(self.name)
+	var currentParent = get_parent()
+	print(currentParent)
+	print(currentParent.get_parent())
+	var panSpatial = Spatial.new()
+	currentParent.call_deferred("remove_child", self)
+	currentParent.call_deferred("add_child", panSpatial)
+	panSpatial.call_deferred("add_child", self)
 	# It's best to catch future divisions by 0 before they happen.
 	# Note that we don't need this check if the mouse support is disabled.
 	# In case you know what you're doing, there's a property you can change.
@@ -184,7 +192,11 @@ func process_mouse(delta):
 		elif Input.is_mouse_button_pressed(BUTTON_RIGHT):
 			add_move_inertia(
 				(_currentDragPosition - _mouseDragPosition) \
-				* mouse_strength * (-0.1 if mouse_invert else 0.1))			
+				* mouse_strength * (-0.1 if mouse_invert else 0.1))
+		elif Input.is_mouse_button_pressed(BUTTON_MIDDLE):
+			add_zoom_inertia(
+				(_currentDragPosition.y - _mouseDragPosition.y) \
+				* mouse_strength * (-0.4 if mouse_invert else 0.4))
 		_mouseDragPosition = _currentDragPosition
 
 
@@ -387,7 +399,7 @@ func apply_movement_from_tangent(tangent):
 	var tr = get_transform()
 	var left = tr.basis.xform(Vector3.LEFT).normalized()
 	var up = tr.basis.xform(Vector3.UP).normalized()	
-	global_translate(tangent.x * left + tangent.y * up)
+	get_parent().global_translate(tangent.x * left + tangent.y * up)
 
 func get_mouse_position():
 	return (

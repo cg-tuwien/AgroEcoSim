@@ -9,6 +9,7 @@
 transform = Transform( 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 2 )
 script = ExtResource( 1 )
 stabilize_horizon = true
+zoom_minimum = 0.003
 
 [node name="MultiagentSystem" type="Spatial" parent="."]
 script = ExtResource( 2 )
