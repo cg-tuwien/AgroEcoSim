@@ -64,5 +64,20 @@ public class MultiagentSystem : Spatial
 		}
 		else if(!Input.IsActionPressed("stop") && Pressed)
 			Pressed = false;
+
+		if (GlobalPauseRequest)
+		{
+			Paused = true;
+			GlobalPauseRequest = false;
+		}
 	}
+
+	static bool GlobalPauseRequest;
+	/// <summary>
+	//Useful for debug to trigger pause as follows:<br/>
+	//<c>#if GODOT<br/>
+	//MultiagentSystem.TriggerPause();<br/>
+	//#endif<br/><c/>
+	/// </summary>
+	public static void TriggerPause() => GlobalPauseRequest = true;
 }
