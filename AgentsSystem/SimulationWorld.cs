@@ -63,13 +63,13 @@ public partial class SimulationWorld
 	{
 		for(uint i = 0U; i < simulationLength; ++i, ++Timestep)
 		{
-			CensusSequential();
 			TickSequential(Timestep);
 			DeliverPostSequential(Timestep);
 #if GODOT
 			foreach(var item in Formations)
 				item.GodotProcess(Timestep);
 #endif
+			CensusSequential();
 		}
 	}
 
@@ -77,13 +77,13 @@ public partial class SimulationWorld
 	{
 		for(uint i = 0U; i < simulationLength; ++i, ++Timestep)
 		{
-			CensusParallel();
 			TickParallel(Timestep);
 			DeliverPostParallel(Timestep);
 #if GODOT
 			foreach(var item in Formations)
 				item.GodotProcess(Timestep);
 #endif
+			CensusParallel();
 		}
 	}
 

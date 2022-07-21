@@ -17,16 +17,14 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 	public readonly PlantFormation Plant;
 	//Once GODOT supports C# 6.0: Make it a List and then for processing send System.Runtime.InteropServices.CollectionsMarshal.AsSpan(Stems);
 	bool ReadTMP = false;
-	protected T[] Agents = Array.Empty<T>();
-	protected T[] AgentsTMP = Array.Empty<T>();
-	protected readonly PostBox<T> Post = new();
-
-	protected List<T> Births = new();
-	protected List<T> Inserts = new();
-	protected List<int> InsertAncestors = new();
-	//protected bool ParentUpdates = false;
-	protected HashSet<int> Deaths = new();
-	protected List<int> DeathsHelper = new();
+	T[] Agents = Array.Empty<T>();
+	T[] AgentsTMP = Array.Empty<T>();
+	readonly PostBox<T> Post = new();
+	readonly List<T> Births = new();
+	readonly List<T> Inserts = new();
+	readonly List<int> InsertAncestors = new();
+	readonly HashSet<int> Deaths = new();
+	readonly List<int> DeathsHelper = new();
 
 	public PlantSubFormation(PlantFormation plant, Action<T[], int[]> reindex)
 	{

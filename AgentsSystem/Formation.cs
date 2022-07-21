@@ -92,7 +92,6 @@ public abstract class Formation<T> : IFormation where T : struct, IAgent
 		var (src, dst) = SrcDst();
 
 		Array.Copy(src, dst, src.Length);
-		//for(int i = 0; i < AgentsTMP.Length; ++i)
 		for(int i = 0; i < dst.Length; ++i)
 			dst[i].Tick(world, this, i, timestep);
 
