@@ -15,9 +15,9 @@
 
   <!-- TODO for win something like here https://superuser.com/questions/1580436/how-to-delete-matching-directories-recursively-using-windows-command -->
 
-  <Target Name="Clean60" BeforeTargets="GenerateTargetFrameworkMonikerAttribute">
+  <!-- <Target Name="Clean60" BeforeTargets="GenerateTargetFrameworkMonikerAttribute">
     <Message Importance="normal" Text="Removing build files" />
     <Exec Command="rm -rf `find . -type d -regex '^\.\/[^\.].*bin$'`" Timeout="100"/>
     <Exec Command="rm -rf `find . -type d -regex '^\.\/[^\.].*obj$'`" Timeout="100"/>
-  </Target>
+  </Target> -->
 </Project>
