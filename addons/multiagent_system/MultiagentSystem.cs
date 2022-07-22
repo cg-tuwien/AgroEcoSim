@@ -56,7 +56,7 @@ public class MultiagentSystem : Spatial
 			EmitSignal("EnteredMenu");
 			hud.MenuState = MenuStatus.EnteredWaiting;
 		}
-		else if(hud.MenuState == MenuStatus.Left){
+		else if(hud.MenuState == MenuStatus.Left && hud.ColorEditorOpen == false){
 			EmitSignal("LeftMenu");
 			hud.MenuState = MenuStatus.LeftWaiting;
 		}

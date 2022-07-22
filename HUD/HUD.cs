@@ -22,6 +22,7 @@ public class HUD : CanvasLayer
     private SoilVisualisationSettings Parameters;
     public bool Paused = false;
     public bool RecentChange = false;
+    public bool ColorEditorOpen = false;
 
     public MenuStatus MenuState = MenuStatus.LeftWaiting;
 
@@ -37,6 +38,10 @@ public class HUD : CanvasLayer
 
     public void Load(SoilVisualisationSettings parameters){
         Parameters = parameters;
+        parameters.FullCellColor = GetNode<ColorPickerButton>("Color/Cell/Full").Color;
+        parameters.EmptyCellColor = GetNode<ColorPickerButton>("Color/Cell/Empty").Color;
+        parameters.NoFlowColor = GetNode<ColorPickerButton>("Color/Marker/Full").Color;
+        parameters.FullFlowColor = GetNode<ColorPickerButton>("Color/Marker/Empty").Color;
     }
 
     public void AllMarkersVisibility(bool flag){
@@ -140,4 +145,11 @@ public class HUD : CanvasLayer
             MenuState = MenuStatus.Left;
     }
 
+    public void ColorOpen(){
+        ColorEditorOpen = true;
+    }
+
+    public void ColorClosed(){
+        ColorEditorOpen = false;
+    }
 }

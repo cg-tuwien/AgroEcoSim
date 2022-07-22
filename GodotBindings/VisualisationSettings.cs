@@ -35,18 +35,18 @@ public class SoilVisualisationSettings{
     public SpatialMaterial MarkerMaterial = new SpatialMaterial {AlbedoColor = new(0f,0.2f,0.6f)};
 
     // COLOR SETTINGS
-    public Color FullCellColor = new(71f/255f,39f/255f,11f/255f);
-    public Color EmptyCellColor = new(148f/255f,143f/255f,130f/255f);
+    public Color FullCellColor = new(57f/255f,37f/255f,29f/255f);
+    public Color EmptyCellColor = new(124/255f,124f/255f,124f/255f);
 
-    public Color NoFlowColor = new(0.2f,0.2f,0.2f);
-    public Color FullFlowColor = new(0.2f,0.2f,1f);
+    public Color NoFlowColor = new(173f/255f,160f/255f,139f/255f);
+    public Color FullFlowColor = new(40f/255f,101f/255f,179f/255f);
 
     // SHAPES (SHOULD BE UNIT-SIZED)
     public Mesh SoilCellShape = GeoBuilder.UnitCube();
     public Mesh MarkerShape = GeoBuilder.UnitPyramid4();
 
     // SCALE SETTINGS
-    public float SoilCellScale = 0.25f;
-    public float MarkerScale = 0.75f;
+    public float SoilCellScale = 0.5f;
+    public float MarkerScale = 0.5f;
 
 }

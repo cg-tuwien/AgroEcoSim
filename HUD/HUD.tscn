@@ -293,19 +293,19 @@ margin_bottom = 557.0
 rect_pivot_offset = Vector2( -388, -120 )
 text = "Cell"
 
-[node name="ColorPickerButton3" type="ColorPickerButton" parent="Color/Cell"]
+[node name="Full" type="ColorPickerButton" parent="Color/Cell"]
 margin_left = 60.0
 margin_top = 540.0
 margin_right = 96.0
 margin_bottom = 560.0
-color = Color( 0.317647, 0.12549, 0.0470588, 1 )
+color = Color( 0.223529, 0.145098, 0.113725, 1 )
 
-[node name="ColorPickerButton" type="ColorPickerButton" parent="Color/Cell"]
+[node name="Empty" type="ColorPickerButton" parent="Color/Cell"]
 margin_left = 13.0
 margin_top = 540.0
 margin_right = 49.0
 margin_bottom = 560.0
-color = Color( 0.376471, 0.388235, 0.368627, 1 )
+color = Color( 0.486275, 0.486275, 0.486275, 1 )
 
 [node name="Marker" type="Node" parent="Color"]
 
@@ -317,20 +317,20 @@ margin_bottom = 586.0
 rect_pivot_offset = Vector2( -388, -120 )
 text = "Marker"
 
-[node name="ColorPickerButton" type="ColorPickerButton" parent="Color/Marker"]
+[node name="Full" type="ColorPickerButton" parent="Color/Marker"]
 margin_left = 60.0
 margin_top = 569.0
 margin_right = 96.0
 margin_bottom = 589.0
 rect_pivot_offset = Vector2( -236, -616 )
-color = Color( 0, 0.439216, 1, 1 )
+color = Color( 0.156863, 0.396078, 0.701961, 1 )
 
-[node name="ColorPickerButton2" type="ColorPickerButton" parent="Color/Marker"]
+[node name="Empty" type="ColorPickerButton" parent="Color/Marker"]
 margin_left = 13.0
 margin_top = 569.0
 margin_right = 49.0
 margin_bottom = 589.0
-color = Color( 0.72549, 0.584314, 0.517647, 1 )
+color = Color( 0.678431, 0.627451, 0.545098, 1 )
 
 [node name="X+9" type="Label" parent="Color"]
 anchor_left = 2.77
@@ -394,18 +394,26 @@ text = "PAUSE"
 [connection signal="mouse_entered" from="Size/Marker/HSlider" to="." method="MenuEntered"]
 [connection signal="mouse_exited" from="Size/Marker/HSlider" to="." method="MenuLeft"]
 [connection signal="value_changed" from="Size/Marker/HSlider" to="." method="MarkerSize"]
-[connection signal="color_changed" from="Color/Cell/ColorPickerButton3" to="." method="CellFullColor"]
-[connection signal="mouse_entered" from="Color/Cell/ColorPickerButton3" to="." method="MenuEntered"]
-[connection signal="mouse_exited" from="Color/Cell/ColorPickerButton3" to="." method="MenuLeft"]
-[connection signal="color_changed" from="Color/Cell/ColorPickerButton" to="." method="CellEmptyColor"]
-[connection signal="mouse_entered" from="Color/Cell/ColorPickerButton" to="." method="MenuEntered"]
-[connection signal="mouse_exited" from="Color/Cell/ColorPickerButton" to="." method="MenuLeft"]
-[connection signal="color_changed" from="Color/Marker/ColorPickerButton" to="." method="MarkerFullColor"]
-[connection signal="mouse_entered" from="Color/Marker/ColorPickerButton" to="." method="MenuEntered"]
-[connection signal="mouse_exited" from="Color/Marker/ColorPickerButton" to="." method="MenuLeft"]
-[connection signal="color_changed" from="Color/Marker/ColorPickerButton2" to="." method="MarkerEmptyColor"]
-[connection signal="mouse_entered" from="Color/Marker/ColorPickerButton2" to="." method="MenuEntered"]
-[connection signal="mouse_exited" from="Color/Marker/ColorPickerButton2" to="." method="MenuLeft"]
+[connection signal="color_changed" from="Color/Cell/Full" to="." method="CellFullColor"]
+[connection signal="mouse_entered" from="Color/Cell/Full" to="." method="MenuEntered"]
+[connection signal="mouse_exited" from="Color/Cell/Full" to="." method="MenuLeft"]
+[connection signal="popup_closed" from="Color/Cell/Full" to="." method="ColorClosed"]
+[connection signal="pressed" from="Color/Cell/Full" to="." method="ColorOpen"]
+[connection signal="color_changed" from="Color/Cell/Empty" to="." method="CellEmptyColor"]
+[connection signal="mouse_entered" from="Color/Cell/Empty" to="." method="MenuEntered"]
+[connection signal="mouse_exited" from="Color/Cell/Empty" to="." method="MenuLeft"]
+[connection signal="popup_closed" from="Color/Cell/Empty" to="." method="ColorClosed"]
+[connection signal="pressed" from="Color/Cell/Empty" to="." method="ColorOpen"]
+[connection signal="color_changed" from="Color/Marker/Full" to="." method="MarkerFullColor"]
+[connection signal="mouse_entered" from="Color/Marker/Full" to="." method="MenuEntered"]
+[connection signal="mouse_exited" from="Color/Marker/Full" to="." method="MenuLeft"]
+[connection signal="popup_closed" from="Color/Marker/Full" to="." method="ColorClosed"]
+[connection signal="pressed" from="Color/Marker/Full" to="." method="ColorOpen"]
+[connection signal="color_changed" from="Color/Marker/Empty" to="." method="MarkerEmptyColor"]
+[connection signal="mouse_entered" from="Color/Marker/Empty" to="." method="MenuEntered"]
+[connection signal="mouse_exited" from="Color/Marker/Empty" to="." method="MenuLeft"]
+[connection signal="popup_closed" from="Color/Marker/Empty" to="." method="ColorClosed"]
+[connection signal="pressed" from="Color/Marker/Empty" to="." method="ColorOpen"]
 [connection signal="mouse_entered" from="Button" to="." method="MenuEntered"]
 [connection signal="mouse_exited" from="Button" to="." method="MenuLeft"]
 [connection signal="pressed" from="Button" to="." method="pause"]
