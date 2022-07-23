@@ -196,7 +196,7 @@ func process_mouse(delta):
 		elif Input.is_mouse_button_pressed(BUTTON_MIDDLE):
 			add_zoom_inertia(
 				(_currentDragPosition.y - _mouseDragPosition.y) \
-				* mouse_strength * (-0.4 if mouse_invert else 0.4))
+				* mouse_strength * (0.4 if mouse_invert else -0.4))
 		_mouseDragPosition = _currentDragPosition
 
 
@@ -341,7 +341,7 @@ func apply_constraints(on_transform):
 
 func apply_pitch_constraint(on_transform):
 	var eulers = on_transform.basis.get_euler()
-	
+
 	var dxu = QUARTER_CIRCLE * pitch_up_limit + eulers.x
 	var dxd = QUARTER_CIRCLE * pitch_down_limit - eulers.x
 	var limit_will = 0
@@ -356,7 +356,7 @@ func apply_pitch_constraint(on_transform):
 		_turnInertia.y = 0.0
 #		_turnInertia *= 0.618
 		var resistance_strength = (((1 - limit_over) * (1 - limit_over)) - 1)
-		
+
 		add_turn_inertia((
 			limit_will * Vector2.UP  # direction
 			* 0.00282  # role: yield a sane behavior with defaults
@@ -364,7 +364,7 @@ func apply_pitch_constraint(on_transform):
 			* pitch_limit_strength  # allow scaling with other strengths?
 			))
 		# …or modify the transform directly, but it's jittery
-	
+
 	return on_transform
 
 
@@ -398,7 +398,7 @@ func apply_rotation_from_tangent(tangent):
 func apply_movement_from_tangent(tangent):
 	var tr = get_transform()
 	var left = tr.basis.xform(Vector3.LEFT).normalized()
-	var up = tr.basis.xform(Vector3.UP).normalized()	
+	var up = tr.basis.xform(Vector3.UP).normalized()
 	get_parent().global_translate(tangent.x * left + tangent.y * up)
 
 func get_mouse_position():
