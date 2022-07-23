@@ -52,7 +52,7 @@ public partial struct AboveGroundAgent : IPlantAgent
 	/// </summary>
 	float mPhotoFactor;
 
-	public float WoodRatio => 1f - mPhotoFactor;
+	public readonly float WoodRatio => 1f - mPhotoFactor;
 
 	/// <summary>
 	/// Plant organ, e.g. stem, leaft, fruit
@@ -103,7 +103,12 @@ public partial struct AboveGroundAgent : IPlantAgent
 	/// <summary>
 	/// Water volume in m³ which can be stored in this agent
 	/// </summary>
-	public readonly float WaterStorageCapacity => 4f * Radius * Radius * Length * WaterCapacityRatio;
+	public static float WaterStorageCapacityfunction(float radius, float length) => 4f * radius * radius * length * WaterCapacityRatio;
+
+	/// <summary>
+	/// Water volume in m³ which can be stored in this agent
+	/// </summary>
+	public readonly float WaterStorageCapacity => WaterStorageCapacityfunction(Radius, Length);
 
 	/// <summary>
 	/// Water volume in m³ which can flow through per hour, or can be stored in this agent
@@ -124,9 +129,9 @@ public partial struct AboveGroundAgent : IPlantAgent
 	//without any energy gains if its storage is initially full
 	const float EnergyStorageCoef = 24 * 31 * 3; //3 months
 
-	static float EnergyCapacityFunc(float radius, float length) => 4f * radius * radius * length * (1f - WaterCapacityRatio) * EnergyStorageCoef;
+	static float EnergyCapacityFunc(float radius, float length, float woodRatio) => 4f * radius * radius * length * (1f + woodRatio) * EnergyStorageCoef;
 
-	public readonly float EnergyStorageCapacity => EnergyCapacityFunc(Radius, Length);
+	public readonly float EnergyStorageCapacity => EnergyCapacityFunc(Radius, Length, WoodRatio);
 
 
 	public AboveGroundAgent(int parent, OrganTypes organ, Quaternion orientation, float initialEnergy, float radius = InitialRadius, float length = InitialLength)
@@ -183,8 +188,10 @@ public partial struct AboveGroundAgent : IPlantAgent
 		var children = formation.GetChildren(formationID);
 		var energyRequestedFromParent = false;
 
+		var enoughEnergyState = lifeSupportPerHour * 36;
+
 		//Growth
-		if (Energy > lifeSupportPerHour * 36) //maybe make it a factor storedEnergy/lifeSupport so that it grows fast when it has full storage
+		if (Energy > enoughEnergyState) //maybe make it a factor storedEnergy/lifeSupport so that it grows fast when it has full storage
 		{
 			if (Organ != OrganTypes.Shoot)
 			{
@@ -242,7 +249,7 @@ public partial struct AboveGroundAgent : IPlantAgent
 							Radius = Radius * 0.7f + childrenRadius * 0.3f;
 						}
 					}
-					else
+					else //if (children.Count > 0)
 					{
 						var waterFactor = Math.Clamp(Water / WaterStorageCapacity, 0f, 1f);
 						//var energyFactor = Math.Clamp(Energy / EnergyStorageCapacity, 0f, 1f);
@@ -259,11 +266,13 @@ public partial struct AboveGroundAgent : IPlantAgent
 							var qz = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, plant.RNG.NextFloat(MathF.PI * zFactor, MathF.PI * zFactor * 2f));
 							//var q = qz * qx * Orientation;
 							var orientation = Orientation * qx * qz;
-							var energy = EnergyCapacityFunc(InitialRadius, InitialLength);
-							var stem = formation.Birth(new(formationID, OrganTypes.Stem, orientation, energy * 0.5f));
-							var leafStem = formation.Birth(new(stem, OrganTypes.Stem, orientation, energy * 0.3f));
-							formation.Birth(new(leafStem, OrganTypes.Leaf, orientation, energy * 0.2f));
-							Energy -= 2f * energy; //twice because some energy is needed for the birth itself
+							var energy = EnergyCapacityFunc(InitialRadius, InitialLength, 0f);
+							var water = WaterStorageCapacityfunction(InitialRadius, InitialLength);
+							var stem = formation.Birth(new(formationID, OrganTypes.Stem, orientation, energy) { Water = water } );
+							var leafStem = formation.Birth(new(stem, OrganTypes.Stem, orientation, energy) { Water = water });
+							formation.Birth(new(leafStem, OrganTypes.Leaf, orientation, energy) { Water = water } );
+							Energy -= 6f * energy; //2x because some energy is needed for the birth itself
+							Water -= 3f * water;
 							//Console.WriteLine($"New root branched to {formationID} at time {timestep}");
 						}
 					}
@@ -276,10 +285,14 @@ public partial struct AboveGroundAgent : IPlantAgent
 			if (Parent >= 0)
 			{
 				var parentEnergy = formation.GetEnergy(Parent);
-				if (parentEnergy > Energy)
+				if (parentEnergy > Energy && parentEnergy > enoughEnergyState)
 				{
-					energyRequestedFromParent = true;
-					plant.Send(Parent, new Energy_PullFrom(formation, Math.Min(EnergyFlowToParentPerTick, parentEnergy - Energy), formationID));
+					var requestedAmount = Math.Min(Math.Min(EnergyFlowToParentPerTick, parentEnergy - Energy), parentEnergy - enoughEnergyState);
+					if (requestedAmount > 0f)
+					{
+						energyRequestedFromParent = true;
+						plant.Send(Parent, new Energy_PullFrom(formation, Math.Min(EnergyFlowToParentPerTick, requestedAmount), formationID));
+					}
 				}
 			}
 		}
