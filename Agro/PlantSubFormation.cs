@@ -7,7 +7,7 @@ using AgentsSystem;
 using glTFLoader.Schema;
 using Utils;
 using NumericHelpers;
-
+using System.Collections;
 
 namespace Agro;
 
@@ -450,4 +450,86 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 		return nodes;
 	}
 	#endregion
+
+	#if DEBUG
+	readonly struct DebugTreeData
+	{
+		public readonly int Index;
+		public readonly int Offset;
+		public readonly bool NewLine;
+		public DebugTreeData(int index, int offset, bool newLine)
+		{
+			Index = index;
+			Offset = offset;
+			NewLine = newLine;
+		}
+		public static int NumStrLength(int number) => number < 10 ? 1 : (int)Math.Ceiling(MathF.Log10(number + 0.1f));
+	}
+
+	/// <summary>
+	///
+	/// </summary>
+	/*
+	Usage:
+	#if DEBUG
+		Console.WriteLine(DebugTreePrint(src));
+	#endif
+	*/
+	public static string DebugTreePrint(T[] tree)
+	{
+		var sb = new System.Text.StringBuilder();
+		var stack = new Stack<DebugTreeData>();
+
+
+		var children = new List<DebugTreeData>();
+		var firstChild = true;
+		for(int i = 0; i < tree.Length; ++i)
+			if( tree[i].Parent == -1)
+			{
+				children.Add(new(i, 0, !firstChild));
+				firstChild = false;
+			}
+
+		for(int i = children.Count - 1; i >= 0; --i) //reverse push
+			stack.Push(children[i]);
+
+		const string rootStr = "(: > ";
+
+		while (stack.Count > 0)
+		{
+			var data = stack.Pop();
+			var offset = data.Offset;
+			if (data.NewLine)
+			{
+				sb.AppendLine();
+				for(int i = 0; i < data.Offset; ++i)
+					sb.Append(' ');
+			}
+
+			if (data.Offset == 0)
+			{
+				sb.Append($"{rootStr}{data.Index}");
+				offset += rootStr.Length + DebugTreeData.NumStrLength(data.Index);
+			}
+			else
+			{
+				sb.Append($" > {data.Index}");
+				offset += 3 + DebugTreeData.NumStrLength(data.Index);
+			}
+
+			children.Clear();
+			firstChild = true;
+			for(int i = 0; i < tree.Length; ++i)
+				if (tree[i].Parent == data.Index)
+				{
+					children.Add(new(i, offset, !firstChild));
+					firstChild = false;
+				}
+
+			for(int i = children.Count - 1; i >= 0; --i) //reverse push
+				stack.Push(children[i]);
+		}
+		return sb.ToString();
+	}
+	#endif
 }
