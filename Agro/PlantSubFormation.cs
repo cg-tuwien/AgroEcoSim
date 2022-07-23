@@ -130,57 +130,84 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 				DeathsHelper.Sort();
 			}
 
-			//filter out addidions to death parts
-			bool anyRemoved;
-			var localRemoved = new HashSet<int>();
-			do
-			{
-				anyRemoved = false;
-				for(int i = Births.Count - 1; i >= 0; --i)
-				{
-					var p = Births[i].Parent;
-					if (Deaths.Contains(p) || localRemoved.Contains(p))
-					{
-						Births.RemoveAt(i);
-						localRemoved.Add(src.Length + i);
-						anyRemoved = true;
-					}
-				}
-			}
-			while (anyRemoved);
-
-			do
-			{
-				anyRemoved = false;
-				for(int i = Inserts.Count - 1; i >= 0; --i)
-				{
-					var p = Inserts[i].Parent;
-					if (Deaths.Contains(p) || localRemoved.Contains(p))
-					{
-						Inserts.RemoveAt(i);
-						InsertAncestors.RemoveAt(i);
-						localRemoved.Add(src.Length + Births.Count + i);
-						anyRemoved = true;
-					}
-				}
-			}
-			while (anyRemoved);
-
-			if (Inserts.Count > 0)
-			{
-				for(int i = 0; i < Inserts.Count; ++i)
-				{
-					var index = src.Length + Births.Count - Deaths.Count + i;
-					src[InsertAncestors[i]].CensusUpdateParent(index);
-				}
-			}
-
 			var diff = Births.Count + Inserts.Count - Deaths.Count;
+
+			//filter out addidions to death parts
+			BitArray? birthsHelper = null, insertsHelper = null;
+			if (Deaths.Count > 0)
+			{
+				bool anyRemoved;
+				var localRemoved = new HashSet<int>();
+				if (Births.Count > 0)
+				{
+					do
+					{
+						anyRemoved = false;
+						for(int i = Births.Count - 1; i >= 0; --i)
+						{
+							var index = src.Length + i;
+							if (!localRemoved.Contains(index))
+							{
+								var p = Births[i].Parent;
+								if (Deaths.Contains(p) || localRemoved.Contains(p))
+								{
+									localRemoved.Add(index);
+									anyRemoved = true;
+								}
+							}
+						}
+					}
+					while (anyRemoved);
+				}
+
+				if (Inserts.Count > 0)
+				{
+					do
+					{
+						anyRemoved = false;
+						for(int i = Inserts.Count - 1; i >= 0; --i)
+						{
+							var index = src.Length + Births.Count + i;
+							if (!localRemoved.Contains(index))
+							{
+								var p = Inserts[i].Parent;
+								if (Deaths.Contains(p) || localRemoved.Contains(p))
+								{
+									localRemoved.Add(index);
+									anyRemoved = true;
+								}
+							}
+						}
+					}
+					while (anyRemoved);
+				}
+
+				if (localRemoved.Count > 0)
+				{
+					diff -= localRemoved.Count;
+					if (Births.Count > 0)
+					{
+						birthsHelper = new BitArray(Births.Count, true);
+						for(int i = 0; i < Births.Count; ++i)
+							if (localRemoved.Contains(src.Length + i))
+								birthsHelper.Set(i, false);
+					}
+
+					if (Inserts.Count > 0)
+					{
+						insertsHelper = new BitArray(Inserts.Count, true);
+						for(int i = 0; i < Inserts.Count; ++i)
+							if (localRemoved.Contains(src.Length + Births.Count + i))
+								insertsHelper.Set(i, false);
+					}
+				}
+			}
+
 			var tmp = diff != 0 ? new T[src.Length + diff] : dst;
 
 			if (Deaths.Count > 0)
 			{
-				var indexMap = new int[src.Length + Births.Count +  Inserts.Count];
+				var indexMap = new int[src.Length + Births.Count + Inserts.Count];
 				Array.Fill(indexMap, -1);
 #if GODOT
 				for(var i = DeathsHelper.Count - 1; i >= 0; --i)
@@ -215,21 +242,29 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 				}
 
 				var birthsCount = Births.Count;
-				for(int i = 0; i < birthsCount; ++i, ++a)
-				{
-					indexMap[src.Length + i] = a;
-					tmp[a] = Births[i];
-				}
+				for(int i = 0; i < birthsCount; ++i)
+					if (birthsHelper?.Get(i) ?? true)
+					{
+						indexMap[src.Length + i] = a;
+						tmp[a++] = Births[i];
+					}
 
 				var insertsCount = Inserts.Count;
-				for(int i = 0; i < insertsCount; ++i, ++a)
-				{
-					indexMap[src.Length + i] = a;
-					tmp[a] = Inserts[i];
-				}
+				var insertsUpdateMap = Inserts.Count > 0 ? new int[Inserts.Count] : Array.Empty<int>();
+				for(int i = 0; i < insertsCount; ++i)
+					if (insertsHelper?.Get(i) ?? true)
+					{
+						indexMap[src.Length + i] = a;
+						insertsUpdateMap[i] = a;
+						tmp[a++] = Inserts[i];
+					}
 
 				if (indexMap != null)
 					Reindex(tmp, indexMap);
+
+				for(int i = 0; i < insertsCount; ++i)
+					if (insertsHelper?.Get(i) ?? true)
+						tmp[indexMap?[InsertAncestors[i]] ?? InsertAncestors[i]].CensusUpdateParent(insertsUpdateMap[i]);
 
 				Deaths.Clear();
 			}
@@ -244,7 +279,10 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 
 				var insertsCount = Inserts.Count;
 				for(int i = 0; i < insertsCount; ++i, ++a)
+				{
 					tmp[a] = Inserts[i];
+					tmp[InsertAncestors[i]].CensusUpdateParent(a);
+				}
 			}
 
 			if (ReadTMP)
