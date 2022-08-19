@@ -3,11 +3,13 @@ using System.Linq;
 using System.Reflection;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using System.Diagnostics;
 
 namespace AgentsSystem;
 public partial class SimulationWorld
 {
 	internal readonly List<IFormation> Formations = new();
+	internal readonly List<Action<uint, IList<IFormation>>> Callbacks = new();
 	public uint Timestep { get; private set; }
 
 	#if TICK_LOG
@@ -32,7 +34,9 @@ public partial class SimulationWorld
 		#endif
 	}
 
-	public void Add(IFormation formation)
+    public void ForEach(Action<IFormation> action) => Formations.ForEach(formation => action(formation));
+
+    public void Add(IFormation formation)
 	{
 		Formations.Add(formation);
 #if GODOT
@@ -189,19 +193,27 @@ public partial class SimulationWorld
 		}
 	}
 
+    public void AddCallback(Action<uint, IList<IFormation>> callback) => Callbacks.Add(callback);
+
+    public void ExecCallbacks()
+	{
+		foreach(var callback in Callbacks)
+			callback(Timestep, Formations);
+	}
+
 	#if HISTORY_LOG || TICK_LOG
-	public string HistoryToJSON()
+	public string HistoryToJSON(int timestep = -1)
 	{
 		var sb = new System.Text.StringBuilder();
 		//assuming all formations are present all the time (no additions or removals)
 		sb.Append("{ \"Formations\": [ ");
 		for(int i = 0; i < Formations.Count; ++i)
 		{
-			sb.Append(Formations[i].HistoryToJSON());
+			sb.Append(Formations[i].HistoryToJSON(timestep));
 			if (i < Formations.Count - 1)
 				sb.Append(", ");
 		}
-		sb.Append("], \"Transactions\": {");
+		sb.Append("], \"Message\": {");
 
 		var anyMessagesType = false;
 		foreach(var assembly in AppDomain.CurrentDomain.GetAssemblies().ToArray()) //ToArray is required for NET6
@@ -210,7 +222,28 @@ public partial class SimulationWorld
 				{
 					anyMessagesType = true;
 					sb.Append($"\"{type.FullName}\": ");
-					sb.Append(Utils.Export.Json(type.GetField("TransactionsHistory", BindingFlags.Public | BindingFlags.Static).GetValue(null)));
+					var data = type.GetField("MessagesHistory", BindingFlags.Public | BindingFlags.Static).GetValue(null);
+#if HISTORY_LOG
+					if (timestep < 0)
+#endif
+						sb.Append(Utils.Export.Json(data));
+#if HISTORY_LOG
+					else
+					{
+						var timestepData = new List<object>();
+						var t = data.GetType();
+						var count = (int)t.GetProperty("Count").GetValue(data);
+						var get = t.GetMethod("get_Item");
+						for(int i = 0; i < count; ++i)
+						{
+							var item = get.Invoke(data, new object[]{i});
+							var typedItem = (IMsgLogData)item;
+							if (typedItem.TimeStep == timestep)
+								timestepData.Add(item);
+						}
+						sb.Append(Utils.Export.Json(timestepData));
+					}
+#endif
 					sb.Append(", ");
 				}
 

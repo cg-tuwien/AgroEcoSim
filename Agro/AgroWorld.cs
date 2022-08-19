@@ -1,10 +1,14 @@
 using Utils;
+using System;
+using System.IO;
 using System.Diagnostics;
 using System.Numerics;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
+using AgentsSystem;
+using System.Text;
 
 namespace Agro;
 
@@ -28,15 +32,15 @@ public readonly struct WeatherStats
 }
 
 public static class AgroWorld {
-    public const int TicksPerHour = 10;
+    public static uint TicksPerHour = 1;
     //public const int TotalHours = 24 * 365 * 10;
-    public const int TotalHours = 24 * 31 * 3;
+    public static uint TotalHours = 24 * 31 * 1;
 
     //public static readonly Vector3 FieldSize = new(6f, 4f, 2f);
     //public const float FieldResolution = 0.1f;
 
-    public static readonly Vector3 FieldSize = new(12f, 8f, 3f); //2D size and the last component is depth
-    public const float FieldResolution = 0.5f;
+    public static Vector3 FieldSize = new(20f, 10f, 3f); //2D size and the last component is depth
+    public static float FieldResolution = 0.5f;
 
     public const float Latitude = 48.208333f;
     public const float Longitude = 16.3725f;
@@ -48,7 +52,7 @@ public static class AgroWorld {
 
     static readonly int[] DaysPerMonth = new[]{31,28,31,30,31,30,31,31,30,31,30,31};
 
-    public const int TimestepsTotal = TicksPerHour * TotalHours;
+    public static uint TimestepsTotal = TicksPerHour * TotalHours;
 
     static AgroWorld()
     {
@@ -92,12 +96,12 @@ public static class AgroWorld {
 
         Weather = new WeatherStats[TimestepsTotal];
         var tsRemain = TimestepsTotal;
-        var tsCounter = 0;
+        var tsCounter = 0U;
         var month = 0;
         while (tsRemain > 0)
         {
             var monthly = PlanCloudsSingleMonth(month + 1, DaysPerMonth[month], sunnyDays[month], cloudyDays[month], dullDays[month], precipitationMM[month], dailyPrecipitation[month]);
-            var monthlyLength = Math.Min(Weather.Length - tsCounter, monthly.Length); //shorten if not the whole month is taken
+            var monthlyLength = (uint)Math.Min(Weather.Length - tsCounter, monthly.Length); //shorten if not the whole month is taken
             Array.Copy(monthly, 0, Weather, tsCounter, monthlyLength);
             month = month < 11 ? month + 1 : 0;
             tsRemain -= monthlyLength;
@@ -170,7 +174,7 @@ public static class AgroWorld {
         var dullHoursTarget = Math.Max(0, (int)Math.Round(RNG.NextNormal(dullDays * 24, 0.15 * dullDays * 24)));
         var cloudHoursTarget = Math.Max(0, hoursInMonth - sunHoursTarget - dullHoursTarget);
         var dullHours = 0;
-        var dullIntervals = new List<int>();
+        var dullIntervals = new List<uint>();
         var lowDull = 1;
         var highDull = Math.Min(24*10, hoursInMonth - sunHoursTarget - cloudHoursTarget); //10 days
         while (dullHours < dullHoursTarget)
@@ -181,7 +185,8 @@ public static class AgroWorld {
                 interval = Math.Min(interval, RNG.Next(lowDull, highDull, maxExclusive: false));
             if (dullHours + interval > dullHoursTarget)
                 interval = dullHoursTarget - dullHours;
-            dullIntervals.Add(interval);
+            Debug.Assert(interval >= 0);
+            dullIntervals.Add((uint)interval);
             dullHours += interval;
         }
 
@@ -297,7 +302,7 @@ public static class AgroWorld {
         {
             if (dullTurn)
             {
-                var cloudDistribution = RNG.NextFloats( TicksPerHour * dullIntervals[di], 0.5f, 1.0f);
+                var cloudDistribution = RNG.NextFloats((int)(TicksPerHour * dullIntervals[di]), 0.5f, 1.0f);
                 var rainDistribution = new float[cloudDistribution.Length];
                 Array.Copy(cloudDistribution, rainDistribution, cloudDistribution.Length);
                 var rainPeriodCharacter = RNG.NextFloat(0.5f, 0.9f);
@@ -315,7 +320,7 @@ public static class AgroWorld {
                 for(int j = 0; j < cloudDistribution.Length; ++j)
                     result[hi + j] = new WeatherStats(cloudDistribution[j], rainDistribution[j]);
 
-                hi += dullIntervals[di] * TicksPerHour;
+                hi += (int)(dullIntervals[di] * TicksPerHour);
                 ++di;
             }
             else
@@ -326,7 +331,7 @@ public static class AgroWorld {
                     var (low,high) = s > 0 ? (0f, 0.25f) : (0.25f, 0.5f);
                     for (int j = 0; j < sca; ++j)
                         result[hi+j] = new WeatherStats(RNG.NextFloat(low, high), 0f);
-                    hi += sca * TicksPerHour;
+                    hi += (int)(sca * TicksPerHour);
                 }
                 ++si;
             }
@@ -335,4 +340,306 @@ public static class AgroWorld {
 
         return result;
     }
+
+
+    public static List<float> Irradiances = new();
+    public static List<int> SkipPlants = new();
+
+    static List<Vector3> IrradiancePoints = new();
+    //static List<Vector3i> IrradianceTriangles = new();
+    //static List<int> IrradianceSurfaceSize = new();
+    //static List<int> IrradianceGroupOffsets = new();
+
+/*
+#INDEXED DATA
+uint32 entitiesCount
+    #foreach ENTITY
+    uint32 surfacesCount
+        #foreach SURFACE (for now, each surface is an irradiancemeter)
+        uint8 trianglesCount
+        #foreach TRIANGLE
+            uint32 index0
+            uint32 index1
+            uint32 index2
+#POINTS DATA
+uint32 pointsCount
+    #foreach POINT
+    float32 x
+    float32 y
+    float32 z
+*/
+
+    public static void IrradianceCallback(uint timestep, IList<IFormation> formations)
+    {
+        if (timestep % 50 > 0)
+            return;
+        SkipPlants.Clear();
+        for(int i = 0; i < formations.Count; ++i)
+            if (!(formations[i] is PlantFormation plant && plant.AG.Alive))
+                SkipPlants.Add(i);
+
+        if (SkipPlants.Count < formations.Count)
+        {
+            Irradiances.Clear();
+            //IrradianceSurfacesPerPlant.Clear();
+            IrradiancePoints.Clear();
+            // IrradianceTriangles.Clear();
+            // IrradianceSurfaceSize.Clear();
+
+            using var objStream = File.Open($"t{timestep}.obj", FileMode.Create);
+            using var objWriter = new StreamWriter(objStream, Encoding.UTF8);
+            var obji = new StringBuilder();
+
+            var meshFileName = $"t{timestep}.mesh";
+            using (var meshStream = File.Open(meshFileName, FileMode.Create))
+            {
+                using var writer = new BinaryWriter(meshStream, Encoding.UTF8, false);
+                writer.Write((uint)(formations.Count - SkipPlants.Count)); //WRITE NUMBER OF PLANTS in this system
+                var skipPointer = 0;
+                for(int pi = 0; pi < formations.Count; ++pi)
+                {
+                    if (skipPointer < SkipPlants.Count && SkipPlants[skipPointer] == pi)
+                        ++skipPointer;
+                    else
+                    {
+                        var plant = formations[pi] as PlantFormation;
+                        var ag = plant.AG;
+                        var count = ag.Count;
+                        //IrradianceSurfacesPerPlant.Add(count);
+                        writer.WriteU32(count); //WRITE NUMBER OF SURFACES in this plant
+
+                        // writer.WriteU8(12); //WRITE NUMBER OF TRIANGLES in this surface
+                        // var center = ag.Plant.Position;
+                        // var p = IrradiancePoints.Count;
+                        // IrradiancePoints.Add(center);
+                        // IrradiancePoints.Add(center + Vector3.UnitX);
+                        // IrradiancePoints.Add(center + Vector3.UnitX + Vector3.UnitZ);
+                        // IrradiancePoints.Add(center + Vector3.UnitZ);
+                        // IrradiancePoints.Add(center + Vector3.UnitY);
+                        // IrradiancePoints.Add(center + Vector3.UnitX + Vector3.UnitY);
+                        // IrradiancePoints.Add(center + Vector3.UnitX + Vector3.UnitZ + Vector3.UnitY);
+                        // IrradiancePoints.Add(center + Vector3.UnitZ + Vector3.UnitY);
+
+                        // writer.WriteU32(p + 0);
+                        // writer.WriteU32(p + 1);
+                        // writer.WriteU32(p + 2);
+                        // writer.WriteU32(p + 0);
+                        // writer.WriteU32(p + 2);
+                        // writer.WriteU32(p + 3);
+                        // obji.AppendLine(OF(p + 0, p + 1, p + 2));
+                        // obji.AppendLine(OF(p + 0, p + 2, p + 3));
+
+                        // writer.WriteU32(p + 4);
+                        // writer.WriteU32(p + 5);
+                        // writer.WriteU32(p + 6);
+                        // writer.WriteU32(p + 4);
+                        // writer.WriteU32(p + 7);
+                        // writer.WriteU32(p + 6);
+                        // obji.AppendLine(OF(p + 4, p + 5, p + 6));
+                        // obji.AppendLine(OF(p + 4, p + 7, p + 6));
+
+                        // writer.WriteU32(p + 0);
+                        // writer.WriteU32(p + 1);
+                        // writer.WriteU32(p + 5);
+                        // writer.WriteU32(p + 0);
+                        // writer.WriteU32(p + 5);
+                        // writer.WriteU32(p + 4);
+                        // obji.AppendLine(OF(p + 0, p + 1, p + 5));
+                        // obji.AppendLine(OF(p + 0, p + 5, p + 4));
+
+                        // writer.WriteU32(p + 1);
+                        // writer.WriteU32(p + 2);
+                        // writer.WriteU32(p + 6);
+                        // writer.WriteU32(p + 1);
+                        // writer.WriteU32(p + 6);
+                        // writer.WriteU32(p + 5);
+                        // obji.AppendLine(OF(p + 1, p + 2, p + 6));
+                        // obji.AppendLine(OF(p + 1, p + 6, p + 5));
+
+                        // writer.WriteU32(p + 2);
+                        // writer.WriteU32(p + 3);
+                        // writer.WriteU32(p + 7);
+                        // writer.WriteU32(p + 2);
+                        // writer.WriteU32(p + 7);
+                        // writer.WriteU32(p + 6);
+                        // obji.AppendLine(OF(p + 2, p + 3, p + 7));
+                        // obji.AppendLine(OF(p + 2, p + 7, p + 6));
+
+                        // writer.WriteU32(p + 3);
+                        // writer.WriteU32(p + 0);
+                        // writer.WriteU32(p + 4);
+                        // writer.WriteU32(p + 3);
+                        // writer.WriteU32(p + 4);
+                        // writer.WriteU32(p + 7);
+                        // obji.AppendLine(OF(p + 3, p + 0, p + 4));
+                        // obji.AppendLine(OF(p + 3, p + 4, p + 7));
+
+                        for(int i = 0; i < count; ++i)
+                        {
+                            var organ = ag.GetOrgan(i);
+                            var center = ag.GetBaseCenter(i);
+                            var scale = ag.GetScale(i);
+                            var halfRadiusX = new Vector3(0f, 0f, scale.Z * 0.5f);
+                            var orientation = ag.GetDirection(i);
+                            //var length = ag.GetLength(i) * 0.5f; //x0.5f because its the radius of the cube!
+                            var lengthVector = new Vector3(scale.X, 0f, 0f);
+
+                            //sprite.Transform = new Transform(basis, (Formation.GetBaseCenter(index) + stableScale).ToGodot());
+                            //sprite.Scale = (Formation.GetScale(index) * 0.5f).ToGodot();
+                            switch(organ)
+                            {
+                                case OrganTypes.Leaf:
+                                {
+                                    writer.WriteU8(2); //WRITE NUMBER OF TRIANGLES in this surface
+
+                                    var p = IrradiancePoints.Count;
+                                    IrradiancePoints.Add(center + Vector3.Transform(-halfRadiusX, orientation));
+                                    IrradiancePoints.Add(center + Vector3.Transform(halfRadiusX, orientation));
+                                    IrradiancePoints.Add(center + Vector3.Transform(lengthVector + halfRadiusX, orientation));
+                                    IrradiancePoints.Add(center + Vector3.Transform(lengthVector - halfRadiusX, orientation));
+
+                                    //var t = IrradianceTriangles.Count;
+                                    writer.WriteU32(p);
+                                    writer.WriteU32(p + 1);
+                                    writer.WriteU32(p + 2);
+                                    writer.WriteU32(p);
+                                    writer.WriteU32(p + 2);
+                                    writer.WriteU32(p + 3);
+
+                                    obji.AppendLine(OF(p, p+1, p+2));
+                                    obji.AppendLine(OF(p, p+2, p+3));
+
+                                    //IrradianceTriangles.Add(new (p, p + 1, p + 2));
+                                    //IrradianceTriangles.Add(new (p, p + 2, p + 3));
+
+                                    //IrradianceGroupOffsets.Add(IrradianceGroups.Count);
+                                    //IrradianceSurfaceSize.Add(2);
+                                    //IrradianceGroups.Add(t + 1);
+                                }
+                                break;
+                                case OrganTypes.Stem:
+                                {
+                                    var halfRadiusY = new Vector3(0f, scale.Y * 0.5f, 0f);
+                                    writer.WriteU8(8); //WRITE NUMBER OF TRIANGLES in this surface
+                                    var p = IrradiancePoints.Count;
+                                    IrradiancePoints.Add(center + Vector3.Transform(- halfRadiusX - halfRadiusY, orientation));
+                                    IrradiancePoints.Add(center + Vector3.Transform(halfRadiusX - halfRadiusY, orientation));
+                                    IrradiancePoints.Add(center + Vector3.Transform(halfRadiusX + halfRadiusY, orientation));
+                                    IrradiancePoints.Add(center + Vector3.Transform(-halfRadiusX + halfRadiusY, orientation));
+                                    IrradiancePoints.Add(center + Vector3.Transform(lengthVector - halfRadiusX - halfRadiusY, orientation));
+                                    IrradiancePoints.Add(center + Vector3.Transform(lengthVector + halfRadiusX - halfRadiusY, orientation));
+                                    IrradiancePoints.Add(center + Vector3.Transform(lengthVector + halfRadiusX + halfRadiusY, orientation));
+                                    IrradiancePoints.Add(center + Vector3.Transform(lengthVector - halfRadiusX + halfRadiusY, orientation));
+
+                                    //front face
+                                    writer.WriteU32(p);
+                                    writer.WriteU32(p + 1);
+                                    writer.WriteU32(p + 5);
+                                    writer.WriteU32(p);
+                                    writer.WriteU32(p + 5);
+                                    writer.WriteU32(p + 4);
+                                    //right face
+                                    writer.WriteU32(p + 1);
+                                    writer.WriteU32(p + 2);
+                                    writer.WriteU32(p + 6);
+                                    writer.WriteU32(p + 1);
+                                    writer.WriteU32(p + 6);
+                                    writer.WriteU32(p + 5);
+                                    //back face
+                                    writer.WriteU32(p + 2);
+                                    writer.WriteU32(p + 3);
+                                    writer.WriteU32(p + 7);
+                                    writer.WriteU32(p + 2);
+                                    writer.WriteU32(p + 7);
+                                    writer.WriteU32(p + 6);
+                                    //left face
+                                    writer.WriteU32(p + 3);
+                                    writer.WriteU32(p);
+                                    writer.WriteU32(p + 4);
+                                    writer.WriteU32(p + 3);
+                                    writer.WriteU32(p + 4);
+                                    writer.WriteU32(p + 7);
+
+                                    obji.AppendLine(OF(p, p+1, p+5));
+                                    obji.AppendLine(OF(p, p+5, p+4));
+
+                                    obji.AppendLine(OF(p+1, p+2, p+6));
+                                    obji.AppendLine(OF(p+1, p+6, p+5));
+
+                                    obji.AppendLine(OF(p+2, p+3, p+7));
+                                    obji.AppendLine(OF(p+2, p+7, p+6));
+
+                                    obji.AppendLine(OF(p+3, p, p+4));
+                                    obji.AppendLine(OF(p+3, p+4, p+7));
+                                }
+                                break;
+                                case OrganTypes.Shoot:
+                                {
+                                    var halfRadiusY = new Vector3(0f, scale.Y * 0.5f, 0f);
+                                    writer.WriteU8(8); //WRITE NUMBER OF TRIANGLES in this surface
+                                    var p = IrradiancePoints.Count;
+                                    IrradiancePoints.Add(center + Vector3.Transform(-halfRadiusX - halfRadiusY, orientation));
+                                    IrradiancePoints.Add(center + Vector3.Transform(halfRadiusX - halfRadiusY, orientation));
+                                    IrradiancePoints.Add(center + Vector3.Transform(halfRadiusX + halfRadiusY, orientation));
+                                    IrradiancePoints.Add(center + Vector3.Transform(-halfRadiusX + halfRadiusY, orientation));
+
+                                    writer.WriteU32(p);
+                                    writer.WriteU32(p + 1);
+                                    writer.WriteU32(p + 2);
+                                    writer.WriteU32(p);
+                                    writer.WriteU32(p + 2);
+                                    writer.WriteU32(p + 3);
+
+                                    obji.AppendLine(OF(p, p+1, p+2));
+                                    obji.AppendLine(OF(p, p+2, p+3));
+                                }
+                                break;
+                                default: throw new NotImplementedException();
+                            }
+                        }
+                    }
+                }
+
+                writer.Write((uint)IrradiancePoints.Count);
+                for(int i = 0; i < IrradiancePoints.Count; ++i)
+                {
+                    var p = IrradiancePoints[i];
+                    writer.Write(p.X);
+                    writer.Write(p.Y);
+                    writer.Write(p.Z);
+                    objWriter.WriteLine($"v {p.X} {p.Y} {p.Z}");
+                }
+
+                objWriter.WriteLine(obji.ToString());
+            }
+
+            // var processInfo = new ProcessStartInfo("python3")
+            // {
+            //     CreateNoWindow = true,
+            //     WindowStyle = ProcessWindowStyle.Hidden,
+            //     Arguments = $"light {meshFileName}"
+            // };
+
+            // var process = Process.Start(processInfo);
+            // process.WaitForExit();
+
+            // var irrFileName = $"t{timestep}.irr";
+            // using var irrStream = File.Open(irrFileName, FileMode.Open);
+            // using var reader = new BinaryReader(irrStream);
+
+            // for(int p = 0; p < formations.Count; ++p)
+            // {
+            //     var irr = reader.ReadSingle();
+            // }
+        }
+    }
+
+    static string OF(int a, int b, int c) => $"f {a+1} {b+1} {c+1}";
+}
+
+public static class BinaryWriterExtensions
+{
+    public static void WriteU8(this BinaryWriter writer, int value) => writer.Write((byte)value);
+    public static void WriteU32(this BinaryWriter writer, int value) => writer.Write((uint)value);
+    public static void WriteU32(this BinaryWriter writer, uint value) => writer.Write(value);
 }

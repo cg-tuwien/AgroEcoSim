@@ -1,0 +1,12 @@
+{
+    "TicksPerHour": 1,
+    "TotalHours": 744,
+    "FieldResolution": 0.5,
+    "FieldSize": { "X": 10, "D": 4, "Z": 10 },
+
+    "Plants": [
+        { "P": {"X": 2.5, "Y": -0.05, "Z": 5}},
+        { "P": {"X": 5, "Y": -0.05, "Z": 5}},
+        { "P": {"X": 7.5, "Y": -0.05, "Z": 5}}
+    ]
+}
