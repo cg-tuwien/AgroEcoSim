@@ -11,6 +11,88 @@ using System.Collections;
 
 namespace Agro;
 
+public enum PlantSubstances { Water, Energy}
+
+internal struct NodeCacheData
+{
+	readonly List<int> mChildren = new();
+	internal ushort Depth;
+
+	public NodeCacheData()
+	{
+		Depth = 0;
+	}
+
+	public void Clear() => mChildren.Clear();
+	public void AddChild(int childIndex) => mChildren.Add(childIndex);
+	public bool IsRoot => mChildren.Count == 0;
+	public IList<int> Children => mChildren;
+}
+
+internal class TreeCacheData
+{
+	public int Count { get; private set; }
+	NodeCacheData[] Nodes;
+	readonly List<int> Roots = new();
+	ushort MaxDepth = 0;
+
+	public TreeCacheData()
+	{
+		Count = 0;
+		Nodes = new NodeCacheData[] {new(), new()};
+	}
+
+	public void Clear(int newSize)
+	{
+		Roots.Clear();
+		if (newSize > Nodes.Length)
+		{
+			var l = Nodes.Length;
+			Array.Resize(ref Nodes, newSize);
+			for(int i = l ; i < newSize; ++i)
+				Nodes[i] = new();
+		}
+		Count = newSize;
+		for(int i = 0; i < newSize; ++i)
+			Nodes[i].Clear();
+	}
+
+	public void AddChild(int parentIndex, int childIndex)
+	{
+		if (parentIndex >= 0)
+			Nodes[parentIndex].AddChild(childIndex);
+		else
+			Roots.Add(childIndex);
+	}
+
+	public void FinishUpdate()
+	{
+		var buffer = new Stack<(int, ushort)>();
+		foreach(var item in Roots)
+			buffer.Push((item, 0));
+
+		MaxDepth = 0;
+
+		while(buffer.Count > 0)
+		{
+			var (index, depth) = buffer.Pop();
+			Nodes[index].Depth = depth;
+			if (depth > MaxDepth)
+				MaxDepth = depth;
+			var nextDepth = (ushort)(depth + 1);
+			foreach(var child in Nodes[index].Children)
+				buffer.Push((child, nextDepth));
+		}
+
+		++MaxDepth;
+	}
+
+	internal IList<int> GetChildren(int index) => Nodes[index].Children;
+	internal ICollection<int> GetRoots() => Roots;
+	internal ushort GetAbsDepth(int index) => Nodes[index].Depth;
+	internal float GetRelDepth(int index) => MaxDepth > 0 ? (Nodes[index].Depth + 1) / (float)MaxDepth : 1f;
+}
+
 public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAgent
 {
 	readonly Action<T[], int[]> Reindex;
@@ -317,6 +399,13 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 			Births.Clear();
 			Inserts.Clear();
 			InsertAncestors.Clear();
+
+			src = Src();
+			TreeCache.Clear(src.Length);
+			for(int i = 0; i < src.Length; ++i)
+				TreeCache.AddChild(src[i].Parent, i);
+
+			TreeCache.FinishUpdate();
 		}
 	}
 
