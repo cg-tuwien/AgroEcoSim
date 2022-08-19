@@ -262,7 +262,7 @@ public partial struct UnderGroundAgent : IPlantAgent
 				if (childEnergy > Energy)
 				{
 					var amount = Math.Min(formation.GetEnergyFlow_PerTick(child), Math.Min(formation.GetEnergyFlow_PerTick(child), childEnergy));
-					plant.Send(child, new Energy_PullFrom(formation, amount, formationID));
+					plant.TransactionUG(child, formationID, PlantSubstances.Energy, amount);
 				}
 			}
 		}
@@ -313,7 +313,7 @@ public partial struct UnderGroundAgent : IPlantAgent
 		{
 			var parentEnergy = formation.GetEnergy(Parent);
 			if (parentEnergy > Energy)
-				plant.Send(Parent, new Energy_PullFrom(formation, EnergyFlowToParentPerTick, formationID)); //TODO make requests based on own need and the need of children
+				plant.TransactionUG(Parent, formationID, PlantSubstances.Energy, EnergyFlowToParentPerTick); //TODO make requests based on own need and the need of children
 		}
 		else
 		{
@@ -333,7 +333,7 @@ public partial struct UnderGroundAgent : IPlantAgent
 		if (Water > 0f)
 		{
 			if (Parent >= 0)
-				plant.Send(formationID, new Water_PullFrom(formation, WaterFlowToParentPerTick, Parent));
+				plant.TransactionUG(formationID, Parent, PlantSubstances.Water, WaterFlowToParentPerTick);
 			else
 			{
 				var roots = plant.AG.GetRoots();

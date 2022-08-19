@@ -14,8 +14,8 @@ public partial struct SoilAgent : IAgent
 	public readonly struct WaterInc : IMessage<SoilAgent>
 	{
 		#if HISTORY_LOG || TICK_LOG
-		public readonly static List<SimpleMsgLog> TransactionsHistory = new();
-		public static void ClearHistory() => TransactionsHistory.Clear();
+		public readonly static List<SimpleMsgLog> MessagesHistory = new();
+		public static void ClearHistory() => MessagesHistory.Clear();
 		public readonly ulong ID { get; } = Utils.UID.Next();
 		#endif
 
@@ -27,7 +27,7 @@ public partial struct SoilAgent : IAgent
 		{
 			dstAgent.IncWater(Amount);
 			#if HISTORY_LOG || TICK_LOG
-			lock(TransactionsHistory) TransactionsHistory.Add(new(timestep, ID, dstAgent.ID, Amount));
+			lock(MessagesHistory) MessagesHistory.Add(new(timestep, ID, dstAgent.ID, Amount));
 			#endif
 		}
 	}
@@ -37,8 +37,8 @@ public partial struct SoilAgent : IAgent
 	public readonly struct Water_PullFrom : IMessage<SoilAgent>
 	{
         #if HISTORY_LOG || TICK_LOG
-		public readonly static List<PullMsgLog> TransactionsHistory = new();
-		public static void ClearHistory() => TransactionsHistory.Clear();
+		public readonly static List<PullMsgLog> MessagesHistory = new();
+		public static void ClearHistory() => MessagesHistory.Clear();
 		public readonly ulong ID { get; } = Utils.UID.Next();
 		#endif
 
@@ -67,7 +67,7 @@ public partial struct SoilAgent : IAgent
 			{
 				DstFormation.Send(DstIndex, new WaterInc(water));
 				#if HISTORY_LOG || TICK_LOG
-				lock(TransactionsHistory) TransactionsHistory.Add(new(timestep, ID, srcAgent.ID, DstFormation.GetID(DstIndex), water));
+				lock(MessagesHistory) MessagesHistory.Add(new(timestep, ID, srcAgent.ID, DstFormation.GetID(DstIndex), water));
 				#endif
 			}
 		}
@@ -87,8 +87,8 @@ public partial struct SoilAgent : IAgent
 	public readonly struct Water_UG_PullFrom_Soil : IMessage<SoilAgent>
 	{
         #if HISTORY_LOG || TICK_LOG
-		public readonly static List<PullMsgLog> TransactionsHistory = new();
-		public static void ClearHistory() => TransactionsHistory.Clear();
+		public readonly static List<PullMsgLog> MessagesHistory = new();
+		public static void ClearHistory() => MessagesHistory.Clear();
 		public readonly ulong ID { get; } = Utils.UID.Next();
 		#endif
 
@@ -108,14 +108,14 @@ public partial struct SoilAgent : IAgent
 		public Transaction Type => Transaction.Decrease;
 		public void Receive(ref SoilAgent srcAgent, uint timestep)
 		{
-			var freeCapacity = Math.Max(0f, DstFormation.GetWaterCapacityPerTick(DstIndex) - DstFormation.GetWater(DstIndex));
+			var freeCapacity = Math.Max(0f, DstFormation.GetWaterTotalCapacity(DstIndex) - DstFormation.GetWater(DstIndex));
 			var water = srcAgent.TryDecWater(Math.Min(Amount, freeCapacity));
 			//Writing actions from other formations must not be implemented directly, but over messages
 			if (water > 0f)
 			{
 				DstFormation.SendProtected(DstIndex, new UnderGroundAgent.WaterInc(water));
 				#if HISTORY_LOG || TICK_LOG
-				lock(TransactionsHistory) TransactionsHistory.Add(new(timestep, ID, srcAgent.ID, DstFormation.GetID(DstIndex), water));
+				lock(MessagesHistory) MessagesHistory.Add(new(timestep, ID, srcAgent.ID, DstFormation.GetID(DstIndex), water));
 				#endif
 			}
 		}
@@ -126,8 +126,8 @@ public partial struct SoilAgent : IAgent
 	public readonly struct Water_Seed_PullFrom_Soil : IMessage<SoilAgent>
 	{
 		#if HISTORY_LOG || TICK_LOG
-		public readonly static List<PullMsgLog> TransactionsHistory = new();
-		public static void ClearHistory() => TransactionsHistory.Clear();
+		public readonly static List<PullMsgLog> MessagesHistory = new();
+		public static void ClearHistory() => MessagesHistory.Clear();
 		public readonly ulong ID { get; } = Utils.UID.Next();
 		#endif
 
@@ -149,7 +149,7 @@ public partial struct SoilAgent : IAgent
 			{
 				DstFormation.Send(0, new SeedAgent.WaterInc(water)); //there is always just one seed
 				#if HISTORY_LOG || TICK_LOG
-				lock(TransactionsHistory) TransactionsHistory.Add(new(timestep, ID, srcAgent.ID, DstFormation.GetID(), water));
+				lock(MessagesHistory) MessagesHistory.Add(new(timestep, ID, srcAgent.ID, DstFormation.GetID(), water));
 				#endif
 			}
 		}

@@ -143,11 +143,14 @@ public abstract class Formation<T> : IFormation where T : struct, IAgent
 		ReadTMP = !ReadTMP;
 	}
 
+	public virtual void ProcessTransactions(uint timestep) { }
+
 	public virtual bool HasUndeliveredPost => Postbox.AnyMessages;
+	public virtual bool HasUnprocessedTransactions => false;
 
 #if HISTORY_LOG || TICK_LOG
 	List<T[]> StatesHistory = new();
-	public string HistoryToJSON() => Utils.Export.Json(StatesHistory);
+	public string HistoryToJSON(int timestep = -1) => timestep >= 0 ? Utils.Export.Json(StatesHistory[timestep]) : Utils.Export.Json(StatesHistory);
 
 	public ulong GetID(int index) => ReadTMP
 		? (AgentsTMP.Length > index ? AgentsTMP[index].ID : ulong.MaxValue)

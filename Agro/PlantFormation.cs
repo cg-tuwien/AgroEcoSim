@@ -86,6 +86,12 @@ public partial class PlantFormation : IFormation
 
 	public bool Send(int recipient, IMessage<AboveGroundAgent> msg) => AG.SendProtected(recipient, msg);
 
+	public bool TransactionAG(int srcIndex, int dstIndex, PlantSubstances substance, float amount) => AG.SendProtected(srcIndex, dstIndex, substance, amount);
+	public bool TransactionUG(int srcIndex, int dstIndex, PlantSubstances substance, float amount) => UG.SendProtected(srcIndex, dstIndex, substance, amount);
+
+	public bool Transaction(bool ag, int srcIndex, int dstIndex, PlantSubstances substance, float amount) =>
+		ag ? AG.SendProtected(srcIndex, dstIndex, substance, amount) : UG.SendProtected(srcIndex, dstIndex, substance, amount);
+
 	public void SeedDeath()
 	{
 		DeathSeed = true;
@@ -150,6 +156,8 @@ public partial class PlantFormation : IFormation
 		#if HISTORY_LOG || TICK_LOG
 		if (dstSeed.Length > 0)
 			StatesHistory.Add(dstSeed[0]);
+		else
+			StatesHistory.Add(null);
 		#endif
 		ReadTMP = !ReadTMP;
 
@@ -171,8 +179,10 @@ public partial class PlantFormation : IFormation
 		}
 		ReadTMP = !ReadTMP;
 
-		UG.DeliverPost(timestep);
-		AG.DeliverPost(timestep);
+		if (UG.HasUndeliveredPost)
+			UG.DeliverPost(timestep);
+		if (AG.HasUndeliveredPost)
+			AG.DeliverPost(timestep);
 
 		// if (!DeathSeed)
 		// 	Console.WriteLine("R: {0} E: {1}", Seed[0].Radius, Seed[0].StoredEnergy);
@@ -180,14 +190,26 @@ public partial class PlantFormation : IFormation
 		// 	Console.WriteLine("R: {0}x{1} E: {2} W: {3}", UnderGround[0].Radius, UnderGround[0].Length, UnderGround[0].Energy, UnderGround[0].Water);
 	}
 
-	public bool HasUndeliveredPost => PostboxSeed.AnyMessages || UG.AnyMessages || AG.AnyMessages;
+	public void ProcessTransactions(uint timestep)
+	{
+		if (UG.HasUnprocessedTransactions)
+			UG.ProcessTransactions(timestep);
+		if (AG.HasUnprocessedTransactions)
+			AG.ProcessTransactions(timestep);
+	}
+
+	public bool HasUndeliveredPost => PostboxSeed.AnyMessages || UG.HasUndeliveredPost || AG.HasUndeliveredPost;
+
+	public bool HasUnprocessedTransactions => UG.HasUnprocessedTransactions || AG.HasUnprocessedTransactions;
 
 	///////////////////////////
 	#region LOG
 	///////////////////////////
 	#if HISTORY_LOG || TICK_LOG
-	List<SeedAgent> StatesHistory = new();
-	public string HistoryToJSON() => $" \"Seeds\" : {Utils.Export.Json(StatesHistory)}, \"UnderGround\" : {UG.HistoryToJSON()}, AboveGround : {AG.HistoryToJSON()}";
+	List<SeedAgent?> StatesHistory = new();
+	public string HistoryToJSON(int timestep = -1) => timestep >= 0
+		? $"{{ \"Seeds\" : {Utils.Export.Json(StatesHistory[timestep])}, \"UnderGround\" : {UG.HistoryToJSON(timestep)}, \"AboveGround\" : {AG.HistoryToJSON(timestep)} }}"
+		: $"{{ \"Seeds\" : {Utils.Export.Json(StatesHistory)}, \"UnderGround\" : {UG.HistoryToJSON()}, \"AboveGround\" : {AG.HistoryToJSON()} }}";
 	public ulong GetID() => Seed.Length > 0 ? Seed[0].ID : ulong.MaxValue;
 	#endif
 	#endregion

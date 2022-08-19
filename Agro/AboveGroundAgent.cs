@@ -63,7 +63,6 @@ public partial struct AboveGroundAgent : IPlantAgent
 	/// Index of the parent agent. -1 represents the root of the hierarchy.
 	/// </summary>
 	public int Parent { get; private set; }
-	//public int[] Children { get; private set; }
 
 	/// <summary>
 	/// Recommended initial length of the agent at birth in m.
@@ -133,6 +132,10 @@ public partial struct AboveGroundAgent : IPlantAgent
 
 	public readonly float EnergyStorageCapacity => EnergyCapacityFunc(Radius, Length, WoodRatio);
 
+	public static Quaternion OrientationUp = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, MathF.PI * 0.5f);
+
+	public const float GrowthRatePerHour = 1 + 1/12; //Let us assume this plant can double volume in 12 hours
+	public static readonly float GrowthRatePerTick = GrowthRatePerHour / AgroWorld.TicksPerHour; //Let us assume this plant can double volume in 12 hours
 
 	public AboveGroundAgent(int parent, OrganTypes organ, Quaternion orientation, float initialEnergy, float radius = InitialRadius, float length = InitialLength)
 	{
@@ -188,18 +191,19 @@ public partial struct AboveGroundAgent : IPlantAgent
 		var children = formation.GetChildren(formationID);
 		var energyRequestedFromParent = false;
 
-		var enoughEnergyState = lifeSupportPerHour * 36;
+		var enoughEnergyState = lifeSupportPerHour * 32;
 
 		//Growth
 		if (Energy > enoughEnergyState) //maybe make it a factor storedEnergy/lifeSupport so that it grows fast when it has full storage
 		{
+			var relativeDepth = formation.GetRelDepth(formationID);
 			if (Organ != OrganTypes.Shoot)
 			{
 				Vector2 factor;
 				var isLeafStem = children.Count == 1 && formation.GetOrgan(children[0]) == OrganTypes.Leaf;
 				switch(Organ)
 				{
-					case OrganTypes.Leaf: factor.X = 4e-5f; factor.Y = 8e-6f; break;
+					case OrganTypes.Leaf: factor.X = 6e-5f; factor.Y = 12e-6f; break;
 					case OrganTypes.Stem:
 					{
 						if (isLeafStem)
@@ -215,7 +219,8 @@ public partial struct AboveGroundAgent : IPlantAgent
 					default: factor = Vector2.Zero; break;
 				};
 				var childrenCount = children.Count + 1;
-				var lengthGrowth = mPhotoFactor * factor.X / (MathF.Pow(lr * Length * childrenCount, 0.1f) * AgroWorld.TicksPerHour);
+
+				var lengthGrowth = relativeDepth * mPhotoFactor * factor.X / (MathF.Pow(lr * Length * childrenCount, 0.1f) * AgroWorld.TicksPerHour);
 				var widthGrowth = factor.Y / (MathF.Pow(lifeSupportPerHour * childrenCount, 0.1f) * AgroWorld.TicksPerHour); //just optimized the number of multiplications
 
 				Length += lengthGrowth;
@@ -233,9 +238,10 @@ public partial struct AboveGroundAgent : IPlantAgent
 				//Chaining
 				if (Organ == OrganTypes.Stem && !isLeafStem)
 				{
-					if (Length > PlantFormation.RootSegmentLength * 0.5f + plant.RNG.NextFloat(PlantFormation.RootSegmentLength * 0.5f))
+					var thresholdFactor = (2f - mPhotoFactor) * 0.5f;
+					if (Length > PlantFormation.RootSegmentLength * thresholdFactor + plant.RNG.NextFloat(PlantFormation.RootSegmentLength * thresholdFactor))
 					{
-						//split this stem into two parts
+						//split this stem into two parts the new one will be the bottom part closer to the root
 						formation.Insert(formationID, new(Parent, OrganTypes.Stem, Orientation, Energy * 0.5f, Radius, Length * 0.5f){ Water = Water * 0.5f, mPhotoFactor = mPhotoFactor});
 						Length *= 0.5f;
 						Energy *= 0.5f;
@@ -244,10 +250,13 @@ public partial struct AboveGroundAgent : IPlantAgent
 						{
 							var childrenRadius = 0f;
 							foreach(var child in children)
-								childrenRadius += formation.GetBaseRadius(child);
-							childrenRadius /= children.Count;
-							Radius = Radius * 0.7f + childrenRadius * 0.3f;
+								childrenRadius = formation.GetBaseRadius(child);
+							childrenRadius = Math.Min(Radius, childrenRadius);
+							Radius = Radius * 0.5f + childrenRadius * 0.5f; //this is of course not fully true, just a very rough approximation
 						}
+						var dir = Vector3.Transform(Vector3.UnitX, Orientation);
+						if (dir.Y < 0.999f)
+							Orientation = Quaternion.Slerp(Orientation, OrientationUp, mPhotoFactor * plant.RNG.NextFloat(0.01f)); //TODO keep the Yaw as is, right now it orients all the same!
 					}
 					else //if (children.Count > 0)
 					{
@@ -258,21 +267,24 @@ public partial struct AboveGroundAgent : IPlantAgent
 							if (formation.GetOrgan(child) == OrganTypes.Stem)
 								++stemChildrenCount;
 						var pool = MathF.Pow(childrenCount, childrenCount << 2) * AgroWorld.TicksPerHour;
-						if (pool < uint.MaxValue && plant.RNG.NextUInt((uint)pool) == 1 && waterFactor > plant.RNG.NextFloat())
+						if (pool < uint.MaxValue && plant.RNG.NextUInt((uint)pool) == 1 && Math.Min(Math.Min(waterFactor, mPhotoFactor), 1f-relativeDepth) > plant.RNG.NextFloat())
 						{
-							const float yFactor = 0.5f;
+							const float xFactor = 0.5f;
 							const float zFactor = 0.2f;
-							var qx = Quaternion.CreateFromAxisAngle(Vector3.UnitX, plant.RNG.NextFloat(-MathF.PI * yFactor, MathF.PI * yFactor));
+							var qx = Quaternion.CreateFromAxisAngle(Vector3.UnitX, plant.RNG.NextFloat(-MathF.PI * xFactor, MathF.PI * xFactor));
 							var qz = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, plant.RNG.NextFloat(MathF.PI * zFactor, MathF.PI * zFactor * 2f));
 							//var q = qz * qx * Orientation;
 							var orientation = Orientation * qx * qz;
 							var energy = EnergyCapacityFunc(InitialRadius, InitialLength, 0f);
 							var water = WaterStorageCapacityfunction(InitialRadius, InitialLength);
-							var stem = formation.Birth(new(formationID, OrganTypes.Stem, orientation, energy) { Water = water } );
-							var leafStem = formation.Birth(new(stem, OrganTypes.Stem, orientation, energy) { Water = water });
-							formation.Birth(new(leafStem, OrganTypes.Leaf, orientation, energy) { Water = water } );
-							Energy -= 6f * energy; //2x because some energy is needed for the birth itself
-							Water -= 3f * water;
+							if (Water > 30f * water && Energy > 100f * energy)
+							{
+								var stem = formation.Birth(new(formationID, OrganTypes.Stem, orientation, energy) { Water = water } );
+								var leafStem = formation.Birth(new(stem, OrganTypes.Stem, orientation, energy) { Water = water });
+								formation.Birth(new(leafStem, OrganTypes.Leaf, orientation, energy) { Water = water } );
+								Energy -= 100f * energy; //because some energy is needed for the birth itself
+								Water -= 30f * water;
+							}
 							//Console.WriteLine($"New root branched to {formationID} at time {timestep}");
 						}
 					}
@@ -291,7 +303,7 @@ public partial struct AboveGroundAgent : IPlantAgent
 					if (requestedAmount > 0f)
 					{
 						energyRequestedFromParent = true;
-						plant.Send(Parent, new Energy_PullFrom(formation, Math.Min(EnergyFlowToParentPerTick, requestedAmount), formationID));
+						plant.TransactionAG(Parent, formationID, PlantSubstances.Energy, Math.Min(EnergyFlowToParentPerTick, requestedAmount));
 					}
 				}
 			}
@@ -312,7 +324,7 @@ public partial struct AboveGroundAgent : IPlantAgent
 				var airTemp = AgroWorld.GetTemperature(timestep);
 				var surface = Length * Radius * (Organ == OrganTypes.Leaf ? 2f : TwoPi);
 				var possibleAmountByLight = surface * approxLight * mPhotoFactor;
-				var possibleAmountByWater = Water * (Organ == OrganTypes.Stem ? 0.4f : 1f);
+				var possibleAmountByWater = Water * (Organ == OrganTypes.Stem ? 0.1f : 1f);
 				var possibleAmountByCO2 = airTemp >= plant.VegetativeHighTemperature.Y
 					? 0f
 					: (airTemp <= plant.VegetativeHighTemperature.X
@@ -336,9 +348,9 @@ public partial struct AboveGroundAgent : IPlantAgent
 				var parentEnergy = formation.GetEnergy(Parent);
 				if (parentEnergy < Energy)
 				{
-					var amount = EnergyForParent(photosynthesizedEnergy, lifeSupportPerTick, parentEnergy);
-					if (amount > 0)
-						plant.Send(formationID, new Energy_PullFrom(formation, Math.Min(amount, EnergyFlowToParentPerTick), Parent)); //TODO make requests based on own need and the need of children
+					var amount = EnergyForParent(photosynthesizedEnergy, lifeSupportPerTick);
+					if (amount > 0f)
+						plant.TransactionAG(formationID, Parent, PlantSubstances.Energy, Math.Min(amount, EnergyFlowToParentPerTick)); //TODO make requests based on own need and the need of children
 				}
 			}
 			else
@@ -349,25 +361,30 @@ public partial struct AboveGroundAgent : IPlantAgent
 					var rootEnergy = plant.UG.GetEnergy(root);
 					if (rootEnergy < Energy)
 					{
-						var amount = EnergyForParent(photosynthesizedEnergy, lifeSupportPerTick, rootEnergy);
-						if (amount > 0)
+						var amount = EnergyForParent(photosynthesizedEnergy, lifeSupportPerTick);
+						if (amount > 0f)
 							plant.Send(formationID, new UnderGroundAgent.Energy_PullFrom_AG(plant.UG, Math.Min(amount, EnergyFlowToParentPerTick), root)); //TODO make requests based on own need and the need of children
 					}
 				}
 			}
 			#endregion
-
-			///////////////////////////
-			#region Transport WATER up from parent
-			///////////////////////////
-			if (Parent >= 0) //TODO different coefficients for different organs and different state (amount of wood)
-				plant.Send(Parent, new Water_PullFrom(formation, WaterFlowToParentPerTick, formationID));
-			#endregion
 		}
+
+		///////////////////////////
+		#region Transport WATER up from parent
+		///////////////////////////
+		if (Parent >= 0) //TODO different coefficients for different organs and different state (amount of wood)
+			plant.TransactionAG(Parent, formationID, PlantSubstances.Water, WaterFlowToParentPerTick);
+		#endregion
 	}
 
-	readonly float EnergyForParent(float photosynthesizedEnergy, float lifeSupportPerTick, float parentEnergy) =>
-		Math.Max(0f, photosynthesizedEnergy > lifeSupportPerTick ? Energy - lifeSupportPerTick * 2f : Math.Min((Energy - parentEnergy) * 0.5f, Energy - lifeSupportPerTick * 2f));
+	readonly float EnergyForParent(float photosynthesizedEnergy, float lifeSupportPerTick)
+	{
+		var lifesupportReserve = 48f * lifeSupportPerTick;
+		var freeEnergy = Energy - lifesupportReserve;
+		return Math.Max(0f, photosynthesizedEnergy > lifeSupportPerTick ? Math.Max(photosynthesizedEnergy - lifeSupportPerTick, freeEnergy) : freeEnergy);
+	}
+
 
 	public void IncWater(float amount)
 	{

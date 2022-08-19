@@ -53,7 +53,14 @@ public readonly struct MessageWrapper<T> where T : struct, IAgent
 }
 
 	#if HISTORY_LOG || TICK_LOG
-	[StructLayout(LayoutKind.Auto)] public readonly struct SimpleMsgLog
+    public interface IMsgLogData
+    {
+        #if !TICK_LOG
+        uint TimeStep { get; }
+        #endif
+        ulong MsgID { get; }
+    }
+	[StructLayout(LayoutKind.Auto)] public readonly struct SimpleMsgLog : IMsgLogData
 	{
         #if !TICK_LOG
 		public readonly uint TimeStep { get; }
@@ -72,7 +79,7 @@ public readonly struct MessageWrapper<T> where T : struct, IAgent
         }
 	}
 
-	[StructLayout(LayoutKind.Auto)] public readonly struct PullMsgLog
+	[StructLayout(LayoutKind.Auto)] public readonly struct PullMsgLog : IMsgLogData
 	{
 		#if !TICK_LOG
 		public readonly uint TimeStep { get; }

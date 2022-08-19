@@ -10,10 +10,10 @@ namespace Agro;
 [StructLayout(LayoutKind.Auto)]
 public partial struct SoilAgent : IAgent
 {
-	public const float FieldCellSurface = AgroWorld.FieldResolution * AgroWorld.FieldResolution;
+	public static readonly float FieldCellSurface = AgroWorld.FieldResolution * AgroWorld.FieldResolution;
 
-	internal const float SoilDiffusionCoefPerTick = 0.2f / AgroWorld.TicksPerHour;
-	internal const float GravitationDiffusionCoefPerTick = 1.5f * SoilDiffusionCoefPerTick;
+	internal static readonly float SoilDiffusionCoefPerTick = 0.2f / AgroWorld.TicksPerHour;
+	internal static readonly float GravitationDiffusionCoefPerTick = 1.5f * SoilDiffusionCoefPerTick;
 
 	public float Water { get; private set; }
 	public float Steam { get; private set; }

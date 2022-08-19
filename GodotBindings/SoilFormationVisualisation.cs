@@ -34,9 +34,6 @@ public partial class SoilFormation
 	int[] IDToIndex;
 	ulong MinID = ulong.MaxValue;
 
-	//CodeReview: This is not local to InitializeMarkers, but it is always the same.
-	//  So it could be reused by other instances of this class (e.g. if having more fields).
-	//  Hence, it makes more sense to make it static or const (for Vector3 only static is possible).
 	static Vector3[] Rotations = {
 		new Vector3(0, 0, -MathF.PI/2),
 		Vector3.Zero,
@@ -46,7 +43,6 @@ public partial class SoilFormation
 		new Vector3(MathF.PI/2, 0, 0)
 	};
 
-	//CodeReview: This is used frequently in AnimateMaker, but there is no noeed to recompute it for each marker in each frame
 	static Vector3[] MarkerOffsets = { Vector3.Right, Vector3.Up, Vector3.Forward, Vector3.Left, Vector3.Down, Vector3.Back };
 
 	int GetDir(int srcIndex, int dstIndex)
@@ -55,7 +51,7 @@ public partial class SoilFormation
 		return coordsDiff switch
 		{
 			Vector3i(1, 0, 0) => 0,
-			Vector3i(0, 1, 0) => 5, //CodeReview: this is really strange, didn't find the reason for 5-1 instead of 1-5 yet
+			Vector3i(0, 1, 0) => 5,
 			Vector3i(0, 0, 1) => 4,
 			Vector3i(-1, 0, 0) => 3,
 			Vector3i(0, -1, 0) => 2,
@@ -153,12 +149,12 @@ public partial class SoilFormation
 	{
 		//fetch data from messages
 		Array.Fill(WaterFlow, 0f);
-		var transactions = SoilAgent.Water_PullFrom.TransactionsHistory;
-		for(int i = 0; i < transactions.Count; ++i) //a for will not copy the whole value type, foreach would
+		var messages = SoilAgent.Water_PullFrom.MessagesHistory;
+		for(int i = 0; i < messages.Count; ++i) //a for will not copy the whole value type, foreach would
 		{
-			var amount = transactions[i].Amount;
-			var srcIndex = IDToIndex[transactions[i].SourceID - MinID];
-			var dstIndex = IDToIndex[transactions[i].TargetID - MinID];
+			var amount = messages[i].Amount;
+			var srcIndex = IDToIndex[messages[i].SourceID - MinID];
+			var dstIndex = IDToIndex[messages[i].TargetID - MinID];
 			var dir = GetDir(srcIndex, dstIndex);
 			WaterFlow[srcIndex * 6 + dir] += amount;
 			WaterFlow[dstIndex * 6 + InvertDir(dir)] -= amount;
@@ -179,17 +175,15 @@ public partial class SoilFormation
 		var appearance_multiplier = Math.Clamp(flow / (Agents[marker.CellIndex].WaterMaxCapacity * SoilAgent.SoilDiffusionCoefPerTick * 5f), 0f, 1f);
 
 		var mesh = MarkerInstances[marker.CellIndex, dir];
-		//CodeReview: Many markers will be zero! Perhaps just use the else branch to hide them
-		if (Parameters.AnimateMarkerSize && flow == 0f)
+
+		if (Parameters.AnimateMarkerSize && flow == 0f) //many markers will be 0, hide them to improve performance
 		{
 			mesh.Visible = false;
 			mesh.Scale = Vector3.Zero;
 		}
 		else
 		{
-			//CodeReview: for simple conditions better use ? : then if else
 			marker_scale = cell_scale * (Parameters.AnimateMarkerSize ? Parameters.MarkerScale * appearance_multiplier : Parameters.MarkerScale);
-			//CodeReview: this way you can save one division
 			var offset_multiplier = (cell_scale + marker_scale) * 0.5f;
 			mesh.Translation = marker.InitialPosition + MarkerOffsets[dir] * offset_multiplier;
 			mesh.Scale = Vector3.One * marker_scale;

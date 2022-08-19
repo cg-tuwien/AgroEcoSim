@@ -8,10 +8,12 @@ public interface IFormation
 {
     void Census();
     void Tick(SimulationWorld world, uint timestep);
+    void ProcessTransactions(uint timestep);
     void DeliverPost(uint timestep);
     bool HasUndeliveredPost { get; }
+    bool HasUnprocessedTransactions { get; }
 #if HISTORY_LOG || TICK_LOG
-    string HistoryToJSON();
+    string HistoryToJSON(int timestep);
 #endif
 #if GODOT
     void GodotReady();

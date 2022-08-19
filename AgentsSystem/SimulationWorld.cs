@@ -64,11 +64,20 @@ public partial class SimulationWorld
 		for(uint i = 0U; i < simulationLength; ++i, ++Timestep)
 		{
 			TickSequential(Timestep);
+			ProcessTransactionsSequential(Timestep);
 			DeliverPostSequential(Timestep);
 			CensusSequential();
+			ExecCallbacks();
 #if GODOT
 			foreach(var item in Formations)
 				item.GodotProcess(Timestep);
+#endif
+#if HISTORY_LOG || HISTORY_TICK
+			// if (i >= 477)
+			// {
+			// 	var exported = HistoryToJSON((int)i);
+			// 	File.WriteAllText($"export-{i}.json", exported.Replace("},", "},\n").Replace("],", "],\n"));
+			// }
 #endif
 		}
 	}
@@ -78,8 +87,10 @@ public partial class SimulationWorld
 		for(uint i = 0U; i < simulationLength; ++i, ++Timestep)
 		{
 			TickParallel(Timestep);
+			ProcessTransactionsParallel(Timestep);
 			DeliverPostParallel(Timestep);
 			CensusParallel();
+			ExecCallbacks();
 #if GODOT
 			foreach(var item in Formations)
 				item.GodotProcess(Timestep);
@@ -97,12 +108,47 @@ public partial class SimulationWorld
 
 	void TickSequential(uint timestep)
 	{
-		//Console.WriteLine($"TIMESTEP: {timestep}");
+		Debug.WriteLine($"TIMESTEP: {timestep}");
 		for(int i = 0; i < Formations.Count; ++i)
 			Formations[i].Tick(this, timestep);
 	}
 
 	void TickParallel(uint timestep) => Parallel.For(0, Formations.Count, i => Formations[i].Tick(this, timestep));
+
+	public void ProcessTransactionsSequential(uint timestep)
+	{
+		var anyDelivered = true;
+		while(anyDelivered)
+		{
+			anyDelivered = false;
+			for(int i = 0; i < Formations.Count; ++i)
+				if (Formations[i].HasUnprocessedTransactions)
+				{
+					Formations[i].ProcessTransactions(timestep);
+					anyDelivered = true;
+				}
+		}
+	}
+
+	public void ProcessTransactionsParallel(uint timestep)
+	{
+		#if TICK_LOG
+		foreach(var clear in MessageLogClears)
+			clear.Invoke(null, null);
+		#endif
+		var anyDelivered = true;
+		while(anyDelivered)
+		{
+			anyDelivered = false;
+			Parallel.For(0, Formations.Count, i => {
+				if (Formations[i].HasUnprocessedTransactions)
+				{
+					Formations[i].ProcessTransactions(timestep);
+					anyDelivered = true;
+				}
+			});
+		}
+	}
 
 	public void DeliverPostSequential(uint timestep)
 	{

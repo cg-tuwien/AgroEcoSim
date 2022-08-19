@@ -75,14 +75,14 @@ public abstract class PlantAbstractGodot<T> where T : struct, IPlantAgent
 			case ColorCodingType.WaterRatio:
 			{
 				var rs = Math.Min(1f, Formation.GetWater(index) / Formation.GetWaterStorageCapacity(index));
-				var rt = Math.Min(1f, Formation.GetWater(index) / Formation.GetWaterCapacityPerTick(index));
+				var rt = Math.Min(1f, Formation.GetWater(index) / Formation.GetWaterTotalCapacity(index));
 				return rs >= 0f ? new Color(rt, rt, rs) : Colors.Red;
 			}
 			case ColorCodingType.MixedRatio:
 			{
 				var re = Math.Min(1f, Formation.GetEnergy(index) / Formation.GetEnergyCapacity(index));
 				var rs = Math.Min(1f, Formation.GetWater(index) / Formation.GetWaterStorageCapacity(index));
-				var rt = Math.Min(1f, Formation.GetWater(index) / Formation.GetWaterCapacityPerTick(index));
+				var rt = Math.Min(1f, Formation.GetWater(index) / Formation.GetWaterTotalCapacity(index));
 				return (re >= 0f && rs >= 0f && rt >= 0f) ? new Color(re, rt, rs) : Colors.Black;
 			}
 			case ColorCodingType.WoodRatio:

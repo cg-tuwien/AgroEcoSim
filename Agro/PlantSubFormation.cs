@@ -20,11 +20,14 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 	T[] Agents = Array.Empty<T>();
 	T[] AgentsTMP = Array.Empty<T>();
 	readonly PostBox<T> Post = new();
+	readonly TransactionsBox Transactions = new();
 	readonly List<T> Births = new();
 	readonly List<T> Inserts = new();
 	readonly List<int> InsertAncestors = new();
 	readonly HashSet<int> Deaths = new();
 	readonly List<int> DeathsHelper = new();
+
+	readonly TreeCacheData TreeCache = new();
 
 	public PlantSubFormation(PlantFormation plant, Action<T[], int[]> reindex)
 	{
@@ -35,7 +38,7 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 	public bool CheckIndex(int index) => index < Agents.Length;
 
 	public bool Alive => Agents.Length > 0 || Births.Count > 0 || Inserts.Count > 0;
-	public bool AnyMessages => Post.AnyMessages;
+	public int Count => Agents.Length;
 
 	/// <summary>
 	/// An ordered tuple of the double data-buffer entries ready for swap.
@@ -95,6 +98,17 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 		if (Agents.Length > dst)
 		{
 			Post.Add(new (msg, dst));
+			return true;
+		}
+		else
+			return false;
+	}
+
+	public bool SendProtected(int srcIndex, int dstIndex, PlantSubstances substance, float amount)
+	{
+		if (Agents.Length > srcIndex && Agents.Length > dstIndex)
+		{
+			Transactions.Add(srcIndex, dstIndex, (byte)substance, amount);
 			return true;
 		}
 		else
@@ -342,34 +356,95 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 #endif
 	}
 
+	public void ProcessTransactions(uint timestep)
+	{
+		var (src, dst) = SrcDst();
+		Array.Copy(src, dst, src.Length);
+		for(int substanceIndex = 0; substanceIndex < Transactions.Buffer.Count; ++substanceIndex)
+			if (Transactions.Buffer[substanceIndex].Count > 0)
+			{
+				var buffer = Transactions.Buffer[substanceIndex];
+
+				//accumulate all transactions on per-agent basis
+				//so positive sum means the agent will in sum receive some substance
+				//negative sum means it will donate some
+				var sumPerAgent = new float[src.Length];
+				for(int j = 0; j < buffer.Count; ++j)
+				{
+					var amount = buffer[j].Amount;
+					sumPerAgent[buffer[j].SrcIndex] -= amount;
+					sumPerAgent[buffer[j].DstIndex] += amount;
+				}
+
+				//decrease the requested amount if the capacity is not sufficient
+				var scale = new float[src.Length];
+				Array.Fill(scale, 1f);
+				var anyScale = false;
+				for(int d = 0; d < sumPerAgent.Length; ++d)
+				{
+					var dstCapacity = GetCapacity(d, substanceIndex);
+					if (sumPerAgent[d] > dstCapacity)
+					{
+						scale[d] = dstCapacity / sumPerAgent[d];
+						anyScale = true;
+					}
+				}
+
+				//apply the decrease and recompute the sums
+				var updated = new float[buffer.Count];
+				if (anyScale)
+				{
+					Array.Fill(sumPerAgent, 0f);
+					for(int j = 0; j < buffer.Count; ++j)
+					{
+						var d = buffer[j].DstIndex;
+						var amount =  buffer[j].Amount * scale[d];
+						updated[j] = amount;
+						sumPerAgent[buffer[j].SrcIndex] -= amount;
+						sumPerAgent[d] += amount;
+					}
+					Array.Fill(scale, 1f);
+				}
+				for(int j = 0; j < buffer.Count; ++j)
+					updated[j] =  buffer[j].Amount;
+
+				//decrease the donated amount if the requests are higher as the available amount
+				for(int s = 0; s < sumPerAgent.Length; ++s)
+				{
+					var srcAmount = GetAmount(s, substanceIndex);
+					if (-sumPerAgent[s] > srcAmount)
+						scale[s] = srcAmount / -sumPerAgent[s];
+				}
+
+				//apply the decrease and fire respective messages
+				for(int j = 0; j < buffer.Count; ++j)
+				{
+					var s = buffer[j].SrcIndex;
+					var amount = updated[j] * scale[s];
+					if (amount > 0f)
+					{
+						DecAmount(s, substanceIndex, amount);
+						IncAmount(buffer[j].DstIndex, substanceIndex, amount);
+					}
+				}
+			}
+
+		ReadTMP = !ReadTMP;
+		Transactions.Clear();
+	}
+
 	public bool HasUndeliveredPost => Post.AnyMessages;
+
+	public bool HasUnprocessedTransactions => Transactions.AnyTransactions;
 
 	///////////////////////////
 	#region READ METHODS
 	///////////////////////////
 
-	public List<int> GetChildren(int index)
-	{
-		//TODO 1: precompute at the beginning of each step  O(n²) -> O(n)
-		//TODO 2: keep between steps if not births or deaths happen
-		var result = new List<int>();
-		var src = Src();
-		//for(int i = index + 1; i < src.Length; ++i) //this had a lot of issues for AG when splitting branches
-		for(int i = 0; i < src.Length; ++i)
-			if (src[i].Parent == index)
-				result.Add(i);
-		return result;
-	}
-
-	public List<int> GetRoots()
-	{
-		var result = new List<int>();
-		var src = Src();
-		for(int i = 0; i < src.Length; ++i)
-			if (src[i].Parent < 0)
-				result.Add(i);
-		return result;
-	}
+	public IList<int> GetChildren(int index) => TreeCache.GetChildren(index);
+	public int GetAbsDepth(int index) => TreeCache.GetAbsDepth(index);
+	public float GetRelDepth(int index) => TreeCache.GetRelDepth(index);
+	public ICollection<int> GetRoots() => TreeCache.GetRoots();
 
 	internal float GetEnergyCapacity(int index) => ReadTMP
 		? (AgentsTMP.Length > index ? AgentsTMP[index].EnergyStorageCapacity : 0f)
@@ -379,7 +454,7 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 		? (AgentsTMP.Length > index ? AgentsTMP[index].WaterStorageCapacity : 0f)
 		: (Agents.Length > index ? Agents[index].WaterStorageCapacity : 0f);
 
-	internal float GetWaterCapacityPerTick(int index) => ReadTMP
+	internal float GetWaterTotalCapacity(int index) => ReadTMP
 		? (AgentsTMP.Length > index ? AgentsTMP[index].WaterTotalCapacityPerTick : 0f)
 		: (Agents.Length > index ? Agents[index].WaterTotalCapacityPerTick : 0f);
 
@@ -443,13 +518,39 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 	public Vector3 GetScale(int index) => ReadTMP
 		? (AgentsTMP.Length > index ? AgentsTMP[index].Scale : Vector3.Zero)
 		: (Agents.Length > index ? Agents[index].Scale : Vector3.Zero);
+
+	float GetCapacity(int index, int substanceIndex) => substanceIndex switch {
+		(byte)PlantSubstances.Water => GetWaterTotalCapacity(index),
+		(byte)PlantSubstances.Energy => GetEnergyCapacity(index),
+		_ => throw new IndexOutOfRangeException($"SubstanceIndex out of range: {substanceIndex}")
+	};
+
+	float GetAmount(int index, int substanceIndex) => substanceIndex switch {
+		(byte)PlantSubstances.Water => GetWater(index),
+		(byte)PlantSubstances.Energy => GetEnergy(index),
+		_ => throw new IndexOutOfRangeException($"SubstanceIndex out of range: {substanceIndex}")
+	};
+
+	public float GetVolume() => (ReadTMP ? AgentsTMP : Agents).Aggregate(0f, (sum, current) => sum + current.Scale.X * current.Scale.Y * current.Scale.Z);
+
 	#endregion
 
 	///////////////////////////
 	#region WRITE METHODS
 	///////////////////////////
 
-	//THERE ARE NO WRITE METHODS ALLOWED.
+	//THERE ARE NO WRITE METHODS ALLOWED except for these via messages.
+	bool IncAmount(int index, int substanceIndex, float amount) => substanceIndex switch {
+		(byte)PlantSubstances.Water => Plant.Send(index, new AboveGroundAgent.WaterInc(amount)),
+		(byte)PlantSubstances.Energy => Plant.Send(index, new AboveGroundAgent.EnergyInc(amount)),
+		_ => throw new IndexOutOfRangeException($"SubstanceIndex out of range: {substanceIndex}")
+	};
+
+	bool DecAmount(int index, int substanceIndex, float amount) => substanceIndex switch {
+		(byte)PlantSubstances.Water => Plant.Send(index, new AboveGroundAgent.WaterDec(amount)),
+		(byte)PlantSubstances.Energy => Plant.Send(index, new AboveGroundAgent.EnergyDec(amount)),
+		_ => throw new IndexOutOfRangeException($"SubstanceIndex out of range: {substanceIndex}")
+	};
 
 	#endregion
 
@@ -458,7 +559,7 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 	///////////////////////////
 	#if HISTORY_LOG || TICK_LOG
 	List<T[]> StatesHistory = new();
-	public string HistoryToJSON() => Utils.Export.Json(StatesHistory);
+	public string HistoryToJSON(int timestep = -1) => timestep >= 0 ? Utils.Export.Json(StatesHistory[timestep]) : Utils.Export.Json(StatesHistory);
 
 	public ulong GetID(int index) => ReadTMP
 		? (AgentsTMP.Length > index ? AgentsTMP[index].ID : ulong.MaxValue)

@@ -19,8 +19,8 @@ public struct SeedAgent : IAgent
 	public readonly struct WaterInc : IMessage<SeedAgent>
 	{
 		#if HISTORY_LOG || TICK_LOG
-		public readonly static List<SimpleMsgLog> TransactionsHistory = new();
-		public static void ClearHistory() => TransactionsHistory.Clear();
+		public readonly static List<SimpleMsgLog> MessagesHistory = new();
+		public static void ClearHistory() => MessagesHistory.Clear();
 		public readonly ulong ID { get; } = Utils.UID.Next();
 		#endif
 		/// <summary>
@@ -34,7 +34,7 @@ public struct SeedAgent : IAgent
 		{
 			dstAgent.IncWater(Amount);
 			#if HISTORY_LOG || TICK_LOG
-			lock(TransactionsHistory) TransactionsHistory.Add(new(timestep, ID, dstAgent.ID, Amount));
+			lock(MessagesHistory) MessagesHistory.Add(new(timestep, ID, dstAgent.ID, Amount));
 			#endif
 		}
 	}
