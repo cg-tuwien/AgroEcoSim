@@ -147,6 +147,10 @@ public partial struct AboveGroundAgent : IPlantAgent
 	public const float GrowthRatePerHour = 1 + 1/12; //Let us assume this plant can double volume in 12 hours
 	public static readonly float GrowthRatePerTick = GrowthRatePerHour / AgroWorld.TicksPerHour; //Let us assume this plant can double volume in 12 hours
 
+	float LifeSupportPerHour => Length * Radius * (Organ == OrganTypes.Leaf ? LeafThickness : Radius);
+	float LifeSupportPerTick => LifeSupportPerHour / AgroWorld.TicksPerHour;
+	float EnoughEnergy(float? lifeSupportPerHour = null) => (lifeSupportPerHour ?? LifeSupportPerHour) * 32;
+
 	public AboveGroundAgent(int parent, OrganTypes organ, Quaternion orientation, float initialEnergy, float radius = InitialRadius, float length = InitialLength)
 	{
 		Parent = parent;
@@ -170,12 +174,7 @@ public partial struct AboveGroundAgent : IPlantAgent
 	public static void Reindex(AboveGroundAgent[] src, int[] map)
 	{
 		for(int i = 0; i < src.Length; ++i)
-		{
 			src[i].Parent = src[i].Parent == -1 ? -1 : map[src[i].Parent];
-			// if (src[i].Children != null)
-			// 	for(int j = 0; j < src[i].Children.Length; ++j)
-			// 		src[i].Children[j] = map[src[i].Children[j]];
-		}
 	}
 
 	///<summary>
@@ -193,15 +192,39 @@ public partial struct AboveGroundAgent : IPlantAgent
 
 		//TODO perhaps growth should somehow reflect temperature
 		var lr = Length * Radius;
-		var lifeSupportPerHour = lr * (Organ == OrganTypes.Leaf ? LeafThickness : Radius);
-		var lifeSupportPerTick = lifeSupportPerHour / AgroWorld.TicksPerHour;
+		var lifeSupportPerHour = LifeSupportPerHour;
+		var lifeSupportPerTick = LifeSupportPerTick / AgroWorld.TicksPerHour;
 
 		Energy -= lifeSupportPerTick; //life support
 
 		var children = formation.GetChildren(formationID);
 		var energyRequestedFromParent = false;
 
-		var enoughEnergyState = lifeSupportPerHour * 32;
+		var enoughEnergyState = EnoughEnergy(lifeSupportPerHour);
+
+		//Photosynthesis
+		var photosynthesizedEnergy = 0f;
+		if ((Organ == OrganTypes.Stem || Organ == OrganTypes.Leaf) && Water > 0f)
+		{
+			var approxLight = AgroWorld.GetAmbientLight(timestep);
+			if (approxLight > 0.2f)
+			{
+				var airTemp = AgroWorld.GetTemperature(timestep);
+				var surface = Length * Radius * (Organ == OrganTypes.Leaf ? 2f : TwoPi);
+				var possibleAmountByLight = surface * approxLight * mPhotoFactor;
+				var possibleAmountByWater = Water * (Organ == OrganTypes.Stem ? 0.1f : 1f);
+				var possibleAmountByCO2 = airTemp >= plant.VegetativeHighTemperature.Y
+					? 0f
+					: (airTemp <= plant.VegetativeHighTemperature.X
+						? float.MaxValue
+						: surface * (airTemp - plant.VegetativeHighTemperature.X) / (plant.VegetativeHighTemperature.Y - plant.VegetativeHighTemperature.X)); //TODO respiratory cycle
+
+				photosynthesizedEnergy = Math.Min(possibleAmountByLight, Math.Min(possibleAmountByWater, possibleAmountByCO2));
+
+				Water -= photosynthesizedEnergy;
+				Energy += photosynthesizedEnergy;
+			}
+		}
 
 		//Growth
 		if (Energy > enoughEnergyState) //maybe make it a factor storedEnergy/lifeSupport so that it grows fast when it has full storage
@@ -300,9 +323,13 @@ public partial struct AboveGroundAgent : IPlantAgent
 					}
 				}
 				//Console.WriteLine($"{formationID}x{timestep}: l={Length} r={Radius} OK={Length > Radius}");
+
+				//Re-evaluate the enoughEnergyState due to higher demands caused by the growth etc.
+				enoughEnergyState = EnoughEnergy();
 			}
 		}
-		else if (Energy > 0f) //if running out of energy, balance it by thaking it away from parent instead of sending it
+
+		if (Energy < enoughEnergyState) //if running out of energy, balance it by thaking it away from parent instead of sending it
 		{
 			if (Parent >= 0)
 			{
@@ -316,35 +343,11 @@ public partial struct AboveGroundAgent : IPlantAgent
 						plant.TransactionAG(Parent, formationID, PlantSubstances.Energy, Math.Min(EnergyFlowToParentPerTick, requestedAmount));
 					}
 				}
-			}
-		}
-		else //Without energy the part dies
-		{
-			formation.Death(formationID);
-			return;
-		}
-
-		//Photosynthesis
-		var photosynthesizedEnergy = 0f;
-		if ((Organ == OrganTypes.Stem || Organ == OrganTypes.Leaf) && Water > 0f)
-		{
-			var approxLight = AgroWorld.GetAmbientLight(timestep);
-			if (approxLight > 0.2f)
-			{
-				var airTemp = AgroWorld.GetTemperature(timestep);
-				var surface = Length * Radius * (Organ == OrganTypes.Leaf ? 2f : TwoPi);
-				var possibleAmountByLight = surface * approxLight * mPhotoFactor;
-				var possibleAmountByWater = Water * (Organ == OrganTypes.Stem ? 0.1f : 1f);
-				var possibleAmountByCO2 = airTemp >= plant.VegetativeHighTemperature.Y
-					? 0f
-					: (airTemp <= plant.VegetativeHighTemperature.X
-						? float.MaxValue
-						: surface * (airTemp - plant.VegetativeHighTemperature.X) / (plant.VegetativeHighTemperature.Y - plant.VegetativeHighTemperature.X)); //TODO respiratory cycle
-
-				photosynthesizedEnergy = Math.Min(possibleAmountByLight, Math.Min(possibleAmountByWater, possibleAmountByCO2));
-
-				Water -= photosynthesizedEnergy;
-				Energy += photosynthesizedEnergy;
+				else //Without energy the part dies
+				{
+					formation.Death(formationID);
+					return;
+				}
 			}
 		}
 
