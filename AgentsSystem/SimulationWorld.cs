@@ -34,9 +34,9 @@ public partial class SimulationWorld
 		#endif
 	}
 
-    public void ForEach(Action<IFormation> action) => Formations.ForEach(formation => action(formation));
+	public void ForEach(Action<IFormation> action) => Formations.ForEach(formation => action(formation));
 
-    public void Add(IFormation formation)
+	public void Add(IFormation formation)
 	{
 		Formations.Add(formation);
 #if GODOT
@@ -193,9 +193,9 @@ public partial class SimulationWorld
 		}
 	}
 
-    public void AddCallback(Action<uint, IList<IFormation>> callback) => Callbacks.Add(callback);
+	public void AddCallback(Action<uint, IList<IFormation>> callback) => Callbacks.Add(callback);
 
-    public void ExecCallbacks()
+	public void ExecCallbacks()
 	{
 		foreach(var callback in Callbacks)
 			callback(Timestep, Formations);

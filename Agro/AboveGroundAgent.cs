@@ -4,7 +4,6 @@ using System.Diagnostics;
 using System.Numerics;
 using AgentsSystem;
 using System.Runtime.InteropServices;
-using System.Text.Json.Serialization;
 
 namespace Agro;
 
@@ -21,7 +20,10 @@ public partial struct AboveGroundAgent : IPlantAgent
 	/// <summary>
 	/// Orientation with respect to the parent. If there is no parent, this is the initial orientation.
 	/// </summary>
-	[JsonIgnore]
+
+	#if !GODOT
+	[System.Text.Json.Serialization.JsonIgnore]
+	#endif
 	public Quaternion Orientation { get; private set; }
 
 	/// <summary>
@@ -34,7 +36,9 @@ public partial struct AboveGroundAgent : IPlantAgent
 	/// </summary>
 	public float Radius { get; private set; }
 
-	[JsonIgnore]
+	#if !GODOT
+	[System.Text.Json.Serialization.JsonIgnore]
+	#endif
 	public Vector3 Scale => Organ switch {
 		OrganTypes.Leaf => new(Length, 0.0001f, 2f * Radius),
 		_ => new(Length, 2f * Radius, 2f * Radius)
@@ -86,12 +90,16 @@ public partial struct AboveGroundAgent : IPlantAgent
 	/// <summary>
 	/// Water volume in m³ which can be passed to the parent per timestep
 	/// </summary>
-	[JsonIgnore]
+	#if !GODOT
+	[System.Text.Json.Serialization.JsonIgnore]
+	#endif
 	public readonly float WaterFlowToParentPerTick => WaterFlowToParentPerHour / AgroWorld.TicksPerHour;
 
 	public readonly float EnergyFlowToParentPerHour => 4f * Radius * Radius * WaterTransportRatio;
 
-	[JsonIgnore]
+	#if !GODOT
+	[System.Text.Json.Serialization.JsonIgnore]
+	#endif
 	public readonly float EnergyFlowToParentPerTick => EnergyFlowToParentPerHour / AgroWorld.TicksPerHour;
 
 	/// <summary>
@@ -117,7 +125,9 @@ public partial struct AboveGroundAgent : IPlantAgent
 	/// <summary>
 	/// Water volume in m³ which can flow through per tick, or can be stored in this agent
 	/// </summary>
-	[JsonIgnore]
+	#if !GODOT
+	[System.Text.Json.Serialization.JsonIgnore]
+	#endif
 	public readonly float WaterTotalCapacityPerTick => WaterTotalCapacityPerHour / AgroWorld.TicksPerHour;
 
 	/// <summary>

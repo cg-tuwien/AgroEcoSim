@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Numerics;
 using System.Runtime.InteropServices;
-using System.Text.Json.Serialization;
 using AgentsSystem;
 
 namespace Agro;

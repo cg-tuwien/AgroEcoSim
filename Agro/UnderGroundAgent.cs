@@ -5,7 +5,6 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using AgentsSystem;
-using System.Text.Json.Serialization;
 
 namespace Agro;
 
@@ -19,7 +18,9 @@ public partial struct UnderGroundAgent : IPlantAgent
 	/// <summary>
 	/// Orientation with respect to the parent. If there is no parent, this is the initial orientation.
 	/// </summary>
-	[JsonIgnore]
+	#if !GODOT
+	[System.Text.Json.Serialization.JsonIgnore]
+	#endif
 	public Quaternion Orientation { get; private set; }
 
 	/// <summary>
@@ -32,7 +33,9 @@ public partial struct UnderGroundAgent : IPlantAgent
 	/// </summary>
 	public float Radius { get; private set; }
 
-	[JsonIgnore]
+	#if !GODOT
+	[System.Text.Json.Serialization.JsonIgnore]
+	#endif
 	public Vector3 Scale => new(Length, 2f * Radius, 2f * Radius);
 
 	public float Energy { get; private set; }
@@ -90,7 +93,9 @@ public partial struct UnderGroundAgent : IPlantAgent
 	/// <summary>
 	/// Water volume in m³ which can be absorbed from soil per timestep
 	/// </summary>
-	[JsonIgnore]
+	#if !GODOT
+	[System.Text.Json.Serialization.JsonIgnore]
+	#endif
 	public readonly float WaterAbsorbtionPerTick => WaterAbsorbtionPerHour / AgroWorld.TicksPerHour;
 
 	public const float EnergyTransportRatio = 4f;
@@ -108,12 +113,16 @@ public partial struct UnderGroundAgent : IPlantAgent
 	/// <summary>
 	/// Water volume in m³ which can be passed to the parent per timestep
 	/// </summary>
-	[JsonIgnore]
+	#if !GODOT
+	[System.Text.Json.Serialization.JsonIgnore]
+	#endif
 	public readonly float WaterFlowToParentPerTick => WaterFlowToParentPerHour / AgroWorld.TicksPerHour;
 
 	public readonly float EnergyFlowToParentPerHour => 4f * Radius * Radius * WaterTransportRatio;
 
-	[JsonIgnore]
+	#if !GODOT
+	[System.Text.Json.Serialization.JsonIgnore]
+	#endif
 	public readonly float EnergyFlowToParentPerTick => EnergyFlowToParentPerHour / AgroWorld.TicksPerHour;
 
 	/// <summary>
@@ -134,7 +143,9 @@ public partial struct UnderGroundAgent : IPlantAgent
 	/// <summary>
 	/// Water volume in m³ which can flow through per tick, or can be stored in this agent
 	/// </summary>
-	[JsonIgnore]
+	#if !GODOT
+	[System.Text.Json.Serialization.JsonIgnore]
+	#endif
 	public readonly float WaterTotalCapacityPerTick => WaterTotalCapacityPerHour / AgroWorld.TicksPerHour;
 
 	/// <summary>

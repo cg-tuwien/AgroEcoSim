@@ -1,11 +1,12 @@
 using System.Numerics;
-using System.Text.Json.Serialization;
 
 namespace Agro;
 
 public class PlantImportData
 {
-    [JsonConverter(typeof(Utils.Json.Vector3JsonConverter))]
+    #if ! GODOT
+    [System.Text.Json.Serialization.JsonConverter(typeof(Utils.Json.Vector3JsonConverter))]
+    #endif
     public Vector3? P { get; set; }
 }
 

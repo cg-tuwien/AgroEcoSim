@@ -386,7 +386,8 @@ uint32 pointsCount
             // IrradianceTriangles.Clear();
             // IrradianceSurfaceSize.Clear();
 
-            using var objStream = File.Open($"t{timestep}.obj", FileMode.Create);
+            var objFileName = $"t{timestep}.obj";
+            using var objStream = File.Open(objFileName, FileMode.Create);
             using var objWriter = new StreamWriter(objStream, Encoding.UTF8);
             var obji = new StringBuilder();
 
@@ -394,7 +395,7 @@ uint32 pointsCount
             using (var meshStream = File.Open(meshFileName, FileMode.Create))
             {
                 using var writer = new BinaryWriter(meshStream, Encoding.UTF8, false);
-                writer.Write((uint)(formations.Count - SkipPlants.Count)); //WRITE NUMBER OF PLANTS in this system
+                writer.WriteU32(formations.Count - SkipPlants.Count); //WRITE NUMBER OF PLANTS in this system
                 var skipPointer = 0;
                 for(int pi = 0; pi < formations.Count; ++pi)
                 {
@@ -576,7 +577,7 @@ uint32 pointsCount
                                 case OrganTypes.Shoot:
                                 {
                                     var halfRadiusY = new Vector3(0f, scale.Y * 0.5f, 0f);
-                                    writer.WriteU8(8); //WRITE NUMBER OF TRIANGLES in this surface
+                                    writer.WriteU8(2); //WRITE NUMBER OF TRIANGLES in this surface
                                     var p = IrradiancePoints.Count;
                                     IrradiancePoints.Add(center + Vector3.Transform(-halfRadiusX - halfRadiusY, orientation));
                                     IrradiancePoints.Add(center + Vector3.Transform(halfRadiusX - halfRadiusY, orientation));
@@ -631,6 +632,9 @@ uint32 pointsCount
             // {
             //     var irr = reader.ReadSingle();
             // }
+
+            File.Delete(meshFileName);
+            File.Delete(objFileName);
         }
     }
 
