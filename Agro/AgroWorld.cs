@@ -9,6 +9,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using AgentsSystem;
 using System.Text;
+using System.Globalization;
 
 namespace Agro;
 
@@ -342,13 +343,14 @@ public static class AgroWorld {
     }
 
 
-    public static List<float> Irradiances = new();
-    public static List<int> SkipPlants = new();
+    static readonly List<float> Irradiances = new();
+    static readonly List<int> SkipPlants = new();
 
-    static List<Vector3> IrradiancePoints = new();
+    static readonly List<Vector3> IrradiancePoints = new();
     //static List<Vector3i> IrradianceTriangles = new();
     //static List<int> IrradianceSurfaceSize = new();
     //static List<int> IrradianceGroupOffsets = new();
+    static readonly Dictionary<IFormation, int> IrradianceFormationOffsets = new ();
 
 /*
 #INDEXED DATA
@@ -371,28 +373,27 @@ uint32 pointsCount
 
     public static void IrradianceCallback(uint timestep, IList<IFormation> formations)
     {
-        if (timestep % 50 > 0)
-            return;
         SkipPlants.Clear();
         for(int i = 0; i < formations.Count; ++i)
             if (!(formations[i] is PlantFormation plant && plant.AG.Alive))
                 SkipPlants.Add(i);
 
+        int offsetCounter = 0;
         if (SkipPlants.Count < formations.Count)
         {
             Irradiances.Clear();
-            //IrradianceSurfacesPerPlant.Clear();
+            IrradianceFormationOffsets.Clear();
             IrradiancePoints.Clear();
-            // IrradianceTriangles.Clear();
-            // IrradianceSurfaceSize.Clear();
 
-            var objFileName = $"t{timestep}.obj";
-            using var objStream = File.Open(objFileName, FileMode.Create);
-            using var objWriter = new StreamWriter(objStream, Encoding.UTF8);
-            var obji = new StringBuilder();
+            // var objFileName = $"t{timestep}.obj";
+            // using var objStream = File.Open(objFileName, FileMode.Create);
+            // using var objWriter = new StreamWriter(objStream, Encoding.UTF8);
+            // var obji = new StringBuilder();
+            // objWriter.WriteLine("o Field");
 
             var meshFileName = $"t{timestep}.mesh";
-            using (var meshStream = File.Open(meshFileName, FileMode.Create))
+            var meshFileFullPath = Path.Combine("..", "agroeco-mts3", meshFileName);
+            using (var meshStream = File.Open(meshFileFullPath, FileMode.Create))
             {
                 using var writer = new BinaryWriter(meshStream, Encoding.UTF8, false);
                 writer.WriteU32(formations.Count - SkipPlants.Count); //WRITE NUMBER OF PLANTS in this system
@@ -406,74 +407,12 @@ uint32 pointsCount
                         var plant = formations[pi] as PlantFormation;
                         var ag = plant.AG;
                         var count = ag.Count;
+
+                        IrradianceFormationOffsets.Add(ag, offsetCounter);
+                        offsetCounter += count;
+
                         //IrradianceSurfacesPerPlant.Add(count);
                         writer.WriteU32(count); //WRITE NUMBER OF SURFACES in this plant
-
-                        // writer.WriteU8(12); //WRITE NUMBER OF TRIANGLES in this surface
-                        // var center = ag.Plant.Position;
-                        // var p = IrradiancePoints.Count;
-                        // IrradiancePoints.Add(center);
-                        // IrradiancePoints.Add(center + Vector3.UnitX);
-                        // IrradiancePoints.Add(center + Vector3.UnitX + Vector3.UnitZ);
-                        // IrradiancePoints.Add(center + Vector3.UnitZ);
-                        // IrradiancePoints.Add(center + Vector3.UnitY);
-                        // IrradiancePoints.Add(center + Vector3.UnitX + Vector3.UnitY);
-                        // IrradiancePoints.Add(center + Vector3.UnitX + Vector3.UnitZ + Vector3.UnitY);
-                        // IrradiancePoints.Add(center + Vector3.UnitZ + Vector3.UnitY);
-
-                        // writer.WriteU32(p + 0);
-                        // writer.WriteU32(p + 1);
-                        // writer.WriteU32(p + 2);
-                        // writer.WriteU32(p + 0);
-                        // writer.WriteU32(p + 2);
-                        // writer.WriteU32(p + 3);
-                        // obji.AppendLine(OF(p + 0, p + 1, p + 2));
-                        // obji.AppendLine(OF(p + 0, p + 2, p + 3));
-
-                        // writer.WriteU32(p + 4);
-                        // writer.WriteU32(p + 5);
-                        // writer.WriteU32(p + 6);
-                        // writer.WriteU32(p + 4);
-                        // writer.WriteU32(p + 7);
-                        // writer.WriteU32(p + 6);
-                        // obji.AppendLine(OF(p + 4, p + 5, p + 6));
-                        // obji.AppendLine(OF(p + 4, p + 7, p + 6));
-
-                        // writer.WriteU32(p + 0);
-                        // writer.WriteU32(p + 1);
-                        // writer.WriteU32(p + 5);
-                        // writer.WriteU32(p + 0);
-                        // writer.WriteU32(p + 5);
-                        // writer.WriteU32(p + 4);
-                        // obji.AppendLine(OF(p + 0, p + 1, p + 5));
-                        // obji.AppendLine(OF(p + 0, p + 5, p + 4));
-
-                        // writer.WriteU32(p + 1);
-                        // writer.WriteU32(p + 2);
-                        // writer.WriteU32(p + 6);
-                        // writer.WriteU32(p + 1);
-                        // writer.WriteU32(p + 6);
-                        // writer.WriteU32(p + 5);
-                        // obji.AppendLine(OF(p + 1, p + 2, p + 6));
-                        // obji.AppendLine(OF(p + 1, p + 6, p + 5));
-
-                        // writer.WriteU32(p + 2);
-                        // writer.WriteU32(p + 3);
-                        // writer.WriteU32(p + 7);
-                        // writer.WriteU32(p + 2);
-                        // writer.WriteU32(p + 7);
-                        // writer.WriteU32(p + 6);
-                        // obji.AppendLine(OF(p + 2, p + 3, p + 7));
-                        // obji.AppendLine(OF(p + 2, p + 7, p + 6));
-
-                        // writer.WriteU32(p + 3);
-                        // writer.WriteU32(p + 0);
-                        // writer.WriteU32(p + 4);
-                        // writer.WriteU32(p + 3);
-                        // writer.WriteU32(p + 4);
-                        // writer.WriteU32(p + 7);
-                        // obji.AppendLine(OF(p + 3, p + 0, p + 4));
-                        // obji.AppendLine(OF(p + 3, p + 4, p + 7));
 
                         for(int i = 0; i < count; ++i)
                         {
@@ -507,8 +446,8 @@ uint32 pointsCount
                                     writer.WriteU32(p + 2);
                                     writer.WriteU32(p + 3);
 
-                                    obji.AppendLine(OF(p, p+1, p+2));
-                                    obji.AppendLine(OF(p, p+2, p+3));
+                                    // obji.AppendLine(OF(p, p+1, p+2));
+                                    // obji.AppendLine(OF(p, p+2, p+3));
 
                                     //IrradianceTriangles.Add(new (p, p + 1, p + 2));
                                     //IrradianceTriangles.Add(new (p, p + 2, p + 3));
@@ -561,17 +500,17 @@ uint32 pointsCount
                                     writer.WriteU32(p + 4);
                                     writer.WriteU32(p + 7);
 
-                                    obji.AppendLine(OF(p, p+1, p+5));
-                                    obji.AppendLine(OF(p, p+5, p+4));
+                                    // obji.AppendLine(OF(p, p+1, p+5));
+                                    // obji.AppendLine(OF(p, p+5, p+4));
 
-                                    obji.AppendLine(OF(p+1, p+2, p+6));
-                                    obji.AppendLine(OF(p+1, p+6, p+5));
+                                    // obji.AppendLine(OF(p+1, p+2, p+6));
+                                    // obji.AppendLine(OF(p+1, p+6, p+5));
 
-                                    obji.AppendLine(OF(p+2, p+3, p+7));
-                                    obji.AppendLine(OF(p+2, p+7, p+6));
+                                    // obji.AppendLine(OF(p+2, p+3, p+7));
+                                    // obji.AppendLine(OF(p+2, p+7, p+6));
 
-                                    obji.AppendLine(OF(p+3, p, p+4));
-                                    obji.AppendLine(OF(p+3, p+4, p+7));
+                                    // obji.AppendLine(OF(p+3, p, p+4));
+                                    // obji.AppendLine(OF(p+3, p+4, p+7));
                                 }
                                 break;
                                 case OrganTypes.Shoot:
@@ -591,8 +530,8 @@ uint32 pointsCount
                                     writer.WriteU32(p + 2);
                                     writer.WriteU32(p + 3);
 
-                                    obji.AppendLine(OF(p, p+1, p+2));
-                                    obji.AppendLine(OF(p, p+2, p+3));
+                                    // obji.AppendLine(OF(p, p+1, p+2));
+                                    // obji.AppendLine(OF(p, p+2, p+3));
                                 }
                                 break;
                                 default: throw new NotImplementedException();
@@ -608,37 +547,38 @@ uint32 pointsCount
                     writer.Write(p.X);
                     writer.Write(p.Y);
                     writer.Write(p.Z);
-                    objWriter.WriteLine($"v {p.X} {p.Y} {p.Z}");
+                    //objWriter.WriteLine($"v {p.X} {p.Y} {p.Z}");
                 }
 
-                objWriter.WriteLine(obji.ToString());
+                //objWriter.WriteLine(obji.ToString());
             }
 
-            // var processInfo = new ProcessStartInfo("python3")
-            // {
-            //     CreateNoWindow = true,
-            //     WindowStyle = ProcessWindowStyle.Hidden,
-            //     Arguments = $"light {meshFileName}"
-            // };
+            var processInfo = new ProcessStartInfo("python3")
+            {
+                CreateNoWindow = true,
+                WindowStyle = ProcessWindowStyle.Hidden,
+                WorkingDirectory = Path.Combine("..", "agroeco-mts3"),
+                Arguments = $"render.py {meshFileName} {Latitude} {Longitude} {(new DateTime(2022, 1, 1, 0, 0, 0, DateTimeKind.Utc) + TimeSpan.FromHours(timestep / (double)TotalHours)).ToString("o", CultureInfo.InvariantCulture)}"
+            };
 
-            // var process = Process.Start(processInfo);
-            // process.WaitForExit();
+            Process.Start(processInfo).WaitForExit();
 
-            // var irrFileName = $"t{timestep}.irr";
-            // using var irrStream = File.Open(irrFileName, FileMode.Open);
-            // using var reader = new BinaryReader(irrStream);
+            var irrFileName = Path.Combine("..","agroeco-mts3",$"t{timestep}.irrbin");
+            using var irrStream = File.Open(irrFileName, FileMode.Open);
+            using var reader = new BinaryReader(irrStream);
 
-            // for(int p = 0; p < formations.Count; ++p)
-            // {
-            //     var irr = reader.ReadSingle();
-            // }
+            for(int p = 0; p < offsetCounter; ++p)
+                Irradiances.Add(reader.ReadSingle());
 
-            File.Delete(meshFileName);
-            File.Delete(objFileName);
+            File.Delete(meshFileFullPath);
+            File.Delete(irrFileName);
+            //File.Delete(objFileName);
         }
     }
 
     static string OF(int a, int b, int c) => $"f {a+1} {b+1} {c+1}";
+
+    internal static float GetIrradiance(IFormation formation, int agentIndex) => IrradianceFormationOffsets.TryGetValue(formation, out var offset) ? Irradiances[offset + agentIndex] : 0f;
 }
 
 public static class BinaryWriterExtensions

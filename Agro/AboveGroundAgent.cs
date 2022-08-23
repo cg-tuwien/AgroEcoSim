@@ -206,7 +206,7 @@ public partial struct AboveGroundAgent : IPlantAgent
 		var photosynthesizedEnergy = 0f;
 		if ((Organ == OrganTypes.Stem || Organ == OrganTypes.Leaf) && Water > 0f)
 		{
-			var approxLight = AgroWorld.GetAmbientLight(timestep);
+			var approxLight = AgroWorld.GetIrradiance(formation, formationID);
 			if (approxLight > 0.2f)
 			{
 				var airTemp = AgroWorld.GetTemperature(timestep);
