@@ -1,0 +1,3 @@
+[submodule "agroeco-mts3"]
+	path = agroeco-mts3
+	url = https://github.com/cfreude/agroeco-mts3.git
