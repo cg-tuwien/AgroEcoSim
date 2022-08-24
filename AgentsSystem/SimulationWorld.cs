@@ -56,7 +56,7 @@ public partial class SimulationWorld
 	public void Run(uint simulationLength)
 	{
 #if !DEBUG
-		if (Formations.Count > Environment.ProcessorCount)
+		if (Formations.Count > 1)
 			RunParallel(simulationLength);
 		else
 #endif

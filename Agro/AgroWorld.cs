@@ -373,6 +373,7 @@ uint32 pointsCount
 
     public static void IrradianceCallback(uint timestep, IList<IFormation> formations)
     {
+        return;
         SkipPlants.Clear();
         for(int i = 0; i < formations.Count; ++i)
             if (!(formations[i] is PlantFormation plant && plant.AG.Alive))
@@ -392,7 +393,11 @@ uint32 pointsCount
             // objWriter.WriteLine("o Field");
 
             var meshFileName = $"t{timestep}.mesh";
+#if GODOT
+            var meshFileFullPath = Path.Combine("agroeco-mts3", meshFileName);
+#else
             var meshFileFullPath = Path.Combine("..", "agroeco-mts3", meshFileName);
+#endif
             using (var meshStream = File.Open(meshFileFullPath, FileMode.Create))
             {
                 using var writer = new BinaryWriter(meshStream, Encoding.UTF8, false);
@@ -553,17 +558,26 @@ uint32 pointsCount
                 //objWriter.WriteLine(obji.ToString());
             }
 
+            SW.Start();
             var processInfo = new ProcessStartInfo("python3")
             {
                 CreateNoWindow = true,
-                WindowStyle = ProcessWindowStyle.Hidden,
+#if GODOT
+                WorkingDirectory = "agroeco-mts3",
+#else
                 WorkingDirectory = Path.Combine("..", "agroeco-mts3"),
+#endif
                 Arguments = $"render.py {meshFileName} {Latitude} {Longitude} {(new DateTime(2022, 1, 1, 0, 0, 0, DateTimeKind.Utc) + TimeSpan.FromHours(timestep / (double)TotalHours)).ToString("o", CultureInfo.InvariantCulture)}"
             };
 
             Process.Start(processInfo).WaitForExit();
+            SW.Stop();
 
-            var irrFileName = Path.Combine("..","agroeco-mts3",$"t{timestep}.irrbin");
+#if GODOT
+            var irrFileName = Path.Combine("agroeco-mts3", $"t{timestep}.irrbin");
+#else
+            var irrFileName = Path.Combine("..", "agroeco-mts3", $"t{timestep}.irrbin");
+#endif
             using var irrStream = File.Open(irrFileName, FileMode.Open);
             using var reader = new BinaryReader(irrStream);
 
@@ -576,9 +590,11 @@ uint32 pointsCount
         }
     }
 
+    internal static Stopwatch SW = new();
+
     static string OF(int a, int b, int c) => $"f {a+1} {b+1} {c+1}";
 
-    internal static float GetIrradiance(IFormation formation, int agentIndex) => IrradianceFormationOffsets.TryGetValue(formation, out var offset) ? Irradiances[offset + agentIndex] : 0f;
+    internal static float GetIrradiance(IFormation formation, int agentIndex) => IrradianceFormationOffsets.TryGetValue(formation, out var offset) ? Irradiances[offset + agentIndex] : 1f;
 }
 
 public static class BinaryWriterExtensions
