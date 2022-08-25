@@ -21,7 +21,7 @@ public static class Initialize
 			AgroWorld.FieldSize = settings.FieldSize.Value;
 
 		var world = new SimulationWorld();
-		world.AddCallback((timestep, formations) => AgroWorld.IrradianceCallback(timestep, formations));
+		world.AddCallback((timestep, formations) => IrradianceClient.Tick(timestep, formations));
 		var soil = new SoilFormation(new Vector3i(AgroWorld.FieldSize / AgroWorld.FieldResolution), AgroWorld.FieldSize, 0);
 		world.Add(soil);
 

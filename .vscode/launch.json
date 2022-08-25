@@ -5,7 +5,7 @@
             // Use IntelliSense to find out which attributes exist for C# debugging
             // Use hover for the description of the existing attributes
             // For further information visit https://github.com/OmniSharp/omnisharp-vscode/blob/master/debugger-launchjson.md
-            "name": "Debug",
+            "name": "Debug .NET",
             "type": "coreclr",
             "request": "launch",
             "preLaunchTask": "build",
@@ -21,7 +21,7 @@
             // Use IntelliSense to find out which attributes exist for C# debugging
             // Use hover for the description of the existing attributes
             // For further information visit https://github.com/OmniSharp/omnisharp-vscode/blob/master/debugger-launchjson.md
-            "name": "Release",
+            "name": "Release .NET",
             "type": "coreclr",
             "request": "launch",
             "preLaunchTask": "build Release",
@@ -33,10 +33,26 @@
             "console": "internalConsole",
             "stopAtEntry": false
         },
-        // {
-        //     "name": ".NET Core Attach",
-        //     "type": "coreclr",
-        //     "request": "attach"
-        // }
+        {
+            "name": "Render Server",
+            "type": "python",
+            "request": "launch",
+            "program": "render-server.py",
+            "args": ["--port", "9000"],
+            "cwd": "${workspaceFolder}/agroeco-mts3",
+            "console": "internalConsole",
+            "justMyCode":true
+        }
+    ],
+    "compounds": [
+        {
+            "name": "Debug + Render",
+            "configurations": ["Debug .NET", "Render Server"]
+        },
+        {
+            "name": "Release + Render",
+            "configurations": ["Release .NET", "Render Server"]
+        },
+
     ]
 }

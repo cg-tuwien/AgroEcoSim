@@ -16,7 +16,7 @@ public partial class Plant_AG_Godot : PlantAbstractGodot<AboveGroundAgent>
 
 	protected override void UpdateTransformation(MeshInstance sprite, int index)
 	{
-		var radius = Formation.GetBaseRadius(index);
+		//var radius = Formation.GetBaseRadius(index);
 		var orientation = Formation.GetDirection(index);
 		var length = Formation.GetLength(index) * 0.5f; //x0.5f because its the radius of the cube!
 		var stableScale = System.Numerics.Vector3.Transform(new System.Numerics.Vector3(length, 0f, 0f), orientation);
