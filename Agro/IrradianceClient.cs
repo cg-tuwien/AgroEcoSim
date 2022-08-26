@@ -244,7 +244,7 @@ uint32 pointsCount
     public static float GetIrradiance(IFormation formation, int agentIndex) => Singleton.IrradianceFormationOffsets.TryGetValue(formation, out var offset) ? Singleton.Irradiances[offset + agentIndex] : 0f;
     static string OF(int a, int b, int c) => $"f {a+1} {b+1} {c+1}";
 
-    internal System.Diagnostics.Stopwatch SW = new();
+    public readonly System.Diagnostics.Stopwatch SW = new();
 
     ~IrradianceClient()
     {

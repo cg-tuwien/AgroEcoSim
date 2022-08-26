@@ -16,6 +16,8 @@ public partial class SimulationWorld
 	List<MethodInfo> MessageLogClears = new();
 	#endif
 
+	public int Count => Formations.Count;
+
 	public SimulationWorld()
 	{
 		Formations = new List<IFormation>();

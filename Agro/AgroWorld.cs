@@ -53,7 +53,7 @@ public static class AgroWorld {
 
     static readonly int[] DaysPerMonth = new[]{31,28,31,30,31,30,31,31,30,31,30,31};
 
-    public static uint TimestepsTotal = TicksPerHour * TotalHours;
+    public static uint TimestepsTotal => TicksPerHour * TotalHours;
 
     public static readonly DateTime InitialTime = new(2022, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 

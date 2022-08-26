@@ -29,7 +29,7 @@ internal class Program
         {
             if (!File.Exists(options.ImportFile))
                 throw new FileNotFoundException("Simulation settings file not found.", options.ImportFile);
-            var settings = Import.JsonFile<FieldImportData>(options.ImportFile);
+            var settings = Import.JsonFile<SimulationRequest>(options.ImportFile);
             world = Initialize.World(settings);
         }
         else

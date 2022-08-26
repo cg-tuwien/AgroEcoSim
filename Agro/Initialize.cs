@@ -6,7 +6,7 @@ namespace Agro;
 
 public static class Initialize
 {
-	public static SimulationWorld World(FieldImportData? settings = null)
+	public static SimulationWorld World(SimulationRequest? settings = null)
 	{
 		if (settings?.TicksPerHour.HasValue ?? false)
 			AgroWorld.TicksPerHour = settings.TicksPerHour.Value;
@@ -34,7 +34,7 @@ public static class Initialize
 			for (int i = 0; i < plantsCount; ++i)
 			{
 				var minVegTemp = AgroWorld.RNG.NextFloat(8f, 10f);
-				var pos = settings.Plants[i].P
+				var pos = settings.Plants[i].Position
 					?? new Vector3(AgroWorld.FieldSize.X * AgroWorld.RNG.NextFloat(), -rnd.NextFloat(0.04f), AgroWorld.FieldSize.Z * AgroWorld.RNG.NextFloat());
 
 				var seed = new SeedAgent(pos,
