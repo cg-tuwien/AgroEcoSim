@@ -1,0 +1,24 @@
+FROM python:3.10-slim-bullseye
+COPY agroeco-mts3/render-server.py .
+COPY agroeco-mts3/binary_loader.py .
+COPY agroeco-mts3/requirements.txt .
+
+#RUN apt-get update && apt-get install ca-certificates && apt-get upgrade -y && apt-get install -y python3 python3-pip
+
+#necessary for numpy
+#RUN apk update && apk add --no-cache ca-certificates && apk upgrade -U --no-cache && apk add --no-cache musl-dev linux-headers g++ && rm -rf /var/cache/apk/*
+
+#RUN echo 'manylinux1_compatible = True' > /usr/local/lib/python3.10/site-packages/_manylinux.py
+RUN yes | pip install python-dateutil pysolar mitsuba numpy
+
+#COPY --from=publish harden.sh .
+#RUN chmod +x harden.sh && sh harden.sh && rm harden.sh
+#USER user:user
+
+#RUN apt-get purge python3-pip
+#RUN apt-get -y autoremove && apt autoclean && rm -rf /var/lib/apt/lists/*
+
+#does nothing, just documents the exposed port
+EXPOSE 9000
+ENTRYPOINT ["python3", "render-server.py"]
+CMD ["--port", "9000"]

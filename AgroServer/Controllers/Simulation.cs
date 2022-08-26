@@ -10,9 +10,17 @@ namespace AgroServer.Controllers;
 [Route("[controller]")]
 public class SimulationController : ControllerBase
 {
-    private readonly ILogger<SimulationController> _logger;
+    //private readonly ILogger<SimulationController> _logger;
+    //private readonly IConfiguration Configuration;
 
-    public SimulationController(ILogger<SimulationController> logger) => _logger = logger;
+    public SimulationController(IConfiguration configuration)
+    {
+        //_logger = logger;
+        //Configuration = configuration;
+        var ip = configuration["RendererIP"];
+        var port = configuration["RendererPort"];
+        IrradianceClient.SetAddress($"http://{ip}:{port}");
+    }
 
     [HttpPost]
     public async Task<ActionResult<SimulationResponse>> Post([FromBody]SimulationRequest request)

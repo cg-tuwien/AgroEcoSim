@@ -39,6 +39,8 @@ uint32 pointsCount
         Client.DefaultRequestHeaders.Add("Lo", AgroWorld.Longitude.ToString());
     }
 
+    public static void SetAddress(string addr) => Singleton.Client.BaseAddress = new Uri(addr);
+
     public static void Tick(uint timestep, IList<IFormation> formations) => Singleton.DoTick(timestep, formations);
 
     void DoTick(uint timestep, IList<IFormation> formations)

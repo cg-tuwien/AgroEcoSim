@@ -1,0 +1,7 @@
+services:
+  simulation:
+    image: agroecosim
+    ports:
+      - "7216:80"
+  renderer:
+    image: agroecorender

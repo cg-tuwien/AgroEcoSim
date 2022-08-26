@@ -1,0 +1,5 @@
+#!/bin/bash
+#docker stop $(sudo docker ps -qa);
+#docker system prune -f
+docker load < agroecoRender.tar.gz
+docker load < agroecoSim.tar.gz

@@ -1,0 +1,9 @@
+#!/bin/bash
+#docker stop $(docker ps -qa);
+#docker rmi -f $(sudo docker images -qa); sudo docker volume rm $(sudo docker volume ls -q)
+#docker system prune -f
+
+docker build --rm -f "Dockerfile-render" -t agroecorender "."
+docker build --rm -f "Dockerfile-sim" -t agroecosim "."
+docker save agroecorender | gzip > agroecoRender.tar.gz
+docker save agroecosim | gzip > agroecoSim.tar.gz

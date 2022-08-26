@@ -1,0 +1,41 @@
+#https://varhowto.com/install-miniconda-ubuntu-20-04/
+FROM mcr.microsoft.com/dotnet/sdk:6.0-alpine AS publish
+COPY . .
+#fix https://github.com/dotnet/dotnet-docker/issues/2470
+ENV COMPlus_EnableDiagnostics=0
+ENV DOTNET_CLI_TELEMETRY_OPTOUT=1
+ENV ASPNETCORE_ENVIRONMENT='Production'
+
+WORKDIR AgroServer
+
+RUN dotnet restore --runtime alpine-x64
+#--disable-parallel
+
+RUN dotnet publish \
+    --configuration Release \
+    -p:Platform=x64 \
+    --framework=net6.0 \
+    --nologo \
+    --runtime alpine-x64 \
+    --no-self-contained \
+    -p:PublishReadyToRun=true \
+    -p:PublishReadyToRunShowWarnings=true \
+    #-p:PublishTrimmed=true \
+    --output /app/
+#--verbosity detailed
+
+FROM mcr.microsoft.com/dotnet/aspnet:6.0-alpine AS final
+WORKDIR /app
+ENV COMPlus_EnableDiagnostics=0
+ENV DOTNET_CLI_TELEMETRY_OPTOUT=1
+ENV ASPNETCORE_ENVIRONMENT='Production'
+#only copy the published app folder into the final image, everything else (the whole src) is ignored
+COPY --from=publish /app .
+
+#COPY --from=publish harden.sh .
+#RUN chmod +x harden.sh && sh harden.sh && rm harden.sh
+#USER user:user
+
+#does nothing, just documents the exposed port
+EXPOSE 7215
+ENTRYPOINT ["./AgroServer"]
