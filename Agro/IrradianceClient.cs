@@ -4,6 +4,11 @@ using System.Numerics;
 using AgentsSystem;
 using Agro;
 using System.Globalization;
+using System.Collections.Generic;
+using System;
+using System.Net.Http;
+using System.IO;
+using System.Security.Cryptography;
 
 public class IrradianceClient
 {
@@ -13,6 +18,7 @@ public class IrradianceClient
     readonly List<Vector3> IrradiancePoints = new();
     readonly Dictionary<IFormation, int> IrradianceFormationOffsets = new ();
 
+    readonly bool IsOnline = false;
 /*
 #INDEXED DATA
 uint32 entitiesCount
@@ -33,15 +39,32 @@ uint32 pointsCount
 */
     private IrradianceClient()
     {
-        Client = new();
-        Client.BaseAddress = new Uri("http://localhost:9000");
+        Client = new() { BaseAddress = new Uri("http://localhost:9000") };
         Client.DefaultRequestHeaders.Add("La", AgroWorld.Latitude.ToString());
         Client.DefaultRequestHeaders.Add("Lo", AgroWorld.Longitude.ToString());
+
+        //Probe if the client is online, else fallback to constant ambient light
+        var request = new HttpRequestMessage() { Method = HttpMethod.Get };
+        try
+        {
+            var result = Client.SendAsync(request).Result;
+            IsOnline = result.IsSuccessStatusCode;
+        }
+        catch (Exception)
+        {
+            Console.WriteLine("WARNING: No irradiance client responded at http://localhost:9000. Falling back to ambient light pipeline.");
+        }
     }
 
     public static void SetAddress(string addr) => Singleton.Client.BaseAddress = new Uri(addr);
 
-    public static void Tick(uint timestep, IList<IFormation> formations) => Singleton.DoTick(timestep, formations);
+    public static void Tick(uint timestep, IList<IFormation> formations)
+    {
+        if (Singleton.IsOnline)
+            Singleton.DoTick(timestep, formations);
+        else
+            Singleton.DoAmbientTick(formations);
+    }
 
     void DoTick(uint timestep, IList<IFormation> formations)
     {
@@ -240,6 +263,41 @@ uint32 pointsCount
             for(int i = 0; i < offsetCounter; ++i)
                 Irradiances.Add(reader.ReadSingle());
             SW.Stop();
+        }
+    }
+
+    void DoAmbientTick(IList<IFormation> formations)
+    {
+        SkipPlants.Clear();
+        for(int i = 0; i < formations.Count; ++i)
+            if (!(formations[i] is PlantFormation plant && plant.AG.Alive))
+                SkipPlants.Add(i);
+
+        int offsetCounter = 0;
+        if (SkipPlants.Count < formations.Count)
+        {
+            Irradiances.Clear();
+            IrradianceFormationOffsets.Clear();
+            IrradiancePoints.Clear();
+
+            var skipPointer = 0;
+            for(int i = 0; i < formations.Count; ++i)
+            {
+                if (skipPointer < SkipPlants.Count && SkipPlants[skipPointer] == i)
+                    ++skipPointer;
+                else
+                {
+                    var plant = formations[i] as PlantFormation;
+                    var ag = plant!.AG;
+                    var count = ag.Count;
+
+                    IrradianceFormationOffsets.Add(ag, offsetCounter);
+                    offsetCounter += count;
+                }
+            }
+
+            for(int i = 0; i < offsetCounter; ++i)
+                Irradiances.Add(1f);
         }
     }
 
