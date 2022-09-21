@@ -22,6 +22,9 @@ public class SimulationController : ControllerBase
         IrradianceClient.SetAddress($"http://{ip}:{port}");
     }
 
+    [HttpGet]
+    public ActionResult Get() => Ok();
+
     [HttpPost]
     public async Task<ActionResult<SimulationResponse>> Post([FromBody]SimulationRequest request)
     {

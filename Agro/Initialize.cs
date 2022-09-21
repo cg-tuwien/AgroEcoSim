@@ -45,7 +45,7 @@ public static class Initialize
 		}
 		else
 		{
-			const int plantsCount = 100;
+			const int plantsCount = 1;
 			plantsFormation = new PlantFormation[plantsCount];
 			for (int i = 0; i < plantsCount; ++i)
 			{
