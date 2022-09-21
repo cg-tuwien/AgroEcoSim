@@ -1,4 +1,4 @@
-extends Camera
+extends Camera3D
 
 # Makes this Camera respond to input from mouse, keyboard, joystick and touch(?),
 # in order to rotate around its parent node while facing it.
@@ -37,40 +37,40 @@ extends Camera
 # - (you <3)
 
 # Keep the horizon stable, the UP to Y
-export var stabilize_horizon = false
-export var mouse_enabled = true
-export var mouse_invert = false
-export var mouse_strength = 1.0
+@export var stabilize_horizon = false
+@export var mouse_enabled = true
+@export var mouse_invert = false
+@export var mouse_strength = 1.0
 # If true will disable click+drag and move around with the mouse moves
-export var mouse_move_mode = false
+@export var mouse_move_mode = false
 # Directly bound keyboard is deprecated, use actions instead
-export var keyboard_enabled = false
-export var keyboard_invert = false
-export var keyboard_strength = 1.0
+@export var keyboard_enabled = false
+@export var keyboard_invert = false
+@export var keyboard_strength = 1.0
 # Directly bound joystick is deprecated, use actions instead
-export var joystick_enabled = true
-export var joystick_invert = false
-export var joystick_strength = 1.0
+@export var joystick_enabled = true
+@export var joystick_invert = false
+@export var joystick_strength = 1.0
 # The resting state of my joystick's x-axis is -0.05,
 # so we want to ignore any input below this threshold.
-export var joystick_threshold = 0.09
-export var joystick_device = 0
+@export var joystick_threshold = 0.09
+@export var joystick_device = 0
 # Use the project's Actions
-export var action_enabled = true
-export var action_invert = false
-export var action_up = 'ui_up'
-export var action_down = 'ui_down'
-export var action_right = 'ui_right'
-export var action_left = 'ui_left'
-export var action_strength = 1.0
+@export var action_enabled = true
+@export var action_invert = false
+@export var action_up = 'ui_up'
+@export var action_down = 'ui_down'
+@export var action_right = 'ui_right'
+@export var action_left = 'ui_left'
+@export var action_strength = 1.0
 
-export var zoom_enabled = true
-export var zoom_invert = false
-export var zoom_strength = 1.0
+@export var zoom_enabled = true
+@export var zoom_invert = false
+@export var zoom_strength = 1.0
 # As distances between the camera and its target
-export var zoom_minimum = 0.3
-export var zoom_maximum = 90.0
-export(float, 0.0, 1.0, 0.000001) var zoomInertiaTreshold = 0.0001
+@export var zoom_minimum = 0.3
+@export var zoom_maximum = 90.0
+@export_range(0.0, 1.0, 0.000001) var zoomInertiaTreshold = 0.0001
 
 # There is no default Godot action using mousewheel, so
 # you should make your own actions and use them here.
@@ -78,27 +78,27 @@ export(float, 0.0, 1.0, 0.000001) var zoomInertiaTreshold = 0.0001
 # Perhaps the plugin could add those…
 # We're using `action_just_released` to catch mousewheels properly,
 # which makes it a bit awkward for key presses.
-export var action_zoom_in = 'ui_page_up'
-export var action_zoom_out = 'ui_page_down'
+@export var action_zoom_in = 'ui_page_up'
+@export var action_zoom_out = 'ui_page_down'
 
 # Multiplier applied to all lateral (non-zoom) inputs
-export var inertia_strength = 1.0
+@export var inertia_strength = 1.0
 # When inertia gets below this treshold, stop the camera
-export(float, 0.0, 1.0, 0.000001) var inertiaTreshold = 0.0001
+@export_range(0.0, 1.0, 0.000001) var inertiaTreshold = 0.0001
 # Fraction of inertia lost on each frame
-export(float, 0.0, 1.0, 0.005) var friction = 0.07
+@export_range(0.0, 1.0, 0.005) var friction = 0.07
 
 
 
-#export var enable_yaw_limit = true  # left & right
+#@export var enable_yaw_limit = true  # left & right
 # Limit as fraction of a half-circle = TAU/2 = PI
 #export(float, 0, 1, 0.005) var yaw_limit = 1.0
 
-export var enable_pitch_limit = false  # up & down
+@export var enable_pitch_limit = false  # up & down
 # Limits as fraction of a quarter-circle = TAU/4
-export(float, 0, 1, 0.005) var pitch_up_limit = 1.0
-export(float, 0, 1, 0.005) var pitch_down_limit = 1.0
-export(float, 0, 100, 0.05) var pitch_limit_strength = 1.0
+@export_range(0, 1, 0.005) var pitch_up_limit = 1.0
+@export_range(0, 1, 0.005) var pitch_down_limit = 1.0
+@export_range(0, 100, 0.05) var pitch_limit_strength = 1.0
 
 
 # If you need those as exported variables, it can happen
@@ -135,7 +135,7 @@ func ready():
 	var currentParent = get_parent()
 	print(currentParent)
 	print(currentParent.get_parent())
-	var panSpatial = Spatial.new()
+	var panSpatial = Node3D.new()
 	currentParent.call_deferred("remove_child", self)
 	currentParent.call_deferred("add_child", panSpatial)
 	panSpatial.call_deferred("add_child", self)
@@ -166,9 +166,9 @@ func handle_mouse_input(event):
 
 		_mouseDragPosition = _mouseDragStart
 	if (mouse_move_mode) and (event is InputEventMouseMotion):
-		if Input.is_mouse_button_pressed(BUTTON_LEFT):
+		if Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
 			add_turn_inertia(event.relative * mouse_strength * 0.00005)
-		elif Input.is_mouse_button_pressed(BUTTON_RIGHT):
+		elif Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT):
 			add_move_inertia(event.relative * mouse_strength * 0.00005)
 
 func _process(delta):
@@ -185,15 +185,15 @@ func _process(delta):
 func process_mouse(delta):
 	if mouse_enabled and _mouseDragPosition != null:
 		var _currentDragPosition = get_mouse_position()
-		if Input.is_mouse_button_pressed(BUTTON_LEFT):
+		if Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
 			add_turn_inertia(
 				(_currentDragPosition - _mouseDragPosition) \
 				* mouse_strength * (-0.1 if mouse_invert else 0.1))
-		elif Input.is_mouse_button_pressed(BUTTON_RIGHT):
+		elif Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT):
 			add_move_inertia(
 				(_currentDragPosition - _mouseDragPosition) \
 				* mouse_strength * (-0.1 if mouse_invert else 0.1))
-		elif Input.is_mouse_button_pressed(BUTTON_MIDDLE):
+		elif Input.is_mouse_button_pressed(MOUSE_BUTTON_MIDDLE):
 			add_zoom_inertia(
 				(_currentDragPosition.y - _mouseDragPosition.y) \
 				* mouse_strength * (0.4 if mouse_invert else -0.4))
@@ -204,21 +204,21 @@ func process_keyboard(delta):  # deprecated, use actions
 	if keyboard_enabled:
 		var key_i = -1 if keyboard_invert else 1
 		var key_s = keyboard_strength / 1000.0	# exported floats get truncated
-		if Input.is_key_pressed(KEY_LEFT) and not Input.is_key_pressed(KEY_CONTROL):
+		if Input.is_key_pressed(KEY_LEFT) and not Input.is_key_pressed(KEY_CTRL):
 			add_turn_inertia(Vector2(key_i * key_s, 0))
-		if Input.is_key_pressed(KEY_RIGHT) and not Input.is_key_pressed(KEY_CONTROL):
+		if Input.is_key_pressed(KEY_RIGHT) and not Input.is_key_pressed(KEY_CTRL):
 			add_turn_inertia(Vector2(-1 * key_i * key_s, 0))
-		if Input.is_key_pressed(KEY_UP) and not Input.is_key_pressed(KEY_CONTROL):
+		if Input.is_key_pressed(KEY_UP) and not Input.is_key_pressed(KEY_CTRL):
 			add_turn_inertia(Vector2(0, key_i * key_s))
-		if Input.is_key_pressed(KEY_DOWN) and not Input.is_key_pressed(KEY_CONTROL):
+		if Input.is_key_pressed(KEY_DOWN) and not Input.is_key_pressed(KEY_CTRL):
 			add_turn_inertia(Vector2(0, -1 * key_i * key_s))
-		if Input.is_key_pressed(KEY_LEFT) and Input.is_key_pressed(KEY_CONTROL):
+		if Input.is_key_pressed(KEY_LEFT) and Input.is_key_pressed(KEY_CTRL):
 			add_move_inertia(Vector2(key_i * key_s, 0))
-		if Input.is_key_pressed(KEY_RIGHT) and Input.is_key_pressed(KEY_CONTROL):
+		if Input.is_key_pressed(KEY_RIGHT) and Input.is_key_pressed(KEY_CTRL):
 			add_move_inertia(Vector2(-1 * key_i * key_s, 0))
-		if Input.is_key_pressed(KEY_UP) and Input.is_key_pressed(KEY_CONTROL):
+		if Input.is_key_pressed(KEY_UP) and Input.is_key_pressed(KEY_CTRL):
 			add_move_inertia(Vector2(0, key_i * key_s))
-		if Input.is_key_pressed(KEY_DOWN) and Input.is_key_pressed(KEY_CONTROL):
+		if Input.is_key_pressed(KEY_DOWN) and Input.is_key_pressed(KEY_CTRL):
 			add_move_inertia(Vector2(0, -1 * key_i * key_s))
 
 func process_joystick(delta):  # deprecated, use actions
@@ -378,7 +378,7 @@ func apply_updown_constraint(on_transform, limit=0.75):
 	var eulers = on_transform.basis.get_euler()
 	eulers.x = clamp(eulers.x, -limit, limit)
 	eulers.z = 0.0
-	on_transform.basis = Basis(Quat(eulers))
+	on_transform.basis = Basis(Quaternion(eulers))
 	return on_transform
 
 
@@ -388,17 +388,18 @@ func apply_rotation_from_tangent(tangent):
 	if self.stabilize_horizon:
 		up = HORIZON_NORMAL
 	else:
-		up = tr.basis.xform(_cameraUp).normalized()
-	var rg = tr.basis.xform(_cameraRight).normalized()
-	var upQuat = Quat(up, -1 * tangent.x * TAU)
-	var rgQuat = Quat(rg, -1 * tangent.y * TAU)
-	var rotated_transform = Transform(upQuat * rgQuat) * tr
+		up = (tr.basis * _cameraUp).normalized()
+	
+	var rg = (tr.basis * _cameraRight).normalized()
+	var upQuat = Quaternion(up, -1 * tangent.x * TAU)
+	var rgQuat = Quaternion(rg, -1 * tangent.y * TAU)
+	var rotated_transform = Transform3D(upQuat * rgQuat) * tr
 	set_transform(apply_constraints(rotated_transform))
 
 func apply_movement_from_tangent(tangent):
 	var tr = get_transform()
-	var left = tr.basis.xform(Vector3.LEFT).normalized()
-	var up = tr.basis.xform(Vector3.UP).normalized()
+	var left = (tr.basis * Vector3.LEFT).normalized()
+	var up = (tr.basis * Vector3.UP).normalized()
 	get_parent().global_translate(tangent.x * left + tangent.y * up)
 
 func get_mouse_position():

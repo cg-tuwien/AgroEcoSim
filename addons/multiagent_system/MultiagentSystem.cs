@@ -5,12 +5,13 @@ using System.Collections.Generic;
 using AgentsSystem;
 using Agro;
 
-public class MultiagentSystem : Spatial
+[Tool]
+public partial class MultiagentSystem : Node3D
 {
 	bool Paused = false;
 	bool Pressed = false;
 	bool SingleStep = false;
-	List<MeshInstance> Sprites = new List<MeshInstance>();
+	List<MeshInstance3D> Sprites = new List<MeshInstance3D>();
 
 	SimulationWorld World;
 
@@ -25,7 +26,7 @@ public class MultiagentSystem : Spatial
 #endif
 		SimulationWorld.GodotAddChild = node => AddChild(node);
 		SimulationWorld.GodotRemoveChild = node => RemoveChild(node);
-		Translation = new Vector3(-0.5f * AgroWorld.FieldSize.X, 0f, -0.5f * AgroWorld.FieldSize.Z);
+		Position = new Vector3(-0.5f * AgroWorld.FieldSize.X, 0f, -0.5f * AgroWorld.FieldSize.Z);
 
 		World = Initialize.World();
 	}
@@ -34,7 +35,7 @@ public class MultiagentSystem : Spatial
 	/// Called every frame
 	/// </summay>
 	/// <param name="delta">'Elapsed time since the previous frame</param>
-	public override void _Process(float delta)
+	public override void _Process(double delta)
 	{
 		SolveInput();
 

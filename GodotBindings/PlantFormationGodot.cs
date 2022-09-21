@@ -14,7 +14,7 @@ public partial class PlantFormation
 	const DisplayOptions ShowOrgans = DisplayOptions.Seed | DisplayOptions.UnderGround | DisplayOptions.AboveGround;
 	//const DisplayOptions ShowOrgans = DisplayOptions.Seed | DisplayOptions.AboveGround;
 	//const DisplayOptions ShowOrgans = DisplayOptions.None;
-	MeshInstance GodotSeedSprite;
+	MeshInstance3D GodotSeedSprite;
 	Plant_UG_Godot UG_Godot;
 	Plant_AG_Godot AG_Godot;
 
@@ -26,17 +26,17 @@ public partial class PlantFormation
 		{
 			var spherePrimitive = new SphereMesh();
 			//spherePrimitive.Height = 1f;
-			GodotSeedSprite = new MeshInstance(); // Create a new Sprite.
+			GodotSeedSprite = new MeshInstance3D(); // Create a new Sprite.
 			SimulationWorld.GodotAddChild(GodotSeedSprite); // Add it as a child of this node.
 			GodotSeedSprite.Mesh = spherePrimitive;
-			if (GodotSeedSprite.GetSurfaceMaterial(0) == null)
+			if (GodotSeedSprite.GetSurfaceOverrideMaterial(0) == null)
 			{
-				var m = new SpatialMaterial();
+				var m = new StandardMaterial3D();
 				m.AlbedoColor = new Color(1, 0, 0);
-				GodotSeedSprite.SetSurfaceMaterial(0, m);
+				GodotSeedSprite.SetSurfaceOverrideMaterial(0, m);
 			}
 			var seed = Seed[0];
-			GodotSeedSprite.Translation = seed.Center.ToGodot();
+			GodotSeedSprite.Position = seed.Center.ToGodot();
 			GodotSeedSprite.Scale = Vector3.One * seed.Radius;
 		}
 
@@ -55,7 +55,7 @@ public partial class PlantFormation
 			{
 				GodotSeedSprite.Scale = Vector3.One * Seed[0].Radius;
 				var seedColor = 0.5f * Seed[0].GerminationProgress + 0.5f;
-				((SpatialMaterial)GodotSeedSprite.GetSurfaceMaterial(0)).AlbedoColor = new Color(seedColor, seedColor, seedColor);
+				((StandardMaterial3D)GodotSeedSprite.GetSurfaceOverrideMaterial(0)).AlbedoColor = new Color(seedColor, seedColor, seedColor);
 			}
 			else if (GodotSeedSprite != null)
 			{

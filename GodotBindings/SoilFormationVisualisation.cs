@@ -50,12 +50,12 @@ public partial class SoilFormation
 		var coordsDiff = Coords(dstIndex) - Coords(srcIndex);
 		return coordsDiff switch
 		{
-			Vector3i(1, 0, 0) => 0,
-			Vector3i(0, 1, 0) => 5,
-			Vector3i(0, 0, 1) => 4,
-			Vector3i(-1, 0, 0) => 3,
-			Vector3i(0, -1, 0) => 2,
-			Vector3i(0, 0, -1) => 1,
+			Utils.Vector3i(1, 0, 0) => 0,
+			Utils.Vector3i(0, 1, 0) => 5,
+			Utils.Vector3i(0, 0, 1) => 4,
+			Utils.Vector3i(-1, 0, 0) => 3,
+			Utils.Vector3i(0, -1, 0) => 2,
+			Utils.Vector3i(0, 0, -1) => 1,
 			_ => throw new Exception("Cells passed to GetDir are no direct neighbors.")
 		};
 	}
@@ -76,7 +76,7 @@ public partial class SoilFormation
 	}
 
 	private void InitializeCells(){
-		SoilCellInstances = new MeshInstance[Agents.Length]; //no need for multiplication here, it's a complete 3D grid
+		SoilCellInstances = new MeshInstance3D[Agents.Length]; //no need for multiplication here, it's a complete 3D grid
 		for (int x = 0; x < SizeX; x++)
 			for (int y = 0; y < SizeY; y++)
 				for (int z = 0; z < SizeZ; z++)
@@ -85,7 +85,7 @@ public partial class SoilFormation
 
 	private void InitializeMarkers(){
 		MarkerDataStorage = new();
-		MarkerInstances = new MeshInstance[Agents.Length, 6];
+		MarkerInstances = new MeshInstance3D[Agents.Length, 6];
 
 		var maxID = ulong.MinValue;
 		foreach(Direction dir in Enum.GetValues(typeof(Direction)))
@@ -104,15 +104,15 @@ public partial class SoilFormation
 	}
 
 	private void InitializeMarker(int parent_index, Direction dir){
-		var parent_pos = SoilCellInstances[parent_index].Translation;
+		var parent_pos = SoilCellInstances[parent_index].Position;
 		var dirIndex = (int)dir;
 
-		var marker = new MeshInstance() {
-			Translation = parent_pos + MarkerOffsets[dirIndex],
+		var marker = new MeshInstance3D() {
+			Position = parent_pos + MarkerOffsets[dirIndex],
 			Rotation = Rotations[dirIndex],
 			Mesh = Parameters.MarkerShape
 		};
-		marker.SetSurfaceMaterial(0, (SpatialMaterial)Parameters.MarkerMaterial.Duplicate());
+		marker.SetSurfaceOverrideMaterial(0, (StandardMaterial3D)Parameters.MarkerMaterial.Duplicate());
 
 
 		MarkerInstances[parent_index, dirIndex] = marker;
@@ -122,13 +122,17 @@ public partial class SoilFormation
 	}
 
 	private void InitializeCell(int x, int y, int z){
-		var mesh = new MeshInstance()
+		var mesh = new MeshInstance3D()
 		{
-			Mesh = Parameters.SoilCellShape,
-			Translation = new Vector3(x, -z, y) * AgroWorld.FieldResolution,
+			Mesh = new BoxMesh(),//Parameters.SoilCellShape,
+			Position = new Vector3(x, -z, y) * AgroWorld.FieldResolution,
 			Scale = Vector3.One * (Parameters.SoilCellScale * AgroWorld.FieldResolution),
 		};
-		mesh.SetSurfaceMaterial(0, (SpatialMaterial)Parameters.SoilCellMaterial.Duplicate());
+		//mesh.SetSurfaceOverrideMaterial(0, (StandardMaterial3D)Parameters.SoilCellMaterial.Duplicate());
+		//mesh.SetSurfaceOverrideMaterial(0,  new StandardMaterial3D());
+		//mesh.Mesh.SurfaceSetMaterial(0, new StandardMaterial3D(){ AlbedoColor = new(0.9f, 0.3f, 0.1f) });
+		//mesh.MaterialOverride = new StandardMaterial3D(){ AlbedoColor = new(0.9f, 0.3f, 0.1f) }; //no effect
+		mesh.MaterialOverlay = new StandardMaterial3D(){ AlbedoColor = new(0.9f, 0.3f, 0.1f) };
 
 		SoilCellInstances[Index(x, y, z)] = mesh;
 		SimulationWorld.GodotAddChild(mesh);
@@ -141,7 +145,8 @@ public partial class SoilFormation
 			var multiplier = Math.Clamp(Agents[i].Water / Agents[i].WaterMaxCapacity, 0f, 1f);
 
 			SoilCellInstances[i].Scale = Vector3.One * (Parameters.SoilCellScale * AgroWorld.FieldResolution * multiplier);
-			((SpatialMaterial)SoilCellInstances[i].GetSurfaceMaterial(0)).AlbedoColor = multiplier * Parameters.FullCellColor + (1f - multiplier) * Parameters.EmptyCellColor;
+			//((StandardMaterial3D)SoilCellInstances[i].GetSurfaceOverrideMaterial(0)).AlbedoColor = multiplier * Parameters.FullCellColor + (1f - multiplier) * Parameters.EmptyCellColor;
+//			Console.WriteLine($"Mode: {((StandardMaterial3D)SoilCellInstances[i].GetSurfaceOverrideMaterial(0)).ShadingMode} Color: {((StandardMaterial3D)SoilCellInstances[i].GetSurfaceOverrideMaterial(0)).AlbedoColor}");
 		}
 	}
 
@@ -185,11 +190,11 @@ public partial class SoilFormation
 		{
 			marker_scale = cell_scale * (Parameters.AnimateMarkerSize ? Parameters.MarkerScale * appearance_multiplier : Parameters.MarkerScale);
 			var offset_multiplier = (cell_scale + marker_scale) * 0.5f;
-			mesh.Translation = marker.InitialPosition + MarkerOffsets[dir] * offset_multiplier;
+			mesh.Position = marker.InitialPosition + MarkerOffsets[dir] * offset_multiplier;
 			mesh.Scale = Vector3.One * marker_scale;
 			mesh.Visible = true;
 
-			((SpatialMaterial)mesh.GetSurfaceMaterial(0)).AlbedoColor = appearance_multiplier * Parameters.FullFlowColor + (1f - appearance_multiplier) * Parameters.NoFlowColor;
+			((StandardMaterial3D)mesh.GetSurfaceOverrideMaterial(0)).AlbedoColor = appearance_multiplier * Parameters.FullFlowColor + (1f - appearance_multiplier) * Parameters.NoFlowColor;
 		}
 	}
 

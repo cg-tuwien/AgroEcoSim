@@ -13,12 +13,12 @@ public abstract class PlantAbstractGodot<T> where T : struct, IPlantAgent
 {
 	internal bool GodotShow = true;
 	protected readonly PlantSubFormation<T> Formation;
-	protected readonly List<MeshInstance> GodotSprites = new();
-	protected readonly static CubeMesh PlantCubePrimitive = new CubeMesh();
+	protected readonly List<MeshInstance3D> GodotSprites = new();
+	protected readonly static BoxMesh PlantCubePrimitive = new BoxMesh();
 
 	protected PlantAbstractGodot(PlantSubFormation<T> formation) => Formation = formation;
 
-	protected abstract void UpdateTransformation(MeshInstance sprite, int index);
+	protected abstract void UpdateTransformation(MeshInstance3D sprite, int index);
 
 	static Color DefaultColor = new Color(0.7f, 0.7f, 0.7f);
 
@@ -29,14 +29,14 @@ public abstract class PlantAbstractGodot<T> where T : struct, IPlantAgent
 	{
 		if (GodotShow)
 		{
-			var sprite = new MeshInstance();
+			var sprite = new MeshInstance3D();
 			SimulationWorld.GodotAddChild(sprite); // Add it as a child of this node.
 			sprite.Mesh = PlantCubePrimitive;
-			if (sprite.GetSurfaceMaterial(0) == null) //TODO if not visualizing, use a common material for all
+			if (sprite.GetSurfaceOverrideMaterial(0) == null) //TODO if not visualizing, use a common material for all
 			{
-				var m = new SpatialMaterial();
-				m.AlbedoColor = new Color(0.7f, 0.7f, 0.7f);
-				sprite.SetSurfaceMaterial(0, new SpatialMaterial{ AlbedoColor = FormationColor });
+				//var m = new StandardMaterial3D();
+				//m.AlbedoColor = new Color(0.7f, 0.7f, 0.7f);
+				sprite.SetSurfaceOverrideMaterial(0, new StandardMaterial3D{ AlbedoColor = FormationColor });
 			}
 
 			UpdateTransformation(sprite, index);

@@ -11,16 +11,16 @@ public partial class SoilFormation
 	SoilVisualisationSettings Parameters = new()
 	{
 		FullCellColor = Colors.Blue,
-		EmptyCellColor = Colors.Black,
+		EmptyCellColor = Colors.Red,
 		FullFlowColor = Colors.Blue,
-		NoFlowColor = Colors.Black,
+		NoFlowColor = Colors.Red,
 		AnimateMarkerSize = true
 	};
 
 	//Todo: Speed of the visualisation could be improved by replacing Mesh with MultiMesh (leveraging identical geo)!!!
-	public MeshInstance[] SoilCellInstances;
+	public MeshInstance3D[] SoilCellInstances;
 
-	public MeshInstance[,] MarkerInstances;
+	public MeshInstance3D[,] MarkerInstances;
 
 	private List<MarkerData> MarkerDataStorage;
 

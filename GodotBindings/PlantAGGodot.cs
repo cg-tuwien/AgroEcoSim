@@ -14,7 +14,7 @@ public partial class Plant_AG_Godot : PlantAbstractGodot<AboveGroundAgent>
 	protected override Color FormationColor => Colors.Green;
 	protected override ColorCodingType FormationColorCoding => ColorCodingType.MixedRatio;
 
-	protected override void UpdateTransformation(MeshInstance sprite, int index)
+	protected override void UpdateTransformation(MeshInstance3D sprite, int index)
 	{
 		//var radius = Formation.GetBaseRadius(index);
 		var orientation = Formation.GetDirection(index);
@@ -22,9 +22,9 @@ public partial class Plant_AG_Godot : PlantAbstractGodot<AboveGroundAgent>
 		var stableScale = System.Numerics.Vector3.Transform(new System.Numerics.Vector3(length, 0f, 0f), orientation);
 
 		var basis = new Basis(orientation.ToGodot());
-		sprite.Transform = new Transform(basis, (Formation.GetBaseCenter(index) + stableScale).ToGodot());
+		sprite.Transform = new Transform3D(basis, (Formation.GetBaseCenter(index) + stableScale).ToGodot());
 		sprite.Scale = (Formation.GetScale(index) * 0.5f).ToGodot();
 
-		((SpatialMaterial)sprite.GetSurfaceMaterial(0)).AlbedoColor = ColorCoding(index, FormationColorCoding);
+		((StandardMaterial3D)sprite.GetSurfaceOverrideMaterial(0)).AlbedoColor = ColorCoding(index, FormationColorCoding);
 	}
 }
