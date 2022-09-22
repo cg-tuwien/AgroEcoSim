@@ -35,6 +35,10 @@ public class SimulationRequest
     ///Size of a soil voxel in meters (default: 0.5)
     ///</summary>
     public float? FieldResolution { get; set; }
+    ///<summary>
+    ///Seed number that controls all pseudo-random decisions in the simulation. (default: 42)
+    ///</summary>
+    public ulong? Seed { get; set; }
 
     ///<summary>
     ///A list of seeds to be planted

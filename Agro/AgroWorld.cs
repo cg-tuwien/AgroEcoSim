@@ -10,6 +10,9 @@ using System.Runtime.InteropServices;
 using AgentsSystem;
 using System.Text;
 using System.Globalization;
+using System.Collections;
+using Innovative.SolarCalculator;
+using GeoTimeZone;
 
 namespace Agro;
 
@@ -46,16 +49,17 @@ public static class AgroWorld {
     public const float Latitude = 48.208333f;
     public const float Longitude = 16.3725f;
     public const float Elevation = 188; //meters above sea level
-
+    public static TimeZoneInfo TimeZone = TimeZoneInfo.FindSystemTimeZoneById(TimeZoneLookup.GetTimeZone(Latitude, Longitude).Result);
 
     //clouds_coverage, precipitation
     static readonly WeatherStats[] Weather;
+    static readonly BitArray Daylight;
 
     static readonly int[] DaysPerMonth = new[]{31,28,31,30,31,30,31,31,30,31,30,31};
 
     public static uint TimestepsTotal => TicksPerHour * TotalHours;
 
-    public static readonly DateTime InitialTime = new(2022, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+    public static readonly DateTime InitialTime = new(2022, 1, 1, 0, 0, 0, DateTimeKind.Unspecified);
 
     static AgroWorld()
     {
@@ -110,13 +114,29 @@ public static class AgroWorld {
             tsRemain -= monthlyLength;
             tsCounter += monthlyLength;
         }
+
+        var tsi = (int)TimestepsTotal;
+        Daylight = new BitArray(tsi);
+        //TODO handle signed vs. unsigned
+        for (int i = 0; i < tsi; ++i)
+        {
+            var t = GetTime((uint)i);
+            var solar = new SolarTimes(t.ToUniversalTime(), 0, Latitude, Longitude);
+            if (solar.DawnAstronomical <= t && t <= solar.DuskAstronomical)
+                Daylight.Set(i, true);
+        }
+
     }
 
+    static readonly double RcpTicksPerHour = 1.0 / TicksPerHour;
+    internal static DateTime GetTime(uint timestep) => TimeZoneInfo.ConvertTimeToUtc(InitialTime, TimeZone) + (TicksPerHour == 1 ? TimeSpan.FromHours(timestep) : TimeSpan.FromHours(timestep * RcpTicksPerHour));
     internal static float GetWater(uint timestep) => Weather[timestep].Precipitation;
     internal static float GetTemperature(uint timestep) => 20;
     internal static float GetAmbientLight(uint timestep) => 1f - Weather[timestep].SkyCoverage;
+    internal static bool GetDaylight(uint timestep) => Daylight.Get((int)timestep);
 
-    internal static readonly Pcg RNG = new(42);
+    internal static Pcg RNG = new(42);
+    internal static void InitRNG(ulong seed) => RNG = new(seed);
 
     static int[] DistributeSunAndClouds(int totalSun, int totalClouds)
     {
