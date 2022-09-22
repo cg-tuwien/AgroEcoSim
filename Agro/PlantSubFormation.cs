@@ -8,19 +8,23 @@ using glTFLoader.Schema;
 using Utils;
 using NumericHelpers;
 using System.Collections;
+using System.Runtime.InteropServices;
 
 namespace Agro;
 
-public enum PlantSubstances { Water, Energy}
+public enum PlantSubstances : byte { Water, Energy}
 
+[StructLayout(LayoutKind.Auto)]
 internal struct NodeCacheData
 {
 	readonly List<int> mChildren = new();
 	internal ushort Depth;
+	internal Vector3 Point;
 
 	public NodeCacheData()
 	{
 		Depth = 0;
+		Point = default;
 	}
 
 	public void Clear() => mChildren.Clear();
@@ -91,6 +95,37 @@ internal class TreeCacheData
 	internal ICollection<int> GetRoots() => Roots;
 	internal ushort GetAbsDepth(int index) => Nodes[index].Depth;
 	internal float GetRelDepth(int index) => MaxDepth > 0 ? (Nodes[index].Depth + 1) / (float)MaxDepth : 1f;
+	internal Vector3 GetBaseCenter(int index) => Nodes[index].Point;
+
+	internal void UpdateBases<T>(PlantSubFormation<T> formation) where T : struct, IPlantAgent
+	{
+		var buffer = new Queue<int>();
+		foreach(var root in Roots)
+		{
+			Nodes[root].Point = formation.Plant.Position;
+			var point = formation.Plant.Position + Vector3.Transform(Vector3.UnitX, formation.GetDirection(root)) * formation.GetLength(root);
+			foreach(var child in GetChildren(root))
+			{
+				Nodes[child].Point = point;
+				buffer.Enqueue(child);
+			}
+		}
+
+		while (buffer.Count > 0)
+		{
+			var next = buffer.Dequeue();
+			var children = GetChildren(next);
+			if (children.Count > 0)
+			{
+				var point = Nodes[next].Point + Vector3.Transform(Vector3.UnitX, formation.GetDirection(next)) * formation.GetLength(next);
+				foreach(var child in children)
+				{
+					Nodes[child].Point = point;
+					buffer.Enqueue(child);
+				}
+			}
+		}
+	}
 }
 
 public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAgent
@@ -217,8 +252,14 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 		//     Roots.AddRange(RootsBirths);
 		if (Births.Count > 0 || Inserts.Count > 0 || Deaths.Count > 0)
 		{
+			Debug.WriteLine($"{typeof(T).Name} census event: B = {Births.Count}   I = {Inserts.Count}   D = {Deaths.Count}");
+			// #if GODOT
+			// MultiagentSystem.TriggerPause();
+			// #endif
 			var (src, dst) = SrcDst();
-
+			// #if DEBUG
+			// Console.WriteLine(DebugTreePrint(src));
+			// #endif
 			if (Deaths.Count > 0)
 			{
 				DeathsHelper.Clear();
@@ -391,7 +432,9 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 				Agents = tmp;
 				AgentsTMP = new T[tmp.Length];
 			}
-
+			// #if DEBUG
+			// Console.WriteLine(DebugTreePrint(Src()));
+			// #endif
 #if GODOT
 			for(int i = Agents.Length - Births.Count - Inserts.Count; i < Agents.Length; ++i)
 				GodotAddSprite(i);
@@ -407,6 +450,7 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 
 			TreeCache.FinishUpdate();
 		}
+		TreeCache.UpdateBases(this);
 	}
 
 	public void Tick(SimulationWorld world, uint timestep)
@@ -439,10 +483,6 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 		Post.Process(timestep, dst);
 
 		ReadTMP = !ReadTMP;
-#if DEBUG
-		for(int i = 0; i < Agents.Length; ++i)
-			GetBaseCenter(i);
-#endif
 	}
 
 	public void ProcessTransactions(uint timestep)
@@ -567,7 +607,6 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 		? (AgentsTMP.Length > index ? AgentsTMP[index].Length : 0f)
 		: (Agents.Length > index ? Agents[index].Length : 0f);
 
-	//TODO accumulate from root
 	public Quaternion GetDirection(int index) => ReadTMP
 		? (AgentsTMP.Length > index ? AgentsTMP[index].Orientation : Quaternion.Identity)
 		: (Agents.Length > index ? Agents[index].Orientation : Quaternion.Identity);
@@ -580,29 +619,32 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 		? (AgentsTMP.Length > index ? AgentsTMP[index].WoodRatio : 0f)
 		: (Agents.Length > index ? Agents[index].WoodRatio : 0f);
 
-	public Vector3 GetBaseCenter(int index)
-	{
-		if (ReadTMP ? AgentsTMP.Length <= index : Agents.Length <= index)
-			return Vector3.Zero;
+	public Vector3 GetBaseCenter(int index) => TreeCache.GetBaseCenter(index);
+	// {
+	// 	if (ReadTMP ? AgentsTMP.Length <= index : Agents.Length <= index)
+	// 		return Vector3.Zero;
 
-		var parents = new List<int>{index};
-		if (ReadTMP)
-			do {parents.Add(AgentsTMP[parents[^1]].Parent); }
-			while(parents[^1] >= 0 && parents.Count <= AgentsTMP.Length);
-		else
-			do parents.Add(Agents[parents[^1]].Parent);
-			while(parents[^1] >= 0 && parents.Count <= Agents.Length);
+	// 	var parents = new List<int>(TreeCache.GetAbsDepth(index)){index};
+	// 	if (ReadTMP)
+	// 		do {parents.Add(AgentsTMP[parents[^1]].Parent); }
+	// 		while(parents[^1] >= 0 && parents.Count <= AgentsTMP.Length);
+	// 	else
+	// 		do parents.Add(Agents[parents[^1]].Parent);
+	// 		while(parents[^1] >= 0 && parents.Count <= Agents.Length);
 
-		var result = Plant.Position;
-		if (ReadTMP)
-			for(int i = parents.Count - 2; i > 0; --i)
-				result += Vector3.Transform(Vector3.UnitX, AgentsTMP[parents[i]].Orientation) * AgentsTMP[parents[i]].Length;
-		else
-			for(int i = parents.Count - 2; i > 0; --i)
-				result += Vector3.Transform(Vector3.UnitX, Agents[parents[i]].Orientation) * Agents[parents[i]].Length;
+	// 	var result = Plant.Position;
+	// 	if (ReadTMP)
+	// 		for(int i = parents.Count - 2; i > 0; --i)
+	// 			result += Vector3.Transform(Vector3.UnitX, AgentsTMP[parents[i]].Orientation) * AgentsTMP[parents[i]].Length;
+	// 	else
+	// 		for(int i = parents.Count - 2; i > 0; --i)
+	// 			result += Vector3.Transform(Vector3.UnitX, Agents[parents[i]].Orientation) * Agents[parents[i]].Length;
 
-		return result;
-	}
+	// 	// var better = TreeCache.GetBaseCenter(index);
+	// 	// Debug.Assert(Math.Abs(better.X - result.X) < 1e-6 && Math.Abs(better.Y - result.Y) < 1e-6 && Math.Abs(better.Z - result.Z) < 1e-6);
+
+	// 	return result;
+	// }
 
 	public Vector3 GetScale(int index) => ReadTMP
 		? (AgentsTMP.Length > index ? AgentsTMP[index].Scale : Vector3.Zero)

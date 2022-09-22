@@ -10,7 +10,7 @@ namespace Agro;
 public partial class PlantFormation
 {
 	[Flags]
-	enum DisplayOptions { None = 0, Seed = 1, UnderGround = 2, AboveGround = 4 }
+	enum DisplayOptions : byte { None = 0, Seed = 1, UnderGround = 2, AboveGround = 4 }
 	const DisplayOptions ShowOrgans = DisplayOptions.Seed | DisplayOptions.UnderGround | DisplayOptions.AboveGround;
 	//const DisplayOptions ShowOrgans = DisplayOptions.Seed | DisplayOptions.AboveGround;
 	//const DisplayOptions ShowOrgans = DisplayOptions.None;

@@ -1,9 +1,9 @@
 using Godot;
 using System;
 
-enum MarkerMode { Steam, Water, Sum };
+enum MarkerMode : byte { Steam, Water, Sum };
 
-public enum Visibility { Visible, Invisible, Waiting }; //Waiting state is used to prevent visibility changes once set to desired visibility
+public enum Visibility : byte { Visible, Invisible, Waiting }; //Waiting state is used to prevent visibility changes once set to desired visibility
 
 public class SoilVisualisationSettings
 {

@@ -120,7 +120,7 @@ public class Formation3i<T> : Formation<T> where T : struct, IAgent
 }
 
 [Flags]
-public enum TransformFlags { None, Translated = 1, Rotated = 2, Scaled = 4};
+public enum TransformFlags : byte { None, Translated = 1, Rotated = 2, Scaled = 4};
 public class Formation3iTransformed<T> : Formation3i<T> where T : struct, IAgent
 {
 	public Formation3iTransformed(int sizeX, int sizeY, int sizeZ) : base(sizeX, sizeY, sizeZ) {}

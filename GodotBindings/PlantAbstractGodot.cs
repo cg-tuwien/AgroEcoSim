@@ -7,7 +7,7 @@ using NumericHelpers;
 
 namespace Agro;
 
-public enum ColorCodingType { Default, EnergyRatio, WaterRatio, MixedRatio, WoodRatio };
+public enum ColorCodingType : byte { Default, EnergyRatio, WaterRatio, MixedRatio, WoodRatio };
 
 public abstract class PlantAbstractGodot<T> where T : struct, IPlantAgent
 {

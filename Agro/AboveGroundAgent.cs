@@ -12,7 +12,7 @@ namespace Agro;
 //TODO Create properties computing the respective storages for water and energy. Just for clarity.
 //[Flags]  //flags are not needed anymore
 
-public enum OrganTypes { Unspecified = 0, Seed = 1, Shoot = 2, Root = 4, Stem = 8, Leaf = 16, Fruit = 32 };
+public enum OrganTypes : byte { Unspecified = 0, Seed = 1, Shoot = 2, Root = 4, Stem = 8, Leaf = 16, Fruit = 32 };
 
 [StructLayout(LayoutKind.Auto)]
 public partial struct AboveGroundAgent : IPlantAgent

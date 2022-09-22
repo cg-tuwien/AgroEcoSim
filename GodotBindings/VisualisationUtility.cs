@@ -2,7 +2,7 @@ using Godot;
 using System;
 
 
-enum Direction{
+enum Direction : byte {
     Right,
     Up,
     Forward,
@@ -11,7 +11,7 @@ enum Direction{
     Backward
 }
 
-class MarkerData{
+class MarkerData {
     public Direction PointingDirection;
     public Vector3 InitialPosition;
     public int CellIndex;

@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 
 namespace AgentsSystem;
 
-public enum Transaction { Unknown = 0, Increase = 1, Decrease = 2}
+public enum Transaction : byte { Unknown = 0, Increase = 1, Decrease = 2}
 public interface IMessage<T> where T : struct, IAgent
 {
     void Receive(ref T agent, uint timestep);
