@@ -38,7 +38,7 @@ public static class Initialize
 			{
 				var minVegTemp = rnd.NextFloat(8f, 10f);
 				var pos = settings.Plants[i].Position
-					?? new Vector3(AgroWorld.FieldSize.X * rnd.NextFloat(), -rnd.NextFloat(0.04f), AgroWorld.FieldSize.Z * rnd.NextFloat());
+					?? new Vector3(AgroWorld.FieldSize.X * rnd.NextFloat(), -rnd.NextFloat(0.04f), AgroWorld.FieldSize.Y * rnd.NextFloat());
 
 				var seed = new SeedAgent(pos,
 										 rnd.NextFloat(0.02f),
@@ -55,7 +55,7 @@ public static class Initialize
 				var minVegTemp = rnd.NextFloat(8f, 10f);
 				var seed = new SeedAgent(new Vector3(AgroWorld.FieldSize.X * rnd.NextFloat(),
 														-rnd.NextFloat(0.04f),
-														AgroWorld.FieldSize.Z * rnd.NextFloat()),
+														AgroWorld.FieldSize.Y * rnd.NextFloat()), //Y because Z is depth
 											rnd.NextFloat(0.02f),
 											new Vector2(minVegTemp, minVegTemp + rnd.NextFloat(8f, 14f)));
 				plantsFormation[i] = new PlantFormation(soil, seed, rnd);
