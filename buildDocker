@@ -7,3 +7,5 @@ docker build --rm -f "Dockerfile-render" -t agroecorender "."
 docker build --rm -f "Dockerfile-sim" -t agroecosim "."
 docker save agroecorender | gzip > agroecoRender.tar.gz
 docker save agroecosim | gzip > agroecoSim.tar.gz
+
+zip -r AgroEcoSim-{time:%Y%m%d%H%M%S}.zip agroecoRender.tar.gz agroecoSim.tar.gz deployDocker docker-compose.yml
