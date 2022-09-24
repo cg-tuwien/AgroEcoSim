@@ -44,13 +44,13 @@ public partial class PlantFormation : IFormation
 
 		UG = new(this, UnderGroundAgent.Reindex
 #if GODOT
-		, i => UG_Godot.RemoveSprite(i), i => UG_Godot.AddSprite(i)
+		, i => UG_Godot.RemoveSprite(i), i => UG_Godot.AddSprites(i)
 #endif
 		);
 
 		AG = new(this, AboveGroundAgent.Reindex
 #if GODOT
-		, i => AG_Godot.RemoveSprite(i), i => AG_Godot.AddSprite(i)
+		, i => AG_Godot.RemoveSprite(i), i => AG_Godot.AddSprites(i)
 #endif
 );
 	}

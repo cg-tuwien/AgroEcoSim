@@ -14,57 +14,59 @@ namespace Agro;
 
 public enum PlantSubstances : byte { Water, Energy}
 
-[StructLayout(LayoutKind.Auto)]
-internal struct NodeCacheData
-{
-	readonly List<int> mChildren = new();
-	internal ushort Depth;
-	internal Vector3 Point;
+// [StructLayout(LayoutKind.Auto)]
+// internal readonly struct NodeCacheData
+// {
+// 	readonly List<int> mChildren = new();
+// 	internal readonly ushort Depth = 0;
+// 	internal readonly Vector3 Point = default;
 
-	public NodeCacheData()
-	{
-		Depth = 0;
-		Point = default;
-	}
-
-	public void Clear() => mChildren.Clear();
-	public void AddChild(int childIndex) => mChildren.Add(childIndex);
-	public bool IsRoot => mChildren.Count == 0;
-	public IList<int> Children => mChildren;
-}
+// 	public NodeCacheData() { }
+// 	public void Clear() => mChildren.Clear();
+// 	public void AddChild(int childIndex) => mChildren.Add(childIndex);
+// 	public bool IsRoot => mChildren.Count == 0;
+// 	public IList<int> Children => mChildren;
+// }
 
 internal class TreeCacheData
 {
 	public int Count { get; private set; }
-	NodeCacheData[] Nodes;
+	List<int>[] ChildrenNodes;
+	ushort[] DepthNodes;
+	Vector3[] PointNodes;
 	readonly List<int> Roots = new();
 	ushort MaxDepth = 0;
 
 	public TreeCacheData()
 	{
 		Count = 0;
-		Nodes = new NodeCacheData[] {new(), new()};
+		//Nodes = new NodeCacheData[] {new(), new()};
+		ChildrenNodes = new List<int>[]{ new(), new() };
+		DepthNodes = new ushort[]{ 0, 0 };
+		PointNodes = new Vector3[] {default, default};
 	}
 
 	public void Clear(int newSize)
 	{
 		Roots.Clear();
-		if (newSize > Nodes.Length)
+		if (newSize > ChildrenNodes.Length)
 		{
-			var l = Nodes.Length;
-			Array.Resize(ref Nodes, newSize);
-			for(int i = l ; i < newSize; ++i)
-				Nodes[i] = new();
+			var l = ChildrenNodes.Length;
+			Array.Resize(ref ChildrenNodes, newSize);
+			for(int i = l; i < newSize; ++i)
+				ChildrenNodes[i] = new();
+			Array.Resize(ref DepthNodes, newSize);
+			Array.Resize(ref PointNodes, newSize);
 		}
 		Count = newSize;
 		for(int i = 0; i < newSize; ++i)
-			Nodes[i].Clear();
+			ChildrenNodes[i].Clear();
 	}
 
 	public void AddChild(int parentIndex, int childIndex)
 	{
 		if (parentIndex >= 0)
-			Nodes[parentIndex].AddChild(childIndex);
+			ChildrenNodes[parentIndex].Add(childIndex);
 		else
 			Roots.Add(childIndex);
 	}
@@ -80,48 +82,48 @@ internal class TreeCacheData
 		while(buffer.Count > 0)
 		{
 			var (index, depth) = buffer.Pop();
-			Nodes[index].Depth = depth;
+			DepthNodes[index] = depth;
 			if (depth > MaxDepth)
 				MaxDepth = depth;
 			var nextDepth = (ushort)(depth + 1);
-			foreach(var child in Nodes[index].Children)
+			foreach(var child in ChildrenNodes[index])
 				buffer.Push((child, nextDepth));
 		}
 
 		++MaxDepth;
 	}
 
-	internal IList<int> GetChildren(int index) => Nodes[index].Children;
+	internal IList<int> GetChildren(int index) => ChildrenNodes[index];
 	internal ICollection<int> GetRoots() => Roots;
-	internal ushort GetAbsDepth(int index) => Nodes[index].Depth;
-	internal float GetRelDepth(int index) => MaxDepth > 0 ? (Nodes[index].Depth + 1) / (float)MaxDepth : 1f;
-	internal Vector3 GetBaseCenter(int index) => Nodes[index].Point;
+	internal ushort GetAbsDepth(int index) => DepthNodes[index];
+	internal float GetRelDepth(int index) => MaxDepth > 0 ? (DepthNodes[index] + 1) / (float)MaxDepth : 1f;
+	internal Vector3 GetBaseCenter(int index) => PointNodes[index];
 
 	internal void UpdateBases<T>(PlantSubFormation<T> formation) where T : struct, IPlantAgent
 	{
-		var buffer = new Queue<int>();
+		var buffer = new Stack<int>();
 		foreach(var root in Roots)
 		{
-			Nodes[root].Point = formation.Plant.Position;
+			PointNodes[root] = formation.Plant.Position;
 			var point = formation.Plant.Position + Vector3.Transform(Vector3.UnitX, formation.GetDirection(root)) * formation.GetLength(root);
 			foreach(var child in GetChildren(root))
 			{
-				Nodes[child].Point = point;
-				buffer.Enqueue(child);
+				PointNodes[child] = point;
+				buffer.Push(child);
 			}
 		}
 
 		while (buffer.Count > 0)
 		{
-			var next = buffer.Dequeue();
+			var next = buffer.Pop();
 			var children = GetChildren(next);
 			if (children.Count > 0)
 			{
-				var point = Nodes[next].Point + Vector3.Transform(Vector3.UnitX, formation.GetDirection(next)) * formation.GetLength(next);
+				var point = PointNodes[next] + Vector3.Transform(Vector3.UnitX, formation.GetDirection(next)) * formation.GetLength(next);
 				foreach(var child in children)
 				{
-					Nodes[child].Point = point;
-					buffer.Enqueue(child);
+					PointNodes[child] = point;
+					buffer.Push(child);
 				}
 			}
 		}
@@ -435,13 +437,6 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 			// #if DEBUG
 			// Console.WriteLine(DebugTreePrint(Src()));
 			// #endif
-#if GODOT
-			for(int i = Agents.Length - Births.Count - Inserts.Count; i < Agents.Length; ++i)
-				GodotAddSprite(i);
-#endif
-			Births.Clear();
-			Inserts.Clear();
-			InsertAncestors.Clear();
 
 			src = Src();
 			TreeCache.Clear(src.Length);
@@ -449,8 +444,17 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 				TreeCache.AddChild(src[i].Parent, i);
 
 			TreeCache.FinishUpdate();
+			TreeCache.UpdateBases(this);
+
+#if GODOT
+			GodotAddSprites(Agents.Length);
+#endif
+			Births.Clear();
+			Inserts.Clear();
+			InsertAncestors.Clear();
 		}
-		TreeCache.UpdateBases(this);
+		else
+			TreeCache.UpdateBases(this);
 	}
 
 	public void Tick(SimulationWorld world, uint timestep)
@@ -552,8 +556,9 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 					var amount = updated[j] * scale[s];
 					if (amount > 0f)
 					{
-						DecAmount(s, substanceIndex, amount);
-						IncAmount(buffer[j].DstIndex, substanceIndex, amount);
+						var d = buffer[j].DstIndex;
+						dst[s].ChangeAmount(Plant, s, substanceIndex, amount, increase: false);
+						dst[d].ChangeAmount(Plant, d, substanceIndex, amount, increase: true);
 					}
 				}
 			}
@@ -669,20 +674,7 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 	///////////////////////////
 	#region WRITE METHODS
 	///////////////////////////
-
 	//THERE ARE NO WRITE METHODS ALLOWED except for these via messages.
-	bool IncAmount(int index, int substanceIndex, float amount) => substanceIndex switch {
-		(byte)PlantSubstances.Water => Plant.Send(index, new AboveGroundAgent.WaterInc(amount)),
-		(byte)PlantSubstances.Energy => Plant.Send(index, new AboveGroundAgent.EnergyInc(amount)),
-		_ => throw new IndexOutOfRangeException($"SubstanceIndex out of range: {substanceIndex}")
-	};
-
-	bool DecAmount(int index, int substanceIndex, float amount) => substanceIndex switch {
-		(byte)PlantSubstances.Water => Plant.Send(index, new AboveGroundAgent.WaterDec(amount)),
-		(byte)PlantSubstances.Energy => Plant.Send(index, new AboveGroundAgent.EnergyDec(amount)),
-		_ => throw new IndexOutOfRangeException($"SubstanceIndex out of range: {substanceIndex}")
-	};
-
 	#endregion
 
 	///////////////////////////

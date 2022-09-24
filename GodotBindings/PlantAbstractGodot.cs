@@ -25,22 +25,25 @@ public abstract class PlantAbstractGodot<T> where T : struct, IPlantAgent
 	protected virtual Color FormationColor => DefaultColor;
 	protected virtual ColorCodingType FormationColorCoding => ColorCodingType.Default;
 
-	public void AddSprite(int index)
+	public void AddSprites(int count)
 	{
 		if (GodotShow)
 		{
-			var sprite = new MeshInstance();
-			SimulationWorld.GodotAddChild(sprite); // Add it as a child of this node.
-			sprite.Mesh = PlantCubePrimitive;
-			if (sprite.GetSurfaceMaterial(0) == null) //TODO if not visualizing, use a common material for all
+			for (int i = GodotSprites.Count; i < count; ++i)
 			{
-				var m = new SpatialMaterial();
-				m.AlbedoColor = new Color(0.7f, 0.7f, 0.7f);
-				sprite.SetSurfaceMaterial(0, new SpatialMaterial{ AlbedoColor = FormationColor });
-			}
+				var sprite = new MeshInstance();
+				SimulationWorld.GodotAddChild(sprite); // Add it as a child of this node.
+				sprite.Mesh = PlantCubePrimitive;
+				if (sprite.GetSurfaceMaterial(0) == null) //TODO if not visualizing, use a common material for all
+				{
+					var m = new SpatialMaterial();
+					m.AlbedoColor = new Color(0.7f, 0.7f, 0.7f);
+					sprite.SetSurfaceMaterial(0, new SpatialMaterial{ AlbedoColor = FormationColor });
+				}
 
-			UpdateTransformation(sprite, index);
-			GodotSprites.Add(sprite);
+				UpdateTransformation(sprite, i);
+				GodotSprites.Add(sprite);
+			}
 		}
 	}
 
