@@ -10,6 +10,7 @@ public class MultiagentSystem : Spatial
 	bool Paused = false;
 	bool Pressed = false;
 	bool SingleStep = false;
+	int Delay = 0;
 	List<MeshInstance> Sprites = new List<MeshInstance>();
 
 	SimulationWorld World;
@@ -25,7 +26,8 @@ public class MultiagentSystem : Spatial
 #endif
 		SimulationWorld.GodotAddChild = node => AddChild(node);
 		SimulationWorld.GodotRemoveChild = node => RemoveChild(node);
-		Translation = new Vector3(-0.5f * AgroWorld.FieldSize.X, 0f, -0.5f * AgroWorld.FieldSize.Z);
+		//Translation = new Vector3(-0.5f * AgroWorld.FieldSize.X, AgroWorld.FieldResolution, -0.5f * AgroWorld.FieldSize.Z);
+		Translation = new Vector3(0, AgroWorld.FieldResolution, 0);
 
 		World = Initialize.World();
 	}

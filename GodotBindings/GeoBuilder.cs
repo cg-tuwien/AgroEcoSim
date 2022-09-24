@@ -17,7 +17,6 @@ public static class GeoBuilder{
         st.AddVertex(new Vector3(0.5f, 0.5f, -0.5f));
         st.AddVertex(new Vector3(-0.5f, 0.5f, -0.5f));
 
-
         st.AddIndex(5); st.AddIndex(1); st.AddIndex(0);
         st.AddIndex(4); st.AddIndex(5); st.AddIndex(0);
 

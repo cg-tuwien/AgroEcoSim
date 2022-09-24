@@ -9,8 +9,25 @@
     <DefineConstants>$(DefineConstants);GODOT;TICK_LOG</DefineConstants>
   </PropertyGroup>
 
+  <!--ItemGroup>
+    <Reference Include="glTF2Loader">
+      <Private>False</Private>
+      <HintPath>$(ProjectDir)/.mono/assemblies/$(ApiConfiguration)/glTF2Loader/1.0.0/lib/net452/glTF2Loader.dll</HintPath>
+    </Reference>
+    <Reference Include="GeoTimeZone">
+      <Private>False</Private>
+      <HintPath>$(ProjectDir)/.mono/assemblies/$(ApiConfiguration)/geotimezone/1.0.0/portable-net40+sl50+win+wp80+MonoAndroid10+MonoTouch10/GeoTimeZone.dll</HintPath>
+    </Reference>
+    <Reference Include="SolarCalculator">
+      <Private>False</Private>
+      <HintPath>$(ProjectDir)/.mono/assemblies/$(ApiConfiguration)/solarcalculator/1.0.0/lib/portable-net4+sl4+wp7+win8/Innovative.SolarCalculator.dll</HintPath>
+    </Reference>
+  </ItemGroup-->
+
   <ItemGroup>
     <PackageReference Include="glTF2Loader" Version="1.1.3-alpha" />
+    <PackageReference Include="GeoTimeZone" Version="5.1.0" />
+    <PackageReference Include="SolarCalculator" Version="3.1.0" />
   </ItemGroup>
 
   <!-- TODO for win something like here https://superuser.com/questions/1580436/how-to-delete-matching-directories-recursively-using-windows-command -->

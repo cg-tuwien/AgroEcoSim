@@ -11,12 +11,12 @@ namespace Agro;
 public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAgent
 {
 	internal Action<int> GodotRemoveSprite;
-	internal Action<int> GodotAddSprite;
+	internal Action<int> GodotAddSprites;
 
 	public PlantSubFormation(PlantFormation plant, Action<T[], int[]> reindex, Action<int> godotRemove, Action<int> godotAdd) : this(plant, reindex)
 	{
 		GodotRemoveSprite = godotRemove;
-		GodotAddSprite = godotAdd;
+		GodotAddSprites = godotAdd;
 	}
 
 	public void GodotReady() {}

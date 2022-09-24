@@ -121,12 +121,15 @@ public partial class SoilFormation
 		MarkerDataStorage.Add(new(dir, parent_pos, parent_index));
 	}
 
-	private void InitializeCell(int x, int y, int z){
+	static Vector3 SoilUncenter = new(0.5f, -0.5f, 0.5f);
+	private void InitializeCell(int x, int y, int z)
+	{
+		var cellSize = (Parameters.SoilCellScale * AgroWorld.FieldResolution);
 		var mesh = new MeshInstance()
 		{
 			Mesh = Parameters.SoilCellShape,
-			Translation = new Vector3(x, -z, y) * AgroWorld.FieldResolution,
-			Scale = Vector3.One * (Parameters.SoilCellScale * AgroWorld.FieldResolution),
+			Translation = new Vector3(x, -z, y) * AgroWorld.FieldResolution + SoilUncenter * cellSize,
+			Scale = new(cellSize, cellSize, cellSize),
 		};
 		mesh.SetSurfaceMaterial(0, (SpatialMaterial)Parameters.SoilCellMaterial.Duplicate());
 
@@ -222,7 +225,6 @@ public partial class SoilFormation
 				Parameters.IndividualMarkerDirectionVisibility[i] = Visibility.Waiting;
 			}
 		}
-
 	}
 
 	private void SetMarkersVisibility(bool flag){
@@ -243,5 +245,4 @@ public partial class SoilFormation
 			SoilCellInstances[i].Visible = flag;
 		}
 	}
-
 }
