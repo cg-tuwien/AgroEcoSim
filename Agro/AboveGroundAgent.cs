@@ -442,45 +442,12 @@ public partial struct AboveGroundAgent : IPlantAgent
 		}
 	}
 
-	// internal AboveGroundAgent AddChild(int index)
-	// {
-	// 	var result = default(AboveGroundAgent);
-	// 	result.Orientation = Orientation;
-	// 	result.Radius = Radius;
-	// 	result.Length = Length;
-	// 	result.Energy = Energy;
-	// 	result.Water = Water;
-	// 	result.mPhotoFactor = mPhotoFactor;
-	// 	result.Organ = Organ;
-	// 	result.Parent = Parent;
+	public bool ChangeAmount(PlantFormation plant, int index, int substanceIndex, float amount, bool increase) => substanceIndex switch {
+		(byte)PlantSubstances.Water => plant.Send(index, increase ? new WaterInc(amount) : new WaterDec(amount)),
+		(byte)PlantSubstances.Energy => plant.Send(index, increase ? new EnergyInc(amount) : new EnergyDec(amount)),
+		_ => throw new IndexOutOfRangeException($"SubstanceIndex out of range: {substanceIndex}")
+	};
 
-	// 	if (Children == null)
-	// 		result.Children = new int[]{index};
-	// 	else
-	// 	{
-	// 		var children = new int[Children.Length];
-	// 		Array.Copy(Children, children, Children.Length);
-	// 		children[^1] = index;
-	// 		result.Children = children;
-	// 	}
-
-	// 	return result;
-	// }
-
-	// internal void RemoveChild(int index)
-	// {
-	// 	Debug.Assert(Children.Contains(index));
-	// 	if (Children.Length == 1)
-	// 		Children = null;
-	// 	else
-	// 	{
-	// 		var children = new int[Children.Length - 1];
-	// 		for(int s = 0, t = 0; s < Children.Length; ++s)
-	// 			if (Children[s] != index)
-	// 				children[t++] = Children[s];
-	// 		Children = children;
-	// 	}
-	// }
 
 	///////////////////////////
 	#region LOG

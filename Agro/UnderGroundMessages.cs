@@ -37,6 +37,29 @@ public partial struct UnderGroundAgent : IAgent
 
     [StructLayout(LayoutKind.Auto)]
     [Message]
+    public readonly struct WaterDec : IMessage<UnderGroundAgent>
+    {
+        #if HISTORY_LOG || TICK_LOG
+		public readonly static List<SimpleMsgLog> MessagesHistory = new();
+        public static void ClearHistory() => MessagesHistory.Clear();
+		public readonly ulong ID { get; } = Utils.UID.Next();
+		#endif
+
+        public readonly float Amount;
+        public WaterDec(float amount) => Amount = amount;
+        public bool Valid => Amount > 0f;
+        public Transaction Type => Transaction.Increase;
+        public void Receive(ref UnderGroundAgent dstAgent, uint timestep)
+        {
+            dstAgent.TryDecWater(Amount);
+			#if HISTORY_LOG || TICK_LOG
+			lock(MessagesHistory) MessagesHistory.Add(new(timestep, ID, dstAgent.ID, -Amount));
+			#endif
+        }
+    }
+
+    [StructLayout(LayoutKind.Auto)]
+    [Message]
     public readonly struct EnergyInc : IMessage<UnderGroundAgent>
     {
         #if HISTORY_LOG || TICK_LOG
@@ -54,6 +77,29 @@ public partial struct UnderGroundAgent : IAgent
             dstAgent.IncEnergy(Amount);
 			#if HISTORY_LOG || TICK_LOG
 			lock(MessagesHistory) MessagesHistory.Add(new(timestep, ID, dstAgent.ID, Amount));
+			#endif
+        }
+    }
+
+    [StructLayout(LayoutKind.Auto)]
+    [Message]
+    public readonly struct EnergyDec : IMessage<UnderGroundAgent>
+    {
+        #if HISTORY_LOG || TICK_LOG
+		public readonly static List<SimpleMsgLog> MessagesHistory = new();
+        public static void ClearHistory() => MessagesHistory.Clear();
+		public readonly ulong ID { get; } = Utils.UID.Next();
+		#endif
+
+        public readonly float Amount;
+        public EnergyDec(float amount) => Amount = amount;
+        public bool Valid => Amount > 0f;
+        public Transaction Type => Transaction.Increase;
+        public void Receive(ref UnderGroundAgent dstAgent, uint timestep)
+        {
+            dstAgent.TryDecEnergy(Amount);
+			#if HISTORY_LOG || TICK_LOG
+			lock(MessagesHistory) MessagesHistory.Add(new(timestep, ID, dstAgent.ID, -Amount));
 			#endif
         }
     }

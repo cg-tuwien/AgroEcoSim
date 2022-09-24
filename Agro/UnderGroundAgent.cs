@@ -98,7 +98,6 @@ public partial struct UnderGroundAgent : IPlantAgent
 	#endif
 	public readonly float WaterAbsorbtionPerTick => WaterAbsorbtionPerHour / AgroWorld.TicksPerHour;
 
-	public const float EnergyTransportRatio = 4f;
 
 	//Let's assume (I might be fully wrong) that the plan can push the water 0.5mm in 1s, then in 1h it can push it 0.001 * 30 * 60 = 1.8m
 	//also see - interestingly it states that while pholem is not photosensitive, xylem is
@@ -108,7 +107,7 @@ public partial struct UnderGroundAgent : IPlantAgent
 	/// <summary>
 	/// Water volume in m³ which can be passed to the parent per hour
 	/// </summary>
-	public readonly float WaterFlowToParentPerHour => 4f * Radius * Radius * WaterTransportRatio;
+	public readonly float WaterFlowToParentPerHour => 4f * Radius * Radius * WaterTransportRatio * (2f - mWaterAbsorbtionFactor);
 
 	/// <summary>
 	/// Water volume in m³ which can be passed to the parent per timestep
@@ -118,7 +117,8 @@ public partial struct UnderGroundAgent : IPlantAgent
 	#endif
 	public readonly float WaterFlowToParentPerTick => WaterFlowToParentPerHour / AgroWorld.TicksPerHour;
 
-	public readonly float EnergyFlowToParentPerHour => 4f * Radius * Radius * WaterTransportRatio;
+	public const float EnergyTransportRatio = 2f;
+	public readonly float EnergyFlowToParentPerHour => 4f * Radius * Radius * EnergyTransportRatio * (2f - mWaterAbsorbtionFactor);
 
 	#if !GODOT
 	[System.Text.Json.Serialization.JsonIgnore]
@@ -156,7 +156,7 @@ public partial struct UnderGroundAgent : IPlantAgent
 	//without any energy gains if its storage is initially full
 	const float EnergyStorageCoef = 24 * 31 * 3; //3 months
 
-	static float EnergyCapacityFunc(float radius, float length) => 4f * radius * radius * length * (1f - WaterCapacityRatio) * EnergyStorageCoef;
+	float EnergyCapacityFunc(float radius, float length) => 4f * radius * radius * length * (1f - WaterCapacityRatio) * EnergyStorageCoef * (2f - mWaterAbsorbtionFactor);
 
 	public readonly float EnergyStorageCapacity => EnergyCapacityFunc(Radius, Length);
 
@@ -200,11 +200,11 @@ public partial struct UnderGroundAgent : IPlantAgent
 		//TODO perhaps it should somehow reflect temperature
 		var diameter = 2f * Radius;
 		var lr = Length * diameter; //area of the side face
-		var lifeSupportPerHour = lr * diameter; //also this is the volume
-		var lifeSupportPerTick = lifeSupportPerHour / AgroWorld.TicksPerHour;
+		var volume = lr * diameter; //also this is the volume
+		var lifeSupportPerHour = volume * mWaterAbsorbtionFactor;
 
 		//life support
-		Energy -= lifeSupportPerTick;
+		Energy -= lifeSupportPerHour / AgroWorld.TicksPerHour;
 
 		var children = formation.GetChildren(formationID);
 
@@ -216,7 +216,7 @@ public partial struct UnderGroundAgent : IPlantAgent
 		{
 			var childrenCount = children.Count + 1;
 			var lengthGrowth = waterFactor * 2e-4f / (AgroWorld.TicksPerHour * MathF.Pow(childrenCount, GrowthDeclineByExpChildren + 1) * MathF.Pow(lr * Length, 0.1f));
-			var widthGrowth = waterFactor * 2e-5f / (AgroWorld.TicksPerHour * MathF.Pow(childrenCount, GrowthDeclineByExpChildren / 2) * MathF.Pow(lifeSupportPerHour, 0.1f)); //just optimized the number of multiplications
+			var widthGrowth = waterFactor * 2e-5f / (AgroWorld.TicksPerHour * MathF.Pow(childrenCount, GrowthDeclineByExpChildren / 2) * MathF.Pow(volume, 0.1f)); //just optimized the number of multiplications
 
 			Length += lengthGrowth;
 			Radius += widthGrowth;
@@ -320,20 +320,25 @@ public partial struct UnderGroundAgent : IPlantAgent
 		///////////////////////////
 		#region Transport ENERGY
 		///////////////////////////
-		if (Parent >= 0)
+		if (children.Count > 0 || Energy < EnergyStorageCapacity)
 		{
-			var parentEnergy = formation.GetEnergy(Parent);
-			if (parentEnergy > Energy)
-				plant.TransactionUG(Parent, formationID, PlantSubstances.Energy, EnergyFlowToParentPerTick); //TODO make requests based on own need and the need of children
-		}
-		else
-		{
-			var roots = plant.AG.GetRoots();
-			foreach(var root in roots)
+			if (Parent >= 0)
 			{
-				var rootEnergy = plant.AG.GetEnergy(root);
-				if (rootEnergy > Energy)
-					plant.Send(root, new Energy_PullFrom_AG(formation, plant.AG.GetEnergyFlow_PerTick(root), formationID)); //TODO make requests based on own need and the need of children
+				var parentEnergy = formation.GetEnergy(Parent);
+				if (parentEnergy > Energy)
+					plant.TransactionUG(Parent, formationID, PlantSubstances.Energy, EnergyFlowToParentPerTick); //TODO make requests based on own need and the need of children
+				else
+					plant.TransactionUG(formationID, Parent, PlantSubstances.Energy, 0.5f * EnergyFlowToParentPerTick); //TODO make requests based on own need and the need of children
+			}
+			else
+			{
+				var roots = plant.AG.GetRoots();
+				foreach(var root in roots)
+				{
+					var rootEnergy = plant.AG.GetEnergy(root);
+					if (rootEnergy > Energy)
+						plant.Send(root, new Energy_PullFrom_AG(formation, plant.AG.GetEnergyFlow_PerTick(root), formationID)); //TODO make requests based on own need and the need of children
+				}
 			}
 		}
 		#endregion
@@ -398,44 +403,11 @@ public partial struct UnderGroundAgent : IPlantAgent
 		}
 	}
 
-	// internal UnderGroundAgent AddChild(int index)
-	// {
-	// 	var result = default(UnderGroundAgent);
-	// 	result.Direction = Direction;
-	// 	result.Radius = Radius;
-	// 	result.Length = Length;
-	// 	result.Energy = Energy;
-	// 	result.Water = Water;
-	//     result.mWaterIntake = mWaterIntake;
-	// 	result.Parent = Parent;
-
-	// 	if (Children == null)
-	// 		result.Children = new int[]{index};
-	// 	else
-	// 	{
-	// 		var children = new int[Children.Length];
-	// 		Array.Copy(Children, children, Children.Length);
-	// 		children[^1] = index;
-	// 		result.Children = children;
-	// 	}
-
-	// 	return result;
-	// }
-
-	// internal void RemoveChild(int index)
-	// {
-	// 	Debug.Assert(Children.Contains(index));
-	// 	if (Children.Length == 1)
-	// 		Children = null;
-	// 	else
-	// 	{
-	// 		var children = new int[Children.Length - 1];
-	// 		for(int s = 0, t = 0; s < Children.Length; ++s)
-	// 			if (Children[s] != index)
-	// 				children[t++] = Children[s];
-	// 		Children = children;
-	// 	}
-	// }
+	public bool ChangeAmount(PlantFormation plant, int index, int substanceIndex, float amount, bool inc) => substanceIndex switch {
+		(byte)PlantSubstances.Water => plant.Send(index, inc ? new WaterInc(amount) : new WaterDec(amount)),
+		(byte)PlantSubstances.Energy => plant.Send(index, inc ? new EnergyInc(amount) : new EnergyDec(amount)),
+		_ => throw new IndexOutOfRangeException($"SubstanceIndex out of range: {substanceIndex}")
+	};
 
 	///////////////////////////
 	#region LOG

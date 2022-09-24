@@ -50,4 +50,6 @@ public interface IPlantAgent : IAgent
 	///</summary>
 	void CensusUpdateParent(int newParent);
 	static void Reindex(IPlantAgent[] data, int[] map) => throw new NotImplementedException();
+
+	bool ChangeAmount(PlantFormation plant, int index, int substanceIndex, float amount, bool increase);
 }
