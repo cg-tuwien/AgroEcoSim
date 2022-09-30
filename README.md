@@ -54,8 +54,8 @@ The Standalone version targets net6.0. Settings for the simulation can be passed
 Note that the first build will fail due to async deletion of extra files. Further builds should run fine. In case of any strange errors (like access denied, lots of declaration or symbol missing errors and similar) delete the whole `.mono` subfolder. Godot 3 only supports .NET 4.7.2 or .NET Core 3.1 (partially), but at least some of the new language features are accessible through `<LangVersion>latest</LangVersion>` in the csproj. Reading JSON files is tricky, it needs explicit installation of `System.Text.JSON` from NUGet and net472 as target. Other assemblies can't be loaded at all. Hopefully, it gets easier once Godot 4.x is stable enough to work with.
 
 Here are the Godot 4.0-beta1 issues so far reported:
-* (Crash at material settings)[https://github.com/godotengine/godot/issues/66175]
-* (Material rendered black)[https://github.com/godotengine/godot/issues/66214]
+* [Crash at material settings](https://github.com/godotengine/godot/issues/66175)
+* [Material rendered black](https://github.com/godotengine/godot/issues/66214)
 
 Godot only take the hard-coded default simulation settings, it has so far no option for consuming `json` settings. There is also no GUI so far.
 
@@ -90,3 +90,35 @@ The following folders are related to the Godot rendering:
 * **GodotBindings** defines how formations are rendered in Godot.
 
 `AgroGodot.csproj` is an umbrella project that takes all files from all subfolders and compiles them for Godot. It defines the `GODOT` switch which activates or deactivates certain blcks of code. This is an ugly, but necessary workaround to cope with Godot's limited .NET support.
+
+# Renderer interface
+The renderer is called via `http`. The primary renderer is Mitsuba 3 in the [agroeco-mts3](https://github.com/cfreude/agroeco-mts3/). To plug-in a different renderer, it has to follow these guidelines:
+* Listening at port `9000`
+* Respond with a status code `200` (OK) to a `GET` request, this is a check for whether the server is up
+* Respond to `POST` requests with scene data by by returning accummulated irradiances
+
+## Input scene data format
+The renderer will receive the scene data in binary form as a set of triangle meshes. A primitive-based alternative format is planned as well.
+```
+#Triangle Mesh Binary Serialization
+#INDEXED DATA
+uint32 entitiesCount
+foreach ENTITY
+    uint32 surfacesCount
+    foreach SURFACE (for now, each surface is an irradiancemeter)
+        uint8 trianglesCount
+        foreach TRIANGLE
+            uint32 index0
+            uint32 index1
+            uint32 index2
+#POINTS DATA
+uint32 pointsCount
+foreach POINT
+    float32 x
+    float32 y
+    float32 z
+```
+Plants correspond to entities. The surfaces are typically light-sensitive plant organs like leafs. Each surface should be associated with a sensor that measures the irradiance exposure (summed all over the surface). Each surface is represented as a set of triangles which are given by vertex indices. After the section with entities, a list of vertices with 3D coordinates is provided.
+
+## Result irradiance data format
+The resulting irradiances per surface need to be sent back as a simple array of floats preserving the  order of the surfaces in the request.
