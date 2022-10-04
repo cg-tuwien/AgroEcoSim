@@ -95,7 +95,13 @@ The following folders are related to the Godot rendering:
 The renderer is called via `http`. The primary renderer is Mitsuba 3 in the [agroeco-mts3](https://github.com/cfreude/agroeco-mts3/). To plug-in a different renderer, it has to follow these guidelines:
 * Listening at port `9000`
 * Respond with a status code `200` (OK) to a `GET` request, this is a check for whether the server is up
-* Respond to `POST` requests with scene data by by returning accummulated irradiances
+* Respond to `POST` requests with scene data by returning accummulated irradiances
+
+## POST headers
+The body of the `POST` request contains the scene in a binary format as described below. Further more, it uses headers to store additional values:
+* `La` and `Lo` contain latitude and longitude as floats (both mandatory)
+* `Ti` is time string in ISO 8601 format with time zone information (mandatory)
+* `Ra` is the number of rays (samples) per pixel (default=128, optional)
 
 ## Input scene data format
 The renderer will receive the scene data in binary form as a set of triangle meshes. A primitive-based alternative format is planned as well.
