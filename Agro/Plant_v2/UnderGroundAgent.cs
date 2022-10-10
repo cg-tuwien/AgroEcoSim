@@ -9,7 +9,7 @@ using AgentsSystem;
 namespace Agro;
 
 [StructLayout(LayoutKind.Auto)]
-public partial struct UnderGroundAgent : IPlantAgent
+public partial struct UnderGroundAgent2 : IPlantAgent
 {
 	///////////////////////////
 	#region DATA
@@ -160,12 +160,15 @@ public partial struct UnderGroundAgent : IPlantAgent
 
 	public readonly float EnergyStorageCapacity => EnergyCapacityFunc(Radius, Length);
 
+	float LifeSupportPerHour => Length * Radius * Radius * 4f * mWaterAbsorbtionFactor;
+	public float LifeSupportPerTick => LifeSupportPerHour / AgroWorld.TicksPerHour;
+	public float PhotosynthPerTick => 0f;
 
 	public static Quaternion OrientationDown = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, -MathF.PI * 0.5f);
 
 	#endregion
 
-	public UnderGroundAgent(int parent, Quaternion orientation, float initialEnergy, float initialWater = 0f, float initialWaterIntake = 1f, float radius = InitialRadius, float length = InitialLength)
+	public UnderGroundAgent2(int parent, Quaternion orientation, float initialEnergy, float initialWater = 0f, float initialWaterIntake = 1f, float radius = InitialRadius, float length = InitialLength)
 	{
 		Parent = parent;
 		Radius = radius;
@@ -180,7 +183,7 @@ public partial struct UnderGroundAgent : IPlantAgent
 	/// <summary>
 	/// If the plant structure changes (agents added or removed), parent entries need to be reindexed according to the map
 	/// </summary>
-	public static void Reindex(UnderGroundAgent[] src, int[] map)
+	public static void Reindex(UnderGroundAgent2[] src, int[] map)
 	{
 		for(int i = 0; i < src.Length; ++i)
 			src[i].Parent = src[i].Parent == -1 ? -1 : map[src[i].Parent];
@@ -191,10 +194,10 @@ public partial struct UnderGroundAgent : IPlantAgent
 	///</summary>
 	public void CensusUpdateParent(int newParent) => Parent = newParent;
 
-	public void Tick(SimulationWorld world, IFormation _formation, int formationID, uint timestep)
+	public void Tick(SimulationWorld world, IFormation _formation, int formationID, uint timestep, byte stage)
 	{
 		//Console.WriteLine($"{timestep} x {formationID}: w={Water} e={Energy} waf={WaterAbsorbtionFactor}");
-		var formation = (PlantSubFormation<UnderGroundAgent>)_formation;
+		var formation = (PlantSubFormation2<UnderGroundAgent2>)_formation;
 		var plant = formation.Plant;
 
 		//TODO perhaps it should somehow reflect temperature
@@ -228,7 +231,7 @@ public partial struct UnderGroundAgent : IPlantAgent
 			const float yFactor = 0.5f;
 			const float zFactor = 0.2f;
 			//Chaining
-			if (children.Count == 0 && Length > PlantFormation.RootSegmentLength * 0.5f + plant.RNG.NextFloat(PlantFormation.RootSegmentLength * 0.5f))
+			if (children.Count == 0 && Length > PlantFormation2.RootSegmentLength * 0.5f + plant.RNG.NextFloat(PlantFormation2.RootSegmentLength * 0.5f))
 			{
 				var ax = plant.RNG.NextFloat(-MathF.PI * yFactor, MathF.PI * yFactor);
 				var qx = Quaternion.CreateFromAxisAngle(Vector3.UnitX, ax);
@@ -242,7 +245,7 @@ public partial struct UnderGroundAgent : IPlantAgent
 				else
 					orientation = Quaternion.Slerp(orientation, OrientationDown, plant.RNG.NextFloat(0.2f / AgroWorld.TicksPerHour));
 				var energy = EnergyCapacityFunc(InitialRadius, InitialLength);
-				formation.Birth(new UnderGroundAgent(formationID, orientation, energy));
+				formation.Birth(new(formationID, orientation, energy));
 				Energy -= 2f * energy; //twice because some energy is needed for the birth itself
 				//Console.WriteLine($"New root chained to {formationID} at time {timestep}");
 			}
@@ -258,26 +261,13 @@ public partial struct UnderGroundAgent : IPlantAgent
 					//var q = qz * qx * Orientation;
 					var orientation = Orientation * qx * qz;
 					var energy = EnergyCapacityFunc(InitialRadius, InitialLength);
-					formation.Birth(new UnderGroundAgent(formationID, orientation, energy));
+					formation.Birth(new(formationID, orientation, energy));
 					Energy -= 2f * energy; //twice because some energy is needed for the birth itself
 					//Console.WriteLine($"New root branched to {formationID} at time {timestep}");
 				}
 			}
 		}
-		else if (Energy > 0f) //if running out of energy, balance it by taking it away from children
-		{
-			//Console.WriteLine($"Root {formationID} starving at time {timestep}");
-			foreach(var child in children)
-			{
-				var childEnergy = formation.GetEnergy(child);
-				if (childEnergy > Energy)
-				{
-					var amount = Math.Min(formation.GetEnergyFlow_PerTick(child), Math.Min(formation.GetEnergyFlow_PerTick(child), childEnergy));
-					plant.TransactionUG(child, formationID, PlantSubstances.Energy, amount);
-				}
-			}
-		}
-		else //Without energy the part dies
+		else if (Energy <= 0f) //Without energy the part dies
 		{
 			//Console.WriteLine($"Root {formationID} depleeted at time {timestep}");
 			formation.Death(formationID);
@@ -308,55 +298,13 @@ public partial struct UnderGroundAgent : IPlantAgent
 					{
 						if (soilTemperature < vegetativeTemp.Y)
 							amount *= (soilTemperature - vegetativeTemp.X) / (vegetativeTemp.Y - vegetativeTemp.X);
-						soil.Send(sources[0], new SoilAgent.Water_UG_PullFrom_Soil(formation, Math.Min(waterCapacity - Water, amount), formationID)); //TODO change to tube surface!
+						soil.Send(sources[0], new SoilAgent.Water_UG_PullFrom_Soil2(formation, Math.Min(waterCapacity - Water, amount), formationID)); //TODO change to tube surface!
 					}
 				}
 			}
 		}
 		else
 			mWaterAbsorbtionFactor = 0f;
-		#endregion
-
-		///////////////////////////
-		#region Transport ENERGY
-		///////////////////////////
-		if (children.Count > 0 || Energy < EnergyStorageCapacity)
-		{
-			if (Parent >= 0)
-			{
-				var parentEnergy = formation.GetEnergy(Parent);
-				if (parentEnergy > Energy)
-					plant.TransactionUG(Parent, formationID, PlantSubstances.Energy, EnergyFlowToParentPerTick); //TODO make requests based on own need and the need of children
-				else
-					plant.TransactionUG(formationID, Parent, PlantSubstances.Energy, 0.5f * EnergyFlowToParentPerTick); //TODO make requests based on own need and the need of children
-			}
-			else
-			{
-				var roots = plant.AG.GetRoots();
-				foreach(var root in roots)
-				{
-					var rootEnergy = plant.AG.GetEnergy(root);
-					if (rootEnergy > Energy)
-						plant.Send(root, new Energy_PullFrom_AG(formation, plant.AG.GetEnergyFlow_PerTick(root), formationID)); //TODO make requests based on own need and the need of children
-				}
-			}
-		}
-		#endregion
-
-		///////////////////////////
-		#region Transport WATER
-		///////////////////////////
-		if (Water > 0f)
-		{
-			if (Parent >= 0)
-				plant.TransactionUG(formationID, Parent, PlantSubstances.Water, WaterFlowToParentPerTick);
-			else
-			{
-				var roots = plant.AG.GetRoots();
-				foreach(var root in roots)
-					plant.Send(formationID, new Water_AG_PullFrom_UG(plant.AG, WaterFlowToParentPerTick, root));
-			}
-		}
 		#endregion
 	}
 
@@ -403,11 +351,19 @@ public partial struct UnderGroundAgent : IPlantAgent
 		}
 	}
 
-	public bool ChangeAmount(PlantFormation plant, int index, int substanceIndex, float amount, bool inc) => substanceIndex switch {
+	public bool ChangeAmount(PlantFormation1 plant, int index, int substanceIndex, float amount, bool increase) => throw new InvalidCastException();
+
+	public bool ChangeAmount(PlantFormation2 plant, int index, int substanceIndex, float amount, bool inc) => substanceIndex switch {
 		(byte)PlantSubstances.Water => plant.Send(index, inc ? new WaterInc(amount) : new WaterDec(amount)),
 		(byte)PlantSubstances.Energy => plant.Send(index, inc ? new EnergyInc(amount) : new EnergyDec(amount)),
 		_ => throw new IndexOutOfRangeException($"SubstanceIndex out of range: {substanceIndex}")
 	};
+
+	public void Distribute(float water, float energy)
+	{
+		Energy = energy;
+		Water = water;
+	}
 
 	///////////////////////////
 	#region LOG

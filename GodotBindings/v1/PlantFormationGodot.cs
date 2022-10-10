@@ -7,7 +7,7 @@ using NumericHelpers;
 
 namespace Agro;
 
-public partial class PlantFormation
+public partial class PlantFormation1
 {
 	[Flags]
 	enum DisplayOptions : byte { None = 0, Seed = 1, UnderGround = 2, AboveGround = 4 }

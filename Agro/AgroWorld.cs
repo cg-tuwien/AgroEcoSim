@@ -38,20 +38,21 @@ public readonly struct WeatherStats
 	}
 }
 
-public static class AgroWorld {
+public static class AgroWorld
+{
 	public static uint TicksPerHour = 1;
 	//public const int TotalHours = 24 * 365 * 10;
-	public static uint TotalHours = 24 * 31 * 2;
+	public static uint TotalHours = 24 * 31;
 
 	//public static readonly Vector3 FieldSize = new(6f, 4f, 2f);
 	//public const float FieldResolution = 0.1f;
 
-	public static Vector3 FieldSize = new(2f, 1f, 3f); //2D size and the last component is depth
+	public static Vector3 FieldSize = new(1f, 1f, 1f); //2D size and the last component is depth
 	public static float FieldResolution = 0.5f;
 
 	public const float Latitude = 48.208333f;
 	public const float Longitude = 16.3725f;
-	public const float Elevation = 188; //meters above sea level
+	public const float Altitude = 188; //meters above sea level
 	#if GODOT
 	public static TimeZoneInfo TimeZone = TimeZoneInfo.Local;
 	#else
@@ -59,16 +60,16 @@ public static class AgroWorld {
 	#endif
 
 	//clouds_coverage, precipitation
-	static readonly WeatherStats[] Weather;
-	static readonly BitArray Daylight;
+	static WeatherStats[] Weather;
+	static BitArray Daylight;
 
-	static readonly int[] DaysPerMonth = new[]{31,28,31,30,31,30,31,31,30,31,30,31};
+	static readonly int[] DaysPerMonth = new[] { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
 
 	public static uint TimestepsTotal => TicksPerHour * TotalHours;
 
-	public static readonly DateTime InitialTime = new(2022, 1, 1, 0, 0, 0, DateTimeKind.Unspecified);
+	public static DateTime InitialTime = new(2022, 1, 1, 0, 0, 0, DateTimeKind.Unspecified);
 
-	static AgroWorld()
+	public static void Init()
 	{
 		var sunnyDays = new float[]{3.2f, 3.3f, 5.8f, 7.6f, 8.2f, 8.6f, 11.8f, 12.6f, 10.5f, 9.7f, 4.3f, 4.1f}; //clouds factor 0 to 0.25
 		var cloudyDays = new float[]{12.3f, 12.6f, 14.6f, 15.3f, 17.2f, 16.6f, 15.1f, 13.7f, 13.2f, 13.6f, 12.4f, 12.1f}; //clouds factor 0.25 to 0.5

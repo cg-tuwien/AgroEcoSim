@@ -147,9 +147,12 @@ public partial struct AboveGroundAgent : IPlantAgent
 	public const float GrowthRatePerHour = 1 + 1/12; //Let us assume this plant can double volume in 12 hours
 	public static readonly float GrowthRatePerTick = GrowthRatePerHour / AgroWorld.TicksPerHour; //Let us assume this plant can double volume in 12 hours
 
-	float LifeSupportPerHour => Length * Radius * (Organ == OrganTypes.Leaf ? LeafThickness : Radius);
-	float LifeSupportPerTick => LifeSupportPerHour / AgroWorld.TicksPerHour;
+	float LifeSupportPerHour => Length * Radius * (Organ == OrganTypes.Leaf ? LeafThickness : Radius * mPhotoFactor);
+	public float LifeSupportPerTick => LifeSupportPerHour / AgroWorld.TicksPerHour;
 	float EnoughEnergy(float? lifeSupportPerHour = null) => (lifeSupportPerHour ?? LifeSupportPerHour) * 32;
+
+	const float TwoPiTenth = MathF.PI * 0.2f;
+	public float PhotosynthPerTick => Length * Radius * (Organ == OrganTypes.Leaf ? 2f : TwoPiTenth) * mPhotoFactor;
 
 	public AboveGroundAgent(int parent, OrganTypes organ, Quaternion orientation, float initialEnergy, float radius = InitialRadius, float length = InitialLength)
 	{
@@ -185,7 +188,7 @@ public partial struct AboveGroundAgent : IPlantAgent
 	const float TwoPi = MathF.PI * 2f;
 	public const float LeafThickness = 0.0001f;
 
-	public void Tick(SimulationWorld world, IFormation _formation, int formationID, uint timestep)
+	public void Tick(SimulationWorld world, IFormation _formation, int formationID, uint timestep, byte stage)
 	{
 		var formation = (PlantSubFormation<AboveGroundAgent>)_formation;
 		var plant = formation.Plant;
@@ -272,7 +275,7 @@ public partial struct AboveGroundAgent : IPlantAgent
 				if (Organ == OrganTypes.Stem && !isLeafStem)
 				{
 					var thresholdFactor = (2f - mPhotoFactor) * 0.5f;
-					if (Length > PlantFormation.RootSegmentLength * thresholdFactor + plant.RNG.NextFloat(PlantFormation.RootSegmentLength * thresholdFactor))
+					if (Length > PlantFormation1.RootSegmentLength * thresholdFactor + plant.RNG.NextFloat(PlantFormation1.RootSegmentLength * thresholdFactor))
 					{
 						//split this stem into two parts the new one will be the bottom part closer to the root
 						formation.Insert(formationID, new(Parent, OrganTypes.Stem, Orientation, Energy * 0.5f, Radius, Length * 0.5f){ Water = Water * 0.5f, mPhotoFactor = mPhotoFactor});
@@ -398,7 +401,6 @@ public partial struct AboveGroundAgent : IPlantAgent
 		return Math.Max(0f, photosynthesizedEnergy > lifeSupportPerTick ? Math.Max(photosynthesizedEnergy - lifeSupportPerTick, freeEnergy) : freeEnergy);
 	}
 
-
 	public void IncWater(float amount)
 	{
 		Debug.Assert(amount >= 0f);
@@ -442,12 +444,15 @@ public partial struct AboveGroundAgent : IPlantAgent
 		}
 	}
 
-	public bool ChangeAmount(PlantFormation plant, int index, int substanceIndex, float amount, bool increase) => substanceIndex switch {
+	public bool ChangeAmount(PlantFormation1 plant, int index, int substanceIndex, float amount, bool increase) => substanceIndex switch {
 		(byte)PlantSubstances.Water => plant.Send(index, increase ? new WaterInc(amount) : new WaterDec(amount)),
 		(byte)PlantSubstances.Energy => plant.Send(index, increase ? new EnergyInc(amount) : new EnergyDec(amount)),
 		_ => throw new IndexOutOfRangeException($"SubstanceIndex out of range: {substanceIndex}")
 	};
 
+	public bool ChangeAmount(PlantFormation2 plant, int index, int substanceIndex, float amount, bool increase) => throw new Exception();
+
+	public void Distribute(float water, float energy) => throw new Exception();
 
 	///////////////////////////
 	#region LOG

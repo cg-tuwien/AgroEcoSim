@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using AgentsSystem;
 using Agro;
+using V3 = System.Numerics.Vector3;
 
 public class MultiagentSystem : Spatial
 {
@@ -29,7 +30,21 @@ public class MultiagentSystem : Spatial
 		//Translation = new Vector3(-0.5f * AgroWorld.FieldSize.X, AgroWorld.FieldResolution, -0.5f * AgroWorld.FieldSize.Z);
 		Translation = new Vector3(0, AgroWorld.FieldResolution, 0);
 
-		World = Initialize.World();
+		Utils.Json.Vector3XDZ fieldSize = default;
+		fieldSize.X = 5;
+		fieldSize.D = 3;
+		fieldSize.Z = 5;
+
+		var plants = new List<PlantRequest>();
+		for(float x = 0.5f; x < fieldSize.X; x += 1f)
+			for(float z = 0.5f; z < fieldSize.Z; z += 1f)
+				plants.Add(new(){ Position = new (x, -0.1f, z) });
+
+		World = Initialize.World(new SimulationRequest(){
+			TotalHours = 24 * 31 * 4,
+			FieldSize = fieldSize,
+			Plants = plants.ToArray()
+		});
 	}
 
 	/// <summary>

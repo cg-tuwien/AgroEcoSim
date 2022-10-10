@@ -10,8 +10,62 @@ using Utils;
 
 namespace Agro;
 
-public partial class PlantFormation : IFormation
+public class PlantGlobalStats
 {
+	public double Energy { get; set; }
+	public double Water { get; set; }
+
+	public double EnergyDiff { get; set; }
+	public double WaterDiff { get; set; }
+
+	public double EnergyCapacity { get; set; }
+	public double WaterCapacity { get; set; }
+
+	public double EnergyRequirement{ get; set; }
+	public double WaterRequirement { get; set; }
+
+	public IList<float> Usefulness { get; set; }
+	public IList<float> LifeSupportEnergy { get; set; }
+	public IList<float> PhotosynthWater { get; set; }
+	public IList<float> EnergyCapacities { get; set; }
+	public IList<float> WaterCapacities { get; set; }
+
+	public float[]? ReceivedEnergy;
+	public float[]? ReceivedWater;
+
+	internal void DistributeEnergyByRequirement(float factor)
+	{
+		ReceivedEnergy = new float[LifeSupportEnergy.Count];
+		for(int i = 0; i < ReceivedEnergy.Length; ++i)
+			ReceivedEnergy[i] = LifeSupportEnergy[i] * factor;
+	}
+
+	internal void DistributeWaterByRequirement(float factor)
+	{
+		ReceivedWater = new float[PhotosynthWater.Count];
+		for(int i = 0; i < ReceivedWater.Length; ++i)
+			ReceivedWater[i] = PhotosynthWater[i] * factor;
+	}
+
+	internal void DistributeEnergyByStorage(float factor)
+	{
+		ReceivedEnergy = new float[LifeSupportEnergy.Count];
+		for(int i = 0; i < ReceivedEnergy.Length; ++i)
+			ReceivedEnergy[i] = LifeSupportEnergy[i] + (EnergyCapacities[i] - LifeSupportEnergy[i]) * factor;
+	}
+
+	internal void DistributeWaterByStorage(float factor)
+	{
+		ReceivedWater = new float[PhotosynthWater.Count];
+		for(int i = 0; i < ReceivedWater.Length; ++i)
+			ReceivedWater[i] = PhotosynthWater[i] + (WaterCapacities[i] - PhotosynthWater[i]) * factor;
+	}
+}
+
+public partial class PlantFormation2 : IPlantFormation
+{
+	public byte Stages => 1;
+
 	public Vector3 Position { get; private set; }
 	bool ReadTMP = false;
 	internal SoilFormation Soil;
@@ -20,8 +74,8 @@ public partial class PlantFormation : IFormation
 	protected readonly PostBox<SeedAgent> PostboxSeed = new();
 	bool DeathSeed = false;
 
-	public readonly PlantSubFormation<UnderGroundAgent> UG;
-	public readonly PlantSubFormation<AboveGroundAgent> AG;
+	public readonly PlantSubFormation2<UnderGroundAgent2> UG;
+	public readonly PlantSubFormation2<AboveGroundAgent2> AG;
 
 
 	internal const float RootSegmentLength = 0.1f;
@@ -34,25 +88,32 @@ public partial class PlantFormation : IFormation
 	/// </summary>
 	internal Pcg RNG;
 
-	public PlantFormation(SoilFormation soil, SeedAgent seed, Pcg parentRNG)
+	/// <summary>
+	/// Species settings
+	/// </summary>
+	public PlantSettings Parameters { get; private set; }
+
+	public PlantFormation2(PlantSettings parameters, SoilFormation soil, SeedAgent seed, Pcg parentRNG)
 	{
+		Parameters = parameters;
 		Soil = soil;
 		Seed[0] = seed;
 		Position = seed.Center;
 
 		RNG = parentRNG.NextRNG();
 
-		UG = new(this, UnderGroundAgent.Reindex
+		UG = new(this, UnderGroundAgent2.Reindex
 #if GODOT
 		, i => UG_Godot.RemoveSprite(i), i => UG_Godot.AddSprites(i)
 #endif
 		);
 
-		AG = new(this, AboveGroundAgent.Reindex
+		AG = new(this, AboveGroundAgent2.Reindex
 #if GODOT
 		, i => AG_Godot.RemoveSprite(i), i => AG_Godot.AddSprites(i)
 #endif
 );
+		Parameters = PlantSettings.Avocado;
 	}
 
 	/// <summary>
@@ -82,9 +143,9 @@ public partial class PlantFormation : IFormation
 			return false;
 	}
 
-	public bool Send(int recipient, IMessage<UnderGroundAgent> msg) => UG.SendProtected(recipient, msg);
+	public bool Send(int recipient, IMessage<UnderGroundAgent2> msg) => UG.SendProtected(recipient, msg);
 
-	public bool Send(int recipient, IMessage<AboveGroundAgent> msg) => AG.SendProtected(recipient, msg);
+	public bool Send(int recipient, IMessage<AboveGroundAgent2> msg) => AG.SendProtected(recipient, msg);
 
 	public bool TransactionAG(int srcIndex, int dstIndex, PlantSubstances substance, float amount) => AG.SendProtected(srcIndex, dstIndex, substance, amount);
 	public bool TransactionUG(int srcIndex, int dstIndex, PlantSubstances substance, float amount) => UG.SendProtected(srcIndex, dstIndex, substance, amount);
@@ -106,7 +167,7 @@ public partial class PlantFormation : IFormation
 		AG.Census();
 	}
 
-	public void Tick(SimulationWorld world, uint timestep)
+	public void Tick(SimulationWorld world, uint timestep, byte stage)
 	{
 		if (DeathSeed && !UG.Alive && !AG.Alive)
 			return;
@@ -148,7 +209,60 @@ public partial class PlantFormation : IFormation
 		if (Seed.Length > 0)
 		{
 			Array.Copy(srcSeed, dstSeed, srcSeed.Length);
-			dstSeed[0].Tick(world, this, 0, timestep);
+			dstSeed[0].Tick(world, this, 0, timestep, stage);
+		}
+		else
+		{
+			UG.Tick(world, timestep, stage);
+			AG.Tick(world, timestep, stage);
+
+			var globalUG = UG.Gather();
+			var globalAG = AG.Gather();
+
+			var energy = globalAG.Energy + globalUG.Energy;
+			var water = globalAG.Water + globalUG.Energy;
+
+			var energyRequirement = globalAG.EnergyRequirement + globalUG.EnergyRequirement;
+			var waterRequirement = globalAG.WaterRequirement + globalUG.WaterRequirement;
+
+			var energyStorage = globalAG.EnergyCapacity + globalUG.EnergyCapacity;
+			var waterStorage = globalAG.WaterCapacity + globalUG.WaterCapacity;
+
+			//Debug.WriteLine($"W: {water} / {waterRequirement}   {globalUG.WaterDiff} + {globalAG.WaterDiff}");
+			//Debug.WriteLine($"E: {energy} / {energyRequirement}   {globalUG.EnergyDiff} + {globalAG.EnergyDiff}");
+
+			if (energy < energyRequirement || energyStorage < energyRequirement)
+			{
+				var factor = (float)(energy / energyRequirement);
+				globalAG.DistributeEnergyByRequirement(factor);
+				globalUG.DistributeEnergyByRequirement(factor);
+			}
+			else
+			{
+				var energyOverhead = energy - energyRequirement;
+
+				var factor = (float)(energyOverhead / (energyStorage - energyRequirement));
+				globalAG.DistributeEnergyByStorage(factor);
+				globalUG.DistributeEnergyByStorage(factor);
+			}
+
+			if (water < waterRequirement || waterStorage < waterRequirement)
+			{
+				var factor = (float)(water / waterRequirement);
+				globalAG.DistributeWaterByRequirement(factor);
+				globalUG.DistributeWaterByRequirement(factor);
+			}
+			else
+			{
+				var waterOverhead = water - waterRequirement;
+
+				var factor = (float)(waterOverhead / (waterStorage - waterRequirement));
+				globalAG.DistributeWaterByStorage(factor);
+				globalUG.DistributeWaterByStorage(factor);
+			}
+
+			UG.Distribute(globalUG);
+			AG.Distribute(globalAG);
 		}
 		#if TICK_LOG
 		StatesHistory.Clear();
@@ -161,28 +275,25 @@ public partial class PlantFormation : IFormation
 		#endif
 		ReadTMP = !ReadTMP;
 
-		UG.Tick(world, timestep);
-		AG.Tick(world, timestep);
-
 		//Just testing
 		// var gltf = GlftHelper.Create(AG.ExportToGLTF());
 		// GlftHelper.Export(gltf, $"T{timestep}.gltf");
 	}
 
-	public void DeliverPost(uint timestep)
+	public void DeliverPost(uint timestep, byte stage)
 	{
 		if (Seed.Length > 0)
 		{
 			var (src, dst) = SrcDst_Seed();
 			Array.Copy(src, dst, src.Length);
-			PostboxSeed.Process(timestep, dst);
+			PostboxSeed.Process(timestep, stage, dst);
 		}
 		ReadTMP = !ReadTMP;
 
 		if (UG.HasUndeliveredPost)
-			UG.DeliverPost(timestep);
+			UG.DeliverPost(timestep, stage);
 		if (AG.HasUndeliveredPost)
-			AG.DeliverPost(timestep);
+			AG.DeliverPost(timestep, stage);
 
 		// if (!DeathSeed)
 		// 	Console.WriteLine("R: {0} E: {1}", Seed[0].Radius, Seed[0].StoredEnergy);
@@ -190,12 +301,12 @@ public partial class PlantFormation : IFormation
 		// 	Console.WriteLine("R: {0}x{1} E: {2} W: {3}", UnderGround[0].Radius, UnderGround[0].Length, UnderGround[0].Energy, UnderGround[0].Water);
 	}
 
-	public void ProcessTransactions(uint timestep)
+	public void ProcessTransactions(uint timestep, byte stage)
 	{
 		if (UG.HasUnprocessedTransactions)
-			UG.ProcessTransactions(timestep);
+			UG.ProcessTransactions(timestep, stage);
 		if (AG.HasUnprocessedTransactions)
-			AG.ProcessTransactions(timestep);
+			AG.ProcessTransactions(timestep, stage);
 	}
 
 	public bool HasUndeliveredPost => PostboxSeed.AnyMessages || UG.HasUndeliveredPost || AG.HasUndeliveredPost;
@@ -207,7 +318,7 @@ public partial class PlantFormation : IFormation
 	///////////////////////////
 	#if HISTORY_LOG || TICK_LOG
 	List<SeedAgent?> StatesHistory = new();
-	public string HistoryToJSON(int timestep = -1) => timestep >= 0
+	public string HistoryToJSON(int timestep = -1, byte stage = 0) => timestep >= 0
 		? $"{{ \"Seeds\" : {Utils.Export.Json(StatesHistory[timestep])}, \"UnderGround\" : {UG.HistoryToJSON(timestep)}, \"AboveGround\" : {AG.HistoryToJSON(timestep)} }}"
 		: $"{{ \"Seeds\" : {Utils.Export.Json(StatesHistory)}, \"UnderGround\" : {UG.HistoryToJSON()}, \"AboveGround\" : {AG.HistoryToJSON()} }}";
 	public ulong GetID() => Seed.Length > 0 ? Seed[0].ID : ulong.MaxValue;

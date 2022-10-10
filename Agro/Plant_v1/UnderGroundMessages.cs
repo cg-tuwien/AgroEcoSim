@@ -26,11 +26,11 @@ public partial struct UnderGroundAgent : IAgent
         public WaterInc(float amount) => Amount = amount;
         public bool Valid => Amount > 0f;
         public Transaction Type => Transaction.Increase;
-        public void Receive(ref UnderGroundAgent dstAgent, uint timestep)
+        public void Receive(ref UnderGroundAgent dstAgent, uint timestep, byte stage)
         {
             dstAgent.IncWater(Amount);
 			#if HISTORY_LOG || TICK_LOG
-			lock(MessagesHistory) MessagesHistory.Add(new(timestep, ID, dstAgent.ID, Amount));
+			lock(MessagesHistory) MessagesHistory.Add(new(timestep, stage, ID, dstAgent.ID, Amount));
 			#endif
         }
     }
@@ -49,11 +49,11 @@ public partial struct UnderGroundAgent : IAgent
         public WaterDec(float amount) => Amount = amount;
         public bool Valid => Amount > 0f;
         public Transaction Type => Transaction.Increase;
-        public void Receive(ref UnderGroundAgent dstAgent, uint timestep)
+        public void Receive(ref UnderGroundAgent dstAgent, uint timestep, byte stage)
         {
             dstAgent.TryDecWater(Amount);
 			#if HISTORY_LOG || TICK_LOG
-			lock(MessagesHistory) MessagesHistory.Add(new(timestep, ID, dstAgent.ID, -Amount));
+			lock(MessagesHistory) MessagesHistory.Add(new(timestep, stage, ID, dstAgent.ID, -Amount));
 			#endif
         }
     }
@@ -72,11 +72,11 @@ public partial struct UnderGroundAgent : IAgent
         public EnergyInc(float amount) => Amount = amount;
         public bool Valid => Amount > 0f;
         public Transaction Type => Transaction.Increase;
-        public void Receive(ref UnderGroundAgent dstAgent, uint timestep)
+        public void Receive(ref UnderGroundAgent dstAgent, uint timestep, byte stage)
         {
             dstAgent.IncEnergy(Amount);
 			#if HISTORY_LOG || TICK_LOG
-			lock(MessagesHistory) MessagesHistory.Add(new(timestep, ID, dstAgent.ID, Amount));
+			lock(MessagesHistory) MessagesHistory.Add(new(timestep, stage, ID, dstAgent.ID, Amount));
 			#endif
         }
     }
@@ -95,11 +95,11 @@ public partial struct UnderGroundAgent : IAgent
         public EnergyDec(float amount) => Amount = amount;
         public bool Valid => Amount > 0f;
         public Transaction Type => Transaction.Increase;
-        public void Receive(ref UnderGroundAgent dstAgent, uint timestep)
+        public void Receive(ref UnderGroundAgent dstAgent, uint timestep, byte stage)
         {
             dstAgent.TryDecEnergy(Amount);
 			#if HISTORY_LOG || TICK_LOG
-			lock(MessagesHistory) MessagesHistory.Add(new(timestep, ID, dstAgent.ID, -Amount));
+			lock(MessagesHistory) MessagesHistory.Add(new(timestep, stage, ID, dstAgent.ID, -Amount));
 			#endif
         }
     }
@@ -162,7 +162,7 @@ public partial struct UnderGroundAgent : IAgent
         public bool Valid => Amount > 0f && DstFormation.CheckIndex(DstIndex);
         public Transaction Type => Transaction.Decrease;
 
-        public void Receive(ref AboveGroundAgent srcAgent, uint timestep)
+        public void Receive(ref AboveGroundAgent srcAgent, uint timestep, byte stage)
         {
             var freeCapacity = Math.Max(0f, DstFormation.GetEnergyCapacity(DstIndex) - DstFormation.GetEnergy(DstIndex));
             var energy = srcAgent.TryDecEnergy(Math.Min(Amount, freeCapacity));
@@ -170,7 +170,7 @@ public partial struct UnderGroundAgent : IAgent
             {
                 DstFormation.SendProtected(DstIndex, new EnergyInc(energy));
                 #if HISTORY_LOG || TICK_LOG
-                lock(MessagesHistory) MessagesHistory.Add(new(timestep, ID, srcAgent.ID, DstFormation.GetID(DstIndex), energy));
+                lock(MessagesHistory) MessagesHistory.Add(new(timestep, stage, ID, srcAgent.ID, DstFormation.GetID(DstIndex), energy));
 			    #endif
             }
         }
@@ -237,7 +237,7 @@ public partial struct UnderGroundAgent : IAgent
         public bool Valid => Amount > 0f && DstFormation.CheckIndex(DstIndex);
         public Transaction Type => Transaction.Decrease;
 
-        public void Receive(ref UnderGroundAgent srcAgent, uint timestep)
+        public void Receive(ref UnderGroundAgent srcAgent, uint timestep, byte stage)
         {
             var freeCapacity = Math.Max(0f, DstFormation.GetWaterTotalCapacity(DstIndex) - DstFormation.GetWater(DstIndex));
             var water = srcAgent.TryDecWater(Math.Min(Amount, freeCapacity));
@@ -245,7 +245,7 @@ public partial struct UnderGroundAgent : IAgent
             {
                 DstFormation.SendProtected(DstIndex, new AboveGroundAgent.WaterInc(water));
 			    #if HISTORY_LOG || TICK_LOG
-			    lock(MessagesHistory) MessagesHistory.Add(new(timestep, ID, srcAgent.ID, DstFormation.GetID(DstIndex), water));
+			    lock(MessagesHistory) MessagesHistory.Add(new(timestep, stage, ID, srcAgent.ID, DstFormation.GetID(DstIndex), water));
                 #endif
             }
         }

@@ -7,12 +7,12 @@ using NumericHelpers;
 
 namespace Agro;
 
-public class Plant_UG_Godot  : PlantAbstractGodot<UnderGroundAgent>
+public class Plant_UG_Godot : PlantAbstractGodot<UnderGroundAgent>
 {
 	public Plant_UG_Godot(PlantSubFormation<UnderGroundAgent> formation) : base(formation) { }
 
 	protected override Color FormationColor => Colors.Brown;
-	protected override ColorCodingType FormationColorCoding => ColorCodingType.MixedRatio;
+	protected override ColorCodingType FormationColorCoding => ColorCodingType.EnergyRatio;
 
 	protected override void UpdateTransformation(MeshInstance sprite, int index)
 	{

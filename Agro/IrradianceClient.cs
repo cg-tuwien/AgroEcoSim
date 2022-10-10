@@ -11,17 +11,7 @@ using System.IO;
 using System.Security.Cryptography;
 using Innovative.SolarCalculator;
 
-public class IrradianceClient
-{
-	readonly HttpClient Client;
-	readonly List<float> Irradiances = new();
-	readonly List<int> SkipPlants = new();
-	readonly List<Vector3> IrradiancePoints = new();
-	readonly Dictionary<IFormation, int> IrradianceFormationOffsets = new ();
-
-	readonly bool IsOnline = false;
-	bool IsNight = true;
-/*
+/* Triangle Mesh Binary Serialization
 #INDEXED DATA
 uint32 entitiesCount
 	#foreach ENTITY
@@ -39,6 +29,32 @@ uint32 pointsCount
 	float32 y
 	float32 z
 */
+
+/* Primitives Binary Serialization
+#INDEXED DATA
+uint32 entitiesCount
+	#foreach ENTITY
+	uint32 surfacesCount
+		#foreach SURFACE (for now, each surface is an irradiancemeter)
+		uint8 primitiveType	(1 = leaf/disk, 2 = cylinder/stem)
+		#for leaf
+		float32 matrix 4x3 (the bottom row is always 0 0 0 1)
+		#for stem
+		float32 radius
+		float32 matrix 4x3 (the bottom row is always 0 0 0 1)
+*/
+
+public class IrradianceClient
+{
+	readonly HttpClient Client;
+	readonly List<float> Irradiances = new();
+	readonly List<int> SkipPlants = new();
+	readonly List<Vector3> IrradiancePoints = new();
+	readonly Dictionary<IFormation, int> IrradianceFormationOffsets = new ();
+
+	readonly bool IsOnline = false;
+	bool IsNight = true;
+
 	private IrradianceClient()
 	{
 		Client = new() { BaseAddress = new Uri("http://localhost:9000") };
@@ -65,7 +81,7 @@ uint32 pointsCount
 		if (Singleton.IsOnline)
 			Singleton.DoTick(timestep, formations);
 		else
-			Singleton.DoFallbackTick(formations);
+			Singleton.DoFallbackTick(timestep, formations);
 	}
 
 	void DoTick(uint timestep, IList<IFormation> formations)
@@ -76,7 +92,7 @@ uint32 pointsCount
 
 			SkipPlants.Clear();
 			for(int i = 0; i < formations.Count; ++i)
-				if (!(formations[i] is PlantFormation plant && plant.AG.Alive))
+				if (!(formations[i] is PlantFormation2 plant && plant.AG.Alive))
 					SkipPlants.Add(i);
 
 			int offsetCounter = 0;
@@ -108,7 +124,7 @@ uint32 pointsCount
 						++skipPointer;
 					else
 					{
-						var plant = formations[pi] as PlantFormation;
+						var plant = formations[pi] as PlantFormation2;
 						var ag = plant.AG;
 						var count = ag.Count;
 
@@ -255,7 +271,7 @@ uint32 pointsCount
 				}
 
 				//objWriter.WriteLine(obji.ToString());
-
+				var startTime = SW.ElapsedMilliseconds;
 				SW.Start();
 				var request = new HttpRequestMessage() {
 					Method = HttpMethod.Post,
@@ -270,45 +286,52 @@ uint32 pointsCount
 				for(int i = 0; i < offsetCounter; ++i)
 					Irradiances.Add(reader.ReadSingle());
 				SW.Stop();
+				Console.WriteLine($"R: {SW.ElapsedMilliseconds - startTime}ms S: {offsetCounter} RpS: {(SW.ElapsedMilliseconds - startTime) / offsetCounter}");
 			}
 		}
 		else
 			IsNight = true;
 	}
 
-	void DoFallbackTick(IList<IFormation> formations)
+	void DoFallbackTick(uint timestep, IList<IFormation> formations)
 	{
-		SkipPlants.Clear();
-		for(int i = 0; i < formations.Count; ++i)
-			if (!(formations[i] is PlantFormation plant && plant.AG.Alive))
-				SkipPlants.Add(i);
-
-		int offsetCounter = 0;
-		if (SkipPlants.Count < formations.Count)
+		if (AgroWorld.GetDaylight(timestep))
 		{
-			Irradiances.Clear();
-			IrradianceFormationOffsets.Clear();
-			IrradiancePoints.Clear();
-
-			var skipPointer = 0;
+			SkipPlants.Clear();
 			for(int i = 0; i < formations.Count; ++i)
+				if (!(formations[i] is PlantFormation2 plant && plant.AG.Alive))
+					SkipPlants.Add(i);
+
+			int offsetCounter = 0;
+			if (SkipPlants.Count < formations.Count)
 			{
-				if (skipPointer < SkipPlants.Count && SkipPlants[skipPointer] == i)
-					++skipPointer;
-				else
+				Irradiances.Clear();
+				IrradianceFormationOffsets.Clear();
+				IrradiancePoints.Clear();
+
+				var skipPointer = 0;
+				for(int i = 0; i < formations.Count; ++i)
 				{
-					var plant = formations[i] as PlantFormation;
-					var ag = plant!.AG;
-					var count = ag.Count;
+					if (skipPointer < SkipPlants.Count && SkipPlants[skipPointer] == i)
+						++skipPointer;
+					else
+					{
+						var plant = formations[i] as PlantFormation2;
+						var ag = plant!.AG;
+						var count = ag.Count;
 
-					IrradianceFormationOffsets.Add(ag, offsetCounter);
-					offsetCounter += count;
+						IrradianceFormationOffsets.Add(ag, offsetCounter);
+						offsetCounter += count;
+					}
 				}
-			}
 
-			for(int i = 0; i < offsetCounter; ++i)
-				Irradiances.Add(1f);
+				for(int i = 0; i < offsetCounter; ++i)
+					Irradiances.Add(1f);
+			}
+			IsNight = false;
 		}
+		else
+			IsNight = true;
 	}
 
 	public static float GetIrradiance(IFormation formation, int agentIndex) => Singleton.GetIrr(formation, agentIndex);

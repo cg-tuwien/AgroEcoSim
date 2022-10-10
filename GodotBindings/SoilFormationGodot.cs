@@ -14,7 +14,9 @@ public partial class SoilFormation
 		EmptyCellColor = Colors.Black,
 		FullFlowColor = Colors.Blue,
 		NoFlowColor = Colors.Black,
-		AnimateMarkerSize = true
+		MarkerVisibility = Visibility.Invisible,
+		AnimateMarkerSize = true,
+		SoilCellScale = 0.99f
 	};
 
 	//Todo: Speed of the visualisation could be improved by replacing Mesh with MultiMesh (leveraging identical geo)!!!

@@ -8,6 +8,7 @@ namespace Agro;
 
 public partial class SoilFormation : Formation3iTransformed<SoilAgent>
 {
+	public override byte Stages => 1;
 	public SoilFormation(Vector3i size, Vector3 fieldSize, uint timestep) : base(size.X, size.Y, size.Z)
 	{
 		const float coldFactor = 0.75f; //earth gets 1 degree colder each x meters (where x is the value of this constant)
@@ -24,11 +25,11 @@ public partial class SoilFormation : Formation3iTransformed<SoilAgent>
 		SetScale(fieldSize);
 	}
 
-	public override void DeliverPost(uint timestep)
-	{
-		base.DeliverPost(timestep);
-		//Console.WriteLine(Agents.Where((x, i) => Coords(i).Z == 2 && Coords(i).X == 1).Select(x => x.Water).Sum());
-	}
+	// public override void DeliverPost(uint timestep, byte stage)
+	// {
+	// 	base.DeliverPost(timestep, stage);
+	// 	Console.WriteLine(Agents.Where((x, i) => Coords(i).Z == 2 && Coords(i).X == 1).Select(x => x.Water).Sum());
+	// }
 
 	public float GetWater(int index) => index >= 0 && index < Agents.Length
 		? (ReadTMP ? AgentsTMP[index].Water : Agents[index].Water)

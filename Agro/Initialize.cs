@@ -23,17 +23,19 @@ public static class Initialize
 		if (settings?.Seed.HasValue ?? false)
 			AgroWorld.InitRNG(settings.Seed.Value);
 
+		AgroWorld.Init();
 		var world = new SimulationWorld();
+
 		world.AddCallback((timestep, formations) => IrradianceClient.Tick(timestep, formations));
 		var soil = new SoilFormation(new Vector3i(AgroWorld.FieldSize / AgroWorld.FieldResolution), AgroWorld.FieldSize, 0);
 		world.Add(soil);
 
-		PlantFormation[] plantsFormation;
+		PlantFormation2[] plantsFormation;
 		var rnd = AgroWorld.RNG;
 		if (settings?.Plants != null)
 		{
 			var plantsCount = settings.Plants.Length;
-			plantsFormation = new PlantFormation[plantsCount];
+			plantsFormation = new PlantFormation2[plantsCount];
 			for (int i = 0; i < plantsCount; ++i)
 			{
 				var minVegTemp = rnd.NextFloat(8f, 10f);
@@ -43,13 +45,13 @@ public static class Initialize
 				var seed = new SeedAgent(pos,
 										 rnd.NextFloat(0.02f),
 										 new Vector2(minVegTemp, minVegTemp + rnd.NextFloat(8f, 14f)));
-				plantsFormation[i] = new PlantFormation(soil, seed, rnd);
+				plantsFormation[i] = new PlantFormation2(PlantSettings.Avocado, soil, seed, rnd);
 			}
 		}
 		else
 		{
 			const int plantsCount = 1;
-			plantsFormation = new PlantFormation[plantsCount];
+			plantsFormation = new PlantFormation2[plantsCount];
 			for (int i = 0; i < plantsCount; ++i)
 			{
 				var minVegTemp = rnd.NextFloat(8f, 10f);
@@ -58,7 +60,7 @@ public static class Initialize
 														AgroWorld.FieldSize.Y * rnd.NextFloat()), //Y because Z is depth
 											rnd.NextFloat(0.02f),
 											new Vector2(minVegTemp, minVegTemp + rnd.NextFloat(8f, 14f)));
-				plantsFormation[i] = new PlantFormation(soil, seed, rnd);
+				plantsFormation[i] = new PlantFormation2(PlantSettings.Avocado, soil, seed, rnd);
 			}
 		}
 		world.AddRange(plantsFormation);

@@ -29,11 +29,11 @@ public struct SeedAgent : IAgent
 		public WaterInc(float amount) => Amount = amount;
 		public bool Valid => Amount > 0f;
 		public Transaction Type => Transaction.Increase;
-		public void Receive(ref SeedAgent dstAgent, uint timestep)
+		public void Receive(ref SeedAgent dstAgent, uint timestep, byte stage)
 		{
 			dstAgent.IncWater(Amount);
 			#if HISTORY_LOG || TICK_LOG
-			lock(MessagesHistory) MessagesHistory.Add(new(timestep, ID, dstAgent.ID, Amount));
+			lock(MessagesHistory) MessagesHistory.Add(new(timestep, stage, ID, dstAgent.ID, Amount));
 			#endif
 		}
 	}
@@ -80,9 +80,9 @@ public struct SeedAgent : IAgent
 		mVegetativeTemperature = vegetativeTemperature;
 	}
 
-	public void Tick(SimulationWorld world, IFormation _formation, int formationID, uint timestep)
+	public void Tick(SimulationWorld world, IFormation _formation, int formationID, uint timestep, byte stage)
 	{
-		var formation = (PlantFormation)_formation;
+		var formation = (PlantFormation2)_formation;
 		Water -= Radius * Radius * Radius / AgroWorld.TicksPerHour; //life support
 		if (Water <= 0) //energy depleted
 		{
@@ -94,14 +94,14 @@ public struct SeedAgent : IAgent
 			if (Water >= GerminationThreshold) //GERMINATION
 			{
 				var initialYaw = Quaternion.CreateFromAxisAngle(Vector3.UnitY, formation.RNG.NextFloat(-MathF.PI, MathF.PI));
-				formation.UG.Birth(new UnderGroundAgent(-1, initialYaw * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, -0.5f * MathF.PI), Water * 0.4f));
+				formation.UG.Birth(new UnderGroundAgent2(-1, initialYaw * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, -0.5f * MathF.PI), Water * 0.4f));
 
 				var baseStemOrientation = initialYaw * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, 0.5f * MathF.PI);
-				formation.AG.Birth(new AboveGroundAgent(-1, OrganTypes.Stem, baseStemOrientation, Water * 0.4f)); //base stem
-				formation.AG.Birth(new AboveGroundAgent(0, OrganTypes.Shoot, baseStemOrientation, Water * 0.4f)); //base shoot on top of the base stem
+				formation.AG.Birth(new AboveGroundAgent2(-1, OrganTypes.Stem, baseStemOrientation, Water * 0.4f)); //base stem
+				formation.AG.Birth(new AboveGroundAgent2(0, OrganTypes.Shoot, baseStemOrientation, Water * 0.4f)); //base shoot on top of the base stem
 				var leafStemOrientation = initialYaw * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, formation.RNG.NextFloat(0.3f * MathF.PI));
-				formation.AG.Birth(new AboveGroundAgent(0, OrganTypes.Stem, leafStemOrientation, Water * 0.4f)); //leaf stem
-				formation.AG.Birth(new AboveGroundAgent(2, OrganTypes.Leaf, initialYaw * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, -formation.RNG.NextFloat(0.25f) * MathF.PI), Water * 0.2f)); //leaf
+				formation.AG.Birth(new AboveGroundAgent2(0, OrganTypes.Stem, leafStemOrientation, Water * 0.4f)); //leaf stem
+				formation.AG.Birth(new AboveGroundAgent2(2, OrganTypes.Leaf, initialYaw * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, -formation.RNG.NextFloat(0.25f) * MathF.PI), Water * 0.2f)); //leaf
 				formation.SeedDeath();
 				Water = 0f;
 			}

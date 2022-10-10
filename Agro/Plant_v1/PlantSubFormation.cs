@@ -14,20 +14,6 @@ namespace Agro;
 
 public enum PlantSubstances : byte { Water, Energy}
 
-// [StructLayout(LayoutKind.Auto)]
-// internal readonly struct NodeCacheData
-// {
-// 	readonly List<int> mChildren = new();
-// 	internal readonly ushort Depth = 0;
-// 	internal readonly Vector3 Point = default;
-
-// 	public NodeCacheData() { }
-// 	public void Clear() => mChildren.Clear();
-// 	public void AddChild(int childIndex) => mChildren.Add(childIndex);
-// 	public bool IsRoot => mChildren.Count == 0;
-// 	public IList<int> Children => mChildren;
-// }
-
 internal class TreeCacheData
 {
 	public int Count { get; private set; }
@@ -40,7 +26,6 @@ internal class TreeCacheData
 	public TreeCacheData()
 	{
 		Count = 0;
-		//Nodes = new NodeCacheData[] {new(), new()};
 		ChildrenNodes = new List<int>[]{ new(), new() };
 		DepthNodes = new ushort[]{ 0, 0 };
 		PointNodes = new Vector3[] {default, default};
@@ -132,8 +117,9 @@ internal class TreeCacheData
 
 public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAgent
 {
+	public byte Stages => 1;
 	readonly Action<T[], int[]> Reindex;
-	public readonly PlantFormation Plant;
+	public readonly PlantFormation1 Plant;
 	//Once GODOT supports C# 6.0: Make it a List and then for processing send System.Runtime.InteropServices.CollectionsMarshal.AsSpan(Stems);
 	bool ReadTMP = false;
 	T[] Agents = Array.Empty<T>();
@@ -148,7 +134,7 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 
 	readonly TreeCacheData TreeCache = new();
 
-	public PlantSubFormation(PlantFormation plant, Action<T[], int[]> reindex)
+	public PlantSubFormation(PlantFormation1 plant, Action<T[], int[]> reindex)
 	{
 		Plant = plant;
 		Reindex = reindex;
@@ -168,19 +154,6 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 	public int Birth(T agent)
 	{
 		Births.Add(agent);
-		// if (agent.Parent >= 0)
-		// {
-		// 	if (agent.Parent < UnderGround.Length)
-		// 	{
-		// 		var data = ReadTMP ? UnderGroundTMP : UnderGround;
-		// 		data[agent.Parent] = data[agent.Parent].AddChild(UnderGround.Length + UnderGroundBirths.Count - 1);
-		// 	}
-		// 	else
-		// 	{
-		// 		var index = agent.Parent - UnderGround.Length;
-		// 		UnderGroundBirths[index] = UnderGroundBirths[index].AddChild(UnderGround.Length + UnderGroundBirths.Count - 1);
-		// 	}
-		// }
 		return Agents.Length + Births.Count - 1;
 	}
 
@@ -348,10 +321,8 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 			{
 				var indexMap = new int[src.Length + Births.Count + Inserts.Count];
 				Array.Fill(indexMap, -1);
-#if GODOT
-				for(var i = DeathsHelper.Count - 1; i >= 0; --i)
-					GodotRemoveSprite(DeathsHelper[i]);
-#endif
+
+				PrepareDeaths();
 
 				// foreach(var index in Deaths)  //must run before copying to underGround
 				// 	if (Agents[index].Parent >= 0)
@@ -444,20 +415,35 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 				TreeCache.AddChild(src[i].Parent, i);
 
 			TreeCache.FinishUpdate();
-			TreeCache.UpdateBases(this);
-
-#if GODOT
-			GodotAddSprites(Agents.Length);
-#endif
+			PostCensusPositive();
 			Births.Clear();
 			Inserts.Clear();
 			InsertAncestors.Clear();
 		}
 		else
-			TreeCache.UpdateBases(this);
+			PostCensusNegative();
 	}
 
-	public void Tick(SimulationWorld world, uint timestep)
+	void PrepareDeaths()
+	{
+		#if GODOT
+		for(var i = DeathsHelper.Count - 1; i >= 0; --i)
+			GodotRemoveSprite(DeathsHelper[i]);
+		#endif
+	}
+
+	void PostCensusPositive()
+	{
+		TreeCache.UpdateBases(this);
+
+		#if GODOT
+		GodotAddSprites(Agents.Length);
+		#endif
+	}
+
+	void PostCensusNegative() => TreeCache.UpdateBases(this);
+
+	public void Tick(SimulationWorld world, uint timestep, byte stage)
 	{
 		var (src, dst) = SrcDst();
 		Array.Copy(src, dst, src.Length);
@@ -465,7 +451,7 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 		// StemsTMP.AddRange(Stems);
 
 		for(int i = 0; i < dst.Length; ++i)
-			dst[i].Tick(world, this, i, timestep);
+			dst[i].Tick(world, this, i, timestep, stage);
 
 		#if TICK_LOG
 		StatesHistory.Clear();
@@ -478,18 +464,18 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 		ReadTMP = !ReadTMP;
 	}
 
-	public void DeliverPost(uint timestep)
+	public void DeliverPost(uint timestep, byte stage)
 	{
 		// Roots.Clear();
 		// Roots.AddRange(RootsTMP);
 		var (src, dst) = SrcDst();
 		Array.Copy(src, dst, src.Length);
-		Post.Process(timestep, dst);
+		Post.Process(timestep, stage, dst);
 
 		ReadTMP = !ReadTMP;
 	}
 
-	public void ProcessTransactions(uint timestep)
+	public void ProcessTransactions(uint timestep, byte stage)
 	{
 		var (src, dst) = SrcDst();
 		Array.Copy(src, dst, src.Length);
@@ -682,7 +668,7 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 	///////////////////////////
 	#if HISTORY_LOG || TICK_LOG
 	List<T[]> StatesHistory = new();
-	public string HistoryToJSON(int timestep = -1) => timestep >= 0 ? Utils.Export.Json(StatesHistory[timestep]) : Utils.Export.Json(StatesHistory);
+	public string HistoryToJSON(int timestep = -1, byte stage = 0) => timestep >= 0 ? Utils.Export.Json(StatesHistory[timestep]) : Utils.Export.Json(StatesHistory);
 
 	public ulong GetID(int index) => ReadTMP
 		? (AgentsTMP.Length > index ? AgentsTMP[index].ID : ulong.MaxValue)

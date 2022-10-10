@@ -34,7 +34,6 @@ internal class Program
         }
         else
             world = Initialize.World();
-
         var start = DateTime.UtcNow.Ticks;
         world.Run(AgroWorld.TimestepsTotal);
         var stop = DateTime.UtcNow.Ticks;
@@ -48,7 +47,7 @@ internal class Program
             var plantData = new List<string>();
             world.ForEach(formation =>
             {
-                if (formation is PlantFormation plant)
+                if (formation is PlantFormation2 plant)
                     plantData.Add(@$"{{""P"":{JsonSerializer.Serialize(new Vector3Data(plant.Position))},""V"":{plant.AG.GetVolume()}}}");
             });
 

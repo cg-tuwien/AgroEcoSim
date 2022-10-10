@@ -1,7 +1,23 @@
-[gd_scene load_steps=3 format=2]
+[gd_scene load_steps=9 format=2]
 
 [ext_resource path="res://addons/goutte.camera.trackball/trackball_camera.gd" type="Script" id=1]
 [ext_resource path="res://addons/multiagent_system/MultiagentSystem.cs" type="Script" id=2]
+
+[sub_resource type="CubeMesh" id=1]
+
+[sub_resource type="CubeMesh" id=2]
+
+[sub_resource type="SpatialMaterial" id=3]
+albedo_color = Color( 1, 0, 0, 1 )
+
+[sub_resource type="SpatialMaterial" id=4]
+albedo_color = Color( 0, 1, 0.25098, 1 )
+
+[sub_resource type="SpatialMaterial" id=5]
+albedo_color = Color( 0.054902, 0, 1, 1 )
+
+[sub_resource type="SpatialMaterial" id=6]
+albedo_color = Color( 1, 0, 0.960784, 1 )
 
 [node name="Spatial" type="Spatial"]
 
@@ -13,3 +29,36 @@ zoom_minimum = 0.003
 
 [node name="MultiagentSystem" type="Spatial" parent="."]
 script = ExtResource( 2 )
+
+[node name="UnitBoxMarkers" type="Spatial" parent="."]
+visible = false
+
+[node name="MeshInstance" type="MeshInstance" parent="UnitBoxMarkers"]
+transform = Transform( 0.02, 0, 0, 0, 0.02, 0, 0, 0, 0.02, 0, 0, 0 )
+mesh = SubResource( 1 )
+skeleton = NodePath("../..")
+material/0 = null
+
+[node name="MeshInstance2" type="MeshInstance" parent="UnitBoxMarkers"]
+transform = Transform( 0.02, 0, 0, 0, 0.02, 0, 0, 0, 0.02, 1, 0, 0 )
+mesh = SubResource( 2 )
+skeleton = NodePath("../..")
+material/0 = SubResource( 3 )
+
+[node name="MeshInstance3" type="MeshInstance" parent="UnitBoxMarkers"]
+transform = Transform( 0.02, 0, 0, 0, 0.02, 0, 0, 0, 0.02, 0, 1, 0 )
+mesh = SubResource( 2 )
+skeleton = NodePath("../..")
+material/0 = SubResource( 4 )
+
+[node name="MeshInstance4" type="MeshInstance" parent="UnitBoxMarkers"]
+transform = Transform( 0.02, 0, 0, 0, 0.02, 0, 0, 0, 0.02, 0, 0, 1 )
+mesh = SubResource( 2 )
+skeleton = NodePath("../..")
+material/0 = SubResource( 5 )
+
+[node name="MeshInstance5" type="MeshInstance" parent="UnitBoxMarkers"]
+transform = Transform( 0.02, 0, 0, 0, 0.02, 0, 0, 0, 0.02, 1, 1, 1 )
+mesh = SubResource( 2 )
+skeleton = NodePath("../..")
+material/0 = SubResource( 6 )

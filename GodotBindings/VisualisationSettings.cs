@@ -45,7 +45,7 @@ public class SoilVisualisationSettings
     public Mesh MarkerShape = GeoBuilder.UnitPyramid4();
 
     // SCALE SETTINGS
-    public float SoilCellScale = 0.25f;
+    public float SoilCellScale = 0.1f;
     public float MarkerScale = 0.75f;
 
 }

@@ -24,11 +24,11 @@ public partial struct AboveGroundAgent : IAgent
 		public WaterInc(float amount) => Amount = amount;
 		public bool Valid => Amount > 0f;
 		public Transaction Type => Transaction.Increase;
-		public void Receive(ref AboveGroundAgent dstAgent, uint timestep)
+		public void Receive(ref AboveGroundAgent dstAgent, uint timestep, byte stage)
 		{
 			dstAgent.IncWater(Amount);
 			#if HISTORY_LOG || TICK_LOG
-			lock(MessagesHistory) MessagesHistory.Add(new(timestep, ID, dstAgent.ID, Amount));
+			lock(MessagesHistory) MessagesHistory.Add(new(timestep, stage, ID, dstAgent.ID, Amount));
 			#endif
 		}
 	}
@@ -47,11 +47,11 @@ public partial struct AboveGroundAgent : IAgent
 		public WaterDec(float amount) => Amount = amount;
 		public bool Valid => Amount > 0f;
 		public Transaction Type => Transaction.Increase;
-		public void Receive(ref AboveGroundAgent dstAgent, uint timestep)
+		public void Receive(ref AboveGroundAgent dstAgent, uint timestep, byte stage)
 		{
 			dstAgent.TryDecWater(Amount);
 			#if HISTORY_LOG || TICK_LOG
-			lock(MessagesHistory) MessagesHistory.Add(new(timestep, ID, dstAgent.ID, -Amount));
+			lock(MessagesHistory) MessagesHistory.Add(new(timestep, stage, ID, dstAgent.ID, -Amount));
 			#endif
 		}
 	}
@@ -70,11 +70,11 @@ public partial struct AboveGroundAgent : IAgent
 		public EnergyInc(float amount) => Amount = amount;
 		public bool Valid => Amount > 0f;
 		public Transaction Type => Transaction.Increase;
-		public void Receive(ref AboveGroundAgent dstAgent, uint timestep)
+		public void Receive(ref AboveGroundAgent dstAgent, uint timestep, byte stage)
 		{
 			dstAgent.IncEnergy(Amount);
 			#if HISTORY_LOG || TICK_LOG
-			lock(MessagesHistory) MessagesHistory.Add(new(timestep, ID, dstAgent.ID, Amount));
+			lock(MessagesHistory) MessagesHistory.Add(new(timestep, stage, ID, dstAgent.ID, Amount));
 			#endif
 		}
 	}
@@ -93,11 +93,11 @@ public partial struct AboveGroundAgent : IAgent
 		public EnergyDec(float amount) => Amount = amount;
 		public bool Valid => Amount > 0f;
 		public Transaction Type => Transaction.Increase;
-		public void Receive(ref AboveGroundAgent dstAgent, uint timestep)
+		public void Receive(ref AboveGroundAgent dstAgent, uint timestep, byte stage)
 		{
 			dstAgent.IncEnergy(Amount);
 			#if HISTORY_LOG || TICK_LOG
-			lock(MessagesHistory) MessagesHistory.Add(new(timestep, ID, dstAgent.ID, -Amount));
+			lock(MessagesHistory) MessagesHistory.Add(new(timestep, stage, ID, dstAgent.ID, -Amount));
 			#endif
 		}
 	}

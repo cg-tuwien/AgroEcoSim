@@ -10,7 +10,10 @@ public partial class SimulationWorld
 {
 	internal readonly List<IFormation> Formations = new();
 	internal readonly List<Action<uint, IList<IFormation>>> Callbacks = new();
-	public uint Timestep { get; private set; }
+	public uint Timestep { get; private set; } = 0U;
+	public byte Stage { get; private set; }
+
+	byte Stages = 1;
 
 	#if TICK_LOG
 	List<MethodInfo> MessageLogClears = new();
@@ -41,6 +44,7 @@ public partial class SimulationWorld
 	public void Add(IFormation formation)
 	{
 		Formations.Add(formation);
+		Stages = Math.Max(Stages, formation.Stages);
 #if GODOT
 		formation.GodotReady();
 #endif
@@ -49,6 +53,8 @@ public partial class SimulationWorld
 	public void AddRange(IEnumerable<IFormation> formations)
 	{
 		Formations.AddRange(formations);
+		foreach(var item in formations)
+			Stages = Math.Max(Stages, item.Stages);
 #if GODOT
 		foreach(var item in formations)
 			item.GodotReady();
@@ -65,13 +71,21 @@ public partial class SimulationWorld
 			RunSequential(simulationLength);
 	}
 
+	byte MaxStage() => Formations.Max(x => x.Stages);
+
 	public void RunSequential(uint simulationLength)
 	{
-		for(uint i = 0U; i < simulationLength; ++i, ++Timestep)
+		Stages = MaxStage();
+		for(int i = 0; i < simulationLength; ++i, ++Timestep)
 		{
-			TickSequential(Timestep);
-			ProcessTransactionsSequential(Timestep);
-			DeliverPostSequential(Timestep);
+			for(Stage = 0; Stage < Stages; ++Stage)
+			{
+
+				TickSequential();
+				ProcessTransactionsSequential();
+				DeliverPostSequential();
+				++Stage;
+			}
 			CensusSequential();
 			ExecCallbacks();
 #if GODOT
@@ -90,11 +104,15 @@ public partial class SimulationWorld
 
 	public void RunParallel(uint simulationLength)
 	{
-		for(uint i = 0U; i < simulationLength; ++i, ++Timestep)
+		Stages = MaxStage();
+		for(int i = 0; i < simulationLength; ++i, ++Timestep)
 		{
-			TickParallel(Timestep);
-			ProcessTransactionsParallel(Timestep);
-			DeliverPostParallel(Timestep);
+			for(Stage = 0; Stage < Stages; ++Stage)
+			{
+				TickParallel();
+				ProcessTransactionsParallel();
+				DeliverPostParallel();
+			}
 			CensusParallel();
 			ExecCallbacks();
 #if GODOT
@@ -112,16 +130,16 @@ public partial class SimulationWorld
 
 	void CensusParallel() => Parallel.For(0, Formations.Count, i => Formations[i].Census());
 
-	void TickSequential(uint timestep)
+	void TickSequential()
 	{
-		Debug.WriteLine($"TIMESTEP: {timestep}");
+		Debug.WriteLine($"TIMESTEP: {Timestep}");
 		for(int i = 0; i < Formations.Count; ++i)
-			Formations[i].Tick(this, timestep);
+			Formations[i].Tick(this, Timestep, Stage);
 	}
 
-	void TickParallel(uint timestep) => Parallel.For(0, Formations.Count, i => Formations[i].Tick(this, timestep));
+	void TickParallel() => Parallel.For(0, Formations.Count, i => Formations[i].Tick(this, Timestep, Stage));
 
-	public void ProcessTransactionsSequential(uint timestep)
+	public void ProcessTransactionsSequential()
 	{
 		var anyDelivered = true;
 		while(anyDelivered)
@@ -130,13 +148,13 @@ public partial class SimulationWorld
 			for(int i = 0; i < Formations.Count; ++i)
 				if (Formations[i].HasUnprocessedTransactions)
 				{
-					Formations[i].ProcessTransactions(timestep);
+					Formations[i].ProcessTransactions(Timestep, Stage);
 					anyDelivered = true;
 				}
 		}
 	}
 
-	public void ProcessTransactionsParallel(uint timestep)
+	public void ProcessTransactionsParallel()
 	{
 		#if TICK_LOG
 		foreach(var clear in MessageLogClears)
@@ -149,14 +167,14 @@ public partial class SimulationWorld
 			Parallel.For(0, Formations.Count, i => {
 				if (Formations[i].HasUnprocessedTransactions)
 				{
-					Formations[i].ProcessTransactions(timestep);
+					Formations[i].ProcessTransactions(Timestep, Stage);
 					anyDelivered = true;
 				}
 			});
 		}
 	}
 
-	public void DeliverPostSequential(uint timestep)
+	public void DeliverPostSequential()
 	{
 		#if TICK_LOG
 		foreach(var clear in MessageLogClears)
@@ -169,13 +187,13 @@ public partial class SimulationWorld
 			for(int i = 0; i < Formations.Count; ++i)
 				if (Formations[i].HasUndeliveredPost)
 				{
-					Formations[i].DeliverPost(timestep);
+					Formations[i].DeliverPost(Timestep, Stage);
 					anyDelivered = true;
 				}
 		}
 	}
 
-	public void DeliverPostParallel(uint timestep)
+	public void DeliverPostParallel()
 	{
 		#if TICK_LOG
 		foreach(var clear in MessageLogClears)
@@ -188,7 +206,7 @@ public partial class SimulationWorld
 			Parallel.For(0, Formations.Count, i => {
 				if (Formations[i].HasUndeliveredPost)
 				{
-					Formations[i].DeliverPost(timestep);
+					Formations[i].DeliverPost(Timestep, Stage);
 					anyDelivered = true;
 				}
 			});

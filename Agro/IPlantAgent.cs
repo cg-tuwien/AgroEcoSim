@@ -4,7 +4,7 @@ using AgentsSystem;
 
 namespace Agro;
 
-public interface IPlantAgent : IAgent
+public interface IPlantAgent : ITreeAgent
 {
 	float Length { get; }
 
@@ -31,25 +31,22 @@ public interface IPlantAgent : IAgent
 	/// </summary>
 	OrganTypes Organ { get; }
 
-	/// <summary>
-	/// Index of the parent agent. -1 represents the root of the hierarchy.
-	/// </summary>
-	int Parent { get; }
-
 	float EnergyStorageCapacity { get; }
 	float WaterStorageCapacity { get; }
 	float WaterTotalCapacityPerTick { get; }
 	float EnergyFlowToParentPerTick { get; }
 
+	float LifeSupportPerTick { get; }
+	float PhotosynthPerTick { get; }
+
 	float WoodRatio { get; }
 
 	Vector3 Scale { get; }
 
-	///<summary>
-	/// Use with caution, call only from census! Updates the Parent value after splitting an agent.
-	///</summary>
-	void CensusUpdateParent(int newParent);
 	static void Reindex(IPlantAgent[] data, int[] map) => throw new NotImplementedException();
 
-	bool ChangeAmount(PlantFormation plant, int index, int substanceIndex, float amount, bool increase);
+	bool ChangeAmount(PlantFormation1 plant, int index, int substanceIndex, float amount, bool increase);
+	bool ChangeAmount(PlantFormation2 plant, int index, int substanceIndex, float amount, bool increase);
+
+	void Distribute(float water, float energy);
 }
