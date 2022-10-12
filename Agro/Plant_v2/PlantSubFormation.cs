@@ -429,7 +429,7 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 			TreeCache.UpdateBases(this);
 	}
 
-    public void Tick(SimulationWorld world, uint timestep, byte stage)
+	public void Tick(SimulationWorld world, uint timestep, byte stage)
 	{
 		var (src, dst) = SrcDst();
 		Array.Copy(src, dst, src.Length);
@@ -512,12 +512,12 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 		};
 	}
 
-    internal void Distribute(PlantGlobalStats stats)
-    {
+	internal void Distribute(PlantGlobalStats stats)
+	{
 		var dst = Src();
-        for(int i = 0; i < stats.ReceivedEnergy.Length; ++i)
+		for(int i = 0; i < stats.ReceivedEnergy.Length; ++i)
 			dst[i].Distribute(stats.ReceivedWater[i], stats.ReceivedEnergy[i]);
-    }
+	}
 
 	public void DeliverPost(uint timestep, byte stage)
 	{
@@ -710,6 +710,8 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 	};
 
 	public float GetVolume() => (ReadTMP ? AgentsTMP : Agents).Aggregate(0f, (sum, current) => sum + current.Scale.X * current.Scale.Y * current.Scale.Z);
+
+	public float GetIrradiance(int index) => IrradianceClient.GetIrradiance(this, index);
 
 	#endregion
 

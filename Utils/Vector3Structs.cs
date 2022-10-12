@@ -4,7 +4,7 @@ namespace Utils.Json;
 
 ///<summary>
 /// Helper struct for JSON serialization of vectors
-///<summary>
+///</summary>
 public readonly struct Vector3Data
 {
     public readonly float X { get; }
@@ -21,7 +21,7 @@ public readonly struct Vector3Data
 
 ///<summary>
 /// Helper struct for JSON serialization of vectors
-///<summary>
+///</summary>
 public struct Vector3XDZ
 {
     public float X { get; set; }

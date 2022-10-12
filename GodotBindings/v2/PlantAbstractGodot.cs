@@ -21,7 +21,7 @@ public abstract class PlantAbstractGodot2<T> where T : struct, IPlantAgent
 	static Color DefaultColor = new Color(0.7f, 0.7f, 0.7f);
 
 	protected virtual Color FormationColor => DefaultColor;
-	protected virtual ColorCodingType FormationColorCoding => ColorCodingType.Default;
+	protected virtual ColorCodingType FormationColorCoding => ColorCodingType.Irradiance;
 
 	public void AddSprites(int count)
 	{
@@ -90,6 +90,11 @@ public abstract class PlantAbstractGodot2<T> where T : struct, IPlantAgent
 			{
 				var w = Formation.GetWoodRatio(index);
 				return Colors.Green * (1f - w) + Colors.Brown * w;
+			}
+			case ColorCodingType.Irradiance:
+			{
+				var w = Math.Clamp(Formation.GetIrradiance(index) * 0.01f, 0, 1);
+				return Colors.White * w;
 			}
 			default: return FormationColor;
 		}

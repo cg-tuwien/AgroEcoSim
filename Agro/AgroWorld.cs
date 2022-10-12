@@ -383,4 +383,17 @@ public static class BinaryWriterExtensions
 	public static void WriteU8(this BinaryWriter writer, int value) => writer.Write((byte)value);
 	public static void WriteU32(this BinaryWriter writer, int value) => writer.Write((uint)value);
 	public static void WriteU32(this BinaryWriter writer, uint value) => writer.Write(value);
+	public static void WriteV32(this BinaryWriter writer, Vector3 xyz)
+	{
+		writer.Write(xyz.X);
+		writer.Write(xyz.Y);
+		writer.Write(xyz.Z);
+	}
+	public static void WriteV32(this BinaryWriter writer, Vector3 xyz, float w)
+	{
+		writer.Write(xyz.X);
+		writer.Write(xyz.Y);
+		writer.Write(xyz.Z);
+		writer.Write(w);
+	}
 }

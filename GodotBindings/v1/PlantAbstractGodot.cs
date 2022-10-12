@@ -7,7 +7,7 @@ using NumericHelpers;
 
 namespace Agro;
 
-public enum ColorCodingType : byte { Default, EnergyRatio, WaterRatio, MixedRatio, WoodRatio };
+public enum ColorCodingType : byte { Default, EnergyRatio, WaterRatio, MixedRatio, WoodRatio, Irradiance };
 
 public abstract class PlantAbstractGodot<T> where T : struct, IPlantAgent
 {
@@ -92,6 +92,11 @@ public abstract class PlantAbstractGodot<T> where T : struct, IPlantAgent
 			{
 				var w = Formation.GetWoodRatio(index);
 				return Colors.Green * (1f - w) + Colors.Brown * w;
+			}
+			case ColorCodingType.Irradiance:
+			{
+				var w = Math.Clamp(Formation.GetIrradiance(index) * 0.5f, 0, 1);
+				return Colors.White * w;
 			}
 			default: return FormationColor;
 		}

@@ -655,6 +655,8 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 
 	public float GetVolume() => (ReadTMP ? AgentsTMP : Agents).Aggregate(0f, (sum, current) => sum + current.Scale.X * current.Scale.Y * current.Scale.Z);
 
+		public float GetIrradiance(int index) => IrradianceClient.GetIrradiance(this, index);
+
 	#endregion
 
 	///////////////////////////
