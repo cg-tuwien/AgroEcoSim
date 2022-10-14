@@ -1,8 +1,19 @@
 # Procedural Agro Simulator
 
-This is both a standalone CLI application as well as a Godot project. Very early development stage.
+The plants simulator can be used as a standalone CLI application, a HTTP server, as well as a Godot project. The simulation currently includes a procedural weather generator, simple water diffusion in soil as well as the plant growth itself. A light simulator that provides irradiance values for the plants important for photosynthesis is a [separate component](https://github.com/cfreude/agroeco-mts3/).
 
+### Docker
 If you want to try out the Docker app, have a look in the [Releases](https://github.com/cg-tuwien/AgroGodot/releases) section.
+
+### Standalone CLI
+This headless mode (subfolder `Agro`) is mainly indended for development and testing when you need to run a single simulation. On start it pings the light simulation server and then calls it in each timestep. Constant light is used as a fallback option.
+
+### HTTP Server
+The second headless mode (subfolder `AgroGodot`) is designed for running multiple simulations in a row. It reduces the overhead of starting new processes over again. The HTTP server runs inside of the Docker along with the light simulation server.
+
+### Godot
+The graphics mode allows to analyze the simulation in 3D usint the open source [Godot Engine](https://godotengine.org/). It integrates the simulation as a Godot component. Unfortunately Godot has many limitations regarding the use of C#. The simulation may behave differently than in the CLI mode.
+
 
 ## Setup
 0. Make sure to use `--recursive` flag for checkout
@@ -91,6 +102,9 @@ The following folders are related to the Godot rendering:
 
 `AgroGodot.csproj` is an umbrella project that takes all files from all subfolders and compiles them for Godot. It defines the `GODOT` switch which activates or deactivates certain blcks of code. This is an ugly, but necessary workaround to cope with Godot's limited .NET support.
 
+## v1 vs. v2
+Some classes are denoted by v1/v2 or just 1/2 or stored in folders called v1/v2. This marks whether they are transaction-based (v1) or global-diffusion based (v2). The *supervised global diffusion* is a novel concept to mitigate the transport limitations of large time steps. Instead of trying to compute at a very dense time rate, the formation gathers all resources in each frame and redistributes them.
+
 # Renderer interface
 The renderer is called via `http`. The primary renderer is Mitsuba 3 in the [agroeco-mts3](https://github.com/cfreude/agroeco-mts3/). To plug-in a different renderer, it has to follow these guidelines:
 * Listening at port `9000`
@@ -104,14 +118,29 @@ The body of the `POST` request contains the scene in a binary format as describe
 * `Ra` is the number of rays (samples) per pixel (default=128, optional)
 
 ## Input scene data format
-The renderer will receive the scene data in binary form as a set of triangle meshes. A primitive-based alternative format is planned as well.
+The renderer will receive the scene data in binary form as a set of triangle meshes. There are two variants a triangle-based and a primitive-based.
+Both contain a section with sensors that measure irradiance and a section with obstacles that only block and reflect light, but do not measure it.
+
+Plants correspond to entities. Their surfaces are typically light-sensitive plant organs like leafs. Each sensor surface must be associated with a sensor that measures the irradiance exposure (summed all over the surface) in W/m².
+
+### Triangle Mesh Binary Serialization
 ```
-#Triangle Mesh Binary Serialization
-#INDEXED DATA
+uint8 version = 1
+#INDEXED DATA FOR OBSTACLES
+uint32 entitiesCount
+foreach ENTITY
+	uint32 surfacesCount
+	foreach SURFACE
+		uint8 trianglesCount
+		foreach TRIANGLE
+			uint32 index0
+			uint32 index1
+			uint32 index2
+#INDEXED DATA FOR SENSORS
 uint32 entitiesCount
 foreach ENTITY
     uint32 surfacesCount
-    foreach SURFACE (for now, each surface is an irradiancemeter)
+    foreach SURFACE
         uint8 trianglesCount
         foreach TRIANGLE
             uint32 index0
@@ -119,12 +148,51 @@ foreach ENTITY
             uint32 index2
 #POINTS DATA
 uint32 pointsCount
-foreach POINT
-    float32 x
-    float32 y
-    float32 z
+	#foreach POINT
+	float32 x
+	float32 y
+	float32 z
 ```
-Plants correspond to entities. The surfaces are typically light-sensitive plant organs like leafs. Each surface should be associated with a sensor that measures the irradiance exposure (summed all over the surface). Each surface is represented as a set of triangles which are given by vertex indices. After the section with entities, a list of vertices with 3D coordinates is provided.
+Each surface is represented as a set of triangles which are given by vertex indices. After the section with entities, a list of vertices with 3D coordinates is provided.
+
+### Primitive Binary Serialization
+```
+uint8 version = 2
+#OBSTACLES
+uint32 entitiesCount
+foreach ENTITY
+	uint32 surfacesCount
+	foreach SURFACE
+		uint8 primitiveType    #1 = disk, 2 = cylinder(stem), 4 = sphere(shoot), 8 = rectangle(leaf)
+		#case disk
+		float32 matrix 4x3 (the bottom row is always 0 0 0 1)
+		#case cylinder
+		float32 length
+		float32 radius
+		float32 matrix 4x3 (the bottom row is always 0 0 0 1)
+		#case sphere
+		3xfloat32 center
+		float32 radius
+		#case rectangle
+		float32 matrix 4x3 (the bottom row is always 0 0 0 1)
+#SENSORS
+uint32 entitiesCount
+foreach ENTITY
+	uint32 surfacesCount
+	foreach SURFACE
+		uint8 primitiveType    #1 = disk, 2 = cylinder(stem), 4 = sphere(shoot), 8 = rectangle(leaf)
+		#case disk
+		float32 matrix 4x3 (the bottom row is always 0 0 0 1)
+		#case cylinder
+		float32 length
+		float32 radius
+		float32 matrix 4x3 (the bottom row is always 0 0 0 1)
+		#case sphere
+		3xfloat32 center
+		float32 radius
+		#case rectangle
+		float32 matrix 4x3 (the bottom row is always 0 0 0 1)
+```
 
 ## Result irradiance data format
 The resulting irradiances per surface need to be sent back as a simple array of floats preserving the  order of the surfaces in the request.

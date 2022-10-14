@@ -9,7 +9,7 @@ public class PlantRequest
 {
     #if !GODOT
     ///<summary>
-    ///Position of the plant seed (OpenGL-like coordinates); Use X,Y,Z for its components, e.g. { "X": 1. "Y": 2, "Z": 3 }
+    ///Position of the plant seed (OpenGL-like coordinates); Use X,Y,Z for its components, e.g. { "X": 1. "Y": 2, "Z": 3 } [default: 0,0,0]
     ///</summary>
     [System.Text.Json.Serialization.JsonConverter(typeof(Utils.Json.Vector3JsonConverter))]
     [System.Text.Json.Serialization.JsonPropertyName("P")]

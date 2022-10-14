@@ -26,7 +26,12 @@ public class SimulationRequest
     public ulong? Seed { get; set; }
 
     ///<summary>
-    ///A list of seeds to be planted
+    ///A list of seeds to be planted (default: a single centered plant)
     ///</summary>
     public PlantRequest[]? Plants { get; set; }
+
+    ///<summary>
+    ///A list of obstacles (default: null)
+    ///</summary>
+    public ObstacleRequest[]? Obstacles { get; set; }
 }

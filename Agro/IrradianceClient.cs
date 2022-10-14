@@ -1,5 +1,5 @@
 //#define EXPORT_OBJ
-//#define EXPORT_BIN
+#define EXPORT_BIN
 using System.Net;
 using System.Net.Http.Headers;
 using System.Numerics;
@@ -17,16 +17,26 @@ using System.Linq;
 
 /* Triangle Mesh Binary Serialization
 uint8 version = 1
-#INDEXED DATA
+#INDEXED DATA FOR OBSTACLES
 uint32 entitiesCount
-	#foreach ENTITY
+foreach ENTITY
 	uint32 surfacesCount
-		#foreach SURFACE (for now, each surface is an irradiancemeter)
+	foreach SURFACE
 		uint8 trianglesCount
-		#foreach TRIANGLE
+		foreach TRIANGLE
 			uint32 index0
 			uint32 index1
 			uint32 index2
+#INDEXED DATA FOR SENSORS
+uint32 entitiesCount
+foreach ENTITY
+    uint32 surfacesCount
+    foreach SURFACE
+        uint8 trianglesCount
+        foreach TRIANGLE
+            uint32 index0
+            uint32 index1
+            uint32 index2
 #POINTS DATA
 uint32 pointsCount
 	#foreach POINT
@@ -37,11 +47,29 @@ uint32 pointsCount
 
 /* Primitives Binary Serialization
 uint8 version = 2
+#OBSTACLES
 uint32 entitiesCount
-	#foreach ENTITY
+foreach ENTITY
 	uint32 surfacesCount
-		#foreach SURFACE (for now, each surface is an irradiancemeter)
-		uint8 primitiveType    #1/129 = disk, 2/130 = cylinder(stem), 4/132 = sphere(shoot), 8/136 = rectangle(leaf); the most significant bit (x | 128) indicates a sensor
+	foreach SURFACE
+		uint8 primitiveType    #1 = disk, 2 = cylinder(stem), 4 = sphere(shoot), 8 = rectangle(leaf)
+		#case disk
+		float32 matrix 4x3 (the bottom row is always 0 0 0 1)
+		#case cylinder
+		float32 length
+		float32 radius
+		float32 matrix 4x3 (the bottom row is always 0 0 0 1)
+		#case sphere
+		3xfloat32 center
+		float32 radius
+		#case rectangle
+		float32 matrix 4x3 (the bottom row is always 0 0 0 1)
+#SENSORS
+uint32 entitiesCount
+foreach ENTITY
+	uint32 surfacesCount
+	foreach SURFACE
+		uint8 primitiveType    #1 = disk, 2 = cylinder(stem), 4 = sphere(shoot), 8 = rectangle(leaf)
 		#case disk
 		float32 matrix 4x3 (the bottom row is always 0 0 0 1)
 		#case cylinder
@@ -87,15 +115,15 @@ public class IrradianceClient
 
 	public static void SetAddress(string addr) => Singleton.Client.BaseAddress = new Uri(addr);
 
-	public static void Tick(uint timestep, IList<IFormation> formations)
+	public static void Tick(uint timestep, IList<IFormation> formations, IList<IObstacle> obstacles)
 	{
 		if (Singleton.IsOnline)
-			Singleton.DoTick(timestep, formations);
+			Singleton.DoTick(timestep, formations, obstacles);
 		else
 			Singleton.DoFallbackTick(timestep, formations);
 	}
 
-	void DoTick(uint timestep, IList<IFormation> formations)
+	void DoTick(uint timestep, IList<IFormation> formations, IList<IObstacle> obstacles)
 	{
 #if EXPORT_OBJ
 		if (true)
@@ -132,12 +160,12 @@ public class IrradianceClient
 #else
 				var meshFileFullPath = Path.Combine("..", "agroeco-mts3", meshFileName);
 #endif
-				offsetCounter = ExportAsTriangles(formations, offsetCounter, out var binaryStream
-#if EXPORT_OBJ
-					, objWriter, obji
-#endif
-				);
-				//offsetCounter = ExportAsPrimitives(formations, offsetCounter, out var binaryStream);
+// 				offsetCounter = ExportAsTriangles(formations, obstacles, offsetCounter, out var binaryStream
+// #if EXPORT_OBJ
+// 					, objWriter, obji
+// #endif
+// 				);
+				offsetCounter = ExportAsPrimitives(formations, obstacles, offsetCounter, out var binaryStream);
 
 				var startTime = SW.ElapsedMilliseconds;
 				SW.Start();
@@ -170,7 +198,7 @@ public class IrradianceClient
 		}
 	}
 
-	private int ExportAsTriangles(IList<IFormation> formations, int offsetCounter, out MemoryStream binaryStream
+	private int ExportAsTriangles(IList<IFormation> formations, IList<IObstacle> obstacles, int offsetCounter, out MemoryStream binaryStream
 #if EXPORT_OBJ
 		, StreamWriter objWriter, System.Text.StringBuilder obji
 #endif
@@ -179,6 +207,21 @@ public class IrradianceClient
 		binaryStream = new MemoryStream();
 		var writer = new BinaryWriter(binaryStream);
 		writer.WriteU8(1); //version 1 using triangular meshes
+
+		//Obstacles
+		writer.WriteU32(obstacles.Count);
+		foreach(var obstacle in obstacles)
+		{
+			obstacle.ExportTriangles(IrradiancePoints, writer
+#if EXPORT_OBJ
+			,obji
+#else
+			, null
+#endif
+			);
+		}
+
+		//Formations
 		writer.WriteU32(formations.Count - SkipPlants.Count); //WRITE NUMBER OF PLANTS in this system
 		var skipPointer = 0;
 		for (int pi = 0; pi < formations.Count; ++pi)
@@ -341,11 +384,18 @@ public class IrradianceClient
 #endif
 		return offsetCounter;
 	}
-	private int ExportAsPrimitives(IList<IFormation> formations, int offsetCounter, out MemoryStream binaryStream)
+	private int ExportAsPrimitives(IList<IFormation> formations, IList<IObstacle> obstacles, int offsetCounter, out MemoryStream binaryStream)
 	{
 		binaryStream = new MemoryStream();
 		var writer = new BinaryWriter(binaryStream);
 		writer.WriteU8(2); //version 2 using triangular meshes
+
+		//Obstacles
+		writer.WriteU32(obstacles.Count);
+		foreach(var obstacle in obstacles)
+			obstacle.ExportPrimitives(writer);
+
+		//Formations
 		writer.WriteU32(formations.Count - SkipPlants.Count); //WRITE NUMBER OF PLANTS in this system
 		var skipPointer = 0;
 		for (int pi = 0; pi < formations.Count; ++pi)

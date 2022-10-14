@@ -227,7 +227,8 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 		//     Roots.AddRange(RootsBirths);
 		if (Births.Count > 0 || Inserts.Count > 0 || Deaths.Count > 0)
 		{
-			Debug.WriteLine($"{typeof(T).Name} census event: B = {Births.Count}   I = {Inserts.Count}   D = {Deaths.Count}");
+			//Debug.WriteLine($"{typeof(T).Name} census event: B = {Births.Count}   I = {Inserts.Count}   D = {Deaths.Count}");
+
 			// #if GODOT
 			// MultiagentSystem.TriggerPause();
 			// #endif

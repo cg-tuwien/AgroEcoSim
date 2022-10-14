@@ -9,7 +9,7 @@ namespace AgentsSystem;
 public partial class SimulationWorld
 {
 	internal readonly List<IFormation> Formations = new();
-	internal readonly List<Action<uint, IList<IFormation>>> Callbacks = new();
+	internal readonly List<Action<uint, IList<IFormation>, IList<IObstacle>>> Callbacks = new();
 	public uint Timestep { get; private set; } = 0U;
 	public byte Stage { get; private set; }
 
@@ -20,6 +20,8 @@ public partial class SimulationWorld
 	#endif
 
 	public int Count => Formations.Count;
+
+	readonly List<IObstacle> Obstacles = new();
 
 	public SimulationWorld()
 	{
@@ -61,6 +63,14 @@ public partial class SimulationWorld
 #endif
 	}
 
+	public void Add(IObstacle obstacle)
+	{
+		Obstacles.Add(obstacle);
+#if GODOT
+		obstacle.GodotReady();
+#endif
+	}
+
 	public void Run(uint simulationLength)
 	{
 #if !DEBUG
@@ -80,7 +90,6 @@ public partial class SimulationWorld
 		{
 			for(Stage = 0; Stage < Stages; ++Stage)
 			{
-
 				TickSequential();
 				ProcessTransactionsSequential();
 				DeliverPostSequential();
@@ -132,7 +141,7 @@ public partial class SimulationWorld
 
 	void TickSequential()
 	{
-		Debug.WriteLine($"TIMESTEP: {Timestep}");
+		Debug.WriteLine($"TIMESTEP: {Timestep} DAY: {(Timestep / 24) + 1} HOUR: {Timestep % 24}"); //Assuming 1 tick per hour
 		for(int i = 0; i < Formations.Count; ++i)
 			Formations[i].Tick(this, Timestep, Stage);
 	}
@@ -213,12 +222,12 @@ public partial class SimulationWorld
 		}
 	}
 
-	public void AddCallback(Action<uint, IList<IFormation>> callback) => Callbacks.Add(callback);
+	public void AddCallback(Action<uint, IList<IFormation>, IList<IObstacle>> callback) => Callbacks.Add(callback);
 
 	public void ExecCallbacks()
 	{
 		foreach(var callback in Callbacks)
-			callback(Timestep, Formations);
+			callback(Timestep, Formations, Obstacles);
 	}
 
 	#if HISTORY_LOG || TICK_LOG
