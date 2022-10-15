@@ -1,4 +1,3 @@
-using System.ComponentModel;
 using System.Numerics;
 using AgentsSystem;
 using Utils;
@@ -76,7 +75,7 @@ public static class Initialize
 				case "umbrella":
 					world.Add(new Umbrella(obstacle.Radius ?? (obstacle.Length.HasValue ? obstacle.Length.Value * 0.5f : 1f), obstacle.Height ?? 1f, obstacle.Thickness ?? 0.1f, obstacle.Position ?? Vector3.Zero));
 				break;
-				default: throw new InvalidEnumArgumentException($"There is no such obstacle type as {obstacle.Type}.");
+				default: throw new ArgumentException($"There is no such obstacle type as {obstacle.Type}.");
 			}
 
 		return world;

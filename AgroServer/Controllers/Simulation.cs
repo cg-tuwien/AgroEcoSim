@@ -37,7 +37,7 @@ public class SimulationController : ControllerBase
             //var exported = world.HistoryToJSON();
             //File.WriteAllText("export.json", exported.Replace("},", "},\n").Replace("],", "],\n"));
 #endif
-        var response = new SimulationResponse(){ Plants = new(world.Count) };
+        var response = new SimulationResponse() { Plants = new(world.Count) };
         world.ForEach(formation =>
         {
             if (formation is PlantFormation plant)

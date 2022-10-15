@@ -1,9 +1,10 @@
 using Godot;
 using System;
 
-public static class GeoBuilder{
-
-    public static Mesh UnitCube(){ //I've created this method because the default one isn't unit cube and it's problematic to get unit cube "Mesh" from it.
+public static class GeoBuilder
+{
+    public static Mesh UnitCube() //I've created this method because the default one isn't unit cube and it's problematic to get unit cube "Mesh" from it.
+    {
         var temp = new ArrayMesh();
         var st = new SurfaceTool();
         st.Begin(Mesh.PrimitiveType.Triangles);
@@ -38,11 +39,11 @@ public static class GeoBuilder{
         st.GenerateNormals();
         st.Commit(temp);
 
-
         return temp;
     }
 
-    public static Mesh UnitPyramid4(){
+    public static Mesh UnitPyramid4()
+    {
         var temp = new ArrayMesh();
         var st = new SurfaceTool();
         st.Begin(Mesh.PrimitiveType.Triangles);

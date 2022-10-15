@@ -1,7 +1,8 @@
-[gd_scene load_steps=9 format=2]
+[gd_scene load_steps=10 format=2]
 
 [ext_resource path="res://addons/goutte.camera.trackball/trackball_camera.gd" type="Script" id=1]
 [ext_resource path="res://addons/multiagent_system/MultiagentSystem.cs" type="Script" id=2]
+[ext_resource path="res://HUD/HUD.tscn" type="PackedScene" id=3]
 
 [sub_resource type="CubeMesh" id=1]
 
@@ -29,6 +30,7 @@ zoom_minimum = 0.003
 
 [node name="MultiagentSystem" type="Spatial" parent="."]
 script = ExtResource( 2 )
+HudScene = ExtResource( 3 )
 
 [node name="UnitBoxMarkers" type="Spatial" parent="."]
 visible = false
@@ -62,3 +64,6 @@ transform = Transform( 0.02, 0, 0, 0, 0.02, 0, 0, 0, 0.02, 1, 1, 1 )
 mesh = SubResource( 2 )
 skeleton = NodePath("../..")
 material/0 = SubResource( 6 )
+
+[connection signal="EnteredMenu" from="MultiagentSystem" to="TrackballCamera" method="_on_MultiagentSystem_EnteredMenu"]
+[connection signal="LeftMenu" from="MultiagentSystem" to="TrackballCamera" method="_on_MultiagentSystem_LeftMenu"]

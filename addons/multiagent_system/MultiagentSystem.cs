@@ -8,18 +8,29 @@ using V3 = System.Numerics.Vector3;
 
 public class MultiagentSystem : Spatial
 {
+	[Export]
+	public PackedScene HudScene;
+
+	[Signal]
+	public delegate void EnteredMenu();
+
+	[Signal]
+	public delegate void LeftMenu();
+
+
 	bool Paused = false;
-	bool Pressed = false;
-	bool SingleStep = false;
-	int Delay = 0;
-	List<MeshInstance> Sprites = new List<MeshInstance>();
+	bool Notified = false;
+
+	HUD hud;
+	readonly List<MeshInstance> Sprites = new();
 
 	SimulationWorld World;
 
-	//float Time = 0f;
+	float Time = 0f;
 	// Called when the node enters the scene tree for the first time.
 	public override void _Ready()
 	{
+		// EmitSignal("LeftMenu");
 #if GODOT
 		GD.Print("GODOT is defined properly.");
 #else
@@ -45,6 +56,12 @@ public class MultiagentSystem : Spatial
 			FieldSize = fieldSize,
 			Plants = plants.ToArray()
 		});
+
+		hud = (HUD)HudScene.Instance();
+		hud.Load((SoilVisualisationSettings)((SoilFormation)World.Formations[0]).Parameters);
+		AddChild(hud);
+
+		// GetNode<HUD>("HUD").Load((SoilVisualisationSettings)((SoilFormation)World.Formations[0]).Parameters);
 	}
 
 	/// <summary>
@@ -53,11 +70,18 @@ public class MultiagentSystem : Spatial
 	/// <param name="delta">'Elapsed time since the previous frame</param>
 	public override void _Process(float delta)
 	{
-		SolveInput();
+		Paused = hud.Paused;
+		if (hud.MenuState == MenuStatus.Entered){
+			EmitSignal("EnteredMenu");
+			hud.MenuState = MenuStatus.EnteredWaiting;
+		}
+		else if (hud.MenuState == MenuStatus.Left && hud.ColorEditorOpen == false){
+			EmitSignal("LeftMenu");
+			hud.MenuState = MenuStatus.LeftWaiting;
+		}
 
-		if(!Paused)
-		{
-			//Time += delta;
+		if (!Paused){
+			Time += delta;
 			if (World.Timestep < AgroWorld.TimestepsTotal)
 			{
 				World.Run(1);
@@ -65,36 +89,13 @@ public class MultiagentSystem : Spatial
 				if (World.Timestep == AgroWorld.TimestepsTotal - 1)
 					GD.Print($"Simulation successfully finished after {AgroWorld.TimestepsTotal} timesteps.");
 			}
-			Paused = SingleStep;
 		}
+		if (hud.RecentChange){
+			((SoilFormation)World.Formations[0]).GodotProcess(0);
+			hud.RecentChange = false;
+		}
+
 	}
 
-	private void SolveInput()
-	{
-		if(Input.IsActionPressed("stop") && !Pressed)
-		{
-			if (Paused)
-				SingleStep = Input.IsActionPressed("ctrl");
 
-			Paused = !Paused;
-			Pressed = true;
-		}
-		else if(!Input.IsActionPressed("stop") && Pressed)
-			Pressed = false;
-
-		if (GlobalPauseRequest)
-		{
-			Paused = true;
-			GlobalPauseRequest = false;
-		}
-	}
-
-	static bool GlobalPauseRequest;
-	/// <summary>
-	//Useful for debug to trigger pause as follows:<br/>
-	//<c>#if GODOT<br/>
-	//MultiagentSystem.TriggerPause();<br/>
-	//#endif<br/><c/>
-	/// </summary>
-	public static void TriggerPause() => GlobalPauseRequest = true;
 }

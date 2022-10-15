@@ -36,7 +36,7 @@ public static class GlftHelper
 			}
 		};
 
-		var boxPrimitive = new MeshPrimitive(){ Mode = MeshPrimitive.ModeEnum.TRIANGLE_STRIP, Attributes = new(){{"POSITION", 0}, {"NORMAL", 1}} };
+		var boxPrimitive = new MeshPrimitive() { Mode = MeshPrimitive.ModeEnum.TRIANGLE_STRIP, Attributes = new(){{"POSITION", 0}, {"NORMAL", 1}} };
 		var boxMesh = new Mesh{ Name = "box", Primitives = new MeshPrimitive[]{boxPrimitive}};
 		gltf.Meshes = new Mesh[] { boxMesh };
 

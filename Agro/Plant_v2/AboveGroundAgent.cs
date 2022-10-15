@@ -282,7 +282,7 @@ public partial struct AboveGroundAgent2 : IPlantAgent
 						Length *= 0.5f;
 						Energy *= 0.5f;
 						Water *= 0.5f;
-						if( children.Count > 0)
+						if (children.Count > 0)
 						{
 							var childrenRadius = 0f;
 							foreach(var child in children)

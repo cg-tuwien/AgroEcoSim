@@ -3,35 +3,37 @@ using System;
 
 enum MarkerMode : byte { Steam, Water, Sum };
 
-public enum Visibility : byte { Visible, Invisible, Waiting }; //Waiting state is used to prevent visibility changes once set to desired visibility
+public enum Visibility : byte { Visible, Invisible, VisibleWaiting, InvisibleWaiting }; //Waiting state is used to prevent visibility changes once set to desired visibility
 
 public class SoilVisualisationSettings
 {
     public bool Visualise = true; //This can turn on/off the entire visualisation
 
     // VISIBILITY SETTINGS
-    public Visibility MarkerVisibility = Visibility.Visible;
-    public Visibility[] IndividualMarkerDirectionVisibility = new Visibility[]{
-        Visibility.Visible, //X+
-        Visibility.Visible, //Y+
-        Visibility.Visible, //Z+
-        Visibility.Visible, //X-
-        Visibility.Visible, //Y-
-        Visibility.Visible //Z-
-        };
-    public Visibility SoilCellsVisibility = Visibility.Waiting;
+    public Visibility MarkerVisibility = Visibility.VisibleWaiting;
+    public Visibility[] IndividualMarkerDirectionVisibility = new Visibility[] {
+        Visibility.VisibleWaiting, //X+
+        Visibility.VisibleWaiting, //Y+
+        Visibility.VisibleWaiting, //Z+
+        Visibility.VisibleWaiting, //X-
+        Visibility.VisibleWaiting, //Y-
+        Visibility.VisibleWaiting //Z-
+    };
+    public Visibility SoilCellsVisibility = Visibility.VisibleWaiting;
 
     // ANIMATION VISIBILITY SETTINGS
     public bool AnimateSoilCellSize = true;
     public bool AnimateMarkerSize = false;
     public bool AnimateSoilCellColor = true;
-    public bool AnimateDownwardMarkerColor = true;
-    public bool AnimateLateralMarkerColor = true;
+
+    public bool AnimateMarkerColor = true;
+    // public bool AnimateDownwardMarkerColor = true;
+    // public bool AnimateLateralMarkerColor = true;
 
     // MATERIAL SETTINGS
-    public SpatialMaterial SoilCellMaterial = new SpatialMaterial {AlbedoColor = new(0.5f, 0.5f, 0.5f)};
+    public SpatialMaterial SoilCellMaterial = new() { AlbedoColor = new(0.5f, 0.5f, 0.5f) };
 
-    public SpatialMaterial MarkerMaterial = new SpatialMaterial {AlbedoColor = new(0f, 0.2f, 0.6f)};
+    public SpatialMaterial MarkerMaterial = new() { AlbedoColor = new(0f, 0.2f, 0.6f) };
 
     // COLOR SETTINGS
     public Color FullCellColor = new(71f/255f, 39f/255f, 11f/255f);

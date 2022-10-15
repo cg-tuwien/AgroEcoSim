@@ -30,13 +30,13 @@ foreach ENTITY
 #INDEXED DATA FOR SENSORS
 uint32 entitiesCount
 foreach ENTITY
-    uint32 surfacesCount
-    foreach SURFACE
-        uint8 trianglesCount
-        foreach TRIANGLE
-            uint32 index0
-            uint32 index1
-            uint32 index2
+	uint32 surfacesCount
+	foreach SURFACE
+		uint8 trianglesCount
+		foreach TRIANGLE
+			uint32 index0
+			uint32 index1
+			uint32 index2
 #POINTS DATA
 uint32 pointsCount
 	#foreach POINT

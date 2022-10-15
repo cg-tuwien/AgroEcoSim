@@ -746,7 +746,8 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 		{
 			var baseCenter = GetBaseCenter(i);
 
-			nodes[i] = new(){
+			nodes[i] = new()
+			{
 				Name = $"{GetOrgan(i)}_{i}",
 				Mesh = 0,
 				Rotation = GetDirection(i).ToArray(),
@@ -791,7 +792,7 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 		var children = new List<DebugTreeData>();
 		var firstChild = true;
 		for(int i = 0; i < tree.Length; ++i)
-			if( tree[i].Parent == -1)
+			if (tree[i].Parent == -1)
 			{
 				children.Add(new(i, 0, !firstChild));
 				firstChild = false;
