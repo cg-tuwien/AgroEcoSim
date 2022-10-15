@@ -12,13 +12,13 @@ public abstract class PlantAbstractGodot2<T> where T : struct, IPlantAgent
 	internal bool GodotShow = true;
 	protected readonly PlantSubFormation2<T> Formation;
 	protected readonly List<MeshInstance> GodotSprites = new();
-	protected readonly static CubeMesh PlantCubePrimitive = new CubeMesh();
+	protected readonly static CubeMesh PlantCubePrimitive = new();
 
 	protected PlantAbstractGodot2(PlantSubFormation2<T> formation) => Formation = formation;
 
 	protected abstract void UpdateTransformation(MeshInstance sprite, int index);
 
-	static Color DefaultColor = new Color(0.7f, 0.7f, 0.7f);
+	static Color DefaultColor = new(0.7f, 0.7f, 0.7f);
 
 	protected virtual Color FormationColor => DefaultColor;
 	protected virtual ColorCodingType FormationColorCoding => ColorCodingType.Irradiance;
@@ -83,7 +83,7 @@ public abstract class PlantAbstractGodot2<T> where T : struct, IPlantAgent
 			{
 				var re = Math.Clamp(Formation.GetEnergy(index) / Formation.GetEnergyCapacity(index), 0f, 1f);
 				var rs = Math.Clamp(Formation.GetWater(index) / Formation.GetWaterStorageCapacity(index), 0f, 1f);
-				var rt = Math.Clamp(Formation.GetWater(index) / Formation.GetWaterTotalCapacity(index), 0f, 1f);
+				//var rt = Math.Clamp(Formation.GetWater(index) / Formation.GetWaterTotalCapacity(index), 0f, 1f);
 				return new Color(re, Math.Min(re, rs), rs);
 			}
 			case ColorCodingType.WoodRatio:

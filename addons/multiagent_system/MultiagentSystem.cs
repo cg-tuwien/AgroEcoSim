@@ -58,7 +58,7 @@ public class MultiagentSystem : Spatial
 		});
 
 		hud = (HUD)HudScene.Instance();
-		hud.Load((SoilVisualisationSettings)((SoilFormation)World.Formations[0]).Parameters);
+		hud.Load(((SoilFormation)World.Formations[0]).Parameters);
 		AddChild(hud);
 
 		// GetNode<HUD>("HUD").Load((SoilVisualisationSettings)((SoilFormation)World.Formations[0]).Parameters);

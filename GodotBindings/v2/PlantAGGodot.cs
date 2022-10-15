@@ -4,6 +4,7 @@ using System.Linq;
 using System.Collections.Generic;
 using AgentsSystem;
 using NumericHelpers;
+using System.Diagnostics;
 
 namespace Agro;
 
@@ -12,7 +13,7 @@ public partial class Plant_AG_Godot2 : PlantAbstractGodot2<AboveGroundAgent2>
 	public Plant_AG_Godot2(PlantSubFormation2<AboveGroundAgent2> formation) : base(formation) { }
 
 	protected override Color FormationColor => Colors.Green;
-	//protected override ColorCodingType FormationColorCoding => ColorCodingType.Default;
+	protected override ColorCodingType FormationColorCoding => ColorCodingType.Default;
 
 	protected override void UpdateTransformation(MeshInstance sprite, int index)
 	{
@@ -25,6 +26,7 @@ public partial class Plant_AG_Godot2 : PlantAbstractGodot2<AboveGroundAgent2>
 		sprite.Transform = new Transform(basis, (Formation.GetBaseCenter(index) + stableScale).ToGodot());
 		sprite.Scale = (Formation.GetScale(index) * 0.5f).ToGodot();
 
+		Debug.WriteLine( ColorCoding(index, FormationColorCoding).g);
 		((SpatialMaterial)sprite.GetSurfaceMaterial(0)).AlbedoColor = ColorCoding(index, FormationColorCoding);
 	}
 }

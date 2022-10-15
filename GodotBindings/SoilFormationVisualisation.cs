@@ -188,7 +188,7 @@ public partial class SoilFormation
 
 	private void AnimateMarker(MarkerData marker)
 	{
-		var markerScale = 0f;
+		//var markerScale = 0f;
 		var dir = (int)marker.PointingDirection;
 		var cellScale = ComputeCellScale(ComputeCellMultiplier(marker.CellIndex));
 
@@ -197,35 +197,34 @@ public partial class SoilFormation
 
 		var mesh = MarkerInstances[marker.CellIndex, dir];
 
-		//HUD if (Parameters.AnimateMarkerSize && flow == 0f) //many markers will be 0, hide them to improve performance
-		//HUD {
-		//HUD	mesh.Visible = false;
-		//HUD	mesh.Scale = Vector3.Zero;
-		//HUD }
-		//HUD else
-		//HUD {
-			markerScale = cellScale * (Parameters.AnimateMarkerSize ? Parameters.MarkerScale * appearanceMultiplier : Parameters.MarkerScale);
+		if (flow == 0f) //many markers will be 0, hide them to improve performance
+		{
+			mesh.Visible = false;
+			mesh.Scale = Vector3.Zero;
+		}
+		else if (Parameters.AnimateMarkerSize)
+		{
+			var markerScale = cellScale * (Parameters.AnimateMarkerSize ? Parameters.MarkerScale * appearanceMultiplier : Parameters.MarkerScale);
 			var offset_multiplier = (cellScale + markerScale) * 0.5f;
 			mesh.Translation = marker.InitialPosition + MarkerOffsets[dir] * offset_multiplier;
 			mesh.Scale = Vector3.One * markerScale;
-		//HUD 	mesh.Visible = true;
+			mesh.Visible = true;
 
-		//HUD	((SpatialMaterial)mesh.GetSurfaceMaterial(0)).AlbedoColor = appearance_multiplier * Parameters.FullFlowColor + (1f - appearance_multiplier) * Parameters.NoFlowColor;
-		//HUD }
+			//((SpatialMaterial)mesh.GetSurfaceMaterial(0)).AlbedoColor = appearance_multiplier * Parameters.FullFlowColor + (1f - appearance_multiplier) * Parameters.NoFlowColor;
 
-		if (Parameters.AnimateMarkerColor)
-			((SpatialMaterial)mesh.GetSurfaceMaterial(0)).AlbedoColor = appearanceMultiplier * Parameters.FullFlowColor + (1f - appearanceMultiplier) * Parameters.NoFlowColor;
-		else
-			((SpatialMaterial)mesh.GetSurfaceMaterial(0)).AlbedoColor = Parameters.FullFlowColor;
+			((SpatialMaterial)mesh.GetSurfaceMaterial(0)).AlbedoColor = Parameters.AnimateMarkerColor
+				? appearanceMultiplier * Parameters.FullFlowColor + (1f - appearanceMultiplier) * Parameters.NoFlowColor
+				: Parameters.FullFlowColor;
 
-		if (Parameters.MarkerVisibility == Visibility.VisibleWaiting)
-			SolveAnimationMarkerVisibility(mesh, dir, flow == 0f);
+			if (Parameters.MarkerVisibility == Visibility.VisibleWaiting)
+				IndividualAnimationMarkerVisibility(mesh, dir, flow == 0f);
+		}
 
-		if (flow == 0f)
-			mesh.Scale = Vector3.Zero;
+		// if (flow == 0f)
+		// 	mesh.Scale = Vector3.Zero;
 	}
 
-	public void SolveAnimationMarkerVisibility(MeshInstance mesh, int direction, bool vis)
+	public void IndividualAnimationMarkerVisibility(MeshInstance mesh, int direction, bool vis)
 	{
 		if (vis && Parameters.IndividualMarkerDirectionVisibility[direction] == Visibility.VisibleWaiting)
 			mesh.Visible = false;
