@@ -1,5 +1,5 @@
 //#define EXPORT_OBJ
-#define EXPORT_BIN
+//#define EXPORT_BIN
 using System.Net;
 using System.Net.Http.Headers;
 using System.Numerics;
@@ -131,7 +131,7 @@ public class IrradianceClient
 		if (AgroWorld.GetDaylight(timestep))
 #endif
 		{
-			if (IsNight) Debug.WriteLine("DAY");
+			//if (IsNight) Debug.WriteLine("DAY");
 			IsNight = false;
 
 			SkipPlants.Clear();
@@ -160,52 +160,60 @@ public class IrradianceClient
 #else
 				var meshFileFullPath = Path.Combine("..", "agroeco-mts3", meshFileName);
 #endif
-// 				offsetCounter = ExportAsTriangles(formations, obstacles, offsetCounter, out var binaryStream
+				using var binaryStream = new MemoryStream();
+// 				offsetCounter = ExportAsTriangles(formations, obstacles, offsetCounter, out binaryStream
 // #if EXPORT_OBJ
 // 					, objWriter, obji
 // #endif
 // 				);
-				offsetCounter = ExportAsPrimitives(formations, obstacles, offsetCounter, out var binaryStream);
+				offsetCounter = ExportAsPrimitives(formations, obstacles, offsetCounter, binaryStream);
 
 				var startTime = SW.ElapsedMilliseconds;
 				SW.Start();
-				var byteBuffer = binaryStream.GetBuffer();
+				binaryStream.TryGetBuffer(out var byteBuffer);
 #if EXPORT_BIN
-				File.WriteAllBytes($"t{timestep}.bin", byteBuffer);
+				var tmp = new byte[byteBuffer.Count];
+				Array.Copy(byteBuffer.Array, tmp, byteBuffer.Count);
+				File.WriteAllBytes($"t{timestep}.bin", tmp);
 #endif
-				var request = new HttpRequestMessage()
+				if (offsetCounter > 0)
 				{
-					Method = HttpMethod.Post,
-					Content = new ByteArrayContent(byteBuffer, 0, (int)binaryStream.Length)
-				};
-				request.Headers.Add("Ti", AgroWorld.GetTime(timestep).ToString("o", CultureInfo.InvariantCulture));
-				//request.Headers.Add("Ra", "1024");
+					var request = new HttpRequestMessage()
+					{
+						Method = HttpMethod.Post,
+						Content = new ByteArrayContent(byteBuffer.Array, 0, byteBuffer.Count)
+					};
+					request.Headers.Add("Ti", AgroWorld.GetTime(timestep).ToString("o", CultureInfo.InvariantCulture));
+					Debug.WriteLine(offsetCounter);
+					request.Headers.Add("C", offsetCounter.ToString()); //Only use for dummy debug
+					//request.Headers.Add("Ra", "1024");
 
-				var result = Client.SendAsync(request).Result;
-				using var responseStream = result.Content.ReadAsStreamAsync().Result;
-				using var reader = new BinaryReader(responseStream);
-				for (int i = 0; i < offsetCounter; ++i)
-					Irradiances.Add(reader.ReadSingle());
+					var result = Client.SendAsync(request).Result;
+					using var responseStream = result.Content.ReadAsStreamAsync().Result;
+					using var reader = new BinaryReader(responseStream);
+					for (int i = 0; i < offsetCounter; ++i)
+						Irradiances.Add(reader.ReadSingle());
+					Debug.WriteLine($"T: {AgroWorld.GetTime(timestep).ToString("o", CultureInfo.InvariantCulture)} Sum: {Irradiances.Sum()}  Avg: {Irradiances.Average()} In: [{Irradiances.Min()} - {Irradiances.Max()}]");
+				}
+
 				SW.Stop();
-				Debug.WriteLine($"T: {AgroWorld.GetTime(timestep).ToString("o", CultureInfo.InvariantCulture)} Sum: {Irradiances.Sum()}  Avg: {Irradiances.Average()} In: [{Irradiances.Min()} - {Irradiances.Max()}]");
 				//Console.WriteLine($"R: {SW.ElapsedMilliseconds - startTime}ms S: {offsetCounter} RpS: {(SW.ElapsedMilliseconds - startTime) / offsetCounter}");
 			}
 		}
 		else
 		{
-			if (!IsNight) Debug.WriteLine("NIGHT");
+			//if (!IsNight) Debug.WriteLine("NIGHT");
 			IsNight = true;
 		}
 	}
 
-	private int ExportAsTriangles(IList<IFormation> formations, IList<IObstacle> obstacles, int offsetCounter, out MemoryStream binaryStream
+	private int ExportAsTriangles(IList<IFormation> formations, IList<IObstacle> obstacles, int offsetCounter, MemoryStream binaryStream
 #if EXPORT_OBJ
 		, StreamWriter objWriter, System.Text.StringBuilder obji
 #endif
 	)
 	{
-		binaryStream = new MemoryStream();
-		var writer = new BinaryWriter(binaryStream);
+		using var writer = new BinaryWriter(binaryStream);
 		writer.WriteU8(1); //version 1 using triangular meshes
 
 		//Obstacles
@@ -247,11 +255,7 @@ public class IrradianceClient
 					var scale = ag.GetScale(i);
 					var halfRadiusX = new Vector3(0f, 0f, scale.Z * 0.5f);
 					var orientation = ag.GetDirection(i);
-					//var length = ag.GetLength(i) * 0.5f; //x0.5f because its the radius of the cube!
 					var lengthVector = new Vector3(scale.X, 0f, 0f);
-
-					//sprite.Transform = new Transform(basis, (Formation.GetBaseCenter(index) + stableScale).ToGodot());
-					//sprite.Scale = (Formation.GetScale(index) * 0.5f).ToGodot();
 					switch (organ)
 					{
 						case OrganTypes.Leaf:
@@ -275,12 +279,6 @@ public class IrradianceClient
 									obji.AppendLine(OF(p, p+1, p+2));
 									obji.AppendLine(OF(p, p+2, p+3));
 #endif
-								//IrradianceTriangles.Add(new (p, p + 1, p + 2));
-								//IrradianceTriangles.Add(new (p, p + 2, p + 3));
-
-								//IrradianceGroupOffsets.Add(IrradianceGroups.Count);
-								//IrradianceSurfaceSize.Add(2);
-								//IrradianceGroups.Add(t + 1);
 							}
 							break;
 						case OrganTypes.Stem:
@@ -384,10 +382,9 @@ public class IrradianceClient
 #endif
 		return offsetCounter;
 	}
-	private int ExportAsPrimitives(IList<IFormation> formations, IList<IObstacle> obstacles, int offsetCounter, out MemoryStream binaryStream)
+	private int ExportAsPrimitives(IList<IFormation> formations, IList<IObstacle> obstacles, int offsetCounter, MemoryStream binaryStream)
 	{
-		binaryStream = new MemoryStream();
-		var writer = new BinaryWriter(binaryStream);
+		using var writer = new BinaryWriter(binaryStream);
 		writer.WriteU8(2); //version 2 using triangular meshes
 
 		//Obstacles
@@ -395,6 +392,7 @@ public class IrradianceClient
 		foreach(var obstacle in obstacles)
 			obstacle.ExportPrimitives(writer);
 
+		writer.WriteU32(0);
 		//Formations
 		writer.WriteU32(formations.Count - SkipPlants.Count); //WRITE NUMBER OF PLANTS in this system
 		var skipPointer = 0;
@@ -428,7 +426,7 @@ public class IrradianceClient
 					{
 						case OrganTypes.Leaf:
 							{
-								writer.WriteU8(136); //PRIMITIVE TYPE 1 disk, 2 cylinder, 4 sphere, 8 >RECTANGLE< + sensor
+								writer.WriteU8(8); //PRIMITIVE TYPE 1 disk, 2 cylinder, 4 sphere, 8 >RECTANGLE<
 								writer.WriteV32(x * scale.X, center.X);
 								writer.WriteV32(y		   , center.Y);
 								writer.WriteV32(z * scale.Z, center.Z);
@@ -436,7 +434,7 @@ public class IrradianceClient
 							break;
 						case OrganTypes.Stem:
 							{
-								writer.WriteU8(130); //PRIMITIVE TYPE 1 disk, 2 >CYLINDER<, 4 sphere, 8 rectangle + sensor
+								writer.WriteU8(2); //PRIMITIVE TYPE 1 disk, 2 >CYLINDER<, 4 sphere, 8 rectangle
 								writer.Write(scale.X); //length
 								writer.Write(scale.Z); //radius
 								writer.WriteV32(x, center.X);
@@ -446,7 +444,7 @@ public class IrradianceClient
 							break;
 						case OrganTypes.Shoot:
 							{
-								writer.WriteU8(132); //PRIMITIVE TYPE 1 disk, 2 cylinder, 4 >SPHERE<, 8 rectangle + sensor
+								writer.WriteU8(4); //PRIMITIVE TYPE 1 disk, 2 cylinder, 4 >SPHERE<, 8 rectangle
 								writer.WriteV32(center);
 								writer.Write(scale.X); //radius
 							}
@@ -457,14 +455,6 @@ public class IrradianceClient
 			}
 		}
 
-		writer.Write((uint)IrradiancePoints.Count);
-		for (int i = 0; i < IrradiancePoints.Count; ++i)
-		{
-			var p = IrradiancePoints[i];
-			writer.Write(p.X);
-			writer.Write(p.Y);
-			writer.Write(p.Z);
-		}
 		return offsetCounter;
 	}
 
@@ -503,12 +493,12 @@ public class IrradianceClient
 				for(int i = 0; i < offsetCounter; ++i)
 					Irradiances.Add(1f);
 			}
-			if (IsNight) Debug.WriteLine("DAY");
+			//if (IsNight) Debug.WriteLine("DAY");
 			IsNight = false;
 		}
 		else
 		{
-			if (!IsNight) Debug.WriteLine("NIGHT");
+			//if (!IsNight) Debug.WriteLine("NIGHT");
 			IsNight = true;
 		}
 	}

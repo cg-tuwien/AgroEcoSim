@@ -51,10 +51,16 @@ public class MultiagentSystem : Spatial
 			for(float z = 0.5f; z < fieldSize.Z; z += 1f)
 				plants.Add(new(){ Position = new (x, -0.1f, z) });
 
+		var obstacles = new ObstacleRequest[] {
+			new(){ Type = "Wall", Length = 5f, Height = 4f},
+			new(){ Type = "Umbrella", Radius = 1.5f, Height = 2.2f, Position = new(2.5f, 0f, 2.5f)}
+		};
+
 		World = Initialize.World(new SimulationRequest(){
 			TotalHours = 24 * 31 * 4,
 			FieldSize = fieldSize,
-			Plants = plants.ToArray()
+			Plants = plants.ToArray(),
+			Obstacles = obstacles,
 		});
 
 		hud = (HUD)HudScene.Instance();

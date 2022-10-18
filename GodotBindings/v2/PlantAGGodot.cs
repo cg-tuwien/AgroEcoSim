@@ -26,7 +26,7 @@ public partial class Plant_AG_Godot2 : PlantAbstractGodot2<AboveGroundAgent2>
 		sprite.Transform = new Transform(basis, (Formation.GetBaseCenter(index) + stableScale).ToGodot());
 		sprite.Scale = (Formation.GetScale(index) * 0.5f).ToGodot();
 
-		Debug.WriteLine( ColorCoding(index, FormationColorCoding).g);
+		//Debug.WriteLine( ColorCoding(index, FormationColorCoding).g);
 		((SpatialMaterial)sprite.GetSurfaceMaterial(0)).AlbedoColor = ColorCoding(index, FormationColorCoding);
 	}
 }

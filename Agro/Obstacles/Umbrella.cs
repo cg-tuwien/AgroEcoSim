@@ -14,7 +14,7 @@ public partial class Umbrella : IObstacle
     const int DiskTriangles = 144;
     readonly List<Vector3> PointData;
     readonly static List<uint> IndexData;
-    readonly byte[] PrimitiveData;
+    readonly ArraySegment<byte> PrimitiveData;
 
     public Umbrella(float radius, float height, float thickness, Vector3 position)
     {
@@ -62,7 +62,7 @@ public partial class Umbrella : IObstacle
         writer.WriteV32(Vector3.UnitY * Radius, Position.Y);
         writer.WriteV32(Vector3.UnitZ * Radius, Position.Z);
 
-        PrimitiveData = stream.GetBuffer();
+        stream.TryGetBuffer(out PrimitiveData);
     }
 
     static Umbrella()

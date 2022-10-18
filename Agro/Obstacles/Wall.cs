@@ -14,7 +14,7 @@ public partial class Wall : IObstacle
 
     readonly Vector3[] PointData;
     readonly static uint[] IndexData;
-    readonly byte[] PrimitiveData;
+    readonly ArraySegment<byte> PrimitiveData;
 
     public Wall(float length, float height, float thickness, Vector3 position, float orientation)
     {
@@ -80,7 +80,7 @@ public partial class Wall : IObstacle
         writer.WriteV32(Vector3.UnitZ, Position.Y + Height);
         writer.WriteV32(-vhy, Position.Z);
 
-        PrimitiveData = stream.GetBuffer();
+        stream.TryGetBuffer(out PrimitiveData);
     }
 
     static Wall()

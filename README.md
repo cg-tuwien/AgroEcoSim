@@ -195,4 +195,4 @@ foreach ENTITY
 ```
 
 ## Result irradiance data format
-The resulting irradiances per surface need to be sent back as a simple array of floats preserving the  order of the surfaces in the request.
+The resulting irradiances per surface need to be sent back as a simple array of 32-bit floats preserving the order of the surfaces in the request.
