@@ -389,11 +389,30 @@ public static class BinaryWriterExtensions
 		writer.Write(xyz.Y);
 		writer.Write(xyz.Z);
 	}
+	public static void WriteV32(this BinaryWriter writer, float x, float y, float z)
+	{
+		writer.Write(x);
+		writer.Write(y);
+		writer.Write(z);
+	}
 	public static void WriteV32(this BinaryWriter writer, Vector3 xyz, float w)
 	{
 		writer.Write(xyz.X);
 		writer.Write(xyz.Y);
 		writer.Write(xyz.Z);
 		writer.Write(w);
+	}
+	public static void WriteM32(this BinaryWriter writer, Vector3 ax, Vector3 ay, Vector3 az, float tx, float ty, float tz)
+	{
+		writer.Write(ax.X); writer.Write(ay.X); writer.Write(az.X); writer.Write(tx);
+		writer.Write(ax.Y); writer.Write(ay.Y); writer.Write(az.Y); writer.Write(ty);
+		writer.Write(ax.Z); writer.Write(ay.Z); writer.Write(az.Z); writer.Write(tz);
+	}
+
+	public static void WriteM32(this BinaryWriter writer, Vector3 ax, Vector3 ay, Vector3 az, Vector3 t)
+	{
+		writer.Write(ax.X); writer.Write(ay.X); writer.Write(az.X); writer.Write(t.X);
+		writer.Write(ax.Y); writer.Write(ay.Y); writer.Write(az.Y); writer.Write(t.Y);
+		writer.Write(ax.Z); writer.Write(ay.Z); writer.Write(az.Z); writer.Write(t.Z);
 	}
 }

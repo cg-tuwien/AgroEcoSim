@@ -23,25 +23,28 @@ public partial class Umbrella : IObstacle
         Thickness = thickness;
         Position = position;
 
+        var ht = Thickness * 0.5f;
+
         PointData = new(153);
-        var x = new Vector3(Thickness, 0f, 0f);
-        var y = new Vector3(0f, Height, 0f);
-        var z = new Vector3(0f, 0f, x.X);
+        var vhx = new Vector3(ht, 0f, 0f);
+        var vy = new Vector3(0f, Height, 0f);
+        var vhz = new Vector3(0f, 0f, ht);
 
-        PointData.Add(Position -x - z);
-        PointData.Add(Position + x - z);
-        PointData.Add(Position + x + z);
-        PointData.Add(Position + -x + z);
-        PointData.Add(Position + y - x - z);
-        PointData.Add(Position + y + x - z);
-        PointData.Add(Position + y + x + z);
-        PointData.Add(Position + y - x + z);
+        PointData.Add(Position - vhx - vhz);
+        PointData.Add(Position + vhx - vhz);
+        PointData.Add(Position + vhx + vhz);
+        PointData.Add(Position - vhx + vhz);
+        PointData.Add(Position + vy - vhx - vhz);
+        PointData.Add(Position + vy + vhx - vhz);
+        PointData.Add(Position + vy + vhx + vhz);
+        PointData.Add(Position + vy - vhx + vhz);
 
-        PointData.Add(Position + y);
+        var diskCenter = Position + vy;
+        PointData.Add(diskCenter);
 
         const float step = MathF.PI * 2f / DiskTriangles;
         for(int i = 0; i < DiskTriangles; ++i)
-            PointData.Add(Position + y + new Vector3(MathF.Cos(i * step), 0f, MathF.Sin(i * step)));
+            PointData.Add(diskCenter + new Vector3(MathF.Cos(i * step) * Radius, 0f, MathF.Sin(i * step) * Radius));
 
         using var stream = new MemoryStream();
         using var writer = new BinaryWriter(stream);
@@ -51,16 +54,24 @@ public partial class Umbrella : IObstacle
         //pole
         writer.WriteU8(2);
         writer.Write(Height);
-        writer.Write(Radius);
-        writer.WriteV32(Vector3.UnitX, Position.X);
-        writer.WriteV32(Vector3.UnitY, Position.Y);
-        writer.WriteV32(Vector3.UnitZ, Position.Z);
+        writer.Write(ht);
+        // writer.WriteV32(Vector3.UnitX, Position.X);
+        // writer.WriteV32(Vector3.UnitY, Position.Y);
+        // writer.WriteV32(Vector3.UnitZ, Position.Z);
+        writer.WriteM32(Vector3.UnitX,
+                Vector3.UnitY,
+                Vector3.UnitZ,
+                Position);
 
         //disk
         writer.WriteU8(1);
-        writer.WriteV32(Vector3.UnitX * Radius, Position.X);
-        writer.WriteV32(Vector3.UnitY * Radius, Position.Y);
-        writer.WriteV32(Vector3.UnitZ * Radius, Position.Z);
+        // writer.WriteV32(Vector3.UnitX * Radius, Position.X);
+        // writer.WriteV32(Vector3.UnitY * Radius, Position.Y + Height);
+        // writer.WriteV32(Vector3.UnitZ * Radius, Position.Z);
+        writer.WriteM32(Vector3.UnitX * Radius,
+                Vector3.UnitY * Radius,
+                Vector3.UnitZ * Radius,
+                Position.X, Position.Y + Height, Position.Z);
 
         stream.TryGetBuffer(out PrimitiveData);
     }

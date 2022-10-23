@@ -160,21 +160,31 @@ public class IrradianceClient
 #else
 				var meshFileFullPath = Path.Combine("..", "agroeco-mts3", meshFileName);
 #endif
-				using var binaryStream = new MemoryStream();
-// 				offsetCounter = ExportAsTriangles(formations, obstacles, offsetCounter, out binaryStream
-// #if EXPORT_OBJ
-// 					, objWriter, obji
-// #endif
-// 				);
-				offsetCounter = ExportAsPrimitives(formations, obstacles, offsetCounter, binaryStream);
+				var ooc = offsetCounter;
+				using var meshBinaryStream = new MemoryStream();
+				offsetCounter = ExportAsTriangles(formations, obstacles, ooc, meshBinaryStream
+#if EXPORT_OBJ
+					, objWriter, obji
+#endif
+				);
+				using var primBinaryStream = new MemoryStream();
+				offsetCounter = ExportAsPrimitives(formations, obstacles, ooc, primBinaryStream);
 
 				var startTime = SW.ElapsedMilliseconds;
 				SW.Start();
-				binaryStream.TryGetBuffer(out var byteBuffer);
+				primBinaryStream.TryGetBuffer(out var byteBuffer);
 #if EXPORT_BIN
-				var tmp = new byte[byteBuffer.Count];
-				Array.Copy(byteBuffer.Array, tmp, byteBuffer.Count);
-				File.WriteAllBytes($"t{timestep}.bin", tmp);
+				//if (timestep == 1999)
+				{
+					var tmp = new byte[byteBuffer.Count];
+					Array.Copy(byteBuffer.Array, tmp, byteBuffer.Count);
+					File.WriteAllBytes($"t{timestep}.prim", tmp);
+
+					meshBinaryStream.TryGetBuffer(out var meshByteBuffer);
+					tmp = new byte[meshByteBuffer.Count];
+					Array.Copy(meshByteBuffer.Array, tmp, meshByteBuffer.Count);
+					File.WriteAllBytes($"t{timestep}.mesh", tmp);
+				}
 #endif
 				if (offsetCounter > 0)
 				{
@@ -245,7 +255,6 @@ public class IrradianceClient
 				IrradianceFormationOffsets.Add(ag, offsetCounter);
 				offsetCounter += count;
 
-				//IrradianceSurfacesPerPlant.Add(count);
 				writer.WriteU32(count); //WRITE NUMBER OF SURFACES in this plant
 
 				for (int i = 0; i < count; ++i)
@@ -392,7 +401,6 @@ public class IrradianceClient
 		foreach(var obstacle in obstacles)
 			obstacle.ExportPrimitives(writer);
 
-		writer.WriteU32(0);
 		//Formations
 		writer.WriteU32(formations.Count - SkipPlants.Count); //WRITE NUMBER OF PLANTS in this system
 		var skipPointer = 0;
@@ -406,10 +414,9 @@ public class IrradianceClient
 				var ag = plant.AG;
 				var count = ag.Count;
 
-				IrradianceFormationOffsets.Add(ag, offsetCounter);
+				IrradianceFormationOffsets[ag] = offsetCounter;
 				offsetCounter += count;
 
-				//IrradianceSurfacesPerPlant.Add(count);
 				writer.WriteU32(count); //WRITE NUMBER OF SURFACES in this plant
 
 				for (int i = 0; i < count; ++i)
@@ -427,19 +434,19 @@ public class IrradianceClient
 						case OrganTypes.Leaf:
 							{
 								writer.WriteU8(8); //PRIMITIVE TYPE 1 disk, 2 cylinder, 4 sphere, 8 >RECTANGLE<
-								writer.WriteV32(x * scale.X, center.X);
-								writer.WriteV32(y		   , center.Y);
-								writer.WriteV32(z * scale.Z, center.Z);
+								var ax = x * scale.X * 0.5f;
+								var ay = -z * scale.Z * 0.5f;
+								var az = y * scale.Y * 0.5f;
+								var c = center + ax;
+								writer.WriteM32(ax, ay, az, c);
 							}
 							break;
 						case OrganTypes.Stem:
 							{
 								writer.WriteU8(2); //PRIMITIVE TYPE 1 disk, 2 >CYLINDER<, 4 sphere, 8 rectangle
 								writer.Write(scale.X); //length
-								writer.Write(scale.Z); //radius
-								writer.WriteV32(x, center.X);
-								writer.WriteV32(y, center.Y);
-								writer.WriteV32(z, center.Z);
+								writer.Write(scale.Z * 0.5f); //radius
+								writer.WriteM32(z, x, y, center);
 							}
 							break;
 						case OrganTypes.Shoot:

@@ -6,7 +6,8 @@ namespace Utils;
 
 public static class Import
 {
-    public static T Json<T>(string input) => JsonSerializer.Deserialize<T>(input);
-    public static T JsonFile<T>(string fileName) => JsonSerializer.Deserialize<T>(File.ReadAllText(fileName));
+    static readonly JsonSerializerOptions Options = new() { AllowTrailingCommas = true, ReadCommentHandling = JsonCommentHandling.Skip };
+    public static T Json<T>(string input) => JsonSerializer.Deserialize<T>(input, Options);
+    public static T JsonFile<T>(string fileName) => JsonSerializer.Deserialize<T>(File.ReadAllText(fileName), Options);
 }
 #endif
