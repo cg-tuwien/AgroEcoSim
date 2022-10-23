@@ -12,7 +12,7 @@ namespace Agro;
 //TODO Create properties computing the respective storages for water and energy. Just for clarity.
 //[Flags]  //flags are not needed anymore
 
-public enum OrganTypes : byte { Unspecified = 0, Seed = 1, Shoot = 2, Root = 4, Stem = 8, Leaf = 16, Fruit = 32 };
+public enum OrganTypes : byte { Unspecified = 0, Seed = 1, Bud = 2, Root = 4, Stem = 8, Leaf = 16, Fruit = 32 };
 
 [StructLayout(LayoutKind.Auto)]
 public partial struct AboveGroundAgent : IPlantAgent
@@ -233,7 +233,7 @@ public partial struct AboveGroundAgent : IPlantAgent
 		if (Energy > enoughEnergyState) //maybe make it a factor storedEnergy/lifeSupport so that it grows fast when it has full storage
 		{
 			var relativeDepth = formation.GetRelDepth(formationID);
-			if (Organ != OrganTypes.Shoot)
+			if (Organ != OrganTypes.Bud)
 			{
 				Vector2 factor;
 				var isLeafStem = children.Count == 1 && formation.GetOrgan(children[0]) == OrganTypes.Leaf;
@@ -354,7 +354,7 @@ public partial struct AboveGroundAgent : IPlantAgent
 			}
 		}
 
-		if (Organ != OrganTypes.Shoot && !energyRequestedFromParent)
+		if (Organ != OrganTypes.Bud && !energyRequestedFromParent)
 		{
 			///////////////////////////
 			#region Transport ENERGY down to parent

@@ -228,7 +228,7 @@ public partial struct AboveGroundAgent2 : IPlantAgent
 		if (Energy > enoughEnergyState) //maybe make it a factor storedEnergy/lifeSupport so that it grows fast when it has full storage
 		{
 
-			if (Organ != OrganTypes.Shoot)
+			if (Organ != OrganTypes.Bud)
 			{
 				var isLeafStem = false;
 				Vector2 growth;

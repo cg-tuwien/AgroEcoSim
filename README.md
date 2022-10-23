@@ -163,7 +163,7 @@ uint32 entitiesCount
 foreach ENTITY
 	uint32 surfacesCount
 	foreach SURFACE
-		uint8 primitiveType    #1 = disk, 2 = cylinder(stem), 4 = sphere(shoot), 8 = rectangle(leaf)
+		uint8 primitiveType    #1 = disk, 2 = cylinder(stem), 4 = sphere(bud), 8 = rectangle(leaf)
 		#case disk
 		float32 matrix 4x3 (the bottom row is always 0 0 0 1)
 		#case cylinder
@@ -180,7 +180,7 @@ uint32 entitiesCount
 foreach ENTITY
 	uint32 surfacesCount
 	foreach SURFACE
-		uint8 primitiveType    #1 = disk, 2 = cylinder(stem), 4 = sphere(shoot), 8 = rectangle(leaf)
+		uint8 primitiveType    #1 = disk, 2 = cylinder(stem), 4 = sphere(bud), 8 = rectangle(leaf)
 		#case disk
 		float32 matrix 4x3 (the bottom row is always 0 0 0 1)
 		#case cylinder
@@ -190,8 +190,23 @@ foreach ENTITY
 		#case sphere
 		3xfloat32 center
 		float32 radius
-		#case rectangle
+		#case rectangle; centered in the middle, normal facing +Z
 		float32 matrix 4x3 (the bottom row is always 0 0 0 1)
+
+#disk: anchored in the center, normal facing +Z, default radius <-1, +1>
+#cylinder: anchored in the center of the bottom face; main axis +Y
+#sphere: anchored in the center
+#rectangle: anchored in the center, normal facing +Z
+#matrix vector ordering: [ x.X, y.X, z.X, t.X, x.Y, y.Y, z.Y, t.Y, x.Z, y.Z, z.Z, t.Z ]
+```
+
+Note that the matrix defines a local coordinate system (right handed with Y up) for each primitive. Assume there is the local right axis vector `x` (already scaled), local up axis `y` and local front axis `z`. These vectors specify the orientation and scale of the respective local axes given in world coordinates. At last, there is also the translation vector `t` that specifies the center of the local coordinate system in world coordinates. The matrix is serialized as an array of `float32` elements in the following order:
+```
+[ x.X, y.X, z.X, t.X,
+  x.Y, y.Y, z.Y, t.Y,
+  x.Z, y.Z, z.Z, t.Z ]
+
+Both `disk` and `rectangle` are 2D bodies anchored in their centers with the normal facing +Z.
 ```
 
 ## Result irradiance data format

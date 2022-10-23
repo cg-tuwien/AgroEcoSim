@@ -52,7 +52,7 @@ uint32 entitiesCount
 foreach ENTITY
 	uint32 surfacesCount
 	foreach SURFACE
-		uint8 primitiveType    #1 = disk, 2 = cylinder(stem), 4 = sphere(shoot), 8 = rectangle(leaf)
+		uint8 primitiveType    #1 = disk, 2 = cylinder(stem), 4 = sphere(bud), 8 = rectangle(leaf)
 		#case disk
 		float32 matrix 4x3 (the bottom row is always 0 0 0 1)
 		#case cylinder
@@ -69,7 +69,7 @@ uint32 entitiesCount
 foreach ENTITY
 	uint32 surfacesCount
 	foreach SURFACE
-		uint8 primitiveType    #1 = disk, 2 = cylinder(stem), 4 = sphere(shoot), 8 = rectangle(leaf)
+		uint8 primitiveType    #1 = disk, 2 = cylinder(stem), 4 = sphere(bud), 8 = rectangle(leaf)
 		#case disk
 		float32 matrix 4x3 (the bottom row is always 0 0 0 1)
 		#case cylinder
@@ -347,7 +347,7 @@ public class IrradianceClient
 #endif
 							}
 							break;
-						case OrganTypes.Shoot:
+						case OrganTypes.Bud:
 							{
 								var halfRadiusY = new Vector3(0f, scale.Y * 0.5f, 0f);
 								writer.WriteU8(2); //WRITE NUMBER OF TRIANGLES in this surface
@@ -449,7 +449,7 @@ public class IrradianceClient
 								writer.WriteM32(z, x, y, center);
 							}
 							break;
-						case OrganTypes.Shoot:
+						case OrganTypes.Bud:
 							{
 								writer.WriteU8(4); //PRIMITIVE TYPE 1 disk, 2 cylinder, 4 >SPHERE<, 8 rectangle
 								writer.WriteV32(center);
