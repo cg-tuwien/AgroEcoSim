@@ -161,12 +161,12 @@ public class IrradianceClient
 				var meshFileFullPath = Path.Combine("..", "agroeco-mts3", meshFileName);
 #endif
 				var ooc = offsetCounter;
-				using var meshBinaryStream = new MemoryStream();
-				offsetCounter = ExportAsTriangles(formations, obstacles, ooc, meshBinaryStream
-#if EXPORT_OBJ
-					, objWriter, obji
-#endif
-				);
+// 				using var meshBinaryStream = new MemoryStream();
+// 				offsetCounter = ExportAsTriangles(formations, obstacles, ooc, meshBinaryStream
+// #if EXPORT_OBJ
+// 					, objWriter, obji
+// #endif
+// 				);
 				using var primBinaryStream = new MemoryStream();
 				offsetCounter = ExportAsPrimitives(formations, obstacles, ooc, primBinaryStream);
 
@@ -194,8 +194,8 @@ public class IrradianceClient
 						Content = new ByteArrayContent(byteBuffer.Array, 0, byteBuffer.Count)
 					};
 					request.Headers.Add("Ti", AgroWorld.GetTime(timestep).ToString("o", CultureInfo.InvariantCulture));
-					Debug.WriteLine(offsetCounter);
-					request.Headers.Add("C", offsetCounter.ToString()); //Only use for dummy debug
+					//Debug.WriteLine(offsetCounter);
+					//request.Headers.Add("C", offsetCounter.ToString()); //Only use for dummy debug
 					//request.Headers.Add("Ra", "1024");
 
 					var result = Client.SendAsync(request).Result;
