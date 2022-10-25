@@ -53,11 +53,8 @@ public static class AgroWorld
 	public const float Latitude = 48.208333f;
 	public const float Longitude = 16.3725f;
 	public const float Altitude = 188; //meters above sea level
-	#if GODOT
+
 	public static TimeZoneInfo TimeZone = TimeZoneInfo.Local;
-	#else
-	public static TimeZoneInfo TimeZone = TimeZoneInfo.FindSystemTimeZoneById(TimeZoneLookup.GetTimeZone(Latitude, Longitude).Result);
-	#endif
 
 	//clouds_coverage, precipitation
 	static WeatherStats[] Weather;
@@ -68,6 +65,18 @@ public static class AgroWorld
 	public static uint TimestepsTotal => TicksPerHour * TotalHours;
 
 	public static DateTime InitialTime = new(2022, 1, 1, 0, 0, 0, DateTimeKind.Unspecified);
+
+	#if !GODOT
+	static AgroWorld()
+	{
+		var ianaTimeZone = TimeZoneLookup.GetTimeZone(Latitude, Longitude).Result;
+		#if WINDOWS
+		TimeZone = TimeZoneInfo.FindSystemTimeZoneById(TZConvert.IanaToWindows(ianaTimeZone));
+		#else
+		TimeZone = TimeZoneInfo.FindSystemTimeZoneById(ianaTimeZone);
+		#endif
+	}
+	#endif
 
 	public static void Init()
 	{

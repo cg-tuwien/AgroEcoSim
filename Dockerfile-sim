@@ -32,6 +32,8 @@ ENV ASPNETCORE_ENVIRONMENT='Production'
 #only copy the published app folder into the final image, everything else (the whole src) is ignored
 COPY --from=publish /app .
 
+RUN apk update && apk --no-cache add tzdata
+
 #COPY --from=publish harden.sh .
 #RUN chmod +x harden.sh && sh harden.sh && rm harden.sh
 #USER user:user
