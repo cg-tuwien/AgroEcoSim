@@ -162,6 +162,6 @@ public abstract class Formation<T> : IFormation where T : struct, IAgent
 
 #if GODOT
 	public virtual void GodotReady() {}
-	public virtual void GodotProcess(uint timestep) {}
+	public virtual void GodotProcess() {}
 #endif
 }

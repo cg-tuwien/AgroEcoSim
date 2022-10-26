@@ -8,17 +8,6 @@ namespace Agro;
 
 public partial class SoilFormation
 {
-	public SoilVisualisationSettings Parameters = new()
-	{
-		FullCellColor = Colors.Blue,
-		EmptyCellColor = Colors.Black,
-		FullFlowColor = Colors.Blue,
-		NoFlowColor = Colors.Black,
-		MarkerVisibility = Visibility.Invisible,
-		AnimateMarkerSize = true,
-		SoilCellScale = 0.99f
-	};
-
 	//Todo: Speed of the visualisation could be improved by replacing Mesh with MultiMesh (leveraging identical geo)!!!
 	public MeshInstance[] SoilCellInstances;
 
@@ -30,23 +19,22 @@ public partial class SoilFormation
 
 	public override void GodotReady()
 	{
-		if (Parameters.Visualise) //Todo: Check whether the previous condition wasn't dependent on something besides this file
-		{
-			InitializeVisualisation();
-		}
-
-		// SetMarkersVisibility(false);
+		InitializeCells();
+		InitializeMarkers();
 	}
 
-	public override void GodotProcess(uint timestep)
+	public override void GodotProcess()
 	{
-		if (Parameters.Visualise)
+		if (AgroWorldGodot.SoilVisualization.Visualise)
 		{
-			SolveVisibility();
-			//if (Parameters.MarkerVisibility == visibility.VisibleWaiting)
-			AnimateMarkers();
-			//if (Parameters.SoilCellsVisibility == visibility.VisibleWaiting)
-			AnimateCells();
+			ApplyMarkerVisibility();
+			if (AgroWorldGodot.SoilVisualization.MarkerVisibility == Visibility.Visible
+			 && AgroWorldGodot.SoilVisualization.IndividualMarkerDirectionVisibility.Any(v => v == Visibility.Visible))
+				AnimateMarkers();
+
+			ApplyCellVisibility();
+			if (AgroWorldGodot.SoilVisualization.SoilCellsVisibility == Visibility.Visible)
+				AnimateCells();
 		}
 	}
 }

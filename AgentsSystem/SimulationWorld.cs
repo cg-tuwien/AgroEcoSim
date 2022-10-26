@@ -99,7 +99,7 @@ public partial class SimulationWorld
 			ExecCallbacks();
 #if GODOT
 			foreach(var item in Formations)
-				item.GodotProcess(Timestep);
+				item.GodotProcess();
 #endif
 #if HISTORY_LOG || HISTORY_TICK
 			// if (i >= 477)
@@ -126,7 +126,7 @@ public partial class SimulationWorld
 			ExecCallbacks();
 #if GODOT
 			foreach(var item in Formations)
-				item.GodotProcess(Timestep);
+				item.GodotProcess();
 #endif
 		}
 	}

@@ -20,5 +20,5 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 	}
 
 	public void GodotReady() {}
-	public void GodotProcess(uint timesteps) {}
+	public void GodotProcess() {}
 }

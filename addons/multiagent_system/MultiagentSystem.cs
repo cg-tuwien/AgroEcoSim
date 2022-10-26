@@ -11,6 +11,15 @@ public class MultiagentSystem : Spatial
 	[Export]
 	public PackedScene HudScene;
 
+	[Export]
+	public PackedScene SimulationScene;
+	[Export]
+	public PackedScene SoilScene;
+	[Export]
+	public PackedScene RootsScene;
+	[Export]
+	public PackedScene ShootsScene;
+
 	[Signal]
 	public delegate void EnteredMenu();
 
@@ -20,13 +29,17 @@ public class MultiagentSystem : Spatial
 
 	bool Paused = false;
 	bool Notified = false;
+	int AsyncLock = 0;
 
-	HUD hud;
+	HUD Hud;
+	Simulation Simulation;
+	Soil Soil;
+
 	readonly List<MeshInstance> Sprites = new();
+	GodotGround Ground;
 
 	SimulationWorld World;
 
-	float Time = 0f;
 	// Called when the node enters the scene tree for the first time.
 	public override void _Ready()
 	{
@@ -52,7 +65,7 @@ public class MultiagentSystem : Spatial
 				plants.Add(new(){ Position = new (x, -0.1f, z) });
 
 		var obstacles = new ObstacleRequest[] {
-			new(){ Type = "Wall", Length = 5f, Height = 4f},
+			new(){ Type = "Wall", Length = 5f, Height = 3.2f, Position = new(2.5f, 0f, 0f)},
 			new(){ Type = "Umbrella", Radius = 1.5f, Height = 2.2f, Position = new(2.5f, 0f, 2.5f)}
 		};
 
@@ -63,11 +76,21 @@ public class MultiagentSystem : Spatial
 			Obstacles = obstacles,
 		});
 
-		hud = (HUD)HudScene.Instance();
-		hud.Load(((SoilFormation)World.Formations[0]).Parameters);
-		AddChild(hud);
+		Ground = new GodotGround();
 
-		// GetNode<HUD>("HUD").Load((SoilVisualisationSettings)((SoilFormation)World.Formations[0]).Parameters);
+
+		Hud = (HUD)HudScene.Instance();
+
+		Simulation = (Simulation)SimulationScene.Instance();
+		Simulation.Load(World);
+
+		Soil = (Soil)SoilScene.Instance();
+		Soil.Load(AgroWorldGodot.SoilVisualization, Ground);
+		Hud.Load(Simulation, Soil);
+		AddChild(Hud);
+
+		//Throws errors, freezes after a few seconds
+		//Task.Run(() => World.Run(AgroWorld.TimestepsTotal));
 	}
 
 	/// <summary>
@@ -76,32 +99,50 @@ public class MultiagentSystem : Spatial
 	/// <param name="delta">'Elapsed time since the previous frame</param>
 	public override void _Process(float delta)
 	{
-		Paused = hud.Paused;
-		if (hud.MenuState == MenuStatus.Entered){
-			EmitSignal("EnteredMenu");
-			hud.MenuState = MenuStatus.EnteredWaiting;
+		Paused = Simulation.Paused;
+		// if (Simulation.MenuState == MenuStatus.Entered)
+		// {
+		// 	EmitSignal("EnteredMenu");
+		// 	Simulation.MenuState = MenuStatus.EnteredWaiting;
+		// }
+		// else if (Simulation.MenuState == MenuStatus.Left && Simulation.ColorEditorOpen == false)
+		// {
+		// 	EmitSignal("LeftMenu");
+		// 	Simulation.MenuState = MenuStatus.LeftWaiting;
+		// }
+//Throws errors, freezes after a few seconds
+// #if ASYNC
+// 		if (!Paused && World.Timestep < AgroWorld.TimestepsTotal && AsyncLock == 0)
+// 		{
+// 			Interlocked.Increment(ref AsyncLock);
+// 			Task.Run(() =>
+// 			{
+// 				World.Run(1);
+// 				if (World.Timestep == AgroWorld.TimestepsTotal - 1)
+// 					GD.Print($"Simulation successfully finished after {AgroWorld.TimestepsTotal} timesteps.");
+// 				Interlocked.Decrement(ref AsyncLock);
+// 			});
+// 		}
+// #else
+		if (!Paused && World.Timestep < AgroWorld.TimestepsTotal)
+		{
+			World.Run(1);
+			if (World.Timestep == AgroWorld.TimestepsTotal - 1)
+				GD.Print($"Simulation successfully finished after {AgroWorld.TimestepsTotal} timesteps.");
 		}
-		else if (hud.MenuState == MenuStatus.Left && hud.ColorEditorOpen == false){
-			EmitSignal("LeftMenu");
-			hud.MenuState = MenuStatus.LeftWaiting;
+		else if (Simulation.ManualStepsRequested > 0)
+		{
+			World.Run(Simulation.ManualStepsRequested);
+			Simulation.ManualStepsDone();
 		}
+// #endif
 
-		if (!Paused){
-			Time += delta;
-			if (World.Timestep < AgroWorld.TimestepsTotal)
-			{
-				World.Run(1);
-
-				if (World.Timestep == AgroWorld.TimestepsTotal - 1)
-					GD.Print($"Simulation successfully finished after {AgroWorld.TimestepsTotal} timesteps.");
-			}
+		if (Soil.UpdateRequest)
+		{
+			foreach(var formation in World.Formations)
+				if (formation is SoilFormation soil)
+					soil.GodotProcess();
+			Soil.UpdateRequest = false;
 		}
-		if (hud.RecentChange){
-			((SoilFormation)World.Formations[0]).GodotProcess(0);
-			hud.RecentChange = false;
-		}
-
 	}
-
-
 }

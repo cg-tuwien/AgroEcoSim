@@ -77,6 +77,10 @@ ctrl={
  ]
 }
 
+[mono]
+
+project/assembly_name="AgroGodot"
+
 [physics]
 
 common/enable_pause_aware_picking=true

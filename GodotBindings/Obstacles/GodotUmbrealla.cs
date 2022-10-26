@@ -18,7 +18,7 @@ public partial class Umbrella : IObstacle
         GodotPoleSprite.Mesh = CubePrimitive;
         GodotPoleSprite.SetSurfaceMaterial(0, UmbrellaMaterial);
         var scale = new Vector3(Thickness, Height, Thickness) * 0.5f;
-        GodotPoleSprite.Translate(Position.ToGodot() + scale);
+        GodotPoleSprite.Translate(Position.ToGodot() + new Vector3(0f, Height * 0.5f, 0f));
         GodotPoleSprite.ScaleObjectLocal(scale);
 
         GodotDiskSprite = new();

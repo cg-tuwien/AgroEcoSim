@@ -47,7 +47,7 @@ public partial class PlantFormation2
 		AG_Godot.GodotReady();
 	}
 
-	public void GodotProcess(uint timestep)
+	public void GodotProcess()
 	{
 		if (ShowOrgans.HasFlag(DisplayOptions.Seed))
 		{
@@ -64,7 +64,7 @@ public partial class PlantFormation2
 			}
 		}
 
-		UG_Godot.GodotProcess(timestep);
-		AG_Godot.GodotProcess(timestep);
+		UG_Godot.GodotProcess();
+		AG_Godot.GodotProcess();
 	}
 }

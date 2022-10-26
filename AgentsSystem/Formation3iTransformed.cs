@@ -13,10 +13,10 @@ public abstract class Formation3iTransformed<T> : Formation3i<T> where T : struc
 {
 	public Formation3iTransformed(int sizeX, int sizeY, int sizeZ) : base(sizeX, sizeY, sizeZ) {}
 
-	TransformFlags Flags = TransformFlags.None;
-	Vector3 Translation;
-	Vector3 Scale;
-	Quaternion Rotation;
+	protected TransformFlags Flags  { get; private set; } = TransformFlags.None;
+	protected Vector3 Translation { get; private set; }
+	protected Vector3 Scale { get; private set; }
+	//Quaternion Rotation; //not yet implemented
 
 	public void SetScale(float factor)
 	{

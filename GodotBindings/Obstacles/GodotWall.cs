@@ -15,9 +15,8 @@ public partial class Wall : IObstacle
         SimulationWorld.GodotAddChild(GodotSprite); // Add it as a child of this node.
         GodotSprite.Mesh = CubePrimitive;
         GodotSprite.SetSurfaceMaterial(0, WallMaterial);
-        var scale = new Vector3(Length, Height, Thickness) * 0.5f;
-        GodotSprite.Translate(Position.ToGodot() + scale);
+        GodotSprite.Translate(Position.ToGodot() + new Vector3(0f, Height * 0.5f, 0f));
         GodotSprite.RotateObjectLocal(Vector3.Up, Orientation);
-        GodotSprite.ScaleObjectLocal(scale);
+        GodotSprite.ScaleObjectLocal(new Vector3(Length, Height, Thickness) * 0.5f);
     }
 }

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Collections.Generic;
 using AgentsSystem;
 using Utils;
+using System.Diagnostics;
 
 namespace Agro;
 
@@ -74,23 +75,25 @@ public partial class SoilFormation
 		_ => throw new Exception("directionassed to InvertDir was invalid.")
 	};
 
-	private void InitializeVisualisation()
-	{
-		InitializeCells();
-		InitializeMarkers();
-	}
-
 	private void InitializeCells()
 	{
+		if (AgroWorldGodot.SoilVisualization.SoilCellsVisibility == Visibility.Invisible)
+			AgroWorldGodot.SoilVisualization.SoilCellsVisibility = Visibility.MakeInvisible;
+
 		SoilCellInstances = new MeshInstance[Agents.Length]; //no need for multiplication here, it's a complete 3D grid
 		for (int x = 0; x < SizeX; x++)
 			for (int y = 0; y < SizeY; y++)
 				for (int z = 0; z < SizeZ; z++)
 					InitializeCell(x, y, z);
+
+		ApplyCellVisibility();
 	}
 
 	private void InitializeMarkers()
 	{
+		if (AgroWorldGodot.SoilVisualization.MarkerVisibility == Visibility.Invisible)
+			AgroWorldGodot.SoilVisualization.MarkerVisibility = Visibility.MakeInvisible;
+
 		MarkerDataStorage = new();
 		MarkerInstances = new MeshInstance[Agents.Length, 6];
 
@@ -112,15 +115,19 @@ public partial class SoilFormation
 
 	private void InitializeMarker(int parent_index, Direction dir)
 	{
-		var parent_pos = SoilCellInstances[parent_index].Translation;
 		var dirIndex = (int)dir;
+
+		if (AgroWorldGodot.SoilVisualization.IndividualMarkerDirectionVisibility[dirIndex] == Visibility.Invisible)
+			AgroWorldGodot.SoilVisualization.IndividualMarkerDirectionVisibility[dirIndex] = Visibility.MakeInvisible;
+
+		var parent_pos = SoilCellInstances[parent_index].Translation;
 
 		var marker = new MeshInstance() {
 			Translation = parent_pos + MarkerOffsets[dirIndex],
 			Rotation = Rotations[dirIndex],
-			Mesh = Parameters.MarkerShape
+			Mesh = AgroWorldGodot.SoilVisualization.MarkerShape
 		};
-		marker.SetSurfaceMaterial(0, (SpatialMaterial)Parameters.MarkerMaterial.Duplicate());
+		marker.SetSurfaceMaterial(0, (SpatialMaterial)AgroWorldGodot.SoilVisualization.MarkerMaterial.Duplicate());
 
 		MarkerInstances[parent_index, dirIndex] = marker;
 
@@ -132,26 +139,26 @@ public partial class SoilFormation
 	static Vector3 SoilUncenter = new(0.5f, -0.5f, 0.5f);
 	private void InitializeCell(int x, int y, int z)
 	{
-		var cellSize = Parameters.SoilCellScale * AgroWorld.FieldResolution;
+		var cellSize = AgroWorldGodot.SoilVisualization.SoilCellScale * AgroWorld.FieldResolution;
 		var mesh = new MeshInstance()
 		{
-			Mesh = Parameters.SoilCellShape,
-			Translation = new Vector3(x, -z, y) * AgroWorld.FieldResolution + SoilUncenter * cellSize,
+			Mesh = AgroWorldGodot.SoilVisualization.SoilCellShape,
+			Translation = new Vector3(x, 1-z, y) * AgroWorld.FieldResolution + SoilUncenter * cellSize,
 			Scale = new(cellSize, cellSize, cellSize),
 		};
-		mesh.SetSurfaceMaterial(0, (SpatialMaterial)Parameters.SoilCellMaterial.Duplicate());
+		mesh.SetSurfaceMaterial(0, (SpatialMaterial)AgroWorldGodot.SoilVisualization.SoilCellMaterial.Duplicate());
 
 		SoilCellInstances[Index(x, y, z)] = mesh;
 		SimulationWorld.GodotAddChild(mesh);
 	}
 
-    private float ComputeCellMultiplier(int id) => Math.Clamp(Agents[id].Water / Agents[id].WaterMaxCapacity, 0f, 1f);
+	private float ComputeCellMultiplier(int id) => Math.Clamp(Agents[id].Water / Agents[id].WaterMaxCapacity, 0f, 1f);
 
-    private float ComputeCellScale(float multiplier) => Parameters.AnimateSoilCellSize
-		? Parameters.SoilCellScale * AgroWorld.FieldResolution * multiplier
-		: Parameters.SoilCellScale * AgroWorld.FieldResolution;
+	private float ComputeCellScale(float multiplier) => AgroWorldGodot.SoilVisualization.AnimateSoilCellSize
+		? AgroWorldGodot.SoilVisualization.SoilCellScale * AgroWorld.FieldResolution * multiplier
+		: AgroWorldGodot.SoilVisualization.SoilCellScale * AgroWorld.FieldResolution;
 
-    private void AnimateCells()
+	private void AnimateCells()
 	{
 		//Note: Temporary solution (redundant resizing)
 		for(int i = 0; i < SoilCellInstances.Length; ++i)
@@ -160,10 +167,10 @@ public partial class SoilFormation
 
 			SoilCellInstances[i].Scale = Vector3.One * ComputeCellScale(multiplier);
 
-			if (Parameters.AnimateSoilCellColor)
-				((SpatialMaterial)SoilCellInstances[i].GetSurfaceMaterial(0)).AlbedoColor = multiplier * Parameters.FullCellColor + (1f - multiplier) * Parameters.EmptyCellColor;
+			if (AgroWorldGodot.SoilVisualization.AnimateSoilCellColor)
+				((SpatialMaterial)SoilCellInstances[i].GetSurfaceMaterial(0)).AlbedoColor = multiplier * AgroWorldGodot.SoilVisualization.CellFullColor + (1f - multiplier) * AgroWorldGodot.SoilVisualization.CellEmptyColor;
 			else
-				((SpatialMaterial)SoilCellInstances[i].GetSurfaceMaterial(0)).AlbedoColor = Parameters.FullCellColor;
+				((SpatialMaterial)SoilCellInstances[i].GetSurfaceMaterial(0)).AlbedoColor = AgroWorldGodot.SoilVisualization.CellFullColor;
 		}
 	}
 
@@ -190,118 +197,123 @@ public partial class SoilFormation
 	{
 		//var markerScale = 0f;
 		var dir = (int)marker.PointingDirection;
-		var cellScale = ComputeCellScale(ComputeCellMultiplier(marker.CellIndex));
-
-		var flow = WaterFlow[marker.CellIndex * 6 + dir];
-		var appearanceMultiplier = Math.Clamp(flow / (Agents[marker.CellIndex].WaterMaxCapacity * SoilAgent.SoilDiffusionCoefPerTick * 5f), 0f, 1f);
-
-		var mesh = MarkerInstances[marker.CellIndex, dir];
-
-		if (flow == 0f) //many markers will be 0, hide them to improve performance
+		if (AgroWorldGodot.SoilVisualization.IndividualMarkerDirectionVisibility[dir] == Visibility.Visible)
 		{
-			mesh.Visible = false;
-			mesh.Scale = Vector3.Zero;
-		}
-		else if (Parameters.AnimateMarkerSize)
-		{
-			var markerScale = cellScale * (Parameters.AnimateMarkerSize ? Parameters.MarkerScale * appearanceMultiplier : Parameters.MarkerScale);
-			var offset_multiplier = (cellScale + markerScale) * 0.5f;
-			mesh.Translation = marker.InitialPosition + MarkerOffsets[dir] * offset_multiplier;
-			mesh.Scale = Vector3.One * markerScale;
-			mesh.Visible = true;
+			var cellScale = ComputeCellScale(ComputeCellMultiplier(marker.CellIndex));
 
-			//((SpatialMaterial)mesh.GetSurfaceMaterial(0)).AlbedoColor = appearance_multiplier * Parameters.FullFlowColor + (1f - appearance_multiplier) * Parameters.NoFlowColor;
+			var flow = WaterFlow[marker.CellIndex * 6 + dir];
+			var appearanceMultiplier = Math.Clamp(flow / (Agents[marker.CellIndex].WaterMaxCapacity * SoilAgent.SoilDiffusionCoefPerTick * 5f), 0f, 1f);
 
-			((SpatialMaterial)mesh.GetSurfaceMaterial(0)).AlbedoColor = Parameters.AnimateMarkerColor
-				? appearanceMultiplier * Parameters.FullFlowColor + (1f - appearanceMultiplier) * Parameters.NoFlowColor
-				: Parameters.FullFlowColor;
+			var mesh = MarkerInstances[marker.CellIndex, dir];
 
-			if (Parameters.MarkerVisibility == Visibility.VisibleWaiting)
-				IndividualAnimationMarkerVisibility(mesh, dir, flow == 0f);
+			if (flow == 0f) //many markers will be 0, hide them to improve performance
+				mesh.Hide();
+			else if (AgroWorldGodot.SoilVisualization.AnimateMarkerSize)
+			{
+				var markerScale = cellScale * (AgroWorldGodot.SoilVisualization.AnimateMarkerSize ? AgroWorldGodot.SoilVisualization.MarkerScale * appearanceMultiplier : AgroWorldGodot.SoilVisualization.MarkerScale);
+				var offset_multiplier = (cellScale + markerScale) * 0.5f;
+				mesh.Translation = marker.InitialPosition + MarkerOffsets[dir] * offset_multiplier;
+				mesh.Scale = Vector3.One * markerScale;
+				mesh.Show();
+
+				//((SpatialMaterial)mesh.GetSurfaceMaterial(0)).AlbedoColor = appearance_multiplier * AgroWorldGodot.SoilVisualization.FullFlowColor + (1f - appearance_multiplier) * AgroWorldGodot.SoilVisualization.NoFlowColor;
+
+				((SpatialMaterial)mesh.GetSurfaceMaterial(0)).AlbedoColor = AgroWorldGodot.SoilVisualization.AnimateMarkerColor
+					? appearanceMultiplier * AgroWorldGodot.SoilVisualization.MarkerFullFlowColor + (1f - appearanceMultiplier) * AgroWorldGodot.SoilVisualization.MarkerNoFlowColor
+					: AgroWorldGodot.SoilVisualization.MarkerFullFlowColor;
+
+				// if (AgroWorldGodot.SoilVisualization.MarkerVisibility == Visibility.MakeVisible)
+				// 	IndividualAnimationMarkerVisibility(mesh, dir, flow == 0f);
+			}
 		}
 
 		// if (flow == 0f)
 		// 	mesh.Scale = Vector3.Zero;
 	}
 
-	public void IndividualAnimationMarkerVisibility(MeshInstance mesh, int direction, bool vis)
-	{
-		if (vis && Parameters.IndividualMarkerDirectionVisibility[direction] == Visibility.VisibleWaiting)
-			mesh.Visible = false;
-		else if (Parameters.IndividualMarkerDirectionVisibility[direction] == Visibility.VisibleWaiting)
-			mesh.Visible = true;
-	}
+	// public void IndividualAnimationMarkerVisibility(MeshInstance mesh, int direction, bool vis)
+	// {
+	// 	if (vis && AgroWorldGodot.SoilVisualization.IndividualMarkerDirectionVisibility[direction] == Visibility.MakeVisible)
+	// 		mesh.Visible = false;
+	// 	else if (AgroWorldGodot.SoilVisualization.IndividualMarkerDirectionVisibility[direction] == Visibility.MakeVisible)
+	// 		mesh.Visible = true;
+	// }
 
-	public void SolveVisibility()
-	{
-		SolveCellVisibility();
-		SolveMarkerVisibility();
-	}
+	bool IsVisible(Visibility flag) => flag == Visibility.MakeVisible || flag == Visibility.Visible;
 
-	private void SolveMarkerVisibility()
+	private void ApplyMarkerVisibility()
 	{
-		if (Parameters.MarkerVisibility == Visibility.Visible)
+		switch (AgroWorldGodot.SoilVisualization.MarkerVisibility)
 		{
-			for(int i = 0; i < 6; i++)
+			case Visibility.MakeVisible:
 			{
-				if (Parameters.IndividualMarkerDirectionVisibility[i] == Visibility.VisibleWaiting)
-					SetMarkersVisibility(true, (Direction)i);
-				else if (Parameters.IndividualMarkerDirectionVisibility[i] == Visibility.InvisibleWaiting)
-					SetMarkersVisibility(false, (Direction)i);
+				for(int i = 0; i < 6; i++)
+				{
+					if (IsVisible(AgroWorldGodot.SoilVisualization.IndividualMarkerDirectionVisibility[i]))
+					{
+						SetMarkersVisibility(true, i);
+						AgroWorldGodot.SoilVisualization.IndividualMarkerDirectionVisibility[i] = Visibility.Visible;
+					}
+					else if (AgroWorldGodot.SoilVisualization.IndividualMarkerDirectionVisibility[i] == Visibility.MakeInvisible)
+						AgroWorldGodot.SoilVisualization.IndividualMarkerDirectionVisibility[i] = Visibility.Invisible;
 
-				Parameters.MarkerVisibility = Visibility.VisibleWaiting;
+					AgroWorldGodot.SoilVisualization.MarkerVisibility = Visibility.Visible;
+				}
 			}
+			break;
+
+			case Visibility.Visible:
+			{
+				for(int i = 0; i < 6; i++)
+				{
+					if (AgroWorldGodot.SoilVisualization.IndividualMarkerDirectionVisibility[i] == Visibility.MakeVisible)
+					{
+						SetMarkersVisibility(true, i);
+						AgroWorldGodot.SoilVisualization.IndividualMarkerDirectionVisibility[i] = Visibility.Visible;
+					}
+					else if (AgroWorldGodot.SoilVisualization.IndividualMarkerDirectionVisibility[i] == Visibility.MakeInvisible)
+					{
+						SetMarkersVisibility(false, i);
+						AgroWorldGodot.SoilVisualization.IndividualMarkerDirectionVisibility[i] = Visibility.Invisible;
+					}
+				}
+			}
+			break;
+
+			case Visibility.MakeInvisible:
+			{
+				for(int i = 0; i < 6; i++)
+					SetMarkersVisibility(false, i);
+
+				AgroWorldGodot.SoilVisualization.MarkerVisibility = Visibility.Invisible;
+			}
+			break;
 		}
-		else if (Parameters.MarkerVisibility == Visibility.Invisible)
-			SetMarkersVisibility(false);
-
-		if (Parameters.MarkerVisibility == Visibility.VisibleWaiting)
-			for(int i = 0; i < 6; i++)
-			{
-				if (Parameters.IndividualMarkerDirectionVisibility[i] == Visibility.Visible)
-				{
-					SetMarkersVisibility(true,(Direction)i);
-					Parameters.IndividualMarkerDirectionVisibility[i] = Visibility.VisibleWaiting;
-				}
-				else if (Parameters.IndividualMarkerDirectionVisibility[i] == Visibility.Invisible)
-				{
-					SetMarkersVisibility(false,(Direction)i);
-					Parameters.IndividualMarkerDirectionVisibility[i] = Visibility.InvisibleWaiting;
-				}
-			}
 	}
 
-	private void SolveCellVisibility()
+	private void ApplyCellVisibility()
 	{
-		if (Parameters.SoilCellsVisibility == Visibility.Visible)
+		if (AgroWorldGodot.SoilVisualization.SoilCellsVisibility == Visibility.MakeVisible)
 		{
 			SetCellsVisibility(true);
-			Parameters.SoilCellsVisibility = Visibility.VisibleWaiting;
+			AgroWorldGodot.SoilVisualization.SoilCellsVisibility = Visibility.Visible;
 		}
-		else if (Parameters.SoilCellsVisibility == Visibility.Invisible)
+		else if (AgroWorldGodot.SoilVisualization.SoilCellsVisibility == Visibility.MakeInvisible)
 		{
 			SetCellsVisibility(false);
-			Parameters.SoilCellsVisibility = Visibility.InvisibleWaiting;
+			AgroWorldGodot.SoilVisualization.SoilCellsVisibility = Visibility.Invisible;
 		}
 	}
 
-	private void SetMarkersVisibility(bool flag)
-	{
-		for(int i = 0; i < 6; i++)
-			SetMarkersVisibility(flag,(Direction)i);
-	}
-
-	private void SetMarkersVisibility(bool flag, Direction dir)
+	private void SetMarkersVisibility(bool flag, int dir)
 	{
 		for(int i = 0; i < SoilCellInstances.Length; i++)
-			MarkerInstances[i,(int)dir].Visible = flag;
+			MarkerInstances[i, dir].Visible = flag;
 	}
-
 
 	private void SetCellsVisibility(bool flag)
 	{
 		for(int i = 0; i < SoilCellInstances.Length; i++)
 			SoilCellInstances[i].Visible = flag;
 	}
-
 }

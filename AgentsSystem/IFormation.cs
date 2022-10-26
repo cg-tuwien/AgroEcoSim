@@ -18,6 +18,6 @@ public interface IFormation
 #endif
 #if GODOT
     void GodotReady();
-	void GodotProcess(uint timestep);
+	void GodotProcess();
 #endif
 }

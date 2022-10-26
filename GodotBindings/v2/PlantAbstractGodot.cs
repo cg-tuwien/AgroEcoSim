@@ -57,7 +57,7 @@ public abstract class PlantAbstractGodot2<T> where T : struct, IPlantAgent
 
 	public void GodotReady() { }
 
-	public void GodotProcess(uint timestep)
+	public void GodotProcess()
 	{
 		if (GodotShow)
 			for(int i = 0; i < GodotSprites.Count; ++i)

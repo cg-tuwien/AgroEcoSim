@@ -1,8 +1,12 @@
-[gd_scene load_steps=10 format=2]
+[gd_scene load_steps=14 format=2]
 
 [ext_resource path="res://addons/goutte.camera.trackball/trackball_camera.gd" type="Script" id=1]
 [ext_resource path="res://addons/multiagent_system/MultiagentSystem.cs" type="Script" id=2]
 [ext_resource path="res://HUD/HUD.tscn" type="PackedScene" id=3]
+[ext_resource path="res://HUD/Simulation.tscn" type="PackedScene" id=4]
+[ext_resource path="res://HUD/Soil.tscn" type="PackedScene" id=5]
+[ext_resource path="res://HUD/Roots.tscn" type="PackedScene" id=6]
+[ext_resource path="res://HUD/Shoots.tscn" type="PackedScene" id=7]
 
 [sub_resource type="CubeMesh" id=1]
 
@@ -31,6 +35,10 @@ zoom_minimum = 0.003
 [node name="MultiagentSystem" type="Spatial" parent="."]
 script = ExtResource( 2 )
 HudScene = ExtResource( 3 )
+SimulationScene = ExtResource( 4 )
+SoilScene = ExtResource( 5 )
+RootsScene = ExtResource( 6 )
+ShootsScene = ExtResource( 7 )
 
 [node name="UnitBoxMarkers" type="Spatial" parent="."]
 visible = false
@@ -39,7 +47,6 @@ visible = false
 transform = Transform( 0.02, 0, 0, 0, 0.02, 0, 0, 0, 0.02, 0, 0, 0 )
 mesh = SubResource( 1 )
 skeleton = NodePath("../..")
-material/0 = null
 
 [node name="MeshInstance2" type="MeshInstance" parent="UnitBoxMarkers"]
 transform = Transform( 0.02, 0, 0, 0, 0.02, 0, 0, 0, 0.02, 1, 0, 0 )
