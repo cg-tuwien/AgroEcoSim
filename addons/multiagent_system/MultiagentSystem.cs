@@ -34,6 +34,8 @@ public class MultiagentSystem : Spatial
 	HUD Hud;
 	Simulation Simulation;
 	Soil Soil;
+	Roots Roots;
+	Shoots Shoots;
 
 	readonly List<MeshInstance> Sprites = new();
 	GodotGround Ground;
@@ -86,7 +88,14 @@ public class MultiagentSystem : Spatial
 
 		Soil = (Soil)SoilScene.Instance();
 		Soil.Load(AgroWorldGodot.SoilVisualization, Ground);
-		Hud.Load(Simulation, Soil);
+
+		Roots = (Roots)RootsScene.Instance();
+		Roots.Load(AgroWorldGodot.RootsVisualization);
+
+		Shoots = (Shoots)ShootsScene.Instance();
+		Shoots.Load(AgroWorldGodot.ShootsVisualization);
+
+		Hud.Load(Simulation, Soil, Roots, Shoots);
 		AddChild(Hud);
 
 		//Throws errors, freezes after a few seconds
@@ -137,12 +146,48 @@ public class MultiagentSystem : Spatial
 		}
 // #endif
 
-		if (Soil.UpdateRequest)
+		if (Paused)
 		{
-			foreach(var formation in World.Formations)
-				if (formation is SoilFormation soil)
-					soil.GodotProcess();
-			Soil.UpdateRequest = false;
+			if (Soil.UpdateRequest)
+			{
+				foreach(var formation in World.Formations)
+					if (formation is SoilFormation soil)
+						soil.GodotProcess();
+				Soil.UpdateRequest = false;
+			}
+
+			if (Roots.UpdateRequest || Shoots.UpdateRequest)
+			{
+				foreach(var formation in World.Formations)
+					if (formation is PlantFormation2 plant)
+						plant.GodotProcess();
+				Roots.UpdateRequest = false;
+				Shoots.UpdateRequest = false;
+			}
 		}
+
+		if (AgroWorldGodot.RootsVisualization.RootsVisibility == Visibility.MakeVisible)
+			AgroWorldGodot.RootsVisualization.RootsVisibility = Visibility.Visible;
+
+		if (AgroWorldGodot.RootsVisualization.RootsVisibility == Visibility.MakeInvisible)
+			AgroWorldGodot.RootsVisualization.RootsVisibility = Visibility.Invisible;
+
+		if (AgroWorldGodot.ShootsVisualization.StemsVisibility == Visibility.MakeVisible)
+			AgroWorldGodot.ShootsVisualization.StemsVisibility = Visibility.Visible;
+
+		if (AgroWorldGodot.ShootsVisualization.StemsVisibility == Visibility.MakeInvisible)
+			AgroWorldGodot.ShootsVisualization.StemsVisibility = Visibility.Invisible;
+
+		if (AgroWorldGodot.ShootsVisualization.LeafsVisibility == Visibility.MakeVisible)
+			AgroWorldGodot.ShootsVisualization.LeafsVisibility = Visibility.Visible;
+
+		if (AgroWorldGodot.ShootsVisualization.LeafsVisibility == Visibility.MakeInvisible)
+			AgroWorldGodot.ShootsVisualization.LeafsVisibility = Visibility.Invisible;
+
+		if (AgroWorldGodot.ShootsVisualization.BudsVisibility == Visibility.MakeVisible)
+			AgroWorldGodot.ShootsVisualization.BudsVisibility = Visibility.Visible;
+
+		if (AgroWorldGodot.ShootsVisualization.BudsVisibility == Visibility.MakeInvisible)
+			AgroWorldGodot.ShootsVisualization.BudsVisibility = Visibility.Invisible;
 	}
 }

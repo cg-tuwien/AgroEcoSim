@@ -162,9 +162,9 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 		InsertAncestors.Add(ancestor);
 	}
 
-	// public void Update(int index) => ParentUpdates = true;
+    // public void Update(int index) => ParentUpdates = true;
 
-	public void Death(int index)
+    public void Death(int index)
 	{
 		if (Deaths.Add(index))
 		{
@@ -712,6 +712,9 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 
 	public float GetVolume() => (ReadTMP ? AgentsTMP : Agents).Aggregate(0f, (sum, current) => sum + current.Scale.X * current.Scale.Y * current.Scale.Z);
 
+	///<summary>
+	///Irradiance in W / hm²
+	///<summary>
 	public float GetIrradiance(int index) => IrradianceClient.GetIrradiance(this, index);
 
 	#endregion

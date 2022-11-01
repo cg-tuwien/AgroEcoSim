@@ -27,6 +27,80 @@ public partial class Plant_AG_Godot2 : PlantAbstractGodot2<AboveGroundAgent2>
 		sprite.Scale = (Formation.GetScale(index) * 0.5f).ToGodot();
 
 		//Debug.WriteLine( ColorCoding(index, FormationColorCoding).g);
-		((SpatialMaterial)sprite.GetSurfaceMaterial(0)).AlbedoColor = ColorCoding(index, FormationColorCoding);
+		((SpatialMaterial)sprite.GetSurfaceMaterial(0)).AlbedoColor = ColorCoding(index, AgroWorldGodot.ShootsVisualization.TransferFunc);
+	}
+
+	protected override Color GetNaturalColor(int index)
+    {
+		var w = Formation.GetWoodRatio(index);
+		return ShootsVisualisationSettings.Segment_NaturalLeaf * (1f - w) + ShootsVisualisationSettings.Segment_NaturalWood * w;
+    }
+
+	public override void GodotProcess()
+	{
+		if (AgroWorldGodot.ShootsVisualization.StemsVisibility == Visibility.MakeVisible)
+		{
+			for(int i = 0; i < GodotSprites.Count; ++i)
+				if (Formation.GetOrgan(i) == OrganTypes.Stem)
+					GodotSprites[i].Show();
+		}
+		else if (AgroWorldGodot.ShootsVisualization.StemsVisibility == Visibility.MakeInvisible)
+		{
+			for(int i = 0; i < GodotSprites.Count; ++i)
+				if (Formation.GetOrgan(i) == OrganTypes.Stem)
+					GodotSprites[i].Hide();
+		}
+
+		if (AgroWorldGodot.ShootsVisualization.LeafsVisibility == Visibility.MakeVisible)
+		{
+			for(int i = 0; i < GodotSprites.Count; ++i)
+				if (Formation.GetOrgan(i) == OrganTypes.Leaf)
+					GodotSprites[i].Show();
+		}
+		else if (AgroWorldGodot.ShootsVisualization.LeafsVisibility == Visibility.MakeInvisible)
+		{
+			for(int i = 0; i < GodotSprites.Count; ++i)
+				if (Formation.GetOrgan(i) == OrganTypes.Leaf)
+					GodotSprites[i].Hide();
+		}
+
+		if (AgroWorldGodot.ShootsVisualization.BudsVisibility == Visibility.MakeVisible)
+		{
+			for(int i = 0; i < GodotSprites.Count; ++i)
+				if (Formation.GetOrgan(i) == OrganTypes.Bud)
+					GodotSprites[i].Show();
+		}
+		else if (AgroWorldGodot.ShootsVisualization.BudsVisibility == Visibility.MakeInvisible)
+		{
+			for(int i = 0; i < GodotSprites.Count; ++i)
+				if (Formation.GetOrgan(i) == OrganTypes.Bud)
+					GodotSprites[i].Hide();
+		}
+
+		for(int i = 0; i < GodotSprites.Count; ++i)
+			UpdateTransformation(GodotSprites[i], i);
+
+		// if (AgroWorldGodot.ShootsVisualization.StemsVisibility == Visibility.Visible ||
+		// 	AgroWorldGodot.ShootsVisualization.LeafsVisibility == Visibility.Visible ||
+		// 	AgroWorldGodot.ShootsVisualization.BudsVisibility == Visibility.Visible)
+		// {
+		// 	for(int i = 0; i < GodotSprites.Count; ++i)
+		// 		switch (Formation.GetOrgan(i))
+		// 		{
+		// 			case OrganTypes.Stem:
+		// 				if (AgroWorldGodot.ShootsVisualization.StemsVisibility == Visibility.Visible)
+		// 					UpdateTransformation(GodotSprites[i], i);
+		// 			break;
+		// 			case OrganTypes.Leaf:
+		// 				if (AgroWorldGodot.ShootsVisualization.LeafsVisibility == Visibility.Visible)
+		// 					UpdateTransformation(GodotSprites[i], i);
+		// 			break;
+		// 			case OrganTypes.Bud:
+		// 				if (AgroWorldGodot.ShootsVisualization.BudsVisibility == Visibility.Visible)
+		// 					UpdateTransformation(GodotSprites[i], i);
+		// 			break;
+		// 			default: UpdateTransformation(GodotSprites[i], i); break;
+		// 		}
+		// }
 	}
 }

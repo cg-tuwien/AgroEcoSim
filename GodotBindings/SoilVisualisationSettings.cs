@@ -5,6 +5,7 @@ enum MarkerMode : byte { Steam, Water, Sum };
 
 public enum Visibility : byte { Visible, Invisible, MakeVisible, MakeInvisible }; //Waiting state is used to prevent visibility changes once set to desired visibility
 
+public enum SurfaceCellTransferFunctionPreset : byte { Custom, BlueWater };
 public enum SoilCellTransferFunctionPreset : byte { Custom, BrownWater, BlueWater };
 public enum SoilMarkerTransferFunctionPreset : byte { Custom, BrownWater, BlueWater };
 
@@ -23,21 +24,24 @@ public class SoilVisualisationSettings
         Visibility.MakeVisible //Z-
     };
     public Visibility SoilCellsVisibility = Visibility.MakeVisible;
+    public Visibility SurfaceCellsVisibility = Visibility.MakeVisible;
     public bool GroundVisible = false;
     #endregion
 
     #region ANIMATION VISIBILITY SETTINGS
+    public bool AnimateSurfaceCellSize = true;
     public bool AnimateSoilCellSize = true;
-    public bool AnimateMarkerSize = false;
+
+    public bool AnimateSurfaceCellColor = true;
     public bool AnimateSoilCellColor = true;
 
+    public bool AnimateMarkerSize = false;
     public bool AnimateMarkerColor = true;
-    // public bool AnimateDownwardMarkerColor = true;
-    // public bool AnimateLateralMarkerColor = true;
     #endregion
 
     #region MATERIAL SETTINGS
     public SpatialMaterial SoilCellMaterial = new() { AlbedoColor = new(0.5f, 0.5f, 0.5f) };
+    public SpatialMaterial SurfaceCellMaterial = new() { AlbedoColor = new(0.5f, 0.5f, 0.5f) };
 
     public SpatialMaterial MarkerMaterial = new() { AlbedoColor = new(0f, 0.2f, 0.6f) };
     #endregion
@@ -46,20 +50,47 @@ public class SoilVisualisationSettings
     public static Color BrownWater_CellFull = new(71f/255f, 39f/255f, 11f/255f);
     public static Color BrownWater_CellEmpty = new(148f/255f, 143f/255f, 130f/255f);
 
-    public static Color BrownWater_MarkerNoFlow = new(0.2f, 0.2f, 0.2f);
-    public static Color BrownWater_MarkerFullFlow = new(0.2f, 0.2f, 1f);
+    public static Color BrownWater_MarkerNoFlow = Colors.Black;
+    public static Color BrownWater_MarkerFullFlow = Colors.White;
 
     public static Color BlueWater_CellFull = Colors.Blue;
     public static Color BlueWater_CellEmpty = Colors.Black;
 
-    public static Color BlueWater_MarkerNoFlow = Colors.Blue;
-    public static Color BlueWater_MarkerFullFlow = Colors.Black;
+    public static Color BlueWater_SurfaceFull = Colors.Blue;
+    public static Color BlueWater_SurfaceEmpty = Colors.Black;
+
+    public static Color BlueWater_MarkerNoFlow = Colors.Black;
+    public static Color BlueWater_MarkerFullFlow = Colors.Blue;
+
+    public Color Custom_SurfaceFull = BrownWater_CellFull;
+    public Color Custom_SurfaceEmpty = BrownWater_CellEmpty;
 
     public Color Custom_CellFull = BrownWater_CellFull;
     public Color Custom_CellEmpty = BrownWater_CellEmpty;
 
     public Color Custom_MarkerNoFlow = BrownWater_MarkerNoFlow;
     public Color Custom_MarkerFullFlow = BrownWater_MarkerFullFlow;
+
+    SurfaceCellTransferFunctionPreset mSurfaceTransferFunc = SurfaceCellTransferFunctionPreset.BlueWater;
+    public SurfaceCellTransferFunctionPreset SurfaceTransferFunc
+    {
+        get => mSurfaceTransferFunc;
+        set
+        {
+            mSurfaceTransferFunc = value;
+            switch (mSurfaceTransferFunc)
+            {
+                case SurfaceCellTransferFunctionPreset.BlueWater:
+                    SurfaceFullColor = BlueWater_SurfaceFull;
+                    SurfaceEmptyColor = BlueWater_SurfaceEmpty;
+                    break;
+                default:
+                    SurfaceFullColor = Custom_SurfaceFull;
+                    SurfaceEmptyColor = Custom_SurfaceEmpty;
+                    break;
+            }
+        }
+    }
 
     SoilCellTransferFunctionPreset mCellTransferFunc = SoilCellTransferFunctionPreset.BrownWater;
     public SoilCellTransferFunctionPreset CellTransferFunc
@@ -111,6 +142,9 @@ public class SoilVisualisationSettings
         }
     }
 
+    public Color SurfaceFullColor = BlueWater_SurfaceFull;
+    public Color SurfaceEmptyColor = BlueWater_SurfaceEmpty;
+
     public Color CellFullColor = BrownWater_CellFull;
     public Color CellEmptyColor = BrownWater_CellEmpty;
 
@@ -120,12 +154,16 @@ public class SoilVisualisationSettings
     #endregion
 
     #region SHAPES (SHOULD BE UNIT-SIZED)
-    public Mesh SoilCellShape = GeoBuilder.UnitCube();
+    public Mesh SoilCellShape = GeoBuilder.UnitCube(verticalCenter: true);
+    public Mesh SurfaceCellShape = GeoBuilder.UnitCube(verticalCenter: false);
     public Mesh MarkerShape = GeoBuilder.UnitPyramid4();
     #endregion
 
     #region SCALE SETTINGS
+
     public float SoilCellScale = 0.1f;
     public float MarkerScale = 0.75f;
     #endregion
+
+    public float SurfaceFullThreshold = 0.03f;
 }

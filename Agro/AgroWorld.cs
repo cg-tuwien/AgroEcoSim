@@ -25,15 +25,15 @@ public readonly struct WeatherStats
 	/// <summary>
 	/// Rainfall in gramm
 	/// </summary>
+	public readonly float Precipitation;
 	/// <summary>
 	/// Factor of sky coverage where 0 means clear sky and 1 means fully covered
 	/// </summary>
-	public readonly float Precipitation;
 	public readonly float SkyCoverage;
 
-	public WeatherStats(float precipitation, float skyCoverage)
+	public WeatherStats(float skyCoverage, float precipitation_inG)
 	{
-		Precipitation = precipitation;
+		Precipitation = precipitation_inG;
 		SkyCoverage = skyCoverage;
 	}
 }
@@ -152,6 +152,9 @@ public static class AgroWorld
 
 	static readonly double RcpTicksPerHour = 1.0 / TicksPerHour;
 	internal static DateTime GetTime(uint timestep) => TimeZoneInfo.ConvertTimeToUtc(InitialTime, TimeZone) + (TicksPerHour == 1 ? TimeSpan.FromHours(timestep) : TimeSpan.FromHours(timestep * RcpTicksPerHour));
+	///<summary>
+	//Rainfall in the given timestep in gramm
+	///</summary>
 	internal static float GetWater(uint timestep) => Weather[timestep].Precipitation;
 	internal static float GetTemperature(uint timestep) => 20;
 	internal static float GetAmbientLight(uint timestep) => 1f - Weather[timestep].SkyCoverage;
@@ -212,7 +215,7 @@ public static class AgroWorld
 	}
 	static readonly float[] precipitationLowIntervals = new float[] {0, 0, 2, 5, 10, 20, 50};
 	static readonly float[] precipitationHighIntervals = new float[] {0, 2, 5, 10, 20, 50, 100};
-	static WeatherStats[] PlanCloudsSingleMonth(int month, int daysPerMonth, float sunnyDays, float cloudDays, float dullDays, float precipitation, float[] maxPrecipitationStats)
+	static WeatherStats[] PlanCloudsSingleMonth(int month, int daysPerMonth, float sunnyDays, float cloudDays, float dullDays, float precipitationMM, float[] maxPrecipitationStats_inDays)
 	{
 		var hoursInMonth = daysPerMonth * 24;
 		var sunHoursTarget = Math.Max(0, (int)Math.Round(RNG.NextNormal(sunnyDays * 24, 0.15 * sunnyDays * 24)));
@@ -306,30 +309,30 @@ public static class AgroWorld
 		for(int i = 0; i < sunIntervals.Length; ++i)
 			sun_cloud_intervals.Add(DistributeSunAndClouds(sunIntervals[i], cloudIntervals[i]));
 
-		var targetPrecipitation = (float)Math.Max(0, RNG.NextNormal(precipitation, 0.25 * precipitation));
+		var targetPrecipitation_inMM = (float)Math.Max(0, RNG.NextNormal(precipitationMM, 0.25 * precipitationMM));
 		//normalize maxPrecipitationStats
-		var maxPrecipitationSum = maxPrecipitationStats.Sum();
-		var precipitationStrengthPrefixSum = new float[maxPrecipitationStats.Length];
-		precipitationStrengthPrefixSum[0] = maxPrecipitationStats[0] / maxPrecipitationSum;
-		for(int i = 1; i < maxPrecipitationStats.Length; ++i)
-			precipitationStrengthPrefixSum[i] = precipitationStrengthPrefixSum[i - 1] + maxPrecipitationStats[i] / maxPrecipitationSum;
+		var maxPrecipitationSum_inDays = maxPrecipitationStats_inDays.Sum();
+		var precipitationStrengthPrefixSum = new float[maxPrecipitationStats_inDays.Length];
+		precipitationStrengthPrefixSum[0] = maxPrecipitationStats_inDays[0] / maxPrecipitationSum_inDays;
+		for(int i = 1; i < maxPrecipitationStats_inDays.Length; ++i)
+			precipitationStrengthPrefixSum[i] = precipitationStrengthPrefixSum[i - 1] + maxPrecipitationStats_inDays[i] / maxPrecipitationSum_inDays;
 
 		var randomVector = RNG.NextFloats(dullIntervals.Count);
-		var rainInDulls = new float[randomVector.Length];
-		var rainInDullsSum = 0.0f;
+		var rainInDulls = new float[randomVector.Length]; //currently in mm
+		var rainInDullsSum_inMM = 0.0f;
 		for(int i = 0; i < randomVector.Length; ++i)
 		{
 			var bin = Array.BinarySearch(precipitationStrengthPrefixSum, 0, precipitationStrengthPrefixSum.Length, randomVector[i]);
 			bin = bin >= 0 ? bin : ~bin;
 			var r = RNG.NextFloat(precipitationLowIntervals[bin], precipitationHighIntervals[bin]) * dullIntervals[i];
 			rainInDulls[i] = r;
-			rainInDullsSum += r;
+			rainInDullsSum_inMM += r;
 		}
 
 		//scale to reach the target AND convert  mm / m² to gramms (= 1000000 mm³ = 1 l and 1 l = 1000 gramms)
-		rainInDullsSum = 1e3f * targetPrecipitation / rainInDullsSum;
+		var rainInDullsSum_inG = 1e3f * targetPrecipitation_inMM / rainInDullsSum_inMM;
 		for(int i = 0; i < rainInDulls.Length; ++i)
-			rainInDulls[i] *= rainInDullsSum;
+			rainInDulls[i] *= rainInDullsSum_inG; //now rainInDulls is in g
 
 		// Debug.WriteLine($"m: {month}, h: {hoursInMonth} = {cloudIntervals.Sum() + sunIntervals.Sum() + dullIntervals.Sum()} = {dullIntervals.Sum() + sun_cloud_intervals.Sum(x => x.Sum(y => Math.Abs(y)))}");
 		// Debug.WriteLine($"sun: {sunHoursTarget} -> {sunIntervals.Sum()}, intervals: {sunIntervals.Length}");
@@ -338,7 +341,7 @@ public static class AgroWorld
 		// Debug.WriteLine($"rain: {targetPrecipitation} -> {rainInDulls.Sum() / 1e3}, intervals: {rainInDulls.Length}");
 		//Debug.WriteLine($"sci: [{String.Join(", ", sun_cloud_intervals)}]");
 
-		//[sky_coverage (factor), precipitation (gramm), temperature (°C), sun_energy (W/hm²)] #wind_speed (km/h), humidity (?)
+		//[sky_coverage (factor), precipitation (gramm), temperature (°C), sun_energy (W / hm²)] #wind_speed (km/h), humidity (?)
 		var result = new WeatherStats[TicksPerHour * hoursInMonth];
 		int hi = 0, di = 0, si = 0;
 		var dullTurn = startDull;
@@ -349,19 +352,21 @@ public static class AgroWorld
 			{
 				var cloudDistribution = RNG.NextFloats((int)(TicksPerHour * dullIntervals[di]), 0.5f, 1.0f);
 				var rainDistribution = new float[cloudDistribution.Length];
-				Array.Copy(cloudDistribution, rainDistribution, cloudDistribution.Length);
-				var rainPeriodCharacter = RNG.NextFloat(0.5f, 0.9f);
-				for(int j = 0; j < rainDistribution.Length; ++j)
-					if (rainDistribution[j] < RNG.NextFloat(0.5f, rainPeriodCharacter))
-						rainDistribution[j] = 0;
-				//assure at least 1 positive element
-				var secureIndex = RNG.Next(rainDistribution.Length);
-				rainDistribution[secureIndex] = cloudDistribution[secureIndex];
-				var rdSum = rainDistribution.Sum();
-				if (rdSum > 0)
+				if (rainInDulls[di] > 0)
+				{
+					Array.Copy(cloudDistribution, rainDistribution, cloudDistribution.Length);
+					var rainPeriodCharacter = RNG.NextFloat(0.5f, 0.9f);
 					for(int j = 0; j < rainDistribution.Length; ++j)
-						rainDistribution[j] *= rainInDulls[di] / rdSum;
-
+						if (rainDistribution[j] < RNG.NextFloat(0.5f, rainPeriodCharacter))
+							rainDistribution[j] = 0;
+					//assure at least 1 positive element
+					var secureIndex = RNG.Next(rainDistribution.Length);
+					rainDistribution[secureIndex] = cloudDistribution[secureIndex];
+					var rdSum = rainDistribution.Sum();
+					if (rdSum > 0)
+						for(int j = 0; j < rainDistribution.Length; ++j)
+							rainDistribution[j] *= rainInDulls[di] / rdSum; //rain in Dulls is in mm
+				}
 				for(int j = 0; j < cloudDistribution.Length; ++j)
 					result[hi + j] = new WeatherStats(cloudDistribution[j], rainDistribution[j]);
 

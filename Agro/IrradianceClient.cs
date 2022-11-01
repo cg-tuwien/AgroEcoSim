@@ -172,6 +172,7 @@ public class IrradianceClient
 
 				var startTime = SW.ElapsedMilliseconds;
 				SW.Start();
+
 				primBinaryStream.TryGetBuffer(out var byteBuffer);
 #if EXPORT_BIN
 				//if (timestep == 1999)

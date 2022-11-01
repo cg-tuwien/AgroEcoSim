@@ -25,6 +25,30 @@ public class Plant_UG_Godot2 : PlantAbstractGodot2<UnderGroundAgent2>
 		sprite.Transform = new Transform(basis, (Formation.GetBaseCenter(index) + stableScale).ToGodot());
 		sprite.Scale = (Formation.GetScale(index) * 0.5f).ToGodot();
 
-		((SpatialMaterial)sprite.GetSurfaceMaterial(0)).AlbedoColor = ColorCoding(index, FormationColorCoding);
+		((SpatialMaterial)sprite.GetSurfaceMaterial(0)).AlbedoColor = ColorCoding(index, AgroWorldGodot.RootsVisualization.TransferFunc);
+	}
+
+	protected override Color GetNaturalColor(int index)
+    {
+		var w = Formation.GetWoodRatio(index);
+		return RootsVisualisationSettings.Segment_Light * (1f - w) + RootsVisualisationSettings.Segment_Dark * w;
+    }
+
+	public override void GodotProcess()
+	{
+		if (AgroWorldGodot.RootsVisualization.RootsVisibility == Visibility.MakeVisible)
+		{
+			for(int i = 0; i < GodotSprites.Count; ++i)
+				GodotSprites[i].Show();
+		}
+		else if (AgroWorldGodot.RootsVisualization.RootsVisibility == Visibility.MakeInvisible)
+		{
+			for(int i = 0; i < GodotSprites.Count; ++i)
+				GodotSprites[i].Hide();
+		}
+
+		if (AgroWorldGodot.RootsVisualization.RootsVisibility == Visibility.Visible)
+			for(int i = 0; i < GodotSprites.Count; ++i)
+				UpdateTransformation(GodotSprites[i], i);
 	}
 }

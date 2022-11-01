@@ -14,20 +14,28 @@ public enum MenuStatus{
 
 public class HUD : CanvasLayer
 {
-	Simulation SimulationSceneInstance;
-	Soil SoilSceneInstance;
+	Simulation SimulationControlsInstance;
+	Soil SoilControlsInstance;
+	Roots RootsControlsInstance;
+	Shoots ShootsControlsInstance;
 
-	public void Load(Simulation simulation, Soil soil)
+	public void Load(Simulation simulation, Soil soil, Roots roots, Shoots shoots)
 	{
-		SimulationSceneInstance = simulation;
-		SoilSceneInstance = soil;
+		SimulationControlsInstance = simulation;
+		SoilControlsInstance = soil;
+		RootsControlsInstance = roots;
+		ShootsControlsInstance = shoots;
 	}
 
 	public override void _Ready()
 	{
-		AddChild(SimulationSceneInstance);
-		AddChild(SoilSceneInstance);
-		SoilSceneInstance.Hide();
+		AddChild(SimulationControlsInstance);
+		AddChild(SoilControlsInstance);
+		AddChild(RootsControlsInstance);
+		AddChild(ShootsControlsInstance);
+		SoilControlsInstance.Hide();
+		RootsControlsInstance.Hide();
+		ShootsControlsInstance.Hide();
 	}
 
 	private void _on_OptionButton_item_selected(int index)
@@ -35,12 +43,28 @@ public class HUD : CanvasLayer
 		switch(index)
 		{
 			case 0:
-				SimulationSceneInstance.Show();
-				SoilSceneInstance.Hide();
+				SimulationControlsInstance.Show();
+				SoilControlsInstance.Hide();
+				RootsControlsInstance.Hide();
+				ShootsControlsInstance.Hide();
 			break;
 			case 1:
-				SimulationSceneInstance.Hide();
-				SoilSceneInstance.Show();
+				SimulationControlsInstance.Hide();
+				SoilControlsInstance.Show();
+				RootsControlsInstance.Hide();
+				ShootsControlsInstance.Hide();
+			break;
+			case 2:
+				SimulationControlsInstance.Hide();
+				SoilControlsInstance.Hide();
+				RootsControlsInstance.Show();
+				ShootsControlsInstance.Hide();
+			break;
+			case 3:
+				SimulationControlsInstance.Hide();
+				SoilControlsInstance.Hide();
+				RootsControlsInstance.Hide();
+				ShootsControlsInstance.Show();
 			break;
 		}
 	}

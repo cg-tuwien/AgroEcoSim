@@ -14,6 +14,10 @@ public static class AgroWorldGodot
 		MarkerTransferFunc = SoilMarkerTransferFunctionPreset.BlueWater,
 		MarkerVisibility = Visibility.Invisible,
 		AnimateMarkerSize = true,
-		SoilCellScale = 0.99f
+		SoilCellScale = 0.99f,
+		//SurfaceCellScale = 0.99f
 	};
+
+	public static RootsVisualisationSettings RootsVisualization = new();
+	public static ShootsVisualisationSettings ShootsVisualization = new();
 }

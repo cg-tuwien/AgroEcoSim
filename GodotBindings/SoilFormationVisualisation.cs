@@ -80,6 +80,9 @@ public partial class SoilFormation
 		if (AgroWorldGodot.SoilVisualization.SoilCellsVisibility == Visibility.Invisible)
 			AgroWorldGodot.SoilVisualization.SoilCellsVisibility = Visibility.MakeInvisible;
 
+		if (AgroWorldGodot.SoilVisualization.SurfaceCellsVisibility == Visibility.Invisible)
+			AgroWorldGodot.SoilVisualization.SurfaceCellsVisibility = Visibility.MakeInvisible;
+
 		SoilCellInstances = new MeshInstance[Agents.Length]; //no need for multiplication here, it's a complete 3D grid
 		for (int x = 0; x < SizeX; x++)
 			for (int y = 0; y < SizeY; y++)
@@ -136,15 +139,18 @@ public partial class SoilFormation
 		MarkerDataStorage.Add(new(dir, parent_pos, parent_index));
 	}
 
-	static Vector3 SoilUncenter = new(0.5f, -0.5f, 0.5f);
+	static readonly Vector3 SoilCellUncenter = new(0.5f, -0.5f, 0.5f);
+	static readonly Vector3 SurfaceCellUncenter = new(0.5f, 0f, 0.5f);
 	private void InitializeCell(int x, int y, int z)
 	{
 		var cellSize = AgroWorldGodot.SoilVisualization.SoilCellScale * AgroWorld.FieldResolution;
 		var mesh = new MeshInstance()
 		{
-			Mesh = AgroWorldGodot.SoilVisualization.SoilCellShape,
-			Translation = new Vector3(x, 1-z, y) * AgroWorld.FieldResolution + SoilUncenter * cellSize,
-			Scale = new(cellSize, cellSize, cellSize),
+			Mesh = z == 0 ? AgroWorldGodot.SoilVisualization.SurfaceCellShape : AgroWorldGodot.SoilVisualization.SoilCellShape,
+			Translation = z > 0
+				? new Vector3(x, 1-z, y) * AgroWorld.FieldResolution + SoilCellUncenter * cellSize
+				: new Vector3(x, 0, y) * AgroWorld.FieldResolution + SurfaceCellUncenter * cellSize,
+			Scale = new(cellSize, z > 0 ? cellSize : 1e-6f, cellSize),
 		};
 		mesh.SetSurfaceMaterial(0, (SpatialMaterial)AgroWorldGodot.SoilVisualization.SoilCellMaterial.Duplicate());
 
@@ -158,10 +164,29 @@ public partial class SoilFormation
 		? AgroWorldGodot.SoilVisualization.SoilCellScale * AgroWorld.FieldResolution * multiplier
 		: AgroWorldGodot.SoilVisualization.SoilCellScale * AgroWorld.FieldResolution;
 
+	static readonly float FieldCellSurface = AgroWorld.FieldResolution * AgroWorld.FieldResolution;
+
 	private void AnimateCells()
 	{
+		var cellSize = AgroWorldGodot.SoilVisualization.SoilCellScale * AgroWorld.FieldResolution;
+		//surface cells
+		for(int i = 0; i < SizeXY; ++i)
+		{
+			var height = Math.Max(1e-6f, (Agents[i].Water * 1e-6f) / FieldCellSurface); //the firt term converts water in gramms to m³
+
+			SoilCellInstances[i].Scale = new Vector3(cellSize, height, cellSize);
+
+			if (AgroWorldGodot.SoilVisualization.AnimateSoilCellColor)
+			{
+				var multiplier = Math.Clamp(height / AgroWorldGodot.SoilVisualization.SurfaceFullThreshold, 0f, 1f);
+				((SpatialMaterial)SoilCellInstances[i].GetSurfaceMaterial(0)).AlbedoColor = multiplier * AgroWorldGodot.SoilVisualization.SurfaceFullColor + (1f - multiplier) * AgroWorldGodot.SoilVisualization.SurfaceEmptyColor;
+			}
+			else
+				((SpatialMaterial)SoilCellInstances[i].GetSurfaceMaterial(0)).AlbedoColor = AgroWorldGodot.SoilVisualization.SurfaceFullColor;
+		}
 		//Note: Temporary solution (redundant resizing)
-		for(int i = 0; i < SoilCellInstances.Length; ++i)
+		//soil cells
+		for(int i = SizeXY; i < SoilCellInstances.Length; ++i)
 		{
 			var multiplier = ComputeCellMultiplier(i);
 
@@ -293,17 +318,32 @@ public partial class SoilFormation
 
 	private void ApplyCellVisibility()
 	{
+		//Soil cells
 		if (AgroWorldGodot.SoilVisualization.SoilCellsVisibility == Visibility.MakeVisible)
 		{
-			SetCellsVisibility(true);
+			SetSoilCellsVisibility(true);
 			AgroWorldGodot.SoilVisualization.SoilCellsVisibility = Visibility.Visible;
 		}
 		else if (AgroWorldGodot.SoilVisualization.SoilCellsVisibility == Visibility.MakeInvisible)
 		{
-			SetCellsVisibility(false);
+			SetSoilCellsVisibility(false);
 			AgroWorldGodot.SoilVisualization.SoilCellsVisibility = Visibility.Invisible;
 		}
+
+		//Surface cells
+		if (AgroWorldGodot.SoilVisualization.SurfaceCellsVisibility == Visibility.MakeVisible)
+		{
+			SetSurfaceCellsVisibility(true);
+			AgroWorldGodot.SoilVisualization.SurfaceCellsVisibility = Visibility.Visible;
+		}
+		else if (AgroWorldGodot.SoilVisualization.SurfaceCellsVisibility == Visibility.MakeInvisible)
+		{
+			SetSurfaceCellsVisibility(false);
+			AgroWorldGodot.SoilVisualization.SurfaceCellsVisibility = Visibility.Invisible;
+		}
 	}
+
+
 
 	private void SetMarkersVisibility(bool flag, int dir)
 	{
@@ -311,9 +351,15 @@ public partial class SoilFormation
 			MarkerInstances[i, dir].Visible = flag;
 	}
 
-	private void SetCellsVisibility(bool flag)
+	private void SetSurfaceCellsVisibility(bool flag)
 	{
-		for(int i = 0; i < SoilCellInstances.Length; i++)
+		for(int i = 0; i < SizeXY; i++)
+			SoilCellInstances[i].Visible = flag;
+	}
+
+	private void SetSoilCellsVisibility(bool flag)
+	{
+		for(int i = SizeXY; i < SoilCellInstances.Length; i++)
 			SoilCellInstances[i].Visible = flag;
 	}
 }

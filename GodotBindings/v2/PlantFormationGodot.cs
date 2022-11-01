@@ -40,7 +40,7 @@ public partial class PlantFormation2
 			GodotSeedSprite.Scale = Vector3.One * seed.Radius;
 		}
 
-		UG_Godot.GodotShow = ShowOrgans.HasFlag(DisplayOptions.UnderGround);
+		UG_Godot.GodotShow =  ShowOrgans.HasFlag(DisplayOptions.UnderGround);
 		AG_Godot.GodotShow = ShowOrgans.HasFlag(DisplayOptions.AboveGround);
 
 		UG_Godot.GodotReady();

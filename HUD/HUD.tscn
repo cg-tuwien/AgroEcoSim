@@ -11,7 +11,7 @@ margin_top = 10.0
 margin_right = 105.0
 margin_bottom = 30.0
 text = "Simulation"
-items = [ "Simulation", null, false, 0, null, "Soil", null, false, 1, null, "Roots", null, false, 2, null, "Sooths", null, false, 3, null ]
+items = [ "Simulation", null, false, 0, null, "Soil", null, false, 1, null, "Roots", null, false, 2, null, "Shoots", null, false, 3, null ]
 selected = 0
 
 [connection signal="item_selected" from="OptionButton" to="." method="_on_OptionButton_item_selected"]

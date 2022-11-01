@@ -12,7 +12,7 @@ public class Plant_UG_Godot : PlantAbstractGodot<UnderGroundAgent>
 	public Plant_UG_Godot(PlantSubFormation<UnderGroundAgent> formation) : base(formation) { }
 
 	protected override Color FormationColor => Colors.Brown;
-	protected override ColorCodingType FormationColorCoding => ColorCodingType.EnergyRatio;
+	protected override ColorCodingType FormationColorCoding => ColorCodingType.Energy;
 
 	protected override void UpdateTransformation(MeshInstance sprite, int index)
 	{
