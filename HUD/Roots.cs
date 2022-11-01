@@ -11,7 +11,7 @@ public class Roots : CanvasLayer
 
 	private RootsVisualisationSettings Parameters;
 	public bool UpdateRequest = false;
-	public MenuStatus MenuState = MenuStatus.LeftWaiting;
+	public MenuEvent MenuEvent = MenuEvent.None;
 
 	bool IsVisible(Visibility visibility) => visibility == Visibility.Visible || visibility == Visibility.MakeVisible;
 	Visibility Vis(bool flag) => flag ? Visibility.MakeVisible : Visibility.MakeInvisible;
@@ -38,15 +38,7 @@ public class Roots : CanvasLayer
 		UpdateRequest = true;
 	}
 
-	public void MenuEntered()
-	{
-		if (MenuState == MenuStatus.LeftWaiting)
-			MenuState = MenuStatus.Entered;
-	}
+	public void MenuEntered() => MenuEvent = MenuEvent.Enter;
 
-	public void MenuLeft()
-	{
-		if (MenuState == MenuStatus.EnteredWaiting)
-			MenuState = MenuStatus.Left;
-	}
+	public void MenuLeft() => MenuEvent = MenuEvent.Leave;
 }

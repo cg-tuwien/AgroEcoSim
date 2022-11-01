@@ -11,7 +11,7 @@ static readonly Agro.ColorCodingType[] TransferOptions = (Agro.ColorCodingType[]
 
 	private ShootsVisualisationSettings Parameters;
 	public bool UpdateRequest = false;
-	public MenuStatus MenuState = MenuStatus.LeftWaiting;
+	public MenuEvent MenuEvent = MenuEvent.None;
 
 	Control LightCutOffControl;
 
@@ -70,15 +70,7 @@ static readonly Agro.ColorCodingType[] TransferOptions = (Agro.ColorCodingType[]
 		UpdateRequest = true;
 	}
 
-	public void MenuEntered()
-	{
-		if (MenuState == MenuStatus.LeftWaiting)
-			MenuState = MenuStatus.Entered;
-	}
+	public void MenuEntered() => MenuEvent = MenuEvent.Enter;
 
-	public void MenuLeft()
-	{
-		if (MenuState == MenuStatus.EnteredWaiting)
-			MenuState = MenuStatus.Left;
-	}
+	public void MenuLeft() => MenuEvent = MenuEvent.Leave;
 }

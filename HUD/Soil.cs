@@ -16,9 +16,9 @@ public class Soil : CanvasLayer
 
 	private SoilVisualisationSettings Parameters;
 	public bool UpdateRequest = false;
-	public bool ColorEditorOpen = false;
 
-	public MenuStatus MenuState = MenuStatus.LeftWaiting;
+	public MenuEvent MenuEvent = MenuEvent.None;
+	public MenuEvent ColorEvent = MenuEvent.None;
 
 	static readonly SoilMarkerTransferFunctionPreset[] MarkerTransferOptions= (SoilMarkerTransferFunctionPreset[])Enum.GetValues(typeof(SoilMarkerTransferFunctionPreset));
 	static readonly SoilCellTransferFunctionPreset[] CellTransferOptions = (SoilCellTransferFunctionPreset[])Enum.GetValues(typeof(SoilCellTransferFunctionPreset));
@@ -64,8 +64,8 @@ public class Soil : CanvasLayer
 		else
 			MarkerCustomColorNode.Hide();
 
-		GetNode<ColorPickerButton>("FlowMarkers/Color/Custom/Full").Color = parameters.MarkerNoFlowColor;
-		GetNode<ColorPickerButton>("FlowMarkers/Color/Custom/Empty").Color = parameters.MarkerFullFlowColor;
+		GetNode<ColorPickerButton>("FlowMarkers/Color/Custom/Full").Color = parameters.Custom_MarkerFullFlow;
+		GetNode<ColorPickerButton>("FlowMarkers/Color/Custom/Empty").Color = parameters.Custom_MarkerNoFlow;
 		#endregion
 
 		#region SOIL CELLS
@@ -87,8 +87,8 @@ public class Soil : CanvasLayer
 		else
 			CellCustomColorNode.Hide();
 
-		GetNode<ColorPickerButton>("SoilCells/Color/Custom/Full").Color = parameters.CellFullColor;
-		GetNode<ColorPickerButton>("SoilCells/Color/Custom/Empty").Color = parameters.CellEmptyColor;
+		GetNode<ColorPickerButton>("SoilCells/Color/Custom/Full").Color = parameters.Custom_CellFull;
+		GetNode<ColorPickerButton>("SoilCells/Color/Custom/Empty").Color = parameters.Custom_CellEmpty;
 		#endregion
 
 		#region SURFACE CELLS
@@ -335,21 +335,13 @@ public class Soil : CanvasLayer
 		UpdateRequest = true;
 	}
 
-	public void MenuEntered()
-	{
-		if (MenuState == MenuStatus.LeftWaiting)
-			MenuState = MenuStatus.Entered;
-	}
+	public void MenuEntered() => MenuEvent = MenuEvent.Enter;
 
-	public void MenuLeft()
-	{
-		if (MenuState == MenuStatus.EnteredWaiting)
-			MenuState = MenuStatus.Left;
-	}
+	public void MenuLeft() => MenuEvent = MenuEvent.Leave;
 
-	public void ColorOpen() => ColorEditorOpen = true;
+	public void ColorOpen() => ColorEvent = MenuEvent.Enter;
 
-	public void ColorClosed() => ColorEditorOpen = false;
+	public void ColorClosed() => ColorEvent = MenuEvent.Leave;
 
 	public void GroundVisibility(bool flag)
 	{

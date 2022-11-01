@@ -5,12 +5,7 @@ using System.Collections.Generic;
 using AgentsSystem;
 using Agro;
 
-public enum MenuStatus{
-	EnteredWaiting,
-	LeftWaiting,
-	Left,
-	Entered
-}
+public enum MenuEvent : byte { None, Enter, Leave };
 
 public class HUD : CanvasLayer
 {

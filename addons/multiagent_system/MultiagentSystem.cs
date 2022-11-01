@@ -28,7 +28,9 @@ public class MultiagentSystem : Spatial
 
 
 	bool Paused = false;
-	bool Notified = false;
+	bool MouseNavigationActive = true;
+	bool MenuInactive = true;
+	bool ColorPickerInactive = true;
 	int AsyncLock = 0;
 
 	HUD Hud;
@@ -109,16 +111,49 @@ public class MultiagentSystem : Spatial
 	public override void _Process(float delta)
 	{
 		Paused = Simulation.Paused;
-		// if (Simulation.MenuState == MenuStatus.Entered)
-		// {
-		// 	EmitSignal("EnteredMenu");
-		// 	Simulation.MenuState = MenuStatus.EnteredWaiting;
-		// }
-		// else if (Simulation.MenuState == MenuStatus.Left && Simulation.ColorEditorOpen == false)
-		// {
-		// 	EmitSignal("LeftMenu");
-		// 	Simulation.MenuState = MenuStatus.LeftWaiting;
-		// }
+
+		if (ColorPickerInactive)
+		{
+			if (Soil.ColorEvent == MenuEvent.Enter)
+			{
+				ColorPickerInactive = false;
+				MenuInactive = true;
+				EmitSignal("EnteredMenu");
+			}
+			else if (MenuInactive)
+			{
+				if (Soil.MenuEvent == MenuEvent.Enter || Roots.MenuEvent == MenuEvent.Enter || Shoots.MenuEvent == MenuEvent.Enter)
+				{
+					MenuInactive = false;
+					EmitSignal("EnteredMenu");
+				}
+			}
+			else
+			{
+				if (Soil.MenuEvent == MenuEvent.Leave || Roots.MenuEvent == MenuEvent.Leave || Shoots.MenuEvent == MenuEvent.Leave)
+				{
+					MenuInactive = true;
+					EmitSignal("LeftMenu");
+				}
+			}
+		}
+		else
+		{
+			if (Soil.ColorEvent == MenuEvent.Leave)
+			{
+				ColorPickerInactive = true;
+				if (Soil.MenuEvent == MenuEvent.Enter || Roots.MenuEvent == MenuEvent.Enter || Shoots.MenuEvent == MenuEvent.Enter)
+					MenuInactive = false;
+				else
+					EmitSignal("LeftMenu");
+			}
+		}
+
+		Soil.MenuEvent = MenuEvent.None;
+		Soil.ColorEvent = MenuEvent.None;
+		Roots.MenuEvent = MenuEvent.None;
+		Shoots.MenuEvent = MenuEvent.None;
+
 //Throws errors, freezes after a few seconds
 // #if ASYNC
 // 		if (!Paused && World.Timestep < AgroWorld.TimestepsTotal && AsyncLock == 0)
