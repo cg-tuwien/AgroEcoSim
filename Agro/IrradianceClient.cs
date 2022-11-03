@@ -113,7 +113,11 @@ public class IrradianceClient
 		}
 	}
 
-	public static void SetAddress(string addr) => Singleton.Client.BaseAddress = new Uri(addr);
+	public static void SetAddress(string addr)
+	{
+		if (Singleton.Client.BaseAddress == null)
+			Singleton.Client.BaseAddress = new Uri(addr);
+	}
 
 	public static void Tick(uint timestep, IList<IFormation> formations, IList<IObstacle> obstacles)
 	{

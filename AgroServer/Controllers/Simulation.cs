@@ -40,7 +40,7 @@ public class SimulationController : ControllerBase
         var response = new SimulationResponse() { Plants = new(world.Count) };
         world.ForEach(formation =>
         {
-            if (formation is PlantFormation plant)
+            if (formation is PlantFormation2 plant)
                 //plantData.Add(@$"{{""P"":{JsonSerializer.Serialize(new Vector3Data(plant.Position))},""V"":{plant.AG.GetVolume()}}}");
                 response.Plants.Add(new(){ Volume = plant.AG.GetVolume()});
         });
