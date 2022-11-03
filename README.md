@@ -109,7 +109,8 @@ Some classes are denoted by v1/v2 or just 1/2 or stored in folders called v1/v2.
 The renderer is called via `http`. The primary renderer is Mitsuba 3 in the [agroeco-mts3](https://github.com/cfreude/agroeco-mts3/). To plug-in a different renderer, it has to follow these guidelines:
 * Listening at port `9000`
 * Respond with a status code `200` (OK) to a `GET` request, this is a check for whether the server is up
-* Respond to `POST` requests with scene data by returning accummulated irradiances
+* Respond to `POST` requests with scene data by returning accummulated irradiances in (W/m²)
+* The energy should be accumulated around the `570 nm` wavelength
 
 ## POST headers
 The body of the `POST` request contains the scene in a binary format as described below. Further more, it uses headers to store additional values:
@@ -122,6 +123,9 @@ The renderer will receive the scene data in binary form as a set of triangle mes
 Both contain a section with sensors that measure irradiance and a section with obstacles that only block and reflect light, but do not measure it.
 
 Plants correspond to entities. Their surfaces are typically light-sensitive plant organs like leafs. Each sensor surface must be associated with a sensor that measures the irradiance exposure (summed all over the surface) in W/m².
+
+* The coordinate system is right-handed with `x: right`, `y: up`, `z: front`
+* For introducing the sun movement, north is oriented back `N = [0, 0, -1]` and east is right `E = [1, 0, 0]`
 
 ### Triangle Mesh Binary Serialization
 ```
@@ -190,7 +194,7 @@ foreach ENTITY
 		#case sphere
 		3xfloat32 center
 		float32 radius
-		#case rectangle; centered in the middle, normal facing +Z
+		#case rectangle
 		float32 matrix 4x3 (the bottom row is always 0 0 0 1)
 
 #disk: anchored in the center, normal facing +Z, default radius <-1, +1>
@@ -207,6 +211,14 @@ Note that the matrix defines a local coordinate system (right handed with Y up) 
   x.Z, y.Z, z.Z, t.Z ]
 
 Both `disk` and `rectangle` are 2D bodies anchored in their centers with the normal facing +Z.
+```
+
+Since shearing is not supported, the bootom row is just `[0 0 0 1]`, hence full matrix is:
+```
+[ x.X, y.X, z.X, t.X,
+  x.Y, y.Y, z.Y, t.Y,
+  x.Z, y.Z, z.Z, t.Z,
+    0,   0,   0,   1 ]
 ```
 
 ## Result irradiance data format
