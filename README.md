@@ -39,7 +39,7 @@ The simulation can be started in three modes:
 * A) call `dotnet run -f net6.0 --project AgroServer/AgroServer.csproj` or
 * B) open the `AgroGodot` folder in VS Code, select a `WebAPI` launch option and hit F5.
 
-The WebAPI version targets net6.0. The server listens on port `7215`. To explore or try out the API, check `http://localhost:7215/swagger/index.html` (accept the self-signed certificate in browser). The `POST` request should contain settings for the simulation formated as `json`. See below in [Options](#options). The server responds with an array of plant volumes (in m³) with stable ordering (wrt. request):
+The WebAPI version targets net6.0. The server listens on port `7215`. To explore or try out the API, check `https://localhost:7215/swagger/index.html` (accept the self-signed certificate in browser). The `POST` request should contain settings for the simulation formated as `json`. See below in [Options](#options). The server responds with an array of plant volumes (in m³) with stable ordering (wrt. request):
 ```json
 {
   "plants": [
