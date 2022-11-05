@@ -3,7 +3,8 @@ using System;
 
 enum MarkerMode : byte { Steam, Water, Sum };
 
-public enum Visibility : byte { Visible, Invisible, MakeVisible, MakeInvisible }; //Waiting state is used to prevent visibility changes once set to desired visibility
+//Make... states are used to prevent visibility changes every frame
+public enum Visibility : byte { Visible, Invisible, MakeVisible, MakeInvisible };
 
 public enum SurfaceCellTransferFunctionPreset : byte { Custom, BlueWater };
 public enum SoilCellTransferFunctionPreset : byte { Custom, BrownWater, BlueWater };

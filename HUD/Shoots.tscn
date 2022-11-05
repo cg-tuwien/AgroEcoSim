@@ -68,7 +68,7 @@ margin_left = 187.0
 margin_top = 87.0
 margin_right = 232.0
 margin_bottom = 101.0
-rect_pivot_offset = Vector2( 103, 10 )
+rect_pivot_offset = Vector2( 37, 36 )
 text = "Leafs"
 
 [node name="LeafsCheckButton" type="CheckButton" parent="Shoots/Visibility"]
@@ -76,7 +76,7 @@ margin_left = 115.0
 margin_top = 74.0
 margin_right = 191.0
 margin_bottom = 114.0
-rect_pivot_offset = Vector2( 48, 58 )
+rect_pivot_offset = Vector2( 109, 49 )
 pressed = true
 
 [node name="Buds" type="Label" parent="Shoots/Visibility"]
@@ -96,6 +96,22 @@ rect_pivot_offset = Vector2( 48, 58 )
 pressed = true
 
 [node name="Color" type="Node" parent="Shoots"]
+
+[node name="UnshadedLabel" type="Label" parent="Shoots/Color"]
+margin_left = 163.0
+margin_top = 175.0
+margin_right = 227.0
+margin_bottom = 189.0
+rect_pivot_offset = Vector2( 37, 36 )
+text = "Unshaded"
+
+[node name="UnshadedButton" type="CheckButton" parent="Shoots/Color"]
+margin_left = 91.0
+margin_top = 162.0
+margin_right = 167.0
+margin_bottom = 202.0
+rect_pivot_offset = Vector2( 109, 49 )
+pressed = true
 
 [node name="LightCutOff" type="Control" parent="Shoots/Color"]
 margin_left = 6.0
@@ -141,6 +157,7 @@ rect_pivot_offset = Vector2( 2, 10 )
 
 [connection signal="toggled" from="Shoots/Visibility/StemsCheckButton" to="." method="StemsVisibility"]
 [connection signal="toggled" from="Shoots/Visibility/LeafsCheckButton" to="." method="LeafsVisibility"]
+[connection signal="toggled" from="Shoots/Color/UnshadedButton" to="." method="Unshaded"]
 [connection signal="mouse_entered" from="Shoots/Color/LightCutOff/HSlider" to="." method="MenuEntered"]
 [connection signal="mouse_exited" from="Shoots/Color/LightCutOff/HSlider" to="." method="MenuLeft"]
 [connection signal="value_changed" from="Shoots/Color/LightCutOff/HSlider" to="." method="LightCutOff"]

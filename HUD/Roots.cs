@@ -24,6 +24,7 @@ public class Roots : CanvasLayer
 			rootsTransferNode.AddItem(TransferOptions[i].ToString());
 		GetNode<CheckButton>("Roots/Visibility/CheckButton").Pressed = IsVisible(parameters.RootsVisibility);
 		rootsTransferNode.Select(Array.IndexOf(TransferOptions, parameters.TransferFunc));
+		GetNode<CheckButton>("Roots/Color/UnshadedButton").Pressed = parameters.Unshaded;
 	}
 
 	public void RootsVisibility(bool flag)
@@ -35,6 +36,12 @@ public class Roots : CanvasLayer
 	public void RootsTransferFunction(int index)
 	{
 		Parameters.TransferFunc = TransferOptions[index];
+		UpdateRequest = true;
+	}
+
+	public void Unshaded(bool flag)
+	{
+		Parameters.Unshaded = flag;
 		UpdateRequest = true;
 	}
 

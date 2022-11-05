@@ -56,6 +56,22 @@ pressed = true
 
 [node name="Color" type="Node" parent="Roots"]
 
+[node name="UnshadedLabel" type="Label" parent="Roots/Color"]
+margin_left = 163.0
+margin_top = 108.0
+margin_right = 227.0
+margin_bottom = 122.0
+rect_pivot_offset = Vector2( 37, 36 )
+text = "Unshaded"
+
+[node name="UnshadedButton" type="CheckButton" parent="Roots/Color"]
+margin_left = 91.0
+margin_top = 95.0
+margin_right = 167.0
+margin_bottom = 135.0
+rect_pivot_offset = Vector2( 109, 49 )
+pressed = true
+
 [node name="Color" type="Label" parent="Roots/Color"]
 anchor_left = 2.77
 anchor_top = 2.129
@@ -81,4 +97,5 @@ margin_bottom = 125.0
 rect_pivot_offset = Vector2( 2, 10 )
 
 [connection signal="toggled" from="Roots/Visibility/CheckButton" to="." method="RootsVisibility"]
+[connection signal="toggled" from="Roots/Color/UnshadedButton" to="." method="Unshaded"]
 [connection signal="item_selected" from="Roots/Color/ColorCombo" to="." method="RootsTransferFunction"]

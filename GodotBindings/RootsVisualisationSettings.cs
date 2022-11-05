@@ -15,6 +15,7 @@ public class RootsVisualisationSettings
     public static Color Segment_Dark = new(60f/255f, 38/255f, 10f/255f);
 
     public Agro.ColorCodingType TransferFunc = Agro.ColorCodingType.Default;
+    public bool Unshaded = true;
     #endregion
 
     #region SHAPES (SHOULD BE UNIT-SIZED)

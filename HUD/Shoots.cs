@@ -28,6 +28,7 @@ static readonly Agro.ColorCodingType[] TransferOptions = (Agro.ColorCodingType[]
 		GetNode<CheckButton>("Shoots/Visibility/LeafsCheckButton").Pressed = IsVisible(parameters.LeafsVisibility);
 		GetNode<CheckButton>("Shoots/Visibility/BudsCheckButton").Pressed = IsVisible(parameters.BudsVisibility);
 		rootsTransferNode.Select(Array.IndexOf(TransferOptions, parameters.TransferFunc));
+		GetNode<CheckButton>("Shoots/Color/UnshadedButton").Pressed = parameters.Unshaded;
 		LightCutOffControl = GetNode<Control>("Shoots/Color/LightCutOff");
 		GetNode<HSlider>("Shoots/Color/LightCutOff/HSlider").Value = Math.Clamp(((1f / parameters.LightCutOff) - 100f) / 900f, 0f, 1f);
 
@@ -61,6 +62,12 @@ static readonly Agro.ColorCodingType[] TransferOptions = (Agro.ColorCodingType[]
 		else
 			LightCutOffControl.Hide();
 
+		UpdateRequest = true;
+	}
+
+	public void Unshaded(bool flag)
+	{
+		Parameters.Unshaded = flag;
 		UpdateRequest = true;
 	}
 

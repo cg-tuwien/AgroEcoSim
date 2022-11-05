@@ -33,7 +33,7 @@ public abstract class PlantAbstractGodot2<T> where T : struct, IPlantAgent
 				SimulationWorld.GodotAddChild(sprite); // Add it as a child of this node.
 				sprite.Mesh = PlantCubePrimitive;
 				if (sprite.GetSurfaceMaterial(0) == null) //TODO if not visualizing, use a common material for all
-					sprite.SetSurfaceMaterial(0, new SpatialMaterial{ AlbedoColor = FormationColor });
+					sprite.SetSurfaceMaterial(0, new SpatialMaterial{ AlbedoColor = FormationColor, FlagsUnshaded = true });
 
 				UpdateTransformation(sprite, i);
 				GodotSprites.Add(sprite);

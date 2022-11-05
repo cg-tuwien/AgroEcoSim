@@ -4,6 +4,7 @@ using System.Linq;
 using System.Collections.Generic;
 using AgentsSystem;
 using NumericHelpers;
+using System.Diagnostics;
 
 namespace Agro;
 
@@ -25,7 +26,9 @@ public class Plant_UG_Godot2 : PlantAbstractGodot2<UnderGroundAgent2>
 		sprite.Transform = new Transform(basis, (Formation.GetBaseCenter(index) + stableScale).ToGodot());
 		sprite.Scale = (Formation.GetScale(index) * 0.5f).ToGodot();
 
-		((SpatialMaterial)sprite.GetSurfaceMaterial(0)).AlbedoColor = ColorCoding(index, AgroWorldGodot.RootsVisualization.TransferFunc);
+		var material = (SpatialMaterial)sprite.GetSurfaceMaterial(0);
+		material.AlbedoColor = ColorCoding(index, AgroWorldGodot.RootsVisualization.TransferFunc);
+		material.FlagsUnshaded = AgroWorldGodot.RootsVisualization.Unshaded;
 	}
 
 	protected override Color GetNaturalColor(int index)
