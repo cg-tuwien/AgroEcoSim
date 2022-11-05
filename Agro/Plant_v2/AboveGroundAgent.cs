@@ -147,7 +147,8 @@ public partial struct AboveGroundAgent2 : IPlantAgent
 	float LifeSupportPerHour => Length * Radius * (Organ == OrganTypes.Leaf ? LeafThickness : Radius * mPhotoFactor);
 	public float LifeSupportPerTick => LifeSupportPerHour / AgroWorld.TicksPerHour;
 
-	public float PhotosynthPerTick => Length * Radius * (Organ == OrganTypes.Leaf ? 2f : TwoPiTenth) * mPhotoFactor;
+	public const float mPhotoEfficiency = 0.25f;
+	public float PhotosynthPerTick => Length * Radius * (Organ == OrganTypes.Leaf ? 2f : TwoPiTenth) * mPhotoFactor * mPhotoEfficiency;
 
 	float EnoughEnergy(float? lifeSupportPerHour = null) => (lifeSupportPerHour ?? LifeSupportPerHour) * 32;
 
@@ -209,15 +210,15 @@ public partial struct AboveGroundAgent2 : IPlantAgent
 			{
 				var airTemp = AgroWorld.GetTemperature(timestep);
 				var surface = Length * Radius * (Organ == OrganTypes.Leaf ? 2f : TwoPi);
-				var possibleAmountByLight = surface * approxLight * mPhotoFactor;
-				var possibleAmountByWater = Water * (Organ == OrganTypes.Stem ? 0.1f : 1f);
+				var possibleAmountByLight = surface * approxLight * mPhotoFactor * (Organ == OrganTypes.Stem ? 0.1f : 1f);
+				var possibleAmountByWater = Water;
 				var possibleAmountByCO2 = airTemp >= plant.VegetativeHighTemperature.Y
 					? 0f
 					: (airTemp <= plant.VegetativeHighTemperature.X
 						? float.MaxValue
 						: surface * (airTemp - plant.VegetativeHighTemperature.X) / (plant.VegetativeHighTemperature.Y - plant.VegetativeHighTemperature.X)); //TODO respiratory cycle
 
-				var photosynthesizedEnergy = Math.Min(possibleAmountByLight, Math.Min(possibleAmountByWater, possibleAmountByCO2));
+				var photosynthesizedEnergy = Math.Min(possibleAmountByLight, Math.Min(possibleAmountByWater, possibleAmountByCO2)) * mPhotoEfficiency;
 
 				Water -= photosynthesizedEnergy;
 				Energy += photosynthesizedEnergy;

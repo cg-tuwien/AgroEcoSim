@@ -24,6 +24,8 @@ public class PlantGlobalStats
 	public double EnergyRequirement{ get; set; }
 	public double WaterRequirement { get; set; }
 
+	public double UsefulnessTotal { get; set; }
+
 	public IList<float> Usefulness { get; set; }
 	public IList<float> LifeSupportEnergy { get; set; }
 	public IList<float> PhotosynthWater { get; set; }
@@ -35,9 +37,19 @@ public class PlantGlobalStats
 
 	internal void DistributeEnergyByRequirement(float factor)
 	{
+		//factor is energyAvailableTotal / energyRequirementTotal
+		var weightsTotal = 0.0;
 		ReceivedEnergy = new float[LifeSupportEnergy.Count];
 		for(int i = 0; i < ReceivedEnergy.Length; ++i)
-			ReceivedEnergy[i] = LifeSupportEnergy[i] * factor;
+		{
+			var w = LifeSupportEnergy[i] * Usefulness[i];
+			ReceivedEnergy[i] = w * factor; //in sum over all i: LifeSupportEnergy[i] / energyRequirementTotal yields 1
+			weightsTotal += w;
+		}
+
+		var wtf = (float)weightsTotal;
+		for(int i = 0; i < ReceivedEnergy.Length; ++i)
+			ReceivedEnergy[i] /= wtf;
 	}
 
 	internal void DistributeWaterByRequirement(float factor)
@@ -221,6 +233,8 @@ public partial class PlantFormation2 : IPlantFormation
 
 			var energy = globalAG.Energy + globalUG.Energy;
 			var water = globalAG.Water + globalUG.Energy;
+
+			var usefulnessSumAG = globalAG.UsefulnessTotal;
 
 			var energyRequirement = globalAG.EnergyRequirement + globalUG.EnergyRequirement;
 			var waterRequirement = globalAG.WaterRequirement + globalUG.WaterRequirement;

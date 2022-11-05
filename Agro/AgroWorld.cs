@@ -429,4 +429,9 @@ public static class BinaryWriterExtensions
 		writer.Write(ax.Y); writer.Write(ay.Y); writer.Write(az.Y); writer.Write(t.Y);
 		writer.Write(ax.Z); writer.Write(ay.Z); writer.Write(az.Z); writer.Write(t.Z);
 	}
+
+	public static float W2J(float watt, float seconds = 3600) => watt * seconds;
+
+	public static float J2Cal(float joules) => joules / 4.186f;
+	public static float Cal2J(float calories) => calories * 4.186f;
 }

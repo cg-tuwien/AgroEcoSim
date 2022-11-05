@@ -461,6 +461,7 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 		var waterCapacity = 0.0;
 		var energyRequirement = 0.0;
 		var waterRequirement = 0.0;
+		var usefulnessTotal = 0.0;
 		var (dst, src) = SrcDst(); //since Tick already swapped them
 		var usefulness = new float[src.Length];
 		var lifesupportEnergy = new float[src.Length];
@@ -469,13 +470,13 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 		var capacityWater = new float[src.Length];
 		for(int i = 0; i < dst.Length; ++i)
 		{
-			energy += dst[i].Energy;
+			var currentEnergy = dst[i].Energy;
+			energy += currentEnergy;
 			water += dst[i].Water;
 
-			energyDiff -= src[i].Energy;
+			var previousEnergy = src[i].Energy;
+			energyDiff -= previousEnergy;
 			waterDiff -= src[i].Water;
-
-			usefulness[i] = 1f;
 
 			var lifeSupport = dst[i].LifeSupportPerTick;
 			lifesupportEnergy[i] = lifeSupport;
@@ -492,6 +493,10 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 			var waterStorageCapacity = dst[i].WaterStorageCapacity;
 			capacityWater[i] = waterStorageCapacity;
 			waterCapacity += waterStorageCapacity;
+
+			var u = photosynthSupport > 0 ? Math.Clamp((currentEnergy - previousEnergy + lifeSupport) / photosynthSupport, 0f, 1f) : 1f;
+			usefulness[i] = u;
+			usefulnessTotal += u;
 		}
 		energyDiff += energy; //optimal variant of sum(dst[i] - src[i])
 		waterDiff += water;
@@ -506,6 +511,7 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 			EnergyRequirement = energyRequirement,
 			WaterRequirement = waterRequirement,
 			Usefulness = usefulness,
+			UsefulnessTotal = usefulnessTotal,
 			LifeSupportEnergy = lifesupportEnergy,
 			PhotosynthWater = photosynthWater,
 			EnergyCapacities = capacityEnergy,
