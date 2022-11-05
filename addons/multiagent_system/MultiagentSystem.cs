@@ -28,7 +28,6 @@ public class MultiagentSystem : Spatial
 
 
 	bool Paused = false;
-	bool MouseNavigationActive = true;
 	bool MenuInactive = true;
 	bool ColorPickerInactive = true;
 	int AsyncLock = 0;
@@ -39,7 +38,6 @@ public class MultiagentSystem : Spatial
 	Roots Roots;
 	Shoots Shoots;
 
-	readonly List<MeshInstance> Sprites = new();
 	GodotGround Ground;
 
 	SimulationWorld World;
@@ -69,8 +67,8 @@ public class MultiagentSystem : Spatial
 				plants.Add(new(){ Position = new (x, -0.1f, z) });
 
 		var obstacles = new ObstacleRequest[] {
-			new(){ Type = "Wall", Length = 5f, Height = 3.2f, Position = new(2.5f, 0f, 0f)},
-			new(){ Type = "Umbrella", Radius = 1.5f, Height = 2.2f, Position = new(2.5f, 0f, 2.5f)}
+			new(){ Type = "Wall", Length = 5f, Height = 3.2f, Position = new(2.5f, 0f, 1.0f)},
+			//new(){ Type = "Umbrella", Radius = 1.5f, Height = 2.2f, Position = new(2.5f, 0f, 2.5f)}
 		};
 
 		World = Initialize.World(new SimulationRequest(){
@@ -86,7 +84,7 @@ public class MultiagentSystem : Spatial
 		Hud = (HUD)HudScene.Instance();
 
 		Simulation = (Simulation)SimulationScene.Instance();
-		Simulation.Load(World);
+		Simulation.Load(World, AgroWorldGodot.SimulationSettings);
 
 		Soil = (Soil)SoilScene.Instance();
 		Soil.Load(AgroWorldGodot.SoilVisualization, Ground);
@@ -103,6 +101,9 @@ public class MultiagentSystem : Spatial
 		//Throws errors, freezes after a few seconds
 		//Task.Run(() => World.Run(AgroWorld.TimestepsTotal));
 	}
+
+	bool AnyMenuEntered() => Soil.MenuEvent == MenuEvent.Enter || Roots.MenuEvent == MenuEvent.Enter || Shoots.MenuEvent == MenuEvent.Enter || Simulation.MenuEvent == MenuEvent.Enter;
+	bool AnyMenuLeft() => Soil.MenuEvent == MenuEvent.Leave || Roots.MenuEvent == MenuEvent.Leave || Shoots.MenuEvent == MenuEvent.Leave || Simulation.MenuEvent == MenuEvent.Leave;
 
 	/// <summary>
 	/// Called every frame
@@ -122,7 +123,7 @@ public class MultiagentSystem : Spatial
 			}
 			else if (MenuInactive)
 			{
-				if (Soil.MenuEvent == MenuEvent.Enter || Roots.MenuEvent == MenuEvent.Enter || Shoots.MenuEvent == MenuEvent.Enter)
+				if (AnyMenuEntered())
 				{
 					MenuInactive = false;
 					EmitSignal("EnteredMenu");
@@ -130,7 +131,7 @@ public class MultiagentSystem : Spatial
 			}
 			else
 			{
-				if (Soil.MenuEvent == MenuEvent.Leave || Roots.MenuEvent == MenuEvent.Leave || Shoots.MenuEvent == MenuEvent.Leave)
+				if (AnyMenuLeft())
 				{
 					MenuInactive = true;
 					EmitSignal("LeftMenu");
@@ -142,7 +143,7 @@ public class MultiagentSystem : Spatial
 			if (Soil.ColorEvent == MenuEvent.Leave)
 			{
 				ColorPickerInactive = true;
-				if (Soil.MenuEvent == MenuEvent.Enter || Roots.MenuEvent == MenuEvent.Enter || Shoots.MenuEvent == MenuEvent.Enter)
+				if (AnyMenuEntered())
 					MenuInactive = false;
 				else
 					EmitSignal("LeftMenu");
@@ -153,6 +154,7 @@ public class MultiagentSystem : Spatial
 		Soil.ColorEvent = MenuEvent.None;
 		Roots.MenuEvent = MenuEvent.None;
 		Shoots.MenuEvent = MenuEvent.None;
+		Simulation.MenuEvent = MenuEvent.None;
 
 //Throws errors, freezes after a few seconds
 // #if ASYNC
@@ -161,7 +163,7 @@ public class MultiagentSystem : Spatial
 // 			Interlocked.Increment(ref AsyncLock);
 // 			Task.Run(() =>
 // 			{
-// 				World.Run(1);
+// 				World.Run(AgroWorldGodot.SimulationSettings.HiddenSteps);
 // 				if (World.Timestep == AgroWorld.TimestepsTotal - 1)
 // 					GD.Print($"Simulation successfully finished after {AgroWorld.TimestepsTotal} timesteps.");
 // 				Interlocked.Decrement(ref AsyncLock);
@@ -170,7 +172,7 @@ public class MultiagentSystem : Spatial
 // #else
 		if (!Paused && World.Timestep < AgroWorld.TimestepsTotal)
 		{
-			World.Run(1);
+			World.Run(AgroWorldGodot.SimulationSettings.HiddenSteps);
 			if (World.Timestep == AgroWorld.TimestepsTotal - 1)
 				GD.Print($"Simulation successfully finished after {AgroWorld.TimestepsTotal} timesteps.");
 		}

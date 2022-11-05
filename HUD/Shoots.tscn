@@ -37,7 +37,7 @@ border_color = Color( 0.745098, 0.745098, 0.745098, 1 )
 border_width = 1.2
 editor_only = false
 
-[node name="Cells" type="Label" parent="Shoots"]
+[node name="Shoots" type="Label" parent="Shoots"]
 margin_left = 87.0
 margin_top = 47.0
 margin_right = 208.0

@@ -8,14 +8,15 @@ using Agro;
 public class Simulation : CanvasLayer
 {
 	SimulationWorld World;
+	private SimulationSettings Parameters;
 	public bool Paused { get; private set; } = false;
+	public MenuEvent MenuEvent = MenuEvent.None;
 	public uint ManualStepsRequested { get; private set; } = 0U;
 
 	Button PlayPause;
 	Control ManualSteps;
 	Label DateLabel;
 
-	//must be lower case in order to work with Godot
 	public void Pause()
 	{
 		Paused = !Paused;
@@ -33,9 +34,9 @@ public class Simulation : CanvasLayer
 
 	public override void _Ready()
 	{
-		DateLabel = GetNode<Label>(nameof(DateLabel));
-		PlayPause = GetNode<Button>(nameof(PlayPause));
-		ManualSteps = GetNode<Control>(nameof(ManualSteps));
+		DateLabel = GetNode<Label>($"Control/{nameof(DateLabel)}");
+		PlayPause = GetNode<Button>($"Control/{nameof(PlayPause)}");
+		ManualSteps = GetNode<Control>($"Control/{nameof(ManualSteps)}");
 		ManualSteps.Hide();
 		base._Ready();
 	}
@@ -48,10 +49,22 @@ public class Simulation : CanvasLayer
 		base._Process(delta);
 	}
 
-	internal void Load(SimulationWorld world) => World = world;
+	internal void Load(SimulationWorld world, SimulationSettings parameters)
+	{
+		World = world;
+		Parameters = parameters;
+
+		GetNode<HSlider>("Control/HSlider").Value = Parameters.HiddenSteps;
+	}
 
 	public void OneFrame() => ManualStepsRequested = 1U;
 	public void OneDay() => ManualStepsRequested = AgroWorld.TicksPerHour * 24;
 
 	internal void ManualStepsDone() => ManualStepsRequested = 0U;
+
+	public void HiddenSteps(float value) => Parameters.HiddenSteps = (uint)Math.Round(value);
+
+	public void MenuEntered() => MenuEvent = MenuEvent.Enter;
+
+	public void MenuLeft() => MenuEvent = MenuEvent.Leave;
 }

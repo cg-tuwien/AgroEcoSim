@@ -20,4 +20,6 @@ public static class AgroWorldGodot
 
 	public static RootsVisualisationSettings RootsVisualization = new();
 	public static ShootsVisualisationSettings ShootsVisualization = new();
+
+    public static SimulationSettings SimulationSettings = new();
 }

@@ -4,6 +4,7 @@ using System.Reflection;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Diagnostics;
+using Agro;
 
 namespace AgentsSystem;
 public partial class SimulationWorld
@@ -93,14 +94,9 @@ public partial class SimulationWorld
 				TickSequential();
 				ProcessTransactionsSequential();
 				DeliverPostSequential();
-				++Stage;
 			}
 			CensusSequential();
 			ExecCallbacks();
-#if GODOT
-			foreach(var item in Formations)
-				item.GodotProcess();
-#endif
 #if HISTORY_LOG || HISTORY_TICK
 			// if (i >= 477)
 			// {
@@ -109,6 +105,10 @@ public partial class SimulationWorld
 			// }
 #endif
 		}
+		#if GODOT
+		foreach(var item in Formations)
+			item.GodotProcess();
+		#endif
 	}
 
 	public void RunParallel(uint simulationLength)
@@ -124,11 +124,11 @@ public partial class SimulationWorld
 			}
 			CensusParallel();
 			ExecCallbacks();
-#if GODOT
-			foreach(var item in Formations)
-				item.GodotProcess();
-#endif
 		}
+		#if GODOT
+		foreach(var item in Formations)
+			item.GodotProcess();
+		#endif
 	}
 
 	void CensusSequential()

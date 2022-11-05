@@ -1,51 +1,115 @@
-[gd_scene load_steps=2 format=2]
+[gd_scene load_steps=3 format=2]
 
 [ext_resource path="res://HUD/Simulation.cs" type="Script" id=1]
 
-[node name="HUD" type="CanvasLayer"]
+[sub_resource type="CanvasItemMaterial" id=1]
+blend_mode = 3
+light_mode = 1
+
+[node name="Simulation" type="CanvasLayer"]
 script = ExtResource( 1 )
 
-[node name="PlayPause" type="Button" parent="."]
-margin_left = 24.0
-margin_top = 60.0
-margin_right = 50.0
-margin_bottom = 80.0
+[node name="ColorRect" type="ColorRect" parent="."]
+material = SubResource( 1 )
+margin_left = 6.0
+margin_top = 38.0
+margin_right = 232.0
+margin_bottom = 228.0
+color = Color( 0.627451, 0.627451, 0.627451, 1 )
+
+[node name="ReferenceRect" type="ReferenceRect" parent="."]
+margin_left = 6.0
+margin_top = 38.0
+margin_right = 232.0
+margin_bottom = 70.0
+border_color = Color( 0.745098, 0.745098, 0.745098, 1 )
+border_width = 1.2
+editor_only = false
+
+[node name="ReferenceRect2" type="ReferenceRect" parent="."]
+margin_left = 6.0
+margin_top = 70.0
+margin_right = 232.0
+margin_bottom = 228.0
+border_color = Color( 0.745098, 0.745098, 0.745098, 1 )
+border_width = 1.2
+editor_only = false
+
+[node name="Animation" type="Label" parent="."]
+margin_left = 60.0
+margin_top = 47.0
+margin_right = 181.0
+margin_bottom = 61.0
+rect_pivot_offset = Vector2( 103, 10 )
+text = "ANIMATION"
+align = 1
+
+[node name="Control" type="Control" parent="."]
+margin_right = 40.0
+margin_bottom = 40.0
+
+[node name="PlayPause" type="Button" parent="Control"]
+margin_left = 32.0
+margin_top = 84.0
+margin_right = 58.0
+margin_bottom = 104.0
 rect_scale = Vector2( 1.61299, 1.57129 )
 hint_tooltip = "Play / Pause"
 text = "||"
 
-[node name="ManualSteps" type="Control" parent="."]
+[node name="ManualSteps" type="Control" parent="Control"]
 margin_right = 40.0
 margin_bottom = 40.0
 
-[node name="OneFrame" type="Button" parent="ManualSteps"]
-margin_left = 88.0
-margin_top = 60.0
-margin_right = 115.0
-margin_bottom = 80.0
+[node name="OneFrame" type="Button" parent="Control/ManualSteps"]
+margin_left = 94.0
+margin_top = 84.0
+margin_right = 121.0
+margin_bottom = 104.0
 rect_scale = Vector2( 1.61299, 1.57129 )
 hint_tooltip = "Advance a single time step"
 text = ">|"
 
-[node name="OneDay" type="Button" parent="ManualSteps"]
-margin_left = 144.0
-margin_top = 60.0
-margin_right = 171.0
-margin_bottom = 80.0
+[node name="OneDay" type="Button" parent="Control/ManualSteps"]
+margin_left = 147.0
+margin_top = 84.0
+margin_right = 182.0
+margin_bottom = 104.0
 rect_scale = Vector2( 1.61299, 1.57129 )
 hint_tooltip = "Advance a single day"
 text = ">>|"
 
-[node name="DateLabel" type="Label" parent="."]
-margin_left = 24.0
-margin_top = 112.0
-margin_right = 105.0
-margin_bottom = 133.0
+[node name="DateLabel" type="Label" parent="Control"]
+margin_left = 32.0
+margin_top = 128.0
+margin_right = 146.0
+margin_bottom = 149.0
+rect_scale = Vector2( 1.5, 1.5 )
 text = "0000-00-00 00:00"
 __meta__ = {
 "_edit_use_anchors_": true
 }
 
-[connection signal="pressed" from="PlayPause" to="." method="Pause"]
-[connection signal="pressed" from="ManualSteps/OneFrame" to="." method="OneFrame"]
-[connection signal="pressed" from="ManualSteps/OneDay" to="." method="OneDay"]
+[node name="HiddenSteps" type="Label" parent="Control"]
+margin_left = 137.0
+margin_top = 198.0
+margin_right = 221.0
+margin_bottom = 212.0
+rect_pivot_offset = Vector2( -388, -120 )
+text = "Hidden steps"
+
+[node name="HSlider" type="HSlider" parent="Control"]
+margin_left = 12.0
+margin_top = 197.0
+margin_right = 122.0
+margin_bottom = 213.0
+rect_pivot_offset = Vector2( -264, -119 )
+max_value = 71.0
+rounded = true
+
+[connection signal="pressed" from="Control/PlayPause" to="." method="Pause"]
+[connection signal="pressed" from="Control/ManualSteps/OneFrame" to="." method="OneFrame"]
+[connection signal="pressed" from="Control/ManualSteps/OneDay" to="." method="OneDay"]
+[connection signal="mouse_entered" from="Control/HSlider" to="." method="MenuEntered"]
+[connection signal="mouse_exited" from="Control/HSlider" to="." method="MenuLeft"]
+[connection signal="value_changed" from="Control/HSlider" to="." method="HiddenSteps"]

@@ -30,17 +30,13 @@ public partial class PlantFormation2
 			SimulationWorld.GodotAddChild(GodotSeedSprite); // Add it as a child of this node.
 			GodotSeedSprite.Mesh = spherePrimitive;
 			if (GodotSeedSprite.GetSurfaceMaterial(0) == null)
-			{
-				var m = new SpatialMaterial();
-				m.AlbedoColor = new Color(1, 0, 0);
-				GodotSeedSprite.SetSurfaceMaterial(0, m);
-			}
+                GodotSeedSprite.SetSurfaceMaterial(0, new SpatialMaterial { AlbedoColor = new Color(1, 0, 0) });
 			var seed = Seed[0];
 			GodotSeedSprite.Translation = seed.Center.ToGodot();
 			GodotSeedSprite.Scale = Vector3.One * seed.Radius;
 		}
 
-		UG_Godot.GodotShow =  ShowOrgans.HasFlag(DisplayOptions.UnderGround);
+		UG_Godot.GodotShow = ShowOrgans.HasFlag(DisplayOptions.UnderGround);
 		AG_Godot.GodotShow = ShowOrgans.HasFlag(DisplayOptions.AboveGround);
 
 		UG_Godot.GodotReady();

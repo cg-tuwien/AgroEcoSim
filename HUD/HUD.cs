@@ -14,12 +14,16 @@ public class HUD : CanvasLayer
 	Roots RootsControlsInstance;
 	Shoots ShootsControlsInstance;
 
+	Button PlayPause;
+
 	public void Load(Simulation simulation, Soil soil, Roots roots, Shoots shoots)
 	{
 		SimulationControlsInstance = simulation;
 		SoilControlsInstance = soil;
 		RootsControlsInstance = roots;
 		ShootsControlsInstance = shoots;
+
+		PlayPause = GetNode<Button>(nameof(PlayPause));
 	}
 
 	public override void _Ready()
@@ -62,5 +66,15 @@ public class HUD : CanvasLayer
 				ShootsControlsInstance.Show();
 			break;
 		}
+	}
+
+	public void Pause()
+	{
+		SimulationControlsInstance.Pause();
+	}
+
+	public override void _Process(float delta)
+	{
+		PlayPause.Text = SimulationControlsInstance.Paused ? ">" : "||";
 	}
 }
