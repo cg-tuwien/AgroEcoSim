@@ -16,6 +16,7 @@ public class Simulation : CanvasLayer
 	Button PlayPause;
 	Control ManualSteps;
 	Label DateLabel;
+	FileDialog SaveDialog;
 
 	public void Pause()
 	{
@@ -34,10 +35,12 @@ public class Simulation : CanvasLayer
 
 	public override void _Ready()
 	{
-		DateLabel = GetNode<Label>($"Control/{nameof(DateLabel)}");
-		PlayPause = GetNode<Button>($"Control/{nameof(PlayPause)}");
-		ManualSteps = GetNode<Control>($"Control/{nameof(ManualSteps)}");
+		DateLabel = GetNode<Label>($"Animation/Control/{nameof(DateLabel)}");
+		PlayPause = GetNode<Button>($"Animation/Control/{nameof(PlayPause)}");
+		ManualSteps = GetNode<Control>($"Animation/Control/{nameof(ManualSteps)}");
 		ManualSteps.Hide();
+
+		SaveDialog = GetNode<FileDialog>($"Export/{nameof(SaveDialog)}");
 		base._Ready();
 	}
 
@@ -54,7 +57,7 @@ public class Simulation : CanvasLayer
 		World = world;
 		Parameters = parameters;
 
-		GetNode<HSlider>("Control/HSlider").Value = Parameters.HiddenSteps;
+		GetNode<HSlider>("Animation/Control/HSlider").Value = Parameters.HiddenSteps;
 	}
 
 	public void OneFrame() => ManualStepsRequested = 1U;
@@ -67,4 +70,37 @@ public class Simulation : CanvasLayer
 	public void MenuEntered() => MenuEvent = MenuEvent.Enter;
 
 	public void MenuLeft() => MenuEvent = MenuEvent.Leave;
+
+	enum SaveModes {None, IrrV1, IrrV2}
+	SaveModes SaveMode = SaveModes.None;
+	public void IrradianceV1()
+	{
+		SaveDialog.ClearFilters();
+		SaveDialog.AddFilter("*.mesh ; Triangular mesh scene");
+		SaveMode = SaveModes.IrrV1;
+		SaveDialog.CurrentFile = $"{World.Timestep:D5}.mesh";
+		SaveDialog.PopupCentered();
+		MenuEntered();
+	}
+
+	public void IrradianceV2()
+	{
+		SaveDialog.ClearFilters();
+		SaveDialog.AddFilter("*.prim ; Primitives scene");
+		SaveMode = SaveModes.IrrV2;
+		SaveDialog.CurrentFile = $"{World.Timestep:D5}.prim";
+		SaveDialog.PopupCentered();
+		MenuEntered();
+	}
+
+	public void OnSave(string path)
+	{
+		MenuLeft();
+		System.Diagnostics.Debug.WriteLine(SaveDialog.CurrentFile);
+		switch (SaveMode)
+		{
+			case SaveModes.IrrV1: IrradianceClient.ExportToFile(path, 1, World.Formations, World.Obstacles); break;
+			case SaveModes.IrrV2: IrradianceClient.ExportToFile(path, 2, World.Formations, World.Obstacles); break;
+		}
+	}
 }

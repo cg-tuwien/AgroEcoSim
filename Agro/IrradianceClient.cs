@@ -147,7 +147,6 @@ public class IrradianceClient
 			if (SkipPlants.Count < formations.Count)
 			{
 				Irradiances.Clear();
-				IrradianceFormationOffsets.Clear();
 				IrradiancePoints.Clear();
 
 #if EXPORT_OBJ
@@ -222,12 +221,13 @@ public class IrradianceClient
 		}
 	}
 
-	private int ExportAsTriangles(IList<IFormation> formations, IList<IObstacle> obstacles, int offsetCounter, MemoryStream binaryStream
+	private int ExportAsTriangles(IList<IFormation> formations, IList<IObstacle> obstacles, int offsetCounter, Stream binaryStream
 #if EXPORT_OBJ
 		, StreamWriter objWriter, System.Text.StringBuilder obji
 #endif
 	)
 	{
+		IrradianceFormationOffsets.Clear();
 		using var writer = new BinaryWriter(binaryStream);
 		writer.WriteU8(1); //version 1 using triangular meshes
 
@@ -396,8 +396,9 @@ public class IrradianceClient
 #endif
 		return offsetCounter;
 	}
-	private int ExportAsPrimitives(IList<IFormation> formations, IList<IObstacle> obstacles, int offsetCounter, MemoryStream binaryStream)
+	private int ExportAsPrimitives(IList<IFormation> formations, IList<IObstacle> obstacles, int offsetCounter, Stream binaryStream)
 	{
+		IrradianceFormationOffsets.Clear();
 		using var writer = new BinaryWriter(binaryStream);
 		writer.WriteU8(2); //version 2 using triangular meshes
 
@@ -419,7 +420,7 @@ public class IrradianceClient
 				var ag = plant.AG;
 				var count = ag.Count;
 
-				IrradianceFormationOffsets[ag] = offsetCounter;
+				IrradianceFormationOffsets.Add(ag, offsetCounter);
 				offsetCounter += count;
 
 				writer.WriteU32(count); //WRITE NUMBER OF SURFACES in this plant
@@ -468,6 +469,16 @@ public class IrradianceClient
 		}
 
 		return offsetCounter;
+	}
+
+	public static void ExportToFile(string fileName, byte version, IList<IFormation> formations, IList<IObstacle> obstacles)
+	{
+		using var file = File.OpenWrite(fileName);
+		switch (version)
+		{
+			default: Singleton.ExportAsTriangles(formations, obstacles, 0, file); break;
+			case 2: Singleton.ExportAsPrimitives(formations, obstacles, 0, file); break;
+		}
 	}
 
 	void DoFallbackTick(uint timestep, IList<IFormation> formations)
@@ -529,12 +540,12 @@ public class IrradianceClient
 		return 0f;
 	}
 
-	public readonly System.Diagnostics.Stopwatch SW = new();
+	readonly Stopwatch SW = new();
 
 	~IrradianceClient()
 	{
 		Client.Dispose();
 	}
 
-	public static readonly IrradianceClient Singleton = new();
+	static readonly IrradianceClient Singleton = new();
 }

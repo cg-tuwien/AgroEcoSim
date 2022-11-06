@@ -17,12 +17,12 @@ public partial class SimulationWorld
 	byte Stages = 1;
 
 	#if TICK_LOG
-	List<MethodInfo> MessageLogClears = new();
+	readonly List<MethodInfo> MessageLogClears = new();
 	#endif
 
 	public int Count => Formations.Count;
 
-	readonly List<IObstacle> Obstacles = new();
+	internal readonly List<IObstacle> Obstacles = new();
 
 	public SimulationWorld()
 	{
