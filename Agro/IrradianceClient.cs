@@ -237,10 +237,7 @@ public class IrradianceClient
 			};
 			request.Headers.Add("Ti", AgroWorld.GetTime(timestep).ToString("o", CultureInfo.InvariantCulture));
 			request.Headers.Add("Cam", string.Join(' ', camera));
-			//request.Headers.Add("Ra", "1024");
-			var width = (int)Math.Round(camera[^2]);
-			var height = (int)Math.Round(camera[^1]);
-
+			request.Headers.Add("Ra", "8192");
 			var result = Client.SendAsync(request).Result;
 			return result.Content.ReadAsByteArrayAsync().Result;
 		}
@@ -568,6 +565,8 @@ public class IrradianceClient
 	}
 
 	readonly Stopwatch SW = new();
+
+	public static long ElapsedMilliseconds => Singleton.SW.ElapsedMilliseconds;
 
 	~IrradianceClient()
 	{

@@ -54,7 +54,7 @@ internal class Program
             File.WriteAllText(options.ExportFile, $"[{string.Join(",",plantData)}]");
         }
 
-        Console.WriteLine($"RENDER TIME: {IrradianceClient.Singleton.SW.ElapsedMilliseconds} ms");
+        Console.WriteLine($"RENDER TIME: {IrradianceClient.ElapsedMilliseconds} ms");
     });
 }
 

@@ -4,7 +4,6 @@ using System.Reflection;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Diagnostics;
-using Agro;
 
 namespace AgentsSystem;
 public partial class SimulationWorld
