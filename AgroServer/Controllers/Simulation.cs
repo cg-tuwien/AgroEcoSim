@@ -45,7 +45,7 @@ public class SimulationController : ControllerBase
                 response.Plants.Add(new(){ Volume = plant.AG.GetVolume()});
         });
 
-        Debug.WriteLine($"RENDER TIME: {IrradianceClient.Singleton.SW.ElapsedMilliseconds} ms");
+        Debug.WriteLine($"RENDER TIME: {IrradianceClient.ElapsedMilliseconds} ms");
         return response;
     }
 }
