@@ -96,7 +96,7 @@ public class IrradianceClient
 
 	private IrradianceClient()
 	{
-		Client = new() { BaseAddress = new Uri("http://localhost:9000") };
+		Client = new() { BaseAddress = new Uri("http://localhost:9000"), Timeout = TimeSpan.FromHours(1) };
 		Client.DefaultRequestHeaders.Add("La", AgroWorld.Latitude.ToString());
 		Client.DefaultRequestHeaders.Add("Lo", AgroWorld.Longitude.ToString());
 
@@ -219,6 +219,33 @@ public class IrradianceClient
 			//if (!IsNight) Debug.WriteLine("NIGHT");
 			IsNight = true;
 		}
+	}
+
+	public static byte[] DebugIrradiance(uint timestep, IList<IFormation> formations, IList<IObstacle> obstacles, float[] cameraMatrix) => Singleton.DebugIrr(timestep, formations, obstacles, cameraMatrix);
+
+	byte[] DebugIrr(uint timestep, IList<IFormation> formations, IList<IObstacle> obstacles, float[] camera)
+	{
+		using var primBinaryStream = new MemoryStream();
+		var offsetCounter = ExportAsPrimitives(formations, obstacles, 0, primBinaryStream);
+		primBinaryStream.TryGetBuffer(out var byteBuffer);
+		if (offsetCounter > 0)
+		{
+			var request = new HttpRequestMessage()
+			{
+				Method = HttpMethod.Post,
+				Content = new ByteArrayContent(byteBuffer.Array, 0, byteBuffer.Count)
+			};
+			request.Headers.Add("Ti", AgroWorld.GetTime(timestep).ToString("o", CultureInfo.InvariantCulture));
+			request.Headers.Add("Cam", string.Join(' ', camera));
+			//request.Headers.Add("Ra", "1024");
+			var width = (int)Math.Round(camera[^2]);
+			var height = (int)Math.Round(camera[^1]);
+
+			var result = Client.SendAsync(request).Result;
+			return result.Content.ReadAsByteArrayAsync().Result;
+		}
+		else
+			return null;
 	}
 
 	private int ExportAsTriangles(IList<IFormation> formations, IList<IObstacle> obstacles, int offsetCounter, Stream binaryStream

@@ -112,8 +112,9 @@ max_value = 71.0
 rounded = true
 
 [node name="Export" type="Control" parent="."]
+margin_top = -5.0
 margin_right = 40.0
-margin_bottom = 40.0
+margin_bottom = 35.0
 
 [node name="ColorRect" type="ColorRect" parent="Export"]
 material = SubResource( 1 )
@@ -186,6 +187,65 @@ rect_min_size = Vector2( 350, 270 )
 resizable = true
 access = 2
 
+[node name="Debug" type="Control" parent="."]
+margin_top = 440.0
+margin_right = 40.0
+margin_bottom = 480.0
+
+[node name="ColorRect" type="ColorRect" parent="Debug"]
+material = SubResource( 1 )
+margin_left = 6.0
+margin_top = 6.0
+margin_right = 232.0
+margin_bottom = 196.0
+color = Color( 0.627451, 0.627451, 0.627451, 1 )
+
+[node name="ReferenceRect" type="ReferenceRect" parent="Debug"]
+margin_left = 6.0
+margin_top = 6.0
+margin_right = 232.0
+margin_bottom = 38.0
+border_color = Color( 0.745098, 0.745098, 0.745098, 1 )
+border_width = 1.2
+editor_only = false
+
+[node name="ReferenceRect2" type="ReferenceRect" parent="Debug"]
+margin_left = 6.0
+margin_top = 38.0
+margin_right = 232.0
+margin_bottom = 196.0
+border_color = Color( 0.745098, 0.745098, 0.745098, 1 )
+border_width = 1.2
+editor_only = false
+
+[node name="Export" type="Label" parent="Debug"]
+margin_left = 60.0
+margin_top = 15.0
+margin_right = 181.0
+margin_bottom = 29.0
+rect_pivot_offset = Vector2( 103, 10 )
+text = "DEBUG"
+align = 1
+
+[node name="Control" type="Control" parent="Debug"]
+margin_right = 40.0
+margin_bottom = 40.0
+
+[node name="IrradianceLabel" type="Label" parent="Debug/Control"]
+margin_left = 83.0
+margin_top = 60.0
+margin_right = 147.0
+margin_bottom = 74.0
+rect_pivot_offset = Vector2( 37, 36 )
+text = "Irradiance"
+
+[node name="IrradianceButton" type="CheckButton" parent="Debug/Control"]
+margin_left = 11.0
+margin_top = 47.0
+margin_right = 87.0
+margin_bottom = 87.0
+rect_pivot_offset = Vector2( 109, 49 )
+
 [connection signal="pressed" from="Animation/Control/PlayPause" to="." method="Pause"]
 [connection signal="pressed" from="Animation/Control/ManualSteps/OneFrame" to="." method="OneFrame"]
 [connection signal="pressed" from="Animation/Control/ManualSteps/OneDay" to="." method="OneDay"]
@@ -195,3 +255,4 @@ access = 2
 [connection signal="pressed" from="Export/Control/irr_v1" to="." method="IrradianceV1"]
 [connection signal="pressed" from="Export/Control/irr_v2" to="." method="IrradianceV2"]
 [connection signal="file_selected" from="Export/SaveDialog" to="." method="OnSave"]
+[connection signal="toggled" from="Debug/Control/IrradianceButton" to="." method="DebugIrradiance"]

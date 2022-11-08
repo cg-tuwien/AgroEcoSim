@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using AgentsSystem;
 using Agro;
+using System.Diagnostics;
 
 public class Simulation : CanvasLayer
 {
@@ -18,6 +19,11 @@ public class Simulation : CanvasLayer
 	Label DateLabel;
 	FileDialog SaveDialog;
 
+	GodotDebugOverlay DebugOverlay;
+	Camera SceneCamera;
+
+	Button IrradianceDebug;
+
 	public void Pause()
 	{
 		Paused = !Paused;
@@ -25,11 +31,15 @@ public class Simulation : CanvasLayer
 		{
 			PlayPause.Text = ">";
 			ManualSteps.Show();
+			IrradianceDebug.Disabled = false;
 		}
 		else
 		{
 			PlayPause.Text = "||";
 			ManualSteps.Hide();
+			IrradianceDebug.Disabled = true;
+			IrradianceDebug.Pressed = false;
+			DebugOverlay.Hide();
 		}
 	}
 
@@ -41,6 +51,8 @@ public class Simulation : CanvasLayer
 		ManualSteps.Hide();
 
 		SaveDialog = GetNode<FileDialog>($"Export/{nameof(SaveDialog)}");
+		IrradianceDebug = GetNode<Button>("Debug/Control/IrradianceButton");
+		IrradianceDebug.Disabled = !Paused;
 		base._Ready();
 	}
 
@@ -49,14 +61,16 @@ public class Simulation : CanvasLayer
 		var datetime = AgroWorld.InitialTime + (AgroWorld.TicksPerHour == 1 ? TimeSpan.FromHours(World.Timestep) : TimeSpan.FromHours(World.Timestep / (float)AgroWorld.TicksPerHour));
 		var local = datetime.ToLocalTime();
 		DateLabel.Text = $"{local.Year}-{local.Month}-{local.Day} {local.Hour}:{local.Minute}";
+
 		base._Process(delta);
 	}
 
-	internal void Load(SimulationWorld world, SimulationSettings parameters)
+	internal void Load(SimulationWorld world, GodotDebugOverlay overlay, Camera sceneCamera, SimulationSettings parameters)
 	{
 		World = world;
+		DebugOverlay = overlay;
 		Parameters = parameters;
-
+		SceneCamera = sceneCamera;
 		GetNode<HSlider>("Animation/Control/HSlider").Value = Parameters.HiddenSteps;
 	}
 
@@ -102,5 +116,28 @@ public class Simulation : CanvasLayer
 			case SaveModes.IrrV1: IrradianceClient.ExportToFile(path, 1, World.Formations, World.Obstacles); break;
 			case SaveModes.IrrV2: IrradianceClient.ExportToFile(path, 2, World.Formations, World.Obstacles); break;
 		}
+	}
+
+	public void DebugIrradiance(bool flag)
+	{
+		if (flag)
+		{
+			var b = SceneCamera.Transform.basis;
+			var o = SceneCamera.Transform.origin;
+			var v = GetViewport().Size;
+			var matrix = new float[] { b.x.x, b.x.y, b.x.z, o.x, b.y.x, b.y.y, b.y.z, o.y, b.z.x, b.z.y, b.z.z, o.z, SceneCamera.Fov, v.x, v.y };
+			var imgData = IrradianceClient.DebugIrradiance(World.Timestep, World.Formations, World.Obstacles, matrix);
+			var image = new Image();
+			image.CreateFromData((int)Math.Round(v.x), (int)Math.Round(v.y), false, Image.Format.Rgbf, imgData);
+			var texture = new ImageTexture();
+			texture.CreateFromImage(image);
+
+			DebugOverlay.Texture?.Dispose();
+			DebugOverlay.Texture = texture;
+
+			DebugOverlay.Show();
+		}
+		else
+			DebugOverlay.Hide();
 	}
 }

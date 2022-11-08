@@ -39,6 +39,8 @@ public class MultiagentSystem : Spatial
 	Shoots Shoots;
 
 	GodotGround Ground;
+	GodotDebugOverlay DebugOverlay;
+	Camera SceneCamera;
 
 	SimulationWorld World;
 
@@ -79,12 +81,22 @@ public class MultiagentSystem : Spatial
 		});
 
 		Ground = new GodotGround();
+		DebugOverlay = new GodotDebugOverlay();
+		DebugOverlay.Hide();
 
+		foreach(var item in GetParent().GetChildren())
+			if (item is Camera camera && camera.Visible)
+			{
+				SceneCamera = camera;
+				break;
+			}
+
+		System.Diagnostics.Debug.WriteLine(SceneCamera == null ? "NO CAMERA" : "has camera");
 
 		Hud = (HUD)HudScene.Instance();
 
 		Simulation = (Simulation)SimulationScene.Instance();
-		Simulation.Load(World, AgroWorldGodot.SimulationSettings);
+		Simulation.Load(World, DebugOverlay, SceneCamera, AgroWorldGodot.SimulationSettings);
 
 		Soil = (Soil)SoilScene.Instance();
 		Soil.Load(AgroWorldGodot.SoilVisualization, Ground);
