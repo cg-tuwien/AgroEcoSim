@@ -16,6 +16,9 @@ public static class AgroWorldGodot
 		AnimateMarkerSize = true,
 		SoilCellScale = 0.99f,
 		//SurfaceCellScale = 0.99f
+		GroundVisible = true,
+		SoilCellsVisibility = Visibility.MakeInvisible,
+		SurfaceCellsVisibility = Visibility.MakeInvisible,
 	};
 
 	public static RootsVisualisationSettings RootsVisualization = new();

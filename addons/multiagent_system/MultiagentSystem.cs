@@ -56,7 +56,7 @@ public class MultiagentSystem : Spatial
 		SimulationWorld.GodotAddChild = node => AddChild(node);
 		SimulationWorld.GodotRemoveChild = node => RemoveChild(node);
 		//Translation = new Vector3(-0.5f * AgroWorld.FieldSize.X, AgroWorld.FieldResolution, -0.5f * AgroWorld.FieldSize.Z);
-		Translation = new Vector3(0, AgroWorld.FieldResolution, 0);
+		//Translation = new Vector3(0, AgroWorld.FieldResolution, 0);
 
 		Utils.Json.Vector3XDZ fieldSize = default;
 		fieldSize.X = 5;
@@ -66,7 +66,7 @@ public class MultiagentSystem : Spatial
 		var plants = new List<PlantRequest>();
 		for(float x = 0.5f; x < fieldSize.X; x += 1f)
 			for(float z = 0.5f; z < fieldSize.Z; z += 1f)
-				plants.Add(new(){ Position = new (x, -0.1f, z) });
+				plants.Add(new(){ Position = new (x, -0.01f, z) });
 
 		var obstacles = new ObstacleRequest[] {
 			new(){ Type = "Wall", Length = 5f, Height = 3.2f, Position = new(2.5f, 0f, 1.0f)},

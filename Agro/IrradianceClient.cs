@@ -200,7 +200,7 @@ public class IrradianceClient
 					request.Headers.Add("Ti", AgroWorld.GetTime(timestep).ToString("o", CultureInfo.InvariantCulture));
 					//Debug.WriteLine(offsetCounter);
 					//request.Headers.Add("C", offsetCounter.ToString()); //Only use for dummy debug
-					//request.Headers.Add("Ra", "1024");
+					//request.Headers.Add("Ra", "8192");
 
 					var result = Client.SendAsync(request).Result;
 					using var responseStream = result.Content.ReadAsStreamAsync().Result;
@@ -225,24 +225,26 @@ public class IrradianceClient
 
 	byte[] DebugIrr(uint timestep, IList<IFormation> formations, IList<IObstacle> obstacles, float[] camera)
 	{
-		using var primBinaryStream = new MemoryStream();
-		var offsetCounter = ExportAsPrimitives(formations, obstacles, 0, primBinaryStream);
-		primBinaryStream.TryGetBuffer(out var byteBuffer);
-		if (offsetCounter > 0)
+		if (Singleton.IsOnline)
 		{
-			var request = new HttpRequestMessage()
+			using var primBinaryStream = new MemoryStream();
+			var offsetCounter = ExportAsPrimitives(formations, obstacles, 0, primBinaryStream);
+			primBinaryStream.TryGetBuffer(out var byteBuffer);
+			if (offsetCounter > 0)
 			{
-				Method = HttpMethod.Post,
-				Content = new ByteArrayContent(byteBuffer.Array, 0, byteBuffer.Count)
-			};
-			request.Headers.Add("Ti", AgroWorld.GetTime(timestep).ToString("o", CultureInfo.InvariantCulture));
-			request.Headers.Add("Cam", string.Join(' ', camera));
-			request.Headers.Add("Ra", "8192");
-			var result = Client.SendAsync(request).Result;
-			return result.Content.ReadAsByteArrayAsync().Result;
+				var request = new HttpRequestMessage()
+				{
+					Method = HttpMethod.Post,
+					Content = new ByteArrayContent(byteBuffer.Array, 0, byteBuffer.Count)
+				};
+				request.Headers.Add("Ti", AgroWorld.GetTime(timestep).ToString("o", CultureInfo.InvariantCulture));
+				request.Headers.Add("Cam", string.Join(' ', camera));
+				//request.Headers.Add("Ra", "512");
+				var result = Client.SendAsync(request).Result;
+				return result.Content.ReadAsByteArrayAsync().Result;
+			}
 		}
-		else
-			return null;
+		return null;
 	}
 
 	private int ExportAsTriangles(IList<IFormation> formations, IList<IObstacle> obstacles, int offsetCounter, Stream binaryStream

@@ -61,7 +61,6 @@ public class Simulation : CanvasLayer
 		var datetime = AgroWorld.InitialTime + (AgroWorld.TicksPerHour == 1 ? TimeSpan.FromHours(World.Timestep) : TimeSpan.FromHours(World.Timestep / (float)AgroWorld.TicksPerHour));
 		var local = datetime.ToLocalTime();
 		DateLabel.Text = $"{local.Year}-{local.Month}-{local.Day} {local.Hour}:{local.Minute}";
-
 		base._Process(delta);
 	}
 
@@ -72,14 +71,20 @@ public class Simulation : CanvasLayer
 		Parameters = parameters;
 		SceneCamera = sceneCamera;
 		GetNode<HSlider>("Animation/Control/HSlider").Value = Parameters.HiddenSteps;
+		GetNode<HSlider>("Debug/Control/IrradiancHSlider").Value = Parameters.IrradianceOverlayOpacity;
 	}
 
 	public void OneFrame() => ManualStepsRequested = 1U;
-	public void OneDay() => ManualStepsRequested = AgroWorld.TicksPerHour * 24;
+	public void OneDay() => ManualStepsRequested = AgroWorld.TicksPerHour * 12;
 
 	internal void ManualStepsDone() => ManualStepsRequested = 0U;
 
 	public void HiddenSteps(float value) => Parameters.HiddenSteps = (uint)Math.Round(value);
+	public void IrradianceOpacity(float value)
+	{
+		Parameters.IrradianceOverlayOpacity = value;
+		DebugOverlay.Opacity = value;
+	}
 
 	public void MenuEntered() => MenuEvent = MenuEvent.Enter;
 
@@ -110,7 +115,7 @@ public class Simulation : CanvasLayer
 	public void OnSave(string path)
 	{
 		MenuLeft();
-		System.Diagnostics.Debug.WriteLine(SaveDialog.CurrentFile);
+		Debug.WriteLine(SaveDialog.CurrentFile);
 		switch (SaveMode)
 		{
 			case SaveModes.IrrV1: IrradianceClient.ExportToFile(path, 1, World.Formations, World.Obstacles); break;
@@ -123,13 +128,18 @@ public class Simulation : CanvasLayer
 		if (flag)
 		{
 			var b = SceneCamera.Transform.basis;
-			var o = SceneCamera.Transform.origin;
+			var o = SceneCamera.GlobalTranslation;
 			var v = GetViewport().Size;
-			var matrix = new float[] { b.x.x, b.x.y, b.x.z, o.x, b.y.x, b.y.y, b.y.z, o.y, b.z.x, b.z.y, b.z.z, o.z, SceneCamera.Fov, v.x, v.y };
+			var matrix = new float[] { o.x, o.y, o.z, b.z.x, b.z.y, b.z.z, SceneCamera.Fov, v.x, v.y };
 			var imgData = IrradianceClient.DebugIrradiance(World.Timestep, World.Formations, World.Obstacles, matrix);
+
 			var image = new Image();
-			image.CreateFromData((int)Math.Round(v.x), (int)Math.Round(v.y), false, Image.Format.Rgbf, imgData);
 			var texture = new ImageTexture();
+			if (imgData != null)
+				image.CreateFromData((int)Math.Round(v.x), (int)Math.Round(v.y), false, Image.Format.Rgbaf, imgData);
+			else
+				image.CreateFromData(2, 2, false, Image.Format.R8, new byte[]{255, 255, 255, 255});
+
 			texture.CreateFromImage(image);
 
 			DebugOverlay.Texture?.Dispose();
