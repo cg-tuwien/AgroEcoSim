@@ -64,9 +64,9 @@ public class MultiagentSystem : Spatial
 		fieldSize.Z = 5;
 
 		var plants = new List<PlantRequest>();
-		for(float x = 0.5f; x < fieldSize.X; x += 1f)
+		//for(float x = 0.5f; x < fieldSize.X; x += 1f)
 			for(float z = 0.5f; z < fieldSize.Z; z += 1f)
-				plants.Add(new(){ Position = new (x, -0.01f, z) });
+				plants.Add(new(){ Position = new ( fieldSize.X * 0.5f, -0.01f, z) });
 
 		var obstacles = new ObstacleRequest[] {
 			new(){ Type = "Wall", Length = 5f, Height = 3.2f, Position = new(2.5f, 0f, 1.0f)},

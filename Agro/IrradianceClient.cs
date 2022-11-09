@@ -1,5 +1,6 @@
 //#define EXPORT_OBJ
 //#define EXPORT_BIN
+//#define USE_TRIANGLES
 using System.Net;
 using System.Net.Http.Headers;
 using System.Numerics;
@@ -164,19 +165,21 @@ public class IrradianceClient
 				var meshFileFullPath = Path.Combine("..", "agroeco-mts3", meshFileName);
 #endif
 				var ooc = offsetCounter;
-// 				using var meshBinaryStream = new MemoryStream();
-// 				offsetCounter = ExportAsTriangles(formations, obstacles, ooc, meshBinaryStream
-// #if EXPORT_OBJ
-// 					, objWriter, obji
-// #endif
-// 				);
-				using var primBinaryStream = new MemoryStream();
-				offsetCounter = ExportAsPrimitives(formations, obstacles, ooc, primBinaryStream);
+				using var binaryStream = new MemoryStream();
+#if USE_TRIANGLES
+				offsetCounter = ExportAsTriangles(formations, obstacles, ooc, binaryStream
+#if EXPORT_OBJ
+					, objWriter, obji
+#endif
+				);
+#else
+				offsetCounter = ExportAsPrimitives(formations, obstacles, ooc, binaryStream);
+#endif
 
 				var startTime = SW.ElapsedMilliseconds;
 				SW.Start();
 
-				primBinaryStream.TryGetBuffer(out var byteBuffer);
+				binaryStream.TryGetBuffer(out var byteBuffer);
 #if EXPORT_BIN
 				//if (timestep == 1999)
 				{
@@ -228,7 +231,11 @@ public class IrradianceClient
 		if (Singleton.IsOnline)
 		{
 			using var primBinaryStream = new MemoryStream();
+#if USE_TRIANGLES
+			var offsetCounter = ExportAsTriangles(formations, obstacles, 0, primBinaryStream);
+#else
 			var offsetCounter = ExportAsPrimitives(formations, obstacles, 0, primBinaryStream);
+#endif
 			primBinaryStream.TryGetBuffer(out var byteBuffer);
 			if (offsetCounter > 0)
 			{

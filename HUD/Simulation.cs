@@ -131,12 +131,13 @@ public class Simulation : CanvasLayer
 			var o = SceneCamera.GlobalTranslation;
 			var v = GetViewport().Size;
 			var matrix = new float[] { o.x, o.y, o.z, b.z.x, b.z.y, b.z.z, SceneCamera.Fov, v.x, v.y };
-			var imgData = IrradianceClient.DebugIrradiance(World.Timestep, World.Formations, World.Obstacles, matrix);
 
 			var image = new Image();
 			var texture = new ImageTexture();
+
+			var imgData = IrradianceClient.DebugIrradiance(World.Timestep, World.Formations, World.Obstacles, matrix);
 			if (imgData != null)
-				image.CreateFromData((int)Math.Round(v.x), (int)Math.Round(v.y), false, Image.Format.Rgbaf, imgData);
+				image.CreateFromData((int)Math.Round(v.x), (int)Math.Round(v.y), false, Image.Format.Rgbf, imgData);
 			else
 				image.CreateFromData(2, 2, false, Image.Format.R8, new byte[]{255, 255, 255, 255});
 
