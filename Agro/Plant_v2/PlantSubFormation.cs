@@ -468,6 +468,13 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 		var photosynthWater = new float[src.Length];
 		var capacityEnergy = new float[src.Length];
 		var capacityWater = new float[src.Length];
+		//var maxIrradiance = IrradianeClient.MaxIrradiance(this);
+
+		var irradiances = IrradianceClient.GetIrradiance(this);
+		var irradianceMax = 0f;
+		for(int i = 0; i < dst.Length; ++i)
+			irradianceMax = Math.Max(irradianceMax, irradiances[i]);
+
 		for(int i = 0; i < dst.Length; ++i)
 		{
 			var currentEnergy = dst[i].Energy;
@@ -482,7 +489,7 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 			lifesupportEnergy[i] = lifeSupport;
 			energyRequirement += lifeSupport;
 
-			var photosynthSupport = dst[i].PhotosynthPerTick;
+			var photosynthSupport = dst[i].PhotosynthPerTick; //*maxIrradiance
 			photosynthWater[i] = photosynthSupport;
 			waterRequirement += photosynthSupport;
 
@@ -493,11 +500,24 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 			var waterStorageCapacity = dst[i].WaterStorageCapacity;
 			capacityWater[i] = waterStorageCapacity;
 			waterCapacity += waterStorageCapacity;
-
-			var u = photosynthSupport > 0 ? Math.Clamp((currentEnergy - previousEnergy + lifeSupport) / photosynthSupport, 0f, 1f) : 1f;
-			usefulness[i] = u;
-			usefulnessTotal += u;
 		}
+
+		if (irradianceMax > 0f)
+		{
+			for(int i = 0; i < dst.Length; ++i)
+			{
+				//var u = photosynthSupport > 0 ? Math.Clamp((currentEnergy - previousEnergy + lifeSupport) / photosynthSupport, 0f, 1f) : 1f;
+				var u = irradiances[i] / irradianceMax;
+				usefulness[i] = u;
+				usefulnessTotal += u;
+			}
+		}
+		else
+		{
+			Array.Fill(usefulness, 1f);
+			usefulnessTotal = usefulness.Length;
+		}
+
 		energyDiff += energy; //optimal variant of sum(dst[i] - src[i])
 		waterDiff += water;
 

@@ -38,6 +38,8 @@ public partial class Plant_AG_Godot2 : PlantAbstractGodot2<AboveGroundAgent2>
 		return ShootsVisualisationSettings.Segment_NaturalLeaf * (1f - w) + ShootsVisualisationSettings.Segment_NaturalWood * w;
     }
 
+	protected override float GetEfficiency(int index) => Formation.GetEfficiency(index);
+
 	public override void GodotProcess()
 	{
 		if (AgroWorldGodot.ShootsVisualization.StemsVisibility == Visibility.MakeVisible)

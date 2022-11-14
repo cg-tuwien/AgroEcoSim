@@ -103,7 +103,7 @@ The following folders are related to the Godot rendering:
 `AgroGodot.csproj` is an umbrella project that takes all files from all subfolders and compiles them for Godot. It defines the `GODOT` switch which activates or deactivates certain blcks of code. This is an ugly, but necessary workaround to cope with Godot's limited .NET support.
 
 ## v1 vs. v2
-Some classes are denoted by v1/v2 or just 1/2 or stored in folders called v1/v2. This marks whether they are transaction-based (v1) or global-diffusion based (v2). The *supervised global diffusion* is a novel concept to mitigate the transport limitations of large time steps. Instead of trying to compute at a very dense time rate, the formation gathers all resources in each frame and redistributes them.
+Some classes are denoted by v1/v2 or just 1/2 or stored in folders called v1/v2. This marks whether they are transaction-based (v1) or global-diffusion based (v2), respectively. The *supervised global diffusion* is a custom concept to mitigate the transport limitations of large time steps. Instead of trying to compute at a very dense time rate, the formation gathers all resources in each frame and redistributes them across all its agents at once.
 
 # Renderer interface
 The renderer is called via `http`. The primary renderer is Mitsuba 3 in the [agroeco-mts3](https://github.com/cfreude/agroeco-mts3/). To plug-in a different renderer, it has to follow these guidelines:
@@ -117,6 +117,9 @@ The body of the `POST` request contains the scene in a binary format as describe
 * `La` and `Lo` contain latitude and longitude as floats (both mandatory)
 * `Ti` is time string in ISO 8601 format with time zone information (mandatory)
 * `Ra` is the number of rays (samples) per pixel (default=128, optional)
+* `Cam` specifies the camera parameters to be used instead of irradiancemeters, great for debugging (default=None, optional)
+
+`Cam` is an array of floats stored as a string with values separated by whitespaces. The values are: camera position (3 floats), target point to look at (3 floats), **vertical** FOV angle (1 float), viewport width and height (2 floats).
 
 ## Input scene data format
 The renderer will receive the scene data in binary form as a set of triangle meshes. There are two variants a triangle-based and a primitive-based.

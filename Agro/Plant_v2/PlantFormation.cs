@@ -40,16 +40,32 @@ public class PlantGlobalStats
 		//factor is energyAvailableTotal / energyRequirementTotal
 		var weightsTotal = 0.0;
 		ReceivedEnergy = new float[LifeSupportEnergy.Count];
+		var positiveUsefulness = false;
 		for(int i = 0; i < ReceivedEnergy.Length; ++i)
-		{
-			var w = LifeSupportEnergy[i] * Usefulness[i];
-			ReceivedEnergy[i] = w * factor; //in sum over all i: LifeSupportEnergy[i] / energyRequirementTotal yields 1
-			weightsTotal += w;
-		}
+			if (Usefulness[i] > 0f)
+			{
+				positiveUsefulness = true;
+				break;
+			}
 
-		var wtf = (float)weightsTotal;
-		for(int i = 0; i < ReceivedEnergy.Length; ++i)
-			ReceivedEnergy[i] /= wtf;
+		if (positiveUsefulness && factor > 0f)
+		{
+			for(int i = 0; i < ReceivedEnergy.Length; ++i)
+			{
+				var w = LifeSupportEnergy[i] * Usefulness[i];
+				ReceivedEnergy[i] = w * factor; //in sum over all i: LifeSupportEnergy[i] / energyRequirementTotal yields 1
+				weightsTotal += w;
+			}
+
+			var wtf = (float)weightsTotal;
+			for(int i = 0; i < ReceivedEnergy.Length; ++i)
+				ReceivedEnergy[i] /= wtf;
+		}
+		else
+		{
+			for(int i = 0; i < ReceivedEnergy.Length; ++i)
+				ReceivedEnergy[i] = LifeSupportEnergy[i] * factor; //in sum over all i: LifeSupportEnergy[i] / energyRequirementTotal yields 1
+		}
 	}
 
 	internal void DistributeWaterByRequirement(float factor)
@@ -242,6 +258,11 @@ public partial class PlantFormation2 : IPlantFormation
 			var energyStorage = globalAG.EnergyCapacity + globalUG.EnergyCapacity;
 			var waterStorage = globalAG.WaterCapacity + globalUG.WaterCapacity;
 
+			#if GODOT
+			UG.Efficiency = globalUG.Usefulness;
+			AG.Efficiency = globalAG.Usefulness;
+			#endif
+
 			//Debug.WriteLine($"W: {water} / {waterRequirement}   {globalUG.WaterDiff} + {globalAG.WaterDiff}");
 			//Debug.WriteLine($"E: {energy} / {energyRequirement}   {globalUG.EnergyDiff} + {globalAG.EnergyDiff}");
 
@@ -326,6 +347,8 @@ public partial class PlantFormation2 : IPlantFormation
 	public bool HasUndeliveredPost => PostboxSeed.AnyMessages || UG.HasUndeliveredPost || AG.HasUndeliveredPost;
 
 	public bool HasUnprocessedTransactions => UG.HasUnprocessedTransactions || AG.HasUnprocessedTransactions;
+
+	public int Count => SeedAlive ? 1 : UG.Count + AG.Count;
 
 	///////////////////////////
 	#region LOG

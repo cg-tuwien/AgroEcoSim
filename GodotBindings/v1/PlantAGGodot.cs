@@ -11,6 +11,7 @@ public partial class Plant_AG_Godot : PlantAbstractGodot<AboveGroundAgent>
 {
 	public Plant_AG_Godot(PlantSubFormation<AboveGroundAgent> formation) : base(formation) { }
 
+
 	protected override Color FormationColor => Colors.Green;
 	protected override ColorCodingType FormationColorCoding => ColorCodingType.All;
 

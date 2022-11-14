@@ -37,6 +37,8 @@ public class Plant_UG_Godot2 : PlantAbstractGodot2<UnderGroundAgent2>
 		return RootsVisualisationSettings.Segment_Light * (1f - w) + RootsVisualisationSettings.Segment_Dark * w;
     }
 
+	protected override float GetEfficiency(int index) => Formation.GetEfficiency(index);
+
 	public override void GodotProcess()
 	{
 		if (AgroWorldGodot.RootsVisualization.RootsVisibility == Visibility.MakeVisible)

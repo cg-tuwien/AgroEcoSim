@@ -85,10 +85,15 @@ public abstract class PlantAbstractGodot2<T> where T : struct, IPlantAgent
 			}
 			case ColorCodingType.Natural:
 				return GetNaturalColor(index);
-
+			case ColorCodingType.Efficiency:
+			{
+				var w = Math.Clamp(GetEfficiency(index), 0, 1);
+				return Colors.Yellow * w + Colors.Blue * (1-w);
+			}
 			default: return FormationColor;
 		}
 	}
 
 	protected abstract Color GetNaturalColor(int index);
+	protected abstract float GetEfficiency(int index);
 }

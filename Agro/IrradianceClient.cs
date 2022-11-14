@@ -203,7 +203,7 @@ public class IrradianceClient
 					request.Headers.Add("Ti", AgroWorld.GetTime(timestep).ToString("o", CultureInfo.InvariantCulture));
 					//Debug.WriteLine(offsetCounter);
 					//request.Headers.Add("C", offsetCounter.ToString()); //Only use for dummy debug
-					//request.Headers.Add("Ra", "8192");
+					request.Headers.Add("Ra", "4096");
 
 					var result = Client.SendAsync(request).Result;
 					using var responseStream = result.Content.ReadAsStreamAsync().Result;
@@ -246,7 +246,7 @@ public class IrradianceClient
 				};
 				request.Headers.Add("Ti", AgroWorld.GetTime(timestep).ToString("o", CultureInfo.InvariantCulture));
 				request.Headers.Add("Cam", string.Join(' ', camera));
-				//request.Headers.Add("Ra", "512");
+				//request.Headers.Add("Ra", "256");
 				var result = Client.SendAsync(request).Result;
 				return result.Content.ReadAsByteArrayAsync().Result;
 			}
@@ -559,9 +559,8 @@ public class IrradianceClient
 		}
 	}
 
-	public static float GetIrradiance(IFormation formation, int agentIndex) => Singleton.GetIrr(formation, agentIndex);
 	static string OF(int a, int b, int c) => $"f {a+1} {b+1} {c+1}";
-
+	public static float GetIrradiance(IFormation formation, int agentIndex) => Singleton.GetIrr(formation, agentIndex);
 	float GetIrr(IFormation formation, int agentIndex)
 	{
 		if (!IsNight && IrradianceFormationOffsets.TryGetValue(formation, out var offset))
@@ -572,6 +571,17 @@ public class IrradianceClient
 		}
 		return 0f;
 	}
+
+	//TODO make this a ReadOnlySpan
+	public static float[]  GetIrradiance(IFormation formation) => Singleton.GetIrr(formation);
+	float[] GetIrr(IFormation formation)
+	{
+		var result = new float[formation.Count];
+		if (!IsNight && IrradianceFormationOffsets.TryGetValue(formation, out var offset))
+			Irradiances.CopyTo(offset, result, 0, result.Length);
+		return result;
+	}
+
 
 	readonly Stopwatch SW = new();
 

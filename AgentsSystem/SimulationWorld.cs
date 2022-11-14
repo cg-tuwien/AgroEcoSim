@@ -94,6 +94,10 @@ public partial class SimulationWorld
 				ProcessTransactionsSequential();
 				DeliverPostSequential();
 			}
+		#if GODOT
+		foreach(var item in Formations)
+			item.GodotProcess();
+		#endif
 			CensusSequential();
 			ExecCallbacks();
 #if HISTORY_LOG || HISTORY_TICK
@@ -104,10 +108,7 @@ public partial class SimulationWorld
 			// }
 #endif
 		}
-		#if GODOT
-		foreach(var item in Formations)
-			item.GodotProcess();
-		#endif
+
 	}
 
 	public void RunParallel(uint simulationLength)

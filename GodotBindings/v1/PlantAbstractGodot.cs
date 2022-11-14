@@ -7,7 +7,7 @@ using NumericHelpers;
 
 namespace Agro;
 
-public enum ColorCodingType : byte { Default, Natural, All, Water, Energy, Light }; //Light must be last as roots receive no light
+public enum ColorCodingType : byte { Default, Natural, All, Water, Energy, Light, Efficiency }; //Light must be last as roots receive no light
 
 public abstract class PlantAbstractGodot<T> where T : struct, IPlantAgent
 {
@@ -94,6 +94,7 @@ public abstract class PlantAbstractGodot<T> where T : struct, IPlantAgent
 				var w = Math.Clamp(Formation.GetIrradiance(index) * 0.5f, 0, 1);
 				return Colors.White * w;
 			}
+
 			default: return FormationColor;
 		}
 	}

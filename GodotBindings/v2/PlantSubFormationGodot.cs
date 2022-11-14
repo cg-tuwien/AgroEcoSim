@@ -21,4 +21,7 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 
 	public void GodotReady() {}
 	public void GodotProcess() {}
+
+	internal IList<float> Efficiency;
+	internal float GetEfficiency(int index) => index < Efficiency?.Count ? Efficiency[index] : 0f;
 }

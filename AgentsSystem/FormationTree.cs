@@ -95,7 +95,7 @@ public abstract class FormationTree<T> : Formation<T> where T : struct, ITreeAge
 	public bool CheckIndex(int index) => index < Agents.Length;
 
 	public bool Alive => Agents.Length > 0 || Births.Count > 0 || Inserts.Count > 0;
-	public int Count => Agents.Length;
+	public override int Count => Agents.Length;
 
 	public void Insert(int ancestor, T agent)
 	{

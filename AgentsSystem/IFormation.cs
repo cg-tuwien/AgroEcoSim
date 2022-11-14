@@ -20,4 +20,8 @@ public interface IFormation
     void GodotReady();
 	void GodotProcess();
 #endif
+    ///<summary>
+    ///Number of agents in this formation
+    ///</summary>
+    int Count { get; }
 }

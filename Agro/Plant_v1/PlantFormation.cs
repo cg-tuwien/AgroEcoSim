@@ -211,6 +211,8 @@ public partial class PlantFormation1 : IPlantFormation
 
 	public bool HasUnprocessedTransactions => UG.HasUnprocessedTransactions || AG.HasUnprocessedTransactions;
 
+	public int Count => SeedAlive ? 1 : UG.Count + AG.Count;
+
 	///////////////////////////
 	#region LOG
 	///////////////////////////

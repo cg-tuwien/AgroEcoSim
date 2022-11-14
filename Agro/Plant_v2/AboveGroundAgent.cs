@@ -148,9 +148,10 @@ public partial struct AboveGroundAgent2 : IPlantAgent
 	public float LifeSupportPerTick => LifeSupportPerHour / AgroWorld.TicksPerHour;
 
 	public const float mPhotoEfficiency = 0.25f;
-	public float PhotosynthPerTick => Length * Radius * (Organ == OrganTypes.Leaf ? 2f : TwoPiTenth) * mPhotoFactor * mPhotoEfficiency;
+	public const float ExpectedIrradiance = 400f; //in W/m² see https://en.wikipedia.org/wiki/Solar_irradiance
+	public float PhotosynthPerTick => Length * Radius * (Organ == OrganTypes.Leaf ? 2f : TwoPiTenth) * mPhotoFactor * mPhotoEfficiency * ExpectedIrradiance;
 
-	float EnoughEnergy(float? lifeSupportPerHour = null) => (lifeSupportPerHour ?? LifeSupportPerHour) * 32;
+	float EnoughEnergy(float? lifeSupportPerHour = null) => (lifeSupportPerHour ?? LifeSupportPerHour) * 320;
 
 	public AboveGroundAgent2(int parent, OrganTypes organ, Quaternion orientation, float initialEnergy, float radius = InitialRadius, float length = InitialLength)
 	{
