@@ -9,10 +9,9 @@ namespace Agro;
 
 public abstract class PlantAbstractGodot2<T> where T : struct, IPlantAgent
 {
-	internal bool GodotShow = true;
-	protected readonly PlantSubFormation2<T> Formation;
-	protected readonly List<MeshInstance> GodotSprites = new();
-	protected readonly static CubeMesh PlantCubePrimitive = new();
+	[Newtonsoft.Json.JsonIgnore] protected readonly PlantSubFormation2<T> Formation;
+	[Newtonsoft.Json.JsonIgnore] protected readonly List<MeshInstance> GodotSprites = new();
+	[Newtonsoft.Json.JsonIgnore] protected readonly static CubeMesh PlantCubePrimitive = new();
 
 	protected PlantAbstractGodot2(PlantSubFormation2<T> formation) => Formation = formation;
 
@@ -20,35 +19,29 @@ public abstract class PlantAbstractGodot2<T> where T : struct, IPlantAgent
 
 	static Color DefaultColor = new(0.7f, 0.7f, 0.7f);
 
-	protected virtual Color FormationColor => DefaultColor;
-	protected virtual ColorCodingType FormationColorCoding => ColorCodingType.Light;
+	[Newtonsoft.Json.JsonIgnore] protected virtual Color FormationColor => DefaultColor;
+	[Newtonsoft.Json.JsonIgnore] protected virtual ColorCodingType FormationColorCoding => ColorCodingType.Light;
 
 	public void AddSprites(int count)
 	{
-		if (GodotShow)
+		for (int i = GodotSprites.Count; i < count; ++i)
 		{
-			for (int i = GodotSprites.Count; i < count; ++i)
-			{
-				var sprite = new MeshInstance();
-				SimulationWorld.GodotAddChild(sprite); // Add it as a child of this node.
-				sprite.Mesh = PlantCubePrimitive;
-				if (sprite.GetSurfaceMaterial(0) == null) //TODO if not visualizing, use a common material for all
-					sprite.SetSurfaceMaterial(0, new SpatialMaterial{ AlbedoColor = FormationColor, FlagsUnshaded = true });
+			var sprite = new MeshInstance();
+			SimulationWorld.GodotAddChild(sprite); // Add it as a child of this node.
+			sprite.Mesh = PlantCubePrimitive;
+			if (sprite.GetSurfaceMaterial(0) == null) //TODO if not visualizing, use a common material for all
+				sprite.SetSurfaceMaterial(0, new SpatialMaterial{ AlbedoColor = FormationColor, FlagsUnshaded = true });
 
-				UpdateTransformation(sprite, i);
-				GodotSprites.Add(sprite);
-			}
+			UpdateTransformation(sprite, i);
+			GodotSprites.Add(sprite);
 		}
 	}
 
 	public void RemoveSprite(int index)
 	{
-		if (GodotShow)
-		{
-			var sprite = GodotSprites[index];
-			GodotSprites.RemoveAt(index);
-			SimulationWorld.GodotRemoveChild(sprite);
-		}
+		var sprite = GodotSprites[index];
+		GodotSprites.RemoveAt(index);
+		SimulationWorld.GodotRemoveChild(sprite);
 	}
 
 	public void GodotReady() { }

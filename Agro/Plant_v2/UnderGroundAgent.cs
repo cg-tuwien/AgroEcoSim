@@ -114,14 +114,23 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 	/// </summary>
 	#if !GODOT
 	[System.Text.Json.Serialization.JsonIgnore]
+	#else
+	[Newtonsoft.Json.JsonIgnore]
 	#endif
 	public readonly float WaterFlowToParentPerTick => WaterFlowToParentPerHour / AgroWorld.TicksPerHour;
 
 	public const float EnergyTransportRatio = 2f;
+	#if !GODOT
+	[System.Text.Json.Serialization.JsonIgnore]
+	#else
+	[Newtonsoft.Json.JsonIgnore]
+	#endif
 	public readonly float EnergyFlowToParentPerHour => 4f * Radius * Radius * EnergyTransportRatio * (2f - mWaterAbsorbtionFactor);
 
 	#if !GODOT
 	[System.Text.Json.Serialization.JsonIgnore]
+	#else
+	[Newtonsoft.Json.JsonIgnore]
 	#endif
 	public readonly float EnergyFlowToParentPerTick => EnergyFlowToParentPerHour / AgroWorld.TicksPerHour;
 
@@ -133,11 +142,21 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 	/// <summary>
 	/// Water volume in m³ which can be stored in this agent
 	/// </summary>
+	#if !GODOT
+	[System.Text.Json.Serialization.JsonIgnore]
+	#else
+	[Newtonsoft.Json.JsonIgnore]
+	#endif
 	public readonly float WaterStorageCapacity => 4f * Radius * Radius * Length * WaterCapacityRatio;
 
 	/// <summary>
 	/// Water volume in m³ which can flow through per hour, or can be stored in this agent
 	/// </summary>
+	#if !GODOT
+	[System.Text.Json.Serialization.JsonIgnore]
+	#else
+	[Newtonsoft.Json.JsonIgnore]
+	#endif
 	public readonly float WaterTotalCapacityPerHour => 4f * Radius * Radius * (Length * WaterCapacityRatio + WaterTransportRatio);
 
 	/// <summary>
@@ -145,6 +164,8 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 	/// </summary>
 	#if !GODOT
 	[System.Text.Json.Serialization.JsonIgnore]
+	#else
+	[Newtonsoft.Json.JsonIgnore]
 	#endif
 	public readonly float WaterTotalCapacityPerTick => WaterTotalCapacityPerHour / AgroWorld.TicksPerHour;
 
@@ -157,11 +178,29 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 	const float EnergyStorageCoef = 24 * 31 * 3; //3 months
 
 	float EnergyCapacityFunc(float radius, float length) => 4f * radius * radius * length * (1f - WaterCapacityRatio) * EnergyStorageCoef * (2f - mWaterAbsorbtionFactor);
-
+	#if !GODOT
+	[System.Text.Json.Serialization.JsonIgnore]
+	#else
+	[Newtonsoft.Json.JsonIgnore]
+	#endif
 	public readonly float EnergyStorageCapacity => EnergyCapacityFunc(Radius, Length);
-
+	#if !GODOT
+	[System.Text.Json.Serialization.JsonIgnore]
+	#else
+	[Newtonsoft.Json.JsonIgnore]
+	#endif
 	float LifeSupportPerHour => Length * Radius * Radius * 4f * mWaterAbsorbtionFactor;
+	#if !GODOT
+	[System.Text.Json.Serialization.JsonIgnore]
+	#else
+	[Newtonsoft.Json.JsonIgnore]
+	#endif
 	public float LifeSupportPerTick => LifeSupportPerHour / AgroWorld.TicksPerHour;
+	#if !GODOT
+	[System.Text.Json.Serialization.JsonIgnore]
+	#else
+	[Newtonsoft.Json.JsonIgnore]
+	#endif
 	public float PhotosynthPerTick => 0f;
 
 	public static Quaternion OrientationDown = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, -MathF.PI * 0.5f);

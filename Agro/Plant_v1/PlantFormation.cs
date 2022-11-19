@@ -207,20 +207,20 @@ public partial class PlantFormation1 : IPlantFormation
 			AG.ProcessTransactions(timestep, stage);
 	}
 
-	public bool HasUndeliveredPost => PostboxSeed.AnyMessages || UG.HasUndeliveredPost || AG.HasUndeliveredPost;
+	[Newtonsoft.Json.JsonIgnore] public bool HasUndeliveredPost => PostboxSeed.AnyMessages || UG.HasUndeliveredPost || AG.HasUndeliveredPost;
 
-	public bool HasUnprocessedTransactions => UG.HasUnprocessedTransactions || AG.HasUnprocessedTransactions;
+	[Newtonsoft.Json.JsonIgnore] public bool HasUnprocessedTransactions => UG.HasUnprocessedTransactions || AG.HasUnprocessedTransactions;
 
 	public int Count => SeedAlive ? 1 : UG.Count + AG.Count;
 
-	///////////////////////////
-	#region LOG
-	///////////////////////////
-	#if HISTORY_LOG || TICK_LOG
-	List<SeedAgent?> StatesHistory = new();
+    ///////////////////////////
+    #region LOG
+    ///////////////////////////
+#if HISTORY_LOG || TICK_LOG
+    readonly List<SeedAgent?> StatesHistory = new();
 	public string HistoryToJSON(int timestep = -1, byte stage = 0) => timestep >= 0
-		? $"{{ \"Seeds\" : {Utils.Export.Json(StatesHistory[timestep])}, \"UnderGround\" : {UG.HistoryToJSON(timestep)}, \"AboveGround\" : {AG.HistoryToJSON(timestep)} }}"
-		: $"{{ \"Seeds\" : {Utils.Export.Json(StatesHistory)}, \"UnderGround\" : {UG.HistoryToJSON()}, \"AboveGround\" : {AG.HistoryToJSON()} }}";
+		? $"{{ \"Seeds\" : {Export.Json(StatesHistory[timestep])}, \"UnderGround\" : {UG.HistoryToJSON(timestep)}, \"AboveGround\" : {AG.HistoryToJSON(timestep)} }}"
+		: $"{{ \"Seeds\" : {Export.Json(StatesHistory)}, \"UnderGround\" : {UG.HistoryToJSON()}, \"AboveGround\" : {AG.HistoryToJSON()} }}";
 	public ulong GetID() => Seed.Length > 0 ? Seed[0].ID : ulong.MaxValue;
 	#endif
 	#endregion

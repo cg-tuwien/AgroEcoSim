@@ -94,10 +94,6 @@ public partial class SimulationWorld
 				ProcessTransactionsSequential();
 				DeliverPostSequential();
 			}
-		#if GODOT
-		foreach(var item in Formations)
-			item.GodotProcess();
-		#endif
 			CensusSequential();
 			ExecCallbacks();
 #if HISTORY_LOG || HISTORY_TICK
@@ -108,7 +104,10 @@ public partial class SimulationWorld
 			// }
 #endif
 		}
-
+		#if GODOT
+		foreach(var item in Formations)
+			item.GodotProcess();
+		#endif
 	}
 
 	public void RunParallel(uint simulationLength)
@@ -228,6 +227,23 @@ public partial class SimulationWorld
 	{
 		foreach(var callback in Callbacks)
 			callback(Timestep, Formations, Obstacles);
+	}
+
+	public string ToJson()
+	{
+		var sb = new System.Text.StringBuilder();
+		//assuming all formations are present all the time (no additions or removals)
+		sb.Append("{ \"Formations\": [ ");
+		sb.Append(Utils.Export.Json(Formations[1]));
+		// for(int i = 0; i < Formations.Count; ++i)
+		// {
+		// 	sb.Append(Utils.Export.Json(Formations[i]));
+		// 	if (i < Formations.Count - 1)
+		// 		sb.Append(", ");
+		// }
+		sb.Append("]}");
+
+		return sb.ToString();
 	}
 
 	#if HISTORY_LOG || TICK_LOG

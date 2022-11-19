@@ -90,7 +90,7 @@ public class Simulation : CanvasLayer
 
 	public void MenuLeft() => MenuEvent = MenuEvent.Leave;
 
-	enum SaveModes {None, IrrV1, IrrV2}
+	enum SaveModes {None, IrrV1, IrrV2, IrrV3, JSON}
 	SaveModes SaveMode = SaveModes.None;
 	public void IrradianceV1()
 	{
@@ -112,14 +112,40 @@ public class Simulation : CanvasLayer
 		MenuEntered();
 	}
 
+	public void IrradianceV3()
+	{
+		SaveDialog.ClearFilters();
+		SaveDialog.AddFilter("*.prim ; Primitives scene");
+		SaveMode = SaveModes.IrrV3;
+		SaveDialog.CurrentFile = $"{World.Timestep:D5}.prim";
+		SaveDialog.PopupCentered();
+		MenuEntered();
+	}
+
+	public void Complete()
+	{
+		SaveDialog.ClearFilters();
+		SaveDialog.AddFilter("*.json ; JSON Serialization");
+		SaveMode = SaveModes.JSON;
+		SaveDialog.CurrentFile = $"{World.Timestep:D5}.json";
+		SaveDialog.PopupCentered();
+		MenuEntered();
+	}
+
 	public void OnSave(string path)
 	{
 		MenuLeft();
-		Debug.WriteLine(SaveDialog.CurrentFile);
+		//Debug.WriteLine(SaveDialog.CurrentFile);
 		switch (SaveMode)
 		{
-			case SaveModes.IrrV1: IrradianceClient.ExportToFile(path, 1, World.Formations, World.Obstacles); break;
-			case SaveModes.IrrV2: IrradianceClient.ExportToFile(path, 2, World.Formations, World.Obstacles); break;
+			case SaveModes.IrrV1:
+			case SaveModes.IrrV2:
+			case SaveModes.IrrV3:
+				IrradianceClient.ExportToFile(path, (byte)SaveMode, World.Formations, World.Obstacles);
+				break;
+			case SaveModes.JSON:
+				System.IO.File.WriteAllText(path, World.ToJson());
+				break;
 		}
 	}
 

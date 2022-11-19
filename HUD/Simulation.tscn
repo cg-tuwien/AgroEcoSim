@@ -151,29 +151,38 @@ rect_pivot_offset = Vector2( 103, 10 )
 text = "EXPORT"
 align = 1
 
-[node name="Control" type="Control" parent="Export"]
+[node name="IrradianceControl" type="Control" parent="Export"]
 margin_right = 40.0
 margin_bottom = 40.0
 
-[node name="irr_v1" type="Button" parent="Export/Control"]
-margin_left = 152.0
+[node name="irr_v1" type="Button" parent="Export/IrradianceControl"]
+margin_left = 128.0
 margin_top = 296.0
-margin_right = 179.0
+margin_right = 155.0
 margin_bottom = 316.0
 rect_pivot_offset = Vector2( 3.8147e-06, 3.99997 )
 hint_tooltip = "Triangular mesh"
 text = "v1"
 
-[node name="irr_v2" type="Button" parent="Export/Control"]
+[node name="irr_v2" type="Button" parent="Export/IrradianceControl"]
+margin_left = 160.0
+margin_top = 296.0
+margin_right = 187.0
+margin_bottom = 316.0
+rect_pivot_offset = Vector2( 3.8147e-06, 3.99997 )
+hint_tooltip = "Primitives"
+text = "v2"
+
+[node name="irr_v3" type="Button" parent="Export/IrradianceControl"]
 margin_left = 192.0
 margin_top = 296.0
 margin_right = 219.0
 margin_bottom = 316.0
 rect_pivot_offset = Vector2( 3.8147e-06, 3.99997 )
 hint_tooltip = "Primitives"
-text = "v2"
+text = "v3"
 
-[node name="Label" type="Label" parent="Export/Control"]
+[node name="Label" type="Label" parent="Export/IrradianceControl"]
 margin_left = 24.0
 margin_top = 300.0
 margin_right = 88.0
@@ -186,6 +195,26 @@ margin_bottom = 400.0
 rect_min_size = Vector2( 350, 270 )
 resizable = true
 access = 2
+
+[node name="CompleteControl" type="Control" parent="Export"]
+margin_right = 40.0
+margin_bottom = 40.0
+
+[node name="json" type="Button" parent="Export/CompleteControl"]
+margin_left = 155.0
+margin_top = 320.0
+margin_right = 194.0
+margin_bottom = 340.0
+rect_pivot_offset = Vector2( 3.8147e-06, 3.99997 )
+hint_tooltip = "Triangular mesh"
+text = "json"
+
+[node name="Label" type="Label" parent="Export/CompleteControl"]
+margin_left = 24.0
+margin_top = 324.0
+margin_right = 88.0
+margin_bottom = 338.0
+text = "Complete"
 
 [node name="Debug" type="Control" parent="."]
 margin_top = 440.0
@@ -270,9 +299,11 @@ step = 0.1
 [connection signal="mouse_entered" from="Animation/Control/HSlider" to="." method="MenuEntered"]
 [connection signal="mouse_exited" from="Animation/Control/HSlider" to="." method="MenuLeft"]
 [connection signal="value_changed" from="Animation/Control/HSlider" to="." method="HiddenSteps"]
-[connection signal="pressed" from="Export/Control/irr_v1" to="." method="IrradianceV1"]
-[connection signal="pressed" from="Export/Control/irr_v2" to="." method="IrradianceV2"]
+[connection signal="pressed" from="Export/IrradianceControl/irr_v1" to="." method="IrradianceV1"]
+[connection signal="pressed" from="Export/IrradianceControl/irr_v2" to="." method="IrradianceV2"]
+[connection signal="pressed" from="Export/IrradianceControl/irr_v3" to="." method="IrradianceV3"]
 [connection signal="file_selected" from="Export/SaveDialog" to="." method="OnSave"]
+[connection signal="pressed" from="Export/CompleteControl/json" to="." method="Complete"]
 [connection signal="toggled" from="Debug/Control/IrradianceButton" to="." method="DebugIrradiance"]
 [connection signal="mouse_entered" from="Debug/Control/IrradiancHSlider" to="." method="MenuEntered"]
 [connection signal="mouse_exited" from="Debug/Control/IrradiancHSlider" to="." method="MenuLeft"]

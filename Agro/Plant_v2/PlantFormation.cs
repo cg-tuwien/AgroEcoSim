@@ -92,34 +92,39 @@ public class PlantGlobalStats
 
 public partial class PlantFormation2 : IPlantFormation
 {
+	#if !GODOT
+	[System.Text.Json.Serialization.JsonIgnore]
+	#else
+	[Newtonsoft.Json.JsonIgnore]
+	#endif
 	public byte Stages => 1;
 
-	public Vector3 Position { get; private set; }
-	bool ReadTMP = false;
-	internal SoilFormation Soil;
-	protected SeedAgent[] Seed = new SeedAgent[1]; //must be an array due to messaging compaatibility
-	protected readonly SeedAgent[] SeedTMP = new SeedAgent[1];
-	protected readonly PostBox<SeedAgent> PostboxSeed = new();
-	bool DeathSeed = false;
+	[Newtonsoft.Json.JsonIgnore]public Vector3 Position { get; private set; }
+	[Newtonsoft.Json.JsonIgnore]bool ReadTMP = false;
+	[Newtonsoft.Json.JsonIgnore] internal SoilFormation Soil;
+	[Newtonsoft.Json.JsonIgnore]protected SeedAgent[] Seed = new SeedAgent[1]; //must be an array due to messaging compaatibility
+	[Newtonsoft.Json.JsonIgnore]protected readonly SeedAgent[] SeedTMP = new SeedAgent[1];
+	[Newtonsoft.Json.JsonIgnore]protected readonly PostBox<SeedAgent> PostboxSeed = new();
+	[Newtonsoft.Json.JsonIgnore]bool DeathSeed = false;
 
-	public readonly PlantSubFormation2<UnderGroundAgent2> UG;
-	public readonly PlantSubFormation2<AboveGroundAgent2> AG;
+	[Newtonsoft.Json.JsonIgnore]public readonly PlantSubFormation2<UnderGroundAgent2> UG;
+	[Newtonsoft.Json.JsonIgnore]public readonly PlantSubFormation2<AboveGroundAgent2> AG;
 
 
 	internal const float RootSegmentLength = 0.1f;
 
-	internal readonly Vector2 VegetativeLowTemperature = new(10, 15);
-	internal readonly Vector2 VegetativeHighTemperature = new(35, 40);
+	[Newtonsoft.Json.JsonIgnore]internal readonly Vector2 VegetativeLowTemperature = new(10, 15);
+	[Newtonsoft.Json.JsonIgnore]internal readonly Vector2 VegetativeHighTemperature = new(35, 40);
 
 	/// <summary>
 	/// Random numbers generator
 	/// </summary>
-	internal Pcg RNG;
+	[Newtonsoft.Json.JsonIgnore]internal Pcg RNG;
 
 	/// <summary>
 	/// Species settings
 	/// </summary>
-	public PlantSettings Parameters { get; private set; }
+	[Newtonsoft.Json.JsonIgnore]public PlantSettings Parameters { get; private set; }
 
 	public PlantFormation2(PlantSettings parameters, SoilFormation soil, SeedAgent seed, Pcg parentRNG)
 	{
@@ -187,7 +192,7 @@ public partial class PlantFormation2 : IPlantFormation
 		Seed = Array.Empty<SeedAgent>();
 	}
 
-	public bool SeedAlive => Seed.Length == 1;
+	[Newtonsoft.Json.JsonIgnore] public bool SeedAlive => Seed.Length == 1;
 
 	public void Census()
 	{
@@ -344,20 +349,20 @@ public partial class PlantFormation2 : IPlantFormation
 			AG.ProcessTransactions(timestep, stage);
 	}
 
-	public bool HasUndeliveredPost => PostboxSeed.AnyMessages || UG.HasUndeliveredPost || AG.HasUndeliveredPost;
+	[Newtonsoft.Json.JsonIgnore] public bool HasUndeliveredPost => PostboxSeed.AnyMessages || UG.HasUndeliveredPost || AG.HasUndeliveredPost;
 
-	public bool HasUnprocessedTransactions => UG.HasUnprocessedTransactions || AG.HasUnprocessedTransactions;
+	[Newtonsoft.Json.JsonIgnore] public bool HasUnprocessedTransactions => UG.HasUnprocessedTransactions || AG.HasUnprocessedTransactions;
 
-	public int Count => SeedAlive ? 1 : UG.Count + AG.Count;
+	[Newtonsoft.Json.JsonIgnore]public int Count => SeedAlive ? 1 : UG.Count + AG.Count;
 
 	///////////////////////////
 	#region LOG
 	///////////////////////////
 	#if HISTORY_LOG || TICK_LOG
-	List<SeedAgent?> StatesHistory = new();
+	[Newtonsoft.Json.JsonIgnore] readonly List<SeedAgent?> StatesHistory = new();
 	public string HistoryToJSON(int timestep = -1, byte stage = 0) => timestep >= 0
-		? $"{{ \"Seeds\" : {Utils.Export.Json(StatesHistory[timestep])}, \"UnderGround\" : {UG.HistoryToJSON(timestep)}, \"AboveGround\" : {AG.HistoryToJSON(timestep)} }}"
-		: $"{{ \"Seeds\" : {Utils.Export.Json(StatesHistory)}, \"UnderGround\" : {UG.HistoryToJSON()}, \"AboveGround\" : {AG.HistoryToJSON()} }}";
+		? $"{{ \"Seeds\" : {Export.Json(StatesHistory[timestep])}, \"UnderGround\" : {UG.HistoryToJSON(timestep)}, \"AboveGround\" : {AG.HistoryToJSON(timestep)} }}"
+		: $"{{ \"Seeds\" : {Export.Json(StatesHistory)}, \"UnderGround\" : {UG.HistoryToJSON()}, \"AboveGround\" : {AG.HistoryToJSON()} }}";
 	public ulong GetID() => Seed.Length > 0 ? Seed[0].ID : ulong.MaxValue;
 	#endif
 	#endregion

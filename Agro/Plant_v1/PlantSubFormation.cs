@@ -554,9 +554,9 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 		Transactions.Clear();
 	}
 
-	public bool HasUndeliveredPost => Post.AnyMessages;
+	[Newtonsoft.Json.JsonIgnore] public bool HasUndeliveredPost => Post.AnyMessages;
 
-	public bool HasUnprocessedTransactions => Transactions.AnyTransactions;
+	[Newtonsoft.Json.JsonIgnore] public bool HasUnprocessedTransactions => Transactions.AnyTransactions;
 
 	///////////////////////////
 	#region READ METHODS
@@ -670,8 +670,8 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 	#region LOG
 	///////////////////////////
 	#if HISTORY_LOG || TICK_LOG
-	List<T[]> StatesHistory = new();
-	public string HistoryToJSON(int timestep = -1, byte stage = 0) => timestep >= 0 ? Utils.Export.Json(StatesHistory[timestep]) : Utils.Export.Json(StatesHistory);
+	readonly List<T[]> StatesHistory = new();
+	public string HistoryToJSON(int timestep = -1, byte stage = 0) => timestep >= 0 ? Export.Json(StatesHistory[timestep]) : Export.Json(StatesHistory);
 
 	public ulong GetID(int index) => ReadTMP
 		? (AgentsTMP.Length > index ? AgentsTMP[index].ID : ulong.MaxValue)

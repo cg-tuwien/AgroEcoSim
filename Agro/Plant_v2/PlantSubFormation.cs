@@ -116,12 +116,21 @@ internal class TreeCacheData2
 
 public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantAgent
 {
+	#if !GODOT
+	[System.Text.Json.Serialization.JsonIgnore]
+	#else
+	[Newtonsoft.Json.JsonIgnore]
+	#endif
 	public byte Stages => 1;
 	readonly Action<T[], int[]> Reindex;
+
+	#if GODOT
+	[Newtonsoft.Json.JsonIgnore]
+	#endif
 	public readonly PlantFormation2 Plant;
 	//Once GODOT supports C# 6.0: Make it a List and then for processing send System.Runtime.InteropServices.CollectionsMarshal.AsSpan(Stems);
 	bool ReadTMP = false;
-	T[] Agents = Array.Empty<T>();
+	[Newtonsoft.Json.JsonProperty] T[] Agents = Array.Empty<T>();
 	T[] AgentsTMP = Array.Empty<T>();
 	readonly PostBox<T> Post = new();
 	readonly TransactionsBox Transactions = new();
@@ -162,9 +171,9 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 		InsertAncestors.Add(ancestor);
 	}
 
-    // public void Update(int index) => ParentUpdates = true;
+	// public void Update(int index) => ParentUpdates = true;
 
-    public void Death(int index)
+	public void Death(int index)
 	{
 		if (Deaths.Add(index))
 		{
@@ -635,9 +644,9 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 		Transactions.Clear();
 	}
 
-	public bool HasUndeliveredPost => Post.AnyMessages;
+	[Newtonsoft.Json.JsonIgnore] public bool HasUndeliveredPost => Post.AnyMessages;
 
-	public bool HasUnprocessedTransactions => Transactions.AnyTransactions;
+	[Newtonsoft.Json.JsonIgnore] public bool HasUnprocessedTransactions => Transactions.AnyTransactions;
 
 	///////////////////////////
 	#region READ METHODS
@@ -755,8 +764,8 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 	#region LOG
 	///////////////////////////
 	#if HISTORY_LOG || TICK_LOG
-	List<T[]> StatesHistory = new();
-	public string HistoryToJSON(int timestep = -1, byte stage = 0) => timestep >= 0 ? Utils.Export.Json(StatesHistory[timestep]) : Utils.Export.Json(StatesHistory);
+	readonly List<T[]> StatesHistory = new();
+	public string HistoryToJSON(int timestep = -1, byte stage = 0) => timestep >= 0 ? Export.Json(StatesHistory[timestep]) : Export.Json(StatesHistory);
 
 	public ulong GetID(int index) => ReadTMP
 		? (AgentsTMP.Length > index ? AgentsTMP[index].ID : ulong.MaxValue)

@@ -24,7 +24,7 @@ public class PlantSettings
 
     public int StdFirstFruitHour;
 
-    public static PlantSettings Avocado;
+    [Newtonsoft.Json.JsonIgnore]public static PlantSettings Avocado;
 
     static PlantSettings()
     {

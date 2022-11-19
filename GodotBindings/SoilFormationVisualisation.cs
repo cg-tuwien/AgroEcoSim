@@ -30,9 +30,9 @@ Note: y is up
 
 public partial class SoilFormation
 {
-	public float[] SteamFlow;// = new float[Agents.Length,6]; //Might save some space by having only 5 elements in the nested array, but I am keeping 6 for better indexing
-	public float[] WaterFlow;// = new float[Agents.Length,6];
-	int[] IDToIndex;
+	[Newtonsoft.Json.JsonIgnore] public float[] SteamFlow;// = new float[Agents.Length,6]; //Might save some space by having only 5 elements in the nested array, but I am keeping 6 for better indexing
+	[Newtonsoft.Json.JsonIgnore] public float[] WaterFlow;// = new float[Agents.Length,6];
+	[Newtonsoft.Json.JsonIgnore] int[] IDToIndex;
 	ulong MinID = ulong.MaxValue;
 
 	//CodeReview: This is not local to InitializeMarkers, but it is always the same.
