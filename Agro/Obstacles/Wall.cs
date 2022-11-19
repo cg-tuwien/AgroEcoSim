@@ -14,7 +14,8 @@ public partial class Wall : IObstacle
 
     readonly Vector3[] PointData;
     readonly static uint[] IndexData;
-    readonly ArraySegment<byte> PrimitiveData;
+    readonly ArraySegment<byte> PrimitiveDataClustered;
+    readonly ArraySegment<byte> PrimitiveDataInterleaved;
 
     public Wall(float length, float height, float thickness, Vector3 position, float orientation)
     {
@@ -51,41 +52,61 @@ public partial class Wall : IObstacle
         PointData[6] = PointData[2] + vy;
         PointData[7] = PointData[3] + vy;
 
-        using var stream = new MemoryStream();
-        using var writer = new BinaryWriter(stream);
+        using var clusteredStream = new MemoryStream();
+        using var clustered = new BinaryWriter(clusteredStream);
 
-        writer.WriteU32(5);
+        using var interleavedStream = new MemoryStream();
+        using var interleaved = new BinaryWriter(interleavedStream);
+
+        clustered.WriteU32(5);
+        interleaved.WriteU32(5);
 
         //apply orientation
         vhx = Vector3.Transform(Vector3.UnitX, rotation) * hx;
         vhz = Vector3.Transform(Vector3.UnitZ, rotation) * hz;
 
         //front
-        writer.WriteU8(8);
-        writer.WriteM32(vhx, vhy, vhz,
-                Position.X + vhz.X,  Position.Y + hy, Position.Z + vhz.Z);
+        clustered.WriteU8(8);
+        clustered.WriteM32(vhx, vhy, vhz, Position.X + vhz.X,  Position.Y + hy, Position.Z + vhz.Z);
+
+        interleaved.WriteU8(8);
+        interleaved.WriteM32(vhx, vhy, vhz, Position.X + vhz.X,  Position.Y + hy, Position.Z + vhz.Z);
+        interleaved.Write(false);
 
         //back
-        writer.WriteU8(8);
-        writer.WriteM32(-vhx, vhy, -vhz,
-                Position.X - vhz.X, Position.Y + hy, Position.Z - vhz.Z);
+        clustered.WriteU8(8);
+        clustered.WriteM32(-vhx, vhy, -vhz, Position.X - vhz.X, Position.Y + hy, Position.Z - vhz.Z);
+
+        interleaved.WriteU8(8);
+        interleaved.WriteM32(-vhx, vhy, -vhz, Position.X - vhz.X, Position.Y + hy, Position.Z - vhz.Z);
+        interleaved.Write(false);
 
         //left
-        writer.WriteU8(8);
-        writer.WriteM32(vhz, vhy, -vhx,
-                Position.X - vhx.X, Position.Y + hy, Position.Z - vhx.Z);
+        clustered.WriteU8(8);
+        clustered.WriteM32(vhz, vhy, -vhx, Position.X - vhx.X, Position.Y + hy, Position.Z - vhx.Z);
+
+        interleaved.WriteU8(8);
+        interleaved.WriteM32(vhz, vhy, -vhx, Position.X - vhx.X, Position.Y + hy, Position.Z - vhx.Z);
+        interleaved.Write(false);
 
         //right
-        writer.WriteU8(8);
-        writer.WriteM32(-vhz, vhy, vhx,
-                Position.X + vhx.X, Position.Y + hy , Position.Z + vhx.Z);
+        clustered.WriteU8(8);
+        clustered.WriteM32(-vhz, vhy, vhx, Position.X + vhx.X, Position.Y + hy , Position.Z + vhx.Z);
+
+        interleaved.WriteU8(8);
+        interleaved.WriteM32(-vhz, vhy, vhx, Position.X + vhx.X, Position.Y + hy , Position.Z + vhx.Z);
+        interleaved.Write(false);
 
         //top
-        writer.WriteU8(8);
-        writer.WriteM32(vhx, -vhz, vhy,
-                Position.X, Position.Y + Height, Position.Z);
+        clustered.WriteU8(8);
+        clustered.WriteM32(vhx, -vhz, vhy, Position.X, Position.Y + Height, Position.Z);
 
-        stream.TryGetBuffer(out PrimitiveData);
+        interleaved.WriteU8(8);
+        interleaved.WriteM32(vhx, -vhz, vhy, Position.X, Position.Y + Height, Position.Z);
+        interleaved.Write(false);
+
+        clusteredStream.TryGetBuffer(out PrimitiveDataClustered);
+        interleavedStream.TryGetBuffer(out PrimitiveDataInterleaved);
     }
 
     static Wall()
@@ -124,5 +145,6 @@ public partial class Wall : IObstacle
         }
     }
 
-    public void ExportPrimitives(BinaryWriter writer) => writer.Write(PrimitiveData);
+    public void ExportAsPrimitivesClustered(BinaryWriter writer) => writer.Write(PrimitiveDataClustered);
+    public void ExportAsPrimitivesInterleaved(BinaryWriter writer) => writer.Write(PrimitiveDataInterleaved);
 }

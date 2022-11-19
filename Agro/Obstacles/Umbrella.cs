@@ -14,7 +14,8 @@ public partial class Umbrella : IObstacle
     const int DiskTriangles = 144;
     readonly List<Vector3> PointData;
     readonly static List<uint> IndexData;
-    readonly ArraySegment<byte> PrimitiveData;
+    readonly ArraySegment<byte> PrimitiveDataClustered;
+    readonly ArraySegment<byte> PrimitiveDataInterleaved;
 
     public Umbrella(float radius, float height, float thickness, Vector3 position)
     {
@@ -46,34 +47,38 @@ public partial class Umbrella : IObstacle
         for(int i = 0; i < DiskTriangles; ++i)
             PointData.Add(diskCenter + new Vector3(MathF.Cos(i * step) * Radius, 0f, MathF.Sin(i * step) * Radius));
 
-        using var stream = new MemoryStream();
-        using var writer = new BinaryWriter(stream);
+        using var clusteredStream = new MemoryStream();
+        using var clustered = new BinaryWriter(clusteredStream);
+        using var interleavedStream = new MemoryStream();
+        using var interleaved = new BinaryWriter(interleavedStream);
 
-        writer.WriteU32(2);
+        clustered.WriteU32(2);
+        interleaved.WriteU32(2);
 
         //pole
-        writer.WriteU8(2);
-        writer.Write(Height);
-        writer.Write(ht);
-        // writer.WriteV32(Vector3.UnitX, Position.X);
-        // writer.WriteV32(Vector3.UnitY, Position.Y);
-        // writer.WriteV32(Vector3.UnitZ, Position.Z);
-        writer.WriteM32(Vector3.UnitX,
-                Vector3.UnitY,
-                Vector3.UnitZ,
-                Position);
+        clustered.WriteU8(2);
+        clustered.Write(Height);
+        clustered.Write(ht);
+        clustered.WriteM32(Vector3.UnitX, Vector3.UnitY, Vector3.UnitZ, Position);
+
+        interleaved.WriteU8(2);
+        interleaved.Write(Height);
+        interleaved.Write(ht);
+        interleaved.WriteM32(Vector3.UnitX, Vector3.UnitY, Vector3.UnitZ, Position);
+        interleaved.Write(false);
 
         //disk
-        writer.WriteU8(1);
-        // writer.WriteV32(Vector3.UnitX * Radius, Position.X);
-        // writer.WriteV32(Vector3.UnitY * Radius, Position.Y + Height);
-        // writer.WriteV32(Vector3.UnitZ * Radius, Position.Z);
-        writer.WriteM32(Vector3.UnitX * Radius,
-                Vector3.UnitY * Radius,
-                Vector3.UnitZ * Radius,
+        clustered.WriteU8(1);
+        clustered.WriteM32(Vector3.UnitX * Radius, Vector3.UnitY * Radius, Vector3.UnitZ * Radius,
                 Position.X, Position.Y + Height, Position.Z);
 
-        stream.TryGetBuffer(out PrimitiveData);
+        interleaved.WriteU8(1);
+        interleaved.WriteM32(Vector3.UnitX * Radius, Vector3.UnitY * Radius, Vector3.UnitZ * Radius,
+                Position.X, Position.Y + Height, Position.Z);
+        interleaved.Write(false);
+
+        clusteredStream.TryGetBuffer(out PrimitiveDataClustered);
+        interleavedStream.TryGetBuffer(out PrimitiveDataInterleaved);
     }
 
     static Umbrella()
@@ -119,5 +124,6 @@ public partial class Umbrella : IObstacle
         }
     }
 
-    public void ExportPrimitives(BinaryWriter writer) => writer.Write(PrimitiveData);
+    public void ExportAsPrimitivesClustered(BinaryWriter writer) => writer.Write(PrimitiveDataClustered);
+    public void ExportAsPrimitivesInterleaved(BinaryWriter writer) => writer.Write(PrimitiveDataInterleaved);
 }

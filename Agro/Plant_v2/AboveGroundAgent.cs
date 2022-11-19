@@ -147,7 +147,7 @@ public partial struct AboveGroundAgent2 : IPlantAgent
 	float LifeSupportPerHour => Length * Radius * (Organ == OrganTypes.Leaf ? LeafThickness : Radius * mPhotoFactor);
 	public float LifeSupportPerTick => LifeSupportPerHour / AgroWorld.TicksPerHour;
 
-	public const float mPhotoEfficiency = 0.25f;
+	public const float mPhotoEfficiency = 0.025f;
 	public const float ExpectedIrradiance = 400f; //in W/m² see https://en.wikipedia.org/wiki/Solar_irradiance
 	public float PhotosynthPerTick => Length * Radius * (Organ == OrganTypes.Leaf ? 2f : TwoPiTenth) * mPhotoFactor * mPhotoEfficiency * ExpectedIrradiance;
 
@@ -219,9 +219,12 @@ public partial struct AboveGroundAgent2 : IPlantAgent
 						? float.MaxValue
 						: surface * (airTemp - plant.VegetativeHighTemperature.X) / (plant.VegetativeHighTemperature.Y - plant.VegetativeHighTemperature.X)); //TODO respiratory cycle
 
-				var photosynthesizedEnergy = Math.Min(possibleAmountByLight, Math.Min(possibleAmountByWater, possibleAmountByCO2)) * mPhotoEfficiency;
+				//simplified photosynthesis equation:
+				//CO_2 + H2O + photons → [CH_2 O] + O_2
+				var photosynthesizedEnergy = Math.Min(possibleAmountByLight * mPhotoEfficiency, Math.Min(possibleAmountByWater, possibleAmountByCO2));
 
 				Water -= photosynthesizedEnergy;
+				//Energy += AgroWorld.W2J(photosynthesizedEnergy, 3600 / AgroWorld.TicksPerHour); //TODO in th efuture convert energy to cal
 				Energy += photosynthesizedEnergy;
 			}
 		}

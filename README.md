@@ -162,7 +162,7 @@ uint32 pointsCount
 ```
 Each surface is represented as a set of triangles which are given by vertex indices. After the section with entities, a list of vertices with 3D coordinates is provided.
 
-### Primitive Binary Serialization
+### Primitive Binary Serialization (separated Obstacles and sensors)
 ```
 uint8 version = 2
 #OBSTACLES
@@ -205,6 +205,31 @@ foreach ENTITY
 #sphere: anchored in the center
 #rectangle: anchored in the center, normal facing +Z
 #matrix vector ordering: [ x.X, y.X, z.X, t.X, x.Y, y.Y, z.Y, t.Y, x.Z, y.Z, z.Z, t.Z ]
+```
+### Primitive Binary Serialization (interleaved Obstacles and sensors)
+```
+uint8 version = 3
+#ENTITIES
+uint32 entitiesCount
+foreach ENTITY
+	uint32 surfacesCount
+	foreach SURFACE
+		uint8 primitiveType    #1 = disk, 2 = cylinder(stem), 4 = sphere(bud), 8 = rectangle(leaf)
+		#case disk
+		float32 matrix 4x3 (the bottom row is always 0 0 0 1)
+		#case cylinder
+		float32 length
+		float32 radius
+		float32 matrix 4x3 (the bottom row is always 0 0 0 1)
+		#case sphere
+		3xfloat32 center
+		float32 radius
+		#case rectangle
+		float32 matrix 4x3 (the bottom row is always 0 0 0 1)
+		#end switch
+		bool isSensor
+
+#primitives and matries same as for version 2
 ```
 
 Note that the matrix defines a local coordinate system (right handed with Y up) for each primitive. Assume there is the local right axis vector `x` (already scaled), local up axis `y` and local front axis `z`. These vectors specify the orientation and scale of the respective local axes given in world coordinates. At last, there is also the translation vector `t` that specifies the center of the local coordinate system in world coordinates. The matrix is serialized as an array of `float32` elements in the following order:

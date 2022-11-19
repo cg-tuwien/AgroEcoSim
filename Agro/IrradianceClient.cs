@@ -90,7 +90,7 @@ public class IrradianceClient
 	readonly List<float> Irradiances = new();
 	readonly List<int> SkipPlants = new();
 	readonly List<Vector3> IrradiancePoints = new();
-	readonly Dictionary<IFormation, int> IrradianceFormationOffsets = new ();
+	readonly Dictionary<IFormation, int[]> IrradianceFormationOffsets = new ();
 
 	readonly bool IsOnline = false;
 	bool IsNight = true;
@@ -173,7 +173,7 @@ public class IrradianceClient
 #endif
 				);
 #else
-				offsetCounter = ExportAsPrimitives(formations, obstacles, ooc, binaryStream);
+				offsetCounter = ExportAsPrimitivesInterleaved(formations, obstacles, ooc, binaryStream);
 #endif
 
 				var startTime = SW.ElapsedMilliseconds;
@@ -208,7 +208,8 @@ public class IrradianceClient
 					var result = Client.SendAsync(request).Result;
 					using var responseStream = result.Content.ReadAsStreamAsync().Result;
 					using var reader = new BinaryReader(responseStream);
-					for (int i = 0; i < offsetCounter; ++i)
+					var length = responseStream.Length / sizeof(float);
+					for (int i = 0; i < length; ++i)
 						Irradiances.Add(reader.ReadSingle());
 					Debug.WriteLine($"T: {AgroWorld.GetTime(timestep).ToString("o", CultureInfo.InvariantCulture)} Sum: {Irradiances.Sum()}  Avg: {Irradiances.Average()} In: [{Irradiances.Min()} - {Irradiances.Max()}]");
 				}
@@ -234,7 +235,7 @@ public class IrradianceClient
 #if USE_TRIANGLES
 			var offsetCounter = ExportAsTriangles(formations, obstacles, 0, primBinaryStream);
 #else
-			var offsetCounter = ExportAsPrimitives(formations, obstacles, 0, primBinaryStream);
+			var offsetCounter = ExportAsPrimitivesInterleaved(formations, obstacles, 0, primBinaryStream);
 #endif
 			primBinaryStream.TryGetBuffer(out var byteBuffer);
 			if (offsetCounter > 0)
@@ -290,7 +291,10 @@ public class IrradianceClient
 				var ag = plant.AG;
 				var count = ag.Count;
 
-				IrradianceFormationOffsets.Add(ag, offsetCounter);
+				var offsets = new int[count];
+				for(int i = 0; i < count; ++i)
+					offsets[i] = offsetCounter + i;
+				IrradianceFormationOffsets.Add(ag, offsets);
 				offsetCounter += count;
 
 				writer.WriteU32(count); //WRITE NUMBER OF SURFACES in this plant
@@ -429,7 +433,8 @@ public class IrradianceClient
 #endif
 		return offsetCounter;
 	}
-	private int ExportAsPrimitives(IList<IFormation> formations, IList<IObstacle> obstacles, int offsetCounter, Stream binaryStream)
+
+	private int ExportAsPrimitivesClustered(IList<IFormation> formations, IList<IObstacle> obstacles, int offsetCounter, Stream binaryStream)
 	{
 		IrradianceFormationOffsets.Clear();
 		using var writer = new BinaryWriter(binaryStream);
@@ -438,7 +443,7 @@ public class IrradianceClient
 		//Obstacles
 		writer.WriteU32(obstacles.Count);
 		foreach(var obstacle in obstacles)
-			obstacle.ExportPrimitives(writer);
+			obstacle.ExportAsPrimitivesClustered(writer);
 
 		//Formations
 		writer.WriteU32(formations.Count - SkipPlants.Count); //WRITE NUMBER OF PLANTS in this system
@@ -453,7 +458,10 @@ public class IrradianceClient
 				var ag = plant.AG;
 				var count = ag.Count;
 
-				IrradianceFormationOffsets.Add(ag, offsetCounter);
+				var offsets = new int[count];
+				for(int i = 0; i < count; ++i)
+					offsets[i] = offsetCounter + i;
+				IrradianceFormationOffsets.Add(ag, offsets);
 				offsetCounter += count;
 
 				writer.WriteU32(count); //WRITE NUMBER OF SURFACES in this plant
@@ -504,13 +512,98 @@ public class IrradianceClient
 		return offsetCounter;
 	}
 
+	private int ExportAsPrimitivesInterleaved(IList<IFormation> formations, IList<IObstacle> obstacles, int offsetCounter, Stream binaryStream)
+	{
+		IrradianceFormationOffsets.Clear();
+		using var writer = new BinaryWriter(binaryStream);
+		writer.WriteU8(3); //version 2 using triangular meshes
+
+		//Formations
+		writer.WriteU32(formations.Count - SkipPlants.Count + obstacles.Count); //WRITE NUMBER OF PLANTS in this system
+		foreach(var obstacle in obstacles)
+			obstacle.ExportAsPrimitivesInterleaved(writer);
+
+		var skipPointer = 0;
+		for (int pi = 0; pi < formations.Count; ++pi)
+		{
+			if (skipPointer < SkipPlants.Count && SkipPlants[skipPointer] == pi)
+				++skipPointer;
+			else
+			{
+				var plant = formations[pi] as PlantFormation2;
+				var ag = plant.AG;
+				var count = ag.Count;
+
+				var sensorsCount = 0;
+				for (int i = 0; i < count; ++i)
+					if (ag.GetOrgan(i) == OrganTypes.Leaf)
+						++sensorsCount;
+
+				var offsets = new int[count];
+				for(int i = 0; i < count; ++i)
+					offsets[i] = ag.GetOrgan(i) == OrganTypes.Leaf ? offsetCounter++ : -1;
+
+				IrradianceFormationOffsets.Add(ag, offsets);
+
+				writer.WriteU32(count); //WRITE NUMBER OF SURFACES in this plant
+
+				for (int i = 0; i < count; ++i)
+				{
+					var organ = ag.GetOrgan(i);
+					var center = ag.GetBaseCenter(i);
+					var scale = ag.GetScale(i);
+					var orientation = ag.GetDirection(i);
+
+					var x = Vector3.Transform(Vector3.UnitX, orientation);
+					var y = Vector3.Transform(Vector3.UnitY, orientation);
+					var z = Vector3.Transform(Vector3.UnitZ, orientation);
+					switch (organ)
+					{
+						case OrganTypes.Leaf:
+							{
+								writer.WriteU8(8); //PRIMITIVE TYPE 1 disk, 2 cylinder, 4 sphere, 8 >RECTANGLE<
+								var ax = x * scale.X * 0.5f;
+								var ay = -z * scale.Z * 0.5f;
+								var az = y * scale.Y * 0.5f;
+								var c = center + ax;
+								writer.WriteM32(ax, ay, az, c);
+								writer.Write(true);
+							}
+							break;
+						case OrganTypes.Stem:
+							{
+								writer.WriteU8(2); //PRIMITIVE TYPE 1 disk, 2 >CYLINDER<, 4 sphere, 8 rectangle
+								writer.Write(scale.X); //length
+								writer.Write(scale.Z * 0.5f); //radius
+								writer.WriteM32(z, x, y, center);
+								writer.Write(false);
+							}
+							break;
+						case OrganTypes.Bud:
+							{
+								writer.WriteU8(4); //PRIMITIVE TYPE 1 disk, 2 cylinder, 4 >SPHERE<, 8 rectangle
+								writer.WriteV32(center);
+								writer.Write(scale.X); //radius
+								writer.Write(false);
+							}
+							break;
+						default: throw new NotImplementedException();
+					}
+				}
+			}
+		}
+
+		return offsetCounter;
+	}
+
 	public static void ExportToFile(string fileName, byte version, IList<IFormation> formations, IList<IObstacle> obstacles)
 	{
 		using var file = File.OpenWrite(fileName);
 		switch (version)
 		{
 			default: Singleton.ExportAsTriangles(formations, obstacles, 0, file); break;
-			case 2: Singleton.ExportAsPrimitives(formations, obstacles, 0, file); break;
+			case 2: Singleton.ExportAsPrimitivesClustered(formations, obstacles, 0, file); break;
+			case 3: Singleton.ExportAsPrimitivesInterleaved(formations, obstacles, 0, file); break;
 		}
 	}
 
@@ -541,7 +634,11 @@ public class IrradianceClient
 						var ag = plant!.AG;
 						var count = ag.Count;
 
-						IrradianceFormationOffsets.Add(ag, offsetCounter);
+
+						var offsets = new int[count];
+						for(int j = 0; j < count; ++j)
+							offsets[j] = offsetCounter + j;
+						IrradianceFormationOffsets.Add(ag, offsets);
 						offsetCounter += count;
 					}
 				}
@@ -563,11 +660,11 @@ public class IrradianceClient
 	public static float GetIrradiance(IFormation formation, int agentIndex) => Singleton.GetIrr(formation, agentIndex);
 	float GetIrr(IFormation formation, int agentIndex)
 	{
-		if (!IsNight && IrradianceFormationOffsets.TryGetValue(formation, out var offset))
+		if (!IsNight && IrradianceFormationOffsets.TryGetValue(formation, out var offset) && agentIndex < offset.Length)
 		{
-			var position = offset + agentIndex;
-			if (position < Irradiances.Count)
-				return Irradiances[offset + agentIndex];
+			var position = offset[agentIndex];
+			if (position >= 0 && position < Irradiances.Count)
+				return Irradiances[position];
 		}
 		return 0f;
 	}
@@ -578,7 +675,12 @@ public class IrradianceClient
 	{
 		var result = new float[formation.Count];
 		if (!IsNight && IrradianceFormationOffsets.TryGetValue(formation, out var offset))
-			Irradiances.CopyTo(offset, result, 0, result.Length);
+			for(int i = 0; i < offset.Length; ++i)
+			{
+				var position = offset[i];
+				result[i] = position >= 0 && position < Irradiances.Count ? Irradiances[position] : 0f;
+			}
+
 		return result;
 	}
 
