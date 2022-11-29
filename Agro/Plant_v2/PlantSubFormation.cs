@@ -511,6 +511,22 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 			waterCapacity += waterStorageCapacity;
 		}
 
+		//this is faster than probing .Contains() for each i
+		foreach(var i in Deaths)
+		{
+			lifesupportEnergy[i] = 0f;
+			energyRequirement -= dst[i].LifeSupportPerTick;
+
+			photosynthWater[i] = 0f;
+			waterRequirement -= dst[i].PhotosynthPerTick;
+
+			capacityEnergy[i] = 0f;
+			energyCapacity -= dst[i].EnergyStorageCapacity;
+
+			capacityWater[i] = 0f;
+			waterCapacity -= dst[i].WaterStorageCapacity;
+		}
+
 		if (irradianceMax > 0f)
 		{
 			for(int i = 0; i < dst.Length; ++i)
@@ -520,11 +536,6 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 				usefulness[i] = u;
 				usefulnessTotal += u;
 			}
-		}
-		else
-		{
-			Array.Fill(usefulness, 1f);
-			usefulnessTotal = usefulness.Length;
 		}
 
 		energyDiff += energy; //optimal variant of sum(dst[i] - src[i])

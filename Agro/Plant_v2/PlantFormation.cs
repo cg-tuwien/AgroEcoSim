@@ -75,11 +75,31 @@ public class PlantGlobalStats
 			ReceivedWater[i] = PhotosynthWater[i] * factor;
 	}
 
-	internal void DistributeEnergyByStorage(float factor)
+	internal double Weights4EnergyDistributionByStorage(bool positiveEfficiency)
+	{
+		var weightsTotal = 0.0;
+		if (positiveEfficiency)
+			for(int i = 0; i < Usefulness.Count; ++i)
+				weightsTotal += (EnergyCapacities[i] - LifeSupportEnergy[i]) * Usefulness[i];
+		else
+			for(int i = 0; i < Usefulness.Count; ++i)
+				weightsTotal += EnergyCapacities[i] - LifeSupportEnergy[i];
+
+		return weightsTotal;
+	}
+
+	internal void DistributeEnergyByStorage(float factor, bool positiveEfficiency)
 	{
 		ReceivedEnergy = new float[LifeSupportEnergy.Count];
-		for(int i = 0; i < ReceivedEnergy.Length; ++i)
-			ReceivedEnergy[i] = LifeSupportEnergy[i] + (EnergyCapacities[i] - LifeSupportEnergy[i]) * factor;
+		if (positiveEfficiency)
+			for(int i = 0; i < ReceivedEnergy.Length; ++i)
+			{
+				var w = (EnergyCapacities[i] - LifeSupportEnergy[i]) * Usefulness[i];
+				ReceivedEnergy[i] = LifeSupportEnergy[i] + w * factor;
+			}
+		else
+			for(int i = 0; i < ReceivedEnergy.Length; ++i)
+				ReceivedEnergy[i] = LifeSupportEnergy[i] + (EnergyCapacities[i] - LifeSupportEnergy[i]) * factor;
 	}
 
 	internal void DistributeWaterByStorage(float factor)
@@ -255,14 +275,14 @@ public partial class PlantFormation2 : IPlantFormation
 			var energy = globalAG.Energy + globalUG.Energy;
 			var water = globalAG.Water + globalUG.Energy;
 
-			var usefulnessSumAG = globalAG.UsefulnessTotal;
-
 			var energyRequirement = globalAG.EnergyRequirement + globalUG.EnergyRequirement;
 			var waterRequirement = globalAG.WaterRequirement + globalUG.WaterRequirement;
 
 			var energyStorage = globalAG.EnergyCapacity + globalUG.EnergyCapacity;
 			var waterStorage = globalAG.WaterCapacity + globalUG.WaterCapacity;
 
+			var positiveEfficiencyAG = globalAG.UsefulnessTotal > 0.0;
+			var positiveEfficiencyUG = globalUG.UsefulnessTotal > 0.0;
 			#if GODOT
 			UG.Efficiency = globalUG.Usefulness;
 			AG.Efficiency = globalAG.Usefulness;
@@ -271,19 +291,24 @@ public partial class PlantFormation2 : IPlantFormation
 			//Debug.WriteLine($"W: {water} / {waterRequirement}   {globalUG.WaterDiff} + {globalAG.WaterDiff}");
 			//Debug.WriteLine($"E: {energy} / {energyRequirement}   {globalUG.EnergyDiff} + {globalAG.EnergyDiff}");
 
-			if (energy < energyRequirement || energyStorage < energyRequirement)
+			if (energy < energyRequirement || energyStorage < energyRequirement) //the plant is short on energy, it must be distributed
 			{
 				var factor = (float)(energy / energyRequirement);
 				globalAG.DistributeEnergyByRequirement(factor);
 				globalUG.DistributeEnergyByRequirement(factor);
 			}
-			else
+			else //there is enough energy
 			{
 				var energyOverhead = energy - energyRequirement;
+				var weights = globalAG.Weights4EnergyDistributionByStorage(positiveEfficiencyAG) + globalUG.Weights4EnergyDistributionByStorage(positiveEfficiencyUG);
 
-				var factor = (float)(energyOverhead / (energyStorage - energyRequirement));
-				globalAG.DistributeEnergyByStorage(factor);
-				globalUG.DistributeEnergyByStorage(factor);
+				var factor = (float)(energyOverhead / weights);
+				globalAG.DistributeEnergyByStorage(factor, positiveEfficiencyAG);
+				globalUG.DistributeEnergyByStorage(factor, positiveEfficiencyUG);
+
+				//check
+				var check = Math.Abs(energy - (globalAG.ReceivedEnergy.Sum() + globalUG.ReceivedEnergy.Sum()));
+				Debug.Assert(check < energy * 1e-4);
 			}
 
 			if (water < waterRequirement || waterStorage < waterRequirement)

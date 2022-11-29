@@ -617,6 +617,7 @@ public class IrradianceClient
 					SkipPlants.Add(i);
 
 			int offsetCounter = 0;
+
 			if (SkipPlants.Count < formations.Count)
 			{
 				Irradiances.Clear();
@@ -674,7 +675,7 @@ public class IrradianceClient
 	float[] GetIrr(IFormation formation)
 	{
 		var result = new float[formation.Count];
-		if (!IsNight && IrradianceFormationOffsets.TryGetValue(formation, out var offset))
+		if (!IsNight && formation.Count > 0 && IrradianceFormationOffsets.TryGetValue(formation, out var offset))
 			for(int i = 0; i < offset.Length; ++i)
 			{
 				var position = offset[i];
