@@ -31,7 +31,7 @@ public interface IPlantAgent : ITreeAgent
 	/// </summary>
 	OrganTypes Organ { get; }
 
-	float EnergyStorageCapacity { get; }
+	float EnergyStorageCapacity();
 	float WaterStorageCapacity { get; }
 	float WaterTotalCapacityPerTick { get; }
 	float EnergyFlowToParentPerTick { get; }

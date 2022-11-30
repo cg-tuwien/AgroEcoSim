@@ -158,7 +158,7 @@ public partial struct UnderGroundAgent : IPlantAgent
 
 	float EnergyCapacityFunc(float radius, float length) => 4f * radius * radius * length * (1f - WaterCapacityRatio) * EnergyStorageCoef * (2f - mWaterAbsorbtionFactor);
 
-	public readonly float EnergyStorageCapacity => EnergyCapacityFunc(Radius, Length);
+	public float EnergyStorageCapacity() => EnergyCapacityFunc(Radius, Length);
 	float LifeSupportPerHour => Length * Radius * Radius * 4f * mWaterAbsorbtionFactor;
 	public float LifeSupportPerTick => LifeSupportPerHour / AgroWorld.TicksPerHour;
 	public float PhotosynthPerTick => 0f;
@@ -322,7 +322,7 @@ public partial struct UnderGroundAgent : IPlantAgent
 		///////////////////////////
 		#region Transport ENERGY
 		///////////////////////////
-		if (children.Count > 0 || Energy < EnergyStorageCapacity)
+		if (children.Count > 0 || Energy < EnergyStorageCapacity())
 		{
 			if (Parent >= 0)
 			{

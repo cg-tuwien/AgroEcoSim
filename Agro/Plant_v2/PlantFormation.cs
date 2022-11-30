@@ -305,11 +305,11 @@ public partial class PlantFormation2 : IPlantFormation
 				var factor = (float)(energyOverhead / weights);
 				globalAG.DistributeEnergyByStorage(factor, positiveEfficiencyAG);
 				globalUG.DistributeEnergyByStorage(factor, positiveEfficiencyUG);
-
-				//check
-				var check = Math.Abs(energy - (globalAG.ReceivedEnergy.Sum() + globalUG.ReceivedEnergy.Sum()));
-				Debug.Assert(check < energy * 1e-4);
 			}
+			#if DEBUG
+			var check = Math.Abs(energy - (globalAG.ReceivedEnergy.Sum() + globalUG.ReceivedEnergy.Sum()));
+			Debug.Assert(check < energy * 1e-5);
+			#endif
 
 			if (water < waterRequirement || waterStorage < waterRequirement)
 			{

@@ -140,7 +140,7 @@ public partial struct AboveGroundAgent : IPlantAgent
 
 	static float EnergyCapacityFunc(float radius, float length, float woodRatio) => 4f * radius * radius * length * (1f + woodRatio) * EnergyStorageCoef;
 
-	public readonly float EnergyStorageCapacity => EnergyCapacityFunc(Radius, Length, WoodRatio);
+	public float EnergyStorageCapacity() => EnergyCapacityFunc(Radius, Length, WoodRatio);
 
 	public static Quaternion OrientationUp = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, MathF.PI * 0.5f);
 
@@ -247,7 +247,7 @@ public partial struct AboveGroundAgent : IPlantAgent
 						else
 						{
 							var waterUsage = Math.Clamp(Water / WaterTotalCapacityPerTick, 0f, 1f);
-							var energyUsage = Math.Clamp(Energy / EnergyStorageCapacity, 0f, 1f);
+							var energyUsage = Math.Clamp(Energy / EnergyStorageCapacity(), 0f, 1f);
 							factor = new Vector2(4e-4f * waterUsage * energyUsage, 4e-6f);
 						}
 					}

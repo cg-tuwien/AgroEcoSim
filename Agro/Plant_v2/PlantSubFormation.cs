@@ -470,19 +470,27 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 		var waterCapacity = 0.0;
 		var energyRequirement = 0.0;
 		var waterRequirement = 0.0;
-		var usefulnessTotal = 0.0;
+		var efficiencyTotal = 0.0;
 		var (dst, src) = SrcDst(); //since Tick already swapped them
-		var usefulness = new float[src.Length];
+		var efficiency = new float[src.Length];
 		var lifesupportEnergy = new float[src.Length];
 		var photosynthWater = new float[src.Length];
 		var capacityEnergy = new float[src.Length];
 		var capacityWater = new float[src.Length];
 		//var maxIrradiance = IrradianeClient.MaxIrradiance(this);
 
-		var irradiances = IrradianceClient.GetIrradiance(this);
+		var (irradianceOffsets, irradiances) = IrradianceClient.GetIrradiance(this);
 		var irradianceMax = 0f;
-		for(int i = 0; i < dst.Length; ++i)
-			irradianceMax = Math.Max(irradianceMax, irradiances[i]);
+		if (irradianceOffsets != null)
+		{
+			for(int i = 0; i < irradianceOffsets.Length; ++i)
+				if (irradianceOffsets[i] >= 0)
+				{
+					var val = irradiances[irradianceOffsets[i]];
+					if (irradianceMax < val)
+						irradianceMax = val;
+				}
+		}
 
 		for(int i = 0; i < dst.Length; ++i)
 		{
@@ -502,7 +510,7 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 			photosynthWater[i] = photosynthSupport;
 			waterRequirement += photosynthSupport;
 
-			var energyStorageCapacity = dst[i].EnergyStorageCapacity;
+			var energyStorageCapacity = dst[i].EnergyStorageCapacity();
 			capacityEnergy[i] = energyStorageCapacity;
 			energyCapacity += energyStorageCapacity;
 
@@ -521,7 +529,7 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 			waterRequirement -= dst[i].PhotosynthPerTick;
 
 			capacityEnergy[i] = 0f;
-			energyCapacity -= dst[i].EnergyStorageCapacity;
+			energyCapacity -= dst[i].EnergyStorageCapacity();
 
 			capacityWater[i] = 0f;
 			waterCapacity -= dst[i].WaterStorageCapacity;
@@ -529,13 +537,47 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 
 		if (irradianceMax > 0f)
 		{
+			//assuming only leafs photosynthesize, efficiency of the parent will be th emax of its children
+			var nodesToSolve = new byte[dst.Length];
+			var sumToSolve = 0;
 			for(int i = 0; i < dst.Length; ++i)
 			{
-				//var u = photosynthSupport > 0 ? Math.Clamp((currentEnergy - previousEnergy + lifeSupport) / photosynthSupport, 0f, 1f) : 1f;
-				var u = irradiances[i] / irradianceMax;
-				usefulness[i] = u;
-				usefulnessTotal += u;
+				var o = irradianceOffsets[i];
+				if (o >= 0)
+					efficiency[i] = irradiances[o] / irradianceMax;
+				else if (GetOrgan(i) == OrganTypes.Fruit)
+					efficiency[i] = 1f;
+				else
+				{
+					Debug.Assert(GetChildren(i).Count < 256);
+					var children = (byte)GetChildren(i).Count;
+					nodesToSolve[i] = children;
+					sumToSolve += children;
+				}
 			}
+
+			//now bubble up the tree to the root(s) and propagate the maximum
+			while (sumToSolve > 0)
+				for(int i = 0; i < dst.Length && sumToSolve > 0; ++i)
+				{
+					if (nodesToSolve[i] == 0)
+					{
+						var parent = dst[i].Parent;
+						var e = efficiency[i];
+						if (efficiency[parent] < e)
+							efficiency[parent] = e;
+						--nodesToSolve[parent];
+						nodesToSolve[i] = byte.MaxValue;
+						--sumToSolve;
+					}
+				}
+
+			for(int i = 0; i < dst.Length; ++i)
+				if (GetOrgan(i) == OrganTypes.Bud)
+					efficiency[i] = 1f;
+
+			for(int i = 0; i < dst.Length; ++i)
+				efficiencyTotal += efficiency[i];
 		}
 
 		energyDiff += energy; //optimal variant of sum(dst[i] - src[i])
@@ -550,8 +592,8 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 			WaterCapacity = waterCapacity,
 			EnergyRequirement = energyRequirement,
 			WaterRequirement = waterRequirement,
-			Usefulness = usefulness,
-			UsefulnessTotal = usefulnessTotal,
+			Usefulness = efficiency,
+			UsefulnessTotal = efficiencyTotal,
 			LifeSupportEnergy = lifesupportEnergy,
 			PhotosynthWater = photosynthWater,
 			EnergyCapacities = capacityEnergy,
@@ -670,8 +712,8 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 	public ICollection<int> GetRoots() => TreeCache.GetRoots();
 
 	internal float GetEnergyCapacity(int index) => ReadTMP
-		? (AgentsTMP.Length > index ? AgentsTMP[index].EnergyStorageCapacity : 0f)
-		: (Agents.Length > index ? Agents[index].EnergyStorageCapacity : 0f);
+		? (AgentsTMP.Length > index ? AgentsTMP[index].EnergyStorageCapacity() : 0f)
+		: (Agents.Length > index ? Agents[index].EnergyStorageCapacity() : 0f);
 
 	internal float GetWaterStorageCapacity(int index) => ReadTMP
 		? (AgentsTMP.Length > index ? AgentsTMP[index].WaterStorageCapacity : 0f)

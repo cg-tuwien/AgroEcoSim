@@ -15,6 +15,7 @@ using System.Security.Cryptography;
 using Innovative.SolarCalculator;
 using System.Diagnostics;
 using System.Linq;
+using System.Linq.Expressions;
 
 /* Triangle Mesh Binary Serialization
 uint8 version = 1
@@ -671,19 +672,9 @@ public class IrradianceClient
 	}
 
 	//TODO make this a ReadOnlySpan
-	public static float[]  GetIrradiance(IFormation formation) => Singleton.GetIrr(formation);
-	float[] GetIrr(IFormation formation)
-	{
-		var result = new float[formation.Count];
-		if (!IsNight && formation.Count > 0 && IrradianceFormationOffsets.TryGetValue(formation, out var offset))
-			for(int i = 0; i < offset.Length; ++i)
-			{
-				var position = offset[i];
-				result[i] = position >= 0 && position < Irradiances.Count ? Irradiances[position] : 0f;
-			}
-
-		return result;
-	}
+	public static (int[], IList<float>) GetIrradiance(IFormation formation) => Singleton.GetIrr(formation);
+	(int[], IList<float>) GetIrr(IFormation formation) =>
+		(!IsNight && formation.Count > 0 && IrradianceFormationOffsets.TryGetValue(formation, out var offset) ? offset : null, Irradiances);
 
 
 	readonly Stopwatch SW = new();

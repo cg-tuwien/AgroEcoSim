@@ -177,13 +177,9 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 	//without any energy gains if its storage is initially full
 	const float EnergyStorageCoef = 24 * 31 * 3; //3 months
 
-	float EnergyCapacityFunc(float radius, float length) => 4f * radius * radius * length * (1f - WaterCapacityRatio) * EnergyStorageCoef * (2f - mWaterAbsorbtionFactor);
-	#if !GODOT
-	[System.Text.Json.Serialization.JsonIgnore]
-	#else
-	[Newtonsoft.Json.JsonIgnore]
-	#endif
-	public readonly float EnergyStorageCapacity => EnergyCapacityFunc(Radius, Length);
+	float EnergyCapacityFunc(float radius, float length) => 4f * radius * radius * length * (1f - WaterCapacityRatio) * EnergyStorageCoef * MathF.Pow(2f - mWaterAbsorbtionFactor, 3);
+
+	public float EnergyStorageCapacity() => EnergyCapacityFunc(Radius, Length);
 	#if !GODOT
 	[System.Text.Json.Serialization.JsonIgnore]
 	#else

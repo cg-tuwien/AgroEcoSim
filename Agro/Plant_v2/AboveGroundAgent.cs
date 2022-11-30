@@ -135,9 +135,9 @@ public partial struct AboveGroundAgent2 : IPlantAgent
 	//without any energy gains if its storage is initially full
 	const float EnergyStorageCoef = 24 * 31 * 3; //3 months
 
-	static float EnergyCapacityFunc(float radius, float length, float woodRatio) => 4f * radius * radius * length * (1f + woodRatio) * EnergyStorageCoef;
+	static float EnergyCapacityFunc(float radius, float length, float woodRatio) => 4f * radius * radius * length * MathF.Pow(1f + woodRatio, 3) * EnergyStorageCoef;
 
-	public readonly float EnergyStorageCapacity => EnergyCapacityFunc(Radius, Length, WoodRatio);
+	public float EnergyStorageCapacity() => EnergyCapacityFunc(Radius, Length, WoodRatio);
 
 	public static Quaternion OrientationUp = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, MathF.PI * 0.5f);
 
@@ -255,7 +255,7 @@ public partial struct AboveGroundAgent2 : IPlantAgent
 						else
 						{
 							//var waterUsage = Math.Clamp(Water / WaterTotalCapacityPerTick, 0f, 1f);
-							var energyUsage = Math.Clamp(Energy / EnergyStorageCapacity, 0f, 1f);
+							var energyUsage = Math.Clamp(Energy / EnergyStorageCapacity(), 0f, 1f);
 							var absDepth = formation.GetAbsInvDepth(formationID) + 1;
 							growth = new Vector2(2e-3f / (absDepth * childrenCount * mPhotoFactor), 1e-5f) * (energyUsage / AgroWorld.TicksPerHour);
 						}

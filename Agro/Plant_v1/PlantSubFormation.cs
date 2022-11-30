@@ -568,8 +568,8 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 	public ICollection<int> GetRoots() => TreeCache.GetRoots();
 
 	internal float GetEnergyCapacity(int index) => ReadTMP
-		? (AgentsTMP.Length > index ? AgentsTMP[index].EnergyStorageCapacity : 0f)
-		: (Agents.Length > index ? Agents[index].EnergyStorageCapacity : 0f);
+		? (AgentsTMP.Length > index ? AgentsTMP[index].EnergyStorageCapacity() : 0f)
+		: (Agents.Length > index ? Agents[index].EnergyStorageCapacity() : 0f);
 
 	internal float GetWaterStorageCapacity(int index) => ReadTMP
 		? (AgentsTMP.Length > index ? AgentsTMP[index].WaterStorageCapacity : 0f)
