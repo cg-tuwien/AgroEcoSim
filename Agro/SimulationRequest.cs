@@ -1,5 +1,3 @@
-using System.Numerics;
-
 namespace Agro;
 
 public class SimulationRequest
@@ -7,10 +5,12 @@ public class SimulationRequest
     ///<summary>
     ///Number of simulation steps per hour (default: 1)
     ///</summary>
+    ///<example>1</example>
     public uint? TicksPerHour { get; set; }
     ///<summary>
     ///Number of simulation hours (default: 744 == 31 days)
     ///</summary>
+    ///<example>744</example>
     public uint? TotalHours { get; set; }
     ///<summary>
     ///Field size in meters. Note "D" is depth. (default: 1x1x1)
@@ -19,10 +19,12 @@ public class SimulationRequest
     ///<summary>
     ///Size of a soil voxel in meters (default: 0.5)
     ///</summary>
+    ///<example>0.5</example>
     public float? FieldResolution { get; set; }
     ///<summary>
     ///Seed number that controls all pseudo-random decisions in the simulation. (default: 42)
     ///</summary>
+    ///<example>42</example>
     public ulong? Seed { get; set; }
 
     ///<summary>

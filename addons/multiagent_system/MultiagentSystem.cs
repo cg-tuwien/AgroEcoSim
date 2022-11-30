@@ -58,18 +58,15 @@ public class MultiagentSystem : Spatial
 		//Translation = new Vector3(-0.5f * AgroWorld.FieldSize.X, AgroWorld.FieldResolution, -0.5f * AgroWorld.FieldSize.Z);
 		//Translation = new Vector3(0, AgroWorld.FieldResolution, 0);
 
-		Utils.Json.Vector3XDZ fieldSize = default;
-		fieldSize.X = 5;
-		fieldSize.D = 3;
-		fieldSize.Z = 5;
+		var fieldSize = new Utils.Json.Vector3XDZ{ X = 5, D = 3, Z = 5 };
 
 		var plants = new List<PlantRequest>();
 		//for(float x = 0.5f; x < fieldSize.X; x += 1f)
 			for(float z = 0.5f; z < 3f; z += 1f)
-				plants.Add(new(){ Position = new ( fieldSize.X * 0.5f, -0.01f, z) });
+				plants.Add(new(){ Position = new Utils.Json.Vector3XYZ{ X = fieldSize.X * 0.5f, Y = -0.01f, Z = z }});
 
 		var obstacles = new ObstacleRequest[] {
-			new(){ Type = "Wall", Length = 5f, Height = 3.2f, Position = new(2.5f, 0f, 1.0f)},
+			new(){ Type = "Wall", Length = 5f, Height = 3.2f, Position = new Utils.Json.Vector3XYZ{ X = 4.5f, Y = 0f, Z = 1.0f }},
 			//new(){ Type = "Umbrella", Radius = 1.5f, Height = 2.2f, Position = new(2.5f, 0f, 2.5f)}
 		};
 
