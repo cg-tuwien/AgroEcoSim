@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Numerics;
+using System.Timers;
 using AgentsSystem;
 using glTFLoader.Schema;
 using NumericHelpers;
@@ -26,7 +27,7 @@ public class PlantGlobalStats
 
 	public double UsefulnessTotal { get; set; }
 
-	public IList<float> Usefulness { get; set; }
+	public IList<float> Efficiency { get; set; }
 	public IList<float> LifeSupportEnergy { get; set; }
 	public IList<float> PhotosynthWater { get; set; }
 	public IList<float> EnergyCapacities { get; set; }
@@ -35,39 +36,6 @@ public class PlantGlobalStats
 	public float[]? ReceivedEnergy;
 	public float[]? ReceivedWater;
 
-	internal void DistributeEnergyByRequirement(float factor)
-	{
-		//factor is energyAvailableTotal / energyRequirementTotal
-		var weightsTotal = 0.0;
-		ReceivedEnergy = new float[LifeSupportEnergy.Count];
-		var positiveUsefulness = false;
-		for(int i = 0; i < ReceivedEnergy.Length; ++i)
-			if (Usefulness[i] > 0f)
-			{
-				positiveUsefulness = true;
-				break;
-			}
-
-		if (positiveUsefulness && factor > 0f)
-		{
-			for(int i = 0; i < ReceivedEnergy.Length; ++i)
-			{
-				var w = LifeSupportEnergy[i] * Usefulness[i];
-				ReceivedEnergy[i] = w * factor; //in sum over all i: LifeSupportEnergy[i] / energyRequirementTotal yields 1
-				weightsTotal += w;
-			}
-
-			var wtf = (float)weightsTotal;
-			for(int i = 0; i < ReceivedEnergy.Length; ++i)
-				ReceivedEnergy[i] /= wtf;
-		}
-		else
-		{
-			for(int i = 0; i < ReceivedEnergy.Length; ++i)
-				ReceivedEnergy[i] = LifeSupportEnergy[i] * factor; //in sum over all i: LifeSupportEnergy[i] / energyRequirementTotal yields 1
-		}
-	}
-
 	internal void DistributeWaterByRequirement(float factor)
 	{
 		ReceivedWater = new float[PhotosynthWater.Count];
@@ -75,14 +43,27 @@ public class PlantGlobalStats
 			ReceivedWater[i] = PhotosynthWater[i] * factor;
 	}
 
+	internal double Weights4EnergyDistributionByRequirement(bool positiveEfficiency)
+	{
+		if (positiveEfficiency)
+		{
+			var weightsTotal = 0.0;
+			for(int i = 0; i < Efficiency.Count; ++i)
+				weightsTotal = LifeSupportEnergy[i] * Efficiency[i];
+			return weightsTotal;
+		}
+		else
+			return EnergyRequirement;
+	}
+
 	internal double Weights4EnergyDistributionByStorage(bool positiveEfficiency)
 	{
 		var weightsTotal = 0.0;
 		if (positiveEfficiency)
-			for(int i = 0; i < Usefulness.Count; ++i)
-				weightsTotal += (EnergyCapacities[i] - LifeSupportEnergy[i]) * Usefulness[i];
+			for(int i = 0; i < Efficiency.Count; ++i)
+				weightsTotal += (EnergyCapacities[i] - LifeSupportEnergy[i]) * Efficiency[i];
 		else
-			for(int i = 0; i < Usefulness.Count; ++i)
+			for(int i = 0; i < Efficiency.Count; ++i)
 				weightsTotal += EnergyCapacities[i] - LifeSupportEnergy[i];
 
 		return weightsTotal;
@@ -94,12 +75,29 @@ public class PlantGlobalStats
 		if (positiveEfficiency)
 			for(int i = 0; i < ReceivedEnergy.Length; ++i)
 			{
-				var w = (EnergyCapacities[i] - LifeSupportEnergy[i]) * Usefulness[i];
+				var w = (EnergyCapacities[i] - LifeSupportEnergy[i]) * Efficiency[i];
 				ReceivedEnergy[i] = LifeSupportEnergy[i] + w * factor;
 			}
 		else
 			for(int i = 0; i < ReceivedEnergy.Length; ++i)
 				ReceivedEnergy[i] = LifeSupportEnergy[i] + (EnergyCapacities[i] - LifeSupportEnergy[i]) * factor;
+	}
+
+	internal void DistributeEnergyByRequirement(float factor, bool positiveEfficiency)
+	{
+		//factor is energyAvailableTotal / energyRequirementTotal
+		ReceivedEnergy = new float[LifeSupportEnergy.Count];
+
+		if (positiveEfficiency)
+		{
+			for(int i = 0; i < ReceivedEnergy.Length; ++i)
+				ReceivedEnergy[i] = LifeSupportEnergy[i] * Efficiency[i] * factor; //in sum over all i: LifeSupportEnergy[i] / energyRequirementTotal yields 1
+		}
+		else
+		{
+			for(int i = 0; i < ReceivedEnergy.Length; ++i)
+				ReceivedEnergy[i] = LifeSupportEnergy[i] * factor; //in sum over all i: LifeSupportEnergy[i] / energyRequirementTotal yields 1
+		}
 	}
 
 	internal void DistributeWaterByStorage(float factor)
@@ -220,10 +218,15 @@ public partial class PlantFormation2 : IPlantFormation
 		AG.Census();
 	}
 
+	bool NewDay = true;
+	internal bool IsNewDay() => NewDay;
+
 	public void Tick(SimulationWorld world, uint timestep, byte stage)
 	{
 		if (DeathSeed && !UG.Alive && !AG.Alive)
 			return;
+
+		NewDay = timestep % (24 * AgroWorld.TicksPerHour) == 0;
 
 		//Ready for List and Span combination
 
@@ -284,18 +287,45 @@ public partial class PlantFormation2 : IPlantFormation
 			var positiveEfficiencyAG = globalAG.UsefulnessTotal > 0.0;
 			var positiveEfficiencyUG = globalUG.UsefulnessTotal > 0.0;
 			#if GODOT
-			UG.Efficiency = globalUG.Usefulness;
-			AG.Efficiency = globalAG.Usefulness;
+			UG.Efficiency = globalUG.Efficiency;
+			AG.Efficiency = globalAG.Efficiency;
 			#endif
 
 			//Debug.WriteLine($"W: {water} / {waterRequirement}   {globalUG.WaterDiff} + {globalAG.WaterDiff}");
 			//Debug.WriteLine($"E: {energy} / {energyRequirement}   {globalUG.EnergyDiff} + {globalAG.EnergyDiff}");
+			var energyEmergencyThrehold = energyRequirement * 4;
+			var energAlertThreshold = energyRequirement * 24;
 
-			if (energy < energyRequirement || energyStorage < energyRequirement) //the plant is short on energy, it must be distributed
+			if (energy < energyEmergencyThrehold)
 			{
-				var factor = (float)(energy / energyRequirement);
-				globalAG.DistributeEnergyByRequirement(factor);
-				globalUG.DistributeEnergyByRequirement(factor);
+				var energyState = energy / energyRequirement;
+				var waterState = water / waterRequirement;
+				if (energyState < waterState) //cut of a root
+				{
+
+				}
+				else //cut off a leaf
+				{
+
+				}
+
+				// var minEfficiency = Math.Min(globalUG.Efficiency.Min(), globalAG.Efficiency.Min());
+				// var weights = globalAG.Weights4EnergyDistributionByEmergency(positiveEfficiencyAG) + globalUG.Weights4EnergyDistributionByEmergency(positiveEfficiencyUG);
+				// var factor = (float)(energy / weights);
+				// globalAG.DistributeEnergyByEmergency(factor, positiveEfficiencyAG);
+				// globalUG.DistributeEnergyByEmergency(factor, positiveEfficiencyUG);
+
+				var weights = globalAG.Weights4EnergyDistributionByRequirement(positiveEfficiencyAG) + globalUG.Weights4EnergyDistributionByRequirement(positiveEfficiencyUG);
+				var factor = (float)(energy / weights);
+				globalAG.DistributeEnergyByRequirement(factor, positiveEfficiencyAG);
+				globalUG.DistributeEnergyByRequirement(factor, positiveEfficiencyUG);
+			}
+			if (energy < energAlertThreshold || energyStorage < energyRequirement) //the plant is short on energy, it must be distributed
+			{
+				var weights = globalAG.Weights4EnergyDistributionByRequirement(positiveEfficiencyAG) + globalUG.Weights4EnergyDistributionByRequirement(positiveEfficiencyUG);
+				var factor = (float)(energy / weights);
+				globalAG.DistributeEnergyByRequirement(factor, positiveEfficiencyAG);
+				globalUG.DistributeEnergyByRequirement(factor, positiveEfficiencyUG);
 			}
 			else //there is enough energy
 			{
@@ -308,7 +338,7 @@ public partial class PlantFormation2 : IPlantFormation
 			}
 			#if DEBUG
 			var check = Math.Abs(energy - (globalAG.ReceivedEnergy.Sum() + globalUG.ReceivedEnergy.Sum()));
-			Debug.Assert(check < energy * 1e-5);
+			Debug.Assert(check <= energy * 1e-5);
 			#endif
 
 			if (water < waterRequirement || waterStorage < waterRequirement)
@@ -374,11 +404,25 @@ public partial class PlantFormation2 : IPlantFormation
 			AG.ProcessTransactions(timestep, stage);
 	}
 
+	public (uint, uint, uint) GeometryStats()
+	{
+		uint triangles = 0, sensors = 0;
+		for(int i = 0; i < AG.Count; ++i)
+			switch (AG.GetOrgan(i))
+			{
+				case OrganTypes.Stem: triangles += 8; break;
+				case OrganTypes.Bud: triangles += 4; break;
+				case OrganTypes.Leaf: ++sensors; triangles += 2; break;
+			}
+
+		return ((uint)AG.Count, triangles, sensors);
+	}
+
 	[Newtonsoft.Json.JsonIgnore] public bool HasUndeliveredPost => PostboxSeed.AnyMessages || UG.HasUndeliveredPost || AG.HasUndeliveredPost;
 
 	[Newtonsoft.Json.JsonIgnore] public bool HasUnprocessedTransactions => UG.HasUnprocessedTransactions || AG.HasUnprocessedTransactions;
 
-	[Newtonsoft.Json.JsonIgnore]public int Count => SeedAlive ? 1 : UG.Count + AG.Count;
+	[Newtonsoft.Json.JsonIgnore] public int Count => SeedAlive ? 1 : UG.Count + AG.Count;
 
 	///////////////////////////
 	#region LOG

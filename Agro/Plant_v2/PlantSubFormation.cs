@@ -9,6 +9,7 @@ using Utils;
 using NumericHelpers;
 using System.Collections;
 using System.Runtime.InteropServices;
+using System.Timers;
 
 namespace Agro;
 
@@ -235,7 +236,7 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 		//     Roots.AddRange(RootsBirths);
 		if (Births.Count > 0 || Inserts.Count > 0 || Deaths.Count > 0)
 		{
-			//Debug.WriteLine($"{typeof(T).Name} census event: B = {Births.Count}   I = {Inserts.Count}   D = {Deaths.Count}");
+			Debug.WriteLine($"{typeof(T).Name} census event: B = {Births.Count}   I = {Inserts.Count}   D = {Deaths.Count}");
 
 			// #if GODOT
 			// MultiagentSystem.TriggerPause();
@@ -494,7 +495,7 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 
 		for(int i = 0; i < dst.Length; ++i)
 		{
-			var currentEnergy = dst[i].Energy;
+			var currentEnergy = Math.Max(0f, dst[i].Energy);
 			energy += currentEnergy;
 			water += dst[i].Water;
 
@@ -502,11 +503,11 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 			energyDiff -= previousEnergy;
 			waterDiff -= src[i].Water;
 
-			var lifeSupport = dst[i].LifeSupportPerTick;
+			var lifeSupport = dst[i].LifeSupportPerTick();
 			lifesupportEnergy[i] = lifeSupport;
 			energyRequirement += lifeSupport;
 
-			var photosynthSupport = dst[i].PhotosynthPerTick; //*maxIrradiance
+			var photosynthSupport = dst[i].PhotosynthPerTick(); //*maxIrradiance
 			photosynthWater[i] = photosynthSupport;
 			waterRequirement += photosynthSupport;
 
@@ -514,7 +515,7 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 			capacityEnergy[i] = energyStorageCapacity;
 			energyCapacity += energyStorageCapacity;
 
-			var waterStorageCapacity = dst[i].WaterStorageCapacity;
+			var waterStorageCapacity = dst[i].WaterStorageCapacity();
 			capacityWater[i] = waterStorageCapacity;
 			waterCapacity += waterStorageCapacity;
 		}
@@ -523,16 +524,16 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 		foreach(var i in Deaths)
 		{
 			lifesupportEnergy[i] = 0f;
-			energyRequirement -= dst[i].LifeSupportPerTick;
+			energyRequirement -= dst[i].LifeSupportPerTick();
 
 			photosynthWater[i] = 0f;
-			waterRequirement -= dst[i].PhotosynthPerTick;
+			waterRequirement -= dst[i].PhotosynthPerTick();
 
 			capacityEnergy[i] = 0f;
 			energyCapacity -= dst[i].EnergyStorageCapacity();
 
 			capacityWater[i] = 0f;
-			waterCapacity -= dst[i].WaterStorageCapacity;
+			waterCapacity -= dst[i].WaterStorageCapacity();
 		}
 
 		if (irradianceMax > 0f)
@@ -592,7 +593,7 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 			WaterCapacity = waterCapacity,
 			EnergyRequirement = energyRequirement,
 			WaterRequirement = waterRequirement,
-			Usefulness = efficiency,
+			Efficiency = efficiency,
 			UsefulnessTotal = efficiencyTotal,
 			LifeSupportEnergy = lifesupportEnergy,
 			PhotosynthWater = photosynthWater,
@@ -716,20 +717,20 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 		: (Agents.Length > index ? Agents[index].EnergyStorageCapacity() : 0f);
 
 	internal float GetWaterStorageCapacity(int index) => ReadTMP
-		? (AgentsTMP.Length > index ? AgentsTMP[index].WaterStorageCapacity : 0f)
-		: (Agents.Length > index ? Agents[index].WaterStorageCapacity : 0f);
+		? (AgentsTMP.Length > index ? AgentsTMP[index].WaterStorageCapacity() : 0f)
+		: (Agents.Length > index ? Agents[index].WaterStorageCapacity() : 0f);
 
 	internal float GetWaterTotalCapacity(int index) => ReadTMP
-		? (AgentsTMP.Length > index ? AgentsTMP[index].WaterTotalCapacityPerTick : 0f)
-		: (Agents.Length > index ? Agents[index].WaterTotalCapacityPerTick : 0f);
+		? (AgentsTMP.Length > index ? AgentsTMP[index].WaterTotalCapacityPerTick() : 0f)
+		: (Agents.Length > index ? Agents[index].WaterTotalCapacityPerTick() : 0f);
 
 	public float GetEnergy(int index) => ReadTMP
 		? (AgentsTMP.Length > index ? AgentsTMP[index].Energy : 0f)
 		: (Agents.Length > index ? Agents[index].Energy : 0f);
 
 	public float GetEnergyFlow_PerTick(int index) => ReadTMP
-		? (AgentsTMP.Length > index ? AgentsTMP[index].EnergyFlowToParentPerTick : 0f)
-		: (Agents.Length > index ? Agents[index].EnergyFlowToParentPerTick : 0f);
+		? (AgentsTMP.Length > index ? AgentsTMP[index].EnergyFlowToParentPerTick() : 0f)
+		: (Agents.Length > index ? Agents[index].EnergyFlowToParentPerTick() : 0f);
 
 	public float GetWater(int index) => ReadTMP
 		? (AgentsTMP.Length > index ? AgentsTMP[index].Water : 0f)
@@ -752,39 +753,22 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 		: (Agents.Length > index ? Agents[index].Organ : OrganTypes.Stem);
 
 	public float GetWoodRatio(int index) => ReadTMP
-		? (AgentsTMP.Length > index ? AgentsTMP[index].WoodRatio : 0f)
-		: (Agents.Length > index ? Agents[index].WoodRatio : 0f);
+		? (AgentsTMP.Length > index ? AgentsTMP[index].WoodRatio() : 0f)
+		: (Agents.Length > index ? Agents[index].WoodRatio() : 0f);
 
 	public Vector3 GetBaseCenter(int index) => TreeCache.GetBaseCenter(index);
-	// {
-	// 	if (ReadTMP ? AgentsTMP.Length <= index : Agents.Length <= index)
-	// 		return Vector3.Zero;
 
-	// 	var parents = new List<int>(TreeCache.GetAbsDepth(index)){index};
-	// 	if (ReadTMP)
-	// 		do {parents.Add(AgentsTMP[parents[^1]].Parent); }
-	// 		while(parents[^1] >= 0 && parents.Count <= AgentsTMP.Length);
-	// 	else
-	// 		do parents.Add(Agents[parents[^1]].Parent);
-	// 		while(parents[^1] >= 0 && parents.Count <= Agents.Length);
+	public float GetDailyEnergyProduction(int index) => ReadTMP
+		? (AgentsTMP.Length > index ? AgentsTMP[index].PreviousDayEnergyProduction : 0f)
+		: (Agents.Length > index ? Agents[index].PreviousDayEnergyProduction : 0f);
 
-	// 	var result = Plant.Position;
-	// 	if (ReadTMP)
-	// 		for(int i = parents.Count - 2; i > 0; --i)
-	// 			result += Vector3.Transform(Vector3.UnitX, AgentsTMP[parents[i]].Orientation) * AgentsTMP[parents[i]].Length;
-	// 	else
-	// 		for(int i = parents.Count - 2; i > 0; --i)
-	// 			result += Vector3.Transform(Vector3.UnitX, Agents[parents[i]].Orientation) * Agents[parents[i]].Length;
-
-	// 	// var better = TreeCache.GetBaseCenter(index);
-	// 	// Debug.Assert(Math.Abs(better.X - result.X) < 1e-6 && Math.Abs(better.Y - result.Y) < 1e-6 && Math.Abs(better.Z - result.Z) < 1e-6);
-
-	// 	return result;
-	// }
+	public float GetDailyLightExposure(int index) => ReadTMP
+		? (AgentsTMP.Length > index ? AgentsTMP[index].PreviousDayLightExposure : 0f)
+		: (Agents.Length > index ? Agents[index].PreviousDayLightExposure : 0f);
 
 	public Vector3 GetScale(int index) => ReadTMP
-		? (AgentsTMP.Length > index ? AgentsTMP[index].Scale : Vector3.Zero)
-		: (Agents.Length > index ? Agents[index].Scale : Vector3.Zero);
+		? (AgentsTMP.Length > index ? AgentsTMP[index].Scale() : Vector3.Zero)
+		: (Agents.Length > index ? Agents[index].Scale() : Vector3.Zero);
 
 	float GetCapacity(int index, int substanceIndex) => substanceIndex switch {
 		(byte)PlantSubstances.Water => GetWaterTotalCapacity(index),
@@ -798,7 +782,10 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 		_ => throw new IndexOutOfRangeException($"SubstanceIndex out of range: {substanceIndex}")
 	};
 
-	public float GetVolume() => (ReadTMP ? AgentsTMP : Agents).Aggregate(0f, (sum, current) => sum + current.Scale.X * current.Scale.Y * current.Scale.Z);
+	///<summary>
+	///Volume in m³
+	///<summary>
+	public float GetVolume() => (ReadTMP ? AgentsTMP : Agents).Aggregate(0f, (sum, current) => sum + current.Volume());
 
 	///<summary>
 	///Irradiance in W / hm²

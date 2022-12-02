@@ -55,12 +55,12 @@ public abstract class PlantAbstractGodot2<T> where T : struct, IPlantAgent
 			case ColorCodingType.Energy:
 			{
 				var r = Math.Min(1f, Formation.GetEnergy(index) / Formation.GetEnergyCapacity(index));
-				return r >= 0f ? new Color(r, r * 0.5f, 0f) : Colors.Red;
+				return r >= 0f ? new Color(Math.Clamp(r, 0, 1), Math.Clamp(r * 0.1f, 0, 1), 0f) : Colors.Red;
 			}
 			case ColorCodingType.Light:
 			{
 				var w = Math.Clamp(Formation.GetIrradiance(index) * AgroWorldGodot.ShootsVisualization.LightCutOff, 0, 1);
-				return Colors.White * w;
+				return new Color(Math.Clamp(w, 0, 1), Math.Clamp(w * 0.8f, 0, 1), Math.Clamp(w * 0.64f, 0, 1));
 			}
 			case ColorCodingType.Water:
 			{
@@ -82,6 +82,18 @@ public abstract class PlantAbstractGodot2<T> where T : struct, IPlantAgent
 			{
 				var w = Math.Clamp(GetEfficiency(index), 0, 1);
 				return Colors.Yellow * w + Colors.Blue * (1-w);
+			}
+			case ColorCodingType.DailyEnergyProduction:
+			{
+				var r = Formation.GetDailyEnergyProduction(index) / 100f;
+				return r >= 0f ? new Color(Math.Clamp(r, 0, 1), Math.Clamp(r * 0.1f, 0, 1), 0f) : Colors.Red;
+			}
+			case ColorCodingType.DailyLightExposure:
+			{
+				// if (Formation.GetDailyLightExposure(index) > 1f)
+				// 	System.Diagnostics.Debug.WriteLine($"D: {Formation.GetDailyLightExposure(index)} f: {AgroWorldGodot.ShootsVisualization.LightCutOff}");
+				var w = Formation.GetDailyLightExposure(index) * AgroWorldGodot.ShootsVisualization.LightCutOff / (12f * AgroWorld.TicksPerHour);
+				return new Color(Math.Clamp(w, 0, 1), Math.Clamp(w * 0.8f, 0, 1), Math.Clamp(w * 0.64f, 0, 1));
 			}
 			default: return FormationColor;
 		}

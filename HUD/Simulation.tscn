@@ -111,6 +111,21 @@ rect_pivot_offset = Vector2( -264, -119 )
 max_value = 71.0
 rounded = true
 
+[node name="ScreenshotLabel" type="Label" parent="Animation/Control"]
+margin_left = 83.0
+margin_top = 164.0
+margin_right = 147.0
+margin_bottom = 178.0
+rect_pivot_offset = Vector2( 37, 36 )
+text = "Screenshot"
+
+[node name="ScreenshotButton" type="CheckButton" parent="Animation/Control"]
+margin_left = 11.0
+margin_top = 151.0
+margin_right = 87.0
+margin_bottom = 191.0
+rect_pivot_offset = Vector2( 109, 49 )
+
 [node name="Export" type="Control" parent="."]
 margin_top = -5.0
 margin_right = 40.0
@@ -121,7 +136,7 @@ material = SubResource( 1 )
 margin_left = 6.0
 margin_top = 246.0
 margin_right = 232.0
-margin_bottom = 436.0
+margin_bottom = 358.0
 color = Color( 0.627451, 0.627451, 0.627451, 1 )
 
 [node name="ReferenceRect" type="ReferenceRect" parent="Export"]
@@ -137,7 +152,7 @@ editor_only = false
 margin_left = 6.0
 margin_top = 278.0
 margin_right = 232.0
-margin_bottom = 436.0
+margin_bottom = 358.0
 border_color = Color( 0.745098, 0.745098, 0.745098, 1 )
 border_width = 1.2
 editor_only = false
@@ -207,6 +222,7 @@ margin_right = 194.0
 margin_bottom = 340.0
 rect_pivot_offset = Vector2( 3.8147e-06, 3.99997 )
 hint_tooltip = "Triangular mesh"
+disabled = true
 text = "json"
 
 [node name="Label" type="Label" parent="Export/CompleteControl"]
@@ -217,9 +233,9 @@ margin_bottom = 338.0
 text = "Complete"
 
 [node name="Debug" type="Control" parent="."]
-margin_top = 440.0
+margin_top = 360.0
 margin_right = 40.0
-margin_bottom = 480.0
+margin_bottom = 400.0
 
 [node name="ColorRect" type="ColorRect" parent="Debug"]
 material = SubResource( 1 )
@@ -292,6 +308,57 @@ margin_bottom = 101.0
 rect_pivot_offset = Vector2( -264, -119 )
 max_value = 1.0
 step = 0.1
+
+[node name="Stats" type="Control" parent="Debug"]
+margin_left = 12.0
+margin_top = 104.0
+margin_right = 224.0
+margin_bottom = 192.0
+
+[node name="ShootSegsLabel" type="Label" parent="Debug/Stats"]
+margin_left = 12.0
+margin_top = 15.0
+margin_right = 76.0
+margin_bottom = 29.0
+text = "Shoot segs:"
+
+[node name="TrianglesLabel" type="Label" parent="Debug/Stats"]
+margin_left = 12.0
+margin_top = 39.0
+margin_right = 85.0
+margin_bottom = 53.0
+text = "Triangles:"
+
+[node name="SensorsLabel" type="Label" parent="Debug/Stats"]
+margin_left = 12.0
+margin_top = 63.0
+margin_right = 85.0
+margin_bottom = 77.0
+text = "Sensors:"
+
+[node name="ShootSegsValue" type="Label" parent="Debug/Stats"]
+margin_left = 108.0
+margin_top = 15.0
+margin_right = 181.0
+margin_bottom = 29.0
+text = "0"
+align = 2
+
+[node name="TrianglesValue" type="Label" parent="Debug/Stats"]
+margin_left = 108.0
+margin_top = 39.0
+margin_right = 181.0
+margin_bottom = 53.0
+text = "0"
+align = 2
+
+[node name="SensorsValue" type="Label" parent="Debug/Stats"]
+margin_left = 108.0
+margin_top = 63.0
+margin_right = 181.0
+margin_bottom = 77.0
+text = "0"
+align = 2
 
 [connection signal="pressed" from="Animation/Control/PlayPause" to="." method="Pause"]
 [connection signal="pressed" from="Animation/Control/ManualSteps/OneFrame" to="." method="OneFrame"]

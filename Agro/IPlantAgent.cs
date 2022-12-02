@@ -31,21 +31,24 @@ public interface IPlantAgent : ITreeAgent
 	/// </summary>
 	OrganTypes Organ { get; }
 
+	float PreviousDayEnergyProduction { get; }
+	float PreviousDayLightExposure { get; }
+
 	float EnergyStorageCapacity();
-	float WaterStorageCapacity { get; }
-	float WaterTotalCapacityPerTick { get; }
-	float EnergyFlowToParentPerTick { get; }
+	float WaterStorageCapacity();
+	float WaterTotalCapacityPerTick();
+	float EnergyFlowToParentPerTick();
 
-	float LifeSupportPerTick { get; }
-	float PhotosynthPerTick { get; }
+	float LifeSupportPerTick();
+	float PhotosynthPerTick();
 
-	float WoodRatio { get; }
+	float WoodRatio();
 
-	Vector3 Scale { get; }
+	Vector3 Scale();
+	float Volume();
 
 	static void Reindex(IPlantAgent[] data, int[] map) => throw new NotImplementedException();
 
-	bool ChangeAmount(PlantFormation1 plant, int index, int substanceIndex, float amount, bool increase);
 	bool ChangeAmount(PlantFormation2 plant, int index, int substanceIndex, float amount, bool increase);
 
 	void Distribute(float water, float energy);

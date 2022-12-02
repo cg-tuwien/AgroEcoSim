@@ -17,10 +17,6 @@ public partial struct AboveGroundAgent2 : IPlantAgent
 	/// <summary>
 	/// Orientation with respect to the parent. If there is no parent, this is the initial orientation.
 	/// </summary>
-
-	#if !GODOT
-	[System.Text.Json.Serialization.JsonIgnore]
-	#endif
 	public Quaternion Orientation { get; private set; }
 
 	/// <summary>
@@ -33,12 +29,14 @@ public partial struct AboveGroundAgent2 : IPlantAgent
 	/// </summary>
 	public float Radius { get; private set; }
 
-	#if !GODOT
-	[System.Text.Json.Serialization.JsonIgnore]
-	#endif
-	public Vector3 Scale => Organ switch {
+	public Vector3 Scale() => Organ switch {
 		OrganTypes.Leaf => new(Length, 0.0001f, 2f * Radius),
 		_ => new(Length, 2f * Radius, 2f * Radius)
+	};
+
+	public float Volume() => Organ switch {
+		OrganTypes.Leaf => Length * 0.0002f * Radius,
+		_ => Length * 4f * Radius* Radius
 	};
 
 	public float Energy { get; private set; }
@@ -48,12 +46,30 @@ public partial struct AboveGroundAgent2 : IPlantAgent
 	/// </summary>
 	public float Water { get; private set; }
 
+	///<summary>
+	///Accumulated energy output of this agent for the whole previous day
+	///</summary>
+	public float PreviousDayEnergyProduction { get; private set; }
+	///<summary>
+	///Accumulated energy output of this agent for the current day
+	///</summary>
+	float CurrentDayEnergyProduction { get; set; }
+
+	///<summary>
+	///Accumulated light exposure of this agent for the whole previous day
+	///</summary>
+	public float PreviousDayLightExposure { get; private set; }
+	///<summary>
+	///Accumulated light exposure of this agent for the current day
+	///</summary>
+	float CurrentDayLightExposure { get; set; }
+
 	/// <summary>
 	/// Inverse woodyness ∈ [0, 1]. The more woody (towards 0) the less photosynthesis can be achieved.
 	/// </summary>
 	float mPhotoFactor;
 
-	public readonly float WoodRatio => 1f - mPhotoFactor;
+	public float WoodRatio() => 1f - mPhotoFactor;
 
 	/// <summary>
 	/// Plant organ, e.g. stem, leaft, fruit
@@ -82,22 +98,16 @@ public partial struct AboveGroundAgent2 : IPlantAgent
 	/// <summary>
 	/// Water volume in m³ which can be passed to the parent per hour
 	/// </summary>
-	public readonly float WaterFlowToParentPerHour => 4f * Radius * Radius * WaterTransportRatio;
+	public float WaterFlowToParentPerHour() => 4f * Radius * Radius * WaterTransportRatio;
 
 	/// <summary>
 	/// Water volume in m³ which can be passed to the parent per timestep
 	/// </summary>
-	#if !GODOT
-	[System.Text.Json.Serialization.JsonIgnore]
-	#endif
-	public readonly float WaterFlowToParentPerTick => WaterFlowToParentPerHour / AgroWorld.TicksPerHour;
+	public float WaterFlowToParentPerTick() => WaterFlowToParentPerHour() / AgroWorld.TicksPerHour;
 
-	public readonly float EnergyFlowToParentPerHour => 4f * Radius * Radius * WaterTransportRatio;
+	public float EnergyFlowToParentPerHour() => 4f * Radius * Radius * WaterTransportRatio;
 
-	#if !GODOT
-	[System.Text.Json.Serialization.JsonIgnore]
-	#endif
-	public readonly float EnergyFlowToParentPerTick => EnergyFlowToParentPerHour / AgroWorld.TicksPerHour;
+	public float EnergyFlowToParentPerTick() => EnergyFlowToParentPerHour() / AgroWorld.TicksPerHour;
 
 	/// <summary>
 	/// Volume ratio ∈ [0, 1] of the agent that can used for storing water
@@ -112,20 +122,17 @@ public partial struct AboveGroundAgent2 : IPlantAgent
 	/// <summary>
 	/// Water volume in m³ which can be stored in this agent
 	/// </summary>
-	public readonly float WaterStorageCapacity => WaterStorageCapacityfunction(Radius, Length);
+	public float WaterStorageCapacity() => WaterStorageCapacityfunction(Radius, Length);
 
 	/// <summary>
 	/// Water volume in m³ which can flow through per hour, or can be stored in this agent
 	/// </summary>
-	public readonly float WaterTotalCapacityPerHour => 4f * Radius * Radius * (Length * WaterCapacityRatio + WaterTransportRatio);
+	public float WaterTotalCapacityPerHour() => 4f * Radius * Radius * (Length * WaterCapacityRatio + WaterTransportRatio);
 
 	/// <summary>
 	/// Water volume in m³ which can flow through per tick, or can be stored in this agent
 	/// </summary>
-	#if !GODOT
-	[System.Text.Json.Serialization.JsonIgnore]
-	#endif
-	public readonly float WaterTotalCapacityPerTick => WaterTotalCapacityPerHour / AgroWorld.TicksPerHour;
+	public float WaterTotalCapacityPerTick() => WaterTotalCapacityPerHour() / AgroWorld.TicksPerHour;
 
 	/// <summary>
 	/// Timespan for which 1 unit of energy can feed 1m³ of plant tissue
@@ -137,21 +144,21 @@ public partial struct AboveGroundAgent2 : IPlantAgent
 
 	static float EnergyCapacityFunc(float radius, float length, float woodRatio) => 4f * radius * radius * length * MathF.Pow(1f + woodRatio, 3) * EnergyStorageCoef;
 
-	public float EnergyStorageCapacity() => EnergyCapacityFunc(Radius, Length, WoodRatio);
+	public float EnergyStorageCapacity() => EnergyCapacityFunc(Radius, Length, WoodRatio());
 
 	public static Quaternion OrientationUp = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, MathF.PI * 0.5f);
 
 	public const float GrowthRatePerHour = 1 + 1/12; //Let us assume this plant can double volume in 12 hours
 	public static readonly float GrowthRatePerTick = GrowthRatePerHour / AgroWorld.TicksPerHour; //Let us assume this plant can double volume in 12 hours
 
-	float LifeSupportPerHour => Length * Radius * (Organ == OrganTypes.Leaf ? LeafThickness : Radius * mPhotoFactor);
-	public float LifeSupportPerTick => LifeSupportPerHour / AgroWorld.TicksPerHour;
+	float LifeSupportPerHour() => Length * Radius * (Organ == OrganTypes.Leaf ? LeafThickness : Radius * mPhotoFactor);
+	public float LifeSupportPerTick() => LifeSupportPerHour() / AgroWorld.TicksPerHour;
 
 	public const float mPhotoEfficiency = 0.025f;
 	public const float ExpectedIrradiance = 400f; //in W/m² see https://en.wikipedia.org/wiki/Solar_irradiance
-	public float PhotosynthPerTick => Length * Radius * (Organ == OrganTypes.Leaf ? 2f : TwoPiTenth) * mPhotoFactor * mPhotoEfficiency * ExpectedIrradiance;
+	public float PhotosynthPerTick() => Length * Radius * (Organ == OrganTypes.Leaf ? 2f : TwoPiTenth) * mPhotoFactor * mPhotoEfficiency * ExpectedIrradiance;
 
-	float EnoughEnergy(float? lifeSupportPerHour = null) => (lifeSupportPerHour ?? LifeSupportPerHour) * 320;
+	float EnoughEnergy(float? lifeSupportPerHour = null) => (lifeSupportPerHour ?? LifeSupportPerHour()) * 320;
 
 	public AboveGroundAgent2(int parent, OrganTypes organ, Quaternion orientation, float initialEnergy, float radius = InitialRadius, float length = InitialLength)
 	{
@@ -167,6 +174,10 @@ public partial struct AboveGroundAgent2 : IPlantAgent
 
 		Water = 0f;
 
+		PreviousDayEnergyProduction = 0f;
+		CurrentDayEnergyProduction = 0f;
+		PreviousDayLightExposure = 0f;
+		CurrentDayLightExposure = 0f;
 		//Children = null;
 	}
 
@@ -193,9 +204,17 @@ public partial struct AboveGroundAgent2 : IPlantAgent
 		var formation = (PlantSubFormation2<AboveGroundAgent2>)_formation;
 		var plant = formation.Plant;
 
+		if (plant.IsNewDay())
+		{
+			PreviousDayEnergyProduction = CurrentDayEnergyProduction;
+			PreviousDayLightExposure = CurrentDayLightExposure;
+			CurrentDayEnergyProduction = 0f;
+			CurrentDayLightExposure = 0f;
+		}
+
 		//TODO perhaps growth should somehow reflect temperature
-		var lifeSupportPerHour = LifeSupportPerHour;
-		var lifeSupportPerTick = LifeSupportPerTick / AgroWorld.TicksPerHour;
+		var lifeSupportPerHour = LifeSupportPerHour();
+		var lifeSupportPerTick = LifeSupportPerTick() / AgroWorld.TicksPerHour;
 
 		Energy -= lifeSupportPerTick; //life support
 
@@ -226,6 +245,8 @@ public partial struct AboveGroundAgent2 : IPlantAgent
 				Water -= photosynthesizedEnergy;
 				//Energy += AgroWorld.W2J(photosynthesizedEnergy, 3600 / AgroWorld.TicksPerHour); //TODO in th efuture convert energy to cal
 				Energy += photosynthesizedEnergy;
+				CurrentDayEnergyProduction += photosynthesizedEnergy;
+				CurrentDayLightExposure += approxLight;
 			}
 		}
 
@@ -300,7 +321,7 @@ public partial struct AboveGroundAgent2 : IPlantAgent
 					}
 					else //branching
 					{
-						var waterFactor = Math.Clamp(Water / WaterStorageCapacity, 0f, 1f);
+						var waterFactor = Math.Clamp(Water / WaterStorageCapacity(), 0f, 1f);
 						//var energyFactor = Math.Clamp(Energy / EnergyStorageCapacity, 0f, 1f);
 						var stemChildrenCount = 0;
 						foreach(var child in children)
@@ -382,8 +403,6 @@ public partial struct AboveGroundAgent2 : IPlantAgent
 			return e;
 		}
 	}
-
-	public bool ChangeAmount(PlantFormation1 plant, int index, int substanceIndex, float amount, bool increase) => throw new InvalidCastException();
 
 	public bool ChangeAmount(PlantFormation2 plant, int index, int substanceIndex, float amount, bool increase) => substanceIndex switch {
 		(byte)PlantSubstances.Water => plant.Send(index, increase ? new WaterInc(amount) : new WaterDec(amount)),

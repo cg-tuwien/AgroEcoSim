@@ -84,44 +84,6 @@ public partial struct SoilAgent : IAgent
 
 	[StructLayout(LayoutKind.Auto)]
 	[Message]
-	public readonly struct Water_UG_PullFrom_Soil : IMessage<SoilAgent>
-	{
-        #if HISTORY_LOG || TICK_LOG
-		public readonly static List<PullMsgLog> MessagesHistory = new();
-		public static void ClearHistory() => MessagesHistory.Clear();
-		public readonly ulong ID { get; } = Utils.UID.Next();
-		#endif
-
-		/// <summary>
-		/// Water volume in m³
-		/// </summary>
-		public readonly float Amount;
-		public readonly PlantSubFormation<UnderGroundAgent> DstFormation;
-		public readonly int DstIndex;
-		public Water_UG_PullFrom_Soil(PlantSubFormation<UnderGroundAgent> dstFormation, float amount, int dstIndex)
-		{
-			Amount = amount;
-			DstFormation = dstFormation;
-			DstIndex = dstIndex;
-		}
-		public bool Valid => Amount > 0f && DstFormation.CheckIndex(DstIndex);
-		public Transaction Type => Transaction.Decrease;
-		public void Receive(ref SoilAgent srcAgent, uint timestep, byte stage)
-		{
-			var freeCapacity = Math.Max(0f, DstFormation.GetWaterTotalCapacity(DstIndex) - DstFormation.GetWater(DstIndex));
-			var water = srcAgent.TryDecWater(Math.Min(Amount, freeCapacity));
-			//Writing actions from other formations must not be implemented directly, but over messages
-			if (water > 0f)
-			{
-				DstFormation.SendProtected(DstIndex, new UnderGroundAgent.WaterInc(water));
-				#if HISTORY_LOG || TICK_LOG
-				lock(MessagesHistory) MessagesHistory.Add(new(timestep, stage, ID, srcAgent.ID, DstFormation.GetID(DstIndex), water));
-				#endif
-			}
-		}
-	}
-	[StructLayout(LayoutKind.Auto)]
-	[Message]
 	public readonly struct Water_UG_PullFrom_Soil2 : IMessage<SoilAgent>
 	{
         #if HISTORY_LOG || TICK_LOG

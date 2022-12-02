@@ -33,10 +33,8 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 	/// </summary>
 	public float Radius { get; private set; }
 
-	#if !GODOT
-	[System.Text.Json.Serialization.JsonIgnore]
-	#endif
-	public Vector3 Scale => new(Length, 2f * Radius, 2f * Radius);
+	public Vector3 Scale() => new(Length, 2f * Radius, 2f * Radius);
+	public float Volume() => 4f * Length * Radius * Radius;
 
 	public float Energy { get; private set; }
 
@@ -45,12 +43,15 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 	/// </summary>
 	public float Water { get; private set; }
 
+	public float PreviousDayEnergyProduction => 0f;
+	public float PreviousDayLightExposure => 0f;
+
 	/// <summary>
 	/// Inverse woodyness ∈ [0, 1]. The more woody (towards 0) the less water the root can absorb.
 	/// </summary>
 	float mWaterAbsorbtionFactor;
 
-	public float WoodRatio => 1f - mWaterAbsorbtionFactor;
+	public float WoodRatio() => 1f - mWaterAbsorbtionFactor;
 
 	public OrganTypes Organ => OrganTypes.Root;
 
@@ -88,15 +89,12 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 	/// <summary>
 	/// Water volume in m³ which can be absorbed from soil per hour
 	/// </summary>
-	public readonly float WaterAbsorbtionPerHour => Radius * 8f * Length * WaterAbsortionRatio;
+	public float WaterAbsorbtionPerHour() => Radius * 8f * Length * WaterAbsortionRatio;
 
 	/// <summary>
 	/// Water volume in m³ which can be absorbed from soil per timestep
 	/// </summary>
-	#if !GODOT
-	[System.Text.Json.Serialization.JsonIgnore]
-	#endif
-	public readonly float WaterAbsorbtionPerTick => WaterAbsorbtionPerHour / AgroWorld.TicksPerHour;
+	public float WaterAbsorbtionPerTick() => WaterAbsorbtionPerHour() / AgroWorld.TicksPerHour;
 
 
 	//Let's assume (I might be fully wrong) that the plan can push the water 0.5mm in 1s, then in 1h it can push it 0.001 * 30 * 60 = 1.8m
@@ -107,32 +105,18 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 	/// <summary>
 	/// Water volume in m³ which can be passed to the parent per hour
 	/// </summary>
-	public readonly float WaterFlowToParentPerHour => 4f * Radius * Radius * WaterTransportRatio * (2f - mWaterAbsorbtionFactor);
+	public float WaterFlowToParentPerHour() => 4f * Radius * Radius * WaterTransportRatio * (2f - mWaterAbsorbtionFactor);
 
 	/// <summary>
 	/// Water volume in m³ which can be passed to the parent per timestep
 	/// </summary>
-	#if !GODOT
-	[System.Text.Json.Serialization.JsonIgnore]
-	#else
-	[Newtonsoft.Json.JsonIgnore]
-	#endif
-	public readonly float WaterFlowToParentPerTick => WaterFlowToParentPerHour / AgroWorld.TicksPerHour;
+	public float WaterFlowToParentPerTick() => WaterFlowToParentPerHour() / AgroWorld.TicksPerHour;
 
 	public const float EnergyTransportRatio = 2f;
-	#if !GODOT
-	[System.Text.Json.Serialization.JsonIgnore]
-	#else
-	[Newtonsoft.Json.JsonIgnore]
-	#endif
-	public readonly float EnergyFlowToParentPerHour => 4f * Radius * Radius * EnergyTransportRatio * (2f - mWaterAbsorbtionFactor);
 
-	#if !GODOT
-	[System.Text.Json.Serialization.JsonIgnore]
-	#else
-	[Newtonsoft.Json.JsonIgnore]
-	#endif
-	public readonly float EnergyFlowToParentPerTick => EnergyFlowToParentPerHour / AgroWorld.TicksPerHour;
+	public float EnergyFlowToParentPerHour() => 4f * Radius * Radius * EnergyTransportRatio * (2f - mWaterAbsorbtionFactor);
+
+	public float EnergyFlowToParentPerTick() => EnergyFlowToParentPerHour() / AgroWorld.TicksPerHour;
 
 	/// <summary>
 	/// Volume ratio ∈ [0, 1] of the agent that can used for storing water
@@ -142,32 +126,17 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 	/// <summary>
 	/// Water volume in m³ which can be stored in this agent
 	/// </summary>
-	#if !GODOT
-	[System.Text.Json.Serialization.JsonIgnore]
-	#else
-	[Newtonsoft.Json.JsonIgnore]
-	#endif
-	public readonly float WaterStorageCapacity => 4f * Radius * Radius * Length * WaterCapacityRatio;
+	public float WaterStorageCapacity() => 4f * Radius * Radius * Length * WaterCapacityRatio;
 
 	/// <summary>
 	/// Water volume in m³ which can flow through per hour, or can be stored in this agent
 	/// </summary>
-	#if !GODOT
-	[System.Text.Json.Serialization.JsonIgnore]
-	#else
-	[Newtonsoft.Json.JsonIgnore]
-	#endif
-	public readonly float WaterTotalCapacityPerHour => 4f * Radius * Radius * (Length * WaterCapacityRatio + WaterTransportRatio);
+	public float WaterTotalCapacityPerHour() => 4f * Radius * Radius * (Length * WaterCapacityRatio + WaterTransportRatio);
 
 	/// <summary>
 	/// Water volume in m³ which can flow through per tick, or can be stored in this agent
 	/// </summary>
-	#if !GODOT
-	[System.Text.Json.Serialization.JsonIgnore]
-	#else
-	[Newtonsoft.Json.JsonIgnore]
-	#endif
-	public readonly float WaterTotalCapacityPerTick => WaterTotalCapacityPerHour / AgroWorld.TicksPerHour;
+	public float WaterTotalCapacityPerTick() => WaterTotalCapacityPerHour() / AgroWorld.TicksPerHour;
 
 	/// <summary>
 	/// Timespan for which 1 unit of energy can feed 1m³ of plant tissue
@@ -180,24 +149,12 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 	float EnergyCapacityFunc(float radius, float length) => 4f * radius * radius * length * (1f - WaterCapacityRatio) * EnergyStorageCoef * MathF.Pow(2f - mWaterAbsorbtionFactor, 3);
 
 	public float EnergyStorageCapacity() => EnergyCapacityFunc(Radius, Length);
-	#if !GODOT
-	[System.Text.Json.Serialization.JsonIgnore]
-	#else
-	[Newtonsoft.Json.JsonIgnore]
-	#endif
-	float LifeSupportPerHour => Length * Radius * Radius * 4f * mWaterAbsorbtionFactor;
-	#if !GODOT
-	[System.Text.Json.Serialization.JsonIgnore]
-	#else
-	[Newtonsoft.Json.JsonIgnore]
-	#endif
-	public float LifeSupportPerTick => LifeSupportPerHour / AgroWorld.TicksPerHour;
-	#if !GODOT
-	[System.Text.Json.Serialization.JsonIgnore]
-	#else
-	[Newtonsoft.Json.JsonIgnore]
-	#endif
-	public float PhotosynthPerTick => 0f;
+
+	float LifeSupportPerHour() => Length * Radius * Radius * 4f * mWaterAbsorbtionFactor;
+
+	public float LifeSupportPerTick() => LifeSupportPerHour() / AgroWorld.TicksPerHour;
+
+	public float PhotosynthPerTick() => 0f;
 
 	public static Quaternion OrientationDown = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, -MathF.PI * 0.5f);
 
@@ -246,7 +203,7 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 
 		var children = formation.GetChildren(formationID);
 
-		var waterFactor = Math.Clamp(Water / WaterStorageCapacity, 0f, 1f);
+		var waterFactor = Math.Clamp(Water / WaterStorageCapacity(), 0f, 1f);
 		///////////////////////////
 		#region Growth
 		///////////////////////////
@@ -315,7 +272,7 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 		///////////////////////////
 		if (mWaterAbsorbtionFactor > 0f)
 		{
-			var waterCapacity = WaterAbsorbtionPerTick;
+			var waterCapacity = WaterAbsorbtionPerTick();
 			if (Water < waterCapacity)
 			{
 				var soil = plant.Soil;
@@ -385,8 +342,6 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 			return e;
 		}
 	}
-
-	public bool ChangeAmount(PlantFormation1 plant, int index, int substanceIndex, float amount, bool increase) => throw new InvalidCastException();
 
 	public bool ChangeAmount(PlantFormation2 plant, int index, int substanceIndex, float amount, bool inc) => substanceIndex switch {
 		(byte)PlantSubstances.Water => plant.Send(index, inc ? new WaterInc(amount) : new WaterDec(amount)),

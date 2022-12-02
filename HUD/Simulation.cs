@@ -17,12 +17,29 @@ public class Simulation : CanvasLayer
 	Button PlayPause;
 	Control ManualSteps;
 	Label DateLabel;
+	Button ScreenshotButton;
 	FileDialog SaveDialog;
 
 	GodotDebugOverlay DebugOverlay;
 	Camera SceneCamera;
 
 	Button IrradianceDebug;
+
+	Label ShootSegmentsValue;
+	Label TrianglesValue;
+	Label SensorsValue;
+
+	const string ScreensDir = "Screens";
+	readonly string SimulationTimestamp = FormatedTimestamp(precise: false);
+	string SimulationDir;
+	uint ScreensCounter = 0;
+
+	static string FormatedTimestamp(bool precise)
+	{
+		var now = DateTime.UtcNow;
+		return now.ToString("yyyy-MM-dd_HH-mm:ss") + (precise ? now.Ticks.ToString() : "");
+	}
+
 
 	public void Pause()
 	{
@@ -37,10 +54,15 @@ public class Simulation : CanvasLayer
 		{
 			PlayPause.Text = "||";
 			ManualSteps.Hide();
-			IrradianceDebug.Disabled = true;
-			IrradianceDebug.Pressed = false;
-			DebugOverlay.Hide();
+			SwitchOffOverlay();
 		}
+	}
+
+	void SwitchOffOverlay()
+	{
+		IrradianceDebug.Disabled = true;
+		IrradianceDebug.Pressed = false;
+		DebugOverlay.Hide();
 	}
 
 	public override void _Ready()
@@ -49,18 +71,66 @@ public class Simulation : CanvasLayer
 		PlayPause = GetNode<Button>($"Animation/Control/{nameof(PlayPause)}");
 		ManualSteps = GetNode<Control>($"Animation/Control/{nameof(ManualSteps)}");
 		ManualSteps.Hide();
+		ScreenshotButton = GetNode<Button>($"Animation/Control/{nameof(ScreenshotButton)}");
 
 		SaveDialog = GetNode<FileDialog>($"Export/{nameof(SaveDialog)}");
 		IrradianceDebug = GetNode<Button>("Debug/Control/IrradianceButton");
 		IrradianceDebug.Disabled = !Paused;
+
+		ShootSegmentsValue = GetNode<Label>("Debug/Stats/ShootSegsValue");
+		TrianglesValue = GetNode<Label>("Debug/Stats/TrianglesValue");
+		SensorsValue = GetNode<Label>("Debug/Stats/SensorsValue");
+
+		if (!System.IO.Directory.Exists(ScreensDir))
+			System.IO.Directory.CreateDirectory(ScreensDir);
+
+		var ignoreFile = $"{ScreensDir}/.gdignore";
+		if (!System.IO.File.Exists(ignoreFile))
+			System.IO.File.Create(ignoreFile);
+
+
+		if (!System.IO.Directory.Exists(ScreensDir))
+			System.IO.Directory.CreateDirectory(ScreensDir);
+
+		SimulationDir = $"{ScreensDir}/{SimulationTimestamp}";
+
+		if (!System.IO.Directory.Exists(SimulationDir))
+			System.IO.Directory.CreateDirectory(SimulationDir);
+
 		base._Ready();
 	}
+
+	uint PrevTimestep = 0;
 
 	public override void _Process(float delta)
 	{
 		var datetime = AgroWorld.InitialTime + (AgroWorld.TicksPerHour == 1 ? TimeSpan.FromHours(World.Timestep) : TimeSpan.FromHours(World.Timestep / (float)AgroWorld.TicksPerHour));
 		var local = datetime.ToLocalTime();
 		DateLabel.Text = $"{local.Year}-{local.Month}-{local.Day} {local.Hour}:{local.Minute}";
+
+		uint segments = 0, triangles = 0, sensors = 0;
+		foreach(var formation in World.Formations)
+			if (formation is PlantFormation2 plant)
+			{
+				var (sg, tr, sn) = plant.GeometryStats();
+				segments += sg;
+				triangles += tr;
+				sensors += sn;
+			}
+
+		ShootSegmentsValue.Text = segments.ToString();
+		TrianglesValue.Text = triangles.ToString();
+		SensorsValue.Text = sensors.ToString();
+
+		if (ScreenshotButton.Pressed && World.Timestep > PrevTimestep)
+		{
+			var img = GetViewport().GetTexture().GetData();
+			img.FlipY();
+			img.SavePng($"{SimulationDir}/{ScreensCounter++:D8}.png");
+		}
+
+		PrevTimestep = World.Timestep;
+
 		base._Process(delta);
 	}
 
@@ -77,7 +147,11 @@ public class Simulation : CanvasLayer
 	public void OneFrame() => ManualStepsRequested = 1U;
 	public void OneDay() => ManualStepsRequested = AgroWorld.TicksPerHour * 12;
 
-	internal void ManualStepsDone() => ManualStepsRequested = 0U;
+	internal void ManualStepsDone()
+	{
+		ManualStepsRequested = 0U;
+		SwitchOffOverlay();
+	}
 
 	public void HiddenSteps(float value) => Parameters.HiddenSteps = (uint)Math.Round(value);
 	public void IrradianceOpacity(float value)

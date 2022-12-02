@@ -20,7 +20,7 @@ public class Roots : CanvasLayer
 	{
 		Parameters = parameters;
 		var rootsTransferNode = GetNode<OptionButton>("Roots/Color/ColorCombo");
-		for(int i = 0; i < TransferOptions.Length - 1; ++i)
+		for(int i = 0; i < TransferOptions.Length - 2; ++i) //skipping the light related stuff
 			rootsTransferNode.AddItem(TransferOptions[i].ToString());
 		GetNode<CheckButton>("Roots/Visibility/CheckButton").Pressed = IsVisible(parameters.RootsVisibility);
 		rootsTransferNode.Select(Array.IndexOf(TransferOptions, parameters.TransferFunc));

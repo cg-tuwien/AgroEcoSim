@@ -32,7 +32,7 @@ static readonly Agro.ColorCodingType[] TransferOptions = (Agro.ColorCodingType[]
 		LightCutOffControl = GetNode<Control>("Shoots/Color/LightCutOff");
 		GetNode<HSlider>("Shoots/Color/LightCutOff/HSlider").Value = Math.Clamp(((1f / parameters.LightCutOff) - 100f) / 900f, 0f, 1f);
 
-		if (!(parameters.TransferFunc == ColorCodingType.Light || parameters.TransferFunc == ColorCodingType.All))
+		if (!(parameters.TransferFunc == ColorCodingType.Light || parameters.TransferFunc == ColorCodingType.DailyLightExposure || parameters.TransferFunc == ColorCodingType.All))
 			LightCutOffControl.Hide();
 	}
 
@@ -57,7 +57,7 @@ static readonly Agro.ColorCodingType[] TransferOptions = (Agro.ColorCodingType[]
 	public void ShootsTransferFunction(int index)
 	{
 		Parameters.TransferFunc = TransferOptions[index];
-		if (Parameters.TransferFunc == ColorCodingType.Light || Parameters.TransferFunc == ColorCodingType.All)
+		if (Parameters.TransferFunc == ColorCodingType.Light || Parameters.TransferFunc == ColorCodingType.DailyLightExposure || Parameters.TransferFunc == ColorCodingType.All)
 			LightCutOffControl.Show();
 		else
 			LightCutOffControl.Hide();
