@@ -108,7 +108,9 @@ margin_top = 197.0
 margin_right = 122.0
 margin_bottom = 213.0
 rect_pivot_offset = Vector2( -264, -119 )
-max_value = 71.0
+min_value = 1.0
+max_value = 72.0
+value = 1.0
 rounded = true
 
 [node name="ScreenshotLabel" type="Label" parent="Animation/Control"]

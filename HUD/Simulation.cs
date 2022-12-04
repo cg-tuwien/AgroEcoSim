@@ -8,6 +8,10 @@ using System.Diagnostics;
 
 public class Simulation : CanvasLayer
 {
+	enum DoubleScreenPhase { Idle, ProcessingOverlay, RequestedBackground }
+
+	DoubleScreenPhase ScreenPhase = DoubleScreenPhase.Idle;
+
 	SimulationWorld World;
 	private SimulationSettings Parameters;
 	public bool Paused { get; private set; } = false;
@@ -18,6 +22,8 @@ public class Simulation : CanvasLayer
 	Control ManualSteps;
 	Label DateLabel;
 	Button ScreenshotButton;
+	Label HiddenStepsLabel;
+
 	FileDialog SaveDialog;
 
 	GodotDebugOverlay DebugOverlay;
@@ -40,7 +46,6 @@ public class Simulation : CanvasLayer
 		return now.ToString("yyyy-MM-dd_HH-mm:ss") + (precise ? now.Ticks.ToString() : "");
 	}
 
-
 	public void Pause()
 	{
 		Paused = !Paused;
@@ -53,6 +58,7 @@ public class Simulation : CanvasLayer
 		else
 		{
 			PlayPause.Text = "||";
+			IrradianceDebug.Disabled = true;
 			ManualSteps.Hide();
 			SwitchOffOverlay();
 		}
@@ -60,7 +66,6 @@ public class Simulation : CanvasLayer
 
 	void SwitchOffOverlay()
 	{
-		IrradianceDebug.Disabled = true;
 		IrradianceDebug.Pressed = false;
 		DebugOverlay.Hide();
 	}
@@ -97,6 +102,8 @@ public class Simulation : CanvasLayer
 		if (!System.IO.Directory.Exists(SimulationDir))
 			System.IO.Directory.CreateDirectory(SimulationDir);
 
+		//IrradianceDebug.Disabled = false;
+
 		base._Ready();
 	}
 
@@ -122,11 +129,45 @@ public class Simulation : CanvasLayer
 		TrianglesValue.Text = triangles.ToString();
 		SensorsValue.Text = sensors.ToString();
 
-		if (ScreenshotButton.Pressed && World.Timestep > PrevTimestep)
+		if (DebugOverlay.Visible)
 		{
-			var img = GetViewport().GetTexture().GetData();
-			img.FlipY();
-			img.SavePng($"{SimulationDir}/{ScreensCounter++:D8}.png");
+			if (World.Timestep > PrevTimestep)
+				ComputeIrradince();
+		}
+		else
+		{
+			if (ScreenPhase != DoubleScreenPhase.RequestedBackground)
+				ScreenPhase = DoubleScreenPhase.Idle;
+		}
+
+		if (ScreenshotButton.Pressed && DebugOverlay.Visible && World.Timestep > PrevTimestep && ScreenPhase == DoubleScreenPhase.Idle)
+		{
+			ScreenPhase = DoubleScreenPhase.ProcessingOverlay;
+			Debug.WriteLine("DoubleScreenPhase.ProcessingOverlay");
+			DebugOverlay.Texture.GetData().SavePng($"{SimulationDir}/r{ScreensCounter:D8}.png");
+			DebugOverlay.Hide();
+		}
+
+		if (ScreenPhase != DoubleScreenPhase.Idle)
+			Debug.WriteLine($"phase {ScreenPhase}");
+
+		if (ScreenshotButton.Pressed && ((World.Timestep > PrevTimestep && ScreenPhase == DoubleScreenPhase.Idle) || ScreenPhase == DoubleScreenPhase.RequestedBackground))
+		{
+			var imgInternal = GetViewport().GetTexture().GetData();
+			imgInternal.FlipY();
+			imgInternal.SavePng($"{SimulationDir}/g{ScreensCounter++:D8}.png");
+			if (ScreenPhase == DoubleScreenPhase.RequestedBackground)
+			{
+				DebugOverlay.Show();
+				ScreenPhase = DoubleScreenPhase.Idle;
+				Debug.WriteLine("DoubleScreenPhase.Idle");
+			}
+		}
+
+		if (ScreenPhase == DoubleScreenPhase.ProcessingOverlay)
+		{
+			ScreenPhase = DoubleScreenPhase.RequestedBackground;
+			Debug.WriteLine("DoubleScreenPhase.RequestedBackground");
 		}
 
 		PrevTimestep = World.Timestep;
@@ -142,6 +183,14 @@ public class Simulation : CanvasLayer
 		SceneCamera = sceneCamera;
 		GetNode<HSlider>("Animation/Control/HSlider").Value = Parameters.HiddenSteps;
 		GetNode<HSlider>("Debug/Control/IrradiancHSlider").Value = Parameters.IrradianceOverlayOpacity;
+
+		HiddenStepsLabel = GetNode<Label>("Animation/Control/HiddenSteps");
+		UpdateHiddenStepsLabel();
+	}
+
+	void UpdateHiddenStepsLabel()
+	{
+		HiddenStepsLabel.Text = Parameters.HiddenSteps == 1 ? "Show all" : $"Batch {Parameters.HiddenSteps} steps";
 	}
 
 	public void OneFrame() => ManualStepsRequested = 1U;
@@ -150,10 +199,14 @@ public class Simulation : CanvasLayer
 	internal void ManualStepsDone()
 	{
 		ManualStepsRequested = 0U;
-		SwitchOffOverlay();
+		//SwitchOffOverlay();
 	}
 
-	public void HiddenSteps(float value) => Parameters.HiddenSteps = (uint)Math.Round(value);
+	public void HiddenSteps(float value)
+	{
+		Parameters.HiddenSteps = Math.Max(1, (uint)Math.Round(value));
+		UpdateHiddenStepsLabel();
+	}
 	public void IrradianceOpacity(float value)
 	{
 		Parameters.IrradianceOverlayOpacity = value;
@@ -223,29 +276,33 @@ public class Simulation : CanvasLayer
 		}
 	}
 
+	public void ComputeIrradince()
+	{
+		var b = SceneCamera.Transform.basis;
+		var o = SceneCamera.GlobalTranslation;
+		var v = GetViewport().Size;
+		var matrix = new float[] { o.x, o.y, o.z, b.z.x, b.z.y, b.z.z, SceneCamera.Fov, v.x, v.y };
+
+		var image = new Image();
+		var texture = new ImageTexture();
+
+		var imgData = IrradianceClient.DebugIrradiance(World.Timestep, World.Formations, World.Obstacles, matrix);
+		if (imgData != null)
+			image.CreateFromData((int)Math.Round(v.x), (int)Math.Round(v.y), false, Image.Format.Rgbf, imgData);
+		else
+			image.CreateFromData(2, 2, false, Image.Format.R8, new byte[]{255, 255, 255, 255});
+
+		texture.CreateFromImage(image);
+
+		DebugOverlay.Texture?.Dispose();
+		DebugOverlay.Texture = texture;
+	}
+
 	public void DebugIrradiance(bool flag)
 	{
 		if (flag)
 		{
-			var b = SceneCamera.Transform.basis;
-			var o = SceneCamera.GlobalTranslation;
-			var v = GetViewport().Size;
-			var matrix = new float[] { o.x, o.y, o.z, b.z.x, b.z.y, b.z.z, SceneCamera.Fov, v.x, v.y };
-
-			var image = new Image();
-			var texture = new ImageTexture();
-
-			var imgData = IrradianceClient.DebugIrradiance(World.Timestep, World.Formations, World.Obstacles, matrix);
-			if (imgData != null)
-				image.CreateFromData((int)Math.Round(v.x), (int)Math.Round(v.y), false, Image.Format.Rgbf, imgData);
-			else
-				image.CreateFromData(2, 2, false, Image.Format.R8, new byte[]{255, 255, 255, 255});
-
-			texture.CreateFromImage(image);
-
-			DebugOverlay.Texture?.Dispose();
-			DebugOverlay.Texture = texture;
-
+			ComputeIrradince();
 			DebugOverlay.Show();
 		}
 		else
