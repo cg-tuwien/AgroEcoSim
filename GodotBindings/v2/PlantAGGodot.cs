@@ -15,7 +15,7 @@ public partial class Plant_AG_Godot2 : PlantAbstractGodot2<AboveGroundAgent2>
 	[Newtonsoft.Json.JsonIgnore] protected override Color FormationColor => Colors.Green;
 	[Newtonsoft.Json.JsonIgnore] protected override ColorCodingType FormationColorCoding => ColorCodingType.Default;
 
-	protected override void UpdateTransformation(MeshInstance sprite, int index)
+	protected override void UpdateTransformation(MeshInstance sprite, int index, bool justCreated)
 	{
 		//var radius = Formation.GetBaseRadius(index);
 		var orientation = Formation.GetDirection(index);
@@ -28,7 +28,7 @@ public partial class Plant_AG_Godot2 : PlantAbstractGodot2<AboveGroundAgent2>
 
 		//Debug.WriteLine( ColorCoding(index, FormationColorCoding).g);
 		var material = (SpatialMaterial)sprite.GetSurfaceMaterial(0);
-		material.AlbedoColor = ColorCoding(index, AgroWorldGodot.ShootsVisualization.TransferFunc);
+		material.AlbedoColor = ColorCoding(index, AgroWorldGodot.ShootsVisualization.TransferFunc, justCreated);
 		material.FlagsUnshaded = AgroWorldGodot.ShootsVisualization.Unshaded;
 	}
 
@@ -38,7 +38,8 @@ public partial class Plant_AG_Godot2 : PlantAbstractGodot2<AboveGroundAgent2>
 		return ShootsVisualisationSettings.Segment_NaturalLeaf * (1f - w) + ShootsVisualisationSettings.Segment_NaturalWood * w;
     }
 
-	protected override float GetEfficiency(int index) => Formation.GetEfficiency(index);
+	protected override float GetLightEfficiency(int index) => Formation.GetLightEfficiency(index);
+	protected override float GetEnergyEfficiency(int index) => Formation.GetEnergyEfficiency(index);
 
 	public override void GodotProcess()
 	{
@@ -82,7 +83,7 @@ public partial class Plant_AG_Godot2 : PlantAbstractGodot2<AboveGroundAgent2>
 		}
 
 		for(int i = 0; i < GodotSprites.Count; ++i)
-			UpdateTransformation(GodotSprites[i], i);
+			UpdateTransformation(GodotSprites[i], i, false);
 
 		// if (AgroWorldGodot.ShootsVisualization.StemsVisibility == Visibility.Visible ||
 		// 	AgroWorldGodot.ShootsVisualization.LeafsVisibility == Visibility.Visible ||

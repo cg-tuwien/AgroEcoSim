@@ -89,10 +89,9 @@ public class IrradianceClient
 {
 	readonly HttpClient Client;
 	readonly List<float> Irradiances = new();
-	readonly List<int> SkipPlants = new();
+	readonly List<int> SkipFormations = new();
 	readonly List<Vector3> IrradiancePoints = new();
-	readonly Dictionary<IFormation, int[]> IrradianceFormationOffsets = new ();
-
+	readonly Dictionary<IFormation, int[]> IrradianceFormationOffsets = new();
 	readonly bool IsOnline = false;
 	bool IsNight = true;
 
@@ -140,16 +139,16 @@ public class IrradianceClient
 			//if (IsNight) Debug.WriteLine("DAY");
 			IsNight = false;
 
-			SkipPlants.Clear();
+			SkipFormations.Clear();
 			for(int i = 0; i < formations.Count; ++i)
 				if (!(formations[i] is PlantFormation2 plant && plant.AG.Alive))
-					SkipPlants.Add(i);
+					SkipFormations.Add(i);
 
 			int offsetCounter = 0;
-			if (SkipPlants.Count < formations.Count)
+			if (SkipFormations.Count < formations.Count)
 			{
 				Irradiances.Clear();
-				IrradiancePoints.Clear();
+				IrradiancePoints.Clear(); // only necessary for triangular mesh export
 
 #if EXPORT_OBJ
 				var objFileName = $"t{timestep}.obj";
@@ -174,7 +173,7 @@ public class IrradianceClient
 #endif
 				);
 #else
-				offsetCounter = ExportAsPrimitivesInterleaved(formations, obstacles, ooc, binaryStream);
+				offsetCounter = ExportAsPrimitivesInterleaved(formations, obstacles, binaryStream);
 #endif
 
 				var startTime = SW.ElapsedMilliseconds;
@@ -212,7 +211,7 @@ public class IrradianceClient
 					var length = responseStream.Length / sizeof(float);
 					for (int i = 0; i < length; ++i)
 						Irradiances.Add(reader.ReadSingle());
-					Debug.WriteLine($"T: {AgroWorld.GetTime(timestep).ToString("o", CultureInfo.InvariantCulture)} Sum: {Irradiances.Sum()}  Avg: {Irradiances.Average()} In: [{Irradiances.Min()} - {Irradiances.Max()}]");
+					//Debug.WriteLine($"T: {AgroWorld.GetTime(timestep).ToString("o", CultureInfo.InvariantCulture)} Sum: {Irradiances.Sum()}  Avg: {Irradiances.Average()} In: [{Irradiances.Min()} - {Irradiances.Max()}]");
 				}
 
 				SW.Stop();
@@ -236,7 +235,7 @@ public class IrradianceClient
 #if USE_TRIANGLES
 			var offsetCounter = ExportAsTriangles(formations, obstacles, 0, primBinaryStream);
 #else
-			var offsetCounter = ExportAsPrimitivesInterleaved(formations, obstacles, 0, primBinaryStream);
+			var offsetCounter = ExportAsPrimitivesInterleaved(formations, obstacles, primBinaryStream);
 #endif
 			primBinaryStream.TryGetBuffer(out var byteBuffer);
 			if (offsetCounter > 0)
@@ -280,11 +279,11 @@ public class IrradianceClient
 		}
 
 		//Formations
-		writer.WriteU32(formations.Count - SkipPlants.Count); //WRITE NUMBER OF PLANTS in this system
+		writer.WriteU32(formations.Count - SkipFormations.Count); //WRITE NUMBER OF PLANTS in this system
 		var skipPointer = 0;
 		for (int pi = 0; pi < formations.Count; ++pi)
 		{
-			if (skipPointer < SkipPlants.Count && SkipPlants[skipPointer] == pi)
+			if (skipPointer < SkipFormations.Count && SkipFormations[skipPointer] == pi)
 				++skipPointer;
 			else
 			{
@@ -439,7 +438,7 @@ public class IrradianceClient
 	{
 		IrradianceFormationOffsets.Clear();
 		using var writer = new BinaryWriter(binaryStream);
-		writer.WriteU8(2); //version 2 using triangular meshes
+		writer.WriteU8(2); //version 2 using primitives clustered into two groups: obstacles and sensors
 
 		//Obstacles
 		writer.WriteU32(obstacles.Count);
@@ -447,11 +446,11 @@ public class IrradianceClient
 			obstacle.ExportAsPrimitivesClustered(writer);
 
 		//Formations
-		writer.WriteU32(formations.Count - SkipPlants.Count); //WRITE NUMBER OF PLANTS in this system
+		writer.WriteU32(formations.Count - SkipFormations.Count); //WRITE NUMBER OF PLANTS in this system
 		var skipPointer = 0;
 		for (int pi = 0; pi < formations.Count; ++pi)
 		{
-			if (skipPointer < SkipPlants.Count && SkipPlants[skipPointer] == pi)
+			if (skipPointer < SkipFormations.Count && SkipFormations[skipPointer] == pi)
 				++skipPointer;
 			else
 			{
@@ -513,21 +512,22 @@ public class IrradianceClient
 		return offsetCounter;
 	}
 
-	private int ExportAsPrimitivesInterleaved(IList<IFormation> formations, IList<IObstacle> obstacles, int offsetCounter, Stream binaryStream)
+	private int ExportAsPrimitivesInterleaved(IList<IFormation> formations, IList<IObstacle> obstacles, Stream binaryStream)
 	{
+		int offsetCounter = 0;
 		IrradianceFormationOffsets.Clear();
 		using var writer = new BinaryWriter(binaryStream);
-		writer.WriteU8(3); //version 2 using triangular meshes
+		writer.WriteU8(3); //version 3 using primitives, each surface is individually marked as obstacle or sensor
 
 		//Formations
-		writer.WriteU32(formations.Count - SkipPlants.Count + obstacles.Count); //WRITE NUMBER OF PLANTS in this system
+		writer.WriteU32(formations.Count - SkipFormations.Count + obstacles.Count); //WRITE NUMBER OF PLANTS in this system
 		foreach(var obstacle in obstacles)
 			obstacle.ExportAsPrimitivesInterleaved(writer);
 
 		var skipPointer = 0;
 		for (int pi = 0; pi < formations.Count; ++pi)
 		{
-			if (skipPointer < SkipPlants.Count && SkipPlants[skipPointer] == pi)
+			if (skipPointer < SkipFormations.Count && SkipFormations[skipPointer] == pi)
 				++skipPointer;
 			else
 			{
@@ -604,7 +604,7 @@ public class IrradianceClient
 		{
 			default: Singleton.ExportAsTriangles(formations, obstacles, 0, file); break;
 			case 2: Singleton.ExportAsPrimitivesClustered(formations, obstacles, 0, file); break;
-			case 3: Singleton.ExportAsPrimitivesInterleaved(formations, obstacles, 0, file); break;
+			case 3: Singleton.ExportAsPrimitivesInterleaved(formations, obstacles, file); break;
 		}
 	}
 
@@ -612,14 +612,14 @@ public class IrradianceClient
 	{
 		if (AgroWorld.GetDaylight(timestep))
 		{
-			SkipPlants.Clear();
+			SkipFormations.Clear();
 			for(int i = 0; i < formations.Count; ++i)
 				if (!(formations[i] is PlantFormation2 plant && plant.AG.Alive))
-					SkipPlants.Add(i);
+					SkipFormations.Add(i);
 
 			int offsetCounter = 0;
 
-			if (SkipPlants.Count < formations.Count)
+			if (SkipFormations.Count < formations.Count)
 			{
 				Irradiances.Clear();
 				IrradianceFormationOffsets.Clear();
@@ -628,7 +628,7 @@ public class IrradianceClient
 				var skipPointer = 0;
 				for(int i = 0; i < formations.Count; ++i)
 				{
-					if (skipPointer < SkipPlants.Count && SkipPlants[skipPointer] == i)
+					if (skipPointer < SkipFormations.Count && SkipFormations[skipPointer] == i)
 						++skipPointer;
 					else
 					{
@@ -662,10 +662,10 @@ public class IrradianceClient
 	public static float GetIrradiance(IFormation formation, int agentIndex) => Singleton.GetIrr(formation, agentIndex);
 	float GetIrr(IFormation formation, int agentIndex)
 	{
-		if (!IsNight && IrradianceFormationOffsets.TryGetValue(formation, out var offset) && agentIndex < offset.Length)
+		if (!IsNight && IrradianceFormationOffsets.TryGetValue(formation, out var offset))
 		{
 			var position = offset[agentIndex];
-			if (position >= 0 && position < Irradiances.Count)
+			if (position >= 0)
 				return Irradiances[position];
 		}
 		return 0f;

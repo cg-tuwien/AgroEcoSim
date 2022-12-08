@@ -471,27 +471,27 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 		var waterCapacity = 0.0;
 		var energyRequirement = 0.0;
 		var waterRequirement = 0.0;
-		var efficiencyTotal = 0.0;
 		var (dst, src) = SrcDst(); //since Tick already swapped them
-		var efficiency = new float[src.Length];
+		var lightEfficiency = new float[src.Length];
+		var energyEfficiency = new float[src.Length];
 		var lifesupportEnergy = new float[src.Length];
 		var photosynthWater = new float[src.Length];
 		var capacityEnergy = new float[src.Length];
 		var capacityWater = new float[src.Length];
 		//var maxIrradiance = IrradianeClient.MaxIrradiance(this);
 
-		var (irradianceOffsets, irradiances) = IrradianceClient.GetIrradiance(this);
-		var irradianceMax = 0f;
-		if (irradianceOffsets != null)
-		{
-			for(int i = 0; i < irradianceOffsets.Length; ++i)
-				if (irradianceOffsets[i] >= 0)
-				{
-					var val = irradiances[irradianceOffsets[i]];
-					if (irradianceMax < val)
-						irradianceMax = val;
-				}
-		}
+		//var (irradianceOffsets, irradiances) = IrradianceClient.GetIrradiance(this);
+		// var irradianceMax = 0f;
+		// if (irradianceOffsets != null)
+		// {
+		// 	for(int i = 0; i < irradianceOffsets.Length; ++i)
+		// 		if (irradianceOffsets[i] >= 0)
+		// 		{
+		// 			var val = irradiances[irradianceOffsets[i]];
+		// 			if (irradianceMax < val)
+		// 				irradianceMax = val;
+		// 		}
+		// }
 
 		for(int i = 0; i < dst.Length; ++i)
 		{
@@ -536,18 +536,42 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 			waterCapacity -= dst[i].WaterStorageCapacity();
 		}
 
-		if (irradianceMax > 0f)
+		var dailyLightMax = 0f;
+		var dailyEnergyMax = 0f;
+		for(int i = 0; i < dst.Length; ++i)
+			if (dailyLightMax < dst[i].PreviousDayLightExposure) dailyLightMax = dst[i].PreviousDayLightExposure;
+		for(int i = 0; i < dst.Length; ++i)
+			if (dailyEnergyMax < dst[i].PreviousDayEnergyProduction) dailyEnergyMax = dst[i].PreviousDayEnergyProduction;
+
+		if (dailyEnergyMax > 0f)
 		{
 			//assuming only leafs photosynthesize, efficiency of the parent will be th emax of its children
 			var nodesToSolve = new byte[dst.Length];
+			// var sumToSolve = 0;
+			// for(int i = 0; i < dst.Length; ++i)
+			// {
+			// 	var o = irradianceOffsets[i];
+			// 	if (o >= 0)
+			// 		efficiency[i] = irradiances[o] / irradianceMax;
+			// 	else if (GetOrgan(i) == OrganTypes.Fruit)
+			// 		efficiency[i] = 1f;
+			// 	else
+			// 	{
+			// 		Debug.Assert(GetChildren(i).Count < 256);
+			// 		var children = (byte)GetChildren(i).Count;
+			// 		nodesToSolve[i] = children;
+			// 		sumToSolve += children;
+			// 	}
+			// }
+
 			var sumToSolve = 0;
 			for(int i = 0; i < dst.Length; ++i)
 			{
-				var o = irradianceOffsets[i];
-				if (o >= 0)
-					efficiency[i] = irradiances[o] / irradianceMax;
-				else if (GetOrgan(i) == OrganTypes.Fruit)
-					efficiency[i] = 1f;
+				if (dst[i].Organ == OrganTypes.Leaf)
+				{
+					lightEfficiency[i] = dst[i].PreviousDayLightExposure / dailyLightMax;
+					energyEfficiency[i] = dst[i].PreviousDayEnergyProduction / dailyEnergyMax;
+				}
 				else
 				{
 					Debug.Assert(GetChildren(i).Count < 256);
@@ -564,9 +588,15 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 					if (nodesToSolve[i] == 0)
 					{
 						var parent = dst[i].Parent;
-						var e = efficiency[i];
-						if (efficiency[parent] < e)
-							efficiency[parent] = e;
+
+						var l = lightEfficiency[i];
+						if (lightEfficiency[parent] < l)
+							lightEfficiency[parent] = l;
+
+						var e = energyEfficiency[i];
+						if (energyEfficiency[parent] < e)
+							energyEfficiency[parent] = e;
+
 						--nodesToSolve[parent];
 						nodesToSolve[i] = byte.MaxValue;
 						--sumToSolve;
@@ -575,10 +605,16 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 
 			for(int i = 0; i < dst.Length; ++i)
 				if (GetOrgan(i) == OrganTypes.Bud)
-					efficiency[i] = 1f;
+				{
+					lightEfficiency[i] = 1f;
+					energyEfficiency[i] = 1f;
+				}
 
-			for(int i = 0; i < dst.Length; ++i)
-				efficiencyTotal += efficiency[i];
+			// for(int i = 0; i < dst.Length; ++i)
+			// {
+			// 	efficiencyTotal += lightEfficiency[i];
+			// 	efficiencyTotal += energyEfficiency[i];
+			// }
 		}
 
 		energyDiff += energy; //optimal variant of sum(dst[i] - src[i])
@@ -593,8 +629,8 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 			WaterCapacity = waterCapacity,
 			EnergyRequirement = energyRequirement,
 			WaterRequirement = waterRequirement,
-			Efficiency = efficiency,
-			UsefulnessTotal = efficiencyTotal,
+			LightEfficiency = lightEfficiency,
+			EnergyEfficiency = energyEfficiency,
 			LifeSupportEnergy = lifesupportEnergy,
 			PhotosynthWater = photosynthWater,
 			EnergyCapacities = capacityEnergy,

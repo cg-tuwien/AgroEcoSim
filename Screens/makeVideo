@@ -1,0 +1,6 @@
+#!/bin/bash
+dir=$1
+dir="${dir%/}"
+
+[ -f $dir/g00000000.png ] && ffmpeg -r 12/1 -i $dir/g%08d.png -c:v libx264 -vf "pad=ceil(iw/2)*2:ceil(ih/2)*2" -pix_fmt yuv420p $dir/g$dir.mp4
+[ -f $dir/r00000000.png ] && ffmpeg -r 12/1 -i $dir/r%08d.png -c:v libx264 -vf "pad=ceil(iw/2)*2:ceil(ih/2)*2" -pix_fmt yuv420p $dir/r$dir.mp4

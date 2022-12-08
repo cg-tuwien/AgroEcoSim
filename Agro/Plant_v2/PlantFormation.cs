@@ -27,7 +27,8 @@ public class PlantGlobalStats
 
 	public double UsefulnessTotal { get; set; }
 
-	public IList<float> Efficiency { get; set; }
+	public IList<float> LightEfficiency { get; set; }
+	public IList<float> EnergyEfficiency { get; set; }
 	public IList<float> LifeSupportEnergy { get; set; }
 	public IList<float> PhotosynthWater { get; set; }
 	public IList<float> EnergyCapacities { get; set; }
@@ -48,8 +49,8 @@ public class PlantGlobalStats
 		if (positiveEfficiency)
 		{
 			var weightsTotal = 0.0;
-			for(int i = 0; i < Efficiency.Count; ++i)
-				weightsTotal = LifeSupportEnergy[i] * Efficiency[i];
+			for(int i = 0; i < EnergyEfficiency.Count; ++i)
+				weightsTotal = LifeSupportEnergy[i] * EnergyEfficiency[i];
 			return weightsTotal;
 		}
 		else
@@ -60,10 +61,10 @@ public class PlantGlobalStats
 	{
 		var weightsTotal = 0.0;
 		if (positiveEfficiency)
-			for(int i = 0; i < Efficiency.Count; ++i)
-				weightsTotal += (EnergyCapacities[i] - LifeSupportEnergy[i]) * Efficiency[i];
+			for(int i = 0; i < LightEfficiency.Count; ++i)
+				weightsTotal += (EnergyCapacities[i] - LifeSupportEnergy[i]) * LightEfficiency[i];
 		else
-			for(int i = 0; i < Efficiency.Count; ++i)
+			for(int i = 0; i < LightEfficiency.Count; ++i)
 				weightsTotal += EnergyCapacities[i] - LifeSupportEnergy[i];
 
 		return weightsTotal;
@@ -75,7 +76,7 @@ public class PlantGlobalStats
 		if (positiveEfficiency)
 			for(int i = 0; i < ReceivedEnergy.Length; ++i)
 			{
-				var w = (EnergyCapacities[i] - LifeSupportEnergy[i]) * Efficiency[i];
+				var w = (EnergyCapacities[i] - LifeSupportEnergy[i]) * LightEfficiency[i];
 				ReceivedEnergy[i] = LifeSupportEnergy[i] + w * factor;
 			}
 		else
@@ -91,7 +92,7 @@ public class PlantGlobalStats
 		if (positiveEfficiency)
 		{
 			for(int i = 0; i < ReceivedEnergy.Length; ++i)
-				ReceivedEnergy[i] = LifeSupportEnergy[i] * Efficiency[i] * factor; //in sum over all i: LifeSupportEnergy[i] / energyRequirementTotal yields 1
+				ReceivedEnergy[i] = LifeSupportEnergy[i] * EnergyEfficiency[i] * factor; //in sum over all i: LifeSupportEnergy[i] / energyRequirementTotal yields 1
 		}
 		else
 		{
@@ -286,16 +287,20 @@ public partial class PlantFormation2 : IPlantFormation
 
 			var positiveEfficiencyAG = globalAG.UsefulnessTotal > 0.0;
 			var positiveEfficiencyUG = globalUG.UsefulnessTotal > 0.0;
+
+			var energyEmergencyThrehold = energyRequirement * 4;
+			var energAlertThreshold = energyRequirement * 24;
+
 			#if GODOT
-			UG.Efficiency = globalUG.Efficiency;
-			AG.Efficiency = globalAG.Efficiency;
+			UG.LightEfficiency = globalUG.LightEfficiency;
+			UG.EnergyEfficiency = globalUG.EnergyEfficiency;
+
+			AG.LightEfficiency = globalAG.LightEfficiency;
+			AG.EnergyEfficiency = globalAG.EnergyEfficiency;
 			#endif
 
 			//Debug.WriteLine($"W: {water} / {waterRequirement}   {globalUG.WaterDiff} + {globalAG.WaterDiff}");
 			//Debug.WriteLine($"E: {energy} / {energyRequirement}   {globalUG.EnergyDiff} + {globalAG.EnergyDiff}");
-			var energyEmergencyThrehold = energyRequirement * 4;
-			var energAlertThreshold = energyRequirement * 24;
-
 			if (energy < energyEmergencyThrehold)
 			{
 				var energyState = energy / energyRequirement;
@@ -320,7 +325,7 @@ public partial class PlantFormation2 : IPlantFormation
 				globalAG.DistributeEnergyByRequirement(factor, positiveEfficiencyAG);
 				globalUG.DistributeEnergyByRequirement(factor, positiveEfficiencyUG);
 			}
-			if (energy < energAlertThreshold || energyStorage < energyRequirement) //the plant is short on energy, it must be distributed
+			else if (energy < energAlertThreshold || energyStorage < energyRequirement) //the plant is short on energy, it must be distributed
 			{
 				var weights = globalAG.Weights4EnergyDistributionByRequirement(positiveEfficiencyAG) + globalUG.Weights4EnergyDistributionByRequirement(positiveEfficiencyUG);
 				var factor = (float)(energy / weights);

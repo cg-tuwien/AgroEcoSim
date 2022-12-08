@@ -15,7 +15,7 @@ public class Plant_UG_Godot2 : PlantAbstractGodot2<UnderGroundAgent2>
 	[Newtonsoft.Json.JsonIgnore] protected override Color FormationColor => Colors.Brown;
 	[Newtonsoft.Json.JsonIgnore] protected override ColorCodingType FormationColorCoding => ColorCodingType.Default;
 
-	protected override void UpdateTransformation(MeshInstance sprite, int index)
+	protected override void UpdateTransformation(MeshInstance sprite, int index, bool justCreated)
 	{
 		//var radius = Formation.GetBaseRadius(index);
 		var orientation = Formation.GetDirection(index);
@@ -27,7 +27,7 @@ public class Plant_UG_Godot2 : PlantAbstractGodot2<UnderGroundAgent2>
 		sprite.Scale = (Formation.GetScale(index) * 0.5f).ToGodot();
 
 		var material = (SpatialMaterial)sprite.GetSurfaceMaterial(0);
-		material.AlbedoColor = ColorCoding(index, AgroWorldGodot.RootsVisualization.TransferFunc);
+		material.AlbedoColor = ColorCoding(index, AgroWorldGodot.RootsVisualization.TransferFunc, justCreated);
 		material.FlagsUnshaded = AgroWorldGodot.RootsVisualization.Unshaded;
 	}
 
@@ -37,7 +37,8 @@ public class Plant_UG_Godot2 : PlantAbstractGodot2<UnderGroundAgent2>
 		return RootsVisualisationSettings.Segment_Light * (1f - w) + RootsVisualisationSettings.Segment_Dark * w;
     }
 
-	protected override float GetEfficiency(int index) => Formation.GetEfficiency(index);
+	protected override float GetLightEfficiency(int index) => Formation.GetLightEfficiency(index);
+	protected override float GetEnergyEfficiency(int index) => Formation.GetEnergyEfficiency(index);
 
 	public override void GodotProcess()
 	{
@@ -54,6 +55,6 @@ public class Plant_UG_Godot2 : PlantAbstractGodot2<UnderGroundAgent2>
 
 		if (AgroWorldGodot.RootsVisualization.RootsVisibility == Visibility.Visible)
 			for(int i = 0; i < GodotSprites.Count; ++i)
-				UpdateTransformation(GodotSprites[i], i);
+				UpdateTransformation(GodotSprites[i], i, false);
 	}
 }

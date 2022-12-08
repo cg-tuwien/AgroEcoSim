@@ -22,6 +22,8 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 	public void GodotReady() {}
 	public void GodotProcess() {}
 
-	[Newtonsoft.Json.JsonIgnore] internal IList<float> Efficiency;
-	internal float GetEfficiency(int index) => index < Efficiency?.Count ? Efficiency[index] : 0f;
+	[Newtonsoft.Json.JsonIgnore] internal IList<float> LightEfficiency;
+	[Newtonsoft.Json.JsonIgnore] internal IList<float> EnergyEfficiency;
+	internal float GetLightEfficiency(int index) => index < LightEfficiency?.Count ? LightEfficiency[index] : 0f;
+	internal float GetEnergyEfficiency(int index) => index < EnergyEfficiency?.Count ? EnergyEfficiency[index] : 0f;
 }

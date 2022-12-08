@@ -43,7 +43,7 @@ public class Simulation : CanvasLayer
 	static string FormatedTimestamp(bool precise)
 	{
 		var now = DateTime.UtcNow;
-		return now.ToString("yyyy-MM-dd_HH-mm:ss") + (precise ? now.Ticks.ToString() : "");
+		return now.ToString("yyyy-MM-dd_HH-mm_ss") + (precise ? now.Ticks.ToString() : "");
 	}
 
 	public void Pause()
@@ -196,11 +196,7 @@ public class Simulation : CanvasLayer
 	public void OneFrame() => ManualStepsRequested = 1U;
 	public void OneDay() => ManualStepsRequested = AgroWorld.TicksPerHour * 12;
 
-	internal void ManualStepsDone()
-	{
-		ManualStepsRequested = 0U;
-		//SwitchOffOverlay();
-	}
+	internal void ManualStepsDone() => ManualStepsRequested = 0U;
 
 	public void HiddenSteps(float value)
 	{

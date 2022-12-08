@@ -15,7 +15,7 @@ public abstract class PlantAbstractGodot2<T> where T : struct, IPlantAgent
 
 	protected PlantAbstractGodot2(PlantSubFormation2<T> formation) => Formation = formation;
 
-	protected abstract void UpdateTransformation(MeshInstance sprite, int index);
+	protected abstract void UpdateTransformation(MeshInstance sprite, int index, bool justCreated);
 
 	static Color DefaultColor = new(0.7f, 0.7f, 0.7f);
 
@@ -32,7 +32,7 @@ public abstract class PlantAbstractGodot2<T> where T : struct, IPlantAgent
 			if (sprite.GetSurfaceMaterial(0) == null) //TODO if not visualizing, use a common material for all
 				sprite.SetSurfaceMaterial(0, new SpatialMaterial{ AlbedoColor = FormationColor, FlagsUnshaded = true });
 
-			UpdateTransformation(sprite, i);
+			UpdateTransformation(sprite, i, true);
 			GodotSprites.Add(sprite);
 		}
 	}
@@ -48,7 +48,7 @@ public abstract class PlantAbstractGodot2<T> where T : struct, IPlantAgent
 
 	public abstract void GodotProcess();
 
-	protected Color ColorCoding(int index, ColorCodingType vis)
+	protected Color ColorCoding(int index, ColorCodingType vis, bool justCreated)
 	{
 		switch (vis)
 		{
@@ -59,6 +59,7 @@ public abstract class PlantAbstractGodot2<T> where T : struct, IPlantAgent
 			}
 			case ColorCodingType.Light:
 			{
+				if (justCreated) return Colors.Black;
 				var w = Math.Clamp(Formation.GetIrradiance(index) * AgroWorldGodot.ShootsVisualization.LightCutOff, 0, 1);
 				return new Color(Math.Clamp(w, 0, 1), Math.Clamp(w * 0.8f, 0, 1), Math.Clamp(w * 0.64f, 0, 1));
 			}
@@ -78,27 +79,37 @@ public abstract class PlantAbstractGodot2<T> where T : struct, IPlantAgent
 			}
 			case ColorCodingType.Natural:
 				return GetNaturalColor(index);
-			case ColorCodingType.Efficiency:
+			case ColorCodingType.EnergyEfficiency:
 			{
-				var w = Math.Clamp(GetEfficiency(index), 0, 1);
+				if (justCreated) return Colors.Black;
+				var w = Math.Clamp(GetEnergyEfficiency(index), 0, 1);
 				return Colors.Yellow * w + Colors.Blue * (1-w);
 			}
 			case ColorCodingType.DailyEnergyProduction:
 			{
+				if (justCreated) return Colors.Black;
 				var r = Formation.GetDailyEnergyProduction(index) / 100f;
 				return r >= 0f ? new Color(Math.Clamp(r, 0, 1), Math.Clamp(r * 0.1f, 0, 1), 0f) : Colors.Red;
 			}
 			case ColorCodingType.DailyLightExposure:
 			{
+				if (justCreated) return Colors.Black;
 				// if (Formation.GetDailyLightExposure(index) > 1f)
 				// 	System.Diagnostics.Debug.WriteLine($"D: {Formation.GetDailyLightExposure(index)} f: {AgroWorldGodot.ShootsVisualization.LightCutOff}");
 				var w = Formation.GetDailyLightExposure(index) * AgroWorldGodot.ShootsVisualization.LightCutOff / (12f * AgroWorld.TicksPerHour);
 				return new Color(Math.Clamp(w, 0, 1), Math.Clamp(w * 0.8f, 0, 1), Math.Clamp(w * 0.64f, 0, 1));
+			}
+			case ColorCodingType.LightEfficiency:
+			{
+				if (justCreated) return Colors.Black;
+				var w = Math.Clamp(GetLightEfficiency(index), 0, 1);
+				return Colors.Yellow * w + Colors.Blue * (1-w);
 			}
 			default: return FormationColor;
 		}
 	}
 
 	protected abstract Color GetNaturalColor(int index);
-	protected abstract float GetEfficiency(int index);
+	protected abstract float GetLightEfficiency(int index);
+	protected abstract float GetEnergyEfficiency(int index);
 }
