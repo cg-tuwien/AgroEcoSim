@@ -1,6 +1,9 @@
 #!/bin/bash
-#docker stop $(docker ps -qa);
-#docker rmi -f $(sudo docker images -qa); sudo docker volume rm $(sudo docker volume ls -q)
+
+### For development only: in case there is too much mess from iterative builds:
+docker stop $(docker ps -qa)
+#docker rm $(docker ps -qa)
+#docker rmi -f $(docker images -qa); docker volume rm $(docker volume ls -q)
 #docker system prune -f
 
 docker build --rm -f "Dockerfile-render" -t agroecorender "."
@@ -8,4 +11,7 @@ docker build --rm -f "Dockerfile-sim" -t agroecosim "."
 docker save agroecorender | gzip > agroecoRender.tar.gz
 docker save agroecosim | gzip > agroecoSim.tar.gz
 
-zip -r "AgroEcoSim-{time:%Y%m%d%H%M%S}.zip" agroecoRender.tar.gz agroecoSim.tar.gz deployDocker docker-compose.yml
+NOW=$(date +"%Y%m%d_%H%M%S")
+zip -r "AgroEcoSim-${NOW}.zip" agroecoRender.tar.gz agroecoSim.tar.gz deployDocker docker-compose.yml #\
+    #Dockerfile-render \
+    #agroeco-mts3/binary_loader.py agroeco-mts3/batch-sensor.py agroeco-mts3/render-server.py agroeco-mts3/RendererMts3.py

@@ -32,11 +32,13 @@ ENV ASPNETCORE_ENVIRONMENT='Production'
 #only copy the published app folder into the final image, everything else (the whole src) is ignored
 COPY --from=publish /app .
 
-RUN apk update && apk --no-cache add tzdata
-
+RUN apk update && apk add --no-cache ca-certificates && apk --no-cache add tzdata && apk upgrade -U --no-cache && rm -rf /var/cache/apk/*
 #COPY --from=publish harden.sh .
 #RUN chmod +x harden.sh && sh harden.sh && rm harden.sh
 #USER user:user
+
+RUN addgroup -g 61000 docker && adduser -g 61000 -H -D -s /bin/false -u 61000 docker -G docker
+USER docker
 
 #does nothing, just documents the exposed port
 EXPOSE 7215

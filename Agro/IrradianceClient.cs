@@ -203,7 +203,7 @@ public class IrradianceClient
 					request.Headers.Add("Ti", AgroWorld.GetTime(timestep).ToString("o", CultureInfo.InvariantCulture));
 					//Debug.WriteLine(offsetCounter);
 					//request.Headers.Add("C", offsetCounter.ToString()); //Only use for dummy debug
-					request.Headers.Add("Ra", "4096");
+					request.Headers.Add("Ra", "2048");
 
 					var result = Client.SendAsync(request).Result;
 					using var responseStream = result.Content.ReadAsStreamAsync().Result;

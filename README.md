@@ -106,7 +106,7 @@ The following folders are related to the Godot rendering:
 Some classes are denoted by v1/v2 or just 1/2 or stored in folders called v1/v2. This marks whether they are transaction-based (v1) or global-diffusion based (v2), respectively. The *supervised global diffusion* is a custom concept to mitigate the transport limitations of large time steps. Instead of trying to compute at a very dense time rate, the formation gathers all resources in each frame and redistributes them across all its agents at once.
 
 # Renderer interface
-The renderer is called via `http`. The primary renderer is Mitsuba 3 in the [agroeco-mts3](https://github.com/cfreude/agroeco-mts3/). To plug-in a different renderer, it has to follow these guidelines:
+The renderer is called via `http`. The primary renderer is Mitsuba 3 in the [agroeco-mts3](https://github.com/cfreude/agroeco-mts3/). Attention, Mitsuba requires AVX instructions, so it won't run on older CPUs. To plug-in a different renderer, it has to follow these guidelines:
 * Listening at port `9000`
 * Respond with a status code `200` (OK) to a `GET` request, this is a check for whether the server is up
 * Respond to `POST` requests with scene data by returning accummulated irradiances in (W/m²)

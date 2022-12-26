@@ -100,78 +100,94 @@ public class Simulation : CanvasLayer
 		SimulationDir = $"{ScreensDir}/{SimulationTimestamp}";
 
 		if (!System.IO.Directory.Exists(SimulationDir))
+		{
 			System.IO.Directory.CreateDirectory(SimulationDir);
+			var proc = new ProcessStartInfo
+			{
+				CreateNoWindow = true,
+				UseShellExecute = false,
+				Arguments = "-Rf o+w ${SimulationDir}",
+				FileName = "chmod"
+			};
+			Process.Start(proc);
+		}
 
-		//IrradianceDebug.Disabled = false;
+		IrradianceDebug.Disabled = false;
 
 		base._Ready();
 	}
 
 	uint PrevTimestep = 0;
+	DateTime CoolDown = DateTime.UtcNow;
 
 	public override void _Process(float delta)
 	{
-		var datetime = AgroWorld.InitialTime + (AgroWorld.TicksPerHour == 1 ? TimeSpan.FromHours(World.Timestep) : TimeSpan.FromHours(World.Timestep / (float)AgroWorld.TicksPerHour));
-		var local = datetime.ToLocalTime();
-		DateLabel.Text = $"{local.Year}-{local.Month}-{local.Day} {local.Hour}:{local.Minute}";
+		if (DateTime.UtcNow >= CoolDown)
+		{
+			var datetime = AgroWorld.InitialTime + (AgroWorld.TicksPerHour == 1 ? TimeSpan.FromHours(World.Timestep) : TimeSpan.FromHours(World.Timestep / (float)AgroWorld.TicksPerHour));
+			var local = datetime.ToLocalTime();
+			DateLabel.Text = $"{local.Year}-{local.Month}-{local.Day} {local.Hour}:{local.Minute}";
 
-		uint segments = 0, triangles = 0, sensors = 0;
-		foreach(var formation in World.Formations)
-			if (formation is PlantFormation2 plant)
+			uint segments = 0, triangles = 0, sensors = 0;
+			foreach(var formation in World.Formations)
+				if (formation is PlantFormation2 plant)
+				{
+					var (sg, tr, sn) = plant.GeometryStats();
+					segments += sg;
+					triangles += tr;
+					sensors += sn;
+				}
+
+			ShootSegmentsValue.Text = segments.ToString();
+			TrianglesValue.Text = triangles.ToString();
+			SensorsValue.Text = sensors.ToString();
+
+			if (DebugOverlay.Visible)
 			{
-				var (sg, tr, sn) = plant.GeometryStats();
-				segments += sg;
-				triangles += tr;
-				sensors += sn;
+				if (World.Timestep > PrevTimestep)
+					ComputeIrradince();
+			}
+			else
+			{
+				if (ScreenPhase != DoubleScreenPhase.RequestedBackground)
+					ScreenPhase = DoubleScreenPhase.Idle;
 			}
 
-		ShootSegmentsValue.Text = segments.ToString();
-		TrianglesValue.Text = triangles.ToString();
-		SensorsValue.Text = sensors.ToString();
-
-		if (DebugOverlay.Visible)
-		{
-			if (World.Timestep > PrevTimestep)
-				ComputeIrradince();
-		}
-		else
-		{
-			if (ScreenPhase != DoubleScreenPhase.RequestedBackground)
-				ScreenPhase = DoubleScreenPhase.Idle;
-		}
-
-		if (ScreenshotButton.Pressed && DebugOverlay.Visible && World.Timestep > PrevTimestep && ScreenPhase == DoubleScreenPhase.Idle)
-		{
-			ScreenPhase = DoubleScreenPhase.ProcessingOverlay;
-			Debug.WriteLine("DoubleScreenPhase.ProcessingOverlay");
-			DebugOverlay.Texture.GetData().SavePng($"{SimulationDir}/r{ScreensCounter:D8}.png");
-			DebugOverlay.Hide();
-		}
-
-		if (ScreenPhase != DoubleScreenPhase.Idle)
-			Debug.WriteLine($"phase {ScreenPhase}");
-
-		if (ScreenshotButton.Pressed && ((World.Timestep > PrevTimestep && ScreenPhase == DoubleScreenPhase.Idle) || ScreenPhase == DoubleScreenPhase.RequestedBackground))
-		{
-			var imgInternal = GetViewport().GetTexture().GetData();
-			imgInternal.FlipY();
-			imgInternal.SavePng($"{SimulationDir}/g{ScreensCounter++:D8}.png");
-			if (ScreenPhase == DoubleScreenPhase.RequestedBackground)
+			if (ScreenshotButton.Pressed && DebugOverlay.Visible && World.Timestep > PrevTimestep && ScreenPhase == DoubleScreenPhase.Idle)
 			{
-				DebugOverlay.Show();
-				ScreenPhase = DoubleScreenPhase.Idle;
-				Debug.WriteLine("DoubleScreenPhase.Idle");
+				ScreenPhase = DoubleScreenPhase.ProcessingOverlay;
+				Debug.WriteLine("DoubleScreenPhase.ProcessingOverlay");
+				DebugOverlay.Texture.GetData().SavePng($"{SimulationDir}/r{ScreensCounter:D8}.png");
+				DebugOverlay.Hide();
 			}
+
+			if (ScreenPhase != DoubleScreenPhase.Idle)
+				Debug.WriteLine($"phase {ScreenPhase}");
+
+			if (ScreenshotButton.Pressed && ((World.Timestep > PrevTimestep && ScreenPhase == DoubleScreenPhase.Idle) || ScreenPhase == DoubleScreenPhase.RequestedBackground))
+			{
+				var imgInternal = GetViewport().GetTexture().GetData();
+				imgInternal.FlipY();
+				imgInternal.SavePng($"{SimulationDir}/g{ScreensCounter++:D8}.png");
+				if (ScreenPhase == DoubleScreenPhase.RequestedBackground)
+				{
+					DebugOverlay.Show();
+					ScreenPhase = DoubleScreenPhase.Idle;
+					Debug.WriteLine("DoubleScreenPhase.Idle");
+
+					if (!Paused)
+						CoolDown = DateTime.UtcNow + TimeSpan.FromSeconds(1);
+				}
+			}
+
+			if (ScreenPhase == DoubleScreenPhase.ProcessingOverlay)
+			{
+				ScreenPhase = DoubleScreenPhase.RequestedBackground;
+				Debug.WriteLine("DoubleScreenPhase.RequestedBackground");
+			}
+
+			PrevTimestep = World.Timestep;
 		}
-
-		if (ScreenPhase == DoubleScreenPhase.ProcessingOverlay)
-		{
-			ScreenPhase = DoubleScreenPhase.RequestedBackground;
-			Debug.WriteLine("DoubleScreenPhase.RequestedBackground");
-		}
-
-		PrevTimestep = World.Timestep;
-
 		base._Process(delta);
 	}
 

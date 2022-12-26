@@ -37,9 +37,15 @@ if (true)
     app.UseSwaggerUI();
 }
 
+app.UseCors(options => options
+    .AllowAnyOrigin()
+    .AllowAnyHeader()
+    .AllowAnyMethod()
+);
+
 //app.UseHttpsRedirection();
 
-app.UseAuthorization();
+//app.UseAuthorization();
 
 app.MapControllers();
 

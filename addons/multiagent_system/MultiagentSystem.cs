@@ -58,7 +58,7 @@ public class MultiagentSystem : Spatial
 		//Translation = new Vector3(-0.5f * AgroWorld.FieldSize.X, AgroWorld.FieldResolution, -0.5f * AgroWorld.FieldSize.Z);
 		//Translation = new Vector3(0, AgroWorld.FieldResolution, 0);
 
-		var fieldSize = new Utils.Json.Vector3XDZ{ X = 5, D = 3, Z = 3 };
+		var fieldSize = new Utils.Json.Vector3XDZ{ X = 5, D = 3, Z = 5 };
 
 		var plants = new List<PlantRequest>();
 		for(float x = 0.5f; x < fieldSize.X; x += 1f)
@@ -72,7 +72,7 @@ public class MultiagentSystem : Spatial
 		};
 
 		World = Initialize.World(new SimulationRequest(){
-			TotalHours = 24 * 31 * 4,
+			TotalHours = 24 * 31 * 12,
 			FieldSize = fieldSize,
 			Plants = plants.ToArray(),
 			Obstacles = obstacles,
