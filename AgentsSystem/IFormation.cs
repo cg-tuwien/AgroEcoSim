@@ -7,16 +7,21 @@ namespace AgentsSystem;
 public interface IFormation
 {
     void Census();
-    void Tick(SimulationWorld world, uint timestep);
-    void ProcessTransactions(uint timestep);
-    void DeliverPost(uint timestep);
-    bool HasUndeliveredPost { get; }
-    bool HasUnprocessedTransactions { get; }
+    void Tick(SimulationWorld world, uint timestep, byte stage);
+    void ProcessTransactions(uint timestep, byte stage);
+    void DeliverPost(uint timestep, byte stage);
+    [Newtonsoft.Json.JsonIgnore] bool HasUndeliveredPost { get; }
+    [Newtonsoft.Json.JsonIgnore] bool HasUnprocessedTransactions { get; }
+    [Newtonsoft.Json.JsonIgnore] byte Stages { get; }
 #if HISTORY_LOG || TICK_LOG
-    string HistoryToJSON(int timestep);
+    string HistoryToJSON(int timestep = -1, byte stage = 0);
 #endif
 #if GODOT
     void GodotReady();
-	void GodotProcess(uint timestep);
+	void GodotProcess();
 #endif
+    ///<summary>
+    ///Number of agents in this formation
+    ///</summary>
+    int Count { get; }
 }

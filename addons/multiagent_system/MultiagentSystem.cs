@@ -4,87 +4,240 @@ using System;
 using System.Collections.Generic;
 using AgentsSystem;
 using Agro;
+using V3 = System.Numerics.Vector3;
 
 [Tool]
-public partial class MultiagentSystem : Node3D
+public class MultiagentSystem : Spatial
 {
+	[Export]
+	public PackedScene HudScene;
+
+	[Export]
+	public PackedScene SimulationScene;
+	[Export]
+	public PackedScene SoilScene;
+	[Export]
+	public PackedScene RootsScene;
+	[Export]
+	public PackedScene ShootsScene;
+
+	[Signal]
+	public delegate void EnteredMenu();
+
+	[Signal]
+	public delegate void LeftMenu();
+
+
 	bool Paused = false;
-	bool Pressed = false;
-	bool SingleStep = false;
-	readonly List<MeshInstance3D> Sprites = new();
+	bool MenuInactive = true;
+	bool ColorPickerInactive = true;
+	int AsyncLock = 0;
+
+	HUD Hud;
+	Simulation Simulation;
+	Soil Soil;
+	Roots Roots;
+	Shoots Shoots;
+
+	GodotGround Ground;
+	GodotDebugOverlay DebugOverlay;
+	Camera SceneCamera;
 
 	SimulationWorld World;
 
-	//float Time = 0f;
 	// Called when the node enters the scene tree for the first time.
 	public override void _Ready()
 	{
-		if (!Engine.IsEditorHint())
-		{
-	#if GODOT
-			GD.Print("GODOT is defined properly.");
-	#else
-			GD.Print("ERROR: GODOT is not defined!");
-	#endif
-			SimulationWorld.GodotAddChild = node => AddChild(node);
-			SimulationWorld.GodotRemoveChild = node => RemoveChild(node);
-			Position = new Vector3(-0.5f * AgroWorld.FieldSize.X, 0f, -0.5f * AgroWorld.FieldSize.Z);
+		if (Engine.IsEditorHint()) return;
+		// EmitSignal("LeftMenu");
+#if GODOT
+		GD.Print("GODOT is defined properly.");
+#else
+		GD.Print("ERROR: GODOT is not defined!");
+#endif
+		SimulationWorld.GodotAddChild = node => AddChild(node);
+		SimulationWorld.GodotRemoveChild = RemoveChild;
+		//Translation = new Vector3(-0.5f * AgroWorld.FieldSize.X, AgroWorld.FieldResolution, -0.5f * AgroWorld.FieldSize.Z);
+		//Translation = new Vector3(0, AgroWorld.FieldResolution, 0);
 
-			World = Initialize.World();
-		}
+		var fieldSize = new Utils.Json.Vector3XDZ{ X = 5, D = 3, Z = 5 };
+
+		var plants = new List<PlantRequest>();
+		for(float x = 0.5f; x < fieldSize.X; x += 1f)
+		//var x = fieldSize.X * 0.5f;
+			for(float z = 0.5f; z < fieldSize.Z; z += 1f)
+				plants.Add(new(){ Position = new Utils.Json.Vector3XYZ{ X = x, Y = -0.01f, Z = z }});
+
+		var obstacles = new ObstacleRequest[] {
+			new(){ Type = "Wall", Length = 5f, Height = 3.2f, Position = new Utils.Json.Vector3XYZ{ X = 2.5f, Y = 0f, Z = 1.0f }},
+			//new(){ Type = "Umbrella", Radius = 1.5f, Height = 2.2f, Position = new(2.5f, 0f, 2.5f)}
+		};
+
+		World = Initialize.World(new SimulationRequest(){
+			TotalHours = 24 * 31 * 12,
+			FieldSize = fieldSize,
+			Plants = plants.ToArray(),
+			Obstacles = obstacles,
+		});
+
+		Ground = new GodotGround();
+		DebugOverlay = new GodotDebugOverlay();
+		DebugOverlay.Hide();
+
+		foreach(var item in GetParent().GetChildren())
+			if (item is Camera camera && camera.Visible)
+			{
+				SceneCamera = camera;
+				break;
+			}
+
+		System.Diagnostics.Debug.WriteLine(SceneCamera == null ? "NO CAMERA" : "has camera");
+
+		Hud = (HUD)HudScene.Instance();
+
+		Simulation = (Simulation)SimulationScene.Instance();
+		Simulation.Load(World, DebugOverlay, SceneCamera, AgroWorldGodot.SimulationSettings);
+
+		Soil = (Soil)SoilScene.Instance();
+		Soil.Load(AgroWorldGodot.SoilVisualization, Ground);
+
+		Roots = (Roots)RootsScene.Instance();
+		Roots.Load(AgroWorldGodot.RootsVisualization);
+
+		Shoots = (Shoots)ShootsScene.Instance();
+		Shoots.Load(AgroWorldGodot.ShootsVisualization);
+
+		Hud.Load(Simulation, Soil, Roots, Shoots);
+		AddChild(Hud);
+
+		//Throws errors, freezes after a few seconds
+		//Task.Run(() => World.Run(AgroWorld.TimestepsTotal));
 	}
+
+	bool AnyMenuEntered() => Soil.MenuEvent == MenuEvent.Enter || Roots.MenuEvent == MenuEvent.Enter || Shoots.MenuEvent == MenuEvent.Enter || Simulation.MenuEvent == MenuEvent.Enter;
+	bool AnyMenuLeft() => Soil.MenuEvent == MenuEvent.Leave || Roots.MenuEvent == MenuEvent.Leave || Shoots.MenuEvent == MenuEvent.Leave || Simulation.MenuEvent == MenuEvent.Leave;
 
 	/// <summary>
 	/// Called every frame
 	/// </summay>
 	/// <param name="delta">'Elapsed time since the previous frame</param>
-	public override void _Process(double delta)
+	public override void _Process(float delta)
 	{
-		if (!Engine.IsEditorHint())
+		if (Engine.IsEditorHint()) return;
+		Paused = Simulation.Paused;
+
+		if (ColorPickerInactive)
 		{
-			SolveInput();
-
-			if(!Paused)
+			if (Soil.ColorEvent == MenuEvent.Enter)
 			{
-				//Time += delta;
-				if (World.Timestep < AgroWorld.TimestepsTotal)
+				ColorPickerInactive = false;
+				MenuInactive = true;
+				EmitSignal("EnteredMenu");
+			}
+			else if (MenuInactive)
+			{
+				if (AnyMenuEntered())
 				{
-					World.Run(1);
-
-					if (World.Timestep == AgroWorld.TimestepsTotal - 1)
-						GD.Print($"Simulation successfully finished after {AgroWorld.TimestepsTotal} timesteps.");
+					MenuInactive = false;
+					EmitSignal("EnteredMenu");
 				}
-				Paused = SingleStep;
+			}
+			else
+			{
+				if (AnyMenuLeft())
+				{
+					MenuInactive = true;
+					EmitSignal("LeftMenu");
+				}
 			}
 		}
-	}
-
-	private void SolveInput()
-	{
-		if(Input.IsActionPressed("stop") && !Pressed)
+		else
 		{
-			if (Paused)
-				SingleStep = Input.IsActionPressed("ctrl");
-
-			Paused = !Paused;
-			Pressed = true;
+			if (Soil.ColorEvent == MenuEvent.Leave)
+			{
+				ColorPickerInactive = true;
+				if (AnyMenuEntered())
+					MenuInactive = false;
+				else
+					EmitSignal("LeftMenu");
+			}
 		}
-		else if(!Input.IsActionPressed("stop") && Pressed)
-			Pressed = false;
 
-		if (GlobalPauseRequest)
+		Soil.MenuEvent = MenuEvent.None;
+		Soil.ColorEvent = MenuEvent.None;
+		Roots.MenuEvent = MenuEvent.None;
+		Shoots.MenuEvent = MenuEvent.None;
+		Simulation.MenuEvent = MenuEvent.None;
+
+//Throws errors, freezes after a few seconds
+// #if ASYNC
+// 		if (!Paused && World.Timestep < AgroWorld.TimestepsTotal && AsyncLock == 0)
+// 		{
+// 			Interlocked.Increment(ref AsyncLock);
+// 			Task.Run(() =>
+// 			{
+// 				World.Run(AgroWorldGodot.SimulationSettings.HiddenSteps);
+// 				if (World.Timestep == AgroWorld.TimestepsTotal - 1)
+// 					GD.Print($"Simulation successfully finished after {AgroWorld.TimestepsTotal} timesteps.");
+// 				Interlocked.Decrement(ref AsyncLock);
+// 			});
+// 		}
+// #else
+		if (!Paused && World.Timestep < AgroWorld.TimestepsTotal)
 		{
-			Paused = true;
-			GlobalPauseRequest = false;
+			World.Run(AgroWorldGodot.SimulationSettings.HiddenSteps);
+			if (World.Timestep == AgroWorld.TimestepsTotal - 1)
+				GD.Print($"Simulation successfully finished after {AgroWorld.TimestepsTotal} timesteps.");
 		}
-	}
+		else if (Simulation.ManualStepsRequested > 0)
+		{
+			World.Run(Simulation.ManualStepsRequested);
+			Simulation.ManualStepsDone();
+		}
+// #endif
 
-	static bool GlobalPauseRequest;
-	/// <summary>
-	//Useful for debug to trigger pause as follows:<br/>
-	//<c>#if GODOT<br/>
-	//MultiagentSystem.TriggerPause();<br/>
-	//#endif<br/><c/>
-	/// </summary>
-	public static void TriggerPause() => GlobalPauseRequest = true;
+		if (Paused)
+		{
+			if (Soil.UpdateRequest)
+			{
+				foreach(var formation in World.Formations)
+					if (formation is SoilFormation soil)
+						soil.GodotProcess();
+				Soil.UpdateRequest = false;
+			}
+
+			if (Roots.UpdateRequest || Shoots.UpdateRequest)
+			{
+				foreach(var formation in World.Formations)
+					if (formation is PlantFormation2 plant)
+						plant.GodotProcess();
+				Roots.UpdateRequest = false;
+				Shoots.UpdateRequest = false;
+			}
+		}
+
+		if (AgroWorldGodot.RootsVisualization.RootsVisibility == Visibility.MakeVisible)
+			AgroWorldGodot.RootsVisualization.RootsVisibility = Visibility.Visible;
+
+		if (AgroWorldGodot.RootsVisualization.RootsVisibility == Visibility.MakeInvisible)
+			AgroWorldGodot.RootsVisualization.RootsVisibility = Visibility.Invisible;
+
+		if (AgroWorldGodot.ShootsVisualization.StemsVisibility == Visibility.MakeVisible)
+			AgroWorldGodot.ShootsVisualization.StemsVisibility = Visibility.Visible;
+
+		if (AgroWorldGodot.ShootsVisualization.StemsVisibility == Visibility.MakeInvisible)
+			AgroWorldGodot.ShootsVisualization.StemsVisibility = Visibility.Invisible;
+
+		if (AgroWorldGodot.ShootsVisualization.LeafsVisibility == Visibility.MakeVisible)
+			AgroWorldGodot.ShootsVisualization.LeafsVisibility = Visibility.Visible;
+
+		if (AgroWorldGodot.ShootsVisualization.LeafsVisibility == Visibility.MakeInvisible)
+			AgroWorldGodot.ShootsVisualization.LeafsVisibility = Visibility.Invisible;
+
+		if (AgroWorldGodot.ShootsVisualization.BudsVisibility == Visibility.MakeVisible)
+			AgroWorldGodot.ShootsVisualization.BudsVisibility = Visibility.Visible;
+
+		if (AgroWorldGodot.ShootsVisualization.BudsVisibility == Visibility.MakeInvisible)
+			AgroWorldGodot.ShootsVisualization.BudsVisibility = Visibility.Invisible;
+	}
 }

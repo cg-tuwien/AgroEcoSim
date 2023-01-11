@@ -9,14 +9,19 @@ namespace AgentsSystem;
 public partial class SimulationWorld
 {
 	internal readonly List<IFormation> Formations = new();
-	internal readonly List<Action<uint, IList<IFormation>>> Callbacks = new();
-	public uint Timestep { get; private set; }
+	internal readonly List<Action<uint, IList<IFormation>, IList<IObstacle>>> Callbacks = new();
+	public uint Timestep { get; private set; } = 0U;
+	public byte Stage { get; private set; }
+
+	byte Stages = 1;
 
 	#if TICK_LOG
-	List<MethodInfo> MessageLogClears = new();
+	readonly List<MethodInfo> MessageLogClears = new();
 	#endif
 
 	public int Count => Formations.Count;
+
+	internal readonly List<IObstacle> Obstacles = new();
 
 	public SimulationWorld()
 	{
@@ -41,6 +46,7 @@ public partial class SimulationWorld
 	public void Add(IFormation formation)
 	{
 		Formations.Add(formation);
+		Stages = Math.Max(Stages, formation.Stages);
 #if GODOT
 		formation.GodotReady();
 #endif
@@ -49,9 +55,19 @@ public partial class SimulationWorld
 	public void AddRange(IEnumerable<IFormation> formations)
 	{
 		Formations.AddRange(formations);
+		foreach(var item in formations)
+			Stages = Math.Max(Stages, item.Stages);
 #if GODOT
 		foreach(var item in formations)
 			item.GodotReady();
+#endif
+	}
+
+	public void Add(IObstacle obstacle)
+	{
+		Obstacles.Add(obstacle);
+#if GODOT
+		obstacle.GodotReady();
 #endif
 	}
 
@@ -65,19 +81,21 @@ public partial class SimulationWorld
 			RunSequential(simulationLength);
 	}
 
+	byte MaxStage() => Formations.Max(x => x.Stages);
+
 	public void RunSequential(uint simulationLength)
 	{
-		for(uint i = 0U; i < simulationLength; ++i, ++Timestep)
+		Stages = MaxStage();
+		for(int i = 0; i < simulationLength; ++i, ++Timestep)
 		{
-			TickSequential(Timestep);
-			ProcessTransactionsSequential(Timestep);
-			DeliverPostSequential(Timestep);
+			for(Stage = 0; Stage < Stages; ++Stage)
+			{
+				TickSequential();
+				ProcessTransactionsSequential();
+				DeliverPostSequential();
+			}
 			CensusSequential();
 			ExecCallbacks();
-#if GODOT
-			foreach(var item in Formations)
-				item.GodotProcess(Timestep);
-#endif
 #if HISTORY_LOG || HISTORY_TICK
 			// if (i >= 477)
 			// {
@@ -86,22 +104,30 @@ public partial class SimulationWorld
 			// }
 #endif
 		}
+		#if GODOT
+		foreach(var item in Formations)
+			item.GodotProcess();
+		#endif
 	}
 
 	public void RunParallel(uint simulationLength)
 	{
-		for(uint i = 0U; i < simulationLength; ++i, ++Timestep)
+		Stages = MaxStage();
+		for(int i = 0; i < simulationLength; ++i, ++Timestep)
 		{
-			TickParallel(Timestep);
-			ProcessTransactionsParallel(Timestep);
-			DeliverPostParallel(Timestep);
+			for(Stage = 0; Stage < Stages; ++Stage)
+			{
+				TickParallel();
+				ProcessTransactionsParallel();
+				DeliverPostParallel();
+			}
 			CensusParallel();
 			ExecCallbacks();
-#if GODOT
-			foreach(var item in Formations)
-				item.GodotProcess(Timestep);
-#endif
 		}
+		#if GODOT
+		foreach(var item in Formations)
+			item.GodotProcess();
+		#endif
 	}
 
 	void CensusSequential()
@@ -112,16 +138,16 @@ public partial class SimulationWorld
 
 	void CensusParallel() => Parallel.For(0, Formations.Count, i => Formations[i].Census());
 
-	void TickSequential(uint timestep)
+	void TickSequential()
 	{
-		Debug.WriteLine($"TIMESTEP: {timestep}");
+		Debug.WriteLine($"TIMESTEP: {Timestep} DAY: {(Timestep / 24) + 1} HOUR: {Timestep % 24}"); //Assuming 1 tick per hour
 		for(int i = 0; i < Formations.Count; ++i)
-			Formations[i].Tick(this, timestep);
+			Formations[i].Tick(this, Timestep, Stage);
 	}
 
-	void TickParallel(uint timestep) => Parallel.For(0, Formations.Count, i => Formations[i].Tick(this, timestep));
+	void TickParallel() => Parallel.For(0, Formations.Count, i => Formations[i].Tick(this, Timestep, Stage));
 
-	public void ProcessTransactionsSequential(uint timestep)
+	public void ProcessTransactionsSequential()
 	{
 		var anyDelivered = true;
 		while(anyDelivered)
@@ -130,13 +156,13 @@ public partial class SimulationWorld
 			for(int i = 0; i < Formations.Count; ++i)
 				if (Formations[i].HasUnprocessedTransactions)
 				{
-					Formations[i].ProcessTransactions(timestep);
+					Formations[i].ProcessTransactions(Timestep, Stage);
 					anyDelivered = true;
 				}
 		}
 	}
 
-	public void ProcessTransactionsParallel(uint timestep)
+	public void ProcessTransactionsParallel()
 	{
 		#if TICK_LOG
 		foreach(var clear in MessageLogClears)
@@ -149,14 +175,14 @@ public partial class SimulationWorld
 			Parallel.For(0, Formations.Count, i => {
 				if (Formations[i].HasUnprocessedTransactions)
 				{
-					Formations[i].ProcessTransactions(timestep);
+					Formations[i].ProcessTransactions(Timestep, Stage);
 					anyDelivered = true;
 				}
 			});
 		}
 	}
 
-	public void DeliverPostSequential(uint timestep)
+	public void DeliverPostSequential()
 	{
 		#if TICK_LOG
 		foreach(var clear in MessageLogClears)
@@ -169,13 +195,13 @@ public partial class SimulationWorld
 			for(int i = 0; i < Formations.Count; ++i)
 				if (Formations[i].HasUndeliveredPost)
 				{
-					Formations[i].DeliverPost(timestep);
+					Formations[i].DeliverPost(Timestep, Stage);
 					anyDelivered = true;
 				}
 		}
 	}
 
-	public void DeliverPostParallel(uint timestep)
+	public void DeliverPostParallel()
 	{
 		#if TICK_LOG
 		foreach(var clear in MessageLogClears)
@@ -188,19 +214,36 @@ public partial class SimulationWorld
 			Parallel.For(0, Formations.Count, i => {
 				if (Formations[i].HasUndeliveredPost)
 				{
-					Formations[i].DeliverPost(timestep);
+					Formations[i].DeliverPost(Timestep, Stage);
 					anyDelivered = true;
 				}
 			});
 		}
 	}
 
-	public void AddCallback(Action<uint, IList<IFormation>> callback) => Callbacks.Add(callback);
+	public void AddCallback(Action<uint, IList<IFormation>, IList<IObstacle>> callback) => Callbacks.Add(callback);
 
 	public void ExecCallbacks()
 	{
 		foreach(var callback in Callbacks)
-			callback(Timestep, Formations);
+			callback(Timestep, Formations, Obstacles);
+	}
+
+	public string ToJson()
+	{
+		var sb = new System.Text.StringBuilder();
+		//assuming all formations are present all the time (no additions or removals)
+		sb.Append("{ \"Formations\": [ ");
+		sb.Append(Utils.Export.Json(Formations[1]));
+		// for(int i = 0; i < Formations.Count; ++i)
+		// {
+		// 	sb.Append(Utils.Export.Json(Formations[i]));
+		// 	if (i < Formations.Count - 1)
+		// 		sb.Append(", ");
+		// }
+		sb.Append("]}");
+
+		return sb.ToString();
 	}
 
 	#if HISTORY_LOG || TICK_LOG

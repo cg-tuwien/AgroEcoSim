@@ -1,0 +1,12 @@
+#!/bin/bash
+dir=$1
+dir="${dir%/}"
+
+fps=12
+br=275
+#[ -f $dir/g00000000.png ] && ffmpeg -r ${fps}/1 -i $dir/g%08d.png -c:v libx265 -crf 36 -vf "pad=ceil(iw/2)*2:ceil(ih/2)*2" -pix_fmt yuv420p $dir/g$dir.mp4
+[ -f $dir/g00000000.png ] && \
+    ffmpeg -y -r ${fps}/1 -i $dir/g%08d.png -c:v libx265 -b:v ${br}k -x265-params pass=1 -vf "pad=ceil(iw/2)*2:ceil(ih/2)*2" -an -f null /dev/null && \
+    ffmpeg -y -r ${fps}/1 -i $dir/g%08d.png -c:v libx265 -b:v ${br}k -x265-params pass=2 -vf "pad=ceil(iw/2)*2:ceil(ih/2)*2" -an $dir/g$dir.mp4
+
+[ -f $dir/r00000000.png ] && ffmpeg -r ${fps}/1 -i $dir/r%08d.png -c:v libx265 -vf "pad=ceil(iw/2)*2:ceil(ih/2)*2" -pix_fmt yuv420p $dir/r$dir.mp4

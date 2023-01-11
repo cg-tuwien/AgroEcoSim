@@ -1,0 +1,164 @@
+[gd_scene load_steps=3 format=2]
+
+[ext_resource path="res://HUD/Shoots.cs" type="Script" id=1]
+
+[sub_resource type="CanvasItemMaterial" id=1]
+blend_mode = 3
+light_mode = 1
+
+[node name="HUD" type="CanvasLayer"]
+script = ExtResource( 1 )
+
+[node name="Shoots" type="Node" parent="."]
+
+[node name="ColorRect" type="ColorRect" parent="Shoots"]
+material = SubResource( 1 )
+margin_left = 6.0
+margin_top = 38.0
+margin_right = 232.0
+margin_bottom = 228.0
+color = Color( 0.627451, 0.627451, 0.627451, 1 )
+
+[node name="ReferenceRect" type="ReferenceRect" parent="Shoots"]
+margin_left = 6.0
+margin_top = 38.0
+margin_right = 232.0
+margin_bottom = 70.0
+border_color = Color( 0.745098, 0.745098, 0.745098, 1 )
+border_width = 1.2
+editor_only = false
+
+[node name="ReferenceRect2" type="ReferenceRect" parent="Shoots"]
+margin_left = 6.0
+margin_top = 70.0
+margin_right = 232.0
+margin_bottom = 228.0
+border_color = Color( 0.745098, 0.745098, 0.745098, 1 )
+border_width = 1.2
+editor_only = false
+
+[node name="Shoots" type="Label" parent="Shoots"]
+margin_left = 87.0
+margin_top = 47.0
+margin_right = 208.0
+margin_bottom = 61.0
+rect_pivot_offset = Vector2( 103, 10 )
+text = "SHOOTS"
+
+[node name="Visibility" type="Node" parent="Shoots"]
+
+[node name="Stems" type="Label" parent="Shoots/Visibility"]
+margin_left = 75.0
+margin_top = 87.0
+margin_right = 120.0
+margin_bottom = 101.0
+rect_pivot_offset = Vector2( 103, 10 )
+text = "Stems"
+
+[node name="StemsCheckButton" type="CheckButton" parent="Shoots/Visibility"]
+margin_left = 3.0
+margin_top = 74.0
+margin_right = 79.0
+margin_bottom = 114.0
+rect_pivot_offset = Vector2( 48, 58 )
+pressed = true
+
+[node name="Leafs" type="Label" parent="Shoots/Visibility"]
+margin_left = 187.0
+margin_top = 87.0
+margin_right = 232.0
+margin_bottom = 101.0
+rect_pivot_offset = Vector2( 37, 36 )
+text = "Leafs"
+
+[node name="LeafsCheckButton" type="CheckButton" parent="Shoots/Visibility"]
+margin_left = 115.0
+margin_top = 74.0
+margin_right = 191.0
+margin_bottom = 114.0
+rect_pivot_offset = Vector2( 109, 49 )
+pressed = true
+
+[node name="Buds" type="Label" parent="Shoots/Visibility"]
+margin_left = 75.0
+margin_top = 119.0
+margin_right = 120.0
+margin_bottom = 133.0
+rect_pivot_offset = Vector2( 103, 10 )
+text = "Buds"
+
+[node name="BudsCheckButton" type="CheckButton" parent="Shoots/Visibility"]
+margin_left = 3.0
+margin_top = 106.0
+margin_right = 79.0
+margin_bottom = 146.0
+rect_pivot_offset = Vector2( 48, 58 )
+pressed = true
+
+[node name="Color" type="Node" parent="Shoots"]
+
+[node name="UnshadedLabel" type="Label" parent="Shoots/Color"]
+margin_left = 163.0
+margin_top = 175.0
+margin_right = 227.0
+margin_bottom = 189.0
+rect_pivot_offset = Vector2( 37, 36 )
+text = "Unshaded"
+
+[node name="UnshadedButton" type="CheckButton" parent="Shoots/Color"]
+margin_left = 91.0
+margin_top = 162.0
+margin_right = 167.0
+margin_bottom = 202.0
+rect_pivot_offset = Vector2( 109, 49 )
+pressed = true
+
+[node name="LightCutOff" type="Control" parent="Shoots/Color"]
+margin_left = 6.0
+margin_top = 197.0
+margin_right = 232.0
+margin_bottom = 228.0
+
+[node name="Scale" type="Label" parent="Shoots/Color/LightCutOff"]
+margin_left = 137.0
+margin_top = 6.0
+margin_right = 221.0
+margin_bottom = 20.0
+rect_pivot_offset = Vector2( -388, -120 )
+text = "Light cut-off"
+
+[node name="HSlider" type="HSlider" parent="Shoots/Color/LightCutOff"]
+margin_left = 12.0
+margin_top = 5.0
+margin_right = 122.0
+margin_bottom = 21.0
+rect_pivot_offset = Vector2( -264, -119 )
+max_value = 1.0
+step = 0.01
+value = 0.5
+
+[node name="Color" type="Label" parent="Shoots/Color"]
+anchor_left = 2.77
+anchor_top = 2.129
+anchor_right = 2.77
+anchor_bottom = 2.129
+margin_left = -2824.48
+margin_top = -1124.4
+margin_right = -2703.48
+margin_bottom = -1110.4
+text = "COLOR"
+
+[node name="ColorCombo" type="OptionButton" parent="Shoots/Color"]
+margin_left = 13.0
+margin_top = 174.0
+margin_right = 42.0
+margin_bottom = 194.0
+rect_pivot_offset = Vector2( 2, 10 )
+
+[connection signal="toggled" from="Shoots/Visibility/StemsCheckButton" to="." method="StemsVisibility"]
+[connection signal="toggled" from="Shoots/Visibility/LeafsCheckButton" to="." method="LeafsVisibility"]
+[connection signal="toggled" from="Shoots/Color/UnshadedButton" to="." method="Unshaded"]
+[connection signal="mouse_entered" from="Shoots/Color/LightCutOff/HSlider" to="." method="MenuEntered"]
+[connection signal="mouse_exited" from="Shoots/Color/LightCutOff/HSlider" to="." method="MenuLeft"]
+[connection signal="value_changed" from="Shoots/Color/LightCutOff/HSlider" to="." method="LightCutOff"]
+[connection signal="item_selected" from="Shoots/Color/ColorCombo" to="." method="ShootsTransferFunction"]

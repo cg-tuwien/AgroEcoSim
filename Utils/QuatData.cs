@@ -3,7 +3,7 @@ namespace Utils;
 
 ///<summary>
 /// Helper struct for JSON serialization of quaternions
-///<summary>
+///</summary>
 public readonly struct QuatData
 {
     public readonly float X { get; }

@@ -410,3 +410,11 @@ func get_mouse_position():
 	)
 
 # That's all folks!
+
+
+func _on_MultiagentSystem_EnteredMenu():
+	mouse_strength = 0;
+
+
+func _on_MultiagentSystem_LeftMenu():
+	mouse_strength = 1;

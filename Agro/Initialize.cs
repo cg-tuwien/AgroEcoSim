@@ -20,45 +20,63 @@ public static class Initialize
 		if (settings?.FieldSize.HasValue ?? false)
 			AgroWorld.FieldSize = settings.FieldSize.Value;
 
+		if (settings?.Seed.HasValue ?? false)
+			AgroWorld.InitRNG(settings.Seed.Value);
+
+		AgroWorld.Init();
 		var world = new SimulationWorld();
-		world.AddCallback((timestep, formations) => IrradianceClient.Tick(timestep, formations));
+
+		world.AddCallback((timestep, formations, obstacles) => IrradianceClient.Tick(timestep, formations, obstacles));
 		var soil = new SoilFormation(new Vector3i(AgroWorld.FieldSize / AgroWorld.FieldResolution), AgroWorld.FieldSize, 0);
 		world.Add(soil);
 
-		PlantFormation[] plantsFormation;
+		PlantFormation2[] plantsFormation;
 		var rnd = AgroWorld.RNG;
 		if (settings?.Plants != null)
 		{
 			var plantsCount = settings.Plants.Length;
-			plantsFormation = new PlantFormation[plantsCount];
+			plantsFormation = new PlantFormation2[plantsCount];
 			for (int i = 0; i < plantsCount; ++i)
 			{
-				var minVegTemp = AgroWorld.RNG.NextFloat(8f, 10f);
+				var minVegTemp = rnd.NextFloat(8f, 10f);
 				var pos = settings.Plants[i].Position
-					?? new Vector3(AgroWorld.FieldSize.X * AgroWorld.RNG.NextFloat(), -rnd.NextFloat(0.04f), AgroWorld.FieldSize.Z * AgroWorld.RNG.NextFloat());
+					?? new Vector3(AgroWorld.FieldSize.X * rnd.NextFloat(), -rnd.NextFloat(0.04f), AgroWorld.FieldSize.Y * rnd.NextFloat());
 
 				var seed = new SeedAgent(pos,
-										 AgroWorld.RNG.NextFloat(0.02f),
-										 new Vector2(minVegTemp, minVegTemp + AgroWorld.RNG.NextFloat(8f, 14f)));
-				plantsFormation[i] = new PlantFormation(soil, seed, rnd);
+										 rnd.NextFloat(0.02f),
+										 new Vector2(minVegTemp, minVegTemp + rnd.NextFloat(8f, 14f)));
+				plantsFormation[i] = new PlantFormation2(PlantSettings.Avocado, soil, seed, rnd);
 			}
 		}
 		else
 		{
 			const int plantsCount = 1;
-			plantsFormation = new PlantFormation[plantsCount];
+			plantsFormation = new PlantFormation2[plantsCount];
 			for (int i = 0; i < plantsCount; ++i)
 			{
-				var minVegTemp = AgroWorld.RNG.NextFloat(8f, 10f);
-				var seed = new SeedAgent(new Vector3(AgroWorld.FieldSize.X * AgroWorld.RNG.NextFloat(),
+				var minVegTemp = rnd.NextFloat(8f, 10f);
+				var seed = new SeedAgent(new Vector3(AgroWorld.FieldSize.X * rnd.NextFloat(),
 														-rnd.NextFloat(0.04f),
-														AgroWorld.FieldSize.Z * AgroWorld.RNG.NextFloat()),
-											AgroWorld.RNG.NextFloat(0.02f),
-											new Vector2(minVegTemp, minVegTemp + AgroWorld.RNG.NextFloat(8f, 14f)));
-				plantsFormation[i] = new PlantFormation(soil, seed, rnd);
+														AgroWorld.FieldSize.Y * rnd.NextFloat()), //Y because Z is depth
+											rnd.NextFloat(0.02f),
+											new Vector2(minVegTemp, minVegTemp + rnd.NextFloat(8f, 14f)));
+				plantsFormation[i] = new PlantFormation2(PlantSettings.Avocado, soil, seed, rnd);
 			}
 		}
 		world.AddRange(plantsFormation);
+
+		if (settings?.Obstacles != null)
+			foreach(var obstacle in settings.Obstacles)
+			switch(obstacle.Type.ToLower())
+			{
+				case "wall":
+					world.Add(new Wall(obstacle.Length ?? (obstacle.Radius.HasValue ? obstacle.Radius.Value * 2f : 1f), obstacle.Height ?? 1f, obstacle.Thickness ?? 0.1f, obstacle.Position ?? Vector3.Zero, obstacle.Orientation ?? 0f));
+					break;
+				case "umbrella":
+					world.Add(new Umbrella(obstacle.Radius ?? (obstacle.Length.HasValue ? obstacle.Length.Value * 0.5f : 1f), obstacle.Height ?? 1f, obstacle.Thickness ?? 0.1f, obstacle.Position ?? Vector3.Zero));
+				break;
+				default: throw new ArgumentException($"There is no such obstacle type as {obstacle.Type}.");
+			}
 
 		return world;
 	}

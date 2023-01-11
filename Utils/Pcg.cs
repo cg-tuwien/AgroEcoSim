@@ -22,24 +22,23 @@ public static class PcgSeed
 	}
 }
 
-
-[Serializable]
-[DataContract]
 /// <summary>
 /// PCG (Permuted Congruential Generator) is a C# port from C the base PCG generator
 /// presented in "PCG: A Family of Simple Fast Space-Efficient Statistically Good
-/// Algorithms for Random Number Generation" by Melissa E. O'Neill. The code follows closely the one 
+/// Algorithms for Random Number Generation" by Melissa E. O'Neill. The code follows closely the one
 /// made available by O'Neill at her site: http://www.pcg-random.org/download.html
 /// To understand how exactly this generator works read this:
-/// http://www.pcg-random.org/pdf/toms-oneill-pcg-family-v1.02.pdf 
+/// http://www.pcg-random.org/pdf/toms-oneill-pcg-family-v1.02.pdf
 /// </summary>
+[Serializable]
+[DataContract]
 public class Pcg
 {
 	[DataMember(Order = 0)]
 	ulong _state;
 	// This shifted to the left and or'ed with 1ul results in the default increment.
 	[DataMember(Order = 1)]
-	ulong _increment = 1442695040888963407ul;        
+	ulong _increment = 1442695040888963407ul;
 	[IgnoreDataMember]
 	const ulong ShiftedIncrement = 721347520444481703ul;
 	[IgnoreDataMember]
@@ -49,7 +48,7 @@ public class Pcg
 
 	// This attribute ensures that every thread will get its own instance of PCG.
 	// An alternative, since PCG supports streams, is to use a different stream per
-	// thread. 
+	// thread.
 	[ThreadStatic]
 	static Pcg? _defaultInstance;
 	/// <summary>
@@ -337,7 +336,7 @@ public class Pcg
 			resultA[i] = r;
 			sum += r;
 		}
-		
+
 		var factor = targetSum / sum;
 		for (int i = 0; i < count; i++)
 			resultA[i] *= factor;

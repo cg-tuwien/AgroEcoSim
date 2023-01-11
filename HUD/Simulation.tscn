@@ -1,0 +1,379 @@
+[gd_scene load_steps=3 format=2]
+
+[ext_resource path="res://HUD/Simulation.cs" type="Script" id=1]
+
+[sub_resource type="CanvasItemMaterial" id=1]
+blend_mode = 3
+light_mode = 1
+
+[node name="Simulation" type="CanvasLayer"]
+script = ExtResource( 1 )
+
+[node name="Animation" type="Control" parent="."]
+margin_right = 40.0
+margin_bottom = 40.0
+
+[node name="ColorRect" type="ColorRect" parent="Animation"]
+material = SubResource( 1 )
+margin_left = 6.0
+margin_top = 38.0
+margin_right = 232.0
+margin_bottom = 228.0
+color = Color( 0.627451, 0.627451, 0.627451, 1 )
+
+[node name="ReferenceRect" type="ReferenceRect" parent="Animation"]
+margin_left = 6.0
+margin_top = 38.0
+margin_right = 232.0
+margin_bottom = 70.0
+border_color = Color( 0.745098, 0.745098, 0.745098, 1 )
+border_width = 1.2
+editor_only = false
+
+[node name="ReferenceRect2" type="ReferenceRect" parent="Animation"]
+margin_left = 6.0
+margin_top = 70.0
+margin_right = 232.0
+margin_bottom = 228.0
+border_color = Color( 0.745098, 0.745098, 0.745098, 1 )
+border_width = 1.2
+editor_only = false
+
+[node name="AnimationLabel" type="Label" parent="Animation"]
+margin_left = 60.0
+margin_top = 47.0
+margin_right = 181.0
+margin_bottom = 61.0
+rect_pivot_offset = Vector2( 103, 10 )
+text = "ANIMATION"
+align = 1
+
+[node name="Control" type="Control" parent="Animation"]
+margin_right = 40.0
+margin_bottom = 40.0
+
+[node name="PlayPause" type="Button" parent="Animation/Control"]
+margin_left = 32.0
+margin_top = 84.0
+margin_right = 58.0
+margin_bottom = 104.0
+rect_scale = Vector2( 1.4, 1.4 )
+hint_tooltip = "Play / Pause"
+text = "||"
+
+[node name="ManualSteps" type="Control" parent="Animation/Control"]
+margin_right = 40.0
+margin_bottom = 40.0
+
+[node name="OneFrame" type="Button" parent="Animation/Control/ManualSteps"]
+margin_left = 94.0
+margin_top = 84.0
+margin_right = 121.0
+margin_bottom = 104.0
+rect_scale = Vector2( 1.4, 1.4 )
+hint_tooltip = "Advance a single time step"
+text = ">|"
+
+[node name="OneDay" type="Button" parent="Animation/Control/ManualSteps"]
+margin_left = 147.0
+margin_top = 84.0
+margin_right = 182.0
+margin_bottom = 104.0
+rect_scale = Vector2( 1.4, 1.4 )
+hint_tooltip = "Advance half a day"
+text = ">>|"
+
+[node name="DateLabel" type="Label" parent="Animation/Control"]
+margin_left = 32.0
+margin_top = 128.0
+margin_right = 146.0
+margin_bottom = 149.0
+rect_scale = Vector2( 1.4, 1.4 )
+text = "0000-00-00 00:00"
+__meta__ = {
+"_edit_use_anchors_": true
+}
+
+[node name="HiddenSteps" type="Label" parent="Animation/Control"]
+margin_left = 137.0
+margin_top = 198.0
+margin_right = 221.0
+margin_bottom = 212.0
+rect_pivot_offset = Vector2( -388, -120 )
+text = "Hidden steps"
+
+[node name="HSlider" type="HSlider" parent="Animation/Control"]
+margin_left = 12.0
+margin_top = 197.0
+margin_right = 122.0
+margin_bottom = 213.0
+rect_pivot_offset = Vector2( -264, -119 )
+min_value = 1.0
+max_value = 72.0
+value = 1.0
+rounded = true
+
+[node name="ScreenshotLabel" type="Label" parent="Animation/Control"]
+margin_left = 83.0
+margin_top = 164.0
+margin_right = 147.0
+margin_bottom = 178.0
+rect_pivot_offset = Vector2( 37, 36 )
+text = "Screenshot"
+
+[node name="ScreenshotButton" type="CheckButton" parent="Animation/Control"]
+margin_left = 11.0
+margin_top = 151.0
+margin_right = 87.0
+margin_bottom = 191.0
+rect_pivot_offset = Vector2( 109, 49 )
+
+[node name="Export" type="Control" parent="."]
+margin_top = -5.0
+margin_right = 40.0
+margin_bottom = 35.0
+
+[node name="ColorRect" type="ColorRect" parent="Export"]
+material = SubResource( 1 )
+margin_left = 6.0
+margin_top = 246.0
+margin_right = 232.0
+margin_bottom = 358.0
+color = Color( 0.627451, 0.627451, 0.627451, 1 )
+
+[node name="ReferenceRect" type="ReferenceRect" parent="Export"]
+margin_left = 6.0
+margin_top = 246.0
+margin_right = 232.0
+margin_bottom = 278.0
+border_color = Color( 0.745098, 0.745098, 0.745098, 1 )
+border_width = 1.2
+editor_only = false
+
+[node name="ReferenceRect2" type="ReferenceRect" parent="Export"]
+margin_left = 6.0
+margin_top = 278.0
+margin_right = 232.0
+margin_bottom = 358.0
+border_color = Color( 0.745098, 0.745098, 0.745098, 1 )
+border_width = 1.2
+editor_only = false
+
+[node name="Export" type="Label" parent="Export"]
+margin_left = 60.0
+margin_top = 255.0
+margin_right = 181.0
+margin_bottom = 269.0
+rect_pivot_offset = Vector2( 103, 10 )
+text = "EXPORT"
+align = 1
+
+[node name="IrradianceControl" type="Control" parent="Export"]
+margin_right = 40.0
+margin_bottom = 40.0
+
+[node name="irr_v1" type="Button" parent="Export/IrradianceControl"]
+margin_left = 128.0
+margin_top = 296.0
+margin_right = 155.0
+margin_bottom = 316.0
+rect_pivot_offset = Vector2( 3.8147e-06, 3.99997 )
+hint_tooltip = "Triangular mesh"
+text = "v1"
+
+[node name="irr_v2" type="Button" parent="Export/IrradianceControl"]
+margin_left = 160.0
+margin_top = 296.0
+margin_right = 187.0
+margin_bottom = 316.0
+rect_pivot_offset = Vector2( 3.8147e-06, 3.99997 )
+hint_tooltip = "Primitives"
+text = "v2"
+
+[node name="irr_v3" type="Button" parent="Export/IrradianceControl"]
+margin_left = 192.0
+margin_top = 296.0
+margin_right = 219.0
+margin_bottom = 316.0
+rect_pivot_offset = Vector2( 3.8147e-06, 3.99997 )
+hint_tooltip = "Primitives"
+text = "v3"
+
+[node name="Label" type="Label" parent="Export/IrradianceControl"]
+margin_left = 24.0
+margin_top = 300.0
+margin_right = 88.0
+margin_bottom = 314.0
+text = "Irradiance"
+
+[node name="SaveDialog" type="FileDialog" parent="Export"]
+margin_right = 600.0
+margin_bottom = 400.0
+rect_min_size = Vector2( 350, 270 )
+resizable = true
+access = 2
+
+[node name="CompleteControl" type="Control" parent="Export"]
+margin_right = 40.0
+margin_bottom = 40.0
+
+[node name="json" type="Button" parent="Export/CompleteControl"]
+margin_left = 155.0
+margin_top = 320.0
+margin_right = 194.0
+margin_bottom = 340.0
+rect_pivot_offset = Vector2( 3.8147e-06, 3.99997 )
+hint_tooltip = "Triangular mesh"
+disabled = true
+text = "json"
+
+[node name="Label" type="Label" parent="Export/CompleteControl"]
+margin_left = 24.0
+margin_top = 324.0
+margin_right = 88.0
+margin_bottom = 338.0
+text = "Complete"
+
+[node name="Debug" type="Control" parent="."]
+margin_top = 360.0
+margin_right = 40.0
+margin_bottom = 400.0
+
+[node name="ColorRect" type="ColorRect" parent="Debug"]
+material = SubResource( 1 )
+margin_left = 6.0
+margin_top = 6.0
+margin_right = 232.0
+margin_bottom = 196.0
+color = Color( 0.627451, 0.627451, 0.627451, 1 )
+
+[node name="ReferenceRect" type="ReferenceRect" parent="Debug"]
+margin_left = 6.0
+margin_top = 6.0
+margin_right = 232.0
+margin_bottom = 38.0
+border_color = Color( 0.745098, 0.745098, 0.745098, 1 )
+border_width = 1.2
+editor_only = false
+
+[node name="ReferenceRect2" type="ReferenceRect" parent="Debug"]
+margin_left = 6.0
+margin_top = 38.0
+margin_right = 232.0
+margin_bottom = 196.0
+rect_pivot_offset = Vector2( 98, 114 )
+border_color = Color( 0.745098, 0.745098, 0.745098, 1 )
+border_width = 1.2
+editor_only = false
+
+[node name="Export" type="Label" parent="Debug"]
+margin_left = 60.0
+margin_top = 15.0
+margin_right = 181.0
+margin_bottom = 29.0
+rect_pivot_offset = Vector2( 103, 10 )
+text = "DEBUG"
+align = 1
+
+[node name="Control" type="Control" parent="Debug"]
+margin_right = 40.0
+margin_bottom = 40.0
+
+[node name="IrradianceLabel" type="Label" parent="Debug/Control"]
+margin_left = 83.0
+margin_top = 60.0
+margin_right = 147.0
+margin_bottom = 74.0
+rect_pivot_offset = Vector2( 37, 36 )
+text = "Irradiance"
+
+[node name="IrradianceButton" type="CheckButton" parent="Debug/Control"]
+margin_left = 11.0
+margin_top = 47.0
+margin_right = 87.0
+margin_bottom = 87.0
+rect_pivot_offset = Vector2( 109, 49 )
+
+[node name="IrradianceOpacity" type="Label" parent="Debug/Control"]
+margin_left = 137.0
+margin_top = 86.0
+margin_right = 222.0
+margin_bottom = 100.0
+rect_pivot_offset = Vector2( -388, -120 )
+text = "Opacity"
+
+[node name="IrradiancHSlider" type="HSlider" parent="Debug/Control"]
+margin_left = 12.0
+margin_top = 85.0
+margin_right = 122.0
+margin_bottom = 101.0
+rect_pivot_offset = Vector2( -264, -119 )
+max_value = 1.0
+step = 0.1
+
+[node name="Stats" type="Control" parent="Debug"]
+margin_left = 12.0
+margin_top = 104.0
+margin_right = 224.0
+margin_bottom = 192.0
+
+[node name="ShootSegsLabel" type="Label" parent="Debug/Stats"]
+margin_left = 12.0
+margin_top = 15.0
+margin_right = 76.0
+margin_bottom = 29.0
+text = "Shoot segs:"
+
+[node name="TrianglesLabel" type="Label" parent="Debug/Stats"]
+margin_left = 12.0
+margin_top = 39.0
+margin_right = 85.0
+margin_bottom = 53.0
+text = "Triangles:"
+
+[node name="SensorsLabel" type="Label" parent="Debug/Stats"]
+margin_left = 12.0
+margin_top = 63.0
+margin_right = 85.0
+margin_bottom = 77.0
+text = "Sensors:"
+
+[node name="ShootSegsValue" type="Label" parent="Debug/Stats"]
+margin_left = 108.0
+margin_top = 15.0
+margin_right = 181.0
+margin_bottom = 29.0
+text = "0"
+align = 2
+
+[node name="TrianglesValue" type="Label" parent="Debug/Stats"]
+margin_left = 108.0
+margin_top = 39.0
+margin_right = 181.0
+margin_bottom = 53.0
+text = "0"
+align = 2
+
+[node name="SensorsValue" type="Label" parent="Debug/Stats"]
+margin_left = 108.0
+margin_top = 63.0
+margin_right = 181.0
+margin_bottom = 77.0
+text = "0"
+align = 2
+
+[connection signal="pressed" from="Animation/Control/PlayPause" to="." method="Pause"]
+[connection signal="pressed" from="Animation/Control/ManualSteps/OneFrame" to="." method="OneFrame"]
+[connection signal="pressed" from="Animation/Control/ManualSteps/OneDay" to="." method="OneDay"]
+[connection signal="mouse_entered" from="Animation/Control/HSlider" to="." method="MenuEntered"]
+[connection signal="mouse_exited" from="Animation/Control/HSlider" to="." method="MenuLeft"]
+[connection signal="value_changed" from="Animation/Control/HSlider" to="." method="HiddenSteps"]
+[connection signal="pressed" from="Export/IrradianceControl/irr_v1" to="." method="IrradianceV1"]
+[connection signal="pressed" from="Export/IrradianceControl/irr_v2" to="." method="IrradianceV2"]
+[connection signal="pressed" from="Export/IrradianceControl/irr_v3" to="." method="IrradianceV3"]
+[connection signal="file_selected" from="Export/SaveDialog" to="." method="OnSave"]
+[connection signal="pressed" from="Export/CompleteControl/json" to="." method="Complete"]
+[connection signal="toggled" from="Debug/Control/IrradianceButton" to="." method="DebugIrradiance"]
+[connection signal="mouse_entered" from="Debug/Control/IrradiancHSlider" to="." method="MenuEntered"]
+[connection signal="mouse_exited" from="Debug/Control/IrradiancHSlider" to="." method="MenuLeft"]
+[connection signal="value_changed" from="Debug/Control/IrradiancHSlider" to="." method="IrradianceOpacity"]

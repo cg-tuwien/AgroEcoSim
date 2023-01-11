@@ -8,11 +8,11 @@ using System.Runtime.InteropServices;
 
 namespace Agro;
 
-public partial struct AboveGroundAgent : IAgent
+public partial struct AboveGroundAgent2 : IPlantAgent
 {
 	[StructLayout(LayoutKind.Auto)]
 	[Message]
-	public readonly struct WaterInc : IMessage<AboveGroundAgent>
+	public readonly struct WaterInc : IMessage<AboveGroundAgent2>
 	{
 		#if HISTORY_LOG || TICK_LOG
 		public readonly static List<SimpleMsgLog> MessagesHistory = new();
@@ -24,18 +24,18 @@ public partial struct AboveGroundAgent : IAgent
 		public WaterInc(float amount) => Amount = amount;
 		public bool Valid => Amount > 0f;
 		public Transaction Type => Transaction.Increase;
-		public void Receive(ref AboveGroundAgent dstAgent, uint timestep)
+		public void Receive(ref AboveGroundAgent2 dstAgent, uint timestep, byte stage)
 		{
 			dstAgent.IncWater(Amount);
 			#if HISTORY_LOG || TICK_LOG
-			lock(MessagesHistory) MessagesHistory.Add(new(timestep, ID, dstAgent.ID, Amount));
+			lock(MessagesHistory) MessagesHistory.Add(new(timestep, stage, ID, dstAgent.ID, Amount));
 			#endif
 		}
 	}
 
 	[StructLayout(LayoutKind.Auto)]
 	[Message]
-	public readonly struct WaterDec : IMessage<AboveGroundAgent>
+	public readonly struct WaterDec : IMessage<AboveGroundAgent2>
 	{
 		#if HISTORY_LOG || TICK_LOG
 		public readonly static List<SimpleMsgLog> MessagesHistory = new();
@@ -47,18 +47,18 @@ public partial struct AboveGroundAgent : IAgent
 		public WaterDec(float amount) => Amount = amount;
 		public bool Valid => Amount > 0f;
 		public Transaction Type => Transaction.Increase;
-		public void Receive(ref AboveGroundAgent dstAgent, uint timestep)
+		public void Receive(ref AboveGroundAgent2 dstAgent, uint timestep, byte stage)
 		{
 			dstAgent.TryDecWater(Amount);
 			#if HISTORY_LOG || TICK_LOG
-			lock(MessagesHistory) MessagesHistory.Add(new(timestep, ID, dstAgent.ID, -Amount));
+			lock(MessagesHistory) MessagesHistory.Add(new(timestep, stage, ID, dstAgent.ID, -Amount));
 			#endif
 		}
 	}
 
 	[StructLayout(LayoutKind.Auto)]
 	[Message]
-	public readonly struct EnergyInc : IMessage<AboveGroundAgent>
+	public readonly struct EnergyInc : IMessage<AboveGroundAgent2>
 	{
 		#if HISTORY_LOG || TICK_LOG
 		public readonly static List<SimpleMsgLog> MessagesHistory = new();
@@ -70,18 +70,18 @@ public partial struct AboveGroundAgent : IAgent
 		public EnergyInc(float amount) => Amount = amount;
 		public bool Valid => Amount > 0f;
 		public Transaction Type => Transaction.Increase;
-		public void Receive(ref AboveGroundAgent dstAgent, uint timestep)
+		public void Receive(ref AboveGroundAgent2 dstAgent, uint timestep, byte stage)
 		{
 			dstAgent.IncEnergy(Amount);
 			#if HISTORY_LOG || TICK_LOG
-			lock(MessagesHistory) MessagesHistory.Add(new(timestep, ID, dstAgent.ID, Amount));
+			lock(MessagesHistory) MessagesHistory.Add(new(timestep, stage, ID, dstAgent.ID, Amount));
 			#endif
 		}
 	}
 
 	[StructLayout(LayoutKind.Auto)]
 	[Message]
-	public readonly struct EnergyDec : IMessage<AboveGroundAgent>
+	public readonly struct EnergyDec : IMessage<AboveGroundAgent2>
 	{
 		#if HISTORY_LOG || TICK_LOG
 		public readonly static List<SimpleMsgLog> MessagesHistory = new();
@@ -93,11 +93,11 @@ public partial struct AboveGroundAgent : IAgent
 		public EnergyDec(float amount) => Amount = amount;
 		public bool Valid => Amount > 0f;
 		public Transaction Type => Transaction.Increase;
-		public void Receive(ref AboveGroundAgent dstAgent, uint timestep)
+		public void Receive(ref AboveGroundAgent2 dstAgent, uint timestep, byte stage)
 		{
 			dstAgent.IncEnergy(Amount);
 			#if HISTORY_LOG || TICK_LOG
-			lock(MessagesHistory) MessagesHistory.Add(new(timestep, ID, dstAgent.ID, -Amount));
+			lock(MessagesHistory) MessagesHistory.Add(new(timestep, stage, ID, dstAgent.ID, -Amount));
 			#endif
 		}
 	}

@@ -10,31 +10,33 @@ namespace AgentsSystem;
 public abstract class Formation<T> : IFormation where T : struct, IAgent
 {
 	protected bool ReadTMP = false;
-	protected T[] Agents;
+	//Once GODOT supports C# 6.0: Make it a List and then for processing send System.Runtime.InteropServices.CollectionsMarshal.AsSpan(Stems);
+	[Newtonsoft.Json.JsonProperty] protected T[] Agents;
 	protected T[] AgentsTMP;
 
 	protected readonly PostBox<T> Postbox = new();
-	readonly List<T> Births = new();
-	readonly List<int> Deaths = new();
+	protected readonly List<T> Births = new();
+	protected readonly HashSet<int> Deaths = new();
+	protected readonly List<int> DeathsHelper = new();
+
+	public abstract byte Stages { get; }
 
 	/// <summary>
 	/// An ordered tuple of the double data-buffer entries ready for swap.
 	/// </summary>
+	protected (T[], T[]) SrcDst() => ReadTMP ? (AgentsTMP, Agents) : (Agents, AgentsTMP);
+	protected T[] Src() => ReadTMP ? AgentsTMP : Agents;
 
-	(T[], T[]) SrcDst() => ReadTMP ? (AgentsTMP, Agents) : (Agents, AgentsTMP);
-
-	public void Census()
+	public virtual void Census()
 	{
 		if (Births.Count > 0 || Deaths.Count > 0)
 		{
-			var src =  ReadTMP ? AgentsTMP : Agents;
+			var src = Src();
 			if (Deaths.Count > 0)
 			{
-				Deaths.Sort();
-				//remove duplicates
-				for(int i = Deaths.Count - 2; i >= 0; --i)
-					if (Deaths[i] == Deaths[i + 1])
-						Deaths.RemoveAt(i + 1);
+				DeathsHelper.Clear();
+				DeathsHelper.AddRange(Deaths);
+				DeathsHelper.Sort();
 			}
 
 			var diff = Births.Count - Deaths.Count;
@@ -50,7 +52,7 @@ public abstract class Formation<T> : IFormation where T : struct, IAgent
 				var dc = Deaths.Count;
 				for(int i = 0, d = 0; i < src.Length; ++i)
 				{
-					if (Deaths[d] == i)
+					if (DeathsHelper[d] == i)
 					{
 						if (++d == dc && i + 1 < src.Length)
 						{
@@ -87,13 +89,13 @@ public abstract class Formation<T> : IFormation where T : struct, IAgent
 		}
 	}
 
-	public virtual void Tick(SimulationWorld world, uint timestep)
+	public virtual void Tick(SimulationWorld world, uint timestep, byte stage)
 	{
 		var (src, dst) = SrcDst();
 
 		Array.Copy(src, dst, src.Length);
 		for(int i = 0; i < dst.Length; ++i)
-			dst[i].Tick(world, this, i, timestep);
+			dst[i].Tick(world, this, i, timestep, stage);
 
 		#if TICK_LOG
 		StatesHistory.Clear();
@@ -125,9 +127,10 @@ public abstract class Formation<T> : IFormation where T : struct, IAgent
 			return false;
 	}
 
-	public virtual void Birth(T agent)
+	public virtual int Birth(T agent)
 	{
 		Births.Add(agent);
+		return Agents.Length + Births.Count - 1;
 	}
 
 	public virtual void Death(int index)
@@ -135,22 +138,23 @@ public abstract class Formation<T> : IFormation where T : struct, IAgent
 		Deaths.Add(index);
 	}
 
-	public virtual void DeliverPost(uint timestep)
+	public virtual void DeliverPost(uint timestep, byte stage)
 	{
 		var (src, dst) = SrcDst();
 		Array.Copy(src, dst, dst.Length);
-		Postbox.Process(timestep, dst);
+		Postbox.Process(timestep, stage, dst);
 		ReadTMP = !ReadTMP;
 	}
 
-	public virtual void ProcessTransactions(uint timestep) { }
+	public virtual void ProcessTransactions(uint timestep, byte stage) { }
 
-	public virtual bool HasUndeliveredPost => Postbox.AnyMessages;
-	public virtual bool HasUnprocessedTransactions => false;
+	[Newtonsoft.Json.JsonIgnore] public virtual bool HasUndeliveredPost => Postbox.AnyMessages;
+	[Newtonsoft.Json.JsonIgnore] public virtual bool HasUnprocessedTransactions => false;
+	public virtual int Count => Agents.Length;
 
 #if HISTORY_LOG || TICK_LOG
-	List<T[]> StatesHistory = new();
-	public string HistoryToJSON(int timestep = -1) => timestep >= 0 ? Utils.Export.Json(StatesHistory[timestep]) : Utils.Export.Json(StatesHistory);
+	readonly List<T[]> StatesHistory = new();
+	public string HistoryToJSON(int timestep = -1, byte stage = 0) => timestep >= 0 ? Export.Json(StatesHistory[timestep]) : Export.Json(StatesHistory);
 
 	public ulong GetID(int index) => ReadTMP
 		? (AgentsTMP.Length > index ? AgentsTMP[index].ID : ulong.MaxValue)
@@ -159,6 +163,6 @@ public abstract class Formation<T> : IFormation where T : struct, IAgent
 
 #if GODOT
 	public virtual void GodotReady() {}
-	public virtual void GodotProcess(uint timestep) {}
+	public virtual void GodotProcess() {}
 #endif
 }

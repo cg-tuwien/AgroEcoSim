@@ -37,15 +37,15 @@ public class SimulationController : ControllerBase
             //var exported = world.HistoryToJSON();
             //File.WriteAllText("export.json", exported.Replace("},", "},\n").Replace("],", "],\n"));
 #endif
-        var response = new SimulationResponse(){ Plants = new(world.Count) };
+        var response = new SimulationResponse() { Plants = new(world.Count) };
         world.ForEach(formation =>
         {
-            if (formation is PlantFormation plant)
+            if (formation is PlantFormation2 plant)
                 //plantData.Add(@$"{{""P"":{JsonSerializer.Serialize(new Vector3Data(plant.Position))},""V"":{plant.AG.GetVolume()}}}");
                 response.Plants.Add(new(){ Volume = plant.AG.GetVolume()});
         });
 
-        Debug.WriteLine($"RENDER TIME: {IrradianceClient.Singleton.SW.ElapsedMilliseconds} ms");
+        Debug.WriteLine($"RENDER TIME: {IrradianceClient.ElapsedMilliseconds} ms");
         return response;
     }
 }

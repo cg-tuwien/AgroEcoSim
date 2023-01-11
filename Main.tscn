@@ -1,7 +1,35 @@
+<<<<<<< HEAD
 [gd_scene load_steps=5 format=3 uid="uid://bop7yvw8a3egf"]
 
 [ext_resource type="Script" path="res://addons/goutte.camera.trackball/trackball_camera.gd" id="1"]
 [ext_resource type="Script" path="res://addons/multiagent_system/MultiagentSystem.cs" id="2"]
+=======
+[gd_scene load_steps=14 format=2]
+
+[ext_resource path="res://addons/goutte.camera.trackball/trackball_camera.gd" type="Script" id=1]
+[ext_resource path="res://addons/multiagent_system/MultiagentSystem.cs" type="Script" id=2]
+[ext_resource path="res://HUD/HUD.tscn" type="PackedScene" id=3]
+[ext_resource path="res://HUD/Simulation.tscn" type="PackedScene" id=4]
+[ext_resource path="res://HUD/Soil.tscn" type="PackedScene" id=5]
+[ext_resource path="res://HUD/Roots.tscn" type="PackedScene" id=6]
+[ext_resource path="res://HUD/Shoots.tscn" type="PackedScene" id=7]
+
+[sub_resource type="CubeMesh" id=1]
+
+[sub_resource type="CubeMesh" id=2]
+
+[sub_resource type="SpatialMaterial" id=3]
+albedo_color = Color( 1, 0, 0, 1 )
+
+[sub_resource type="SpatialMaterial" id=4]
+albedo_color = Color( 0, 0.705882, 0.12549, 1 )
+
+[sub_resource type="SpatialMaterial" id=5]
+albedo_color = Color( 0.054902, 0, 1, 1 )
+
+[sub_resource type="SpatialMaterial" id=6]
+albedo_color = Color( 1, 0, 0.960784, 1 )
+>>>>>>> main
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_3ksif"]
 albedo_color = Color(1, 0.00784314, 0, 1)
@@ -16,6 +44,7 @@ script = ExtResource("1")
 stabilize_horizon = true
 zoom_minimum = 0.003
 
+<<<<<<< HEAD
 [node name="MultiagentSystem" type="Node3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -10, 0, -1.5)
 script = ExtResource("2")
@@ -30,3 +59,54 @@ transform = Transform3D(0.997458, 0, 0.0712537, 0, 1, 0, -0.0712537, 0, 0.997458
 material_overlay = SubResource("StandardMaterial3D_3ksif")
 mesh = SubResource("BoxMesh_wyhw3")
 skeleton = NodePath("../DirectionalLight3d")
+=======
+[node name="MultiagentSystem" type="Spatial" parent="."]
+script = ExtResource( 2 )
+HudScene = ExtResource( 3 )
+SimulationScene = ExtResource( 4 )
+SoilScene = ExtResource( 5 )
+RootsScene = ExtResource( 6 )
+ShootsScene = ExtResource( 7 )
+
+[node name="UnitBoxMarkers" type="Spatial" parent="."]
+visible = false
+
+[node name="ZERO" type="MeshInstance" parent="UnitBoxMarkers"]
+transform = Transform( 0.02, 0, 0, 0, 0.02, 0, 0, 0, 0.02, 0, 0, 0 )
+mesh = SubResource( 1 )
+skeleton = NodePath("../..")
+
+[node name="X" type="MeshInstance" parent="UnitBoxMarkers"]
+transform = Transform( 0.02, 0, 0, 0, 0.02, 0, 0, 0, 0.02, 1, 0, 0 )
+mesh = SubResource( 2 )
+skeleton = NodePath("../..")
+material/0 = SubResource( 3 )
+
+[node name="Y" type="MeshInstance" parent="UnitBoxMarkers"]
+transform = Transform( 0.02, 0, 0, 0, 0.02, 0, 0, 0, 0.02, 0, 1, 0 )
+mesh = SubResource( 2 )
+skeleton = NodePath("../..")
+material/0 = SubResource( 4 )
+
+[node name="Z" type="MeshInstance" parent="UnitBoxMarkers"]
+transform = Transform( 0.02, 0, 0, 0, 0.02, 0, 0, 0, 0.02, 0, 0, 1 )
+mesh = SubResource( 2 )
+skeleton = NodePath("../..")
+material/0 = SubResource( 5 )
+
+[node name="XYZ" type="MeshInstance" parent="UnitBoxMarkers"]
+transform = Transform( 0.02, 0, 0, 0, 0.02, 0, 0, 0, 0.02, 1, 1, 1 )
+mesh = SubResource( 2 )
+skeleton = NodePath("../..")
+material/0 = SubResource( 6 )
+
+[node name="Yhalf" type="MeshInstance" parent="UnitBoxMarkers"]
+transform = Transform( 0.02, 0, 0, 0, 0.02, 0, 0, 0, 0.02, 0, 0.5, 0 )
+visible = false
+mesh = SubResource( 2 )
+skeleton = NodePath("../..")
+material/0 = SubResource( 4 )
+
+[connection signal="EnteredMenu" from="MultiagentSystem" to="TrackballCamera" method="_on_MultiagentSystem_EnteredMenu"]
+[connection signal="LeftMenu" from="MultiagentSystem" to="TrackballCamera" method="_on_MultiagentSystem_LeftMenu"]
+>>>>>>> main

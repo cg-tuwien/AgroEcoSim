@@ -14,8 +14,17 @@ public partial struct SoilAgent : IAgent
 	internal static readonly float SoilDiffusionCoefPerTick = 0.2f / AgroWorld.TicksPerHour;
 	internal static readonly float GravitationDiffusionCoefPerTick = 1.5f * SoilDiffusionCoefPerTick;
 
+	///<summary>
+	//Water ammount (g)
+	///</summary>
 	public float Water { get; private set; }
+	///<summary>
+	//Steam ammount (g)
+	///</summary>
 	public float Steam { get; private set; }
+	///<summary>
+	//Temperature (°C)
+	///</summary>
 	public float Temperature { get; private set; }
 
 	public const float WaterCapacityRatio = 1f;
@@ -33,7 +42,7 @@ public partial struct SoilAgent : IAgent
 		Temperature = temperature;
 	}
 
-	public void Tick(SimulationWorld world, IFormation _formation, int formationID, uint timestep)
+	public void Tick(SimulationWorld world, IFormation _formation, int formationID, uint timestep, byte stage)
 	{
 		var formation = (SoilFormation)_formation;
 		var coords = formation.Coords(formationID);
