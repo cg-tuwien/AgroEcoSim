@@ -1,24 +1,20 @@
-<Project Sdk="Godot.NET.Sdk/4.0.0-beta1">
+<Project Sdk="Godot.NET.Sdk/4.0.0-beta.10">
   <PropertyGroup>
     <TargetFramework>net6.0</TargetFramework>
     <EnableDynamicLoading>true</EnableDynamicLoading>
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
   </PropertyGroup>
-
   <PropertyGroup>
     <DefineConstants>$(DefineConstants);GODOT;TICK_LOG</DefineConstants>
   </PropertyGroup>
-
   <ItemGroup>
     <PackageReference Include="glTF2Loader" Version="1.1.3-alpha" />
   </ItemGroup>
-
   <!-- TODO for win something like here https://superuser.com/questions/1580436/how-to-delete-matching-directories-recursively-using-windows-command -->
-
   <Target Name="Clean60" BeforeTargets="GenerateTargetFrameworkMonikerAttribute">
     <Message Importance="normal" Text="Removing build files" />
-    <Exec Command="rm -rf `find . -type d -regex '^\.\/[^\.].*bin$'`"/>
-    <Exec Command="rm -rf `find . -type d -regex '^\.\/[^\.].*obj$'`"/>
+    <Exec Command="rm -rf `find . -type d -regex '^\.\/[^\.].*bin$'`" />
+    <Exec Command="rm -rf `find . -type d -regex '^\.\/[^\.].*obj$'`" />
   </Target>
 </Project>
