@@ -1,7 +1,10 @@
-[gd_scene load_steps=4 format=3 uid="uid://bop7yvw8a3egf"]
+[gd_scene load_steps=5 format=3 uid="uid://bop7yvw8a3egf"]
 
 [ext_resource type="Script" path="res://addons/goutte.camera.trackball/trackball_camera.gd" id="1"]
 [ext_resource type="Script" path="res://addons/multiagent_system/MultiagentSystem.cs" id="2"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_3ksif"]
+albedo_color = Color(1, 0.00784314, 0, 1)
 
 [sub_resource type="BoxMesh" id="BoxMesh_wyhw3"]
 
@@ -14,13 +17,16 @@ stabilize_horizon = true
 zoom_minimum = 0.003
 
 [node name="MultiagentSystem" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -10, 0, -1.5)
 script = ExtResource("2")
 
 [node name="DirectionalLight3d" type="DirectionalLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, -0.959314, 0.282341, 0, -0.282341, -0.959314, 0, 7.93057, 0)
 light_bake_mode = 0
 directional_shadow_mode = 0
 
 [node name="MeshInstance3d" type="MeshInstance3D" parent="."]
 transform = Transform3D(0.997458, 0, 0.0712537, 0, 1, 0, -0.0712537, 0, 0.997458, 1.53991, -0.237357, -0.629681)
+material_overlay = SubResource("StandardMaterial3D_3ksif")
 mesh = SubResource("BoxMesh_wyhw3")
 skeleton = NodePath("../DirectionalLight3d")

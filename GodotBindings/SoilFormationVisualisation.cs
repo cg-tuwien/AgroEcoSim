@@ -121,18 +121,39 @@ public partial class SoilFormation
 		MarkerDataStorage.Add(new(dir, parent_pos, parent_index));
 	}
 
+	const string COLOR = "mColor";
+
+	const string MaterialCoreString = $@"
+		uniform vec4 { COLOR } : source_color = vec4(0.7, 0.7, 0.7, 1.0);
+		void fragment() {{ ALBEDO = {COLOR}.rgb; }}
+	";
+	static readonly ShaderMaterial UnshadedMaterial = new() {
+		Shader = new Shader {
+			Code = $@"
+				shader_type spatial;
+				render_mode unshaded;
+				{MaterialCoreString}
+			"
+		},
+	};
+
+	static readonly ShaderMaterial ShadedMaterial = new() {
+		Shader = new Shader {
+			Code = $@"
+				shader_type spatial;
+				{MaterialCoreString}
+			"
+		},
+	};
+
 	private void InitializeCell(int x, int y, int z){
 		var mesh = new MeshInstance3D()
 		{
 			Mesh = new BoxMesh(),//Parameters.SoilCellShape,
 			Position = new Vector3(x, -z, y) * AgroWorld.FieldResolution,
 			Scale = Vector3.One * (Parameters.SoilCellScale * AgroWorld.FieldResolution),
+			MaterialOverride = UnshadedMaterial,
 		};
-		//mesh.SetSurfaceOverrideMaterial(0, (StandardMaterial3D)Parameters.SoilCellMaterial.Duplicate());
-		//mesh.SetSurfaceOverrideMaterial(0,  new StandardMaterial3D());
-		//mesh.Mesh.SurfaceSetMaterial(0, new StandardMaterial3D(){ AlbedoColor = new(0.9f, 0.3f, 0.1f) });
-		//mesh.MaterialOverride = new StandardMaterial3D(){ AlbedoColor = new(0.9f, 0.3f, 0.1f) }; //no effect
-		mesh.MaterialOverlay = new StandardMaterial3D(){ AlbedoColor = new(0.9f, 0.3f, 0.1f) };
 
 		SoilCellInstances[Index(x, y, z)] = mesh;
 		SimulationWorld.GodotAddChild(mesh);
@@ -145,8 +166,7 @@ public partial class SoilFormation
 			var multiplier = Math.Clamp(Agents[i].Water / Agents[i].WaterMaxCapacity, 0f, 1f);
 
 			SoilCellInstances[i].Scale = Vector3.One * (Parameters.SoilCellScale * AgroWorld.FieldResolution * multiplier);
-			//((StandardMaterial3D)SoilCellInstances[i].GetSurfaceOverrideMaterial(0)).AlbedoColor = multiplier * Parameters.FullCellColor + (1f - multiplier) * Parameters.EmptyCellColor;
-//			Console.WriteLine($"Mode: {((StandardMaterial3D)SoilCellInstances[i].GetSurfaceOverrideMaterial(0)).ShadingMode} Color: {((StandardMaterial3D)SoilCellInstances[i].GetSurfaceOverrideMaterial(0)).AlbedoColor}");
+			((ShaderMaterial)SoilCellInstances[i].MaterialOverride).SetShaderParameter(COLOR, multiplier * Parameters.FullCellColor + (1f - multiplier) * Parameters.EmptyCellColor);
 		}
 	}
 
