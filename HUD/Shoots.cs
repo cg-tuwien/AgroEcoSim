@@ -5,9 +5,9 @@ using System.Collections.Generic;
 using AgentsSystem;
 using Agro;
 
-public class Shoots : CanvasLayer
+public partial class Shoots : CanvasLayer
 {
-static readonly Agro.ColorCodingType[] TransferOptions = (Agro.ColorCodingType[])Enum.GetValues(typeof(Agro.ColorCodingType));
+	static readonly ColorCodingType[] TransferOptions = (ColorCodingType[])Enum.GetValues(typeof(Agro.ColorCodingType));
 
 	private ShootsVisualisationSettings Parameters;
 	public bool UpdateRequest = false;
@@ -15,22 +15,22 @@ static readonly Agro.ColorCodingType[] TransferOptions = (Agro.ColorCodingType[]
 
 	Control LightCutOffControl;
 
-	bool IsVisible(Visibility visibility) => visibility == Visibility.Visible || visibility == Visibility.MakeVisible;
-	Visibility Vis(bool flag) => flag ? Visibility.MakeVisible : Visibility.MakeInvisible;
+	static bool IsVisible(Visibility visibility) => visibility == Visibility.Visible || visibility == Visibility.MakeVisible;
+	static Visibility Vis(bool flag) => flag ? Visibility.MakeVisible : Visibility.MakeInvisible;
 
 	public void Load(ShootsVisualisationSettings parameters)
 	{
 		Parameters = parameters;
-		var rootsTransferNode = GetNode<OptionButton>("Shoots/Color/ColorCombo");
+		var rootsTransferNode = GetNode<OptionButton>("Color/OptionButton");
 		foreach(var item in TransferOptions)
 			rootsTransferNode.AddItem(item.ToString());
-		GetNode<CheckButton>("Shoots/Visibility/StemsCheckButton").Pressed = IsVisible(parameters.StemsVisibility);
-		GetNode<CheckButton>("Shoots/Visibility/LeafsCheckButton").Pressed = IsVisible(parameters.LeafsVisibility);
-		GetNode<CheckButton>("Shoots/Visibility/BudsCheckButton").Pressed = IsVisible(parameters.BudsVisibility);
+		GetNode<CheckButton>("Visibility/StemsCheckButton").ButtonPressed = IsVisible(parameters.StemsVisibility);
+		GetNode<CheckButton>("Visibility/LeafsCheckButton").ButtonPressed = IsVisible(parameters.LeafsVisibility);
+		GetNode<CheckButton>("Visibility/BudsCheckButton").ButtonPressed = IsVisible(parameters.BudsVisibility);
 		rootsTransferNode.Select(Array.IndexOf(TransferOptions, parameters.TransferFunc));
-		GetNode<CheckButton>("Shoots/Color/UnshadedButton").Pressed = parameters.Unshaded;
-		LightCutOffControl = GetNode<Control>("Shoots/Color/LightCutOff");
-		GetNode<HSlider>("Shoots/Color/LightCutOff/HSlider").Value = Math.Clamp(((1f / parameters.LightCutOff) - 100f) / 900f, 0f, 1f);
+		GetNode<CheckButton>("Color/UnshadedButton").ButtonPressed = parameters.IsUnshaded;
+		LightCutOffControl = GetNode<Control>("LightCutOff");
+		GetNode<HSlider>("LightCutOff/HSlider").Value = Math.Clamp(((1f / parameters.LightCutOff) - 100f) / 900f, 0f, 1f);
 
 		if (!(parameters.TransferFunc == ColorCodingType.Light || parameters.TransferFunc == ColorCodingType.DailyLightExposure || parameters.TransferFunc == ColorCodingType.All))
 			LightCutOffControl.Hide();
@@ -67,7 +67,7 @@ static readonly Agro.ColorCodingType[] TransferOptions = (Agro.ColorCodingType[]
 
 	public void Unshaded(bool flag)
 	{
-		Parameters.Unshaded = flag;
+		Parameters.IsUnshaded = flag;
 		UpdateRequest = true;
 	}
 

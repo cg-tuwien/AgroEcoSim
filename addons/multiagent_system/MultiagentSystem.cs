@@ -7,7 +7,7 @@ using Agro;
 using V3 = System.Numerics.Vector3;
 
 [Tool]
-public class MultiagentSystem : Spatial
+public partial class MultiagentSystem : Node3D
 {
 	[Export]
 	public PackedScene HudScene;
@@ -22,10 +22,10 @@ public class MultiagentSystem : Spatial
 	public PackedScene ShootsScene;
 
 	[Signal]
-	public delegate void EnteredMenu();
+	public delegate void EnteredMenuEventHandler();
 
 	[Signal]
-	public delegate void LeftMenu();
+	public delegate void LeftMenuEventHandler();
 
 
 	bool Paused = false;
@@ -41,14 +41,16 @@ public class MultiagentSystem : Spatial
 
 	GodotGround Ground;
 	GodotDebugOverlay DebugOverlay;
-	Camera SceneCamera;
+	Camera3D SceneCamera;
 
 	SimulationWorld World;
 
 	// Called when the node enters the scene tree for the first time.
 	public override void _Ready()
 	{
-		if (Engine.IsEditorHint()) return;
+		if (Engine.IsEditorHint())
+			return;
+
 		// EmitSignal("LeftMenu");
 #if GODOT
 		GD.Print("GODOT is defined properly.");
@@ -63,14 +65,13 @@ public class MultiagentSystem : Spatial
 		var fieldSize = new Utils.Json.Vector3XDZ{ X = 5, D = 3, Z = 5 };
 
 		var plants = new List<PlantRequest>();
-		for(float x = 0.5f; x < fieldSize.X; x += 1f)
-		//var x = fieldSize.X * 0.5f;
+		//for(float x = 0.5f; x < fieldSize.X; x += 1f)
+		var x = fieldSize.X * 0.5f;
 			for(float z = 0.5f; z < fieldSize.Z; z += 1f)
 				plants.Add(new(){ Position = new Utils.Json.Vector3XYZ{ X = x, Y = -0.01f, Z = z }});
-
 		var obstacles = new ObstacleRequest[] {
-			new(){ Type = "Wall", Length = 5f, Height = 3.2f, Position = new Utils.Json.Vector3XYZ{ X = 2.5f, Y = 0f, Z = 1.0f }},
-			//new(){ Type = "Umbrella", Radius = 1.5f, Height = 2.2f, Position = new(2.5f, 0f, 2.5f)}
+			new(){ Type = "Wall", Length = 5f, Height = 3.2f, Position = new Utils.Json.Vector3XYZ{ X = 2.5f, Y = 0f, Z = 0.1f }},
+			new(){ Type = "Umbrella", Radius = 1.5f, Height = 2.2f, Position = new Utils.Json.Vector3XYZ{ X = 2.5f, Y = 0f, Z = 2.5f }}
 		};
 
 		World = Initialize.World(new SimulationRequest(){
@@ -80,12 +81,12 @@ public class MultiagentSystem : Spatial
 			Obstacles = obstacles,
 		});
 
-		Ground = new GodotGround();
-		DebugOverlay = new GodotDebugOverlay();
+		Ground = new ();
+		DebugOverlay = new ();
 		DebugOverlay.Hide();
 
 		foreach(var item in GetParent().GetChildren())
-			if (item is Camera camera && camera.Visible)
+			if (item != null && item is Camera3D camera && camera.Visible)
 			{
 				SceneCamera = camera;
 				break;
@@ -93,18 +94,18 @@ public class MultiagentSystem : Spatial
 
 		System.Diagnostics.Debug.WriteLine(SceneCamera == null ? "NO CAMERA" : "has camera");
 
-		Hud = (HUD)HudScene.Instance();
+		Hud = (HUD)HudScene.Instantiate();
 
-		Simulation = (Simulation)SimulationScene.Instance();
+		Simulation = (Simulation)SimulationScene.Instantiate();
 		Simulation.Load(World, DebugOverlay, SceneCamera, AgroWorldGodot.SimulationSettings);
 
-		Soil = (Soil)SoilScene.Instance();
+		Soil = (Soil)SoilScene.Instantiate();
 		Soil.Load(AgroWorldGodot.SoilVisualization, Ground);
 
-		Roots = (Roots)RootsScene.Instance();
+		Roots = (Roots)RootsScene.Instantiate();
 		Roots.Load(AgroWorldGodot.RootsVisualization);
 
-		Shoots = (Shoots)ShootsScene.Instance();
+		Shoots = (Shoots)ShootsScene.Instantiate();
 		Shoots.Load(AgroWorldGodot.ShootsVisualization);
 
 		Hud.Load(Simulation, Soil, Roots, Shoots);
@@ -121,9 +122,11 @@ public class MultiagentSystem : Spatial
 	/// Called every frame
 	/// </summay>
 	/// <param name="delta">'Elapsed time since the previous frame</param>
-	public override void _Process(float delta)
+	public override void _Process(double delta)
 	{
-		if (Engine.IsEditorHint()) return;
+		if (Engine.IsEditorHint())
+			return;
+
 		Paused = Simulation.Paused;
 
 		if (ColorPickerInactive)
@@ -183,16 +186,20 @@ public class MultiagentSystem : Spatial
 // 			});
 // 		}
 // #else
-		if (!Paused && World.Timestep < AgroWorld.TimestepsTotal)
+
+		if (World.Timestep < AgroWorld.TimestepsTotal)
 		{
-			World.Run(AgroWorldGodot.SimulationSettings.HiddenSteps);
-			if (World.Timestep == AgroWorld.TimestepsTotal - 1)
-				GD.Print($"Simulation successfully finished after {AgroWorld.TimestepsTotal} timesteps.");
-		}
-		else if (Simulation.ManualStepsRequested > 0)
-		{
-			World.Run(Simulation.ManualStepsRequested);
-			Simulation.ManualStepsDone();
+			if (!Paused)
+			{
+				World.Run(AgroWorldGodot.SimulationSettings.HiddenSteps);
+				if (World.Timestep == AgroWorld.TimestepsTotal - 1)
+					GD.Print($"Simulation successfully finished after {AgroWorld.TimestepsTotal} timesteps.");
+			}
+			else if (Simulation.ManualStepsRequested > 0)
+			{
+				World.Run(Simulation.ManualStepsRequested);
+				Simulation.ManualStepsDone();
+			}
 		}
 // #endif
 

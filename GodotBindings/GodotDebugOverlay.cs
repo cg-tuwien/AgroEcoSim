@@ -4,14 +4,14 @@ using Godot;
 
 namespace Agro;
 
-public class GodotDebugOverlay : TextureRect
+public partial class GodotDebugOverlay : TextureRect
 {
 	//static readonly ColorRect Overlay = new();
 	//readonly SpatialMaterial OverlayMaterial = new() { AlbedoColor = new(1f, 1f, 1f, 1f)};
 	public GodotDebugOverlay()
 	{
 		SimulationWorld.GodotAddChild(this); // Add it as a child of this node.
-		Expand = true;
+		StretchMode = StretchModeEnum.Scale;
 		//Material = OverlayMaterial;
 		// Mesh = PlanePrimitive;
 		// SetSurfaceMaterial(0, GroundMaterial);
@@ -23,9 +23,9 @@ public class GodotDebugOverlay : TextureRect
 	{
 		set => SelfModulate = new(1f, 1f, 1f, value);
 	}
-	public override void _Process(float delta)
+	public override void _Process(double delta)
 	{
-		RectSize = new(GetViewportRect().Size);
+		Size = GetViewportRect().Size; //in Godot3 this was RectSize = new(GetViewportRect().Size);
 		base._Process(delta);
 	}
 }

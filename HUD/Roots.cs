@@ -5,26 +5,26 @@ using System.Collections.Generic;
 using AgentsSystem;
 using Agro;
 
-public class Roots : CanvasLayer
+public partial class Roots : CanvasLayer
 {
-	static readonly Agro.ColorCodingType[] TransferOptions = (Agro.ColorCodingType[])Enum.GetValues(typeof(Agro.ColorCodingType));
+	static readonly ColorCodingType[] TransferOptions = (ColorCodingType[])Enum.GetValues(typeof(ColorCodingType));
 
 	private RootsVisualisationSettings Parameters;
 	public bool UpdateRequest = false;
 	public MenuEvent MenuEvent = MenuEvent.None;
 
-	bool IsVisible(Visibility visibility) => visibility == Visibility.Visible || visibility == Visibility.MakeVisible;
-	Visibility Vis(bool flag) => flag ? Visibility.MakeVisible : Visibility.MakeInvisible;
+	static bool IsVisible(Visibility visibility) => visibility == Visibility.Visible || visibility == Visibility.MakeVisible;
+	static Visibility Vis(bool flag) => flag ? Visibility.MakeVisible : Visibility.MakeInvisible;
 
 	public void Load(RootsVisualisationSettings parameters)
 	{
 		Parameters = parameters;
-		var rootsTransferNode = GetNode<OptionButton>("Roots/Color/ColorCombo");
+		var rootsTransferNode = GetNode<OptionButton>("Color/OptionButton");
 		for(int i = 0; i < TransferOptions.Length - 3; ++i) //skipping the light related stuff
 			rootsTransferNode.AddItem(TransferOptions[i].ToString());
-		GetNode<CheckButton>("Roots/Visibility/CheckButton").Pressed = IsVisible(parameters.RootsVisibility);
+		GetNode<CheckButton>("VisibilityCheckButton").ButtonPressed = IsVisible(parameters.RootsVisibility);
 		rootsTransferNode.Select(Array.IndexOf(TransferOptions, parameters.TransferFunc));
-		GetNode<CheckButton>("Roots/Color/UnshadedButton").Pressed = parameters.Unshaded;
+		GetNode<CheckButton>("Color/UnshadedButton").ButtonPressed = parameters.IsUnshaded;
 	}
 
 	public void RootsVisibility(bool flag)
@@ -35,13 +35,14 @@ public class Roots : CanvasLayer
 
 	public void RootsTransferFunction(int index)
 	{
+		System.Diagnostics.Debug.WriteLine($"ROOTS TRANSFER FUNCTION {index}");
 		Parameters.TransferFunc = TransferOptions[index];
 		UpdateRequest = true;
 	}
 
 	public void Unshaded(bool flag)
 	{
-		Parameters.Unshaded = flag;
+		Parameters.IsUnshaded = flag;
 		UpdateRequest = true;
 	}
 

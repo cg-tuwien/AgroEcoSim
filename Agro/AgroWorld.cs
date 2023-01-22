@@ -147,7 +147,6 @@ public static class AgroWorld
 				Daylight.Set(i, true);
 #endif
 		}
-
 	}
 
 	static readonly double RcpTicksPerHour = 1.0 / TicksPerHour;

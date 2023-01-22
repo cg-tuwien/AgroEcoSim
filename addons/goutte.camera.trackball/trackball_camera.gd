@@ -389,7 +389,7 @@ func apply_rotation_from_tangent(tangent):
 		up = HORIZON_NORMAL
 	else:
 		up = (tr.basis * _cameraUp).normalized()
-	
+
 	var rg = (tr.basis * _cameraRight).normalized()
 	var upQuat = Quaternion(up, -1 * tangent.x * TAU)
 	var rgQuat = Quaternion(rg, -1 * tangent.y * TAU)
@@ -412,9 +412,9 @@ func get_mouse_position():
 # That's all folks!
 
 
-func _on_MultiagentSystem_EnteredMenu():
+func _on_MultiagentSystem_EnteredMenuEventHandler():
 	mouse_strength = 0;
 
 
-func _on_MultiagentSystem_LeftMenu():
+func _on_MultiagentSystem_LeftMenuEventHandler():
 	mouse_strength = 1;

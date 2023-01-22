@@ -7,7 +7,7 @@ using Agro;
 
 public enum MenuEvent : byte { None, Enter, Leave };
 
-public class HUD : CanvasLayer
+public partial class HUD : CanvasLayer
 {
 	Simulation SimulationControlsInstance;
 	Soil SoilControlsInstance;
@@ -73,7 +73,7 @@ public class HUD : CanvasLayer
 		SimulationControlsInstance.Pause();
 	}
 
-	public override void _Process(float delta)
+	public override void _Process(double delta)
 	{
 		PlayPause.Text = SimulationControlsInstance.Paused ? ">" : "||";
 	}

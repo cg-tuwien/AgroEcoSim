@@ -25,4 +25,30 @@ public static class AgroWorldGodot
 	public static ShootsVisualisationSettings ShootsVisualization = new();
 
     public static SimulationSettings SimulationSettings = new();
+
+	internal const string COLOR = "mColor";
+
+	const string MaterialCoreString = $@"
+		uniform vec4 { COLOR } : source_color = vec4(0.7, 0.7, 0.7, 1.0);
+		void fragment() {{ ALBEDO = {COLOR}.rgb; }}
+	";
+
+	static readonly Shader UnshadedShader = new() {
+		Code = $@"
+			shader_type spatial;
+			render_mode unshaded;
+			{MaterialCoreString}
+		"
+	};
+
+	static readonly Shader ShadedShader = new() {
+		Code = $@"
+			shader_type spatial;
+			{MaterialCoreString}
+		"
+	};
+
+	internal static ShaderMaterial UnshadedMaterial() => new() { Shader = UnshadedShader };
+
+	internal static ShaderMaterial ShadedMaterial() => new() { Shader = ShadedShader };
 }

@@ -6,26 +6,29 @@ namespace Agro;
 
 public partial class Umbrella : IObstacle
 {
-    MeshInstance GodotPoleSprite;
-    MeshInstance GodotDiskSprite;
-    static readonly CubeMesh CubePrimitive = new();
+    MeshInstance3D GodotPoleSprite;
+    MeshInstance3D GodotDiskSprite;
+    static readonly BoxMesh CubePrimitive = new();
     static readonly CylinderMesh CylinderPrimitive = new();
-    static readonly SpatialMaterial UmbrellaMaterial = new() { AlbedoColor = new Color(0.95f, 0.95f, 0.95f) };
+    static readonly Color UmbrellaColor = new (0.95f, 0.95f, 0.95f);
+    static readonly ShaderMaterial UmbrellaMaterial = AgroWorldGodot.ShadedMaterial();
     public void GodotReady()
     {
         GodotPoleSprite = new();
         SimulationWorld.GodotAddChild(GodotPoleSprite); // Add it as a child of this node.
         GodotPoleSprite.Mesh = CubePrimitive;
-        GodotPoleSprite.SetSurfaceMaterial(0, UmbrellaMaterial);
-        var scale = new Vector3(Thickness, Height, Thickness) * 0.5f;
+        GodotPoleSprite.MaterialOverride = UmbrellaMaterial;
         GodotPoleSprite.Translate(Position.ToGodot() + new Vector3(0f, Height * 0.5f, 0f));
-        GodotPoleSprite.ScaleObjectLocal(scale);
+        GodotPoleSprite.ScaleObjectLocal(new (Thickness, Height, Thickness));
 
         GodotDiskSprite = new();
         SimulationWorld.GodotAddChild(GodotDiskSprite);
         GodotDiskSprite.Mesh = CylinderPrimitive;
-        GodotDiskSprite.SetSurfaceMaterial(0, UmbrellaMaterial);
+        GodotDiskSprite.MaterialOverride = UmbrellaMaterial;
         GodotDiskSprite.Translate(Position.ToGodot() + new Vector3(0f, Height, 0f));
-        GodotDiskSprite.ScaleObjectLocal(new (Radius, 0.005f, Radius));
+        var diameter = 2f * Radius;
+        GodotDiskSprite.ScaleObjectLocal(new (diameter, 0.01f, diameter));
+
+        UmbrellaMaterial.SetShaderParameter(AgroWorldGodot.COLOR, UmbrellaColor);
     }
 }

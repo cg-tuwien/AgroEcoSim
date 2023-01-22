@@ -10,28 +10,32 @@ namespace Agro;
 public abstract class PlantAbstractGodot2<T> where T : struct, IPlantAgent
 {
 	[Newtonsoft.Json.JsonIgnore] protected readonly PlantSubFormation2<T> Formation;
-	[Newtonsoft.Json.JsonIgnore] protected readonly List<MeshInstance> GodotSprites = new();
-	[Newtonsoft.Json.JsonIgnore] protected readonly static CubeMesh PlantCubePrimitive = new();
+	[Newtonsoft.Json.JsonIgnore] protected readonly List<MeshInstance3D> GodotSprites = new();
+	[Newtonsoft.Json.JsonIgnore] protected readonly static BoxMesh PlantCubePrimitive = new();
 
 	protected PlantAbstractGodot2(PlantSubFormation2<T> formation) => Formation = formation;
 
-	protected abstract void UpdateTransformation(MeshInstance sprite, int index, bool justCreated);
+	protected abstract void UpdateTransformation(MeshInstance3D sprite, int index, bool justCreated);
 
 	static Color DefaultColor = new(0.7f, 0.7f, 0.7f);
 
 	[Newtonsoft.Json.JsonIgnore] protected virtual Color FormationColor => DefaultColor;
 	[Newtonsoft.Json.JsonIgnore] protected virtual ColorCodingType FormationColorCoding => ColorCodingType.Light;
+	[Newtonsoft.Json.JsonIgnore] protected ShaderMaterial UnshadedMaterial = AgroWorldGodot.UnshadedMaterial();
+	[Newtonsoft.Json.JsonIgnore] protected ShaderMaterial ShadedMaterial = AgroWorldGodot.ShadedMaterial();
 
 	public void AddSprites(int count)
 	{
 		for (int i = GodotSprites.Count; i < count; ++i)
 		{
-			var sprite = new MeshInstance();
-			SimulationWorld.GodotAddChild(sprite); // Add it as a child of this node.
-			sprite.Mesh = PlantCubePrimitive;
-			if (sprite.GetSurfaceMaterial(0) == null) //TODO if not visualizing, use a common material for all
-				sprite.SetSurfaceMaterial(0, new SpatialMaterial{ AlbedoColor = FormationColor, FlagsUnshaded = true });
+			UnshadedMaterial.SetShaderParameter(AgroWorldGodot.COLOR, FormationColor);
+			ShadedMaterial.SetShaderParameter(AgroWorldGodot.COLOR, FormationColor);
+			var sprite = new MeshInstance3D() {
+				Mesh = PlantCubePrimitive,
+				MaterialOverride = UnshadedMaterial
+			};
 
+			SimulationWorld.GodotAddChild(sprite); // Add it as a child of this node.
 			UpdateTransformation(sprite, i, true);
 			GodotSprites.Add(sprite);
 		}

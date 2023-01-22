@@ -1,0 +1,74 @@
+[gd_scene load_steps=2 format=3 uid="uid://bn088wpvyawus"]
+
+[ext_resource type="PackedScene" uid="uid://dyilprx3evq4f" path="res://HUD/Components/TransferFunction.tscn" id="2_dgm5k"]
+
+[node name="Node2D" type="Node2D"]
+
+[node name="ScaleHSlider" type="HSlider" parent="."]
+offset_left = 11.0
+offset_top = 15.0
+offset_right = 145.0
+offset_bottom = 31.0
+metadata/_edit_use_anchors_ = true
+
+[node name="ScaleLabel" type="Label" parent="."]
+offset_left = 161.0
+offset_top = 10.0
+offset_right = 201.0
+offset_bottom = 36.0
+text = "Scale"
+metadata/_edit_use_anchors_ = true
+
+[node name="AnimationLabel" type="Label" parent="."]
+offset_left = 6.0
+offset_top = 38.0
+offset_right = 99.0
+offset_bottom = 64.0
+text = "ANIMATION"
+metadata/_edit_use_anchors_ = true
+
+[node name="SizeLabel" type="Label" parent="."]
+offset_left = 52.0
+offset_top = 63.0
+offset_right = 83.0
+offset_bottom = 89.0
+text = "Size"
+metadata/_edit_use_anchors_ = true
+
+[node name="SizeCheckButton" type="CheckButton" parent="."]
+offset_left = 3.0
+offset_top = 56.0
+offset_right = 47.0
+offset_bottom = 96.0
+pivot_offset = Vector2(48, 58)
+button_pressed = true
+metadata/_edit_use_anchors_ = true
+
+[node name="ColorLabel" type="Label" parent="."]
+offset_left = 161.0
+offset_top = 63.0
+offset_right = 203.0
+offset_bottom = 89.0
+text = "Color"
+metadata/_edit_use_anchors_ = true
+
+[node name="ColorCheckButton" type="CheckButton" parent="."]
+offset_left = 112.0
+offset_top = 56.0
+offset_right = 156.0
+offset_bottom = 96.0
+pivot_offset = Vector2(48, 58)
+button_pressed = true
+metadata/_edit_use_anchors_ = true
+
+[node name="TransferFunctionLabel" type="Label" parent="."]
+offset_left = 6.0
+offset_top = 91.0
+offset_right = 172.0
+offset_bottom = 117.0
+text = "TRANSFER FUNCTION"
+metadata/_edit_use_anchors_ = true
+
+[node name="TransferFunction" parent="." instance=ExtResource("2_dgm5k")]
+offset_top = 120.0
+offset_bottom = 120.0

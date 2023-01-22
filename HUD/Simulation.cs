@@ -6,7 +6,7 @@ using AgentsSystem;
 using Agro;
 using System.Diagnostics;
 
-public class Simulation : CanvasLayer
+public partial class Simulation : CanvasLayer
 {
 	enum DoubleScreenPhase { Idle, ProcessingOverlay, RequestedBackground }
 
@@ -18,7 +18,7 @@ public class Simulation : CanvasLayer
 	public MenuEvent MenuEvent = MenuEvent.None;
 	public uint ManualStepsRequested { get; private set; } = 0U;
 
-	Button PlayPause;
+	Button PlayPauseButton;
 	Control ManualSteps;
 	Label DateLabel;
 	Button ScreenshotButton;
@@ -27,7 +27,7 @@ public class Simulation : CanvasLayer
 	FileDialog SaveDialog;
 
 	GodotDebugOverlay DebugOverlay;
-	Camera SceneCamera;
+	Camera3D SceneCamera;
 
 	Button IrradianceDebug;
 
@@ -51,13 +51,13 @@ public class Simulation : CanvasLayer
 		Paused = !Paused;
 		if (Paused)
 		{
-			PlayPause.Text = ">";
+			PlayPauseButton.Text = ">";
 			ManualSteps.Show();
 			IrradianceDebug.Disabled = false;
 		}
 		else
 		{
-			PlayPause.Text = "||";
+			PlayPauseButton.Text = "||";
 			IrradianceDebug.Disabled = true;
 			ManualSteps.Hide();
 			SwitchOffOverlay();
@@ -66,25 +66,26 @@ public class Simulation : CanvasLayer
 
 	void SwitchOffOverlay()
 	{
-		IrradianceDebug.Pressed = false;
+		IrradianceDebug.ButtonPressed = false;
 		DebugOverlay.Hide();
 	}
 
 	public override void _Ready()
 	{
 		DateLabel = GetNode<Label>($"Animation/Control/{nameof(DateLabel)}");
-		PlayPause = GetNode<Button>($"Animation/Control/{nameof(PlayPause)}");
+		PlayPauseButton = GetNode<Button>($"Animation/Control/{nameof(PlayPauseButton)}");
 		ManualSteps = GetNode<Control>($"Animation/Control/{nameof(ManualSteps)}");
 		ManualSteps.Hide();
-		ScreenshotButton = GetNode<Button>($"Animation/Control/{nameof(ScreenshotButton)}");
+		ScreenshotButton = GetNode<Button>($"Export/{nameof(ScreenshotButton)}");
 
 		SaveDialog = GetNode<FileDialog>($"Export/{nameof(SaveDialog)}");
-		IrradianceDebug = GetNode<Button>("Debug/Control/IrradianceButton");
+		SaveDialog.RootSubfolder = Directory.GetCurrentDirectory();
+		IrradianceDebug = GetNode<Button>("Debug/IrradianceButton");
 		IrradianceDebug.Disabled = !Paused;
 
-		ShootSegmentsValue = GetNode<Label>("Debug/Stats/ShootSegsValue");
-		TrianglesValue = GetNode<Label>("Debug/Stats/TrianglesValue");
-		SensorsValue = GetNode<Label>("Debug/Stats/SensorsValue");
+		ShootSegmentsValue = GetNode<Label>("Debug/ShootSegsValue");
+		TrianglesValue = GetNode<Label>("Debug/TrianglesValue");
+		SensorsValue = GetNode<Label>("Debug/SensorsValue");
 
 		if (!System.IO.Directory.Exists(ScreensDir))
 			System.IO.Directory.CreateDirectory(ScreensDir);
@@ -120,7 +121,7 @@ public class Simulation : CanvasLayer
 	uint PrevTimestep = 0;
 	DateTime CoolDown = DateTime.UtcNow;
 
-	public override void _Process(float delta)
+	public override void _Process(double delta)
 	{
 		if (DateTime.UtcNow >= CoolDown)
 		{
@@ -153,20 +154,20 @@ public class Simulation : CanvasLayer
 					ScreenPhase = DoubleScreenPhase.Idle;
 			}
 
-			if (ScreenshotButton.Pressed && DebugOverlay.Visible && World.Timestep > PrevTimestep && ScreenPhase == DoubleScreenPhase.Idle)
+			if (ScreenshotButton.ButtonPressed && DebugOverlay.Visible && World.Timestep > PrevTimestep && ScreenPhase == DoubleScreenPhase.Idle)
 			{
 				ScreenPhase = DoubleScreenPhase.ProcessingOverlay;
 				Debug.WriteLine("DoubleScreenPhase.ProcessingOverlay");
-				DebugOverlay.Texture.GetData().SavePng($"{SimulationDir}/r{ScreensCounter:D8}.png");
+				DebugOverlay.Texture.GetImage().SavePng($"{SimulationDir}/r{ScreensCounter:D8}.png");
 				DebugOverlay.Hide();
 			}
 
 			if (ScreenPhase != DoubleScreenPhase.Idle)
 				Debug.WriteLine($"phase {ScreenPhase}");
 
-			if (ScreenshotButton.Pressed && ((World.Timestep > PrevTimestep && ScreenPhase == DoubleScreenPhase.Idle) || ScreenPhase == DoubleScreenPhase.RequestedBackground))
+			if (ScreenshotButton.ButtonPressed && ((World.Timestep > PrevTimestep && ScreenPhase == DoubleScreenPhase.Idle) || ScreenPhase == DoubleScreenPhase.RequestedBackground))
 			{
-				var imgInternal = GetViewport().GetTexture().GetData();
+				var imgInternal = GetViewport().GetTexture().GetImage();
 				imgInternal.FlipY();
 				imgInternal.SavePng($"{SimulationDir}/g{ScreensCounter++:D8}.png");
 				if (ScreenPhase == DoubleScreenPhase.RequestedBackground)
@@ -191,16 +192,16 @@ public class Simulation : CanvasLayer
 		base._Process(delta);
 	}
 
-	internal void Load(SimulationWorld world, GodotDebugOverlay overlay, Camera sceneCamera, SimulationSettings parameters)
+	internal void Load(SimulationWorld world, GodotDebugOverlay overlay, Camera3D sceneCamera, SimulationSettings parameters)
 	{
 		World = world;
 		DebugOverlay = overlay;
 		Parameters = parameters;
 		SceneCamera = sceneCamera;
 		GetNode<HSlider>("Animation/Control/HSlider").Value = Parameters.HiddenSteps;
-		GetNode<HSlider>("Debug/Control/IrradiancHSlider").Value = Parameters.IrradianceOverlayOpacity;
+		GetNode<HSlider>("Debug/HSlider").Value = Parameters.IrradianceOverlayOpacity;
 
-		HiddenStepsLabel = GetNode<Label>("Animation/Control/HiddenSteps");
+		HiddenStepsLabel = GetNode<Label>("Animation/Control/HiddenStepsLabel");
 		UpdateHiddenStepsLabel();
 	}
 
@@ -227,7 +228,8 @@ public class Simulation : CanvasLayer
 
 	public void MenuEntered() => MenuEvent = MenuEvent.Enter;
 
-	public void MenuLeft() => MenuEvent = MenuEvent.Leave;
+	//public void MenuLeft() => MenuEvent = MenuEvent.Leave;
+	public void MenuLeft(bool dummy = false) => MenuEvent = MenuEvent.Leave;
 
 	enum SaveModes {None, IrrV1, IrrV2, IrrV3, JSON}
 	SaveModes SaveMode = SaveModes.None;
@@ -291,20 +293,19 @@ public class Simulation : CanvasLayer
 	public void ComputeIrradince()
 	{
 		var b = SceneCamera.Transform.basis;
-		var o = SceneCamera.GlobalTranslation;
-		var v = GetViewport().Size;
+		var o = SceneCamera.GlobalPosition;
+		var v = GetViewport().GetVisibleRect().Size; //Godot3 has .Size
 		var matrix = new float[] { o.x, o.y, o.z, b.z.x, b.z.y, b.z.z, SceneCamera.Fov, v.x, v.y };
 
-		var image = new Image();
-		var texture = new ImageTexture();
-
+		Image image;
 		var imgData = IrradianceClient.DebugIrradiance(World.Timestep, World.Formations, World.Obstacles, matrix);
-		if (imgData != null)
-			image.CreateFromData((int)Math.Round(v.x), (int)Math.Round(v.y), false, Image.Format.Rgbf, imgData);
-		else
-			image.CreateFromData(2, 2, false, Image.Format.R8, new byte[]{255, 255, 255, 255});
 
-		texture.CreateFromImage(image);
+		if (imgData != null)
+			image = Image.CreateFromData((int)Math.Round(v.x), (int)Math.Round(v.y), false, Image.Format.Rgbf, imgData);
+		else
+			image = Image.CreateFromData(2, 2, false, Image.Format.R8, new byte[]{ 255, 255, 255, 255 });
+
+		var texture = ImageTexture.CreateFromImage(image);
 
 		DebugOverlay.Texture?.Dispose();
 		DebugOverlay.Texture = texture;

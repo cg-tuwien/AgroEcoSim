@@ -1,0 +1,48 @@
+[gd_scene load_steps=3 format=3 uid="uid://cv54s87lp8dk"]
+
+[ext_resource type="PackedScene" uid="uid://bwahnmnmx0ijw" path="res://HUD/Components/Block.tscn" id="1_gv1vm"]
+[ext_resource type="PackedScene" uid="uid://bn088wpvyawus" path="res://HUD/Components/SoilControlsTemplate.tscn" id="2_6msa0"]
+
+[node name="Node2D" type="Control"]
+layout_mode = 3
+anchors_preset = 0
+
+[node name="BlockRect" parent="." instance=ExtResource("1_gv1vm")]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.175
+anchor_top = 7.725
+anchor_right = 0.175
+anchor_bottom = 7.725
+offset_bottom = 182.0
+
+[node name="TitleLabel" parent="BlockRect" index="0"]
+layout_mode = 1
+anchors_preset = -1
+anchor_top = 0.0164835
+anchor_bottom = 0.0164835
+offset_left = 0.0
+offset_top = 0.0
+offset_right = 224.0
+offset_bottom = 26.0
+text = "CELLS"
+
+[node name="BorderRectBottom" parent="BlockRect" index="1"]
+layout_mode = 1
+
+[node name="BorderRectTop" parent="BlockRect" index="2"]
+layout_mode = 0
+
+[node name="Controls" parent="." instance=ExtResource("2_6msa0")]
+position = Vector2(0, 32)
+
+[node name="VisibilityButton" type="CheckButton" parent="."]
+layout_mode = 0
+offset_left = 182.0
+offset_top = -4.0
+offset_right = 226.0
+offset_bottom = 36.0
+pivot_offset = Vector2(48, 58)
+button_pressed = true
+
+[editable path="BlockRect"]

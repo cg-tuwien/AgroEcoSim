@@ -35,7 +35,7 @@ public partial class SoilFormation
 	[Newtonsoft.Json.JsonIgnore] int[] IDToIndex;
 	ulong MinID = ulong.MaxValue;
 
-	static Vector3[] Rotations = {
+	static readonly Vector3[] Rotations = {
 		new Vector3(0, 0, -MathF.PI/2),
 		Vector3.Zero,
 		new Vector3(-MathF.PI/2, 0, 0),
@@ -44,19 +44,19 @@ public partial class SoilFormation
 		new Vector3(MathF.PI/2, 0, 0)
 	};
 
-	static Vector3[] MarkerOffsets = { Vector3.Right, Vector3.Up, Vector3.Forward, Vector3.Left, Vector3.Down, Vector3.Back };
+	static readonly Vector3[] MarkerOffsets = { Vector3.Right, Vector3.Up, Vector3.Forward, Vector3.Left, Vector3.Down, Vector3.Back };
 
 	int GetDir(int srcIndex, int dstIndex)
 	{
 		var coordsDiff = Coords(dstIndex) - Coords(srcIndex);
 		return coordsDiff switch
 		{
-			Vector3i(1, 0, 0) => 0,
-			Vector3i(0, 1, 0) => 5,
-			Vector3i(0, 0, 1) => 4,
-			Vector3i(-1, 0, 0) => 3,
-			Vector3i(0, -1, 0) => 2,
-			Vector3i(0, 0, -1) => 1,
+			Utils.Vector3i(1, 0, 0) => 0,
+			Utils.Vector3i(0, 1, 0) => 5,
+			Utils.Vector3i(0, 0, 1) => 4,
+			Utils.Vector3i(-1, 0, 0) => 3,
+			Utils.Vector3i(0, -1, 0) => 2,
+			Utils.Vector3i(0, 0, -1) => 1,
 			_ => throw new Exception("Cells passed to GetDir are no direct neighbors.")
 		};
 	}
@@ -79,7 +79,7 @@ public partial class SoilFormation
 		if (AgroWorldGodot.SoilVisualization.SurfaceCellsVisibility == Visibility.Invisible)
 			AgroWorldGodot.SoilVisualization.SurfaceCellsVisibility = Visibility.MakeInvisible;
 
-		SoilCellInstances = new MeshInstance[Agents.Length]; //no need for multiplication here, it's a complete 3D grid
+		SoilCellInstances = new MeshInstance3D[Agents.Length]; //no need for multiplication here, it's a complete 3D grid
 		for (int x = 0; x < SizeX; x++)
 			for (int y = 0; y < SizeY; y++)
 				for (int z = 0; z < SizeZ; z++)
@@ -94,7 +94,7 @@ public partial class SoilFormation
 			AgroWorldGodot.SoilVisualization.MarkerVisibility = Visibility.MakeInvisible;
 
 		MarkerDataStorage = new();
-		MarkerInstances = new MeshInstance[Agents.Length, 6];
+		MarkerInstances = new MeshInstance3D[Agents.Length, 6];
 
 		var maxID = ulong.MinValue;
 		foreach(Direction dir in Enum.GetValues(typeof(Direction)))
@@ -119,14 +119,14 @@ public partial class SoilFormation
 		if (AgroWorldGodot.SoilVisualization.IndividualMarkerDirectionVisibility[dirIndex] == Visibility.Invisible)
 			AgroWorldGodot.SoilVisualization.IndividualMarkerDirectionVisibility[dirIndex] = Visibility.MakeInvisible;
 
-		var parent_pos = SoilCellInstances[parent_index].Translation;
+		var parent_pos = SoilCellInstances[parent_index].Position;
 
-		var marker = new MeshInstance() {
-			Translation = parent_pos + MarkerOffsets[dirIndex],
+		var marker = new MeshInstance3D() {
+			Position = parent_pos + MarkerOffsets[dirIndex],
 			Rotation = Rotations[dirIndex],
-			Mesh = AgroWorldGodot.SoilVisualization.MarkerShape
+			Mesh = AgroWorldGodot.SoilVisualization.MarkerShape,
+			MaterialOverride = (Material)AgroWorldGodot.SoilVisualization.MarkerMaterial.Duplicate(),
 		};
-		marker.SetSurfaceMaterial(0, (SpatialMaterial)AgroWorldGodot.SoilVisualization.MarkerMaterial.Duplicate());
 
 		MarkerInstances[parent_index, dirIndex] = marker;
 
@@ -135,44 +135,20 @@ public partial class SoilFormation
 		MarkerDataStorage.Add(new(dir, parent_pos, parent_index));
 	}
 
-	const string COLOR = "mColor";
-
-	const string MaterialCoreString = $@"
-		uniform vec4 { COLOR } : source_color = vec4(0.7, 0.7, 0.7, 1.0);
-		void fragment() {{ ALBEDO = {COLOR}.rgb; }}
-	";
-	static readonly ShaderMaterial UnshadedMaterial = new() {
-		Shader = new Shader {
-			Code = $@"
-				shader_type spatial;
-				render_mode unshaded;
-				{MaterialCoreString}
-			"
-		},
-	};
-
-	static readonly ShaderMaterial ShadedMaterial = new() {
-		Shader = new Shader {
-			Code = $@"
-				shader_type spatial;
-				{MaterialCoreString}
-			"
-		},
-	};
 
 	static readonly Vector3 SoilCellUncenter = new(0.5f, -0.5f, 0.5f);
 	static readonly Vector3 SurfaceCellUncenter = new(0.5f, 0f, 0.5f);
 	private void InitializeCell(int x, int y, int z)
 	{
 		var cellSize = AgroWorldGodot.SoilVisualization.SoilCellScale * AgroWorld.FieldResolution;
-		var mesh = new MeshInstance()
+		var mesh = new MeshInstance3D()
 		{
 			Mesh = z == 0 ? AgroWorldGodot.SoilVisualization.SurfaceCellShape : AgroWorldGodot.SoilVisualization.SoilCellShape,
-			Translation = z > 0
+			Position = z > 0
 				? new Vector3(x, 1-z, y) * AgroWorld.FieldResolution + SoilCellUncenter * cellSize
 				: new Vector3(x, 0, y) * AgroWorld.FieldResolution + SurfaceCellUncenter * cellSize,
 			Scale = new(cellSize, z > 0 ? cellSize : 1e-6f, cellSize),
-			MaterialOverride = UnshadedMaterial,
+			MaterialOverride = AgroWorldGodot.UnshadedMaterial(),
 		};
 		//mesh.SetSurfaceMaterial(0, (SpatialMaterial)AgroWorldGodot.SoilVisualization.SoilCellMaterial.Duplicate());
 
@@ -182,7 +158,7 @@ public partial class SoilFormation
 
 	private float ComputeCellMultiplier(int id) => Math.Clamp(Agents[id].Water / Agents[id].WaterMaxCapacity, 0f, 1f);
 
-	private float ComputeCellScale(float multiplier) => AgroWorldGodot.SoilVisualization.AnimateSoilCellSize
+	static float ComputeCellScale(float multiplier) => AgroWorldGodot.SoilVisualization.AnimateSoilCellSize
 		? AgroWorldGodot.SoilVisualization.SoilCellScale * AgroWorld.FieldResolution * multiplier
 		: AgroWorldGodot.SoilVisualization.SoilCellScale * AgroWorld.FieldResolution;
 
@@ -201,10 +177,10 @@ public partial class SoilFormation
 			if (AgroWorldGodot.SoilVisualization.AnimateSoilCellColor)
 			{
 				var multiplier = Math.Clamp(height / AgroWorldGodot.SoilVisualization.SurfaceFullThreshold, 0f, 1f);
-				((SpatialMaterial)SoilCellInstances[i].GetSurfaceMaterial(0)).AlbedoColor = multiplier * AgroWorldGodot.SoilVisualization.SurfaceFullColor + (1f - multiplier) * AgroWorldGodot.SoilVisualization.SurfaceEmptyColor;
+				((ShaderMaterial)SoilCellInstances[i].MaterialOverride).SetShaderParameter(AgroWorldGodot.COLOR, multiplier * AgroWorldGodot.SoilVisualization.SurfaceFullColor + (1f - multiplier) * AgroWorldGodot.SoilVisualization.SurfaceEmptyColor);
 			}
 			else
-				((SpatialMaterial)SoilCellInstances[i].GetSurfaceMaterial(0)).AlbedoColor = AgroWorldGodot.SoilVisualization.SurfaceFullColor;
+				((ShaderMaterial)SoilCellInstances[i].MaterialOverride).SetShaderParameter(AgroWorldGodot.COLOR, AgroWorldGodot.SoilVisualization.SurfaceFullColor);
 		}
 		//Note: Temporary solution (redundant resizing)
 		//soil cells
@@ -215,9 +191,9 @@ public partial class SoilFormation
 			SoilCellInstances[i].Scale = Vector3.One * ComputeCellScale(multiplier);
 
 			if (AgroWorldGodot.SoilVisualization.AnimateSoilCellColor)
-				((SpatialMaterial)SoilCellInstances[i].GetSurfaceMaterial(0)).AlbedoColor = multiplier * AgroWorldGodot.SoilVisualization.CellFullColor + (1f - multiplier) * AgroWorldGodot.SoilVisualization.CellEmptyColor;
+				((ShaderMaterial)SoilCellInstances[i].MaterialOverride).SetShaderParameter(AgroWorldGodot.COLOR, multiplier * AgroWorldGodot.SoilVisualization.CellFullColor + (1f - multiplier) * AgroWorldGodot.SoilVisualization.CellEmptyColor);
 			else
-				((SpatialMaterial)SoilCellInstances[i].GetSurfaceMaterial(0)).AlbedoColor = AgroWorldGodot.SoilVisualization.CellFullColor;
+				((ShaderMaterial)SoilCellInstances[i].MaterialOverride).SetShaderParameter(AgroWorldGodot.COLOR, AgroWorldGodot.SoilVisualization.CellFullColor);
 		}
 		//((ShaderMaterial)SoilCellInstances[i].MaterialOverride).SetShaderParameter(COLOR, multiplier * Parameters.FullCellColor + (1f - multiplier) * Parameters.EmptyCellColor);
 	}
@@ -260,15 +236,15 @@ public partial class SoilFormation
 			{
 				var markerScale = cellScale * (AgroWorldGodot.SoilVisualization.AnimateMarkerSize ? AgroWorldGodot.SoilVisualization.MarkerScale * appearanceMultiplier : AgroWorldGodot.SoilVisualization.MarkerScale);
 				var offset_multiplier = (cellScale + markerScale) * 0.5f;
-				mesh.Translation = marker.InitialPosition + MarkerOffsets[dir] * offset_multiplier;
+				mesh.Position = marker.InitialPosition + MarkerOffsets[dir] * offset_multiplier;
 				mesh.Scale = Vector3.One * markerScale;
 				mesh.Show();
 
 				//((SpatialMaterial)mesh.GetSurfaceMaterial(0)).AlbedoColor = appearance_multiplier * AgroWorldGodot.SoilVisualization.FullFlowColor + (1f - appearance_multiplier) * AgroWorldGodot.SoilVisualization.NoFlowColor;
 
-				((SpatialMaterial)mesh.GetSurfaceMaterial(0)).AlbedoColor = AgroWorldGodot.SoilVisualization.AnimateMarkerColor
+				((ShaderMaterial)mesh.MaterialOverlay).SetShaderParameter(AgroWorldGodot.COLOR, AgroWorldGodot.SoilVisualization.AnimateMarkerColor
 					? appearanceMultiplier * AgroWorldGodot.SoilVisualization.MarkerFullFlowColor + (1f - appearanceMultiplier) * AgroWorldGodot.SoilVisualization.MarkerNoFlowColor
-					: AgroWorldGodot.SoilVisualization.MarkerFullFlowColor;
+					: AgroWorldGodot.SoilVisualization.MarkerFullFlowColor);
 
 				// if (AgroWorldGodot.SoilVisualization.MarkerVisibility == Visibility.MakeVisible)
 				// 	IndividualAnimationMarkerVisibility(mesh, dir, flow == 0f);
@@ -279,7 +255,7 @@ public partial class SoilFormation
 		// 	mesh.Scale = Vector3.Zero;
 	}
 
-	// public void IndividualAnimationMarkerVisibility(MeshInstance mesh, int direction, bool vis)
+	// public void IndividualAnimationMarkerVisibility(MeshInstance3D mesh, int direction, bool vis)
 	// {
 	// 	if (vis && AgroWorldGodot.SoilVisualization.IndividualMarkerDirectionVisibility[direction] == Visibility.MakeVisible)
 	// 		mesh.Visible = false;
@@ -287,7 +263,7 @@ public partial class SoilFormation
 	// 		mesh.Visible = true;
 	// }
 
-	bool IsVisible(Visibility flag) => flag == Visibility.MakeVisible || flag == Visibility.Visible;
+	static bool IsVisible(Visibility flag) => flag == Visibility.MakeVisible || flag == Visibility.Visible;
 
 	private void ApplyMarkerVisibility()
 	{
@@ -364,19 +340,6 @@ public partial class SoilFormation
 			SetSurfaceCellsVisibility(false);
 			AgroWorldGodot.SoilVisualization.SurfaceCellsVisibility = Visibility.Invisible;
 		}
-	}
-
-		for(int i = 0; i < 6; i++){
-			if(Parameters.IndividualMarkerDirectionVisibility[i] == Visibility.Visible){
-				SetMarkersVisibility(true,(Direction)i);
-				Parameters.IndividualMarkerDirectionVisibility[i] = Visibility.Waiting;
-			}
-			else if(Parameters.IndividualMarkerDirectionVisibility[i] == Visibility.Invisible){
-				SetMarkersVisibility(false,(Direction)i);
-				Parameters.IndividualMarkerDirectionVisibility[i] = Visibility.Waiting;
-			}
-		}
-
 	}
 
 	private void SetMarkersVisibility(bool flag, int dir)

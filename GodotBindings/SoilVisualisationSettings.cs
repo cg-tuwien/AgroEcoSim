@@ -41,27 +41,27 @@ public class SoilVisualisationSettings
     #endregion
 
     #region MATERIAL SETTINGS
-    public SpatialMaterial SoilCellMaterial = new() { AlbedoColor = new(0.5f, 0.5f, 0.5f) };
-    public SpatialMaterial SurfaceCellMaterial = new() { AlbedoColor = new(0.5f, 0.5f, 0.5f) };
+    public StandardMaterial3D SoilCellMaterial = new() { AlbedoColor = new(0.5f, 0.5f, 0.5f) };
+    public StandardMaterial3D SurfaceCellMaterial = new() { AlbedoColor = new(0.5f, 0.5f, 0.5f) };
 
-    public SpatialMaterial MarkerMaterial = new() { AlbedoColor = new(0f, 0.2f, 0.6f) };
+    public StandardMaterial3D MarkerMaterial = new() { AlbedoColor = new(0f, 0.2f, 0.6f) };
     #endregion
 
     #region COLOR SETTINGS
-    public static Color BrownWater_CellFull = new(71f/255f, 39f/255f, 11f/255f);
-    public static Color BrownWater_CellEmpty = new(148f/255f, 143f/255f, 130f/255f);
+    public static readonly Color BrownWater_CellFull = new(71f/255f, 39f/255f, 11f/255f);
+    public static readonly Color BrownWater_CellEmpty = new(148f/255f, 143f/255f, 130f/255f);
 
-    public static Color BrownWater_MarkerNoFlow = Colors.Black;
-    public static Color BrownWater_MarkerFullFlow = Colors.White;
+    public static readonly Color BrownWater_MarkerNoFlow = Colors.Black;
+    public static readonly Color BrownWater_MarkerFullFlow = Colors.White;
 
-    public static Color BlueWater_CellFull = Colors.Blue;
-    public static Color BlueWater_CellEmpty = Colors.Black;
+    public static readonly Color BlueWater_CellFull = Colors.Blue;
+    public static readonly Color BlueWater_CellEmpty = Colors.Black;
 
-    public static Color BlueWater_SurfaceFull = Colors.Blue;
-    public static Color BlueWater_SurfaceEmpty = Colors.Black;
+    public static readonly Color BlueWater_SurfaceFull = Colors.Blue;
+    public static readonly Color BlueWater_SurfaceEmpty = Colors.Black;
 
-    public static Color BlueWater_MarkerNoFlow = Colors.Black;
-    public static Color BlueWater_MarkerFullFlow = Colors.Blue;
+    public static readonly Color BlueWater_MarkerNoFlow = Colors.Black;
+    public static readonly Color BlueWater_MarkerFullFlow = Colors.Blue;
 
     public Color Custom_SurfaceFull = BrownWater_CellFull;
     public Color Custom_SurfaceEmpty = BrownWater_CellEmpty;

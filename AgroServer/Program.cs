@@ -13,8 +13,6 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
-    // using System.Reflection;
-    //var xmlFilename = $"{System.Reflection.Assembly.GetExecutingAssembly().GetName().Name}.xml";
     var loaded = new HashSet<string>();
     foreach(var asm in AppDomain.CurrentDomain.GetAssemblies())
         loaded.Add(asm.GetName().Name);

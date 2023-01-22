@@ -15,7 +15,7 @@ public class Plant_UG_Godot2 : PlantAbstractGodot2<UnderGroundAgent2>
 	[Newtonsoft.Json.JsonIgnore] protected override Color FormationColor => Colors.Brown;
 	[Newtonsoft.Json.JsonIgnore] protected override ColorCodingType FormationColorCoding => ColorCodingType.Default;
 
-	protected override void UpdateTransformation(MeshInstance sprite, int index, bool justCreated)
+	protected override void UpdateTransformation(MeshInstance3D sprite, int index, bool justCreated)
 	{
 		//var radius = Formation.GetBaseRadius(index);
 		var orientation = Formation.GetDirection(index);
@@ -23,12 +23,15 @@ public class Plant_UG_Godot2 : PlantAbstractGodot2<UnderGroundAgent2>
 		var stableScale = System.Numerics.Vector3.Transform(new System.Numerics.Vector3(length, 0f, 0f), orientation);
 
 		var basis = new Basis(orientation.ToGodot());
-		sprite.Transform = new Transform(basis, (Formation.GetBaseCenter(index) + stableScale).ToGodot());
-		sprite.Scale = (Formation.GetScale(index) * 0.5f).ToGodot();
+		sprite.Transform = new Transform3D(basis, (Formation.GetBaseCenter(index) + stableScale).ToGodot());
+		sprite.Scale = (Formation.GetScale(index)).ToGodot();
 
-		var material = (SpatialMaterial)sprite.GetSurfaceMaterial(0);
-		material.AlbedoColor = ColorCoding(index, AgroWorldGodot.RootsVisualization.TransferFunc, justCreated);
-		material.FlagsUnshaded = AgroWorldGodot.RootsVisualization.Unshaded;
+		var material = AgroWorldGodot.RootsVisualization.IsUnshaded
+			? UnshadedMaterial
+			: ShadedMaterial;
+
+		material.SetShaderParameter(AgroWorldGodot.COLOR, ColorCoding(index, AgroWorldGodot.ShootsVisualization.TransferFunc, justCreated));
+		sprite.MaterialOverride = material;
 	}
 
 	protected override Color GetNaturalColor(int index)

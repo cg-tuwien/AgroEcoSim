@@ -1,0 +1,53 @@
+[gd_scene format=3 uid="uid://dyilprx3evq4f"]
+
+[node name="Node2D" type="Control"]
+layout_mode = 3
+anchors_preset = 0
+
+[node name="ShadedLabel" type="Label" parent="."]
+layout_mode = 2
+offset_left = 200.0
+offset_top = -7.0
+offset_right = 222.0
+offset_bottom = 51.0
+theme_override_font_sizes/font_size = 40
+text = "*"
+
+[node name="UnshadedButton" type="CheckButton" parent="."]
+layout_mode = 2
+offset_left = 156.0
+offset_top = 4.0
+offset_right = 200.0
+offset_bottom = 28.0
+
+[node name="OptionButton" type="OptionButton" parent="."]
+layout_mode = 2
+offset_left = 2.0
+offset_right = 98.0
+offset_bottom = 20.0
+fit_to_longest_item = false
+
+[node name="ColorFrame" type="ReferenceRect" parent="."]
+layout_mode = 2
+border_color = Color(1, 1, 1, 0.509804)
+
+[node name="CustomColor" type="Control" parent="."]
+custom_minimum_size = Vector2(0, 9)
+layout_mode = 1
+anchors_preset = 0
+offset_left = 109.0
+offset_top = 6.0
+offset_right = 154.0
+offset_bottom = 29.0
+
+[node name="LoColorPickerButton" type="ColorPickerButton" parent="CustomColor"]
+layout_mode = 0
+offset_left = 1.0
+offset_right = 21.0
+offset_bottom = 20.0
+
+[node name="HiColorPickerButton" type="ColorPickerButton" parent="CustomColor"]
+layout_mode = 0
+offset_left = 25.0
+offset_right = 45.0
+offset_bottom = 20.0

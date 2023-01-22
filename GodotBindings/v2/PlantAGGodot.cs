@@ -15,21 +15,21 @@ public partial class Plant_AG_Godot2 : PlantAbstractGodot2<AboveGroundAgent2>
 	[Newtonsoft.Json.JsonIgnore] protected override Color FormationColor => Colors.Green;
 	[Newtonsoft.Json.JsonIgnore] protected override ColorCodingType FormationColorCoding => ColorCodingType.Default;
 
-	protected override void UpdateTransformation(MeshInstance sprite, int index, bool justCreated)
+	protected override void UpdateTransformation(MeshInstance3D sprite, int index, bool justCreated)
 	{
 		//var radius = Formation.GetBaseRadius(index);
 		var orientation = Formation.GetDirection(index);
 		var length = Formation.GetLength(index) * 0.5f; //x0.5f because its the radius of the cube!
-		var stableScale = System.Numerics.Vector3.Transform(new System.Numerics.Vector3(length, 0f, 0f), orientation);
+		var stableScale = System.Numerics.Vector3.Transform(new(length, 0f, 0f), orientation);
 
 		var basis = new Basis(orientation.ToGodot());
-		sprite.Transform = new Transform(basis, (Formation.GetBaseCenter(index) + stableScale).ToGodot());
-		sprite.Scale = (Formation.GetScale(index) * 0.5f).ToGodot();
+		sprite.Transform = new Transform3D(basis, (Formation.GetBaseCenter(index) + stableScale).ToGodot());
+		sprite.Scale = Formation.GetScale(index).ToGodot();
 
-		//Debug.WriteLine( ColorCoding(index, FormationColorCoding).g);
-		var material = (SpatialMaterial)sprite.GetSurfaceMaterial(0);
-		material.AlbedoColor = ColorCoding(index, AgroWorldGodot.ShootsVisualization.TransferFunc, justCreated);
-		material.FlagsUnshaded = AgroWorldGodot.ShootsVisualization.Unshaded;
+		var material = AgroWorldGodot.ShootsVisualization.IsUnshaded ? UnshadedMaterial : ShadedMaterial;
+
+		material.SetShaderParameter(AgroWorldGodot.COLOR, ColorCoding(index, AgroWorldGodot.ShootsVisualization.TransferFunc, justCreated));
+		sprite.MaterialOverride = material;
 	}
 
 	protected override Color GetNaturalColor(int index)
@@ -84,28 +84,5 @@ public partial class Plant_AG_Godot2 : PlantAbstractGodot2<AboveGroundAgent2>
 
 		for(int i = 0; i < GodotSprites.Count; ++i)
 			UpdateTransformation(GodotSprites[i], i, false);
-
-		// if (AgroWorldGodot.ShootsVisualization.StemsVisibility == Visibility.Visible ||
-		// 	AgroWorldGodot.ShootsVisualization.LeafsVisibility == Visibility.Visible ||
-		// 	AgroWorldGodot.ShootsVisualization.BudsVisibility == Visibility.Visible)
-		// {
-		// 	for(int i = 0; i < GodotSprites.Count; ++i)
-		// 		switch (Formation.GetOrgan(i))
-		// 		{
-		// 			case OrganTypes.Stem:
-		// 				if (AgroWorldGodot.ShootsVisualization.StemsVisibility == Visibility.Visible)
-		// 					UpdateTransformation(GodotSprites[i], i);
-		// 			break;
-		// 			case OrganTypes.Leaf:
-		// 				if (AgroWorldGodot.ShootsVisualization.LeafsVisibility == Visibility.Visible)
-		// 					UpdateTransformation(GodotSprites[i], i);
-		// 			break;
-		// 			case OrganTypes.Bud:
-		// 				if (AgroWorldGodot.ShootsVisualization.BudsVisibility == Visibility.Visible)
-		// 					UpdateTransformation(GodotSprites[i], i);
-		// 			break;
-		// 			default: UpdateTransformation(GodotSprites[i], i); break;
-		// 		}
-		// }
 	}
 }

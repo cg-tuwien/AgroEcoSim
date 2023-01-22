@@ -6,7 +6,7 @@ using System.Collections.Generic;
 using AgentsSystem;
 using Agro;
 
-public class Soil : CanvasLayer
+public partial class Soil : CanvasLayer
 {
 	// [Signal]
 	// public delegate void EnteredMenu();
@@ -24,62 +24,75 @@ public class Soil : CanvasLayer
 	static readonly SoilCellTransferFunctionPreset[] CellTransferOptions = (SoilCellTransferFunctionPreset[])Enum.GetValues(typeof(SoilCellTransferFunctionPreset));
 	static readonly SurfaceCellTransferFunctionPreset[] SurfaceTransferOptions = (SurfaceCellTransferFunctionPreset[])Enum.GetValues(typeof(SurfaceCellTransferFunctionPreset));
 
-	Control MarkerCustomColorNode;
+	Control MarkerCustomColorButtom;
 	Control CellCustomColorNode;
 	Control SurfaceCustomColorNode;
 	GodotGround Ground;
 
-	bool IsVisible(Visibility visibility) => visibility == Visibility.Visible || visibility == Visibility.MakeVisible;
+	List<CheckButton> DirMarkerVisibility = new(6);
+
+	static bool IsVisible(Visibility visibility) => visibility == Visibility.Visible || visibility == Visibility.MakeVisible;
+
+	const string CustomColorPath = "Controls/TransferFunction/CustomColor";
+	const string CustomColorLoPath = $"{CustomColorPath}/LoColorPickerButton";
+	const string CustomColorHiPath = $"{CustomColorPath}/HiColorPickerButton";
+	const string TransferFunctionPath = "Controls/TransferFunction/OptionButton";
+	const string ScaleSliderPath = "Controls/ScaleHSlider";
+	const string AnimateSizeButtonPath = "Controls/SizeCheckButton";
+	const string AnimateColorButtonPath = "Controls/ColorCheckButton";
 	public void Load(SoilVisualisationSettings parameters, GodotGround ground)
 	{
 		Parameters = parameters;
 		Ground = ground;
 
 		#region MARKERS
-		var markerTransferNode = GetNode<OptionButton>("FlowMarkers/Color/ColorCombo");
+		var markerTransferNode = GetNode<OptionButton>($"FlowMarkers/{TransferFunctionPath}");
 		foreach(var item in MarkerTransferOptions)
 			markerTransferNode.AddItem(item.ToString());
 
-		MarkerCustomColorNode = GetNode<Control>("FlowMarkers/Color/Custom");
+		MarkerCustomColorButtom = GetNode<Control>($"FlowMarkers/{CustomColorPath}");
 
-		GetNode<CheckButton>("FlowMarkers/Visibility/AllMarkers/CheckButton").Pressed = IsVisible(parameters.MarkerVisibility);
-		GetNode<HSlider>("FlowMarkers/Visibility/Scale/HSlider").Value = parameters.MarkerScale;
-		GetNode<CheckButton>("FlowMarkers/Visibility/MarkerDirs/X-Button").Pressed = IsVisible(parameters.IndividualMarkerDirectionVisibility[3]);
-		GetNode<CheckButton>("FlowMarkers/Visibility/MarkerDirs/X+Button").Pressed = IsVisible(parameters.IndividualMarkerDirectionVisibility[0]);
-		GetNode<CheckButton>("FlowMarkers/Visibility/MarkerDirs/Y-Button").Pressed = IsVisible(parameters.IndividualMarkerDirectionVisibility[4]);
-		GetNode<CheckButton>("FlowMarkers/Visibility/MarkerDirs/Y+Button").Pressed = IsVisible(parameters.IndividualMarkerDirectionVisibility[1]);
-		GetNode<CheckButton>("FlowMarkers/Visibility/MarkerDirs/Z-Button").Pressed = IsVisible(parameters.IndividualMarkerDirectionVisibility[5]);
-		GetNode<CheckButton>("FlowMarkers/Visibility/MarkerDirs/Z+Button").Pressed = IsVisible(parameters.IndividualMarkerDirectionVisibility[2]);
-		GetNode<CheckButton>("FlowMarkers/Animation/MarkerSize/CheckButton").Pressed = parameters.AnimateMarkerSize;
-		GetNode<CheckButton>("FlowMarkers/Animation/MarkerColor/CheckButton").Pressed = parameters.AnimateMarkerColor;
+		GetNode<CheckButton>("FlowMarkers/VisibilityButton").ButtonPressed = IsVisible(parameters.MarkerVisibility);
+		GetNode<HSlider>($"FlowMarkers/{ScaleSliderPath}").Value = parameters.MarkerScale;
+		GetNode<CheckButton>($"FlowMarkers/{AnimateSizeButtonPath}").ButtonPressed = parameters.AnimateMarkerSize;
+		GetNode<CheckButton>($"FlowMarkers/{AnimateColorButtonPath}").ButtonPressed = parameters.AnimateMarkerColor;
 
-		if (IsVisible(parameters.MarkerVisibility))
-			GetNode<Control>("FlowMarkers/Visibility/MarkerDirs").Show();
-		else
-			GetNode<Control>("FlowMarkers/Visibility/MarkerDirs").Hide();
+		DirMarkerVisibility.Add(GetNode<CheckButton>("FlowMarkers/Visibility/X+Button"));
+		DirMarkerVisibility.Add(GetNode<CheckButton>("FlowMarkers/Visibility/Y+Button"));
+		DirMarkerVisibility.Add(GetNode<CheckButton>("FlowMarkers/Visibility/Z+Button"));
+		DirMarkerVisibility.Add(GetNode<CheckButton>("FlowMarkers/Visibility/X-Button"));
+		DirMarkerVisibility.Add(GetNode<CheckButton>("FlowMarkers/Visibility/Y-Button"));
+		DirMarkerVisibility.Add(GetNode<CheckButton>("FlowMarkers/Visibility/Z-Button"));
+		for(int i = 0; i < DirMarkerVisibility.Count; ++i)
+			DirMarkerVisibility[i].ButtonPressed = IsVisible(parameters.IndividualMarkerDirectionVisibility[i]);
+
+		// if (IsVisible(parameters.MarkerVisibility))
+		// 	GetNode<Control>("FlowMarkers/Visibility/MarkerDirs").Show();
+		// else
+		// 	GetNode<Control>("FlowMarkers/Visibility/MarkerDirs").Hide();
 
 		markerTransferNode.Select(Array.IndexOf(MarkerTransferOptions, parameters.MarkerTransferFunc));
 		if (parameters.MarkerTransferFunc == SoilMarkerTransferFunctionPreset.Custom)
-			MarkerCustomColorNode.Show();
+			MarkerCustomColorButtom.Show();
 		else
-			MarkerCustomColorNode.Hide();
+			MarkerCustomColorButtom.Hide();
 
-		GetNode<ColorPickerButton>("FlowMarkers/Color/Custom/Full").Color = parameters.Custom_MarkerFullFlow;
-		GetNode<ColorPickerButton>("FlowMarkers/Color/Custom/Empty").Color = parameters.Custom_MarkerNoFlow;
+		GetNode<ColorPickerButton>($"FlowMarkers/{CustomColorHiPath}").Color = parameters.Custom_MarkerFullFlow;
+		GetNode<ColorPickerButton>($"FlowMarkers/{CustomColorLoPath}").Color = parameters.Custom_MarkerNoFlow;
 		#endregion
 
 		#region SOIL CELLS
-		var cellTransferNode = GetNode<OptionButton>("SoilCells/Color/ColorCombo");
+		var cellTransferNode = GetNode<OptionButton>($"FlowMarkers/{TransferFunctionPath}");
 		foreach(var item in CellTransferOptions)
 			cellTransferNode.AddItem(item.ToString());
 
-		CellCustomColorNode = GetNode<Control>("SoilCells/Color/Custom");
+		CellCustomColorNode = GetNode<Control>($"SoilCells/{CustomColorPath}");
 
-		GetNode<CheckButton>("SoilCells/Visibility/CheckButton").Pressed = IsVisible(parameters.SoilCellsVisibility);
-		GetNode<HSlider>("SoilCells/Scale/HSlider").Value = parameters.SoilCellScale;
+		GetNode<CheckButton>("SoilCells/VisibilityButton").ButtonPressed = IsVisible(parameters.SoilCellsVisibility);
+		GetNode<HSlider>($"SoilCells/{ScaleSliderPath}").Value = parameters.SoilCellScale;
 
-		GetNode<CheckButton>("SoilCells/Animation/CellSize/CheckButton").Pressed = parameters.AnimateSoilCellSize;
-		GetNode<CheckButton>("SoilCells/Animation/CellColor/CheckButton").Pressed = parameters.AnimateSoilCellColor;
+		GetNode<CheckButton>($"SoilCells/{AnimateSizeButtonPath}").ButtonPressed = parameters.AnimateSoilCellSize;
+		GetNode<CheckButton>($"SoilCells/{AnimateColorButtonPath}").ButtonPressed = parameters.AnimateSoilCellColor;
 
 		cellTransferNode.Select(Array.IndexOf(CellTransferOptions, parameters.CellTransferFunc));
 		if (parameters.CellTransferFunc == SoilCellTransferFunctionPreset.Custom)
@@ -87,22 +100,22 @@ public class Soil : CanvasLayer
 		else
 			CellCustomColorNode.Hide();
 
-		GetNode<ColorPickerButton>("SoilCells/Color/Custom/Full").Color = parameters.Custom_CellFull;
-		GetNode<ColorPickerButton>("SoilCells/Color/Custom/Empty").Color = parameters.Custom_CellEmpty;
+		GetNode<ColorPickerButton>($"SoilCells/{CustomColorHiPath}").Color = parameters.Custom_CellFull;
+		GetNode<ColorPickerButton>($"SoilCells/{CustomColorLoPath}").Color = parameters.Custom_CellEmpty;
 		#endregion
 
 		#region SURFACE CELLS
-		var surfaceTransferNode = GetNode<OptionButton>("SurfaceCells/Color/ColorCombo");
+		var surfaceTransferNode = GetNode<OptionButton>($"SurfaceCells/{TransferFunctionPath}");
 		foreach(var item in SurfaceTransferOptions)
 			surfaceTransferNode.AddItem(item.ToString());
 
-		SurfaceCustomColorNode = GetNode<Control>("SurfaceCells/Color/Custom");
+		SurfaceCustomColorNode = GetNode<Control>($"SurfaceCells/{CustomColorPath}");
 
-		GetNode<CheckButton>("SurfaceCells/Visibility/CheckButton").Pressed = IsVisible(parameters.SurfaceCellsVisibility);
-		GetNode<HSlider>("SurfaceCells/Threshold/HSlider").Value = Math.Sqrt(parameters.SurfaceFullThreshold);
+		GetNode<CheckButton>("SurfaceCells/VisibilityButton").ButtonPressed = IsVisible(parameters.SurfaceCellsVisibility);
+		GetNode<HSlider>($"SurfaceCells/{ScaleSliderPath}").Value = Math.Sqrt(parameters.SurfaceFullThreshold);
 
-		GetNode<CheckButton>("SurfaceCells/Animation/CellSize/CheckButton").Pressed = parameters.AnimateSurfaceCellSize;
-		GetNode<CheckButton>("SurfaceCells/Animation/CellColor/CheckButton").Pressed = parameters.AnimateSurfaceCellColor;
+		GetNode<CheckButton>($"SurfaceCells/{AnimateSizeButtonPath}").ButtonPressed = parameters.AnimateSurfaceCellSize;
+		GetNode<CheckButton>($"SurfaceCells/{AnimateColorButtonPath}").ButtonPressed = parameters.AnimateSurfaceCellColor;
 
 		surfaceTransferNode.Select(Array.IndexOf(SurfaceTransferOptions, parameters.SurfaceTransferFunc));
 		if (parameters.SurfaceTransferFunc == SurfaceCellTransferFunctionPreset.Custom)
@@ -110,28 +123,30 @@ public class Soil : CanvasLayer
 		else
 			SurfaceCustomColorNode.Hide();
 
-		GetNode<ColorPickerButton>("SurfaceCells/Color/Custom/Full").Color = parameters.Custom_SurfaceFull;
-		GetNode<ColorPickerButton>("SurfaceCells/Color/Custom/Empty").Color = parameters.Custom_SurfaceEmpty;
+		GetNode<ColorPickerButton>($"SurfaceCells/{CustomColorHiPath}").Color = parameters.Custom_SurfaceFull;
+		GetNode<ColorPickerButton>($"SurfaceCells/{CustomColorLoPath}").Color = parameters.Custom_SurfaceEmpty;
 		#endregion
 
 
-		GetNode<Button>("Ground/Visibility/CheckButton").Pressed = parameters.GroundVisible;
+		GetNode<Button>("Ground/VisibilityButton").ButtonPressed = parameters.GroundVisible;
 		if (parameters.GroundVisible)
 			Ground.Show();
 		else
 			Ground.Hide();
 	}
 
-	Visibility Vis(bool flag) => flag ? Visibility.MakeVisible : Visibility.MakeInvisible;
+	static Visibility Vis(bool flag) => flag ? Visibility.MakeVisible : Visibility.MakeInvisible;
 
 	public void AllMarkersVisibility(bool flag)
 	{
 		Parameters.MarkerVisibility = Vis(flag);
 		UpdateRequest = true;
 		if (IsVisible(Parameters.MarkerVisibility))
-			GetNode<Control>("FlowMarkers/Visibility/MarkerDirs").Show();
+			for(int i = 0; i < DirMarkerVisibility.Count; ++i)
+				DirMarkerVisibility[i].Disabled = false;
 		else
-			GetNode<Control>("FlowMarkers/Visibility/MarkerDirs").Hide();
+			for(int i = 0; i < DirMarkerVisibility.Count; ++i)
+				DirMarkerVisibility[i].Disabled = true;
 	}
 
 	public void XplusMarkersVisibility(bool flag)
@@ -307,17 +322,17 @@ public class Soil : CanvasLayer
 			case SoilMarkerTransferFunctionPreset.BrownWater:
 				Parameters.MarkerNoFlowColor = SoilVisualisationSettings.BrownWater_MarkerNoFlow;
 				Parameters.MarkerFullFlowColor = SoilVisualisationSettings.BrownWater_MarkerFullFlow;
-				MarkerCustomColorNode.Hide();
+				MarkerCustomColorButtom.Hide();
 			break;
 			case SoilMarkerTransferFunctionPreset.BlueWater:
 				Parameters.MarkerNoFlowColor = SoilVisualisationSettings.BlueWater_MarkerNoFlow;
 				Parameters.MarkerFullFlowColor = SoilVisualisationSettings.BlueWater_MarkerFullFlow;
-				MarkerCustomColorNode.Hide();
+				MarkerCustomColorButtom.Hide();
 			break;
 			default:
 				Parameters.MarkerNoFlowColor = Parameters.Custom_MarkerNoFlow;
 				Parameters.MarkerFullFlowColor = Parameters.Custom_MarkerFullFlow;
-				MarkerCustomColorNode.Show();
+				MarkerCustomColorButtom.Show();
 			break;
 		}
 		UpdateRequest = true;

@@ -1,0 +1,40 @@
+[gd_scene load_steps=2 format=3 uid="uid://bwahnmnmx0ijw"]
+
+[sub_resource type="CanvasItemMaterial" id="CanvasItemMaterial_lofvw"]
+blend_mode = 3
+
+[node name="BlockRect" type="ColorRect"]
+material = SubResource("CanvasItemMaterial_lofvw")
+offset_right = 226.0
+offset_bottom = 190.0
+color = Color(0.627451, 0.627451, 0.627451, 1)
+metadata/_edit_use_anchors_ = true
+metadata/Title = ""
+
+[node name="TitleLabel" type="Label" parent="."]
+offset_left = 1.0
+offset_top = 4.0
+offset_right = 225.0
+offset_bottom = 30.0
+text = "Title"
+horizontal_alignment = 1
+uppercase = true
+metadata/_edit_use_anchors_ = true
+
+[node name="BorderRectBottom" type="ReferenceRect" parent="."]
+anchors_preset = -1
+anchor_bottom = 1.0
+offset_top = 32.0
+offset_right = 226.0
+border_color = Color(0.745098, 0.745098, 0.745098, 1)
+border_width = 1.2
+editor_only = false
+metadata/_edit_use_anchors_ = true
+
+[node name="BorderRectTop" type="ReferenceRect" parent="."]
+offset_right = 226.0
+offset_bottom = 32.0
+border_color = Color(0.745098, 0.745098, 0.745098, 1)
+border_width = 1.2
+editor_only = false
+metadata/_edit_use_anchors_ = true

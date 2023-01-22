@@ -9,7 +9,7 @@ public class ShootsVisualisationSettings
     public Visibility LeafsVisibility = Visibility.MakeVisible;
     public Visibility BudsVisibility = Visibility.MakeInvisible;
 
-    public SpatialMaterial Material = new() { AlbedoColor = new(0.5f, 0.5f, 0.5f) };
+    public StandardMaterial3D Material = new() { AlbedoColor = new(0.5f, 0.5f, 0.5f) };
 
 
     #region COLOR SETTINGS
@@ -17,7 +17,7 @@ public class ShootsVisualisationSettings
     public static Color Segment_NaturalLeaf = new(1f/255f, 153/255f, 52f/255f);
 
     public Agro.ColorCodingType TransferFunc = Agro.ColorCodingType.Natural;
-    public bool Unshaded = true;
+    public bool IsUnshaded = true;
     public float LightCutOff = 1e-3f;
     #endregion
 
