@@ -597,6 +597,83 @@ public class IrradianceClient
 		return offsetCounter;
 	}
 
+	private void ExportAsBeautyPrimitives(IList<IFormation> formations, Stream binaryStream)
+	{
+		using var writer = new BinaryWriter(binaryStream);
+		writer.WriteU8(4); //version 4 is for the beauty pass; using primitives, each surface is individually marked as obstacle or sensor
+
+		//Formations
+		writer.WriteU32(formations.Count - SkipFormations.Count); //WRITE NUMBER OF PLANTS in this system
+
+		var skipPointer = 0;
+		for (int pi = 0; pi < formations.Count; ++pi)
+		{
+			if (skipPointer < SkipFormations.Count && SkipFormations[skipPointer] == pi)
+				++skipPointer;
+			else
+			{
+				var plant = formations[pi] as PlantFormation2;
+				var ag = plant.AG;
+				var count = ag.Count;
+
+				var sensorsCount = 0;
+				for (int i = 0; i < count; ++i)
+					if (ag.GetOrgan(i) == OrganTypes.Leaf)
+						++sensorsCount;
+
+				writer.WriteU32(count); //WRITE NUMBER OF SURFACES in this plant
+
+				for (int i = 0; i < count; ++i)
+				{
+					var organ = ag.GetOrgan(i);
+					var center = ag.GetBaseCenter(i);
+					var scale = ag.GetScale(i);
+					var orientation = ag.GetDirection(i);
+
+					var x = Vector3.Transform(Vector3.UnitX, orientation);
+					var y = Vector3.Transform(Vector3.UnitY, orientation);
+					var z = Vector3.Transform(Vector3.UnitZ, orientation);
+					switch (organ)
+					{
+						case OrganTypes.Leaf:
+							{
+								writer.WriteU8(1); //ORGAN 1 leaf
+								var ax = x * scale.X * 0.5f;
+								var ay = -z * scale.Z * 0.5f;
+								var az = y * scale.Y * 0.5f;
+								var c = center + ax;
+								writer.WriteM32(ax, ay, az, c);
+								writer.Write(Math.Clamp(ag.GetWater(i) / ag.GetWaterStorageCapacity(i), 0, 1));
+								writer.Write(Math.Clamp(ag.GetEnergy(i) / ag.GetEnergyCapacity(i), 0, 1));
+							}
+							break;
+						case OrganTypes.Stem:
+							{
+								writer.WriteU8(2); //ORGAN 2 stem
+								writer.Write(scale.X); //length
+								writer.Write(scale.Z * 0.5f); //radius
+								writer.WriteM32(z, x, y, center);
+								writer.Write(Math.Clamp(ag.GetWater(i) / ag.GetWaterStorageCapacity(i), 0, 1));
+								writer.Write(Math.Clamp(ag.GetEnergy(i) / ag.GetEnergyCapacity(i), 0, 1));
+								writer.Write(Math.Clamp(ag.GetWoodRatio(i), 0, 1));
+							}
+							break;
+						case OrganTypes.Bud:
+							{
+								writer.WriteU8(3); //ORGAN 3 bud
+								writer.WriteV32(center);
+								writer.Write(scale.X); //radius
+								writer.Write(Math.Clamp(ag.GetWater(i) / ag.GetWaterStorageCapacity(i), 0, 1));
+								writer.Write(Math.Clamp(ag.GetEnergy(i) / ag.GetEnergyCapacity(i), 0, 1));
+							}
+							break;
+						default: throw new NotImplementedException();
+					}
+				}
+			}
+		}
+	}
+
 	public static void ExportToFile(string fileName, byte version, IList<IFormation> formations, IList<IObstacle> obstacles)
 	{
 		using var file = File.OpenWrite(fileName);
