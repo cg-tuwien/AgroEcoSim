@@ -12,7 +12,7 @@ This headless mode (subfolder `Agro`) is mainly indended for development and tes
 The second headless mode (subfolder `AgroGodot`) is designed for running multiple simulations in a row. It reduces the overhead of starting new processes over again. The HTTP server runs inside of the Docker along with the light simulation server.
 
 ### Godot
-The graphics mode allows to analyze the simulation in 3D usint the open source [Godot Engine](https://godotengine.org/). It integrates the simulation as a Godot component. Unfortunately Godot has many limitations regarding the use of C#. The simulation may behave differently than in the CLI mode.
+The graphics mode allows to analyze the simulation in 3D usint the open source [Godot Engine](https://godotengine.org/). It integrates the simulation as a Godot component. Unfortunately Godot has many limitations regarding the use of C#. The simulation may behave differently than in the CLI mode. **See the first line in `AgroGodot.csproj` to determine the target Godot version.
 
 
 ## Setup
@@ -58,17 +58,13 @@ The WebAPI version targets net6.0. The server listens on port `7215`. To explore
 The Standalone version targets net6.0. Settings for the simulation can be passed using the `--import` flag pointing to a `json` file. See below in [Options](#options).
 
 ### Godot
-* launch Godot (4.x not supported due to Godot bugs, see below),
+* launch Godot (see `AgroGodot.csproj` for the respective version),
 * select and load the project
 * hit play or F5
 
-Note that the first build will fail due to async deletion of extra files. Further builds should run fine. In case of any strange errors (like access denied, lots of declaration or symbol missing errors and similar) delete the whole `.mono` subfolder. Godot 3 only supports .NET 4.7.2 or .NET Core 3.1 (partially), but at least some of the new language features are accessible through `<LangVersion>latest</LangVersion>` in the csproj. Reading JSON files is tricky, it needs explicit installation of `System.Text.JSON` from NUGet and net472 as target. Other assemblies can't be loaded at all. Hopefully, it gets easier once Godot 4.x is stable enough to work with.
+Note that the first build will fail due to async deletion of extra files. Further builds should run fine. In case of any strange errors (like access denied, lots of declaration or symbol missing errors and similar) delete the whole `.mono` subfolder.
 
-Here are the Godot 4.0-beta1 issues so far reported:
-* [Crash at material settings](https://github.com/godotengine/godot/issues/66175)
-* [Material rendered black](https://github.com/godotengine/godot/issues/66214)
-
-Godot only take the hard-coded default simulation settings, it has so far no option for consuming `json` settings. There is also no GUI so far.
+Godot only takes the hard-coded default simulation settings, it has so far no option for consuming `json` settings.
 
 ## Options
 Most settings and their default values can be found in the following two files: `Agro/Initialize.cs` and `Agro/AgroWorld.cs`. They are shared for all modes. The WebAPI and CLI allow for passing a `json` file that overrides the defaults. This example covers all currently available options, position and sizes are given in metric units:
@@ -228,6 +224,38 @@ foreach ENTITY
 		float32 matrix 4x3 (the bottom row is always 0 0 0 1)
 		#end switch
 		bool isSensor
+
+#primitives and matries same as for version 2
+```
+### Primitive Binary Serialization (Beauty target)
+```
+uint8 version = 4
+#ENTITIES
+uint32 entitiesCount
+foreach ENTITY
+	uint32 surfacesCount
+	foreach SURFACE
+		uint8 organType    #1 = leaf, 2 = stem, 3 = bud
+		#case leaf
+		#the primitive is a disk (i.e. circle)
+		float32 matrix 4x3 (the bottom row is always 0 0 0 1)
+		float32 waterRatio #[0..1] wrt. to its capacity given by the volume and structure
+		float32 energyRatio #ditto
+		#case stem
+		#the primitive is a cylinder
+		float32 length
+		float32 radius
+		float32 matrix 4x3 (the bottom row is always 0 0 0 1)
+		float32 waterRatio #[0..1] wrt. to its capacity given by the volume and structure
+		float32 energyRatio #ditto
+		float32 woodRatio #[0..1]
+		#case bud
+		#the primitive is a sphere
+		3xfloat32 center
+		float32 radius
+		float32 waterRatio #[0..1] wrt. to its capacity given by the volume and structure
+		float32 energyRatio #ditto
+		#end switch
 
 #primitives and matries same as for version 2
 ```
