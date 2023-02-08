@@ -191,9 +191,9 @@ public partial class SoilFormation
 			SoilCellInstances[i].Scale = Vector3.One * ComputeCellScale(multiplier);
 
 			if (AgroWorldGodot.SoilVisualization.AnimateSoilCellColor)
-				((ShaderMaterial)SoilCellInstances[i].MaterialOverride).SetShaderParameter(AgroWorldGodot.COLOR, multiplier * AgroWorldGodot.SoilVisualization.CellFullColor + (1f - multiplier) * AgroWorldGodot.SoilVisualization.CellEmptyColor);
+				((ShaderMaterial)SoilCellInstances[i].MaterialOverride).SetShaderParameter(AgroWorldGodot.COLOR, multiplier * AgroWorldGodot.SoilVisualization.CellColorHigh + (1f - multiplier) * AgroWorldGodot.SoilVisualization.CellColorLow);
 			else
-				((ShaderMaterial)SoilCellInstances[i].MaterialOverride).SetShaderParameter(AgroWorldGodot.COLOR, AgroWorldGodot.SoilVisualization.CellFullColor);
+				((ShaderMaterial)SoilCellInstances[i].MaterialOverride).SetShaderParameter(AgroWorldGodot.COLOR, AgroWorldGodot.SoilVisualization.CellColorHigh);
 		}
 		//((ShaderMaterial)SoilCellInstances[i].MaterialOverride).SetShaderParameter(COLOR, multiplier * Parameters.FullCellColor + (1f - multiplier) * Parameters.EmptyCellColor);
 	}

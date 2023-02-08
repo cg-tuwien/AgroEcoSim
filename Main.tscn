@@ -49,6 +49,7 @@ RootsScene = ExtResource("6")
 ShootsScene = ExtResource("7")
 
 [node name="UnitBoxMarkers" type="Node3D" parent="."]
+visible = false
 
 [node name="ZERO" type="MeshInstance3D" parent="UnitBoxMarkers"]
 transform = Transform3D(0.02, 0, 0, 0, 0.02, 0, 0, 0, 0.02, 0, 0, 0)

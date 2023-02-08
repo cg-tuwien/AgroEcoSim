@@ -255,33 +255,33 @@ public partial class Soil : CanvasLayer
 		switch(CellTransferOptions[index])
 		{
 			case SoilCellTransferFunctionPreset.BrownWater:
-				Parameters.CellEmptyColor = SoilVisualisationSettings.BrownWater_CellEmpty;
-				Parameters.CellFullColor = SoilVisualisationSettings.BrownWater_CellFull;
+				Parameters.CellColorLow = SoilVisualisationSettings.BrownWater_CellEmpty;
+				Parameters.CellColorHigh = SoilVisualisationSettings.BrownWater_CellFull;
 				CellCustomColorNode.Hide();
 			break;
 			case SoilCellTransferFunctionPreset.BlueWater:
-				Parameters.CellEmptyColor = SoilVisualisationSettings.BlueWater_CellEmpty;
-				Parameters.CellFullColor = SoilVisualisationSettings.BlueWater_CellFull;
+				Parameters.CellColorLow = SoilVisualisationSettings.BlueWater_CellEmpty;
+				Parameters.CellColorHigh = SoilVisualisationSettings.BlueWater_CellFull;
 				CellCustomColorNode.Hide();
 			break;
 			default:
-				Parameters.CellEmptyColor = Parameters.Custom_CellEmpty;
-				Parameters.CellFullColor = Parameters.Custom_CellFull;
+				Parameters.CellColorLow = Parameters.Custom_CellEmpty;
+				Parameters.CellColorHigh = Parameters.Custom_CellFull;
 				CellCustomColorNode.Show();
 			break;
 		}
 		UpdateRequest = true;
 	}
 
-	public void CellEmptyColor(Color color)
+	public void CellColorLow(Color color)
 	{
-		Parameters.CellEmptyColor = color;
+		Parameters.CellColorLow = color;
 		UpdateRequest = true;
 	}
 
-	public void CellFullColor(Color color)
+	public void CellColorHigh(Color color)
 	{
-		Parameters.CellFullColor = color;
+		Parameters.CellColorHigh = color;
 		UpdateRequest = true;
 	}
 

@@ -103,16 +103,16 @@ public class SoilVisualisationSettings
             switch (mCellTransferFunc)
             {
                 case SoilCellTransferFunctionPreset.BrownWater:
-                    CellFullColor = BrownWater_CellFull;
-                    CellEmptyColor = BrownWater_CellEmpty;
+                    CellColorHigh = BrownWater_CellFull;
+                    CellColorLow = BrownWater_CellEmpty;
                     break;
                 case SoilCellTransferFunctionPreset.BlueWater:
-                    CellFullColor = BlueWater_CellFull;
-                    CellEmptyColor = BlueWater_CellEmpty;
+                    CellColorHigh = BlueWater_CellFull;
+                    CellColorLow = BlueWater_CellEmpty;
                     break;
                 default:
-                    CellFullColor = Custom_CellFull;
-                    CellEmptyColor = Custom_CellEmpty;
+                    CellColorHigh = Custom_CellFull;
+                    CellColorLow = Custom_CellEmpty;
                     break;
             }
         }
@@ -146,8 +146,8 @@ public class SoilVisualisationSettings
     public Color SurfaceFullColor = BlueWater_SurfaceFull;
     public Color SurfaceEmptyColor = BlueWater_SurfaceEmpty;
 
-    public Color CellFullColor = BrownWater_CellFull;
-    public Color CellEmptyColor = BrownWater_CellEmpty;
+    public Color CellColorHigh = BrownWater_CellFull;
+    public Color CellColorLow = BrownWater_CellEmpty;
 
     public Color MarkerNoFlowColor = BrownWater_MarkerNoFlow;
     public Color MarkerFullFlowColor = BrownWater_MarkerFullFlow;

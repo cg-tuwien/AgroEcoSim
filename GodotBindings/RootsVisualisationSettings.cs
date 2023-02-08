@@ -9,7 +9,6 @@ public class RootsVisualisationSettings
 
     public StandardMaterial3D Material = new() { AlbedoColor = new(0.5f, 0.5f, 0.5f) };
 
-
     #region COLOR SETTINGS
     public static Color Segment_Light = new(133f/255f, 121/255f, 106f/255f);
     public static Color Segment_Dark = new(60f/255f, 38/255f, 10f/255f);

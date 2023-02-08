@@ -60,6 +60,9 @@ offset_right = 8.0
 offset_bottom = -154.0
 grow_vertical = 2
 
+[node name="CustomColor" parent="Color" index="4"]
+visible = false
+
 [node name="Visibility" type="Control" parent="."]
 layout_mode = 3
 anchors_preset = 0
@@ -171,9 +174,9 @@ metadata/_edit_use_anchors_ = true
 [connection signal="item_selected" from="Color/OptionButton" to="." method="ShootsTransferFunction"]
 [connection signal="toggled" from="Visibility/StemsCheckButton" to="." method="StemsVisibility"]
 [connection signal="toggled" from="Visibility/LeafsCheckButton" to="." method="LeafsVisibility"]
-[connection signal="mouse_entered" from="LightCutOff/HSlider" to="." method="MenuEntered"]
-[connection signal="focus_exited" from="LightCutOff/HSlider" to="." method="MenuLeft"]
 [connection signal="drag_ended" from="LightCutOff/HSlider" to="." method="MenuLeft"]
+[connection signal="focus_exited" from="LightCutOff/HSlider" to="." method="MenuLeft"]
+[connection signal="mouse_entered" from="LightCutOff/HSlider" to="." method="MenuEntered"]
 [connection signal="value_changed" from="LightCutOff/HSlider" to="." method="LightCutOff"]
 
 [editable path="Color"]
