@@ -1,4 +1,3 @@
-//#define EXPORT_OBJ
 //#define EXPORT_BIN
 //#define USE_TRIANGLES
 using System.Net;
@@ -130,11 +129,7 @@ public class IrradianceClient
 
 	void DoTick(uint timestep, IList<IFormation> formations, IList<IObstacle> obstacles)
 	{
-#if EXPORT_OBJ
-		if (true)
-#else
 		if (AgroWorld.GetDaylight(timestep))
-#endif
 		{
 			//if (IsNight) Debug.WriteLine("DAY");
 			IsNight = false;
@@ -150,14 +145,6 @@ public class IrradianceClient
 				Irradiances.Clear();
 				IrradiancePoints.Clear(); // only necessary for triangular mesh export
 
-#if EXPORT_OBJ
-				var objFileName = $"t{timestep}.obj";
-				using var objStream = File.Open(objFileName, FileMode.Create);
-				using var objWriter = new StreamWriter(objStream, System.Text.Encoding.UTF8);
-				var obji = new System.Text.StringBuilder();
-				objWriter.WriteLine("o Field");
-#endif
-
 				var meshFileName = $"t{timestep}.mesh";
 #if GODOT
 				var meshFileFullPath = Path.Combine("agroeco-mts3", meshFileName);
@@ -167,11 +154,7 @@ public class IrradianceClient
 				var ooc = offsetCounter;
 				using var binaryStream = new MemoryStream();
 #if USE_TRIANGLES
-				offsetCounter = ExportAsTriangles(formations, obstacles, ooc, binaryStream
-#if EXPORT_OBJ
-					, objWriter, obji
-#endif
-				);
+				offsetCounter = ExportAsTriangles(formations, obstacles, ooc, binaryStream);
 #else
 				offsetCounter = ExportAsPrimitivesInterleaved(formations, obstacles, binaryStream);
 #endif
@@ -181,7 +164,6 @@ public class IrradianceClient
 
 				binaryStream.TryGetBuffer(out var byteBuffer);
 #if EXPORT_BIN
-				//if (timestep == 1999)
 				{
 					var tmp = new byte[byteBuffer.Count];
 					Array.Copy(byteBuffer.Array, tmp, byteBuffer.Count);
@@ -255,11 +237,97 @@ public class IrradianceClient
 		return null;
 	}
 
-	private int ExportAsTriangles(IList<IFormation> formations, IList<IObstacle> obstacles, int offsetCounter, Stream binaryStream
-#if EXPORT_OBJ
-		, StreamWriter objWriter, System.Text.StringBuilder obji
-#endif
-	)
+	private void ExportAsObj(IList<IFormation> formations, IList<IObstacle> obstacles, StreamWriter writer)
+	{
+		var obji = new System.Text.StringBuilder();
+		var points = new List<Vector3>();
+		foreach(var obstacle in obstacles)
+			obstacle.ExportObj(points, obji);
+
+		var skipPointer = 0;
+		for (int pi = 0; pi < formations.Count; ++pi)
+		{
+			if (skipPointer < SkipFormations.Count && SkipFormations[skipPointer] == pi)
+				++skipPointer;
+			else
+			{
+				var plant = formations[pi] as PlantFormation2;
+				var ag = plant.AG;
+				var count = ag.Count;
+
+				for (int i = 0; i < count; ++i)
+				{
+					var organ = ag.GetOrgan(i);
+					var center = ag.GetBaseCenter(i);
+					var scale = ag.GetScale(i);
+					var halfRadiusX = new Vector3(0f, 0f, scale.Z * 0.5f);
+					var orientation = ag.GetDirection(i);
+					var lengthVector = new Vector3(scale.X, 0f, 0f);
+					switch (organ)
+					{
+						case OrganTypes.Leaf:
+							{
+								var p = points.Count;
+								points.Add(center + Vector3.Transform(-halfRadiusX, orientation));
+								points.Add(center + Vector3.Transform(halfRadiusX, orientation));
+								points.Add(center + Vector3.Transform(lengthVector + halfRadiusX, orientation));
+								points.Add(center + Vector3.Transform(lengthVector - halfRadiusX, orientation));
+								obji.AppendLine(OF(p, p+1, p+2));
+								obji.AppendLine(OF(p, p+2, p+3));
+							}
+							break;
+						case OrganTypes.Stem:
+							{
+								var halfRadiusY = new Vector3(0f, scale.Y * 0.5f, 0f);
+								var p = points.Count;
+								points.Add(center + Vector3.Transform(-halfRadiusX - halfRadiusY, orientation));
+								points.Add(center + Vector3.Transform(halfRadiusX - halfRadiusY, orientation));
+								points.Add(center + Vector3.Transform(halfRadiusX + halfRadiusY, orientation));
+								points.Add(center + Vector3.Transform(-halfRadiusX + halfRadiusY, orientation));
+								points.Add(center + Vector3.Transform(lengthVector - halfRadiusX - halfRadiusY, orientation));
+								points.Add(center + Vector3.Transform(lengthVector + halfRadiusX - halfRadiusY, orientation));
+								points.Add(center + Vector3.Transform(lengthVector + halfRadiusX + halfRadiusY, orientation));
+								points.Add(center + Vector3.Transform(lengthVector - halfRadiusX + halfRadiusY, orientation));
+
+								obji.AppendLine(OF(p, p+1, p+5));
+								obji.AppendLine(OF(p, p+5, p+4));
+
+								obji.AppendLine(OF(p+1, p+2, p+6));
+								obji.AppendLine(OF(p+1, p+6, p+5));
+
+								obji.AppendLine(OF(p+2, p+3, p+7));
+								obji.AppendLine(OF(p+2, p+7, p+6));
+
+								obji.AppendLine(OF(p+3, p, p+4));
+								obji.AppendLine(OF(p+3, p+4, p+7));
+							}
+							break;
+						case OrganTypes.Bud:
+							{
+								var halfRadiusY = new Vector3(0f, scale.Y * 0.5f, 0f);
+								var p = points.Count;
+								points.Add(center + Vector3.Transform(-halfRadiusX - halfRadiusY, orientation));
+								points.Add(center + Vector3.Transform(halfRadiusX - halfRadiusY, orientation));
+								points.Add(center + Vector3.Transform(halfRadiusX + halfRadiusY, orientation));
+								points.Add(center + Vector3.Transform(-halfRadiusX + halfRadiusY, orientation));
+
+								obji.AppendLine(OF(p, p+1, p+2));
+								obji.AppendLine(OF(p, p+2, p+3));
+							}
+							break;
+						default: throw new NotImplementedException();
+					}
+				}
+			}
+		}
+
+		for (int i = 0; i < points.Count; ++i)
+			writer.WriteLine($"v {points[i].X} {points[i].Y} {points[i].Z}");
+
+		writer.WriteLine(obji.ToString());
+	}
+
+	private int ExportAsTriangles(IList<IFormation> formations, IList<IObstacle> obstacles, int offsetCounter, Stream binaryStream)
 	{
 		IrradianceFormationOffsets.Clear();
 		using var writer = new BinaryWriter(binaryStream);
@@ -268,15 +336,7 @@ public class IrradianceClient
 		//Obstacles
 		writer.WriteU32(obstacles.Count);
 		foreach(var obstacle in obstacles)
-		{
-			obstacle.ExportTriangles(IrradiancePoints, writer
-#if EXPORT_OBJ
-			,obji
-#else
-			, null
-#endif
-			);
-		}
+			obstacle.ExportTriangles(IrradiancePoints, writer);
 
 		//Formations
 		writer.WriteU32(formations.Count - SkipFormations.Count); //WRITE NUMBER OF PLANTS in this system
@@ -326,10 +386,6 @@ public class IrradianceClient
 								writer.WriteU32(p);
 								writer.WriteU32(p + 2);
 								writer.WriteU32(p + 3);
-#if EXPORT_OBJ
-									obji.AppendLine(OF(p, p+1, p+2));
-									obji.AppendLine(OF(p, p+2, p+3));
-#endif
 							}
 							break;
 						case OrganTypes.Stem:
@@ -374,19 +430,6 @@ public class IrradianceClient
 								writer.WriteU32(p + 3);
 								writer.WriteU32(p + 4);
 								writer.WriteU32(p + 7);
-#if EXPORT_OBJ
-									obji.AppendLine(OF(p, p+1, p+5));
-									obji.AppendLine(OF(p, p+5, p+4));
-
-									obji.AppendLine(OF(p+1, p+2, p+6));
-									obji.AppendLine(OF(p+1, p+6, p+5));
-
-									obji.AppendLine(OF(p+2, p+3, p+7));
-									obji.AppendLine(OF(p+2, p+7, p+6));
-
-									obji.AppendLine(OF(p+3, p, p+4));
-									obji.AppendLine(OF(p+3, p+4, p+7));
-#endif
 							}
 							break;
 						case OrganTypes.Bud:
@@ -405,10 +448,6 @@ public class IrradianceClient
 								writer.WriteU32(p);
 								writer.WriteU32(p + 2);
 								writer.WriteU32(p + 3);
-#if EXPORT_OBJ
-									obji.AppendLine(OF(p, p+1, p+2));
-									obji.AppendLine(OF(p, p+2, p+3));
-#endif
 							}
 							break;
 						default: throw new NotImplementedException();
@@ -424,13 +463,7 @@ public class IrradianceClient
 			writer.Write(p.X);
 			writer.Write(p.Y);
 			writer.Write(p.Z);
-#if EXPORT_OBJ
-			objWriter.WriteLine($"v {p.X} {p.Y} {p.Z}");
-#endif
 		}
-#if EXPORT_OBJ
-				objWriter.WriteLine(obji.ToString());
-#endif
 		return offsetCounter;
 	}
 
@@ -597,7 +630,13 @@ public class IrradianceClient
 		return offsetCounter;
 	}
 
-	private void ExportAsBeautyPrimitives(IList<IFormation> formations, Stream binaryStream)
+	internal void ExportAsBeautyPrimitives(string fileName, IList<IFormation> formations)
+	{
+		using var file = File.OpenWrite(fileName);
+		ExportAsBeautyPrimitives(formations, file);
+	}
+
+	internal void ExportAsBeautyPrimitives(IList<IFormation> formations, Stream binaryStream)
 	{
 		using var writer = new BinaryWriter(binaryStream);
 		writer.WriteU8(4); //version 4 is for the beauty pass; using primitives, each surface is individually marked as obstacle or sensor
@@ -674,7 +713,7 @@ public class IrradianceClient
 		}
 	}
 
-	public static void ExportToFile(string fileName, byte version, IList<IFormation> formations, IList<IObstacle> obstacles)
+	public static void ExportToFile(string fileName, byte version, IList<IFormation> formations, IList<IObstacle> obstacles = null)
 	{
 		using var file = File.OpenWrite(fileName);
 		switch (version)
@@ -682,7 +721,16 @@ public class IrradianceClient
 			default: Singleton.ExportAsTriangles(formations, obstacles, 0, file); break;
 			case 2: Singleton.ExportAsPrimitivesClustered(formations, obstacles, 0, file); break;
 			case 3: Singleton.ExportAsPrimitivesInterleaved(formations, obstacles, file); break;
+			case 4: Singleton.ExportAsBeautyPrimitives(formations, file); break;
 		}
+	}
+
+	public static void ExportToObjFile(string fileName, IList<IFormation> formations, IList<IObstacle> obstacles)
+	{
+		using var objStream = File.Open(fileName, FileMode.Create);
+		using var objWriter = new StreamWriter(objStream, System.Text.Encoding.UTF8);
+		objWriter.WriteLine("o Field");
+		Singleton.ExportAsObj(formations, obstacles, objWriter);
 	}
 
 	void DoFallbackTick(uint timestep, IList<IFormation> formations)

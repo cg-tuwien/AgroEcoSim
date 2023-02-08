@@ -133,7 +133,7 @@ offset_bottom = 363.0
 layout_mode = 1
 anchors_preset = -1
 anchor_right = 0.00400003
-anchor_bottom = 0.301587
+anchor_bottom = 0.484127
 offset_right = 225.096
 offset_bottom = 123.0
 
@@ -154,76 +154,111 @@ layout_mode = 1
 [node name="BorderRectTop" parent="Export/ColorRect" index="2"]
 layout_mode = 0
 
-[node name="Label" type="Label" parent="Export"]
+[node name="IrradianceLabel" type="Label" parent="Export"]
 layout_mode = 0
 offset_left = 18.0
-offset_top = 82.0
+offset_top = 76.0
 offset_right = 97.0
-offset_bottom = 108.0
+offset_bottom = 102.0
 text = "Irradiance"
 
-[node name="Label3" type="Label" parent="Export"]
+[node name="ScreenshotsLabel" type="Label" parent="Export"]
 layout_mode = 0
 offset_left = 66.0
-offset_top = 48.0
+offset_top = 45.0
 offset_right = 161.0
-offset_bottom = 74.0
+offset_bottom = 71.0
 text = "Screenshots"
 
-[node name="Label2" type="Label" parent="Export"]
+[node name="CompleteLabel" type="Label" parent="Export"]
+visible = false
 layout_mode = 0
 offset_left = 18.0
-offset_top = 118.0
+offset_top = 150.0
 offset_right = 97.0
-offset_bottom = 144.0
+offset_bottom = 176.0
 text = "Complete"
 
 [node name="irr_v1" type="Button" parent="Export"]
 layout_mode = 0
 offset_left = 118.0
-offset_top = 78.0
+offset_top = 72.0
 offset_right = 144.0
-offset_bottom = 109.0
+offset_bottom = 103.0
 text = "v1"
 
 [node name="irr_v2" type="Button" parent="Export"]
 layout_mode = 0
 offset_left = 154.0
-offset_top = 78.0
+offset_top = 72.0
 offset_right = 180.0
-offset_bottom = 109.0
+offset_bottom = 103.0
 text = "v2"
 
 [node name="irr_v3" type="Button" parent="Export"]
 layout_mode = 0
 offset_left = 190.0
-offset_top = 78.0
+offset_top = 72.0
 offset_right = 216.0
-offset_bottom = 109.0
+offset_bottom = 103.0
 text = "v3"
 
 [node name="json" type="Button" parent="Export"]
+visible = false
 layout_mode = 0
 offset_left = 118.0
-offset_top = 114.0
+offset_top = 146.0
 offset_right = 159.0
-offset_bottom = 145.0
+offset_bottom = 177.0
 text = "json"
 
 [node name="bin" type="Button" parent="Export"]
+visible = false
 layout_mode = 0
 offset_left = 174.0
-offset_top = 114.0
+offset_top = 146.0
 offset_right = 215.0
-offset_bottom = 145.0
+offset_bottom = 177.0
 text = "bin"
+
+[node name="BeautyLabel" type="Label" parent="Export"]
+layout_mode = 1
+offset_left = 18.0
+offset_top = 113.0
+offset_right = 97.0
+offset_bottom = 139.0
+text = "Beauty"
+
+[node name="beauty_v4" type="Button" parent="Export"]
+layout_mode = 1
+offset_left = 118.0
+offset_top = 109.0
+offset_right = 144.0
+offset_bottom = 140.0
+text = "v4"
+
+[node name="GeometryLabel" type="Label" parent="Export"]
+layout_mode = 1
+offset_left = 18.0
+offset_top = 145.0
+offset_right = 97.0
+offset_bottom = 171.0
+text = "Geometry"
+
+[node name="geometry_obj" type="Button" parent="Export"]
+layout_mode = 1
+offset_left = 115.0
+offset_top = 145.0
+offset_right = 148.0
+offset_bottom = 176.0
+text = "obj"
 
 [node name="ScreenshotButton" type="CheckButton" parent="Export"]
 layout_mode = 0
 offset_left = 18.0
-offset_top = 49.0
+offset_top = 46.0
 offset_right = 62.0
-offset_bottom = 73.0
+offset_bottom = 70.0
 
 [node name="SaveDialog" type="FileDialog" parent="Export"]
 size = Vector2i(700, 600)
@@ -234,9 +269,9 @@ access = 2
 layout_mode = 3
 anchors_preset = 0
 offset_left = 6.0
-offset_top = 412.0
+offset_top = 436.0
 offset_right = 233.0
-offset_bottom = 606.0
+offset_bottom = 630.0
 
 [node name="ColorRect" parent="Debug" instance=ExtResource("2_6cwee")]
 layout_mode = 1
@@ -358,6 +393,8 @@ step = 0.01
 [connection signal="pressed" from="Export/irr_v2" to="." method="IrradianceV2"]
 [connection signal="pressed" from="Export/irr_v3" to="." method="IrradianceV3"]
 [connection signal="pressed" from="Export/json" to="." method="Complete"]
+[connection signal="pressed" from="Export/beauty_v4" to="." method="BeautyV4"]
+[connection signal="pressed" from="Export/geometry_obj" to="." method="GeometryObj"]
 [connection signal="file_selected" from="Export/SaveDialog" to="." method="OnSave"]
 [connection signal="toggled" from="Debug/IrradianceButton" to="." method="DebugIrradiance"]
 [connection signal="drag_ended" from="Debug/HSlider" to="." method="MenuLeft"]

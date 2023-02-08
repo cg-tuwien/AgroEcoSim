@@ -126,23 +126,24 @@ public partial class Wall : IObstacle
         };
     }
 
-    public void ExportTriangles(List<Vector3> points, BinaryWriter writer, StringBuilder obji = null)
+    public void ExportTriangles(List<Vector3> points, BinaryWriter writer)
     {
         writer.WriteU32(1);
         writer.WriteU8(10); //WRITE NUMBER OF TRIANGLES in this surface
-        uint p = (uint)points.Count;
+        var p = (uint)points.Count;
 
         points.AddRange(PointData);
 
         foreach(var item in IndexData)
             writer.Write(item + p);
+    }
 
-        if (obji != null)
-        {
-            var p1 = p + 1;
-            for(int i = 0; i < IndexData.Length; i += 3)
-                obji.AppendLine($"f {IndexData[i] + p1} {IndexData[i+1] + p1} {IndexData[i+2] + p1}");
-        }
+    public void ExportObj(List<Vector3> points, StringBuilder obji)
+    {
+        var p1 = points.Count + 1;
+        points.AddRange(PointData);
+        for(int i = 0; i < IndexData.Length; i += 3)
+            obji.AppendLine($"f {IndexData[i] + p1} {IndexData[i+1] + p1} {IndexData[i+2] + p1}");
     }
 
     public void ExportAsPrimitivesClustered(BinaryWriter writer) => writer.Write(PrimitiveDataClustered);

@@ -231,7 +231,7 @@ public partial class Simulation : CanvasLayer
 	//public void MenuLeft() => MenuEvent = MenuEvent.Leave;
 	public void MenuLeft(bool dummy = false) => MenuEvent = MenuEvent.Leave;
 
-	enum SaveModes {None, IrrV1, IrrV2, IrrV3, JSON}
+	enum SaveModes {None, IrrV1, IrrV2, IrrV3, JSON, BeaV4, OBJ}
 	SaveModes SaveMode = SaveModes.None;
 	public void IrradianceV1()
 	{
@@ -273,6 +273,26 @@ public partial class Simulation : CanvasLayer
 		MenuEntered();
 	}
 
+	public void GeometryObj()
+	{
+		SaveDialog.ClearFilters();
+		SaveDialog.AddFilter("*.obj ; Wavefront OBJ");
+		SaveMode = SaveModes.OBJ;
+		SaveDialog.CurrentFile = $"{World.Timestep:D5}.obj";
+		SaveDialog.PopupCentered();
+		MenuEntered();
+	}
+
+	public void BeautyV4()
+	{
+		SaveDialog.ClearFilters();
+		SaveDialog.AddFilter("*.prim ; Primitives scene");
+		SaveMode = SaveModes.BeaV4;
+		SaveDialog.CurrentFile = $"{World.Timestep:D5}.prim";
+		SaveDialog.PopupCentered();
+		MenuEntered();
+	}
+
 	public void OnSave(string path)
 	{
 		MenuLeft();
@@ -286,6 +306,12 @@ public partial class Simulation : CanvasLayer
 				break;
 			case SaveModes.JSON:
 				System.IO.File.WriteAllText(path, World.ToJson());
+				break;
+			case SaveModes.BeaV4:
+				IrradianceClient.ExportToFile(path, 4, World.Formations);
+				break;
+			case SaveModes.OBJ:
+				IrradianceClient.ExportToObjFile(path, World.Formations, World.Obstacles);
 				break;
 		}
 	}
