@@ -742,6 +742,9 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 	#region READ METHODS
 	///////////////////////////
 
+	public int GetParent(int index) => ReadTMP
+		? (AgentsTMP.Length > index ? AgentsTMP[index].Parent : int.MinValue)
+		: (Agents.Length > index ? Agents[index].Parent : int.MinValue);
 	public IList<int> GetChildren(int index) => TreeCache.GetChildren(index);
 	public int GetAbsDepth(int index) => TreeCache.GetAbsDepth(index);
 	public int GetAbsInvDepth(int index) => TreeCache.GetAbsInvDepth(index);

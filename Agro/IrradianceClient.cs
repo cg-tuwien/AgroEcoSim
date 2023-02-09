@@ -672,6 +672,8 @@ public class IrradianceClient
 					var x = Vector3.Transform(Vector3.UnitX, orientation);
 					var y = Vector3.Transform(Vector3.UnitY, orientation);
 					var z = Vector3.Transform(Vector3.UnitZ, orientation);
+
+					writer.Write(ag.GetParent(i));
 					switch (organ)
 					{
 						case OrganTypes.Leaf:

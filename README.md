@@ -235,25 +235,26 @@ uint32 entitiesCount
 foreach ENTITY
 	uint32 surfacesCount
 	foreach SURFACE
-		uint8 organType    #1 = leaf, 2 = stem, 3 = bud
+		int32 parentIndex   #local index within the entity; -1 = root, int.MinValue = invalid
+		uint8 organType     #1 = leaf, 2 = stem, 3 = bud
 		#case leaf
 		#the primitive is a disk (i.e. circle)
 		float32 matrix 4x3 (the bottom row is always 0 0 0 1)
-		float32 waterRatio #[0..1] wrt. to its capacity given by the volume and structure
+		float32 waterRatio  #[0..1] wrt. to its capacity given by the volume and structure
 		float32 energyRatio #ditto
 		#case stem
 		#the primitive is a cylinder
 		float32 length
 		float32 radius
 		float32 matrix 4x3 (the bottom row is always 0 0 0 1)
-		float32 waterRatio #[0..1] wrt. to its capacity given by the volume and structure
+		float32 waterRatio  #[0..1] wrt. to its capacity given by the volume and structure
 		float32 energyRatio #ditto
-		float32 woodRatio #[0..1]
+		float32 woodRatio   #[0..1]
 		#case bud
 		#the primitive is a sphere
 		3xfloat32 center
 		float32 radius
-		float32 waterRatio #[0..1] wrt. to its capacity given by the volume and structure
+		float32 waterRatio  #[0..1] wrt. to its capacity given by the volume and structure
 		float32 energyRatio #ditto
 		#end switch
 
