@@ -146,24 +146,24 @@ public class IrradianceClient
 				IrradiancePoints.Clear(); // only necessary for triangular mesh export
 
 				var meshFileName = $"t{timestep}.mesh";
-#if GODOT
+				#if GODOT
 				var meshFileFullPath = Path.Combine("agroeco-mts3", meshFileName);
-#else
+				#else
 				var meshFileFullPath = Path.Combine("..", "agroeco-mts3", meshFileName);
-#endif
+				#endif
 				var ooc = offsetCounter;
 				using var binaryStream = new MemoryStream();
-#if USE_TRIANGLES
+				#if USE_TRIANGLES
 				offsetCounter = ExportAsTriangles(formations, obstacles, ooc, binaryStream);
-#else
+				#else
 				offsetCounter = ExportAsPrimitivesInterleaved(formations, obstacles, binaryStream);
-#endif
+				#endif
 
 				var startTime = SW.ElapsedMilliseconds;
 				SW.Start();
 
 				binaryStream.TryGetBuffer(out var byteBuffer);
-#if EXPORT_BIN
+				#if EXPORT_BIN
 				{
 					var tmp = new byte[byteBuffer.Count];
 					Array.Copy(byteBuffer.Array, tmp, byteBuffer.Count);
@@ -174,7 +174,7 @@ public class IrradianceClient
 					Array.Copy(meshByteBuffer.Array, tmp, meshByteBuffer.Count);
 					File.WriteAllBytes($"t{timestep}.mesh", tmp);
 				}
-#endif
+				#endif
 				if (offsetCounter > 0)
 				{
 					var request = new HttpRequestMessage()
@@ -773,7 +773,7 @@ public class IrradianceClient
 				}
 
 				for(int i = 0; i < offsetCounter; ++i)
-					Irradiances.Add(1f);
+					Irradiances.Add(AgroWorld.HoursPerTick * 50f);
 			}
 			//if (IsNight) Debug.WriteLine("DAY");
 			IsNight = false;

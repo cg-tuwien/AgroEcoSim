@@ -12,8 +12,8 @@ public class Plant_UG_Godot2 : PlantAbstractGodot2<UnderGroundAgent2>
 {
 	public Plant_UG_Godot2(PlantSubFormation2<UnderGroundAgent2> formation) : base(formation) { }
 
-	[Newtonsoft.Json.JsonIgnore] protected override Color FormationColor => Colors.Brown;
-	[Newtonsoft.Json.JsonIgnore] protected override ColorCodingType FormationColorCoding => ColorCodingType.Default;
+	protected override Color FormationColor => Colors.Brown;
+	protected override ColorCodingType FormationColorCoding => ColorCodingType.Default;
 
 	protected override void UpdateTransformation(MeshInstance3D sprite, int index, bool justCreated)
 	{

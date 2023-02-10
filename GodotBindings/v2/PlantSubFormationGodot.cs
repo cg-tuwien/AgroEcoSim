@@ -10,8 +10,8 @@ namespace Agro;
 
 public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantAgent
 {
-	[Newtonsoft.Json.JsonIgnore] internal Action<int> GodotRemoveSprite;
-	[Newtonsoft.Json.JsonIgnore] internal Action<int> GodotAddSprites;
+	internal Action<int> GodotRemoveSprite;
+	internal Action<int> GodotAddSprites;
 
 	public PlantSubFormation2(PlantFormation2 plant, Action<T[], int[]> reindex, Action<int> godotRemove, Action<int> godotAdd) : this(plant, reindex)
 	{
@@ -22,8 +22,8 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 	public void GodotReady() {}
 	public void GodotProcess() {}
 
-	[Newtonsoft.Json.JsonIgnore] internal IList<float> LightEfficiency;
-	[Newtonsoft.Json.JsonIgnore] internal IList<float> EnergyEfficiency;
+	internal IList<float> LightEfficiency;
+	internal IList<float> EnergyEfficiency;
 	internal float GetLightEfficiency(int index) => index < LightEfficiency?.Count ? LightEfficiency[index] : 0f;
 	internal float GetEnergyEfficiency(int index) => index < EnergyEfficiency?.Count ? EnergyEfficiency[index] : 0f;
 }

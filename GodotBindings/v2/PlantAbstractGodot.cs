@@ -9,9 +9,9 @@ namespace Agro;
 
 public abstract class PlantAbstractGodot2<T> where T : struct, IPlantAgent
 {
-	[Newtonsoft.Json.JsonIgnore] protected readonly PlantSubFormation2<T> Formation;
-	[Newtonsoft.Json.JsonIgnore] protected readonly List<MeshInstance3D> GodotSprites = new();
-	[Newtonsoft.Json.JsonIgnore] protected readonly static BoxMesh PlantCubePrimitive = new();
+	protected readonly PlantSubFormation2<T> Formation;
+	protected readonly List<MeshInstance3D> GodotSprites = new();
+	protected readonly static BoxMesh PlantCubePrimitive = new();
 
 	protected PlantAbstractGodot2(PlantSubFormation2<T> formation) => Formation = formation;
 
@@ -19,10 +19,10 @@ public abstract class PlantAbstractGodot2<T> where T : struct, IPlantAgent
 
 	static Color DefaultColor = new(0.7f, 0.7f, 0.7f);
 
-	[Newtonsoft.Json.JsonIgnore] protected virtual Color FormationColor => DefaultColor;
-	[Newtonsoft.Json.JsonIgnore] protected virtual ColorCodingType FormationColorCoding => ColorCodingType.Light;
-	[Newtonsoft.Json.JsonIgnore] protected ShaderMaterial UnshadedMaterial = AgroWorldGodot.UnshadedMaterial();
-	[Newtonsoft.Json.JsonIgnore] protected ShaderMaterial ShadedMaterial = AgroWorldGodot.ShadedMaterial();
+	protected virtual Color FormationColor => DefaultColor;
+	protected virtual ColorCodingType FormationColorCoding => ColorCodingType.Light;
+	protected ShaderMaterial UnshadedMaterial = AgroWorldGodot.UnshadedMaterial();
+	protected ShaderMaterial ShadedMaterial = AgroWorldGodot.ShadedMaterial();
 
 	public void AddSprites(int count)
 	{
@@ -100,7 +100,7 @@ public abstract class PlantAbstractGodot2<T> where T : struct, IPlantAgent
 				if (justCreated) return Colors.Black;
 				// if (Formation.GetDailyLightExposure(index) > 1f)
 				// 	System.Diagnostics.Debug.WriteLine($"D: {Formation.GetDailyLightExposure(index)} f: {AgroWorldGodot.ShootsVisualization.LightCutOff}");
-				var w = Formation.GetDailyLightExposure(index) * AgroWorldGodot.ShootsVisualization.LightCutOff / (12f * AgroWorld.TicksPerHour);
+				var w = Formation.GetDailyLightExposure(index) * AgroWorldGodot.ShootsVisualization.LightCutOff * AgroWorld.HoursPerTick / 12f;
 				return new Color(Math.Clamp(w, 0, 1), Math.Clamp(w * 0.8f, 0, 1), Math.Clamp(w * 0.64f, 0, 1));
 			}
 			case ColorCodingType.LightEfficiency:

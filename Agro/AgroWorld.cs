@@ -12,10 +12,10 @@ using System.Text;
 using System.Globalization;
 using System.Collections;
 //This is a necessary fix. Godot can't load this library properly. Possibly with Godot 4 it will get better.
-#if !GODOT
+//#if !GODOT
 using Innovative.SolarCalculator;
 using GeoTimeZone;
-#endif
+//#endif
 
 namespace Agro;
 
@@ -31,6 +31,12 @@ public readonly struct WeatherStats
 	/// </summary>
 	public readonly float SkyCoverage;
 
+	public WeatherStats(double skyCoverage, double precipitation_inG)
+	{
+		SkyCoverage = (float)skyCoverage;
+		Precipitation = (float)precipitation_inG;
+	}
+
 	public WeatherStats(float skyCoverage, float precipitation_inG)
 	{
 		Precipitation = precipitation_inG;
@@ -40,9 +46,9 @@ public readonly struct WeatherStats
 
 public static class AgroWorld
 {
-	public static uint TicksPerHour = 1;
+	public static int HoursPerTick = 1;
 	//public const int TotalHours = 24 * 365 * 10;
-	public static uint TotalHours = 24 * 31;
+	public static int TotalHours = 24 * 31 * 12;
 
 	//public static readonly Vector3 FieldSize = new(6f, 4f, 2f);
 	//public const float FieldResolution = 0.1f;
@@ -62,9 +68,13 @@ public static class AgroWorld
 
 	static readonly int[] DaysPerMonth = new[] { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
 
-	public static uint TimestepsTotal => TicksPerHour * TotalHours;
+	public static int TimestepsTotal()
+	{
+		var ticks = Math.DivRem(TotalHours, HoursPerTick, out var rem);
+		return ticks + (rem == 0 ? 0 : 1);
+	}
 
-	public static DateTime InitialTime = new(2022, 1, 1, 0, 0, 0, DateTimeKind.Unspecified);
+	public readonly static DateTime InitialTime = new(2022, 1, 1, 0, 0, 0, DateTimeKind.Unspecified);
 
 	#if !GODOT
 	static AgroWorld()
@@ -118,39 +128,82 @@ public static class AgroWorld
 		var avgLowTemperature = new float []{-2, -2, 1, 5, 9, 12, 14, 14, 11, 6, 2, -1};
 		var avgColdNightTemperature = new float[]{-10, -8, -5, -2, 2 ,5, 9, 8, 5, -2, -4, -8};
 
-		Weather = new WeatherStats[TimestepsTotal];
-		var tsRemain = TimestepsTotal;
-		var tsCounter = 0U;
+		var tsTotal = TimestepsTotal();
+		Weather = new WeatherStats[tsTotal];
+		var tsCounter = 0;
+
+		var overflow = 0;
 		var month = 0;
-		while (tsRemain > 0)
+		while(tsCounter < tsTotal)
 		{
+			var hCounter = 0;
 			var monthly = PlanCloudsSingleMonth(month + 1, DaysPerMonth[month], sunnyDays[month], cloudyDays[month], dullDays[month], precipitationMM[month], dailyPrecipitation[month]);
-			var monthlyLength = (uint)Math.Min(Weather.Length - tsCounter, monthly.Length); //shorten if not the whole month is taken
-			Array.Copy(monthly, 0, Weather, tsCounter, monthlyLength);
+
+			if (overflow > 0)
+			{
+				var precipitation = 0.0;
+				var coverage = 0.0;
+
+				var remaining = HoursPerTick - overflow;
+				int h = 0;
+				for(; h < remaining && hCounter < monthly.Length; ++h)
+				{
+					precipitation += monthly[hCounter].Precipitation;
+					coverage += monthly[hCounter].SkyCoverage;
+					++hCounter;
+				}
+
+				Weather[tsCounter++] = new WeatherStats((Weather[tsCounter].SkyCoverage + coverage) / HoursPerTick, Weather[tsCounter].Precipitation + precipitation);
+				overflow = 0;
+			}
+
+			while(hCounter < monthly.Length && tsCounter < tsTotal)
+			{
+				var precipitation = 0.0;
+				var coverage = 0.0;
+				int h = 0;
+				for(; h < HoursPerTick && hCounter < monthly.Length; ++h)
+				{
+					precipitation += monthly[hCounter].Precipitation;
+					coverage += monthly[hCounter].SkyCoverage;
+					++hCounter;
+				}
+
+				if (h == HoursPerTick || tsCounter + 1 == tsTotal)
+				{
+					Weather[tsCounter++] = new WeatherStats(coverage / HoursPerTick, precipitation);
+					overflow = 0;
+				}
+				else
+				{
+					Weather[tsCounter++] = new WeatherStats(coverage, precipitation);
+					overflow = HoursPerTick - h;
+				}
+			}
+
 			month = month < 11 ? month + 1 : 0;
-			tsRemain -= monthlyLength;
-			tsCounter += monthlyLength;
 		}
 
-		var tsi = (int)TimestepsTotal;
-		Daylight = new BitArray(tsi);
+		Daylight = new BitArray(tsTotal);
 		//TODO handle signed vs. unsigned
-		for (int i = 0; i < tsi; ++i)
+		for (int i = 0; i < tsTotal; ++i)
 		{
-			var t = GetTime((uint)i);
-//This is a necessary fix. Godot can't load this library properly. Possibly with Godot 4 it will get better.
-#if GODOT
-			Daylight.Set(i, true);
-#else
-			var solar = new SolarTimes(t, 0, Latitude, Longitude);
-			if (solar.DawnAstronomical <= t && t <= solar.DuskAstronomical)
+			var t0 = GetTime((uint)i);
+			var t1 = t0.AddHours(HoursPerTick);
+
+			if (HoursPerTick >= 24)
 				Daylight.Set(i, true);
-#endif
+			else
+			{
+				var solar0 = new SolarTimes(t0, 0, Latitude, Longitude);
+				var solar1 = new SolarTimes(t1, 0, Latitude, Longitude);
+				if (!(t1 < solar0.DawnAstronomical || t0 > solar1.DuskAstronomical || (t0 > solar0.DuskAstronomical && t1 < solar1.DawnAstronomical)))
+					Daylight.Set(i, true);
+			}
 		}
 	}
 
-	static readonly double RcpTicksPerHour = 1.0 / TicksPerHour;
-	internal static DateTime GetTime(uint timestep) => TimeZoneInfo.ConvertTimeToUtc(InitialTime, TimeZone) + (TicksPerHour == 1 ? TimeSpan.FromHours(timestep) : TimeSpan.FromHours(timestep * RcpTicksPerHour));
+	internal static DateTime GetTime(uint timestep) => TimeZoneInfo.ConvertTimeToUtc(InitialTime, TimeZone) + TimeSpan.FromHours(timestep * HoursPerTick);
 	///<summary>
 	//Rainfall in the given timestep in gramm
 	///</summary>
@@ -221,7 +274,7 @@ public static class AgroWorld
 		var dullHoursTarget = Math.Max(0, (int)Math.Round(RNG.NextNormal(dullDays * 24, 0.15 * dullDays * 24)));
 		var cloudHoursTarget = Math.Max(0, hoursInMonth - sunHoursTarget - dullHoursTarget);
 		var dullHours = 0;
-		var dullIntervals = new List<uint>();
+		var dullIntervals = new List<int>();
 		var lowDull = 1;
 		var highDull = Math.Min(24*10, hoursInMonth - sunHoursTarget - cloudHoursTarget); //10 days
 		while (dullHours < dullHoursTarget)
@@ -233,7 +286,7 @@ public static class AgroWorld
 			if (dullHours + interval > dullHoursTarget)
 				interval = dullHoursTarget - dullHours;
 			Debug.Assert(interval >= 0);
-			dullIntervals.Add((uint)interval);
+			dullIntervals.Add(interval);
 			dullHours += interval;
 		}
 
@@ -341,7 +394,7 @@ public static class AgroWorld
 		//Debug.WriteLine($"sci: [{String.Join(", ", sun_cloud_intervals)}]");
 
 		//[sky_coverage (factor), precipitation (gramm), temperature (°C), sun_energy (W / hm²)] #wind_speed (km/h), humidity (?)
-		var result = new WeatherStats[TicksPerHour * hoursInMonth];
+		var resultHourly = new WeatherStats[hoursInMonth];
 		int hi = 0, di = 0, si = 0;
 		var dullTurn = startDull;
 		var resultLimit = dullIntervals.Count + sun_cloud_intervalsLength;
@@ -349,7 +402,7 @@ public static class AgroWorld
 		{
 			if (dullTurn)
 			{
-				var cloudDistribution = RNG.NextFloats((int)(TicksPerHour * dullIntervals[di]), 0.5f, 1.0f);
+				var cloudDistribution = RNG.NextFloats(dullIntervals[di], 0.5f, 1.0f);
 				var rainDistribution = new float[cloudDistribution.Length];
 				if (rainInDulls[di] > 0)
 				{
@@ -367,9 +420,8 @@ public static class AgroWorld
 							rainDistribution[j] *= rainInDulls[di] / rdSum; //rain in Dulls is in mm
 				}
 				for(int j = 0; j < cloudDistribution.Length; ++j)
-					result[hi + j] = new WeatherStats(cloudDistribution[j], rainDistribution[j]);
+					resultHourly[hi++] = new WeatherStats(cloudDistribution[j], rainDistribution[j]);
 
-				hi += (int)(dullIntervals[di] * TicksPerHour);
 				++di;
 			}
 			else
@@ -379,15 +431,14 @@ public static class AgroWorld
 					var sca = Math.Abs(s);
 					var (low,high) = s > 0 ? (0f, 0.25f) : (0.25f, 0.5f);
 					for (int j = 0; j < sca; ++j)
-						result[hi+j] = new WeatherStats(RNG.NextFloat(low, high), 0f);
-					hi += (int)(sca * TicksPerHour);
+						resultHourly[hi++] = new WeatherStats(RNG.NextFloat(low, high), 0f);
 				}
 				++si;
 			}
 			dullTurn = !dullTurn;
 		}
 
-		return result;
+		return resultHourly;
 	}
 
 	public static float W2J(float watt, float seconds = 3600) => watt * seconds;

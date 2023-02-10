@@ -187,12 +187,12 @@ public partial class MultiagentSystem : Node3D
 // 		}
 // #else
 
-		if (World.Timestep < AgroWorld.TimestepsTotal)
+		if (World.Timestep < AgroWorld.TimestepsTotal())
 		{
 			if (!Paused)
 			{
 				World.Run(AgroWorldGodot.SimulationSettings.HiddenSteps);
-				if (World.Timestep == AgroWorld.TimestepsTotal - 1)
+				if (World.Timestep == AgroWorld.TimestepsTotal() - 1)
 					GD.Print($"Simulation successfully finished after {AgroWorld.TimestepsTotal} timesteps.");
 			}
 			else if (Simulation.ManualStepsRequested > 0)

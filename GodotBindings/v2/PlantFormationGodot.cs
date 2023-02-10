@@ -9,9 +9,9 @@ namespace Agro;
 
 public partial class PlantFormation2
 {
-	[Newtonsoft.Json.JsonIgnore] MeshInstance3D GodotSeedSprite;
-	[Newtonsoft.Json.JsonIgnore] Plant_UG_Godot2 UG_Godot;
-	[Newtonsoft.Json.JsonIgnore] Plant_AG_Godot2 AG_Godot;
+	MeshInstance3D GodotSeedSprite;
+	Plant_UG_Godot2 UG_Godot;
+	Plant_AG_Godot2 AG_Godot;
 
 	public void GodotReady()
 	{

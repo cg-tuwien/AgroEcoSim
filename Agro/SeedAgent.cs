@@ -83,7 +83,7 @@ public struct SeedAgent : IAgent
 	public void Tick(SimulationWorld world, IFormation _formation, int formationID, uint timestep, byte stage)
 	{
 		var formation = (PlantFormation2)_formation;
-		Water -= Radius * Radius * Radius / AgroWorld.TicksPerHour; //life support
+		Water -= Radius * Radius * Radius * AgroWorld.HoursPerTick; //life support
 		if (Water <= 0) //energy depleted
 		{
 			Water = 0f;
@@ -120,7 +120,7 @@ public struct SeedAgent : IAgent
 							amount *= (soilTemperature - mVegetativeTemperature.X) / (mVegetativeTemperature.Y - mVegetativeTemperature.X);
 						Water += amount * 0.7f; //store most of the energy, 0.2f are losses
 						Radius = MathF.Pow(Radius * Radius * Radius + amount * PiV, Third); //use the rest for growth
-						soil.Send(sources[0], new SoilAgent.Water_Seed_PullFrom_Soil(formation, amount / AgroWorld.TicksPerHour));
+						soil.Send(sources[0], new SoilAgent.Water_Seed_PullFrom_Soil(formation, amount * AgroWorld.HoursPerTick));
 					}
 				}
 			}

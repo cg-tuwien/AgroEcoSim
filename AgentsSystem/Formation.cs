@@ -11,7 +11,7 @@ public abstract class Formation<T> : IFormation where T : struct, IAgent
 {
 	protected bool ReadTMP = false;
 	//Once GODOT supports C# 6.0: Make it a List and then for processing send System.Runtime.InteropServices.CollectionsMarshal.AsSpan(Stems);
-	[Newtonsoft.Json.JsonProperty] protected T[] Agents;
+	protected T[] Agents;
 	protected T[] AgentsTMP;
 
 	protected readonly PostBox<T> Postbox = new();
@@ -148,21 +148,21 @@ public abstract class Formation<T> : IFormation where T : struct, IAgent
 
 	public virtual void ProcessTransactions(uint timestep, byte stage) { }
 
-	[Newtonsoft.Json.JsonIgnore] public virtual bool HasUndeliveredPost => Postbox.AnyMessages;
-	[Newtonsoft.Json.JsonIgnore] public virtual bool HasUnprocessedTransactions => false;
+	public virtual bool HasUndeliveredPost => Postbox.AnyMessages;
+	public virtual bool HasUnprocessedTransactions => false;
 	public virtual int Count => Agents.Length;
 
-#if HISTORY_LOG || TICK_LOG
+	#if HISTORY_LOG || TICK_LOG
 	readonly List<T[]> StatesHistory = new();
 	public string HistoryToJSON(int timestep = -1, byte stage = 0) => timestep >= 0 ? Export.Json(StatesHistory[timestep]) : Export.Json(StatesHistory);
 
 	public ulong GetID(int index) => ReadTMP
 		? (AgentsTMP.Length > index ? AgentsTMP[index].ID : ulong.MaxValue)
 		: (Agents.Length > index ? Agents[index].ID : ulong.MaxValue);
-#endif
+	#endif
 
-#if GODOT
+	#if GODOT
 	public virtual void GodotReady() {}
 	public virtual void GodotProcess() {}
-#endif
+	#endif
 }

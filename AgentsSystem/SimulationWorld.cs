@@ -47,9 +47,9 @@ public partial class SimulationWorld
 	{
 		Formations.Add(formation);
 		Stages = Math.Max(Stages, formation.Stages);
-#if GODOT
+		#if GODOT
 		formation.GodotReady();
-#endif
+		#endif
 	}
 
 	public void AddRange(IEnumerable<IFormation> formations)
@@ -57,27 +57,27 @@ public partial class SimulationWorld
 		Formations.AddRange(formations);
 		foreach(var item in formations)
 			Stages = Math.Max(Stages, item.Stages);
-#if GODOT
+		#if GODOT
 		foreach(var item in formations)
 			item.GodotReady();
-#endif
+		#endif
 	}
 
 	public void Add(IObstacle obstacle)
 	{
 		Obstacles.Add(obstacle);
-#if GODOT
+		#if GODOT
 		obstacle.GodotReady();
-#endif
+		#endif
 	}
 
 	public void Run(uint simulationLength)
 	{
-#if !DEBUG
+		#if !DEBUG
 		if (Formations.Count > 1)
 			RunParallel(simulationLength);
 		else
-#endif
+		#endif
 			RunSequential(simulationLength);
 	}
 
@@ -96,13 +96,13 @@ public partial class SimulationWorld
 			}
 			CensusSequential();
 			ExecCallbacks();
-#if HISTORY_LOG || HISTORY_TICK
+			#if HISTORY_LOG || HISTORY_TICK
 			// if (i >= 477)
 			// {
 			// 	var exported = HistoryToJSON((int)i);
 			// 	File.WriteAllText($"export-{i}.json", exported.Replace("},", "},\n").Replace("],", "],\n"));
 			// }
-#endif
+			#endif
 		}
 		#if GODOT
 		foreach(var item in Formations)
@@ -140,7 +140,7 @@ public partial class SimulationWorld
 
 	void TickSequential()
 	{
-		Debug.WriteLine($"TIMESTEP: {Timestep} DAY: {(Timestep / 24) + 1} HOUR: {Timestep % 24}"); //Assuming 1 tick per hour
+		Debug.WriteLine($"TIMESTEP: {Timestep}");
 		for(int i = 0; i < Formations.Count; ++i)
 			Formations[i].Tick(this, Timestep, Stage);
 	}

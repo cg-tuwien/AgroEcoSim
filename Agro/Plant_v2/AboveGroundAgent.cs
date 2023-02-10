@@ -103,11 +103,11 @@ public partial struct AboveGroundAgent2 : IPlantAgent
 	/// <summary>
 	/// Water volume in m³ which can be passed to the parent per timestep
 	/// </summary>
-	public float WaterFlowToParentPerTick() => WaterFlowToParentPerHour() / AgroWorld.TicksPerHour;
+	public float WaterFlowToParentPerTick() => WaterFlowToParentPerHour() * AgroWorld.HoursPerTick;
 
 	public float EnergyFlowToParentPerHour() => 4f * Radius * Radius * WaterTransportRatio;
 
-	public float EnergyFlowToParentPerTick() => EnergyFlowToParentPerHour() / AgroWorld.TicksPerHour;
+	public float EnergyFlowToParentPerTick() => EnergyFlowToParentPerHour() * AgroWorld.HoursPerTick;
 
 	/// <summary>
 	/// Volume ratio ∈ [0, 1] of the agent that can used for storing water
@@ -132,7 +132,7 @@ public partial struct AboveGroundAgent2 : IPlantAgent
 	/// <summary>
 	/// Water volume in m³ which can flow through per tick, or can be stored in this agent
 	/// </summary>
-	public float WaterTotalCapacityPerTick() => WaterTotalCapacityPerHour() / AgroWorld.TicksPerHour;
+	public float WaterTotalCapacityPerTick() => WaterTotalCapacityPerHour() * AgroWorld.HoursPerTick;
 
 	/// <summary>
 	/// Timespan for which 1 unit of energy can feed 1m³ of plant tissue
@@ -149,10 +149,10 @@ public partial struct AboveGroundAgent2 : IPlantAgent
 	public static Quaternion OrientationUp = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, MathF.PI * 0.5f);
 
 	public const float GrowthRatePerHour = 1 + 1/12; //Let us assume this plant can double volume in 12 hours
-	public static readonly float GrowthRatePerTick = GrowthRatePerHour / AgroWorld.TicksPerHour; //Let us assume this plant can double volume in 12 hours
+	public static readonly float GrowthRatePerTick = GrowthRatePerHour * AgroWorld.HoursPerTick; //Let us assume this plant can double volume in 12 hours
 
 	float LifeSupportPerHour() => Length * Radius * (Organ == OrganTypes.Leaf ? LeafThickness : Radius * mPhotoFactor);
-	public float LifeSupportPerTick() => LifeSupportPerHour() / AgroWorld.TicksPerHour;
+	public float LifeSupportPerTick() => LifeSupportPerHour() * AgroWorld.HoursPerTick;
 
 	public const float mPhotoEfficiency = 0.025f;
 	public const float ExpectedIrradiance = 400f; //in W/m² see https://en.wikipedia.org/wiki/Solar_irradiance
@@ -214,7 +214,7 @@ public partial struct AboveGroundAgent2 : IPlantAgent
 
 		//TODO perhaps growth should somehow reflect temperature
 		var lifeSupportPerHour = LifeSupportPerHour();
-		var lifeSupportPerTick = LifeSupportPerTick() / AgroWorld.TicksPerHour;
+		var lifeSupportPerTick = LifeSupportPerTick() * AgroWorld.HoursPerTick;
 
 		Energy -= lifeSupportPerTick; //life support
 
@@ -263,7 +263,7 @@ public partial struct AboveGroundAgent2 : IPlantAgent
 				{
 					case OrganTypes.Leaf:
 					{
-						growth = new Vector2(2e-4f, 1e-4f) / (AgroWorld.TicksPerHour);
+						growth = new Vector2(2e-4f, 1e-4f) * AgroWorld.HoursPerTick;
 					}
 					break;
 					case OrganTypes.Stem:
@@ -271,14 +271,14 @@ public partial struct AboveGroundAgent2 : IPlantAgent
 						isLeafStem = childrenCount == 2 && formation.GetOrgan(children[0]) == OrganTypes.Leaf;
 						if (isLeafStem)
 						{
-							growth = new Vector2(1e-4f, 3e-6f) / AgroWorld.TicksPerHour;
+							growth = new Vector2(1e-4f, 3e-6f) * AgroWorld.HoursPerTick;
 						}
 						else
 						{
 							//var waterUsage = Math.Clamp(Water / WaterTotalCapacityPerTick, 0f, 1f);
 							var energyUsage = Math.Clamp(Energy / EnergyStorageCapacity(), 0f, 1f);
 							var absDepth = formation.GetAbsInvDepth(formationID) + 1;
-							growth = new Vector2(2e-3f / (absDepth * childrenCount * mPhotoFactor), 1e-5f) * (energyUsage / AgroWorld.TicksPerHour);
+							growth = new Vector2(2e-3f / (absDepth * childrenCount * mPhotoFactor), 1e-5f) * (energyUsage * AgroWorld.HoursPerTick);
 						}
 					}
 					break;
@@ -327,7 +327,7 @@ public partial struct AboveGroundAgent2 : IPlantAgent
 						foreach(var child in children)
 							if (formation.GetOrgan(child) == OrganTypes.Stem)
 								++stemChildrenCount;
-						var pool = MathF.Pow(childrenCount, childrenCount << 2) * AgroWorld.TicksPerHour;
+						var pool = MathF.Pow(childrenCount, childrenCount << 2) * AgroWorld.HoursPerTick;
 						var relativeDepth = formation.GetRelDepth(formationID);
 						if (pool < uint.MaxValue && plant.RNG.NextUInt((uint)pool) == 1 && Math.Min(Math.Min(waterFactor, mPhotoFactor), 1f-relativeDepth) > plant.RNG.NextFloat())
 						{

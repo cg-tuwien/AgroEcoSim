@@ -35,7 +35,7 @@ internal class Program
         else
             world = Initialize.World();
         var start = DateTime.UtcNow.Ticks;
-        world.Run(AgroWorld.TimestepsTotal);
+        world.Run((uint)AgroWorld.TimestepsTotal());
         var stop = DateTime.UtcNow.Ticks;
         Console.WriteLine($"Simulation time: {(stop - start) / TimeSpan.TicksPerMillisecond} ms");
 #if HISTORY_LOG || HISTORY_TICK

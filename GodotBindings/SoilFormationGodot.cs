@@ -9,13 +9,10 @@ namespace Agro;
 public partial class SoilFormation
 {
 	//Todo: Speed of the visualisation could be improved by replacing Mesh with MultiMesh (leveraging identical geo)!!!
-	[Newtonsoft.Json.JsonIgnore]
 	public MeshInstance3D[] SoilCellInstances;
 
-	[Newtonsoft.Json.JsonIgnore]
 	public MeshInstance3D[,] MarkerInstances;
 
-	[Newtonsoft.Json.JsonIgnore]
 	private List<MarkerData> MarkerDataStorage;
 
 	// float[] FlowTracking;

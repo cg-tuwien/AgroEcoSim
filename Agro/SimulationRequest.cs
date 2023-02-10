@@ -6,12 +6,12 @@ public class SimulationRequest
     ///Number of simulation steps per hour (default: 1)
     ///</summary>
     ///<example>1</example>
-    public uint? TicksPerHour { get; set; }
+    public int? HoursPerTick { get; set; }
     ///<summary>
     ///Number of simulation hours (default: 744 == 31 days)
     ///</summary>
     ///<example>744</example>
-    public uint? TotalHours { get; set; }
+    public int? TotalHours { get; set; }
     ///<summary>
     ///Field size in meters. Note "D" is depth. (default: 1x1x1)
     ///</summary>

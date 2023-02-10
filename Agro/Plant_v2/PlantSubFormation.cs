@@ -117,21 +117,14 @@ internal class TreeCacheData2
 
 public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantAgent
 {
-	#if !GODOT
 	[System.Text.Json.Serialization.JsonIgnore]
-	#else
-	[Newtonsoft.Json.JsonIgnore]
-	#endif
 	public byte Stages => 1;
 	readonly Action<T[], int[]> Reindex;
 
-	#if GODOT
-	[Newtonsoft.Json.JsonIgnore]
-	#endif
 	public readonly PlantFormation2 Plant;
 	//Once GODOT supports C# 6.0: Make it a List and then for processing send System.Runtime.InteropServices.CollectionsMarshal.AsSpan(Stems);
 	bool ReadTMP = false;
-	[Newtonsoft.Json.JsonProperty] T[] Agents = Array.Empty<T>();
+	T[] Agents = Array.Empty<T>();
 	T[] AgentsTMP = Array.Empty<T>();
 	readonly PostBox<T> Post = new();
 	readonly TransactionsBox Transactions = new();
@@ -331,10 +324,10 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 			{
 				var indexMap = new int[src.Length + Births.Count + Inserts.Count];
 				Array.Fill(indexMap, -1);
-#if GODOT
+				#if GODOT
 				for(var i = DeathsHelper.Count - 1; i >= 0; --i)
 					GodotRemoveSprite(DeathsHelper[i]);
-#endif
+				#endif
 
 				// foreach(var index in Deaths)  //must run before copying to underGround
 				// 	if (Agents[index].Parent >= 0)
@@ -429,9 +422,9 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 			TreeCache.FinishUpdate();
 			TreeCache.UpdateBases(this);
 
-#if GODOT
+			#if GODOT
 			GodotAddSprites(Agents.Length);
-#endif
+			#endif
 			Births.Clear();
 			Inserts.Clear();
 			InsertAncestors.Clear();
@@ -734,9 +727,9 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 		Transactions.Clear();
 	}
 
-	[Newtonsoft.Json.JsonIgnore] public bool HasUndeliveredPost => Post.AnyMessages;
+	public bool HasUndeliveredPost => Post.AnyMessages;
 
-	[Newtonsoft.Json.JsonIgnore] public bool HasUnprocessedTransactions => Transactions.AnyTransactions;
+	public bool HasUnprocessedTransactions => Transactions.AnyTransactions;
 
 	///////////////////////////
 	#region READ METHODS

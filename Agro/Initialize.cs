@@ -8,8 +8,8 @@ public static class Initialize
 {
 	public static SimulationWorld World(SimulationRequest? settings = null)
 	{
-		if (settings?.TicksPerHour.HasValue ?? false)
-			AgroWorld.TicksPerHour = settings.TicksPerHour.Value;
+		if (settings?.HoursPerTick.HasValue ?? false)
+			AgroWorld.HoursPerTick = settings.HoursPerTick.Value;
 
 		if (settings?.TotalHours.HasValue ?? false)
 			AgroWorld.TotalHours = settings.TotalHours.Value;

@@ -11,7 +11,7 @@ public partial struct SoilAgent : IAgent
 {
 	public static readonly float FieldCellSurface = AgroWorld.FieldResolution * AgroWorld.FieldResolution;
 
-	internal static readonly float SoilDiffusionCoefPerTick = 0.2f / AgroWorld.TicksPerHour;
+	internal static readonly float SoilDiffusionCoefPerTick = 0.2f * AgroWorld.HoursPerTick;
 	internal static readonly float GravitationDiffusionCoefPerTick = 1.5f * SoilDiffusionCoefPerTick;
 
 	///<summary>

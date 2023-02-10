@@ -94,7 +94,7 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 	/// <summary>
 	/// Water volume in m³ which can be absorbed from soil per timestep
 	/// </summary>
-	public float WaterAbsorbtionPerTick() => WaterAbsorbtionPerHour() / AgroWorld.TicksPerHour;
+	public float WaterAbsorbtionPerTick() => WaterAbsorbtionPerHour() * AgroWorld.HoursPerTick;
 
 
 	//Let's assume (I might be fully wrong) that the plan can push the water 0.5mm in 1s, then in 1h it can push it 0.001 * 30 * 60 = 1.8m
@@ -110,13 +110,13 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 	/// <summary>
 	/// Water volume in m³ which can be passed to the parent per timestep
 	/// </summary>
-	public float WaterFlowToParentPerTick() => WaterFlowToParentPerHour() / AgroWorld.TicksPerHour;
+	public float WaterFlowToParentPerTick() => WaterFlowToParentPerHour() * AgroWorld.HoursPerTick;
 
 	public const float EnergyTransportRatio = 2f;
 
 	public float EnergyFlowToParentPerHour() => 4f * Radius * Radius * EnergyTransportRatio * (2f - mWaterAbsorbtionFactor);
 
-	public float EnergyFlowToParentPerTick() => EnergyFlowToParentPerHour() / AgroWorld.TicksPerHour;
+	public float EnergyFlowToParentPerTick() => EnergyFlowToParentPerHour() * AgroWorld.HoursPerTick;
 
 	/// <summary>
 	/// Volume ratio ∈ [0, 1] of the agent that can used for storing water
@@ -136,7 +136,7 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 	/// <summary>
 	/// Water volume in m³ which can flow through per tick, or can be stored in this agent
 	/// </summary>
-	public float WaterTotalCapacityPerTick() => WaterTotalCapacityPerHour() / AgroWorld.TicksPerHour;
+	public float WaterTotalCapacityPerTick() => WaterTotalCapacityPerHour() * AgroWorld.HoursPerTick;
 
 	/// <summary>
 	/// Timespan for which 1 unit of energy can feed 1m³ of plant tissue
@@ -152,7 +152,7 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 
 	float LifeSupportPerHour() => Length * Radius * Radius * 4f * mWaterAbsorbtionFactor;
 
-	public float LifeSupportPerTick() => LifeSupportPerHour() / AgroWorld.TicksPerHour;
+	public float LifeSupportPerTick() => LifeSupportPerHour() * AgroWorld.HoursPerTick;
 
 	public float PhotosynthPerTick() => 0f;
 
@@ -199,7 +199,7 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 		var lifeSupportPerHour = volume * mWaterAbsorbtionFactor;
 
 		//life support
-		Energy -= lifeSupportPerHour / AgroWorld.TicksPerHour;
+		Energy -= lifeSupportPerHour * AgroWorld.HoursPerTick;
 
 		var children = formation.GetChildren(formationID);
 
@@ -210,8 +210,8 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 		if (Energy > lifeSupportPerHour * 36) //maybe make it a factor storedEnergy/lifeSupport so that it grows fast when it has full storage
 		{
 			var childrenCount = children.Count + 1;
-			var lengthGrowth = waterFactor * 2e-4f / (AgroWorld.TicksPerHour * MathF.Pow(childrenCount, GrowthDeclineByExpChildren + 1) * MathF.Pow(lr * Length, 0.1f));
-			var widthGrowth = waterFactor * 2e-5f / (AgroWorld.TicksPerHour * MathF.Pow(childrenCount, GrowthDeclineByExpChildren / 2) * MathF.Pow(volume, 0.1f)); //just optimized the number of multiplications
+			var lengthGrowth = waterFactor * 2e-4f * AgroWorld.HoursPerTick / (MathF.Pow(childrenCount, GrowthDeclineByExpChildren + 1) * MathF.Pow(lr * Length, 0.1f));
+			var widthGrowth = waterFactor * 2e-5f * AgroWorld.HoursPerTick / (MathF.Pow(childrenCount, GrowthDeclineByExpChildren / 2) * MathF.Pow(volume, 0.1f)); //just optimized the number of multiplications
 
 			Length += lengthGrowth;
 			Radius += widthGrowth;
@@ -235,7 +235,7 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 				if (y > 0)
 					orientation = Quaternion.Slerp(orientation, OrientationDown, plant.RNG.NextFloat(y));
 				else
-					orientation = Quaternion.Slerp(orientation, OrientationDown, plant.RNG.NextFloat(0.2f / AgroWorld.TicksPerHour));
+					orientation = Quaternion.Slerp(orientation, OrientationDown, plant.RNG.NextFloat(0.2f * AgroWorld.HoursPerTick));
 				var energy = EnergyCapacityFunc(InitialRadius, InitialLength);
 				formation.Birth(new(formationID, orientation, energy));
 				Energy -= 2f * energy; //twice because some energy is needed for the birth itself
@@ -245,7 +245,7 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 			//Branching
 			if (children.Count > 0)
 			{
-				var pool = MathF.Pow(childrenCount, childrenCount << 2) * AgroWorld.TicksPerHour;
+				var pool = MathF.Pow(childrenCount, childrenCount << 2) * AgroWorld.HoursPerTick;
 				if (pool < uint.MaxValue && plant.RNG.NextUInt((uint)pool) == 1 && waterFactor > plant.RNG.NextFloat())
 				{
 					var qx = Quaternion.CreateFromAxisAngle(Vector3.UnitX, plant.RNG.NextFloat(-MathF.PI * yFactor, MathF.PI * yFactor));

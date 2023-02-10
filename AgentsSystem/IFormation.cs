@@ -10,16 +10,16 @@ public interface IFormation
     void Tick(SimulationWorld world, uint timestep, byte stage);
     void ProcessTransactions(uint timestep, byte stage);
     void DeliverPost(uint timestep, byte stage);
-    [Newtonsoft.Json.JsonIgnore] bool HasUndeliveredPost { get; }
-    [Newtonsoft.Json.JsonIgnore] bool HasUnprocessedTransactions { get; }
-    [Newtonsoft.Json.JsonIgnore] byte Stages { get; }
-#if HISTORY_LOG || TICK_LOG
+    bool HasUndeliveredPost { get; }
+    bool HasUnprocessedTransactions { get; }
+    byte Stages { get; }
+    #if HISTORY_LOG || TICK_LOG
     string HistoryToJSON(int timestep = -1, byte stage = 0);
-#endif
-#if GODOT
+    #endif
+    #if GODOT
     void GodotReady();
 	void GodotProcess();
-#endif
+    #endif
     ///<summary>
     ///Number of agents in this formation
     ///</summary>

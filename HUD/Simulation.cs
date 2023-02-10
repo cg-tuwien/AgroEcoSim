@@ -125,7 +125,7 @@ public partial class Simulation : CanvasLayer
 	{
 		if (DateTime.UtcNow >= CoolDown)
 		{
-			var datetime = AgroWorld.InitialTime + (AgroWorld.TicksPerHour == 1 ? TimeSpan.FromHours(World.Timestep) : TimeSpan.FromHours(World.Timestep / (float)AgroWorld.TicksPerHour));
+			var datetime = AgroWorld.InitialTime + TimeSpan.FromHours(World.Timestep * (float)AgroWorld.HoursPerTick);
 			var local = datetime.ToLocalTime();
 			DateLabel.Text = $"{local.Year}-{local.Month}-{local.Day} {local.Hour}:{local.Minute}";
 
@@ -211,7 +211,7 @@ public partial class Simulation : CanvasLayer
 	}
 
 	public void OneFrame() => ManualStepsRequested = 1U;
-	public void OneDay() => ManualStepsRequested = AgroWorld.TicksPerHour * 12;
+	public void OneDay() => ManualStepsRequested = (uint)(24 / AgroWorld.HoursPerTick);
 
 	internal void ManualStepsDone() => ManualStepsRequested = 0U;
 
