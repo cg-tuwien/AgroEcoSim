@@ -57,7 +57,7 @@ public partial struct SoilAgent : IAgent
 			Amount = amount;
 			DstIndex = new Vector3i(dstX, dstY, dstZ);
 		}
-		public bool Valid => Amount > 0f && DstFormation.CheckCoords(DstIndex);
+		public bool Valid => Amount > 0f && DstFormation.Contains(DstIndex);
 		public Transaction Type => Transaction.Decrease;
 		public void Receive(ref SoilAgent srcAgent, uint timestep, byte stage)
 		{

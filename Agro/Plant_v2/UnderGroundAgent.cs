@@ -278,7 +278,7 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 				var soil = plant.Soil;
 				var baseCenter = formation.GetBaseCenter(formationID);
 				//find all soild cells that the shpere intersects
-				var sources = soil.IntersectSphere(baseCenter + Vector3.Transform(Vector3.UnitX, Orientation) * Length * 0.75f, Length * 0.25f); //TODO make a tube intersection
+				var sources = soil.IntersectPoint(baseCenter + Vector3.Transform(Vector3.UnitX, Orientation) * Length * 0.75f); //TODO make a tube intersection
 
 				var vegetativeTemp = plant.VegetativeLowTemperature;
 
@@ -290,7 +290,7 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 					{
 						if (soilTemperature < vegetativeTemp.Y)
 							amount *= (soilTemperature - vegetativeTemp.X) / (vegetativeTemp.Y - vegetativeTemp.X);
-						soil.Send(sources[0], new SoilAgent.Water_UG_PullFrom_Soil2(formation, Math.Min(waterCapacity - Water, amount), formationID)); //TODO change to tube surface!
+						Water += soil.RequestWater(sources[0], Math.Min(waterCapacity - Water, amount)); //TODO change to tube surface!
 					}
 				}
 			}

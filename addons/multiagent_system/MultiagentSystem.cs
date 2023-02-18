@@ -52,21 +52,23 @@ public partial class MultiagentSystem : Node3D
 			return;
 
 		// EmitSignal("LeftMenu");
-#if GODOT
+		#if GODOT
 		GD.Print("GODOT is defined properly.");
-#else
+		#else
 		GD.Print("ERROR: GODOT is not defined!");
-#endif
+		#endif
+
 		SimulationWorld.GodotAddChild = node => AddChild(node);
 		SimulationWorld.GodotRemoveChild = RemoveChild;
 		//Translation = new Vector3(-0.5f * AgroWorld.FieldSize.X, AgroWorld.FieldResolution, -0.5f * AgroWorld.FieldSize.Z);
 		//Translation = new Vector3(0, AgroWorld.FieldResolution, 0);
 
-		var fieldSize = new Utils.Json.Vector3XDZ{ X = 5, D = 3, Z = 5 };
+		//var fieldSize = new Utils.Json.Vector3XDZ{ X = 5, D = 3, Z = 5 };
+		var fieldSize = new Utils.Json.Vector3XDZ{ X = 2, D = 4, Z = 2 };
 
 		var plants = new List<PlantRequest>();
-		//for(float x = 0.5f; x < fieldSize.X; x += 1f)
-		var x = fieldSize.X * 0.5f;
+		for(float x = 0.5f; x < fieldSize.X; x += 1f)
+		//var x = fieldSize.X * 0.5f;
 			for(float z = 0.5f; z < fieldSize.Z; z += 1f)
 				plants.Add(new(){ Position = new Utils.Json.Vector3XYZ{ X = x, Y = -0.01f, Z = z }});
 		var obstacles = new ObstacleRequest[] {
@@ -75,10 +77,12 @@ public partial class MultiagentSystem : Node3D
 		};
 
 		World = Initialize.World(new SimulationRequest(){
-			TotalHours = 24 * 31 * 12,
+			TotalHours = 24 * 31 * 12 * 2,
+			HoursPerTick = 12,
 			FieldSize = fieldSize,
-			Plants = plants.ToArray(),
-			Obstacles = obstacles,
+			//Plants = plants.ToArray(),
+			Plants = Array.Empty<PlantRequest>()
+			//Obstacles = obstacles,
 		});
 
 		Ground = new ();
@@ -208,7 +212,7 @@ public partial class MultiagentSystem : Node3D
 			if (Soil.UpdateRequest)
 			{
 				foreach(var formation in World.Formations)
-					if (formation is SoilFormation soil)
+					if (formation is SoilFormationNew soil)
 						soil.GodotProcess();
 				Soil.UpdateRequest = false;
 			}

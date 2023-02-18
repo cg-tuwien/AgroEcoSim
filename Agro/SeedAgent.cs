@@ -109,7 +109,7 @@ public struct SeedAgent : IAgent
 			{
 				var soil = formation.Soil;
 				//find all soild cells that the shpere intersects
-				var sources = soil.IntersectSphere(Center, Radius);
+				var sources = soil.IntersectPoint(Center);
 				if (sources.Count > 0) //TODO this is a rough approximation taking only the first intersected soil cell
 				{
 					var amount = Pi4 * Radius * Radius; //sphere surface is 4πr²
@@ -118,9 +118,8 @@ public struct SeedAgent : IAgent
 					{
 						if (soilTemperature < mVegetativeTemperature.Y)
 							amount *= (soilTemperature - mVegetativeTemperature.X) / (mVegetativeTemperature.Y - mVegetativeTemperature.X);
-						Water += amount * 0.7f; //store most of the energy, 0.2f are losses
 						Radius = MathF.Pow(Radius * Radius * Radius + amount * PiV, Third); //use the rest for growth
-						soil.Send(sources[0], new SoilAgent.Water_Seed_PullFrom_Soil(formation, amount * AgroWorld.HoursPerTick));
+						Water += soil.RequestWater(sources[0], amount * AgroWorld.HoursPerTick);
 					}
 				}
 			}

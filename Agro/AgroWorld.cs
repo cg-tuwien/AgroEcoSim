@@ -23,7 +23,7 @@ namespace Agro;
 public readonly struct WeatherStats
 {
 	/// <summary>
-	/// Rainfall in gramm
+	/// Rainfall in gramm per m²
 	/// </summary>
 	public readonly float Precipitation;
 	/// <summary>
@@ -31,15 +31,15 @@ public readonly struct WeatherStats
 	/// </summary>
 	public readonly float SkyCoverage;
 
-	public WeatherStats(double skyCoverage, double precipitation_inG)
+	public WeatherStats(double skyCoverage, double precipitation_in_g_per_m2)
 	{
 		SkyCoverage = (float)skyCoverage;
-		Precipitation = (float)precipitation_inG;
+		Precipitation = (float)precipitation_in_g_per_m2;
 	}
 
-	public WeatherStats(float skyCoverage, float precipitation_inG)
+	public WeatherStats(float skyCoverage, float precipitation_in_g_per_m2)
 	{
-		Precipitation = precipitation_inG;
+		Precipitation = precipitation_in_g_per_m2;
 		SkyCoverage = skyCoverage;
 	}
 }
@@ -382,9 +382,7 @@ public static class AgroWorld
 		}
 
 		//scale to reach the target AND convert  mm / m² to gramms (= 1000000 mm³ = 1 l and 1 l = 1000 gramms)
-		var rainInDullsSum_inG = 1e3f * targetPrecipitation_inMM / rainInDullsSum_inMM;
-		for(int i = 0; i < rainInDulls.Length; ++i)
-			rainInDulls[i] *= rainInDullsSum_inG; //now rainInDulls is in g
+		var rainInDullsSum_inG_per_m2 = 1e3f * targetPrecipitation_inMM / rainInDullsSum_inMM;
 
 		// Debug.WriteLine($"m: {month}, h: {hoursInMonth} = {cloudIntervals.Sum() + sunIntervals.Sum() + dullIntervals.Sum()} = {dullIntervals.Sum() + sun_cloud_intervals.Sum(x => x.Sum(y => Math.Abs(y)))}");
 		// Debug.WriteLine($"sun: {sunHoursTarget} -> {sunIntervals.Sum()}, intervals: {sunIntervals.Length}");
@@ -417,7 +415,7 @@ public static class AgroWorld
 					var rdSum = rainDistribution.Sum();
 					if (rdSum > 0)
 						for(int j = 0; j < rainDistribution.Length; ++j)
-							rainDistribution[j] *= rainInDulls[di] / rdSum; //rain in Dulls is in mm
+							rainDistribution[j] *= rainInDullsSum_inG_per_m2 * rainInDulls[di] / rdSum; //rain in Dulls is in mm/m²; rainDistribution is now in g/m²
 				}
 				for(int j = 0; j < cloudDistribution.Length; ++j)
 					resultHourly[hi++] = new WeatherStats(cloudDistribution[j], rainDistribution[j]);

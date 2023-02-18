@@ -7,7 +7,16 @@ using Utils;
 
 namespace AgentsSystem;
 
-public abstract class Formation3i<T> : Formation<T> where T : struct, IAgent
+public interface IGrid3D
+{
+	int Index(Vector3i coords);
+	int Index(int x, int y, int z);
+	Vector3i Coords(int index);
+ 	bool Contains(Vector3i coords);
+	bool Contains(int x, int y, int z);
+}
+
+public abstract class Formation3i<T> : Formation<T>, IGrid3D where T : struct, IAgent
 {
 	public readonly int SizeX, SizeY, SizeZ;
 	protected readonly int SizeXY;
@@ -33,12 +42,12 @@ public abstract class Formation3i<T> : Formation<T> where T : struct, IAgent
 		return new(index - y * SizeX, y, z);
 	}
 
-	public bool CheckCoords(Vector3i coords) => coords.X >= 0 && coords.Y >= 0 && coords.Z >= 0 && coords.X < SizeX && coords.Y < SizeY && coords.Z < SizeZ;
-	public bool CheckCoords(int x, int y, int z) => x >= 0 && y >= 0 && z >= 0 && x < SizeX && y < SizeY && z < SizeZ;
+	public bool Contains(Vector3i coords) => coords.X >= 0 && coords.Y >= 0 && coords.Z >= 0 && coords.X < SizeX && coords.Y < SizeY && coords.Z < SizeZ;
+	public bool Contains(int x, int y, int z) => x >= 0 && y >= 0 && z >= 0 && x < SizeX && y < SizeY && z < SizeZ;
 
 	public bool TryGet(Vector3i coords, out T result)
 	{
-		if (CheckCoords(coords))
+		if (Contains(coords))
 		{
 			result = ReadTMP ? AgentsTMP[Index(coords)] : Agents[Index(coords)];
 			return true;
@@ -53,7 +62,7 @@ public abstract class Formation3i<T> : Formation<T> where T : struct, IAgent
 	//Private
 	public bool Send(Vector3i dst, IMessage<T> msg)
 	{
-		if (CheckCoords(dst))
+		if (Contains(dst))
 		{
 			Postbox.Add(new (msg, Index(dst)));
 			return true;
@@ -64,7 +73,7 @@ public abstract class Formation3i<T> : Formation<T> where T : struct, IAgent
 
 	public bool Send(int x, int y, int z, IMessage<T> msg)
 	{
-		if (CheckCoords(x, y, z))
+		if (Contains(x, y, z))
 		{
 			Postbox.Add(new (msg, Index(x, y, z)));
 			return true;

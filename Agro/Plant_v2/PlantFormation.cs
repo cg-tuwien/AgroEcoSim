@@ -116,7 +116,7 @@ public partial class PlantFormation2 : IPlantFormation
 
 	public Vector3 Position { get; private set; }
 	bool ReadTMP = false;
-	internal SoilFormation Soil;
+	internal SoilFormationNew Soil;
 	protected SeedAgent[] Seed = new SeedAgent[1]; //must be an array due to messaging compaatibility
 	protected readonly SeedAgent[] SeedTMP = new SeedAgent[1];
 	protected readonly PostBox<SeedAgent> PostboxSeed = new();
@@ -141,7 +141,7 @@ public partial class PlantFormation2 : IPlantFormation
 	/// </summary>
 	public PlantSettings Parameters { get; private set; }
 
-	public PlantFormation2(PlantSettings parameters, SoilFormation soil, SeedAgent seed, Pcg parentRNG)
+	public PlantFormation2(PlantSettings parameters, SoilFormationNew soil, SeedAgent seed, Pcg parentRNG)
 	{
 		Parameters = parameters;
 		Soil = soil;
@@ -223,8 +223,7 @@ public partial class PlantFormation2 : IPlantFormation
 		if (DeathSeed && !UG.Alive && !AG.Alive)
 			return;
 
-		var hours = (timestep * AgroWorld.HoursPerTick) % 24;
-		NewDay = AgroWorld.HoursPerTick > 24 || hours < AgroWorld.HoursPerTick;
+		NewDay = AgroWorld.HoursPerTick >= 24 || timestep == 0 || ((timestep - 1) * AgroWorld.HoursPerTick) / 24 < (timestep * AgroWorld.HoursPerTick) / 24;
 
 		//Ready for List and Span combination
 

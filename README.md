@@ -70,7 +70,7 @@ Godot only takes the hard-coded default simulation settings, it has so far no op
 Most settings and their default values can be found in the following two files: `Agro/Initialize.cs` and `Agro/AgroWorld.cs`. They are shared for all modes. The WebAPI and CLI allow for passing a `json` file that overrides the defaults. This example covers all currently available options, position and sizes are given in metric units:
 ```json
 {
-    "TicksPerHour": 1,
+    "HoursPerTick": 24,
     "TotalHours": 744,
     "FieldResolution": 0.5,
     "FieldSize": { "X": 10, "D": 4, "Z": 10 },

@@ -26,8 +26,9 @@ public static class Initialize
 		AgroWorld.Init();
 		var world = new SimulationWorld();
 
-		world.AddCallback((timestep, formations, obstacles) => IrradianceClient.Tick(timestep, formations, obstacles));
-		var soil = new SoilFormation(new Vector3i(AgroWorld.FieldSize / AgroWorld.FieldResolution), AgroWorld.FieldSize, 0);
+		world.AddCallback(IrradianceClient.Tick);
+		//var soil = new SoilFormation(new Vector3i(AgroWorld.FieldSize / AgroWorld.FieldResolution), AgroWorld.FieldSize, 0);
+		var soil = new SoilFormationNew(new Vector3i(AgroWorld.FieldSize / AgroWorld.FieldResolution), AgroWorld.FieldSize, Vector3.Zero);
 		world.Add(soil);
 
 		PlantFormation2[] plantsFormation;
@@ -41,6 +42,7 @@ public static class Initialize
 				var minVegTemp = rnd.NextFloat(8f, 10f);
 				var pos = settings.Plants[i].Position
 					?? new Vector3(AgroWorld.FieldSize.X * rnd.NextFloat(), -rnd.NextFloat(0.04f), AgroWorld.FieldSize.Y * rnd.NextFloat());
+				pos.Y += soil.GetHeight(pos.X, pos.Z);
 
 				var seed = new SeedAgent(pos,
 										 rnd.NextFloat(0.02f),
