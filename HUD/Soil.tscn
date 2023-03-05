@@ -18,12 +18,14 @@ offset_right = 40.0
 offset_bottom = 40.0
 
 [node name="BlockRect" parent="FlowMarkers" instance=ExtResource("2_dtw4c")]
+layout_mode = 0
 offset_left = 7.0
 offset_top = 38.0
 offset_right = 233.0
 offset_bottom = 298.0
 
 [node name="TitleLabel" parent="FlowMarkers/BlockRect" index="0"]
+layout_mode = 1
 anchors_preset = -1
 anchor_top = 0.0115385
 anchor_bottom = 0.0115385
@@ -33,8 +35,14 @@ offset_right = 224.0
 offset_bottom = 26.0
 text = "FLOW MARKERS"
 
+[node name="BorderRectBottom" parent="FlowMarkers/BlockRect" index="1"]
+layout_mode = 1
+
+[node name="BorderRectTop" parent="FlowMarkers/BlockRect" index="2"]
+layout_mode = 0
+
 [node name="Visibility" type="Control" parent="FlowMarkers"]
-layout_mode = 3
+layout_mode = 1
 anchors_preset = 0
 offset_left = 8.0
 offset_top = 70.0
@@ -42,6 +50,7 @@ offset_right = 232.0
 offset_bottom = 228.0
 
 [node name="NegativeXLabel" type="Label" parent="FlowMarkers/Visibility"]
+layout_mode = 0
 offset_left = 51.0
 offset_top = 9.0
 offset_right = 72.0
@@ -49,6 +58,7 @@ offset_bottom = 35.0
 text = "-X"
 
 [node name="NegativeYLabel" type="Label" parent="FlowMarkers/Visibility"]
+layout_mode = 0
 offset_left = 51.0
 offset_top = 36.0
 offset_right = 72.0
@@ -56,6 +66,7 @@ offset_bottom = 62.0
 text = "-Y"
 
 [node name="NegativeZLabel" type="Label" parent="FlowMarkers/Visibility"]
+layout_mode = 0
 offset_left = 51.0
 offset_top = 63.0
 offset_right = 72.0
@@ -63,6 +74,7 @@ offset_bottom = 89.0
 text = "-Z"
 
 [node name="X-Button" type="CheckButton" parent="FlowMarkers/Visibility"]
+layout_mode = 0
 offset_left = 2.0
 offset_top = 2.0
 offset_right = 46.0
@@ -71,6 +83,7 @@ pivot_offset = Vector2(48, 58)
 button_pressed = true
 
 [node name="Y-Button" type="CheckButton" parent="FlowMarkers/Visibility"]
+layout_mode = 0
 offset_left = 2.0
 offset_top = 29.0
 offset_right = 46.0
@@ -79,6 +92,7 @@ pivot_offset = Vector2(48, 58)
 button_pressed = true
 
 [node name="Z-Button" type="CheckButton" parent="FlowMarkers/Visibility"]
+layout_mode = 0
 offset_left = 2.0
 offset_top = 56.0
 offset_right = 46.0
@@ -87,6 +101,7 @@ pivot_offset = Vector2(48, 58)
 button_pressed = true
 
 [node name="PositiveXLabel" type="Label" parent="FlowMarkers/Visibility"]
+layout_mode = 0
 offset_left = 161.0
 offset_top = 9.0
 offset_right = 182.0
@@ -94,6 +109,7 @@ offset_bottom = 35.0
 text = "X"
 
 [node name="PositiveYLabel" type="Label" parent="FlowMarkers/Visibility"]
+layout_mode = 0
 offset_left = 161.0
 offset_top = 36.0
 offset_right = 182.0
@@ -101,6 +117,7 @@ offset_bottom = 62.0
 text = "Y"
 
 [node name="PositiveZLabel" type="Label" parent="FlowMarkers/Visibility"]
+layout_mode = 0
 offset_left = 161.0
 offset_top = 63.0
 offset_right = 182.0
@@ -108,6 +125,7 @@ offset_bottom = 89.0
 text = "Z"
 
 [node name="X+Button" type="CheckButton" parent="FlowMarkers/Visibility"]
+layout_mode = 0
 offset_left = 112.0
 offset_top = 2.0
 offset_right = 156.0
@@ -116,6 +134,7 @@ pivot_offset = Vector2(48, 58)
 button_pressed = true
 
 [node name="Y+Button" type="CheckButton" parent="FlowMarkers/Visibility"]
+layout_mode = 0
 offset_left = 112.0
 offset_top = 29.0
 offset_right = 156.0
@@ -124,6 +143,7 @@ pivot_offset = Vector2(48, 58)
 button_pressed = true
 
 [node name="Z+Button" type="CheckButton" parent="FlowMarkers/Visibility"]
+layout_mode = 0
 offset_left = 112.0
 offset_top = 56.0
 offset_right = 156.0
@@ -132,6 +152,7 @@ pivot_offset = Vector2(48, 58)
 button_pressed = true
 
 [node name="VisibilityButton" type="CheckButton" parent="FlowMarkers"]
+layout_mode = 0
 offset_left = 189.0
 offset_top = 34.0
 offset_right = 233.0
@@ -141,6 +162,10 @@ button_pressed = true
 
 [node name="Controls" parent="FlowMarkers" instance=ExtResource("3_vb6xb")]
 position = Vector2(8, 148)
+
+[node name="ScaleHSlider" parent="FlowMarkers/Controls" index="0"]
+max_value = 1.0
+step = 0.01
 
 [node name="ShadedLabel" parent="FlowMarkers/Controls/TransferFunction" index="0"]
 layout_mode = 3
@@ -169,18 +194,15 @@ offset_top = 309.0
 offset_right = 7.0
 offset_bottom = 309.0
 
-[node name="BlockRect" parent="SoilCells" index="0"]
-layout_mode = 3
-
 [node name="TitleLabel" parent="SoilCells/BlockRect" index="0"]
-layout_mode = 3
 text = "SOIL CELLS"
-
-[node name="BorderRectBottom" parent="SoilCells/BlockRect" index="1"]
-layout_mode = 3
 
 [node name="BorderRectTop" parent="SoilCells/BlockRect" index="2"]
 layout_mode = 3
+
+[node name="ScaleHSlider" parent="SoilCells/Controls" index="0"]
+max_value = 1.0
+step = 0.01
 
 [node name="ShadedLabel" parent="SoilCells/Controls/TransferFunction" index="0"]
 layout_mode = 3
@@ -212,18 +234,15 @@ offset_top = 501.0
 offset_right = 7.0
 offset_bottom = 501.0
 
-[node name="BlockRect" parent="SurfaceCells" index="0"]
-layout_mode = 3
-
 [node name="TitleLabel" parent="SurfaceCells/BlockRect" index="0"]
-layout_mode = 3
 text = "SURFACE CELLS"
-
-[node name="BorderRectBottom" parent="SurfaceCells/BlockRect" index="1"]
-layout_mode = 3
 
 [node name="BorderRectTop" parent="SurfaceCells/BlockRect" index="2"]
 layout_mode = 3
+
+[node name="ScaleHSlider" parent="SurfaceCells/Controls" index="0"]
+max_value = 1.0
+step = 0.01
 
 [node name="ShadedLabel" parent="SurfaceCells/Controls/TransferFunction" index="0"]
 layout_mode = 3
@@ -258,11 +277,13 @@ offset_right = 233.0
 offset_bottom = 720.0
 
 [node name="BlockRect" parent="Ground" instance=ExtResource("2_dtw4c")]
+layout_mode = 1
 anchors_preset = -1
 anchor_bottom = 1.333
 offset_bottom = 0.00799942
 
 [node name="TitleLabel" parent="Ground/BlockRect" index="0"]
+layout_mode = 1
 anchors_preset = -1
 anchor_top = 0.09375
 anchor_bottom = 0.09375
@@ -274,8 +295,13 @@ text = "GROUND"
 
 [node name="BorderRectBottom" parent="Ground/BlockRect" index="1"]
 visible = false
+layout_mode = 1
+
+[node name="BorderRectTop" parent="Ground/BlockRect" index="2"]
+layout_mode = 0
 
 [node name="VisibilityButton" type="CheckButton" parent="Ground"]
+layout_mode = 0
 offset_left = 182.0
 offset_top = -4.0
 offset_right = 226.0
@@ -304,8 +330,8 @@ button_pressed = true
 [connection signal="mouse_exited" from="FlowMarkers/Controls/TransferFunction/CustomColor/HiColorPickerButton" to="." method="MenuLeft"]
 [connection signal="popup_closed" from="FlowMarkers/Controls/TransferFunction/CustomColor/HiColorPickerButton" to="." method="ColorClosed"]
 [connection signal="pressed" from="FlowMarkers/Controls/TransferFunction/CustomColor/HiColorPickerButton" to="." method="ColorOpen"]
-[connection signal="drag_started" from="SoilCells/Controls/ScaleHSlider" to="." method="MenuEntered"]
 [connection signal="drag_ended" from="SoilCells/Controls/ScaleHSlider" to="." method="MenuLeft"]
+[connection signal="drag_started" from="SoilCells/Controls/ScaleHSlider" to="." method="MenuEntered"]
 [connection signal="focus_exited" from="SoilCells/Controls/ScaleHSlider" to="." method="MenuLeft"]
 [connection signal="value_changed" from="SoilCells/Controls/ScaleHSlider" to="." method="CellSize"]
 [connection signal="toggled" from="SoilCells/Controls/SizeCheckButton" to="." method="AnimateCellSize"]
@@ -322,8 +348,8 @@ button_pressed = true
 [connection signal="popup_closed" from="SoilCells/Controls/TransferFunction/CustomColor/HiColorPickerButton" to="." method="ColorClosed"]
 [connection signal="pressed" from="SoilCells/Controls/TransferFunction/CustomColor/HiColorPickerButton" to="." method="ColorOpen"]
 [connection signal="toggled" from="SoilCells/VisibilityButton" to="." method="CellsVisibility"]
-[connection signal="drag_started" from="SurfaceCells/Controls/ScaleHSlider" to="." method="MenuEntered"]
 [connection signal="drag_ended" from="SurfaceCells/Controls/ScaleHSlider" to="." method="MenuLeft"]
+[connection signal="drag_started" from="SurfaceCells/Controls/ScaleHSlider" to="." method="MenuEntered"]
 [connection signal="focus_exited" from="SurfaceCells/Controls/ScaleHSlider" to="." method="MenuLeft"]
 [connection signal="value_changed" from="SurfaceCells/Controls/ScaleHSlider" to="." method="SurfaceCellSize"]
 [connection signal="toggled" from="SurfaceCells/Controls/SizeCheckButton" to="." method="AnimateSurfaceCellSize"]

@@ -87,22 +87,22 @@ public partial class Simulation : CanvasLayer
 		TrianglesValue = GetNode<Label>("Debug/TrianglesValue");
 		SensorsValue = GetNode<Label>("Debug/SensorsValue");
 
-		if (!System.IO.Directory.Exists(ScreensDir))
-			System.IO.Directory.CreateDirectory(ScreensDir);
+		if (!Directory.Exists(ScreensDir))
+			Directory.CreateDirectory(ScreensDir);
 
 		var ignoreFile = $"{ScreensDir}/.gdignore";
-		if (!System.IO.File.Exists(ignoreFile))
-			System.IO.File.Create(ignoreFile);
+		if (!File.Exists(ignoreFile))
+			File.Create(ignoreFile);
 
 
-		if (!System.IO.Directory.Exists(ScreensDir))
-			System.IO.Directory.CreateDirectory(ScreensDir);
+		if (!Directory.Exists(ScreensDir))
+			Directory.CreateDirectory(ScreensDir);
 
 		SimulationDir = $"{ScreensDir}/{SimulationTimestamp}";
 
-		if (!System.IO.Directory.Exists(SimulationDir))
+		if (!Directory.Exists(SimulationDir))
 		{
-			System.IO.Directory.CreateDirectory(SimulationDir);
+			Directory.CreateDirectory(SimulationDir);
 			var proc = new ProcessStartInfo
 			{
 				CreateNoWindow = true,

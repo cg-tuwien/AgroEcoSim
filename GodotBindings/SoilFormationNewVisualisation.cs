@@ -35,6 +35,8 @@ public partial class SoilFormationNew
 	public float[] WaterFlow;// = new float[Agents.Length,6];
 	int[] IDToIndex;
 	ulong MinID = ulong.MaxValue;
+	List<int> SoilIndices = new();
+	List<int> SurfaceIndices = new();
 
 	static readonly Vector3[] Rotations = {
 		new Vector3(0, 0, -MathF.PI/2),
@@ -80,13 +82,14 @@ public partial class SoilFormationNew
 		if (AgroWorldGodot.SoilVisualization.SurfaceCellsVisibility == Visibility.Invisible)
 			AgroWorldGodot.SoilVisualization.SurfaceCellsVisibility = Visibility.MakeInvisible;
 
-		SoilCellInstances = new MeshInstance3D[Count]; //no need for multiplication here, it's a complete 3D grid
+		SoilCellInstances = new MeshInstance3D[Count];
 		for (int x = 0; x < Size.X; x++)
 			for (int y = 0; y < Size.Y; y++)
 			{
-				var height = Height(x, y);
-				for (int z = 0; z <= height; z++)
-					InitializeCell(x, y, height - z, z == height);
+				var ground = GroundLevel(x, y);
+				Console.WriteLine($"H({x},{y}) = {ground}");
+				for (int z = 0; z <= ground; z++)
+					InitializeCell(x, y, z, ground);
 			}
 
 		ApplyCellVisibility();
@@ -99,24 +102,28 @@ public partial class SoilFormationNew
 
 	static readonly Vector3 SoilCellUncenter = new(0.5f, 0.5f, 0.5f);
 	static readonly Vector3 SurfaceCellUncenter = new(0.5f, 0f, 0.5f);
-	private void InitializeCell(int x, int y, int depth, bool isGround)
+	private void InitializeCell(int x, int y, int z, int ground)
 	{
+		var isGround = z == ground;
+		var depth = ground - z;
 		var cellSize = AgroWorldGodot.SoilVisualization.SoilCellScale * AgroWorld.FieldResolution;
 		var mesh = new MeshInstance3D()
 		{
 			Mesh = isGround ? AgroWorldGodot.SoilVisualization.SurfaceCellShape : AgroWorldGodot.SoilVisualization.SoilCellShape,
 			Position = depth == 0
-				? new Vector3(x, 0, y) * AgroWorld.FieldResolution + SurfaceCellUncenter * cellSize
-				: new Vector3(x, -depth, y) * AgroWorld.FieldResolution + SoilCellUncenter * cellSize,
-			Scale = new(cellSize, depth > 0 ? cellSize : 1e-6f, cellSize),
+				? new Vector3(x, ground - MaxZ, y) * AgroWorld.FieldResolution + SurfaceCellUncenter * cellSize
+				: new Vector3(x, z - MaxZ, y) * AgroWorld.FieldResolution + SoilCellUncenter * cellSize,
+			Scale = new(cellSize, isGround ? 1e-6f : cellSize, cellSize),
 			MaterialOverride = AgroWorldGodot.UnshadedMaterial(),
 		};
 
-		SoilCellInstances[Index(x, y, depth)] = mesh;
+		var index = Index(x, y, depth);
+		SoilCellInstances[index] = mesh;
+		(isGround ? SurfaceIndices : SoilIndices).Add(index);
 		SimulationWorld.GodotAddChild(mesh);
 	}
 
-	private float ComputeCellMultiplier(int index) => Math.Clamp(GetWater(index) / GetWaterCapacity(index), 0f, 1f);
+	private float ComputeCellMultiplier(int index) => Math.Clamp(GetWater(index) / WaterCapacityPerCell, 0f, 1f);
 
 	static float ComputeCellScale(float multiplier) => AgroWorldGodot.SoilVisualization.AnimateSoilCellSize
 		? AgroWorldGodot.SoilVisualization.SoilCellScale * AgroWorld.FieldResolution * multiplier
@@ -126,39 +133,32 @@ public partial class SoilFormationNew
 
 	private void AnimateCells()
 	{
-		for(int x = 0; x < Size.X; ++x)
-			for(int y = 0; y < Size.Y; ++y)
+		//Soil cells
+		foreach(var idx in SoilIndices)
+		{
+			var multiplier = ComputeCellMultiplier(idx);
+			var mesh = SoilCellInstances[idx];
+			mesh.Scale = Vector3.One * ComputeCellScale(multiplier);
+
+			((ShaderMaterial)mesh.MaterialOverride).SetShaderParameter(AgroWorldGodot.COLOR, AgroWorldGodot.SoilVisualization.AnimateSoilCellColor
+				? multiplier * AgroWorldGodot.SoilVisualization.CellColorHigh + (1f - multiplier) * AgroWorldGodot.SoilVisualization.CellColorLow
+				: AgroWorldGodot.SoilVisualization.CellColorHigh);
+		}
+
+		//Surface cell
+		foreach(var surfaceIdx in SurfaceIndices)
+		{
+			var height = Math.Max(1e-6f, GetWater(surfaceIdx) / (FieldCellSurface * 1e6f));
+			var mesh = SoilCellInstances[surfaceIdx];
+			mesh.Scale = new(CellSize.X, height, CellSize.Z);
+			if (AgroWorldGodot.SoilVisualization.AnimateSoilCellColor)
 			{
-				var ground = Height(x, y);
-				//Soil cells
-				for(int z = 1; z <= ground; ++z)
-				{
-					var idx = Index(x, y, z);
-					var multiplier = ComputeCellMultiplier(idx);
-					var mesh = SoilCellInstances[idx];
-					mesh.Scale = Vector3.One * ComputeCellScale(multiplier);
-
-					if (AgroWorldGodot.SoilVisualization.AnimateSoilCellColor)
-						((ShaderMaterial)mesh.MaterialOverride).SetShaderParameter(AgroWorldGodot.COLOR, multiplier * AgroWorldGodot.SoilVisualization.CellColorHigh + (1f - multiplier) * AgroWorldGodot.SoilVisualization.CellColorLow);
-					else
-						((ShaderMaterial)mesh.MaterialOverride).SetShaderParameter(AgroWorldGodot.COLOR, AgroWorldGodot.SoilVisualization.CellColorHigh);
-				}
-
-				//Surface cell
-				{
-					var surfaceIdx = Index(x, y, 0);
-					var height = Math.Max(1e-6f, GetWater(surfaceIdx) / (FieldCellSurface * 1e6f));
-					var mesh = SoilCellInstances[surfaceIdx];
-					mesh.Scale = new(CellSize.X, height, CellSize.Z);
-					if (AgroWorldGodot.SoilVisualization.AnimateSoilCellColor)
-					{
-						var multiplier = Math.Clamp(height / AgroWorldGodot.SoilVisualization.SurfaceFullThreshold, 0f, 1f);
-						((ShaderMaterial)mesh.MaterialOverride).SetShaderParameter(AgroWorldGodot.COLOR, multiplier * AgroWorldGodot.SoilVisualization.SurfaceFullColor + (1f - multiplier) * AgroWorldGodot.SoilVisualization.SurfaceEmptyColor);
-					}
-					else
-						((ShaderMaterial)mesh.MaterialOverride).SetShaderParameter(AgroWorldGodot.COLOR, AgroWorldGodot.SoilVisualization.SurfaceFullColor);
-				}
+				var multiplier = Math.Clamp(height / AgroWorldGodot.SoilVisualization.SurfaceFullThreshold, 0f, 1f);
+				((ShaderMaterial)mesh.MaterialOverride).SetShaderParameter(AgroWorldGodot.COLOR, multiplier * AgroWorldGodot.SoilVisualization.SurfaceFullColor + (1f - multiplier) * AgroWorldGodot.SoilVisualization.SurfaceEmptyColor);
 			}
+			else
+				((ShaderMaterial)mesh.MaterialOverride).SetShaderParameter(AgroWorldGodot.COLOR, AgroWorldGodot.SoilVisualization.SurfaceFullColor);
+		}
 	}
 
 	private void AnimateMarkers() { }
