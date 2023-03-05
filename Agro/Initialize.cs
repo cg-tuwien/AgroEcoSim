@@ -42,7 +42,7 @@ public static class Initialize
 				var minVegTemp = rnd.NextFloat(8f, 10f);
 				var pos = settings.Plants[i].Position
 					?? new Vector3(AgroWorld.FieldSize.X * rnd.NextFloat(), -rnd.NextFloat(0.04f), AgroWorld.FieldSize.Y * rnd.NextFloat());
-				pos.Y += soil.GetMetricHeight(pos.X, pos.Z);
+				pos.Y -= soil.GetMetricGroundDepth(pos.X, pos.Z);
 
 				var seed = new SeedAgent(pos,
 										 rnd.NextFloat(0.02f),

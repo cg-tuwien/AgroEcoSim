@@ -203,10 +203,20 @@ public partial class SoilFormationNew : IFormation, IGrid3D
 	{
 		var center = new Vector3(x, z, 0) - Position;
 
-		center *= CellSize;
+		center /= CellSize;
 
 		var iCenter = new Vector3i(center);
 		return (GroundLevel(iCenter) + 1) * CellSize.Y;
+	}
+
+	internal float GetMetricGroundDepth(float x, float z)
+	{
+		var center = new Vector3(x, z, 0) - Position;
+
+		center /= CellSize;
+
+		var iCenter = new Vector3i(center);
+		return (MaxZ - GroundLevel(iCenter)) * CellSize.Y;
 	}
 
 	static readonly float WaterTravelDistPerStep = AgroWorld.HoursPerTick * 0.000012f; //1g of water can travel so far an hour
