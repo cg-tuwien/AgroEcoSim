@@ -48,5 +48,5 @@ public partial class Roots : CanvasLayer
 
 	public void MenuEntered() => MenuEvent = MenuEvent.Enter;
 
-	public void MenuLeft() => MenuEvent = MenuEvent.Leave;
+	public void MenuLeft(bool dummy = false) => MenuEvent = MenuEvent.Leave;
 }

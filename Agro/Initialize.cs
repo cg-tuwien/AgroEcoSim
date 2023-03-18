@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Numerics;
 using AgentsSystem;
 using Utils;
@@ -9,7 +10,15 @@ public static class Initialize
 	public static SimulationWorld World(SimulationRequest? settings = null)
 	{
 		if (settings?.HoursPerTick.HasValue ?? false)
+		{
 			AgroWorld.HoursPerTick = settings.HoursPerTick.Value;
+			if (AgroWorld.HoursPerTick < 24)
+				AgroWorld.HoursPerTick = AgroWorld.HoursPerTick switch { <= 0 => 1, 5 => 4, 7 => 6, 9 or 10 => 8, 11 => 12, >12 and <= 18 => 12, >18 => 24, _ => AgroWorld.HoursPerTick };
+			else
+				AgroWorld.HoursPerTick = 24 * (AgroWorld.HoursPerTick / 24);
+
+			AgroWorld.StatsBlockLength = 23 / AgroWorld.HoursPerTick + 1;
+		}
 
 		if (settings?.TotalHours.HasValue ?? false)
 			AgroWorld.TotalHours = settings.TotalHours.Value;

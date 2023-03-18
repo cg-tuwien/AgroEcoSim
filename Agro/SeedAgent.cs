@@ -93,6 +93,7 @@ public struct SeedAgent : IAgent
 		{
 			if (Water >= GerminationThreshold) //GERMINATION
 			{
+				Debug.WriteLine($"GERMINATION at {timestep}");
 				var initialYaw = Quaternion.CreateFromAxisAngle(Vector3.UnitY, formation.RNG.NextFloat(-MathF.PI, MathF.PI));
 				formation.UG.Birth(new UnderGroundAgent2(-1, initialYaw * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, -0.5f * MathF.PI), Water * 0.4f));
 
@@ -112,15 +113,21 @@ public struct SeedAgent : IAgent
 				var sources = soil.IntersectPoint(Center);
 				if (sources.Count > 0) //TODO this is a rough approximation taking only the first intersected soil cell
 				{
-					var amount = Pi4 * Radius * Radius; //sphere surface is 4πr²
 					var soilTemperature = soil.GetTemperature(sources[0]);
-					if (soilTemperature > mVegetativeTemperature.X)
+					var waterRequest = 0f;
+					for(int i = 0; i < AgroWorld.HoursPerTick; ++i)
 					{
-						if (soilTemperature < mVegetativeTemperature.Y)
-							amount *= (soilTemperature - mVegetativeTemperature.X) / (mVegetativeTemperature.Y - mVegetativeTemperature.X);
-						Radius = MathF.Pow(Radius * Radius * Radius + amount * PiV, Third); //use the rest for growth
-						Water += soil.RequestWater(sources[0], amount * AgroWorld.HoursPerTick);
+						var amount = Pi4 * Radius * Radius; //sphere surface is 4πr²
+						if (soilTemperature > mVegetativeTemperature.X)
+						{
+							if (soilTemperature < mVegetativeTemperature.Y)
+								amount *= (soilTemperature - mVegetativeTemperature.X) / (mVegetativeTemperature.Y - mVegetativeTemperature.X);
+
+							Radius = MathF.Pow(Radius * Radius * Radius + amount * PiV, Third); //use the rest for growth
+							waterRequest += amount;
+						}
 					}
+					Water += soil.RequestWater(sources[0], waterRequest);
 				}
 			}
 		}

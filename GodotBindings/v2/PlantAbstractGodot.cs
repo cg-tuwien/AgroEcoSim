@@ -65,6 +65,7 @@ public abstract class PlantAbstractGodot2<T> where T : struct, IPlantAgent
 			{
 				if (justCreated) return Colors.Black;
 				var w = Math.Clamp(Formation.GetIrradiance(index) * AgroWorldGodot.ShootsVisualization.LightCutOff, 0, 1);
+				if (Formation.GetIrradiance(index) > 0) System.Diagnostics.Debug.WriteLine($"LI {index}: {Formation.GetIrradiance(index)} => {w}");
 				return new Color(Math.Clamp(w, 0, 1), Math.Clamp(w * 0.8f, 0, 1), Math.Clamp(w * 0.64f, 0, 1));
 			}
 			case ColorCodingType.Water:
@@ -100,7 +101,7 @@ public abstract class PlantAbstractGodot2<T> where T : struct, IPlantAgent
 				if (justCreated) return Colors.Black;
 				// if (Formation.GetDailyLightExposure(index) > 1f)
 				// 	System.Diagnostics.Debug.WriteLine($"D: {Formation.GetDailyLightExposure(index)} f: {AgroWorldGodot.ShootsVisualization.LightCutOff}");
-				var w = Formation.GetDailyLightExposure(index) * AgroWorldGodot.ShootsVisualization.LightCutOff * AgroWorld.HoursPerTick / 12f;
+				var w = Formation.GetDailyLightExposure(index) * AgroWorldGodot.ShootsVisualization.LightCutOff / 12f;
 				return new Color(Math.Clamp(w, 0, 1), Math.Clamp(w * 0.8f, 0, 1), Math.Clamp(w * 0.64f, 0, 1));
 			}
 			case ColorCodingType.LightEfficiency:

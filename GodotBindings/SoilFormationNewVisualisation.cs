@@ -111,8 +111,8 @@ public partial class SoilFormationNew
 		{
 			Mesh = isGround ? AgroWorldGodot.SoilVisualization.SurfaceCellShape : AgroWorldGodot.SoilVisualization.SoilCellShape,
 			Position = depth == 0
-				? new Vector3(x, ground - MaxZ, y) * AgroWorld.FieldResolution + SurfaceCellUncenter * cellSize
-				: new Vector3(x, z - MaxZ, y) * AgroWorld.FieldResolution + SoilCellUncenter * cellSize,
+				? new Vector3(x, ground - MaxLevel, y) * AgroWorld.FieldResolution + SurfaceCellUncenter * cellSize
+				: new Vector3(x, z - MaxLevel, y) * AgroWorld.FieldResolution + SoilCellUncenter * cellSize,
 			Scale = new(cellSize, isGround ? 1e-6f : cellSize, cellSize),
 			MaterialOverride = AgroWorldGodot.UnshadedMaterial(),
 		};

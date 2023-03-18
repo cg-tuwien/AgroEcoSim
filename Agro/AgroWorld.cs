@@ -50,6 +50,8 @@ public static class AgroWorld
 	//public const int TotalHours = 24 * 365 * 10;
 	public static int TotalHours = 24 * 31 * 12;
 
+	public static int StatsBlockLength = 24;
+
 	//public static readonly Vector3 FieldSize = new(6f, 4f, 2f);
 	//public const float FieldResolution = 0.1f;
 
@@ -184,21 +186,24 @@ public static class AgroWorld
 			month = month < 11 ? month + 1 : 0;
 		}
 
-		Daylight = new BitArray(tsTotal);
-		//TODO handle signed vs. unsigned
-		for (int i = 0; i < tsTotal; ++i)
+		if (HoursPerTick < 24 || Math.Abs(Latitude) > 66)
 		{
-			var t0 = GetTime((uint)i);
-			var t1 = t0.AddHours(HoursPerTick);
-
-			if (HoursPerTick >= 24)
-				Daylight.Set(i, true);
-			else
+			Daylight = new BitArray(tsTotal);
+			//TODO handle signed vs. unsigned
+			for (int i = 0; i < tsTotal; ++i)
 			{
-				var solar0 = new SolarTimes(t0, 0, Latitude, Longitude);
-				var solar1 = new SolarTimes(t1, 0, Latitude, Longitude);
-				if (!(t1 < solar0.DawnAstronomical || t0 > solar1.DuskAstronomical || (t0 > solar0.DuskAstronomical && t1 < solar1.DawnAstronomical)))
+				var t0 = GetTime((uint)i);
+				var t1 = t0.AddHours(HoursPerTick);
+
+				if (HoursPerTick >= 24 && Math.Abs(Latitude) < 66)
 					Daylight.Set(i, true);
+				else
+				{
+					var solar0 = new SolarTimes(t0, 0, Latitude, Longitude);
+					var solar1 = new SolarTimes(t1, 0, Latitude, Longitude);
+					if (!(t1 < solar0.DawnAstronomical || t0 > solar1.DuskAstronomical || (t0 > solar0.DuskAstronomical && t1 < solar1.DawnAstronomical)))
+						Daylight.Set(i, true);
+				}
 			}
 		}
 	}
@@ -210,7 +215,7 @@ public static class AgroWorld
 	internal static float GetWater(uint timestep) => Weather[timestep].Precipitation;
 	internal static float GetTemperature(uint timestep) => 20;
 	internal static float GetAmbientLight(uint timestep) => 1f - Weather[timestep].SkyCoverage;
-	internal static bool GetDaylight(uint timestep) => Daylight.Get((int)timestep);
+	internal static bool GetDaylight(uint timestep) => Daylight?.Get((int)timestep) ?? true;
 
 	internal static Pcg RNG = new(42);
 	internal static void InitRNG(ulong seed) => RNG = new(seed);

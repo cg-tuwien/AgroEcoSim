@@ -532,9 +532,9 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 		var dailyLightMax = 0f;
 		var dailyEnergyMax = 0f;
 		for(int i = 0; i < dst.Length; ++i)
-			if (dailyLightMax < dst[i].PreviousDayLightExposure) dailyLightMax = dst[i].PreviousDayLightExposure;
+			if (dailyLightMax < dst[i].PreviousDayEnvResources) dailyLightMax = dst[i].PreviousDayEnvResources;
 		for(int i = 0; i < dst.Length; ++i)
-			if (dailyEnergyMax < dst[i].PreviousDayEnergyProduction) dailyEnergyMax = dst[i].PreviousDayEnergyProduction;
+			if (dailyEnergyMax < dst[i].PreviousDayProduction) dailyEnergyMax = dst[i].PreviousDayProduction;
 
 		if (dailyEnergyMax > 0f)
 		{
@@ -562,8 +562,8 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 			{
 				if (dst[i].Organ == OrganTypes.Leaf)
 				{
-					lightEfficiency[i] = dst[i].PreviousDayLightExposure / dailyLightMax;
-					energyEfficiency[i] = dst[i].PreviousDayEnergyProduction / dailyEnergyMax;
+					lightEfficiency[i] = dst[i].PreviousDayEnvResources / dailyLightMax;
+					energyEfficiency[i] = dst[i].PreviousDayProduction / dailyEnergyMax;
 				}
 				else
 				{
@@ -791,12 +791,12 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 	public Vector3 GetBaseCenter(int index) => TreeCache.GetBaseCenter(index);
 
 	public float GetDailyEnergyProduction(int index) => ReadTMP
-		? (AgentsTMP.Length > index ? AgentsTMP[index].PreviousDayEnergyProduction : 0f)
-		: (Agents.Length > index ? Agents[index].PreviousDayEnergyProduction : 0f);
+		? (AgentsTMP.Length > index ? AgentsTMP[index].PreviousDayProduction : 0f)
+		: (Agents.Length > index ? Agents[index].PreviousDayProduction : 0f);
 
 	public float GetDailyLightExposure(int index) => ReadTMP
-		? (AgentsTMP.Length > index ? AgentsTMP[index].PreviousDayLightExposure : 0f)
-		: (Agents.Length > index ? Agents[index].PreviousDayLightExposure : 0f);
+		? (AgentsTMP.Length > index ? AgentsTMP[index].PreviousDayEnvResources : 0f)
+		: (Agents.Length > index ? Agents[index].PreviousDayEnvResources : 0f);
 
 	public Vector3 GetScale(int index) => ReadTMP
 		? (AgentsTMP.Length > index ? AgentsTMP[index].Scale() : Vector3.Zero)

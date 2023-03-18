@@ -11,7 +11,7 @@
             "preLaunchTask": "build CLI",
             // If you have changed target frameworks, make sure to update the program path.
             "program": "${workspaceFolder}/Agro/bin/Debug/net6.0/Agro.dll",
-            "args": ["--import", "${workspaceFolder}/Agro/ML-Import.json", "--export", "${workspaceFolder}/Agro/ML-Export.json"],
+            "args": ["--import", "${workspaceFolder}/Agro/ML-Import3.json", "--export", "${workspaceFolder}/Agro/ML-Export.json"],
             "cwd": "${workspaceFolder}/Agro",
             // For more information about the 'console' field, see https://aka.ms/VSCode-CS-LaunchJson-Console
             "console": "internalConsole",

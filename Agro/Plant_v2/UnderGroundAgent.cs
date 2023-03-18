@@ -43,8 +43,8 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 	/// </summary>
 	public float Water { get; private set; }
 
-	public float PreviousDayEnergyProduction => 0f;
-	public float PreviousDayLightExposure => 0f;
+	public float PreviousDayProduction => 0f;
+	public float PreviousDayEnvResources => 0f;
 
 	/// <summary>
 	/// Inverse woodyness ∈ [0, 1]. The more woody (towards 0) the less water the root can absorb.
@@ -210,8 +210,9 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 		if (Energy > lifeSupportPerHour * 36) //maybe make it a factor storedEnergy/lifeSupport so that it grows fast when it has full storage
 		{
 			var childrenCount = children.Count + 1;
-			var lengthGrowth = waterFactor * 2e-4f * AgroWorld.HoursPerTick / (MathF.Pow(childrenCount, GrowthDeclineByExpChildren + 1) * MathF.Pow(lr * Length, 0.1f));
-			var widthGrowth = waterFactor * 2e-5f * AgroWorld.HoursPerTick / (MathF.Pow(childrenCount, GrowthDeclineByExpChildren / 2) * MathF.Pow(volume, 0.1f)); //just optimized the number of multiplications
+			//TODO MI 2023-03-07 Incorporate water capacity factor
+			var lengthGrowth = 2e-4f * AgroWorld.HoursPerTick / (MathF.Pow(childrenCount, GrowthDeclineByExpChildren + 1) * MathF.Pow(lr * Length, 0.1f));
+			var widthGrowth = 2e-5f * AgroWorld.HoursPerTick / (MathF.Pow(childrenCount, GrowthDeclineByExpChildren / 2) * MathF.Pow(volume, 0.1f)); //just optimized the number of multiplications
 
 			Length += lengthGrowth;
 			Radius += widthGrowth;
@@ -245,8 +246,8 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 			//Branching
 			if (children.Count > 0)
 			{
-				var pool = MathF.Pow(childrenCount, childrenCount << 2) * AgroWorld.HoursPerTick;
-				if (pool < uint.MaxValue && plant.RNG.NextUInt((uint)pool) == 1 && waterFactor > plant.RNG.NextFloat())
+				var pool = MathF.Pow(childrenCount, childrenCount << 2) / AgroWorld.HoursPerTick;
+				if (pool < uint.MaxValue && plant.RNG.NextUInt((uint)pool) == 1 /*&& waterFactor > plant.RNG.NextFloat()*/) //TODO MI 2023-03-07 Revive waterfactor weighting
 				{
 					var qx = Quaternion.CreateFromAxisAngle(Vector3.UnitX, plant.RNG.NextFloat(-MathF.PI * yFactor, MathF.PI * yFactor));
 					var qz = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, plant.RNG.NextFloat(MathF.PI * zFactor, MathF.PI * zFactor * 2f));
@@ -272,7 +273,7 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 		///////////////////////////
 		if (mWaterAbsorbtionFactor > 0f)
 		{
-			var waterCapacity = WaterAbsorbtionPerTick();
+			var waterCapacity = WaterStorageCapacity();
 			if (Water < waterCapacity)
 			{
 				var soil = plant.Soil;
@@ -284,7 +285,7 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 
 				if (sources.Count > 0) //TODO this is a rough approximation taking only the first intersected soil cell
 				{
-					var amount = waterCapacity;
+					var amount = WaterAbsorbtionPerTick();
 					var soilTemperature = soil.GetTemperature(sources[0]);
 					if (soilTemperature > vegetativeTemp.X)
 					{

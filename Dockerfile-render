@@ -6,6 +6,9 @@ COPY agroeco-mts3/render-server.py .
 COPY agroeco-mts3/binary_loader.py .
 COPY agroeco-mts3/batch-sensor.py .
 COPY agroeco-mts3/RendererMts3.py .
+COPY agroeco-mts3/cumulative_sky.py .
+COPY agroeco-mts3/batch-sensor.py .
+COPY agroeco-mts3/EPW/ EPW/
 #COPY agroeco-mts3/requirements.txt .
 
 #RUN apt-get update && apt-get install ca-certificates && apt-get upgrade -y && apt-get install -y python3 python3-pip
@@ -14,7 +17,7 @@ COPY agroeco-mts3/RendererMts3.py .
 #RUN apk update && apk add --no-cache ca-certificates && apk upgrade -U --no-cache && apk add --no-cache musl-dev linux-headers g++ && rm -rf /var/cache/apk/*
 
 #RUN echo 'manylinux1_compatible = True' > /usr/local/lib/python3.10/site-packages/_manylinux.py
-RUN yes | pip install --no-cache-dir python-dateutil pysolar mitsuba numpy
+RUN yes | pip install --no-cache-dir python-dateutil pysolar mitsuba numpy ladybug_radiance imageio
 
 #RUN apt-get purge python3-pip && apt-get autoremove -y
 #COPY --from=publish harden.sh .
@@ -23,7 +26,11 @@ RUN yes | pip install --no-cache-dir python-dateutil pysolar mitsuba numpy
 
 #RUN apt-get purge python3-pip
 
-RUN apt-get -qq update && apt-get install -qq ca-certificates && apt-get -y -qq upgrade && apt-get -y -qq autoremove && apt autoclean && rm -rf /var/lib/apt/lists/*
+RUN apt-get -qq update && apt-get install -qq ca-certificates && apt-get -y -qq upgrade && apt-get -y -qq install wget unzip
+RUN wget https://github.com/LBNL-ETA/Radiance/releases/download/e8f58bd6/Radiance_e8f58bd6_Linux.zip && \
+    unzip Radiance_e8f58bd6_Linux.zip && \
+    tar -xf radiance-5.4.e8f58bd6ca-Linux.tar.gz
+RUN apt-get -y -qq purge wget unzip && apt-get -y -qq autoremove && apt autoclean && rm -rf /var/lib/apt/lists/*
 
 RUN groupadd -g 61000 docker && useradd -g 61000 -l -m -s /bin/false -u 61000 docker
 #-M omitted, home directory required due to DrJit

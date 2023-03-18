@@ -183,6 +183,7 @@ public class IrradianceClient
 						Content = new ByteArrayContent(byteBuffer.Array, 0, byteBuffer.Count)
 					};
 					request.Headers.Add("Ti", AgroWorld.GetTime(timestep).ToString("o", CultureInfo.InvariantCulture));
+					request.Headers.Add("TiE", AgroWorld.GetTime(timestep + 1).ToString("o", CultureInfo.InvariantCulture));
 					//Debug.WriteLine(offsetCounter);
 					//request.Headers.Add("C", offsetCounter.ToString()); //Only use for dummy debug
 					request.Headers.Add("Ra", "2048");
@@ -194,6 +195,7 @@ public class IrradianceClient
 					for (int i = 0; i < length; ++i)
 						Irradiances.Add(reader.ReadSingle());
 					//Debug.WriteLine($"T: {AgroWorld.GetTime(timestep).ToString("o", CultureInfo.InvariantCulture)} Sum: {Irradiances.Sum()}  Avg: {Irradiances.Average()} In: [{Irradiances.Min()} - {Irradiances.Max()}]");
+					Debug.WriteLine($"IR: {String.Join(", ", Irradiances)}");
 				}
 
 				SW.Stop();
@@ -228,6 +230,7 @@ public class IrradianceClient
 					Content = new ByteArrayContent(byteBuffer.Array, 0, byteBuffer.Count)
 				};
 				request.Headers.Add("Ti", AgroWorld.GetTime(timestep).ToString("o", CultureInfo.InvariantCulture));
+				request.Headers.Add("TiE", AgroWorld.GetTime(timestep + 1).ToString("o", CultureInfo.InvariantCulture));
 				request.Headers.Add("Cam", string.Join(' ', camera));
 				//request.Headers.Add("Ra", "256");
 				var result = Client.SendAsync(request).Result;

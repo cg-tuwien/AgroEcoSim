@@ -47,22 +47,22 @@ public partial struct AboveGroundAgent2 : IPlantAgent
 	public float Water { get; private set; }
 
 	///<summary>
-	///Accumulated energy output of this agent for the whole previous day
+	///Accumulated energy output of this agent for the last 24 steps
 	///</summary>
-	public float PreviousDayEnergyProduction { get; private set; }
+	public float PreviousDayProduction { get; private set; }
 	///<summary>
-	///Accumulated energy output of this agent for the current day
+	///Accumulated energy output of this agent for the next 24-steps batcg
 	///</summary>
-	float CurrentDayEnergyProduction { get; set; }
+	float CurrentDayProduction { get; set; }
 
 	///<summary>
-	///Accumulated light exposure of this agent for the whole previous day
+	///Accumulated light exposure or water intake of this agent for the last 24 steps
 	///</summary>
-	public float PreviousDayLightExposure { get; private set; }
+	public float PreviousDayEnvResources { get; private set; }
 	///<summary>
-	///Accumulated light exposure of this agent for the current day
+	///Accumulated light exposure of this agent for the next 24-steps batch
 	///</summary>
-	float CurrentDayLightExposure { get; set; }
+	float CurrentDayEnvResources { get; set; }
 
 	/// <summary>
 	/// Inverse woodyness ∈ [0, 1]. The more woody (towards 0) the less photosynthesis can be achieved.
@@ -174,10 +174,10 @@ public partial struct AboveGroundAgent2 : IPlantAgent
 
 		Water = 0f;
 
-		PreviousDayEnergyProduction = 0f;
-		CurrentDayEnergyProduction = 0f;
-		PreviousDayLightExposure = 0f;
-		CurrentDayLightExposure = 0f;
+		PreviousDayProduction = 0f;
+		CurrentDayProduction = 0f;
+		PreviousDayEnvResources = 0f;
+		CurrentDayEnvResources = 0f;
 		//Children = null;
 	}
 
@@ -206,10 +206,10 @@ public partial struct AboveGroundAgent2 : IPlantAgent
 
 		if (plant.IsNewDay())
 		{
-			PreviousDayEnergyProduction = CurrentDayEnergyProduction;
-			PreviousDayLightExposure = CurrentDayLightExposure;
-			CurrentDayEnergyProduction = 0f;
-			CurrentDayLightExposure = 0f;
+			PreviousDayProduction = CurrentDayProduction;
+			PreviousDayEnvResources = CurrentDayEnvResources;
+			CurrentDayProduction = 0f;
+			CurrentDayEnvResources = 0f;
 		}
 
 		//TODO perhaps growth should somehow reflect temperature
@@ -245,15 +245,14 @@ public partial struct AboveGroundAgent2 : IPlantAgent
 				Water -= photosynthesizedEnergy;
 				//Energy += AgroWorld.W2J(photosynthesizedEnergy, 3600 / AgroWorld.TicksPerHour); //TODO in th efuture convert energy to cal
 				Energy += photosynthesizedEnergy;
-				CurrentDayEnergyProduction += photosynthesizedEnergy;
-				CurrentDayLightExposure += approxLight;
+				CurrentDayProduction += photosynthesizedEnergy;
+				CurrentDayEnvResources += approxLight;
 			}
 		}
 
 		//Growth
 		if (Energy > enoughEnergyState) //maybe make it a factor storedEnergy/lifeSupport so that it grows fast when it has full storage
 		{
-
 			if (Organ != OrganTypes.Bud)
 			{
 				var isLeafStem = false;
@@ -278,7 +277,7 @@ public partial struct AboveGroundAgent2 : IPlantAgent
 							//var waterUsage = Math.Clamp(Water / WaterTotalCapacityPerTick, 0f, 1f);
 							var energyUsage = Math.Clamp(Energy / EnergyStorageCapacity(), 0f, 1f);
 							var absDepth = formation.GetAbsInvDepth(formationID) + 1;
-							growth = new Vector2(2e-3f / (absDepth * childrenCount * mPhotoFactor), 1e-5f) * (energyUsage * AgroWorld.HoursPerTick);
+							growth = new Vector2(4e-3f / (absDepth * childrenCount * mPhotoFactor), 2e-5f) * (energyUsage * AgroWorld.HoursPerTick);
 						}
 					}
 					break;
@@ -327,7 +326,7 @@ public partial struct AboveGroundAgent2 : IPlantAgent
 						foreach(var child in children)
 							if (formation.GetOrgan(child) == OrganTypes.Stem)
 								++stemChildrenCount;
-						var pool = MathF.Pow(childrenCount, childrenCount << 2) * AgroWorld.HoursPerTick;
+						var pool = Math.Max(1, Math.Ceiling(MathF.Pow(childrenCount, childrenCount << 2) / AgroWorld.HoursPerTick));
 						var relativeDepth = formation.GetRelDepth(formationID);
 						if (pool < uint.MaxValue && plant.RNG.NextUInt((uint)pool) == 1 && Math.Min(Math.Min(waterFactor, mPhotoFactor), 1f-relativeDepth) > plant.RNG.NextFloat())
 						{

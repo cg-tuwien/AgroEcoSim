@@ -33,12 +33,9 @@ public partial class SoilFormationNew : IFormation, IGrid3D
 	readonly float CellVolume;
 	readonly Vector3 Position;
 	readonly Vector3 CellSize;
+	readonly Vector3 CellSize4Intersect;
 	readonly float WaterCapacityPerCell;
-	readonly int MaxZ;
-
-	readonly int SubstepSeconds;
-	readonly int Substeps;
-	readonly static int[] Divisors3600 = { 1, 2, 3, 4, 5, 6, 8, 9, 10, 12, 15, 16, 18, 20, 24, 25, 30, 36, 40, 45, 48, 50, 60, 72, 75, 80, 90, 100, 120, 144, 150, 180, 200, 225, 240, 300, 360, 400, 450, 600, 720, 900, 1200, 1800, 3600 };
+	readonly int MaxLevel;
 	readonly (ushort, ushort, ushort)[] CoordsCache;
 
 	public SoilFormationNew(Vector3i size, Vector3 metricSize, Vector3 position)
@@ -50,7 +47,8 @@ public partial class SoilFormationNew : IFormation, IGrid3D
 		SizeXY = size.X * size.Y;
 		Position = position;
 
-		CellSize = new Vector3(metricSize.X / size.X, metricSize.Y / size.Y, metricSize.Z / size.Z);
+		CellSize = new (metricSize.X / size.X, metricSize.Y / size.Y, metricSize.Z / size.Z);
+		CellSize4Intersect = new (CellSize.X, CellSize.Y, -CellSize.Z);
 		CellSurface = CellSize.X * CellSize.Y;
 		CellVolume = CellSurface * CellSize.Z;
 		WaterCapacityPerCell = CellVolume * 0.45e6f;
@@ -61,28 +59,28 @@ public partial class SoilFormationNew : IFormation, IGrid3D
 			for(int y = 0; y < size.X; ++y)
 				heightfield[x, y] = metricSize.Z;
 
-		var rnd = new Random(42);
-		var maxRadius = Math.Min(size.X, size.Y) / 2;
-		for(int i = 0; i < SizeXY; ++i)
-		{
-			var (px, py, r) = (rnd.Next(size.X), rnd.Next(size.Y), rnd.Next(maxRadius));
-			var s = rnd.NextSingle();
-			if (r > 0)
-			{
-				s -= 0.5f;
-				s *= 16f;
-				var rcpR = s / (r * size.Z);
-				var xLimit = Math.Min(Size.X - 1, px + r);
-				var yLimit = Math.Min(Size.Y - 1, py + r);
-				for(int x = Math.Max(0, px - r); x <= xLimit; ++x)
-					for(int y = Math.Max(0, py - r); y <= yLimit; ++y)
-					{
-						var d = Vector2.Distance(new(x, y), new(px, py));
-						if (d <= r)
-							heightfield[x, y] += (r - d) * rcpR;
-					}
-			}
-		}
+		// var rnd = new Random(42);
+		// var maxRadius = Math.Min(size.X, size.Y) / 2;
+		// for(int i = 0; i < SizeXY; ++i)
+		// {
+		// 	var (px, py, r) = (rnd.Next(size.X), rnd.Next(size.Y), rnd.Next(maxRadius));
+		// 	var s = rnd.NextSingle();
+		// 	if (r > 0)
+		// 	{
+		// 		s -= 0.5f;
+		// 		s *= 16f;
+		// 		var rcpR = s / (r * size.Z);
+		// 		var xLimit = Math.Min(Size.X - 1, px + r);
+		// 		var yLimit = Math.Min(Size.Y - 1, py + r);
+		// 		for(int x = Math.Max(0, px - r); x <= xLimit; ++x)
+		// 			for(int y = Math.Max(0, py - r); y <= yLimit; ++y)
+		// 			{
+		// 				var d = Vector2.Distance(new(x, y), new(px, py));
+		// 				if (d <= r)
+		// 					heightfield[x, y] += (r - d) * rcpR;
+		// 			}
+		// 	}
+		// }
 
 		var heights = new int[size.X, size.Y];
 		for(int x = 0; x < size.X; ++x)
@@ -96,7 +94,7 @@ public partial class SoilFormationNew : IFormation, IGrid3D
 		GroundAddr = new int[size.X * size.Y];
 		GroundLevels = new ushort[GroundAddr.Length];
 		var addr = 0;
-		MaxZ = 0;
+		MaxLevel = 0;
 		for(int y = 0; y < size.X; ++y) //y must be outer so that neighboring x items stay adjacent
 			for(int x = 0; x < size.X; ++x)
 			{
@@ -105,8 +103,8 @@ public partial class SoilFormationNew : IFormation, IGrid3D
 				var a = y * Size.X + x;
 				GroundAddr[a] = addr++;
 				GroundLevels[a] = (ushort)h;
-				if (MaxZ < h)
-					MaxZ = h;
+				if (MaxLevel < h)
+					MaxLevel = h;
 			}
 
 		//Fora agiven x,y the ordering in Water and other compressed 1D arrays goes as: [floor, floor + 1, ... , ground -1, ground] and then goes the next (x,y) pair.
@@ -124,6 +122,9 @@ public partial class SoilFormationNew : IFormation, IGrid3D
 		Temperature = new float[Water.Length];
 		Steam = new float[Water.Length];
 
+		Array.Fill(Water, 1e3f * CellVolume); //some basic water
+		Array.Fill(Water, 1e3f * CellVolume); //some basic steam
+
 		// const float coldFactor = 0.75f; //earth gets 1 degree colder each x meters (where x is the value of this constant)
 		// var airTemp = AgroWorld.GetTemperature(timestep);
 		// var bottomTemp = airTemp > 4f ? Math.Max(4f, airTemp - fieldSize.Z * coldFactor) : Math.Min(4f, airTemp + fieldSize.Z * coldFactor);
@@ -134,13 +135,6 @@ public partial class SoilFormationNew : IFormation, IGrid3D
 		// 		for(var y = 0; y < size.Y; ++y)
 		// 			Temp[Index(x, y, z)] = temp;
 		// }
-
-		//let's assume the water in soil flows down 0.5m per minute so 30m per hour (MI: OUTDATED)
-		var minDim = Math.Min(Math.Min(CellSize.X, CellSize.Y) * 2f, CellSize.Z); //*2 since lateralflow is slower
-		var substeps = (int)Math.Ceiling(30 / minDim);
-		var stepIndex = Array.BinarySearch(Divisors3600, 0, Divisors3600.Length, substeps);
-		Substeps = (stepIndex >= 0 ? substeps : Divisors3600[~stepIndex]) * AgroWorld.HoursPerTick;
-		SubstepSeconds = AgroWorld.HoursPerTick * 3600 / Substeps;
 
 		WaterRetainedPerCell = CellSize.Z / WaterTravelDistPerStep;
 	}
@@ -156,16 +150,13 @@ public partial class SoilFormationNew : IFormation, IGrid3D
 
 	int Ground(int x, int y) => GroundAddr[y * Size.X + x];
 	int Ground(Vector3i p) => GroundAddr[p.Y * Size.X + p.X];
-	ushort GroundLevel(int x, int y)
-	{
-		var addr = y * Size.X + x;
-		return (ushort)(addr == 0 ? GroundAddr[0] : GroundAddr[addr] - GroundAddr[addr - 1] - 1);
-	}
+	ushort GroundLevel(int x, int y) => GroundLevels[y * Size.X + x];
+	ushort GroundLevel(Vector3i p) => GroundLevels[p.Y * Size.X + p.X];
 
-	ushort GroundLevel(Vector3i p)
+	(int, int) GroundWithLevel(Vector3i p)
 	{
 		var addr = p.Y * Size.X + p.X;
-		return (ushort)(addr == 0 ? GroundAddr[0] : GroundAddr[addr] - GroundAddr[addr - 1] - 1);
+		return (GroundAddr[addr], addr == 0 ? GroundAddr[0] : GroundAddr[addr] - GroundAddr[addr - 1] - 1);
 	}
 
 	public float GetWater(int index) => index >= 0 && index < Water.Length ? Water[index] : 0f;
@@ -183,20 +174,17 @@ public partial class SoilFormationNew : IFormation, IGrid3D
 	public List<int> IntersectPoint(Vector3 center)
 	{
 		center = new Vector3(center.X, center.Z, center.Y) - Position;
-
-		center *= CellSize;
+		center /= CellSize4Intersect;
 
 		var iCenter = new Vector3i(center);
-		var iGroundLevel = GroundLevel(iCenter);
-
-		if (iCenter.X >= 0 && iCenter.Y >= 0 && iCenter.Z >= 0 && iCenter.X < Size.X && iCenter.Y < Size.Y)
+		if (iCenter.X >= 0 && iCenter.Y >= 0 && iCenter.X < Size.X && iCenter.Y < Size.Y)
 		{
-			return iCenter.Z < iGroundLevel
-				? new(){ SoilIndex(iCenter) }
-				: new(){ SoilIndex(new Vector3i(iCenter.X, iCenter.Y, iGroundLevel)) };
+			var (groundAddr, groundLevel) = GroundWithLevel(iCenter);
+			if (iCenter.Z < groundLevel)
+				return new(){ groundAddr - (iCenter.Z <= MaxLevel - groundLevel ? 1 + iCenter.Z : 0) };
 		}
-		else
-			return new();
+
+		return new();
 	}
 
 	internal float GetMetricHeight(float x, float z)
@@ -216,7 +204,7 @@ public partial class SoilFormationNew : IFormation, IGrid3D
 		center /= CellSize;
 
 		var iCenter = new Vector3i(center);
-		return (MaxZ - GroundLevel(iCenter)) * CellSize.Y;
+		return (MaxLevel - GroundLevel(iCenter)) * CellSize.Y;
 	}
 
 	static readonly float WaterTravelDistPerStep = AgroWorld.HoursPerTick * 0.000012f; //1g of water can travel so far an hour
@@ -230,8 +218,6 @@ public partial class SoilFormationNew : IFormation, IGrid3D
 		var evaporizationFactorPerHour = 0*1e-4f;
 		var evaporizationSoilFactorPerStep = MathF.Pow(1f - evaporizationFactorPerHour, AgroWorld.HoursPerTick);
 		var evaporizationSurfaceFactorPerStep = MathF.Pow(1f - Math.Min(1f, evaporizationFactorPerHour * (surfaceTemp * surfaceTemp) / 10), AgroWorld.HoursPerTick);
-		var waterVerticalFlowPerStep = 0.01f * SubstepSeconds;
-		var steamVerticalFlowPerStep = 0.2f * SubstepSeconds;
 
 		var sumBefore = Water.Sum();
 
@@ -242,7 +228,7 @@ public partial class SoilFormationNew : IFormation, IGrid3D
 				Water[ground] += rainPerCell;
 
 		//3. Soak the water from bottom to the top
-		for(int d = MaxZ - 1; d > 0; --d)
+		for(int d = MaxLevel - 1; d > 0; --d)
 		{
 			for(int y = 0; y < Size.Y; ++y) //should be in this order to keep adjacency
 				for(int x = 0; x < Size.X; ++x)
@@ -278,7 +264,7 @@ public partial class SoilFormationNew : IFormation, IGrid3D
 		}
 
 		var sumAfter = Water.Sum();
-		Console.WriteLine($"Water in system {sumAfter} {(sumAfter < sumBefore ? "---------" : "")}");
+		//Console.WriteLine($"Water in system {sumAfter} {(sumAfter < sumBefore ? "---------" : "")}");
 
 		// //for(int t = 0; t < Substeps; ++t)
 		// {

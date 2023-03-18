@@ -27,7 +27,6 @@ public partial class Plant_AG_Godot2 : PlantAbstractGodot2<AboveGroundAgent2>
 		sprite.Scale = Formation.GetScale(index).ToGodot();
 
 		var material = AgroWorldGodot.ShootsVisualization.IsUnshaded ? UnshadedMaterial : ShadedMaterial;
-
 		material.SetShaderParameter(AgroWorldGodot.COLOR, ColorCoding(index, AgroWorldGodot.ShootsVisualization.TransferFunc, justCreated));
 		sprite.MaterialOverride = material;
 	}

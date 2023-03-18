@@ -215,15 +215,16 @@ public partial class PlantFormation2 : IPlantFormation
 		AG.Census();
 	}
 
-	bool NewDay = true;
-	internal bool IsNewDay() => NewDay;
+	bool NewStatsBlock = true;
+	internal bool IsNewDay() => NewStatsBlock;
 
 	public void Tick(SimulationWorld world, uint timestep, byte stage)
 	{
 		if (DeathSeed && !UG.Alive && !AG.Alive)
 			return;
 
-		NewDay = AgroWorld.HoursPerTick >= 24 || timestep == 0 || ((timestep - 1) * AgroWorld.HoursPerTick) / 24 < (timestep * AgroWorld.HoursPerTick) / 24;
+		//NewStatsBlock = AgroWorld.HoursPerTick >= 24 || timestep == 0 || ((timestep - 1) * AgroWorld.HoursPerTick) / 24 < (timestep * AgroWorld.HoursPerTick) / 24; //MI 2023-03-07 This was used for timesteps shorter than one hour
+		NewStatsBlock = timestep % AgroWorld.StatsBlockLength == 0;
 
 		//Ready for List and Span combination
 

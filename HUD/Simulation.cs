@@ -14,7 +14,7 @@ public partial class Simulation : CanvasLayer
 
 	SimulationWorld World;
 	private SimulationSettings Parameters;
-	public bool Paused { get; private set; } = false;
+	public bool Paused { get; private set; } = true;
 	public MenuEvent MenuEvent = MenuEvent.None;
 	public uint ManualStepsRequested { get; private set; } = 0U;
 
@@ -75,8 +75,11 @@ public partial class Simulation : CanvasLayer
 		DateLabel = GetNode<Label>($"Animation/Control/{nameof(DateLabel)}");
 		PlayPauseButton = GetNode<Button>($"Animation/Control/{nameof(PlayPauseButton)}");
 		ManualSteps = GetNode<Control>($"Animation/Control/{nameof(ManualSteps)}");
-		ManualSteps.Hide();
 		ScreenshotButton = GetNode<Button>($"Export/{nameof(ScreenshotButton)}");
+		if (Paused)
+			ManualSteps.Hide();
+		else
+			ManualSteps.Show();
 
 		SaveDialog = GetNode<FileDialog>($"Export/{nameof(SaveDialog)}");
 		SaveDialog.RootSubfolder = Directory.GetCurrentDirectory();
