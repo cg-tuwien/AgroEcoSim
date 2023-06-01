@@ -3,3 +3,4 @@
 #docker system prune -f
 docker load < agroecoRender.tar.gz
 docker load < agroecoSim.tar.gz
+docker load < agroecoWeb.tar.gz

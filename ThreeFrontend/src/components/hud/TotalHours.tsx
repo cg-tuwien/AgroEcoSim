@@ -1,0 +1,45 @@
+import { Component, h } from "preact";
+import appstate from "../../appstate";
+
+const day = 24;
+const month = 31 * day;
+const year = 365 * day;
+const decade = 10 * year + 48;
+
+export class TotalHours extends Component
+{
+    render() {
+        return <div>
+            <input min={1} type="number" name="totalhours" value={appstate.totalHours} onChange={e => {
+                const targetValue = parseInt(e.currentTarget.value);
+                if (Math.abs(targetValue - appstate.totalHours.value) > 1)
+                    appstate.totalHours.value = Math.max(1, targetValue);
+                else
+                {
+                    if (targetValue > appstate.totalHours.value){
+                        let step = 1;
+                        if (appstate.totalHours.value >= decade) step = decade;
+                        else if (appstate.totalHours.value >= year) step = year;
+                        else if (appstate.totalHours.value >= month) step = month;
+                        else if (appstate.totalHours.value >= day) step = day;
+
+                        appstate.totalHours.value += step;
+                    }
+                    else
+                    {
+                        let step = 1;
+                        if (appstate.totalHours.value >= decade * 2) step = decade;
+                        else if (appstate.totalHours.value >= year * 2) step = year;
+                        else if (appstate.totalHours.value >= month * 2) step = month;
+                        else if (appstate.totalHours.value >= day * 2) step = day;
+
+                        appstate.totalHours.value = Math.max(1, appstate.totalHours.value - step);
+                    }
+                }
+            }} onInput={e => {
+                console.log(e)
+            }}/>
+            <label for="totalhours">Total Hours to be simulated</label>
+        </div>;
+    }
+}

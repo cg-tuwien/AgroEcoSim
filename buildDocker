@@ -1,5 +1,10 @@
 #!/bin/bash
 
+if [ ! "$1" ]; then
+    echo "The backend URI is not given as an argument. Please provide it, e.g. bash buildDocker https://tuwien.ac.at"
+    exit 1
+fi
+
 ### For development only: in case there is too much mess from iterative builds:
 docker stop $(docker ps -qa)
 #docker rm $(docker ps -qa)
@@ -8,10 +13,12 @@ docker stop $(docker ps -qa)
 
 docker build --rm -f "Dockerfile-render" -t agroecorender "."
 docker build --rm -f "Dockerfile-sim" -t agroecosim "."
+docker build --rm -f "Dockerfile-web" -t agroecoweb "." --build-arg BACKEND=$1
 docker save agroecorender | gzip > agroecoRender.tar.gz
 docker save agroecosim | gzip > agroecoSim.tar.gz
+docker save agroecoweb | gzip > agroecoWeb.tar.gz
 
 NOW=$(date +"%Y%m%d_%H%M%S")
-zip -r "AgroEcoSim-${NOW}.zip" agroecoRender.tar.gz agroecoSim.tar.gz deployDocker docker-compose.yml #\
+zip -r "AgroEcoSim-${NOW}.zip" agroecoRender.tar.gz agroecoSim.tar.gz agroecoWeb.tar.gz deployDocker docker-compose.yml #\
     #Dockerfile-render \
     #agroeco-mts3/binary_loader.py agroeco-mts3/batch-sensor.py agroeco-mts3/render-server.py agroeco-mts3/RendererMts3.py
