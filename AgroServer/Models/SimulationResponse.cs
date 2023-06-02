@@ -21,5 +21,9 @@ public class SimulationResponse
     ///Resulting plants (same ordering as in the request)
     ///</summary>
     public List<PlantResponse> Plants { get; set; }
+    ///<summary>
+    ///3D Scene of the last time step
+    ///</summary>
+    public byte[] Scene { get; set; }
 }
 #endif

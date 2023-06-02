@@ -3,7 +3,9 @@ import { h } from 'preact';
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls"
 import { FlyControls } from "three/examples/jsm/controls/FlyControls"
-import * as WEBGL from "three/examples/jsm/capabilities/WebGL"
+import WEBGL from "three/examples/jsm/capabilities/WebGL"
+import { Index, Scene } from "src/helpers/Scene";
+import { Primitive } from "src/helpers/Primitives";
 
 interface IProps {
     width: number,
@@ -12,6 +14,10 @@ interface IProps {
     onDblClick(id: number): void,
     hasSelection(): boolean,
 };
+
+interface IState {
+    Data: Scene;
+}
 
 interface IInitData {
     tanFOV: number;
@@ -73,16 +79,17 @@ export default class ThreeScene extends PureComponent<IProps> {
 
             //this.renderer.gammaFactor = 2.2;
             //this.renderer.outputEncoding = THREE.GammaEncoding;
-            this.renderer.outputEncoding = THREE.sRGBEncoding;
-            this.renderer.physicallyCorrectLights = true;
+            this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+            this.renderer.useLegacyLights = true;
 
             this.renderer.setPixelRatio( devicePixelRatio );
-            //this.renderer.setClearColor(new THREE.Color(0xffffff));
+            //this.renderer.setClearColor(new THREE.Color(0x1c1c1c));
             //this.renderer.toneMapping = THREE.NoToneMapping;
             this.renderer.toneMapping = THREE.LinearToneMapping;
             //this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
             this.renderer.autoClear = false;
             this.initScene();
+            this.renderOnce();
         }
 
         this.parent = findDOMNode(this)?.parentElement;
@@ -127,7 +134,8 @@ export default class ThreeScene extends PureComponent<IProps> {
         this.perspectiveCamera.position.set(0, 20, 30);
         if (this.renderer){
             this.controls = new OrbitControls(this.perspectiveCamera, this.renderer.domElement);
-            this.controls.enableKeys = false;
+            //this.controls.enableKeys = false;
+            this.controls.keys = { LEFT: "", RIGHT: "", BOTTOM: "", UP: "" };
             this.controls.screenSpacePanning = true;
 
             //this.controls.addEventListener("start", () => { this.performRendering = true });
@@ -141,13 +149,17 @@ export default class ThreeScene extends PureComponent<IProps> {
 
     private initScene(){
         this.scene = new THREE.Scene();
-        this.scene.background = new THREE.Color("#FFFFFF");
+        this.scene.background = new THREE.Color(getComputedStyle(document.documentElement).getPropertyValue("background"));
 
         const hemiLight = new THREE.HemisphereLight( 0xffffff, 0x707070, 3.175 );
         // hemiLight.color.setHSL( 0.6, 1, 0.6 );
         // hemiLight.groundColor.setHSL( 0.2, 0.2, 0.2 );
         hemiLight.position.set( 0, 10000, 0 );
         this.scene?.add( hemiLight );
+
+        const mesh = new THREE.Mesh(threeCylinderPrimitive, new THREE.MeshBasicMaterial({color: new THREE.Color("#ff4411")}));
+        mesh.translateY(10);
+        this.scene?.add(mesh);
     }
 
     public componentWillUnmount = () =>
@@ -243,4 +255,35 @@ export default class ThreeScene extends PureComponent<IProps> {
         }
     }
 
+    buildObject3D(primitive: Primitive, index: Index, material: THREE.MeshStandardMaterial) {
+        let matrix: THREE.Matrix4;
+        let geometry: THREE.BufferGeometry;
+        switch(primitive.type)
+        {
+            case 4: matrix = new THREE.Matrix4().fromArray([1, 0, 0, primitive.center[0], 0, 1, 0, primitive.center[1], 0, 0, 1, primitive.center[2], 0, 0, 0, 1]).transpose(); break;
+            default: matrix = new THREE.Matrix4().fromArray([...primitive.affineTransform, 0, 0, 0, 1]).transpose();
+        }
+
+        switch(primitive.type)
+        {
+            case 1: geometry = threeCirclePrimitive; break;
+            case 2: geometry = threeCylinderPrimitive; break;
+            case 4: geometry = threeSpherePrimitive; break;
+            case 8: geometry = threePlanePrimitive; break;
+        }
+
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.matrixAutoUpdate = false;
+        mesh.name = `${index.entity.toString()}_${index.primitive.toString()}`;
+        mesh.layers.enable(1);
+        mesh.applyMatrix4(matrix);
+
+        this.scene.add(mesh);
+    }
 }
+
+//const threeBoxPrimitive = new THREE.BoxGeometry(1, 1, 1); //box
+const threeSpherePrimitive = new THREE.SphereGeometry(0.5, 16, 16); //sphere
+const threeCylinderPrimitive = new THREE.CylinderGeometry(0.5, 0.5, 1.0, 16); //cylinder
+const threePlanePrimitive = new THREE.PlaneGeometry(1, 1); //rect
+const threeCirclePrimitive = new THREE.CircleGeometry(1, 1); //disk

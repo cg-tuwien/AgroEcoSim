@@ -1,5 +1,7 @@
 import { Signal, computed, signal } from "@preact/signals";
 import { BackendURI } from "./config";
+import BinaryReader from "./helpers/BinaryReader";
+import { Scene } from "./helpers/Scene";
 
 // const appInitState = {
 //     computing: false,
@@ -31,7 +33,7 @@ export interface IPlantResponse
 export interface ISimResponse
 {
     plants: IPlantResponse[],
-    scene: string
+    scene: Uint8Array
 }
 
 const state = {
@@ -45,7 +47,7 @@ const state = {
     initNumber: signal(42),
     randomize: signal(false),
 
-    seeds: signal<IPlantRequest[]>([]),
+    seeds: signal<IPlantRequest[]>([{PX: signal(0.5), PY: signal(-0.01), PZ: signal(0.5)}]),
     seedsCount: computed(() => state.seeds.length),
 
     obstacles: signal([""]),
@@ -55,8 +57,8 @@ const state = {
     computing: signal(false),
 
     //RESPONSE
-    platns: signal<IPlantResponse[]>([]),
-    scene: signal(""),
+    plants: signal<IPlantResponse[]>([]),
+    scene: signal<Scene>([]),
 
     //METHODS
     run: run,
@@ -92,24 +94,34 @@ async function run() {
         });
 
         const json = await response.json() as ISimResponse;
-        state.platns.value = json.plants;
-        state.scene.value = json.scene;
+        state.plants.value = json.plants;
+        const binaryScene = base64ToArrayBuffer(json.scene);
+        const reader = new BinaryReader(binaryScene);
+        state.scene = reader.readAgroScene();
+
         state.computing.value = false;
     }
 }
 
+function base64ToArrayBuffer(base64) {
+    var binaryString = atob(base64);
+    var bytes = new Uint8Array(binaryString.length);
+    for (var i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+    }
+    return bytes;
+}
+
 function pushRndSeed(){
-    console.log(state.seeds.value);
-    state.seeds.value.push({PX: signal(Math.random() * state.fieldSizeX.value), PY: signal(0), PZ: signal(Math.random() * state.fieldSizeZ.value) });
-    console.log(state.seeds.value);
-    console.log("---------");
+    state.seeds.value = [ ...state.seeds.value, { PX: signal(Math.random() * state.fieldSizeX.value), PY: signal(0), PZ: signal(Math.random() * state.fieldSizeZ.value) }];
 }
 
 function removeSeed(i : number) {
     if (i >= 0 && i < state.seeds.value.length)
         state.seeds.value.splice(i, 1);
+        state.seeds.value = [...state.seeds.value];
 }
 
 function obstaclesCount() {
-    return computed(() => state.obstacles.length)
+    return computed(() => state.obstacles.value.length)
 }

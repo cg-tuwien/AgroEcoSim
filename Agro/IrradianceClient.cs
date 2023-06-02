@@ -719,15 +719,27 @@ public class IrradianceClient
 	}
 
 	public static void ExportToFile(string fileName, byte version, IList<IFormation> formations, IList<IObstacle> obstacles = null)
+    {
+        using var file = File.OpenWrite(fileName);
+        ExportToStream(version, formations, obstacles, file);
+    }
+
+    static void ExportToStream(byte version, IList<IFormation> formations, IList<IObstacle> obstacles, Stream target)
+    {
+        switch (version)
+        {
+            default: Singleton.ExportAsTriangles(formations, obstacles, 0, target); break;
+            case 2: Singleton.ExportAsPrimitivesClustered(formations, obstacles, 0, target); break;
+            case 3: Singleton.ExportAsPrimitivesInterleaved(formations, obstacles, target); break;
+            case 4: Singleton.ExportAsBeautyPrimitives(formations, target); break;
+        }
+    }
+
+    public static byte[] ExportToStream(byte version, IList<IFormation> formations, IList<IObstacle> obstacles = null)
 	{
-		using var file = File.OpenWrite(fileName);
-		switch (version)
-		{
-			default: Singleton.ExportAsTriangles(formations, obstacles, 0, file); break;
-			case 2: Singleton.ExportAsPrimitivesClustered(formations, obstacles, 0, file); break;
-			case 3: Singleton.ExportAsPrimitivesInterleaved(formations, obstacles, file); break;
-			case 4: Singleton.ExportAsBeautyPrimitives(formations, file); break;
-		}
+		using var stream = new MemoryStream();
+		ExportToStream(version, formations, obstacles, stream);
+		return stream.ToArray();
 	}
 
 	public static void ExportToObjFile(string fileName, IList<IFormation> formations, IList<IObstacle> obstacles)

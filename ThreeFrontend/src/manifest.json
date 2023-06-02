@@ -1,6 +1,6 @@
 {
-  "name": "tsfe",
-  "short_name": "tsfe",
+  "name": "ThreeFrontend",
+  "short_name": "ThreeFrontend",
   "start_url": "/",
   "display": "standalone",
   "orientation": "portrait",

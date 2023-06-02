@@ -36,4 +36,9 @@ public class SimulationRequest
     ///A list of obstacles (default: null)
     ///</summary>
     public ObstacleRequest[]? Obstacles { get; set; }
+
+    ///<summary>
+    ///If true, returns also the geometry for frontend visualization (default: false)
+    ///</summary>
+    public bool? RequestGeometry { get; set; }
 }

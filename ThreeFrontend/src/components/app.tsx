@@ -31,7 +31,7 @@ const App = () => {
 		</nav>
 		<main id="app">
 			<PlantsTable/>
-			{/*<Viewport />*/}
+			<Viewport  />
 		</main>
 	</Fragment>
 )};

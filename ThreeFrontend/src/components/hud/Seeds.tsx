@@ -6,8 +6,7 @@ export class Seeds extends Component
 {
     render() {
         return <div>
-            Seeds: {appstate.obstacles.value.length}
-            <button name="seeds" onClick={() => {appstate.obstacles.value.push("123"); console.log(appstate.obstacles.value.length)} }>Add new seed</button>
+            <button name="seeds" onClick={() => appstate.pushRndSeed()}>Add new seed</button>
             <ul>
                 {appstate.seeds.value.map((x, i) => (<li>
                     <input min={0} max={appstate.fieldSizeX.value} type="number" name={`seedpx-${i}`} value={x.PX} />
