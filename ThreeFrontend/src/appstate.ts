@@ -33,13 +33,14 @@ export interface IPlantResponse
 export interface ISimResponse
 {
     plants: IPlantResponse[],
-    scene: Uint8Array
+    scene: Uint8Array,
+    renderer: string,
 }
 
 const state = {
     // SETTINGS
     hoursPerTick: signal(1),
-    totalHours: signal(1744),
+    totalHours: signal(744),
     fieldResolution: signal(0.5),
     fieldSizeX: signal(10),
     fieldSizeZ: signal(10),
@@ -101,6 +102,7 @@ async function run() {
             state.plants.value = json.plants;
             state.scene.value = scene;
             state.computing.value = false;
+            state.renderer = json.renderer;
         });
     }
 }

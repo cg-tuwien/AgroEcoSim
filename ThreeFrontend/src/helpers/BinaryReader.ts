@@ -41,7 +41,6 @@ export default class BinaryReader {
         //const result = new Float32Array([this.source[this.pos + 3], this.source[this.pos + 2], this.source[this.pos + 1], this.source[this.pos]]);
         const result = new Float32Array(this.source.slice(this.pos, this.pos + 4).buffer);
         this.pos += 4;
-        console.log(result[0])
         return result[0];
     }
 

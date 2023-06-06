@@ -50,6 +50,7 @@ public class SimulationController : ControllerBase
         if(request?.RequestGeometry ?? false)
             response.Scene = world.ExportToStream();
 
+        response.Renderer = world.RendererName;
 
         return response;
     }

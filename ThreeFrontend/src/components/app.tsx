@@ -1,5 +1,4 @@
 import { Fragment, createContext, h } from 'preact';
-import { Viewport } from './viewport/Viewport';
 import { Start } from './hud/Start'
 import { HoursPerTick } from './hud/HoursPerTick';
 import { TotalHours } from './hud/TotalHours';
@@ -11,7 +10,6 @@ import { InitNumber } from './hud/InitNumber';
 import { PlantsTable } from './viewport/PlantsTable';
 import { Randomize } from './hud/Randomize';
 import { Seeds } from './hud/Seeds';
-import SceneTable from './viewport/SceneTable';
 import ThreeSceneFn from './viewport/ThreeSceneFn';
 
 const App = () => {

@@ -299,4 +299,5 @@ public partial class SimulationWorld
 
 	public Func<List<IFormation>, List<IObstacle>, byte[]> StreamExporterFunc = null;
 	public byte[] ExportToStream() => StreamExporterFunc == null ? null : StreamExporterFunc(Formations, Obstacles);
+	public string RendererName;
 }

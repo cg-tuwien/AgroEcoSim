@@ -750,6 +750,8 @@ public class IrradianceClient
 		Singleton.ExportAsObj(formations, obstacles, objWriter);
 	}
 
+	public static bool IsRendererOnline => Singleton.IsOnline;
+
 	void DoFallbackTick(uint timestep, IList<IFormation> formations)
 	{
 		if (AgroWorld.GetDaylight(timestep))

@@ -7,7 +7,7 @@ import WEBGL from "three/examples/jsm/capabilities/WebGL"
 import { Index, Scene } from "src/helpers/Scene";
 import { Primitive } from "src/helpers/Primitives";
 import appstate from "../../appstate";
-import { effect } from "@preact/signals";
+import { effect, useSignalEffect } from "@preact/signals";
 
 interface IProps {
 //     width: number,
@@ -68,6 +68,10 @@ export default function ThreeSceneFn () {
     const initScene = () => {
         scene.clear();
         scene.background = new THREE.Color(getComputedStyle(document.documentElement).getPropertyValue("background"));
+        const neutralColor = new THREE.Color(getComputedStyle(document.documentElement).getPropertyValue("color"));
+        singlePlantMaterial = new THREE.MeshStandardMaterial({ color: neutralColor});
+        doublePlantMaterial = new THREE.MeshStandardMaterial({ color: neutralColor, side: THREE.DoubleSide});
+
 
         // hemiLight.color.setHSL( 0.6, 1, 0.6 );
         // hemiLight.groundColor.setHSL( 0.2, 0.2, 0.2 );
@@ -191,11 +195,6 @@ export default function ThreeSceneFn () {
         mesh.applyMatrix4(matrix);
         mesh.updateMatrix();
         mesh.matrixAutoUpdate = false;
-        let p = new THREE.Vector3();
-        let q = new THREE.Quaternion();
-        let s = new THREE.Vector3();
-        matrix.decompose(p, q, s);
-        console.log(p,q,s);
         scene.add(mesh);
     }
 
@@ -214,8 +213,6 @@ export default function ThreeSceneFn () {
 
     let animationRequest: number;
     let mouse = { inside: false, x: 0, y: 0};
-
-    const devicePixelRatio = window.devicePixelRatio || 1;
 
     useLayoutEffect(() => {
         //if (this.width !== this.props.width || this.height !== this.props.height) {
@@ -253,10 +250,10 @@ export default function ThreeSceneFn () {
             controls?.dispose();
             controls = undefined;
         }
-    }, [window.innerWidth, window.innerHeight]);
+    });
 
 
-    effect(() => {
+    useSignalEffect(() => {
         initScene();
         const sceneData = appstate.scene.value;
         for(let i = 0; i < sceneData.length; ++i)
@@ -301,7 +298,7 @@ export default function ThreeSceneFn () {
             renderer.outputColorSpace = THREE.SRGBColorSpace;
             renderer.useLegacyLights = true;
 
-            renderer.setPixelRatio( devicePixelRatio );
+            renderer.setPixelRatio( window.devicePixelRatio || 1 );
             //this.renderer.setClearColor(new THREE.Color(0x1c1c1c));
             //this.renderer.toneMapping = THREE.NoToneMapping;
             renderer.toneMapping = THREE.LinearToneMapping;
@@ -324,5 +321,5 @@ const threeCylinderPrimitive = new THREE.CylinderGeometry(1, 1, 1.0, 16); //cyli
 const threePlanePrimitive = new THREE.PlaneGeometry(1, 1); //rect
 const threeCirclePrimitive = new THREE.CircleGeometry(1, 1); //disk
 
-const singlePlantMaterial = new THREE.MeshStandardMaterial({ color: "#cccccc"});
-const doublePlantMaterial = new THREE.MeshStandardMaterial({ color: "#cccccc", side: THREE.DoubleSide});
+let singlePlantMaterial: THREE.MeshStandardMaterial;
+let doublePlantMaterial: THREE.MeshStandardMaterial;
