@@ -1,4 +1,4 @@
-import { Signal, computed, signal } from "@preact/signals";
+import { Signal, batch, computed, signal } from "@preact/signals";
 import { BackendURI } from "./config";
 import BinaryReader from "./helpers/BinaryReader";
 import { Scene } from "./helpers/Scene";
@@ -39,7 +39,7 @@ export interface ISimResponse
 const state = {
     // SETTINGS
     hoursPerTick: signal(1),
-    totalHours: signal(744),
+    totalHours: signal(1744),
     fieldResolution: signal(0.5),
     fieldSizeX: signal(10),
     fieldSizeZ: signal(10),
@@ -63,7 +63,7 @@ const state = {
     //METHODS
     run: run,
     pushRndSeed : pushRndSeed,
-    removeSeedAt: removeSeed
+    removeSeedAt: removeSeed,
 };
 
 export default state;
@@ -94,12 +94,14 @@ async function run() {
         });
 
         const json = await response.json() as ISimResponse;
-        state.plants.value = json.plants;
         const binaryScene = base64ToArrayBuffer(json.scene);
         const reader = new BinaryReader(binaryScene);
-        state.scene = reader.readAgroScene();
-
-        state.computing.value = false;
+        const scene = reader.readAgroScene();
+        batch(() => {
+            state.plants.value = json.plants;
+            state.scene.value = scene;
+            state.computing.value = false;
+        });
     }
 }
 

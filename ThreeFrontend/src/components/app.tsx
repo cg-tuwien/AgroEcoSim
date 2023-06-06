@@ -11,10 +11,16 @@ import { InitNumber } from './hud/InitNumber';
 import { PlantsTable } from './viewport/PlantsTable';
 import { Randomize } from './hud/Randomize';
 import { Seeds } from './hud/Seeds';
+import SceneTable from './viewport/SceneTable';
+import ThreeSceneFn from './viewport/ThreeSceneFn';
 
 const App = () => {
 	return(
 	<Fragment>
+		<main id="app">
+			<PlantsTable/>
+			<ThreeSceneFn />
+		</main>
 		<nav id="hud">
 			<HoursPerTick/>
 			<TotalHours/>
@@ -28,11 +34,9 @@ const App = () => {
 			<Seeds/>
 			<hr/>
 			<Start/>
-		</nav>
-		<main id="app">
 			<PlantsTable/>
-			<Viewport  />
-		</main>
+		</nav>
+
 	</Fragment>
 )};
 
