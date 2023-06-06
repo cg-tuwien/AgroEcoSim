@@ -1,0 +1,18 @@
+FROM node:18-alpine AS build
+
+WORKDIR app
+COPY ThreeFrontend/ .
+
+ARG BACKEND
+RUN echo "export const BackendURI = \"${BACKEND}\";" > src/config.ts
+
+RUN npm install
+RUN npm run build
+
+FROM node:18-alpine AS final
+WORKDIR /app
+COPY --from=build /app/build .
+RUN npm install sirv-cli
+
+EXPOSE 8080
+ENTRYPOINT ["npx", "sirv", ".", " --cors", "--single", "--host"]
