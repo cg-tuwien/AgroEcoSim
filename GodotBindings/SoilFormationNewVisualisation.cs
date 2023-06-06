@@ -114,7 +114,6 @@ public partial class SoilFormationNew
 				? new Vector3(x, ground - MaxLevel, y) * AgroWorld.FieldResolution + SurfaceCellUncenter * cellSize
 				: new Vector3(x, z - MaxLevel, y) * AgroWorld.FieldResolution + SoilCellUncenter * cellSize,
 			Scale = new(cellSize, isGround ? 1e-6f : cellSize, cellSize),
-			MaterialOverride = AgroWorldGodot.UnshadedMaterial(),
 		};
 
 		var index = Index(x, y, depth);
@@ -140,7 +139,7 @@ public partial class SoilFormationNew
 			var mesh = SoilCellInstances[idx];
 			mesh.Scale = Vector3.One * ComputeCellScale(multiplier);
 
-			((ShaderMaterial)mesh.MaterialOverride).SetShaderParameter(AgroWorldGodot.COLOR, AgroWorldGodot.SoilVisualization.AnimateSoilCellColor
+			mesh.SetInstanceShaderParameter(AgroWorldGodot.COLOR, AgroWorldGodot.SoilVisualization.AnimateSoilCellColor
 				? multiplier * AgroWorldGodot.SoilVisualization.CellColorHigh + (1f - multiplier) * AgroWorldGodot.SoilVisualization.CellColorLow
 				: AgroWorldGodot.SoilVisualization.CellColorHigh);
 		}
@@ -154,10 +153,10 @@ public partial class SoilFormationNew
 			if (AgroWorldGodot.SoilVisualization.AnimateSoilCellColor)
 			{
 				var multiplier = Math.Clamp(height / AgroWorldGodot.SoilVisualization.SurfaceFullThreshold, 0f, 1f);
-				((ShaderMaterial)mesh.MaterialOverride).SetShaderParameter(AgroWorldGodot.COLOR, multiplier * AgroWorldGodot.SoilVisualization.SurfaceFullColor + (1f - multiplier) * AgroWorldGodot.SoilVisualization.SurfaceEmptyColor);
+				mesh.SetInstanceShaderParameter(AgroWorldGodot.COLOR, multiplier * AgroWorldGodot.SoilVisualization.SurfaceFullColor + (1f - multiplier) * AgroWorldGodot.SoilVisualization.SurfaceEmptyColor);
 			}
 			else
-				((ShaderMaterial)mesh.MaterialOverride).SetShaderParameter(AgroWorldGodot.COLOR, AgroWorldGodot.SoilVisualization.SurfaceFullColor);
+				mesh.SetInstanceShaderParameter(AgroWorldGodot.COLOR, AgroWorldGodot.SoilVisualization.SurfaceFullColor);
 		}
 	}
 

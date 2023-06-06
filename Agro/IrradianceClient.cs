@@ -94,6 +94,9 @@ public class IrradianceClient
 	readonly bool IsOnline = false;
 	bool IsNight = true;
 
+	byte[] EnvMap = null; //just for debug output
+	ushort EnvMapX = 0;
+
 	private IrradianceClient()
 	{
 		Client = new() { BaseAddress = new Uri("http://localhost:9000"), Timeout = TimeSpan.FromHours(1) };
@@ -177,6 +180,7 @@ public class IrradianceClient
 				#endif
 				if (offsetCounter > 0)
 				{
+					var reqEnvMap = true;
 					var request = new HttpRequestMessage()
 					{
 						Method = HttpMethod.Post,
@@ -187,15 +191,31 @@ public class IrradianceClient
 					//Debug.WriteLine(offsetCounter);
 					//request.Headers.Add("C", offsetCounter.ToString()); //Only use for dummy debug
 					request.Headers.Add("Ra", "2048");
-
+					if (reqEnvMap)
+						request.Headers.Add("Env", "true");
 					var result = Client.SendAsync(request).Result;
 					using var responseStream = result.Content.ReadAsStreamAsync().Result;
 					using var reader = new BinaryReader(responseStream);
-					var length = responseStream.Length / sizeof(float);
-					for (int i = 0; i < length; ++i)
-						Irradiances.Add(reader.ReadSingle());
+
+					long length;
+					if (reqEnvMap)
+					{
+						length = reader.ReadUInt16() * sizeof(float);
+						EnvMapX = reader.ReadUInt16();
+						EnvMap = reader.ReadBytes((int)length);
+
+						// Debug.WriteLine($"Total stream length: {responseStream.Length} env length: {length} irr length: {(responseStream.Length - sizeof(int) - length) / sizeof(float)}");
+						length = (responseStream.Length - 2*sizeof(ushort) - length) / sizeof(float);
+					}
+					else
+						length = responseStream.Length / sizeof(float);
+
+					for (var i = 0; i < length; ++i)
+						Irradiances.Add(reader.ReadSingle() * 1e3f * AgroWorld.HoursPerTick);
+					// Debug.WriteLine($"Irradiances length: {length} count: {Irradiances.Count}");
+
 					//Debug.WriteLine($"T: {AgroWorld.GetTime(timestep).ToString("o", CultureInfo.InvariantCulture)} Sum: {Irradiances.Sum()}  Avg: {Irradiances.Average()} In: [{Irradiances.Min()} - {Irradiances.Max()}]");
-					Debug.WriteLine($"IR: {String.Join(", ", Irradiances)}");
+					//Debug.WriteLine($"IR: {String.Join(", ", Irradiances)}");
 				}
 
 				SW.Stop();
@@ -210,6 +230,8 @@ public class IrradianceClient
 	}
 
 	public static byte[] DebugIrradiance(uint timestep, IList<IFormation> formations, IList<IObstacle> obstacles, float[] cameraMatrix) => Singleton.DebugIrr(timestep, formations, obstacles, cameraMatrix);
+	public static byte[] DebugEnvironment() => Singleton.EnvMap;
+	public static ushort DebugEnvironmentX() => Singleton.EnvMapX;
 
 	byte[] DebugIrr(uint timestep, IList<IFormation> formations, IList<IObstacle> obstacles, float[] camera)
 	{

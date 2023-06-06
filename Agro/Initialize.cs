@@ -80,16 +80,16 @@ public static class Initialize
 
 		if (settings?.Obstacles != null)
 			foreach(var obstacle in settings.Obstacles)
-			switch(obstacle.Type.ToLower())
-			{
-				case "wall":
-					world.Add(new Wall(obstacle.Length ?? (obstacle.Radius.HasValue ? obstacle.Radius.Value * 2f : 1f), obstacle.Height ?? 1f, obstacle.Thickness ?? 0.1f, obstacle.Position ?? Vector3.Zero, obstacle.Orientation ?? 0f));
+				switch(obstacle.Type.ToLower())
+				{
+					case "wall":
+						world.Add(new Wall(obstacle.Length ?? (obstacle.Radius.HasValue ? obstacle.Radius.Value * 2f : 1f), obstacle.Height ?? 1f, obstacle.Thickness ?? 0.1f, obstacle.Position ?? Vector3.Zero, obstacle.Orientation ?? 0f));
+						break;
+					case "umbrella":
+						world.Add(new Umbrella(obstacle.Radius ?? (obstacle.Length.HasValue ? obstacle.Length.Value * 0.5f : 1f), obstacle.Height ?? 1f, obstacle.Thickness ?? 0.1f, obstacle.Position ?? Vector3.Zero));
 					break;
-				case "umbrella":
-					world.Add(new Umbrella(obstacle.Radius ?? (obstacle.Length.HasValue ? obstacle.Length.Value * 0.5f : 1f), obstacle.Height ?? 1f, obstacle.Thickness ?? 0.1f, obstacle.Position ?? Vector3.Zero));
-				break;
-				default: throw new ArgumentException($"There is no such obstacle type as {obstacle.Type}.");
-			}
+					default: throw new ArgumentException($"There is no such obstacle type as {obstacle.Type}.");
+				}
 
 		return world;
 	}

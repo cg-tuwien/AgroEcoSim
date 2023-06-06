@@ -262,6 +262,8 @@ public partial struct AboveGroundAgent2 : IPlantAgent
 				{
 					case OrganTypes.Leaf:
 					{
+						//TDMI take env res efficiency into account
+						//TDMI limit by avg growth
 						growth = new Vector2(2e-4f, 1e-4f) * AgroWorld.HoursPerTick;
 					}
 					break;
@@ -276,8 +278,9 @@ public partial struct AboveGroundAgent2 : IPlantAgent
 						{
 							//var waterUsage = Math.Clamp(Water / WaterTotalCapacityPerTick, 0f, 1f);
 							var energyUsage = Math.Clamp(Energy / EnergyStorageCapacity(), 0f, 1f);
+							//TDMI take relative inverse depth
 							var absDepth = formation.GetAbsInvDepth(formationID) + 1;
-							growth = new Vector2(4e-3f / (absDepth * childrenCount * mPhotoFactor), 2e-5f) * (energyUsage * AgroWorld.HoursPerTick);
+							growth = new Vector2(5e-3f / (MathF.Pow(absDepth, 1.5f) * childrenCount * mPhotoFactor), 2e-5f) * (energyUsage * AgroWorld.HoursPerTick);
 						}
 					}
 					break;
@@ -287,6 +290,7 @@ public partial struct AboveGroundAgent2 : IPlantAgent
 				Length += growth.X;
 				Radius += growth.Y;
 
+				//TDMI maybe do it even if no growth
 				if (Organ == OrganTypes.Stem)
 				{
 					mPhotoFactor -= 8f * growth.Y;

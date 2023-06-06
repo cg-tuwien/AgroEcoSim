@@ -2,11 +2,19 @@
 # Visual Studio 2012
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AgroGodot", "AgroGodot.csproj", "{49AA2D33-E6FD-4EA8-8EFB-4B2EDCE4749F}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AgentsSystem", "AgentsSystem\AgentsSystem.csproj", "{25658456-25D3-487D-8F87-0CE5C4BA2E77}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Agro", "Agro\Agro.csproj", "{C863FFE8-5D48-4928-AB35-EFC659076791}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AgroServer", "AgroServer\AgroServer.csproj", "{89645079-A368-4EC2-9D10-AB01318C796E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Utils", "Utils\Utils.csproj", "{57AA65E8-6783-474C-A7C4-BA72471146AF}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
-	Debug|Any CPU = Debug|Any CPU
-	ExportDebug|Any CPU = ExportDebug|Any CPU
-	ExportRelease|Any CPU = ExportRelease|Any CPU
+		Debug|Any CPU = Debug|Any CPU
+		ExportDebug|Any CPU = ExportDebug|Any CPU
+		ExportRelease|Any CPU = ExportRelease|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
 		{49AA2D33-E6FD-4EA8-8EFB-4B2EDCE4749F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
@@ -15,5 +23,29 @@ Global
 		{49AA2D33-E6FD-4EA8-8EFB-4B2EDCE4749F}.ExportDebug|Any CPU.Build.0 = ExportDebug|Any CPU
 		{49AA2D33-E6FD-4EA8-8EFB-4B2EDCE4749F}.ExportRelease|Any CPU.ActiveCfg = ExportRelease|Any CPU
 		{49AA2D33-E6FD-4EA8-8EFB-4B2EDCE4749F}.ExportRelease|Any CPU.Build.0 = ExportRelease|Any CPU
+		{25658456-25D3-487D-8F87-0CE5C4BA2E77}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{25658456-25D3-487D-8F87-0CE5C4BA2E77}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{25658456-25D3-487D-8F87-0CE5C4BA2E77}.ExportDebug|Any CPU.ActiveCfg = Debug|Any CPU
+		{25658456-25D3-487D-8F87-0CE5C4BA2E77}.ExportDebug|Any CPU.Build.0 = Debug|Any CPU
+		{25658456-25D3-487D-8F87-0CE5C4BA2E77}.ExportRelease|Any CPU.ActiveCfg = Debug|Any CPU
+		{25658456-25D3-487D-8F87-0CE5C4BA2E77}.ExportRelease|Any CPU.Build.0 = Debug|Any CPU
+		{C863FFE8-5D48-4928-AB35-EFC659076791}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C863FFE8-5D48-4928-AB35-EFC659076791}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C863FFE8-5D48-4928-AB35-EFC659076791}.ExportDebug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C863FFE8-5D48-4928-AB35-EFC659076791}.ExportDebug|Any CPU.Build.0 = Debug|Any CPU
+		{C863FFE8-5D48-4928-AB35-EFC659076791}.ExportRelease|Any CPU.ActiveCfg = Debug|Any CPU
+		{C863FFE8-5D48-4928-AB35-EFC659076791}.ExportRelease|Any CPU.Build.0 = Debug|Any CPU
+		{89645079-A368-4EC2-9D10-AB01318C796E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{89645079-A368-4EC2-9D10-AB01318C796E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{89645079-A368-4EC2-9D10-AB01318C796E}.ExportDebug|Any CPU.ActiveCfg = Debug|Any CPU
+		{89645079-A368-4EC2-9D10-AB01318C796E}.ExportDebug|Any CPU.Build.0 = Debug|Any CPU
+		{89645079-A368-4EC2-9D10-AB01318C796E}.ExportRelease|Any CPU.ActiveCfg = Debug|Any CPU
+		{89645079-A368-4EC2-9D10-AB01318C796E}.ExportRelease|Any CPU.Build.0 = Debug|Any CPU
+		{57AA65E8-6783-474C-A7C4-BA72471146AF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{57AA65E8-6783-474C-A7C4-BA72471146AF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{57AA65E8-6783-474C-A7C4-BA72471146AF}.ExportDebug|Any CPU.ActiveCfg = Debug|Any CPU
+		{57AA65E8-6783-474C-A7C4-BA72471146AF}.ExportDebug|Any CPU.Build.0 = Debug|Any CPU
+		{57AA65E8-6783-474C-A7C4-BA72471146AF}.ExportRelease|Any CPU.ActiveCfg = Debug|Any CPU
+		{57AA65E8-6783-474C-A7C4-BA72471146AF}.ExportRelease|Any CPU.Build.0 = Debug|Any CPU
 	EndGlobalSection
 EndGlobal

@@ -19,13 +19,12 @@ public partial class PlantFormation2
 		AG_Godot = new(AG);
 
 		var seed = Seed[0];
-		var spherePrimitive = new SphereMesh();
+		var spherePrimitive = new SphereMesh(){ Material = AgroWorldGodot.UnshadedMaterial };
 		GodotSeedSprite = new ()
         {
             Mesh = spherePrimitive,
 			Position = seed.Center.ToGodot(),
-			Scale = Vector3.One * seed.Radius,
-			MaterialOverride = AgroWorldGodot.UnshadedMaterial()
+			Scale = Vector3.One * seed.Radius
         }; // Create a new Sprite.
 
 		SimulationWorld.GodotAddChild(GodotSeedSprite); // Add it as a child of this node.
@@ -38,8 +37,8 @@ public partial class PlantFormation2
 		if (Seed.Length == 1)
 		{
 			GodotSeedSprite.Scale = Vector3.One * Seed[0].Radius;
-			var seedColor = 0.5f * Seed[0].GerminationProgress + 0.5f;
-			((ShaderMaterial)GodotSeedSprite.MaterialOverride).SetShaderParameter(AgroWorldGodot.COLOR, new Color(seedColor, seedColor, seedColor));
+			var seedColor = 0.7f * Seed[0].GerminationProgress + 0.3f;
+			GodotSeedSprite.SetInstanceShaderParameter(AgroWorldGodot.COLOR, new Color(seedColor, seedColor, seedColor));
 		}
 		else if (GodotSeedSprite != null)
 		{

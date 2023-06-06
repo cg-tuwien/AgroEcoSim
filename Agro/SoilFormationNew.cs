@@ -88,7 +88,7 @@ public partial class SoilFormationNew : IFormation, IGrid3D
 			{
 				var h = Size.Z * (heightfield[x, y] / metricSize.Z);
 				heights[x, y] = Math.Clamp((int)Math.Ceiling(h), 1, Size.Z - 1);
-				Console.WriteLine($"rH({x}, {y}) = {heights[x, y]}");
+				//Console.WriteLine($"rH({x}, {y}) = {heights[x, y]}");
 			}
 
 		GroundAddr = new int[size.X * size.Y];

@@ -11,7 +11,9 @@ public abstract class PlantAbstractGodot2<T> where T : struct, IPlantAgent
 {
 	protected readonly PlantSubFormation2<T> Formation;
 	protected readonly List<MeshInstance3D> GodotSprites = new();
-	protected readonly static BoxMesh PlantCubePrimitive = new();
+	protected readonly static BoxMesh PlantCubePrimitive = new() { Material = AgroWorldGodot.UnshadedMaterial };
+	protected bool IsUnshadedMaterial = false;
+	protected bool ShadedMaterialTarget = false;
 
 	protected PlantAbstractGodot2(PlantSubFormation2<T> formation) => Formation = formation;
 
@@ -21,18 +23,17 @@ public abstract class PlantAbstractGodot2<T> where T : struct, IPlantAgent
 
 	protected virtual Color FormationColor => DefaultColor;
 	protected virtual ColorCodingType FormationColorCoding => ColorCodingType.Light;
-	protected ShaderMaterial UnshadedMaterial = AgroWorldGodot.UnshadedMaterial();
-	protected ShaderMaterial ShadedMaterial = AgroWorldGodot.ShadedMaterial();
+	// protected ShaderMaterial UnshadedMaterial = AgroWorldGodot.UnshadedMaterial;
+	// protected ShaderMaterial ShadedMaterial = AgroWorldGodot.ShadedMaterial;
 
 	public void AddSprites(int count)
 	{
 		for (int i = GodotSprites.Count; i < count; ++i)
 		{
-			UnshadedMaterial.SetShaderParameter(AgroWorldGodot.COLOR, FormationColor);
-			ShadedMaterial.SetShaderParameter(AgroWorldGodot.COLOR, FormationColor);
+			// UnshadedMaterial.SetShaderParameter(AgroWorldGodot.COLOR, FormationColor);
+			// ShadedMaterial.SetShaderParameter(AgroWorldGodot.COLOR, FormationColor);
 			var sprite = new MeshInstance3D() {
-				Mesh = PlantCubePrimitive,
-				MaterialOverride = UnshadedMaterial
+				Mesh = PlantCubePrimitive
 			};
 
 			SimulationWorld.GodotAddChild(sprite); // Add it as a child of this node.
@@ -65,8 +66,8 @@ public abstract class PlantAbstractGodot2<T> where T : struct, IPlantAgent
 			{
 				if (justCreated) return Colors.Black;
 				var w = Math.Clamp(Formation.GetIrradiance(index) * AgroWorldGodot.ShootsVisualization.LightCutOff, 0, 1);
-				if (Formation.GetIrradiance(index) > 0) System.Diagnostics.Debug.WriteLine($"LI {index}: {Formation.GetIrradiance(index)} => {w}");
-				return new Color(Math.Clamp(w, 0, 1), Math.Clamp(w * 0.8f, 0, 1), Math.Clamp(w * 0.64f, 0, 1));
+				//return new Color(Math.Clamp(w, 0, 1), Math.Clamp(w * 0.8f, 0, 1), Math.Clamp(w * 0.64f, 0, 1));
+				return new Color(w, w, w);
 			}
 			case ColorCodingType.Water:
 			{

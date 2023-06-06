@@ -39,6 +39,8 @@ public partial class Simulation : CanvasLayer
 	readonly string SimulationTimestamp = FormatedTimestamp(precise: false);
 	string SimulationDir;
 	uint ScreensCounter = 0;
+	int ScreensBurst = -1;
+	int InitScreenBurst() => /*28 * */24 / AgroWorld.HoursPerTick;
 
 	static string FormatedTimestamp(bool precise)
 	{
@@ -48,6 +50,7 @@ public partial class Simulation : CanvasLayer
 
 	public void Pause()
 	{
+		ScreensBurst = -1;
 		Paused = !Paused;
 		if (Paused)
 		{
@@ -64,10 +67,18 @@ public partial class Simulation : CanvasLayer
 		}
 	}
 
+	public bool IsPaused() => Paused || ScreensBurst > 0;
+	public bool IsBurst() => ScreensBurst > 0;
+
 	void SwitchOffOverlay()
 	{
-		IrradianceDebug.ButtonPressed = false;
-		DebugOverlay.Hide();
+		//IrradianceDebug.ButtonPressed = false;
+		//DebugOverlay.Hide();
+		if (IrradianceDebug.ButtonPressed)
+		{
+			ScreensBurst = InitScreenBurst();
+			ManualStepsRequested = 1;
+		}
 	}
 
 	public override void _Ready()
@@ -163,6 +174,28 @@ public partial class Simulation : CanvasLayer
 				Debug.WriteLine("DoubleScreenPhase.ProcessingOverlay");
 				DebugOverlay.Texture.GetImage().SavePng($"{SimulationDir}/r{ScreensCounter:D8}.png");
 				DebugOverlay.Hide();
+
+				var envData = IrradianceClient.DebugEnvironment();
+				if (envData != null)
+				{
+					var size = envData.Length / sizeof(float);
+					var sizeX = IrradianceClient.DebugEnvironmentX();
+					var sizeY = size / IrradianceClient.DebugEnvironmentX();
+					var envImg = Image.CreateFromData(sizeX, sizeY, false, Image.Format.Rf, envData);
+					envImg.SaveExr($"{SimulationDir}/e{ScreensCounter:D8}.exr", true);
+					//workaround
+					// var tmpf = new float[envData.Length / sizeof(float)];
+					// Buffer.BlockCopy(envData, 0, tmpf, 0, envData.Length);
+					// var tmpb = new byte[tmpf.Length];
+					// for(var i = 0; i < tmpf.Length; ++i)
+					// 	tmpb[i] = (byte)Math.Clamp(tmpf[i] * 16, 0, 255);
+
+					// Debug.WriteLine($"Size: {size} Length: {tmpb.Length}");
+					// var envImg = Image.CreateFromData(sizeX, sizeY, false, Image.Format.R8, tmpb);
+					// envImg.SavePng($"{SimulationDir}/e{ScreensCounter:D8}.png");
+
+					envImg.Dispose();
+				}
 			}
 
 			if (ScreenPhase != DoubleScreenPhase.Idle)
@@ -171,7 +204,7 @@ public partial class Simulation : CanvasLayer
 			if (ScreenshotButton.ButtonPressed && ((World.Timestep > PrevTimestep && ScreenPhase == DoubleScreenPhase.Idle) || ScreenPhase == DoubleScreenPhase.RequestedBackground))
 			{
 				var imgInternal = GetViewport().GetTexture().GetImage();
-				imgInternal.FlipY();
+				//imgInternal.FlipY(); //Not necessary for Godot4 anymore
 				imgInternal.SavePng($"{SimulationDir}/g{ScreensCounter++:D8}.png");
 				if (ScreenPhase == DoubleScreenPhase.RequestedBackground)
 				{
@@ -180,7 +213,12 @@ public partial class Simulation : CanvasLayer
 					Debug.WriteLine("DoubleScreenPhase.Idle");
 
 					if (!Paused)
-						CoolDown = DateTime.UtcNow + TimeSpan.FromSeconds(1);
+						CoolDown = DateTime.UtcNow + TimeSpan.FromSeconds(0.5);
+
+					if (ScreensBurst-- == 0)
+						Pause();
+					else
+						ManualStepsRequested = 1;
 				}
 			}
 
@@ -321,16 +359,16 @@ public partial class Simulation : CanvasLayer
 
 	public void ComputeIrradince()
 	{
-		var b = SceneCamera.Transform.basis;
+		var b = SceneCamera.Transform.Basis;
 		var o = SceneCamera.GlobalPosition;
 		var v = GetViewport().GetVisibleRect().Size; //Godot3 has .Size
-		var matrix = new float[] { o.x, o.y, o.z, b.z.x, b.z.y, b.z.z, SceneCamera.Fov, v.x, v.y };
+		var matrix = new float[] { o.X, o.Y, o.Z, b.Z.X, b.Z.Y, b.Z.Z, SceneCamera.Fov, v.X, v.Y };
 
 		Image image;
 		var imgData = IrradianceClient.DebugIrradiance(World.Timestep, World.Formations, World.Obstacles, matrix);
 
 		if (imgData != null)
-			image = Image.CreateFromData((int)Math.Round(v.x), (int)Math.Round(v.y), false, Image.Format.Rgbf, imgData);
+			image = Image.CreateFromData((int)Math.Round(v.X), (int)Math.Round(v.Y), false, Image.Format.Rgbf, imgData);
 		else
 			image = Image.CreateFromData(2, 2, false, Image.Format.R8, new byte[]{ 255, 255, 255, 255 });
 

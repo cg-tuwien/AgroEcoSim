@@ -29,7 +29,7 @@ public static class AgroWorldGodot
 	internal const string COLOR = "mColor";
 
 	const string MaterialCoreString = $@"
-		uniform vec4 { COLOR } : source_color = vec4(0.7, 0.7, 0.7, 1.0);
+		instance uniform vec4 { COLOR } : source_color = vec4(0.7, 0.7, 0.7, 1.0);
 		void fragment() {{ ALBEDO = {COLOR}.rgb; }}
 	";
 
@@ -48,7 +48,7 @@ public static class AgroWorldGodot
 		"
 	};
 
-	internal static ShaderMaterial UnshadedMaterial() => new() { Shader = UnshadedShader };
+	internal static readonly ShaderMaterial UnshadedMaterial = new() { Shader = UnshadedShader };
 
-	internal static ShaderMaterial ShadedMaterial() => new() { Shader = ShadedShader };
+	internal static readonly ShaderMaterial ShadedMaterial = new() { Shader = ShadedShader };
 }

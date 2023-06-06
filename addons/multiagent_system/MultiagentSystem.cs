@@ -67,24 +67,24 @@ public partial class MultiagentSystem : Node3D
 		var fieldSize = new Utils.Json.Vector3XDZ{ X = 5f, D = 4, Z = 5f };
 
 		var plants = new List<PlantRequest>();
-		//for(float x = 0.75f; x < fieldSize.X; x += 1f)
-		var x = fieldSize.X * 0.5f;
-			//for(float z = 0.75f; z < fieldSize.Z; z += 1f)
-			var z = fieldSize.Z * 0.5f;
+		for(float x = 0.75f; x < fieldSize.X; x += 1f)
+		//var x = fieldSize.X * 0.5f;
+			for(float z = 0.75f; z < fieldSize.Z; z += 1f)
+			//var z = fieldSize.Z * 0.5f;
 				plants.Add(new(){ Position = new Utils.Json.Vector3XYZ{ X = x, Y = -0.01f, Z = z }});
 
 		var obstacles = new ObstacleRequest[] {
 			//new(){ Type = "Wall", Length = 5f, Height = 3.2f, Position = new Utils.Json.Vector3XYZ{ X = 2.5f, Y = 0f, Z = 1.25f }},
-			//new(){ Type = "Umbrella", Radius = 1.5f, Height = 2.2f, Position = new Utils.Json.Vector3XYZ{ X = 2.5f, Y = 0f, Z = 2.5f }}
+			new(){ Type = "Umbrella", Radius = 1.5f, Height = 2.2f, Position = new Utils.Json.Vector3XYZ{ X = 2.5f, Y = 0f, Z = 2.5f }}
 		};
 
 		World = Initialize.World(new SimulationRequest(){
 			TotalHours = 24 * 31 * 12 * 2,
-			HoursPerTick = 1,
+			HoursPerTick = 12,
 			FieldSize = fieldSize,
 			Plants = plants.ToArray(),
 			//Plants = Array.Empty<PlantRequest>()
-			//Obstacles = obstacles,
+			Obstacles = obstacles,
 		});
 
 		Ground = new ();
@@ -133,7 +133,7 @@ public partial class MultiagentSystem : Node3D
 		if (Engine.IsEditorHint())
 			return;
 
-		Paused = Simulation.Paused;
+		Paused = Simulation.IsPaused();
 
 		if (ColorPickerInactive)
 		{

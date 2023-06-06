@@ -26,9 +26,9 @@ public partial class Plant_AG_Godot2 : PlantAbstractGodot2<AboveGroundAgent2>
 		sprite.Transform = new Transform3D(basis, (Formation.GetBaseCenter(index) + stableScale).ToGodot());
 		sprite.Scale = Formation.GetScale(index).ToGodot();
 
-		var material = AgroWorldGodot.ShootsVisualization.IsUnshaded ? UnshadedMaterial : ShadedMaterial;
-		material.SetShaderParameter(AgroWorldGodot.COLOR, ColorCoding(index, AgroWorldGodot.ShootsVisualization.TransferFunc, justCreated));
-		sprite.MaterialOverride = material;
+		//var material = AgroWorldGodot.ShootsVisualization.IsUnshaded ? UnshadedMaterial : ShadedMaterial;
+		//if (IsUnshadedMaterial != AgroWorldGodot.ShootsVisualization.IsUnshaded) //TODO how to dynamically change material shading?
+		sprite.SetInstanceShaderParameter(AgroWorldGodot.COLOR, ColorCoding(index, AgroWorldGodot.ShootsVisualization.TransferFunc, justCreated));
 	}
 
 	protected override Color GetNaturalColor(int index)

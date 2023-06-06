@@ -50,15 +50,6 @@ horizontal_alignment = 1
 uppercase = true
 metadata/_edit_use_anchors_ = true
 
-[node name="Color" parent="." instance=ExtResource("1_cjpau")]
-offset_left = 7.0
-offset_top = 170.0
-offset_right = 7.0
-offset_bottom = 170.0
-
-[node name="CustomColor" parent="Color" index="4"]
-visible = false
-
 [node name="Visibility" type="Control" parent="."]
 layout_mode = 3
 anchors_preset = 0
@@ -132,6 +123,15 @@ offset_top = 6.0
 offset_right = 164.0
 offset_bottom = 30.0
 
+[node name="Color" parent="." instance=ExtResource("1_cjpau")]
+offset_left = 7.0
+offset_top = 170.0
+offset_right = 7.0
+offset_bottom = 170.0
+
+[node name="CustomColor" parent="Color" index="4"]
+visible = false
+
 [node name="LightCutOff" type="Control" parent="."]
 layout_mode = 3
 anchors_preset = 0
@@ -169,10 +169,10 @@ text = "Light cut-off"
 horizontal_alignment = 2
 metadata/_edit_use_anchors_ = true
 
-[connection signal="toggled" from="Color/UnshadedButton" to="." method="Unshaded"]
-[connection signal="item_selected" from="Color/OptionButton" to="." method="ShootsTransferFunction"]
 [connection signal="toggled" from="Visibility/StemsCheckButton" to="." method="StemsVisibility"]
 [connection signal="toggled" from="Visibility/LeafsCheckButton" to="." method="LeafsVisibility"]
+[connection signal="toggled" from="Color/UnshadedButton" to="." method="Unshaded"]
+[connection signal="item_selected" from="Color/OptionButton" to="." method="ShootsTransferFunction"]
 [connection signal="drag_ended" from="LightCutOff/HSlider" to="." method="MenuLeft"]
 [connection signal="drag_started" from="LightCutOff/HSlider" to="." method="MenuEntered"]
 [connection signal="value_changed" from="LightCutOff/HSlider" to="." method="LightCutOff"]

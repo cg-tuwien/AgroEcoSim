@@ -26,12 +26,9 @@ public class Plant_UG_Godot2 : PlantAbstractGodot2<UnderGroundAgent2>
 		sprite.Transform = new Transform3D(basis, (Formation.GetBaseCenter(index) + stableScale).ToGodot());
 		sprite.Scale = (Formation.GetScale(index)).ToGodot();
 
-		var material = AgroWorldGodot.RootsVisualization.IsUnshaded
-			? UnshadedMaterial
-			: ShadedMaterial;
-
-		material.SetShaderParameter(AgroWorldGodot.COLOR, ColorCoding(index, AgroWorldGodot.ShootsVisualization.TransferFunc, justCreated));
-		sprite.MaterialOverride = material;
+		//var material = AgroWorldGodot.RootsVisualization.IsUnshaded ? UnshadedMaterial : ShadedMaterial;
+		sprite.SetInstanceShaderParameter(AgroWorldGodot.COLOR, ColorCoding(index, AgroWorldGodot.ShootsVisualization.TransferFunc, justCreated));
+		//sprite.MaterialOverride = material;
 	}
 
 	protected override Color GetNaturalColor(int index)
