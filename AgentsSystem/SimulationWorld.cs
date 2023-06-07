@@ -9,9 +9,11 @@ namespace AgentsSystem;
 public partial class SimulationWorld
 {
 	internal readonly List<IFormation> Formations = new();
-	internal readonly List<Action<uint, IList<IFormation>, IList<IObstacle>>> Callbacks = new();
+	internal readonly List<Action<SimulationWorld, uint, IList<IFormation>, IList<IObstacle>>> Callbacks = new();
 	public uint Timestep { get; private set; } = 0U;
 	public byte Stage { get; private set; }
+
+	public ushort UnitsPerTick = 1;
 
 	byte Stages = 1;
 
@@ -156,7 +158,7 @@ public partial class SimulationWorld
 			for(int i = 0; i < Formations.Count; ++i)
 				if (Formations[i].HasUnprocessedTransactions)
 				{
-					Formations[i].ProcessTransactions(Timestep, Stage);
+					Formations[i].ProcessTransactions(this, Timestep, Stage);
 					anyDelivered = true;
 				}
 		}
@@ -175,7 +177,7 @@ public partial class SimulationWorld
 			Parallel.For(0, Formations.Count, i => {
 				if (Formations[i].HasUnprocessedTransactions)
 				{
-					Formations[i].ProcessTransactions(Timestep, Stage);
+					Formations[i].ProcessTransactions(this, Timestep, Stage);
 					anyDelivered = true;
 				}
 			});
@@ -221,12 +223,12 @@ public partial class SimulationWorld
 		}
 	}
 
-	public void AddCallback(Action<uint, IList<IFormation>, IList<IObstacle>> callback) => Callbacks.Add(callback);
+	public void AddCallback(Action<SimulationWorld, uint, IList<IFormation>, IList<IObstacle>> callback) => Callbacks.Add(callback);
 
 	public void ExecCallbacks()
 	{
 		foreach(var callback in Callbacks)
-			callback(Timestep, Formations, Obstacles);
+			callback(this, Timestep, Formations, Obstacles);
 	}
 
 	public string ToJson()

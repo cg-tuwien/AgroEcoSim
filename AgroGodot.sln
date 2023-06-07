@@ -1,7 +1,5 @@
 ﻿Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 2012
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AgroGodot", "AgroGodot.csproj", "{49AA2D33-E6FD-4EA8-8EFB-4B2EDCE4749F}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AgentsSystem", "AgentsSystem\AgentsSystem.csproj", "{25658456-25D3-487D-8F87-0CE5C4BA2E77}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Agro", "Agro\Agro.csproj", "{C863FFE8-5D48-4928-AB35-EFC659076791}"
@@ -17,12 +15,6 @@ Global
 		ExportRelease|Any CPU = ExportRelease|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{49AA2D33-E6FD-4EA8-8EFB-4B2EDCE4749F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{49AA2D33-E6FD-4EA8-8EFB-4B2EDCE4749F}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{49AA2D33-E6FD-4EA8-8EFB-4B2EDCE4749F}.ExportDebug|Any CPU.ActiveCfg = ExportDebug|Any CPU
-		{49AA2D33-E6FD-4EA8-8EFB-4B2EDCE4749F}.ExportDebug|Any CPU.Build.0 = ExportDebug|Any CPU
-		{49AA2D33-E6FD-4EA8-8EFB-4B2EDCE4749F}.ExportRelease|Any CPU.ActiveCfg = ExportRelease|Any CPU
-		{49AA2D33-E6FD-4EA8-8EFB-4B2EDCE4749F}.ExportRelease|Any CPU.Build.0 = ExportRelease|Any CPU
 		{25658456-25D3-487D-8F87-0CE5C4BA2E77}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{25658456-25D3-487D-8F87-0CE5C4BA2E77}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{25658456-25D3-487D-8F87-0CE5C4BA2E77}.ExportDebug|Any CPU.ActiveCfg = Debug|Any CPU

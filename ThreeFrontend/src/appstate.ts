@@ -2,21 +2,53 @@ import { Signal, batch, computed, signal } from "@preact/signals";
 import { BackendURI } from "./config";
 import BinaryReader from "./helpers/BinaryReader";
 import { Scene } from "./helpers/Scene";
+import * as SignalR from "@microsoft/signalr";
 
-// const appInitState = {
-//     computing: false,
-//     resultScene: ""
-// };
+interface RetryContext {
+    readonly previousRetryCount: number; //The number of consecutive failed tries so far.
+    readonly elapsedMilliseconds: number; // The amount of time in milliseconds spent retrying so far.
+    readonly retryReason: Error; // The error that forced the upcoming retry.
+}
 
-// const appReducer = (state, action) => {
-//     switch(action) {
-//         case 'compute': return state.computing ? {...state} : {...state, computing: true};
-//     }
-// };
+const InfiniteHubRetry = {
+    nextRetryDelayInMilliseconds(retryContext: RetryContext): number | null {
+        switch (retryContext.previousRetryCount)
+        {
+            case 0: case 1: return 200;
+            case 2: case 3: return 500;
+            case 4: case 5: case 6: case 7: return 1000;
+            case 8: case 9: case 10: case 11: return 2000;
+            default: return 5000;
+        }
+    }
+}
 
-// const [appState, appDispatcher] = useReducer(appReducer, appInitState);
+export const hubConnection = new SignalR.HubConnectionBuilder().withUrl(`${BackendURI.startsWith("localhost") ? "https:" : location.protocol}//${BackendURI}/SimSocket`).withAutomaticReconnect(InfiniteHubRetry).build();
 
-// const Simulation = signal({state: appState, dispatcher: appDispatcher});
+hubConnection.on("reject", () => { console.log("You have another simulation already running. Please wait until it is finished."); });
+hubConnection.on("progress", (step: number, length: number) => {
+    batch(() => {
+        state.simStep.value = step;
+        state.simLength.value = length;
+    });
+});
+
+hubConnection.on("result", (result: ISimResponse) => {
+    const binaryScene = base64ToArrayBuffer(result.scene);
+    const reader = new BinaryReader(binaryScene);
+    const scene = reader.readAgroScene();
+    batch(() => {
+        state.plants.value = result.plants;
+        state.scene.value = scene;
+        state.computing.value = false;
+        state.renderer = result.renderer;
+        state.simLength.value = 0;
+    });
+});
+
+const start = async() => hubConnection.start();
+hubConnection.onclose(start);
+start();
 
 export interface IPlantRequest
 {
@@ -56,6 +88,8 @@ const state = {
 
     //OPERATIONAL STATE
     computing: signal(false),
+    simStep: signal(0),
+    simLength: signal(0),
 
     //RESPONSE
     plants: signal<IPlantResponse[]>([]),
@@ -85,25 +119,24 @@ async function run() {
     if (!state.computing.value)
     {
         state.computing.value = true;
-        const response = await fetch(`${BackendURI.startsWith("localhost") ? "https:" : location.protocol}//${BackendURI}/Simulation`, {
-            method: "POST",
+        // const response = await fetch(`${BackendURI.startsWith("localhost") ? "https:" : location.protocol}//${BackendURI}/Simulation`, {
+        //     method: "POST",
+        //     cache: "no-cache",
+        //     headers: { "Content-Type": "application/json" },
+        //     body: JSON.stringify(requestBody()),
+        // });
+        hubConnection.invoke("run", requestBody());
 
-            cache: "no-cache",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(requestBody()),
-
-        });
-
-        const json = await response.json() as ISimResponse;
-        const binaryScene = base64ToArrayBuffer(json.scene);
-        const reader = new BinaryReader(binaryScene);
-        const scene = reader.readAgroScene();
-        batch(() => {
-            state.plants.value = json.plants;
-            state.scene.value = scene;
-            state.computing.value = false;
-            state.renderer = json.renderer;
-        });
+        //const json = await response.json() as ISimResponse;
+        // const binaryScene = base64ToArrayBuffer(json.scene);
+        // const reader = new BinaryReader(binaryScene);
+        // const scene = reader.readAgroScene();
+        // batch(() => {
+        //     state.plants.value = json.plants;
+        //     state.scene.value = scene;
+        //     state.computing.value = false;
+        //     state.renderer = json.renderer;
+        // });
     }
 }
 

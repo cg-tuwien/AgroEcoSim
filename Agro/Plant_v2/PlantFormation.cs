@@ -218,13 +218,14 @@ public partial class PlantFormation2 : IPlantFormation
 	bool NewStatsBlock = true;
 	internal bool IsNewDay() => NewStatsBlock;
 
-	public void Tick(SimulationWorld world, uint timestep, byte stage)
+	public void Tick(SimulationWorld _world, uint timestep, byte stage)
 	{
+		var world = _world as AgroWorld;
 		if (DeathSeed && !UG.Alive && !AG.Alive)
 			return;
 
 		//NewStatsBlock = AgroWorld.HoursPerTick >= 24 || timestep == 0 || ((timestep - 1) * AgroWorld.HoursPerTick) / 24 < (timestep * AgroWorld.HoursPerTick) / 24; //MI 2023-03-07 This was used for timesteps shorter than one hour
-		NewStatsBlock = timestep % AgroWorld.StatsBlockLength == 0;
+		NewStatsBlock = timestep % world.StatsBlockLength == 0;
 
 		//Ready for List and Span combination
 
@@ -270,8 +271,8 @@ public partial class PlantFormation2 : IPlantFormation
 			UG.Tick(world, timestep, stage);
 			AG.Tick(world, timestep, stage);
 
-			var globalUG = UG.Gather();
-			var globalAG = AG.Gather();
+			var globalUG = UG.Gather(world);
+			var globalAG = AG.Gather(world);
 
 			var energy = globalAG.Energy + globalUG.Energy;
 			var water = globalAG.Water + globalUG.Energy;
@@ -398,12 +399,12 @@ public partial class PlantFormation2 : IPlantFormation
 		// 	Console.WriteLine("R: {0}x{1} E: {2} W: {3}", UnderGround[0].Radius, UnderGround[0].Length, UnderGround[0].Energy, UnderGround[0].Water);
 	}
 
-	public void ProcessTransactions(uint timestep, byte stage)
+	public void ProcessTransactions(SimulationWorld world, uint timestep, byte stage)
 	{
 		if (UG.HasUnprocessedTransactions)
-			UG.ProcessTransactions(timestep, stage);
+			UG.ProcessTransactions(world, timestep, stage);
 		if (AG.HasUnprocessedTransactions)
-			AG.ProcessTransactions(timestep, stage);
+			AG.ProcessTransactions(world, timestep, stage);
 	}
 
 	public (uint, uint, uint) GeometryStats()

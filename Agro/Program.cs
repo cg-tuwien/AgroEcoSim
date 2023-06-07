@@ -24,7 +24,7 @@ internal class Program
 
     private static void Main(string[] args) => Parser.Default.ParseArguments<Options>(args).WithParsed(options =>
     {
-        AgentsSystem.SimulationWorld world;
+        AgroWorld world;
         if (options.ImportFile != null)
         {
             if (!File.Exists(options.ImportFile))
@@ -35,7 +35,7 @@ internal class Program
         else
             world = Initialize.World();
         var start = DateTime.UtcNow.Ticks;
-        world.Run((uint)AgroWorld.TimestepsTotal());
+        world.Run((uint)world.TimestepsTotal());
         var stop = DateTime.UtcNow.Ticks;
         Console.WriteLine($"Simulation time: {(stop - start) / TimeSpan.TicksPerMillisecond} ms");
 #if HISTORY_LOG || HISTORY_TICK

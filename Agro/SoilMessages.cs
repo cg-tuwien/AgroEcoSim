@@ -61,8 +61,9 @@ public partial struct SoilAgent : IAgent
 		public Transaction Type => Transaction.Decrease;
 		public void Receive(ref SoilAgent srcAgent, uint timestep, byte stage)
 		{
-			var freeCapacity = Math.Max(0f, DstFormation.GetWaterCapacity(DstIndex) - DstFormation.GetWater(DstIndex));
-			var water = srcAgent.TryDecWater(Math.Min(Amount, freeCapacity));
+			//var freeCapacity = Math.Max(0f, DstFormation.GetWaterCapacity(DstIndex) - DstFormation.GetWater(DstIndex));
+			//var water = srcAgent.TryDecWater(Math.Min(Amount, freeCapacity));
+			var water = srcAgent.TryDecWater(Amount);
 			if (water > 0f)
 			{
 				DstFormation.Send(DstIndex, new WaterInc(water));
@@ -108,8 +109,9 @@ public partial struct SoilAgent : IAgent
 		public Transaction Type => Transaction.Decrease;
 		public void Receive(ref SoilAgent srcAgent, uint timestep, byte stage)
 		{
-			var freeCapacity = Math.Max(0f, DstFormation.GetWaterTotalCapacity(DstIndex) - DstFormation.GetWater(DstIndex));
-			var water = srcAgent.TryDecWater(Math.Min(Amount, freeCapacity));
+			//var freeCapacity = Math.Max(0f, DstFormation.GetWaterTotalCapacity(DstIndex) - DstFormation.GetWater(DstIndex));
+			//var water = srcAgent.TryDecWater(Math.Min(Amount, freeCapacity));
+			var water = srcAgent.TryDecWater(Amount);
 			//Writing actions from other formations must not be implemented directly, but over messages
 			if (water > 0f)
 			{

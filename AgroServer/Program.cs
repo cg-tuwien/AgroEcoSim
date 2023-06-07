@@ -3,6 +3,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using AgroServer.Hubs;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.Extensions.DependencyInjection;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -26,6 +29,8 @@ builder.Services.AddSwaggerGen(options =>
 
 builder.Services.AddSignalR();
 
+builder.Configuration.AddEnvironmentVariables(prefix: "AGRO_");
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -37,15 +42,31 @@ if (true)
     app.UseSwaggerUI();
 }
 
-app.UseCors(options => options
-    .AllowAnyOrigin()
-    .AllowAnyHeader()
-    .AllowAnyMethod()
-);
+if (app.Environment.IsDevelopment())
+    app.UseCors(options => options
+        .SetIsOriginAllowed(s => s.Contains("localhost"))
+        .AllowAnyHeader()
+        .AllowCredentials()
+        .AllowAnyMethod()
+    );
+else
+{
+    var host = app.Configuration["AGRO_HOSTNAME"];
+    app.UseCors(options => options
+        .SetIsOriginAllowed(s => s.Contains(host))
+        .AllowAnyHeader()
+        .AllowCredentials()
+        .AllowAnyMethod()
+    );
+}
+
+
 
 //app.UseHttpsRedirection();
 
 //app.UseAuthorization();
+
+app.MapHub<SimulationHub>("/SimSocket");
 
 app.MapControllers();
 

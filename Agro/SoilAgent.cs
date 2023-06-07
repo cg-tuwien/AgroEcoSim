@@ -9,10 +9,10 @@ namespace Agro;
 [StructLayout(LayoutKind.Auto)]
 public partial struct SoilAgent : IAgent
 {
-	public static readonly float FieldCellSurface = AgroWorld.FieldResolution * AgroWorld.FieldResolution;
+	public static float FieldCellSurface(AgroWorld world) => world.FieldResolution * world.FieldResolution;
 
-	internal static readonly float SoilDiffusionCoefPerTick = 0.2f * AgroWorld.HoursPerTick;
-	internal static readonly float GravitationDiffusionCoefPerTick = 1.5f * SoilDiffusionCoefPerTick;
+	internal static float SoilDiffusionCoefPerTick(AgroWorld world) => 0.2f * world.HoursPerTick;
+	internal static float GravitationDiffusionCoefPerTick(AgroWorld world) => 1.5f * SoilDiffusionCoefPerTick(world);
 
 	///<summary>
 	//Water ammount (g)
@@ -30,8 +30,8 @@ public partial struct SoilAgent : IAgent
 	public const float WaterCapacityRatio = 1f;
 	public const float WaterSaturationRatio = 0.01f;
 
-	public float WaterMaxCapacity => FieldCellSurface * AgroWorld.FieldResolution * WaterCapacityRatio;
-	public float WaterMinSaturation => FieldCellSurface * AgroWorld.FieldResolution * WaterSaturationRatio;
+	public float WaterMaxCapacity(AgroWorld world) => FieldCellSurface(world) * world.FieldResolution * WaterCapacityRatio;
+	public float WaterMinSaturation(AgroWorld world) => FieldCellSurface(world) * world.FieldResolution * WaterSaturationRatio;
 
 	internal static readonly Vector3i[] LateralNeighborhood = new []{ new Vector3i(-1, 0, 0), new Vector3i(1, 0, 0), new Vector3i(0, -1, 0), new Vector3i(0, 1, 0) };
 
@@ -42,21 +42,22 @@ public partial struct SoilAgent : IAgent
 		Temperature = temperature;
 	}
 
-	public void Tick(SimulationWorld world, IFormation _formation, int formationID, uint timestep, byte stage)
+	public void Tick(SimulationWorld _world, IFormation _formation, int formationID, uint timestep, byte stage)
 	{
+		var world = _world as AgroWorld;
 		var formation = (SoilFormation)_formation;
 		var coords = formation.Coords(formationID);
 
 		//CodeReview: I used this trick to better visualize the lateral flow.
 		//  Now only one corner cell gets water, so in order to spread it needs the lateral flow
 		if (coords.Z == 0 /*&& coords.X == 0 && coords.Y == 0*/) // cells at z = 0 are above the ground, infinitely tall so no capacity restrictions for them
-			Water += AgroWorld.GetWater(timestep) * FieldCellSurface;
+			Water += world.GetWater(timestep) * FieldCellSurface(world);
 
 		//if (Water > WaterMinSaturation)
 		{
 			var availableForDiffusion = Water * 0.5f;
-			var downDiffusion = availableForDiffusion * GravitationDiffusionCoefPerTick;
-			var sideDiffusion = coords.Z > 0 ? (availableForDiffusion - downDiffusion) * SoilDiffusionCoefPerTick : availableForDiffusion - downDiffusion; //lateral flow above the ground is very strong
+			var downDiffusion = availableForDiffusion * GravitationDiffusionCoefPerTick(world);
+			var sideDiffusion = coords.Z > 0 ? (availableForDiffusion - downDiffusion) * SoilDiffusionCoefPerTick(world) : availableForDiffusion - downDiffusion; //lateral flow above the ground is very strong
 
 			var lateralFlow = new float[LateralNeighborhood.Length];
 			var lateralSum = 0f;

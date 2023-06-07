@@ -5,6 +5,8 @@ services:
       - "7215:80"
   renderer:
     image: agroecorender
+    ports:
+      - "9000:9000"
   web:
     image: agroecoweb
     ports:

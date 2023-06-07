@@ -11,6 +11,7 @@ import { PlantsTable } from './viewport/PlantsTable';
 import { Randomize } from './hud/Randomize';
 import { Seeds } from './hud/Seeds';
 import ThreeSceneFn from './viewport/ThreeSceneFn';
+import { ProgressBar } from './hud/ProgressBar';
 
 const App = () => {
 	return(
@@ -31,7 +32,7 @@ const App = () => {
 			<hr/>
 			<Seeds/>
 			<hr/>
-			<Start/>
+			<Start/>&nbsp;<ProgressBar/>
 			<PlantsTable/>
 		</nav>
 

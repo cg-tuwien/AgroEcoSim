@@ -44,33 +44,33 @@ public readonly struct WeatherStats
 	}
 }
 
-public static class AgroWorld
+public class AgroWorld : SimulationWorld
 {
-	public static int HoursPerTick = 1;
+	public ushort HoursPerTick = 1;
 	//public const int TotalHours = 24 * 365 * 10;
-	public static int TotalHours = 24 * 31 * 12;
+	public int TotalHours = 24 * 31 * 12;
 
-	public static int StatsBlockLength = 24;
+	public byte StatsBlockLength = 24;
 
 	//public static readonly Vector3 FieldSize = new(6f, 4f, 2f);
 	//public const float FieldResolution = 0.1f;
 
-	public static Vector3 FieldSize = new(1f, 1f, 1f); //2D size and the last component is depth
-	public static float FieldResolution = 0.5f;
+	public Vector3 FieldSize = new(1f, 1f, 1f); //2D size and the last component is depth
+	public float FieldResolution = 0.5f;
 
 	public const float Latitude = 48.208333f;
 	public const float Longitude = 16.3725f;
 	public const float Altitude = 188; //meters above sea level
 
-	public static TimeZoneInfo TimeZone = TimeZoneInfo.Local;
+	public TimeZoneInfo TimeZone = TimeZoneInfo.Local;
 
 	//clouds_coverage, precipitation
-	static WeatherStats[] Weather;
-	static BitArray Daylight;
+	WeatherStats[] Weather;
+	BitArray Daylight;
 
 	static readonly int[] DaysPerMonth = new[] { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
 
-	public static int TimestepsTotal()
+	public int TimestepsTotal()
 	{
 		var ticks = Math.DivRem(TotalHours, HoursPerTick, out var rem);
 		return ticks + (rem == 0 ? 0 : 1);
@@ -79,7 +79,7 @@ public static class AgroWorld
 	public readonly static DateTime InitialTime = new(2022, 1, 1, 0, 0, 0, DateTimeKind.Unspecified);
 
 	#if !GODOT
-	static AgroWorld()
+	public AgroWorld(SimulationRequest? settings = null) : base()
 	{
 		var ianaTimeZone = TimeZoneLookup.GetTimeZone(Latitude, Longitude).Result;
 		#if WINDOWS
@@ -87,10 +87,37 @@ public static class AgroWorld
 		#else
 		TimeZone = TimeZoneInfo.FindSystemTimeZoneById(ianaTimeZone);
 		#endif
+
+		if (settings != null)
+		{
+			if (settings?.HoursPerTick.HasValue ?? false)
+			{
+				HoursPerTick = (ushort)settings.HoursPerTick.Value;
+				if (HoursPerTick < 24)
+					HoursPerTick = HoursPerTick switch { <= 0 => 1, 5 => 4, 7 => 6, 9 or 10 => 8, 11 => 12, >12 and <= 18 => 12, >18 => 24, _ => HoursPerTick };
+				else
+					HoursPerTick = (ushort)(24 * (HoursPerTick / 24));
+
+				StatsBlockLength = (byte)(23 / HoursPerTick + 1);
+			}
+
+			if (settings?.TotalHours.HasValue ?? false)
+				TotalHours = settings.TotalHours.Value;
+
+			if (settings?.FieldResolution.HasValue ?? false)
+				FieldResolution = settings.FieldResolution.Value;
+
+			if (settings?.FieldSize.HasValue ?? false)
+				FieldSize = settings.FieldSize.Value;
+
+			if (settings?.Seed.HasValue ?? false)
+				InitRNG(settings.Seed.Value);
+		}
+		Init();
 	}
 	#endif
 
-	public static void Init()
+	public void Init()
 	{
 		var sunnyDays = new float[]{3.2f, 3.3f, 5.8f, 7.6f, 8.2f, 8.6f, 11.8f, 12.6f, 10.5f, 9.7f, 4.3f, 4.1f}; //clouds factor 0 to 0.25
 		var cloudyDays = new float[]{12.3f, 12.6f, 14.6f, 15.3f, 17.2f, 16.6f, 15.1f, 13.7f, 13.2f, 13.6f, 12.4f, 12.1f}; //clouds factor 0.25 to 0.5
@@ -208,19 +235,19 @@ public static class AgroWorld
 		}
 	}
 
-	internal static DateTime GetTime(uint timestep) => TimeZoneInfo.ConvertTimeToUtc(InitialTime, TimeZone) + TimeSpan.FromHours(timestep * HoursPerTick);
+	internal DateTime GetTime(uint timestep) => TimeZoneInfo.ConvertTimeToUtc(InitialTime, TimeZone) + TimeSpan.FromHours(timestep * HoursPerTick);
 	///<summary>
 	//Rainfall in the given timestep in gramm
 	///</summary>
-	internal static float GetWater(uint timestep) => Weather[timestep].Precipitation;
-	internal static float GetTemperature(uint timestep) => 20;
-	internal static float GetAmbientLight(uint timestep) => 1f - Weather[timestep].SkyCoverage;
-	internal static bool GetDaylight(uint timestep) => Daylight?.Get((int)timestep) ?? true;
+	internal float GetWater(uint timestep) => Weather[timestep].Precipitation;
+	internal float GetTemperature(uint timestep) => 20;
+	internal float GetAmbientLight(uint timestep) => 1f - Weather[timestep].SkyCoverage;
+	internal bool GetDaylight(uint timestep) => Daylight?.Get((int)timestep) ?? true;
 
-	internal static Pcg RNG = new(42);
-	internal static void InitRNG(ulong seed) => RNG = new(seed);
+	internal Pcg RNG = new(42);
+	internal void InitRNG(ulong seed) => RNG = new(seed);
 
-	static int[] DistributeSunAndClouds(int totalSun, int totalClouds)
+	int[] DistributeSunAndClouds(int totalSun, int totalClouds)
 	{
 		if (totalSun <= 0f)
 			return new int[] { -totalClouds };
@@ -272,7 +299,7 @@ public static class AgroWorld
 	}
 	static readonly float[] precipitationLowIntervals = new float[] {0, 0, 2, 5, 10, 20, 50};
 	static readonly float[] precipitationHighIntervals = new float[] {0, 2, 5, 10, 20, 50, 100};
-	static WeatherStats[] PlanCloudsSingleMonth(int month, int daysPerMonth, float sunnyDays, float cloudDays, float dullDays, float precipitationMM, float[] maxPrecipitationStats_inDays)
+	WeatherStats[] PlanCloudsSingleMonth(int month, int daysPerMonth, float sunnyDays, float cloudDays, float dullDays, float precipitationMM, float[] maxPrecipitationStats_inDays)
 	{
 		var hoursInMonth = daysPerMonth * 24;
 		var sunHoursTarget = Math.Max(0, (int)Math.Round(RNG.NextNormal(sunnyDays * 24, 0.15 * sunnyDays * 24)));

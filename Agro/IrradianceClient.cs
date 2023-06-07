@@ -87,11 +87,12 @@ foreach ENTITY
 public class IrradianceClient
 {
 	readonly HttpClient Client;
+	readonly HttpRequestMessage ProbeRequest = new() { Method = HttpMethod.Get };
 	readonly List<float> Irradiances = new();
 	readonly List<int> SkipFormations = new();
 	readonly List<Vector3> IrradiancePoints = new();
 	readonly Dictionary<IFormation, int[]> IrradianceFormationOffsets = new();
-	readonly bool IsOnline = false;
+	bool IsOnline = false;
 	bool IsNight = true;
 
 	byte[] EnvMap = null; //just for debug output
@@ -102,18 +103,22 @@ public class IrradianceClient
 		Client = new() { BaseAddress = new Uri("http://localhost:9000"), Timeout = TimeSpan.FromHours(1) };
 		Client.DefaultRequestHeaders.Add("La", AgroWorld.Latitude.ToString());
 		Client.DefaultRequestHeaders.Add("Lo", AgroWorld.Longitude.ToString());
+	}
 
+	bool ProbeRenderer()
+	{
 		//Probe if the client is online, else fallback to constant ambient light
-		var request = new HttpRequestMessage() { Method = HttpMethod.Get };
 		try
 		{
-			var result = Client.SendAsync(request).Result;
+			var result = Client.SendAsync(ProbeRequest).Result;
 			IsOnline = result.IsSuccessStatusCode;
 		}
 		catch (Exception)
 		{
 			Console.WriteLine("WARNING: No irradiance client responded at http://localhost:9000. Falling back to ambient light pipeline.");
+			IsOnline = false;
 		}
+		return IsOnline;
 	}
 
 	public static void SetAddress(string addr)
@@ -122,17 +127,20 @@ public class IrradianceClient
 			Singleton.Client.BaseAddress = new Uri(addr);
 	}
 
-	public static void Tick(uint timestep, IList<IFormation> formations, IList<IObstacle> obstacles)
+	public static void Tick(SimulationWorld world, uint timestep, IList<IFormation> formations, IList<IObstacle> obstacles)
 	{
+		if (timestep == 0)
+			Singleton.ProbeRenderer();
+
 		if (Singleton.IsOnline)
-			Singleton.DoTick(timestep, formations, obstacles);
+			Singleton.DoTick(world as AgroWorld, timestep, formations, obstacles);
 		else
-			Singleton.DoFallbackTick(timestep, formations);
+			Singleton.DoFallbackTick(world as AgroWorld, timestep, formations);
 	}
 
-	void DoTick(uint timestep, IList<IFormation> formations, IList<IObstacle> obstacles)
+	void DoTick(AgroWorld world, uint timestep, IList<IFormation> formations, IList<IObstacle> obstacles)
 	{
-		if (AgroWorld.GetDaylight(timestep))
+		if (world.GetDaylight(timestep))
 		{
 			//if (IsNight) Debug.WriteLine("DAY");
 			IsNight = false;
@@ -186,8 +194,8 @@ public class IrradianceClient
 						Method = HttpMethod.Post,
 						Content = new ByteArrayContent(byteBuffer.Array, 0, byteBuffer.Count)
 					};
-					request.Headers.Add("Ti", AgroWorld.GetTime(timestep).ToString("o", CultureInfo.InvariantCulture));
-					request.Headers.Add("TiE", AgroWorld.GetTime(timestep + 1).ToString("o", CultureInfo.InvariantCulture));
+					request.Headers.Add("Ti", world.GetTime(timestep).ToString("o", CultureInfo.InvariantCulture));
+					request.Headers.Add("TiE", world.GetTime(timestep + 1).ToString("o", CultureInfo.InvariantCulture));
 					//Debug.WriteLine(offsetCounter);
 					//request.Headers.Add("C", offsetCounter.ToString()); //Only use for dummy debug
 					request.Headers.Add("Ra", "2048");
@@ -211,7 +219,7 @@ public class IrradianceClient
 						length = responseStream.Length / sizeof(float);
 
 					for (var i = 0; i < length; ++i)
-						Irradiances.Add(reader.ReadSingle() * 1e3f * AgroWorld.HoursPerTick);
+						Irradiances.Add(reader.ReadSingle() * 1e3f * world.HoursPerTick);
 					// Debug.WriteLine($"Irradiances length: {length} count: {Irradiances.Count}");
 
 					//Debug.WriteLine($"T: {AgroWorld.GetTime(timestep).ToString("o", CultureInfo.InvariantCulture)} Sum: {Irradiances.Sum()}  Avg: {Irradiances.Average()} In: [{Irradiances.Min()} - {Irradiances.Max()}]");
@@ -229,11 +237,11 @@ public class IrradianceClient
 		}
 	}
 
-	public static byte[] DebugIrradiance(uint timestep, IList<IFormation> formations, IList<IObstacle> obstacles, float[] cameraMatrix) => Singleton.DebugIrr(timestep, formations, obstacles, cameraMatrix);
+	public static byte[] DebugIrradiance(AgroWorld world, uint timestep, IList<IFormation> formations, IList<IObstacle> obstacles, float[] cameraMatrix) => Singleton.DebugIrr(world, timestep, formations, obstacles, cameraMatrix);
 	public static byte[] DebugEnvironment() => Singleton.EnvMap;
 	public static ushort DebugEnvironmentX() => Singleton.EnvMapX;
 
-	byte[] DebugIrr(uint timestep, IList<IFormation> formations, IList<IObstacle> obstacles, float[] camera)
+	byte[] DebugIrr(AgroWorld world, uint timestep, IList<IFormation> formations, IList<IObstacle> obstacles, float[] camera)
 	{
 		if (Singleton.IsOnline)
 		{
@@ -251,8 +259,8 @@ public class IrradianceClient
 					Method = HttpMethod.Post,
 					Content = new ByteArrayContent(byteBuffer.Array, 0, byteBuffer.Count)
 				};
-				request.Headers.Add("Ti", AgroWorld.GetTime(timestep).ToString("o", CultureInfo.InvariantCulture));
-				request.Headers.Add("TiE", AgroWorld.GetTime(timestep + 1).ToString("o", CultureInfo.InvariantCulture));
+				request.Headers.Add("Ti", world.GetTime(timestep).ToString("o", CultureInfo.InvariantCulture));
+				request.Headers.Add("TiE", world.GetTime(timestep + 1).ToString("o", CultureInfo.InvariantCulture));
 				request.Headers.Add("Cam", string.Join(' ', camera));
 				//request.Headers.Add("Ra", "256");
 				var result = Client.SendAsync(request).Result;
@@ -774,9 +782,9 @@ public class IrradianceClient
 
 	public static bool IsRendererOnline => Singleton.IsOnline;
 
-	void DoFallbackTick(uint timestep, IList<IFormation> formations)
+	void DoFallbackTick(AgroWorld world, uint timestep, IList<IFormation> formations)
 	{
-		if (AgroWorld.GetDaylight(timestep))
+		if (world.GetDaylight(timestep))
 		{
 			SkipFormations.Clear();
 			for(int i = 0; i < formations.Count; ++i)
@@ -812,7 +820,7 @@ public class IrradianceClient
 				}
 
 				for(int i = 0; i < offsetCounter; ++i)
-					Irradiances.Add(AgroWorld.HoursPerTick * 50f);
+					Irradiances.Add(world.HoursPerTick * 50f);
 			}
 			//if (IsNight) Debug.WriteLine("DAY");
 			IsNight = false;

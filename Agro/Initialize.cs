@@ -1,3 +1,4 @@
+using System;
 using System.Diagnostics;
 using System.Numerics;
 using AgentsSystem;
@@ -7,43 +8,19 @@ namespace Agro;
 
 public static class Initialize
 {
-	public static SimulationWorld World(SimulationRequest? settings = null)
+	public static AgroWorld World(SimulationRequest? settings = null)
 	{
-		if (settings?.HoursPerTick.HasValue ?? false)
-		{
-			AgroWorld.HoursPerTick = settings.HoursPerTick.Value;
-			if (AgroWorld.HoursPerTick < 24)
-				AgroWorld.HoursPerTick = AgroWorld.HoursPerTick switch { <= 0 => 1, 5 => 4, 7 => 6, 9 or 10 => 8, 11 => 12, >12 and <= 18 => 12, >18 => 24, _ => AgroWorld.HoursPerTick };
-			else
-				AgroWorld.HoursPerTick = 24 * (AgroWorld.HoursPerTick / 24);
-
-			AgroWorld.StatsBlockLength = 23 / AgroWorld.HoursPerTick + 1;
-		}
-
-		if (settings?.TotalHours.HasValue ?? false)
-			AgroWorld.TotalHours = settings.TotalHours.Value;
-
-		if (settings?.FieldResolution.HasValue ?? false)
-			AgroWorld.FieldResolution = settings.FieldResolution.Value;
-
-		if (settings?.FieldSize.HasValue ?? false)
-			AgroWorld.FieldSize = settings.FieldSize.Value;
-
-		if (settings?.Seed.HasValue ?? false)
-			AgroWorld.InitRNG(settings.Seed.Value);
-
-		AgroWorld.Init();
-		var world = new SimulationWorld();
+		var world = new AgroWorld(settings);
 
 		world.AddCallback(IrradianceClient.Tick);
 		world.StreamExporterFunc = (f, o) => IrradianceClient.ExportToStream(3, f, o);
 		world.RendererName = IrradianceClient.IsRendererOnline ? "mts3" : "none";
 		//var soil = new SoilFormation(new Vector3i(AgroWorld.FieldSize / AgroWorld.FieldResolution), AgroWorld.FieldSize, 0);
-		var soil = new SoilFormationNew(new Vector3i(AgroWorld.FieldSize / AgroWorld.FieldResolution), AgroWorld.FieldSize, Vector3.Zero);
+		var soil = new SoilFormationNew(world, new Vector3i(world.FieldSize / world.FieldResolution), world.FieldSize, Vector3.Zero);
 		world.Add(soil);
 
 		PlantFormation2[] plantsFormation;
-		var rnd = AgroWorld.RNG;
+		var rnd = world.RNG;
 		if (settings?.Plants != null)
 		{
 			var plantsCount = settings.Plants.Length;
@@ -52,7 +29,7 @@ public static class Initialize
 			{
 				var minVegTemp = rnd.NextFloat(8f, 10f);
 				var pos = settings.Plants[i].Position
-					?? new Vector3(AgroWorld.FieldSize.X * rnd.NextFloat(), -rnd.NextFloat(0.04f), AgroWorld.FieldSize.Y * rnd.NextFloat());
+					?? new Vector3(world.FieldSize.X * rnd.NextFloat(), -rnd.NextFloat(0.04f), world.FieldSize.Y * rnd.NextFloat());
 				pos.Y -= soil.GetMetricGroundDepth(pos.X, pos.Z);
 
 				var seed = new SeedAgent(pos,
@@ -68,9 +45,9 @@ public static class Initialize
 			for (int i = 0; i < plantsCount; ++i)
 			{
 				var minVegTemp = rnd.NextFloat(8f, 10f);
-				var seed = new SeedAgent(new Vector3(AgroWorld.FieldSize.X * rnd.NextFloat(),
+				var seed = new SeedAgent(new Vector3(world.FieldSize.X * rnd.NextFloat(),
 														-rnd.NextFloat(0.04f),
-														AgroWorld.FieldSize.Y * rnd.NextFloat()), //Y because Z is depth
+														world.FieldSize.Y * rnd.NextFloat()), //Y because Z is depth
 											rnd.NextFloat(0.02f),
 											new Vector2(minVegTemp, minVegTemp + rnd.NextFloat(8f, 14f)));
 				plantsFormation[i] = new PlantFormation2(PlantSettings.Avocado, soil, seed, rnd);

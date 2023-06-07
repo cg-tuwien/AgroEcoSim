@@ -36,10 +36,10 @@ public interface IPlantAgent : ITreeAgent
 
 	float EnergyStorageCapacity();
 	float WaterStorageCapacity();
-	float WaterTotalCapacityPerTick();
-	float EnergyFlowToParentPerTick();
+	float WaterTotalCapacityPerTick(AgroWorld world);
+	float EnergyFlowToParentPerTick(AgroWorld world);
 
-	float LifeSupportPerTick();
+	float LifeSupportPerTick(AgroWorld world);
 	float PhotosynthPerTick();
 
 	float WoodRatio();

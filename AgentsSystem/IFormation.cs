@@ -8,7 +8,7 @@ public interface IFormation
 {
     void Census();
     void Tick(SimulationWorld world, uint timestep, byte stage);
-    void ProcessTransactions(uint timestep, byte stage);
+    void ProcessTransactions(SimulationWorld world, uint timestep, byte stage);
     void DeliverPost(uint timestep, byte stage);
     bool HasUndeliveredPost { get; }
     bool HasUnprocessedTransactions { get; }

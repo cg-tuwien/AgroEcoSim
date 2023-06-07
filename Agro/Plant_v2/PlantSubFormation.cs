@@ -454,7 +454,7 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 		ReadTMP = !ReadTMP;
 	}
 
-	public PlantGlobalStats Gather()
+	public PlantGlobalStats Gather(AgroWorld world)
 	{
 		var energy = 0.0;
 		var water = 0.0;
@@ -496,7 +496,7 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 			energyDiff -= previousEnergy;
 			waterDiff -= src[i].Water;
 
-			var lifeSupport = dst[i].LifeSupportPerTick();
+			var lifeSupport = dst[i].LifeSupportPerTick(world);
 			lifesupportEnergy[i] = lifeSupport;
 			energyRequirement += lifeSupport;
 
@@ -517,7 +517,7 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 		foreach(var i in Deaths)
 		{
 			lifesupportEnergy[i] = 0f;
-			energyRequirement -= dst[i].LifeSupportPerTick();
+			energyRequirement -= dst[i].LifeSupportPerTick(world);
 
 			photosynthWater[i] = 0f;
 			waterRequirement -= dst[i].PhotosynthPerTick();
@@ -649,7 +649,7 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 		ReadTMP = !ReadTMP;
 	}
 
-	public void ProcessTransactions(uint timestep, byte stage)
+	public void ProcessTransactions(SimulationWorld _world, uint timestep, byte stage)
 	{
 		var (src, dst) = SrcDst();
 		Array.Copy(src, dst, src.Length);
@@ -673,9 +673,10 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 				var scale = new float[src.Length];
 				Array.Fill(scale, 1f);
 				var anyScale = false;
+				var world = _world as AgroWorld;
 				for(int d = 0; d < sumPerAgent.Length; ++d)
 				{
-					var dstCapacity = GetCapacity(d, substanceIndex);
+					var dstCapacity = GetCapacity(world, d, substanceIndex);
 					if (sumPerAgent[d] > dstCapacity)
 					{
 						scale[d] = dstCapacity / sumPerAgent[d];
@@ -752,17 +753,17 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 		? (AgentsTMP.Length > index ? AgentsTMP[index].WaterStorageCapacity() : 0f)
 		: (Agents.Length > index ? Agents[index].WaterStorageCapacity() : 0f);
 
-	internal float GetWaterTotalCapacity(int index) => ReadTMP
-		? (AgentsTMP.Length > index ? AgentsTMP[index].WaterTotalCapacityPerTick() : 0f)
-		: (Agents.Length > index ? Agents[index].WaterTotalCapacityPerTick() : 0f);
+	internal float GetWaterTotalCapacity(AgroWorld world, int index) => ReadTMP
+		? (AgentsTMP.Length > index ? AgentsTMP[index].WaterTotalCapacityPerTick(world) : 0f)
+		: (Agents.Length > index ? Agents[index].WaterTotalCapacityPerTick(world) : 0f);
 
 	public float GetEnergy(int index) => ReadTMP
 		? (AgentsTMP.Length > index ? AgentsTMP[index].Energy : 0f)
 		: (Agents.Length > index ? Agents[index].Energy : 0f);
 
-	public float GetEnergyFlow_PerTick(int index) => ReadTMP
-		? (AgentsTMP.Length > index ? AgentsTMP[index].EnergyFlowToParentPerTick() : 0f)
-		: (Agents.Length > index ? Agents[index].EnergyFlowToParentPerTick() : 0f);
+	public float GetEnergyFlow_PerTick(AgroWorld world, int index) => ReadTMP
+		? (AgentsTMP.Length > index ? AgentsTMP[index].EnergyFlowToParentPerTick(world) : 0f)
+		: (Agents.Length > index ? Agents[index].EnergyFlowToParentPerTick(world) : 0f);
 
 	public float GetWater(int index) => ReadTMP
 		? (AgentsTMP.Length > index ? AgentsTMP[index].Water : 0f)
@@ -802,8 +803,8 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 		? (AgentsTMP.Length > index ? AgentsTMP[index].Scale() : Vector3.Zero)
 		: (Agents.Length > index ? Agents[index].Scale() : Vector3.Zero);
 
-	float GetCapacity(int index, int substanceIndex) => substanceIndex switch {
-		(byte)PlantSubstances.Water => GetWaterTotalCapacity(index),
+	float GetCapacity(AgroWorld world, int index, int substanceIndex) => substanceIndex switch {
+		(byte)PlantSubstances.Water => GetWaterTotalCapacity(world, index),
 		(byte)PlantSubstances.Energy => GetEnergyCapacity(index),
 		_ => throw new IndexOutOfRangeException($"SubstanceIndex out of range: {substanceIndex}")
 	};

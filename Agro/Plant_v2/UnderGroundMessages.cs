@@ -239,8 +239,9 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 
         public void Receive(ref UnderGroundAgent2 srcAgent, uint timestep, byte stage)
         {
-            var freeCapacity = Math.Max(0f, DstFormation.GetWaterTotalCapacity(DstIndex) - DstFormation.GetWater(DstIndex));
-            var water = srcAgent.TryDecWater(Math.Min(Amount, freeCapacity));
+            //var freeCapacity = Math.Max(0f, DstFormation.GetWaterTotalCapacity(DstIndex) - DstFormation.GetWater(DstIndex));
+            //var water = srcAgent.TryDecWater(Math.Min(Amount, freeCapacity));
+            var water = srcAgent.TryDecWater(Amount);
             if (water > 0f)
             {
                 DstFormation.SendProtected(DstIndex, new AboveGroundAgent2.WaterInc(water));

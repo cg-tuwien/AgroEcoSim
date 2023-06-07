@@ -3,6 +3,9 @@ using Microsoft.AspNetCore.Mvc;
 using AgroServer.Models;
 using Agro;
 using System.Diagnostics;
+using System;
+using System.Threading.Tasks;
+using Microsoft.Extensions.Configuration;
 
 namespace AgroServer.Controllers;
 
@@ -30,7 +33,7 @@ public class SimulationController : ControllerBase
     {
         var world = Initialize.World(request);
         var start = DateTime.UtcNow.Ticks;
-        world.Run((uint)AgroWorld.TimestepsTotal());
+        world.Run((uint)world.TimestepsTotal());
         var stop = DateTime.UtcNow.Ticks;
         Debug.WriteLine($"Simulation time: {(stop - start) / TimeSpan.TicksPerMillisecond} ms");
 #if HISTORY_LOG || HISTORY_TICK

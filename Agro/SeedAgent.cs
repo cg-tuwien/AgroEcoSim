@@ -80,10 +80,11 @@ public struct SeedAgent : IAgent
 		mVegetativeTemperature = vegetativeTemperature;
 	}
 
-	public void Tick(SimulationWorld world, IFormation _formation, int formationID, uint timestep, byte stage)
+	public void Tick(SimulationWorld _world, IFormation _formation, int formationID, uint timestep, byte stage)
 	{
+		var world = _world as AgroWorld;
 		var formation = (PlantFormation2)_formation;
-		Water -= Radius * Radius * Radius * AgroWorld.HoursPerTick; //life support
+		Water -= Radius * Radius * Radius * world.HoursPerTick; //life support
 		if (Water <= 0) //energy depleted
 		{
 			Water = 0f;
@@ -115,7 +116,7 @@ public struct SeedAgent : IAgent
 				{
 					var soilTemperature = soil.GetTemperature(sources[0]);
 					var waterRequest = 0f;
-					for(int i = 0; i < AgroWorld.HoursPerTick; ++i)
+					for(int i = 0; i < world.HoursPerTick; ++i)
 					{
 						var amount = Pi4 * Radius * Radius; //sphere surface is 4πr²
 						if (soilTemperature > mVegetativeTemperature.X)

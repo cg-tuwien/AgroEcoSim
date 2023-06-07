@@ -5,6 +5,7 @@ using AgentsSystem;
 using Utils;
 using System.Timers;
 using System.Diagnostics;
+using System.Linq;
 
 namespace Agro;
 
@@ -38,7 +39,7 @@ public partial class SoilFormationNew : IFormation, IGrid3D
 	readonly int MaxLevel;
 	readonly (ushort, ushort, ushort)[] CoordsCache;
 
-	public SoilFormationNew(Vector3i size, Vector3 metricSize, Vector3 position)
+	public SoilFormationNew(AgroWorld world, Vector3i size, Vector3 metricSize, Vector3 position)
 	{
 		if (size.X >= ushort.MaxValue-1 || size.Y >= ushort.MaxValue-1 || size.Z >= ushort.MaxValue-1)
 			throw new Exception($"Grid resolution in any direction may not exceed {ushort.MaxValue-1}");
@@ -136,7 +137,7 @@ public partial class SoilFormationNew : IFormation, IGrid3D
 		// 			Temp[Index(x, y, z)] = temp;
 		// }
 
-		WaterRetainedPerCell = CellSize.Z / WaterTravelDistPerStep;
+		WaterRetainedPerCell = CellSize.Z / WaterTravelDistPerTick(world);
 	}
 
 	public int Index(Vector3i coords) => Ground(coords) - coords.Z;
@@ -207,22 +208,23 @@ public partial class SoilFormationNew : IFormation, IGrid3D
 		return (MaxLevel - GroundLevel(iCenter)) * CellSize.Y;
 	}
 
-	static readonly float WaterTravelDistPerStep = AgroWorld.HoursPerTick * 0.000012f; //1g of water can travel so far an hour
+	static float WaterTravelDistPerTick(AgroWorld world) => world.HoursPerTick * 0.000012f; //1g of water can travel so far an hour
 	readonly float WaterRetainedPerCell;
 
-	public void Tick(SimulationWorld world, uint timestep, byte stage)
+	public void Tick(SimulationWorld _world, uint timestep, byte stage)
 	{
+		var world = _world as AgroWorld;
 		//float[] waterSrc, waterTarget, steamSrc, steamTarget, temperatureSrc, temperatureTarget;
 
-		var surfaceTemp = Math.Max(0f, AgroWorld.GetTemperature(timestep));
+		var surfaceTemp = Math.Max(0f, world.GetTemperature(timestep));
 		var evaporizationFactorPerHour = 0*1e-4f;
-		var evaporizationSoilFactorPerStep = MathF.Pow(1f - evaporizationFactorPerHour, AgroWorld.HoursPerTick);
-		var evaporizationSurfaceFactorPerStep = MathF.Pow(1f - Math.Min(1f, evaporizationFactorPerHour * (surfaceTemp * surfaceTemp) / 10), AgroWorld.HoursPerTick);
+		var evaporizationSoilFactorPerStep = MathF.Pow(1f - evaporizationFactorPerHour, world.HoursPerTick);
+		var evaporizationSurfaceFactorPerStep = MathF.Pow(1f - Math.Min(1f, evaporizationFactorPerHour * (surfaceTemp * surfaceTemp) / 10), world.HoursPerTick);
 
 		var sumBefore = Water.Sum();
 
 		//1. Receive RAIN
-		var rainPerCell = AgroWorld.GetWater(timestep) * CellSurface; //shadowing not taken into account
+		var rainPerCell = world.GetWater(timestep) * CellSurface; //shadowing not taken into account
 		if (rainPerCell > 0)
 			foreach(var ground in GroundAddr)
 				Water[ground] += rainPerCell;
@@ -241,7 +243,7 @@ public partial class SoilFormationNew : IFormation, IGrid3D
 						var distribute = Water[srcIdx] * evaporizationSoilFactorPerStep;
 
 						if (distribute > WaterRetainedPerCell)
-							GravityDiffusion(srcIdx, distribute, depth, d, WaterRetainedPerCell);
+							GravityDiffusion(world, srcIdx, distribute, depth, d, WaterRetainedPerCell);
 					}
 				}
 		}
@@ -260,7 +262,7 @@ public partial class SoilFormationNew : IFormation, IGrid3D
 			var srcIdx = GroundAddr[i];
 			var distribute = Water[srcIdx] * evaporizationSurfaceFactorPerStep;
 			if (distribute > 0)
-				GravityDiffusion(srcIdx, distribute, GroundLevels[i], 0, 0);
+				GravityDiffusion(world, srcIdx, distribute, GroundLevels[i], 0, 0);
 		}
 
 		var sumAfter = Water.Sum();
@@ -344,9 +346,9 @@ public partial class SoilFormationNew : IFormation, IGrid3D
 		// }
 	}
 
-	private void GravityDiffusion(int srcIdx, float distribute, ushort groundLevel, int currentDepth, float retain)
+	private void GravityDiffusion(AgroWorld world, int srcIdx, float distribute, ushort groundLevel, int currentDepth, float retain)
 	{
-		var distPerTimestep_in_m = WaterTravelDistPerStep * distribute;
+		var distPerTimestep_in_m = WaterTravelDistPerTick(world) * distribute;
 		var cellsPerStep = (int)Math.Ceiling(distPerTimestep_in_m * CellSize.Z);
 		if (cellsPerStep > 0)
 		{
@@ -402,7 +404,7 @@ public partial class SoilFormationNew : IFormation, IGrid3D
 
 	void IFormation.Census() {}
 
-	void IFormation.ProcessTransactions(uint timestep, byte stage) {}
+	void IFormation.ProcessTransactions(SimulationWorld world, uint timestep, byte stage) {}
 	void IFormation.DeliverPost(uint timestep, byte stage) {}
 	bool IFormation.HasUndeliveredPost => false;
 	bool IFormation.HasUnprocessedTransactions => false;

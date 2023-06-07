@@ -146,7 +146,7 @@ public abstract class Formation<T> : IFormation where T : struct, IAgent
 		ReadTMP = !ReadTMP;
 	}
 
-	public virtual void ProcessTransactions(uint timestep, byte stage) { }
+	public virtual void ProcessTransactions(SimulationWorld world, uint timestep, byte stage) { }
 
 	public virtual bool HasUndeliveredPost => Postbox.AnyMessages;
 	public virtual bool HasUnprocessedTransactions => false;
