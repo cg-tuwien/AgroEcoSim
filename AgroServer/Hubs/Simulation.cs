@@ -20,8 +20,6 @@ public class SimulationHub : Hub<IEditorHub>
 {
     public SimulationHub(IConfiguration configuration)
     {
-        //_logger = logger;
-        //Configuration = configuration;
         var ip = configuration["RendererIP"];
         var port = configuration["RendererPort"];
         IrradianceClient.SetAddress($"http://{ip}:{port}");
@@ -66,6 +64,7 @@ public class SimulationHub : Hub<IEditorHub>
             result.Scene = world.ExportToStream();
 
         result.Renderer = world.RendererName;
+        result.Debug = $"{IrradianceClient.Address}";
 
         await Clients.Caller.Result(result);
         lock (ClientSimulations) ClientSimulations.Remove(Context.UserIdentifier);

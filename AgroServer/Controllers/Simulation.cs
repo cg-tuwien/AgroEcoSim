@@ -18,8 +18,6 @@ public class SimulationController : ControllerBase
 
     public SimulationController(IConfiguration configuration)
     {
-        //_logger = logger;
-        //Configuration = configuration;
         var ip = configuration["RendererIP"];
         var port = configuration["RendererPort"];
         IrradianceClient.SetAddress($"http://{ip}:{port}");

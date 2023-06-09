@@ -27,5 +27,6 @@ public class SimulationResponse
     ///</summary>
     public byte[] Scene { get; set; }
     public string Renderer { get; set; }
+    public string Debug { get; set; }
 }
 #endif

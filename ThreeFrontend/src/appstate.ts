@@ -23,8 +23,7 @@ const InfiniteHubRetry = {
     }
 }
 
-export const hubConnection = new SignalR.HubConnectionBuilder().withUrl(`${BackendURI.startsWith("localhost") ? "https:" : location.protocol}//${BackendURI}/SimSocket`).withAutomaticReconnect(InfiniteHubRetry).build();
-
+const hubConnection = new SignalR.HubConnectionBuilder().withUrl(`${BackendURI.startsWith("localhost") ? "https:" : location.protocol}//${BackendURI}/SimSocket`).withAutomaticReconnect(InfiniteHubRetry).build();
 hubConnection.on("reject", () => { console.log("You have another simulation already running. Please wait until it is finished."); });
 hubConnection.on("progress", (step: number, length: number) => {
     batch(() => {
@@ -37,6 +36,7 @@ hubConnection.on("result", (result: ISimResponse) => {
     const binaryScene = base64ToArrayBuffer(result.scene);
     const reader = new BinaryReader(binaryScene);
     const scene = reader.readAgroScene();
+    console.log(result.debug);
     batch(() => {
         state.plants.value = result.plants;
         state.scene.value = scene;
@@ -48,7 +48,7 @@ hubConnection.on("result", (result: ISimResponse) => {
 
 const start = async() => hubConnection.start();
 hubConnection.onclose(start);
-start();
+//start();
 
 export interface IPlantRequest
 {
@@ -67,6 +67,7 @@ export interface ISimResponse
     plants: IPlantResponse[],
     scene: Uint8Array,
     renderer: string,
+    debug: string,
 }
 
 const state = {
@@ -119,24 +120,19 @@ async function run() {
     if (!state.computing.value)
     {
         state.computing.value = true;
-        // const response = await fetch(`${BackendURI.startsWith("localhost") ? "https:" : location.protocol}//${BackendURI}/Simulation`, {
-        //     method: "POST",
-        //     cache: "no-cache",
-        //     headers: { "Content-Type": "application/json" },
-        //     body: JSON.stringify(requestBody()),
-        // });
-        hubConnection.invoke("run", requestBody());
+        if (hubConnection.state !== SignalR.HubConnectionState.Connected)
+            await start();
 
-        //const json = await response.json() as ISimResponse;
-        // const binaryScene = base64ToArrayBuffer(json.scene);
-        // const reader = new BinaryReader(binaryScene);
-        // const scene = reader.readAgroScene();
-        // batch(() => {
-        //     state.plants.value = json.plants;
-        //     state.scene.value = scene;
-        //     state.computing.value = false;
-        //     state.renderer = json.renderer;
-        // });
+        if (hubConnection.state == SignalR.HubConnectionState.Connected)
+            hubConnection.invoke("run", requestBody()).catch(e => {
+                console.error(e);
+                batch(() => {
+                    state.computing.value = false;
+                    state.renderer.value = "error";
+                });
+            });
+        else
+            state.computing.value = false;
     }
 }
 

@@ -49,7 +49,6 @@ export default function ThreeSceneFn () {
         perspectiveCamera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.025, 5000);
         perspectiveCamera.position.set(0, 20, 30);
         if (renderer){
-            console.log(renderer.domElement)
             controls = new OrbitControls(perspectiveCamera, renderer.domElement);
             //this.controls.enableKeys = false;
             //this.controls.keys = { LEFT: "", RIGHT: "", BOTTOM: "", UP: "" };

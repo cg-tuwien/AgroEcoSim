@@ -87,12 +87,15 @@ foreach ENTITY
 public class IrradianceClient
 {
 	readonly HttpClient Client;
-	readonly HttpRequestMessage ProbeRequest = new() { Method = HttpMethod.Get };
+	bool IsOnline = false;
+	bool AddressFixed = false;
+
+
 	readonly List<float> Irradiances = new();
 	readonly List<int> SkipFormations = new();
 	readonly List<Vector3> IrradiancePoints = new();
 	readonly Dictionary<IFormation, int[]> IrradianceFormationOffsets = new();
-	bool IsOnline = false;
+
 	bool IsNight = true;
 
 	byte[] EnvMap = null; //just for debug output
@@ -107,24 +110,33 @@ public class IrradianceClient
 
 	bool ProbeRenderer()
 	{
+		Singleton.AddressFixed = true;
 		//Probe if the client is online, else fallback to constant ambient light
 		try
 		{
-			var result = Client.SendAsync(ProbeRequest).Result;
+			var result = Client.SendAsync(new() { Method = HttpMethod.Get }).Result; //HTTPRequests can not be reused, a new request needs to be created every time
 			IsOnline = result.IsSuccessStatusCode;
 		}
 		catch (Exception)
 		{
-			Console.WriteLine("WARNING: No irradiance client responded at http://localhost:9000. Falling back to ambient light pipeline.");
+			Console.WriteLine($"WARNING: No irradiance client responded at {Client.BaseAddress}. Falling back to ambient light pipeline.");
 			IsOnline = false;
 		}
 		return IsOnline;
 	}
 
+	public static string Address => Singleton.Client.BaseAddress?.ToString() ?? "null";
+
 	public static void SetAddress(string addr)
 	{
-		if (Singleton.Client.BaseAddress == null)
-			Singleton.Client.BaseAddress = new Uri(addr);
+		lock(Singleton.Client)
+		{
+			if (!Singleton.AddressFixed && Singleton.Client.BaseAddress?.ToString() != addr)
+			{
+				Singleton.Client.BaseAddress = new Uri(addr);
+				Singleton.AddressFixed = true;
+			}
+		}
 	}
 
 	public static void Tick(SimulationWorld world, uint timestep, IList<IFormation> formations, IList<IObstacle> obstacles)
@@ -201,25 +213,35 @@ public class IrradianceClient
 					request.Headers.Add("Ra", "2048");
 					if (reqEnvMap)
 						request.Headers.Add("Env", "true");
-					var result = Client.SendAsync(request).Result;
-					using var responseStream = result.Content.ReadAsStreamAsync().Result;
-					using var reader = new BinaryReader(responseStream);
 
-					long length;
-					if (reqEnvMap)
+					try
 					{
-						length = reader.ReadUInt16() * sizeof(float);
-						EnvMapX = reader.ReadUInt16();
-						EnvMap = reader.ReadBytes((int)length);
+						var result = Client.SendAsync(request).Result;
+						using var responseStream = result.Content.ReadAsStreamAsync().Result;
+						using var reader = new BinaryReader(responseStream);
 
-						// Debug.WriteLine($"Total stream length: {responseStream.Length} env length: {length} irr length: {(responseStream.Length - sizeof(int) - length) / sizeof(float)}");
-						length = (responseStream.Length - 2*sizeof(ushort) - length) / sizeof(float);
+						long length;
+						if (reqEnvMap)
+						{
+							length = reader.ReadUInt16() * sizeof(float);
+							EnvMapX = reader.ReadUInt16();
+							EnvMap = reader.ReadBytes((int)length);
+
+							// Debug.WriteLine($"Total stream length: {responseStream.Length} env length: {length} irr length: {(responseStream.Length - sizeof(int) - length) / sizeof(float)}");
+							length = (responseStream.Length - 2*sizeof(ushort) - length) / sizeof(float);
+						}
+						else
+							length = responseStream.Length / sizeof(float);
+
+						for (var i = 0; i < length; ++i)
+							Irradiances.Add(reader.ReadSingle() * 1e3f * world.HoursPerTick);
 					}
-					else
-						length = responseStream.Length / sizeof(float);
-
-					for (var i = 0; i < length; ++i)
-						Irradiances.Add(reader.ReadSingle() * 1e3f * world.HoursPerTick);
+					catch (Exception)
+                    {
+						IsOnline = false;
+						SW.Stop();
+						DoFallbackTick(world, timestep, formations);
+					}
 					// Debug.WriteLine($"Irradiances length: {length} count: {Irradiances.Count}");
 
 					//Debug.WriteLine($"T: {AgroWorld.GetTime(timestep).ToString("o", CultureInfo.InvariantCulture)} Sum: {Irradiances.Sum()}  Avg: {Irradiances.Average()} In: [{Irradiances.Min()} - {Irradiances.Max()}]");

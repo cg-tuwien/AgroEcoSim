@@ -32,8 +32,11 @@ data_*/
 **/orbit_camera
 **/.godot
 *.oldot
-/AgroEco*.zip
+/*.zip
 /agroeco*.tar.gz
 /AgroGodot*
 
 /Screens/20*
+
+**/package-lock.json
+**/size-plugin.json

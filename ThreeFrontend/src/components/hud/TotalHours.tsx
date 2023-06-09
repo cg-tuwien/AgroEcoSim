@@ -36,8 +36,6 @@ export class TotalHours extends Component
                         appstate.totalHours.value = Math.max(1, appstate.totalHours.value - step);
                     }
                 }
-            }} onInput={e => {
-                console.log(e)
             }}/>
             <label for="totalhours">Total Hours to be simulated</label>
         </div>;

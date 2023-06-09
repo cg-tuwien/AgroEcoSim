@@ -1,18 +1,20 @@
 FROM node:18-alpine AS build
 
+ARG BACKEND
+
 WORKDIR app
 COPY ThreeFrontend/ .
 
-ARG BACKEND
 RUN echo "export const BackendURI = \"${BACKEND}\";" > src/config.ts
 
-RUN npm install
-RUN npm run build
+RUN npm install -g npm@latest && npm install && npm install @microsoft/signalr
+RUN npx cross-env NODE_OPTIONS=--openssl-legacy-provider preact build --no-prerender
 
 FROM node:18-alpine AS final
-WORKDIR /app
-COPY --from=build /app/build .
-RUN npm install sirv-cli
-
 EXPOSE 8080
+WORKDIR /app
+
+COPY --from=build /app/build .
+RUN npm install -g npm@latest && npm install sirv-cli
+
 ENTRYPOINT ["npx", "sirv", ".", " --cors", "--single", "--host"]

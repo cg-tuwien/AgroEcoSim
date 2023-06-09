@@ -17,7 +17,7 @@ COPY agroeco-mts3/epw/ epw/
 #RUN apk update && apk add --no-cache ca-certificates && apk upgrade -U --no-cache && apk add --no-cache musl-dev linux-headers g++ && rm -rf /var/cache/apk/*
 
 #RUN echo 'manylinux1_compatible = True' > /usr/local/lib/python3.10/site-packages/_manylinux.py
-RUN yes | pip install --no-cache-dir python-dateutil pysolar mitsuba numpy ladybug_radiance imageio matplotlib
+RUN yes | pip install --no-cache-dir python-dateutil pysolar mitsuba numpy ladybug-radiance imageio matplotlib
 
 #RUN apt-get purge python3-pip && apt-get autoremove -y
 #COPY --from=publish harden.sh .
@@ -30,8 +30,9 @@ RUN apt-get -qq update && apt-get install -qq ca-certificates && apt-get -y -qq 
     libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libxcb-xkb1 libxkbcommon-x11-0 libxcb-xinerama0
 
 RUN wget -q https://github.com/LBNL-ETA/Radiance/releases/download/e8f58bd6/Radiance_e8f58bd6_Linux.zip && \
-    unzip Radiance_e8f58bd6_Linux.zip && \
-    tar -xf radiance-5.4.e8f58bd6ca-Linux.tar.gz
+    unzip Radiance_e8f58bd6_Linux.zip && rm Radiance_e8f58bd6_Linux.zip && \
+    tar -xzf radiance-5.4.e8f58bd6ca-Linux.tar.gz && rm radiance-5.4.e8f58bd6ca-Linux.tar.gz && \
+    cp radiance-5.4.e8f58bd6ca-Linux/usr / -R && rm -r radiance-5.4.e8f58bd6ca-Linux
 RUN apt-get -y -qq purge wget unzip && apt-get -y -qq autoremove && apt autoclean && rm -rf /var/lib/apt/lists/*
 
 RUN groupadd -g 61000 docker && useradd -g 61000 -l -m -s /bin/false -u 61000 docker
