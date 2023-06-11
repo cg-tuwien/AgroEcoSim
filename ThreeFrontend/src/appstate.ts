@@ -57,6 +57,26 @@ export interface IPlantRequest
     PZ: Signal<number>
 }
 
+export interface IWallObstacle extends IPlantRequest
+{
+    Type: "wall",
+    AngleX: Signal<number>,
+    AngleY: Signal<number>,
+    Length: Signal<number>,
+    Height: Signal<number>,
+    Thickness: Signal<number>,
+}
+
+export interface IUmbrellaObstacle extends IPlantRequest
+{
+    Type: "umbrella",
+    PoleThickness: Signal<number>,
+    DiskRadius: Signal<number>,
+    Height: Signal<number>,
+}
+
+export type IObstacleRequest = IWallObstacle | IUmbrellaObstacle
+
 export interface IPlantResponse
 {
     V: number
@@ -84,8 +104,8 @@ const state = {
     seeds: signal<IPlantRequest[]>([{PX: signal(0.5), PY: signal(-0.01), PZ: signal(0.5)}]),
     seedsCount: computed(() => state.seeds.length),
 
-    obstacles: signal([""]),
-    obstaclesCount: obstaclesCount,
+    obstacles: signal<IObstacleRequest[]>([]),
+    obstaclesCount: computed(() => state.obstacles.length),
 
     //OPERATIONAL STATE
     computing: signal(false),
@@ -155,6 +175,31 @@ function removeSeed(i : number) {
         state.seeds.value = [...state.seeds.value];
 }
 
-function obstaclesCount() {
-    return computed(() => state.obstacles.value.length)
+function pushRndObstacle(){
+    const item = Math.random() > 0.5 ? {
+        Type: "wall",
+        Height: signal(3),
+        Length: signal(3),
+        Thickness: signal(0.4),
+        AngleX: signal(0),
+        AngleY: signal(0),
+        PX: signal(Math.random() * state.fieldSizeX.value),
+        PY: signal(0),
+        PZ: signal(Math.random() * state.fieldSizeZ.value)
+    } : {
+        Type: "umbrella",
+        PoleThickness: signal(0.08),
+        DiskRadius: signal(1),
+        Height: signal(2.2),
+        PX: signal(Math.random() * state.fieldSizeX.value),
+        PY: signal(0),
+        PZ: signal(Math.random() * state.fieldSizeZ.value)
+    };
+    state.obstacles.value = [ ...state.obstacles.value, item];
+}
+
+function removeObstacle(i : number) {
+    if (i >= 0 && i < state.obstacles.value.length)
+        state.obstacles.value.splice(i, 1);
+        state.obstacles.value = [...state.obstacles.value];
 }
