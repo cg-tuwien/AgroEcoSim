@@ -3,11 +3,14 @@ services:
     image: agroecosim
     ports:
       - "7215:80"
+    restart: on-failure
   renderer:
     image: agroecorender
     expose:
       - "9000"
+    restart: on-failure
   web:
     image: agroecoweb
     ports:
       - "8080:8080"
+    restart: on-failure

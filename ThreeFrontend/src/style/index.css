@@ -45,7 +45,7 @@ body {
 }
 
 #hud > div  input {
-	width: 7em;
+	width: 5em;
 }
 /*
 #app > main {
@@ -86,4 +86,8 @@ canvas {
 	left: 0;
 	overflow: hidden;
 	z-index:1;
+}
+
+li {
+	margin: 8px;
 }

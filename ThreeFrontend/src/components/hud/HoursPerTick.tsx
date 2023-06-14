@@ -30,10 +30,7 @@ export class HoursPerTick extends Component
                 let index = 0;
                 if (Math.abs(targetValue - appstate.hoursPerTick.value) > 1)
                 {
-                    //debugger;
                     index = this.findIndex(targetValue);
-                    console.log("target:", targetValue);
-                    console.log("index:", index);
                     if (index < lookup.length - 1 && (lookup[index + 1] - targetValue < targetValue - lookup[index]))
                         index++;
                     appstate.hoursPerTick.value = lookup[index]

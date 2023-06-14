@@ -7,7 +7,13 @@ import WEBGL from "three/examples/jsm/capabilities/WebGL"
 import { Index, Scene } from "src/helpers/Scene";
 import { Primitive } from "src/helpers/Primitives";
 import appstate from "../../appstate";
-import { effect, useSignalEffect } from "@preact/signals";
+import { batch, effect, useSignalEffect } from "@preact/signals";
+import { Obstacle } from "src/helpers/Obstacle";
+import { Seed } from "src/helpers/Seed";
+import { backgroundColor, neutralColor } from "../../helpers/Selection";
+
+
+enum Clicks { None, Down, Up, Double };
 
 interface IProps {
 //     width: number,
@@ -22,6 +28,27 @@ interface IInitData {
     tanFOV: number;
     windowHeight: number;
 }
+
+interface ISeedRef {
+    type: "seed";
+    seed: Seed;
+}
+
+interface ITerrainRef {
+    type: "terrain";
+}
+
+interface IPlantRef {
+    type: "plant";
+    index: Index;
+}
+
+interface IObstacleRef {
+    type: "obstacle";
+    obastacle: Obstacle;
+}
+
+type DataRef = ISeedRef | ITerrainRef | IPlantRef | IObstacleRef;
 
 const materialHovered = new THREE.MeshBasicMaterial({
     color: 'orange',
@@ -47,7 +74,8 @@ export default function ThreeSceneFn () {
 
     const initCameras = () => {
         perspectiveCamera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.025, 5000);
-        perspectiveCamera.position.set(0, 20, 30);
+        perspectiveCamera.position.set(0, 5, 10);
+        perspectiveCamera.layers.enableAll();
         if (renderer){
             controls = new OrbitControls(perspectiveCamera, renderer.domElement);
             //this.controls.enableKeys = false;
@@ -59,6 +87,10 @@ export default function ThreeSceneFn () {
             //this.controls.addEventListener("end", () => { this.performRendering = false });
             controls.addEventListener("change", () => renderOnce());
             renderer?.domElement.addEventListener('wheel', () => renderOnce());
+            renderer?.domElement.addEventListener('mousemove', e => onMouseMove(e));
+            renderer?.domElement.addEventListener('dblclick', e => onDblClick(e));
+            renderer?.domElement.addEventListener('mousedown', e => onMouseDown(e));
+            renderer?.domElement.addEventListener('mouseup', e => onMouseUp(e));
         }
 
         //initData = { tanFOV: Math.tan( ( ( Math.PI / 180 ) * perspectiveCamera.fov / 2 ) ), windowHeight: window.innerHeight };
@@ -66,100 +98,157 @@ export default function ThreeSceneFn () {
 
     const initScene = () => {
         scene.clear();
-        scene.background = new THREE.Color(getComputedStyle(document.documentElement).getPropertyValue("background"));
-        const neutralColor = new THREE.Color(getComputedStyle(document.documentElement).getPropertyValue("color"));
+        scene.background = backgroundColor;
         singlePlantMaterial = new THREE.MeshStandardMaterial({ color: neutralColor});
         doublePlantMaterial = new THREE.MeshStandardMaterial({ color: neutralColor, side: THREE.DoubleSide});
-
 
         // hemiLight.color.setHSL( 0.6, 1, 0.6 );
         // hemiLight.groundColor.setHSL( 0.2, 0.2, 0.2 );
         hemiLight.position.set( 0, 10000, 0 );
         scene.add( hemiLight );
 
-        //const mesh = new THREE.Mesh(threeCylinderPrimitive, new THREE.MeshBasicMaterial({color: new THREE.Color("#ff4411")}));
+        //scene.add(new THREE.AxesHelper( 1 ))
+
+        //const mesh = new THREE.Mesh(threePlanePrimitive, new THREE.MeshBasicMaterial({color: new THREE.Color("#ff4411")}));
         //mesh.translateY(10);
         //const m = new THREE.Matrix4().scale(new THREE.Vector3(1, 1.4, 1));
+        //const m = new THREE.Matrix4().setPosition(new THREE.Vector3(0.5, 0.5, 0));
         //mesh.applyMatrix4(m);
         //scene.add(mesh);
+
+        appstate.seeds.value.forEach((s: Seed) => scene.add(s.mesh));
+
+        buildTerrain();
+
+        const sceneData = appstate.scene.value;
+        for(let i = 0; i < sceneData.length; ++i)
+        {
+            const entity = sceneData[i];
+            for(let j = 0; j < entity.length; ++j)
+                buildObject3D(entity[j], {entity: i, primitive: j});
+        }
+
         renderOnce();
     }
 
     const onMouseMove = (event: MouseEvent) => {
-        this.interaction(event.clientX, event.clientY, false);
+        interaction(event.clientX, event.clientY, Clicks.None);
+    };
+
+    const onMouseDown = (event: MouseEvent) => {
+        interaction(event.clientX, event.clientY, Clicks.Down);
+    };
+
+    const onMouseUp = (event: MouseEvent) => {
+        interaction(event.clientX, event.clientY, Clicks.Up);
+
     };
 
     const onDblClick = (event: MouseEvent) => {
-        this.interaction(event.clientX, event.clientY, true);
+        interaction(event.clientX, event.clientY, Clicks.Double);
     };
 
-    const interaction = (x: number, y: number, isDblClick: boolean) => {
-        if (this.divContainer.current && perspectiveCamera) {
-            const offsetLeft = this.divContainer.current.offsetLeft;
-            const offsetTop = this.divContainer.current.offsetTop;
+    const interaction = (x: number, y: number, clicks: Clicks) => {
+        if (renderer?.domElement && perspectiveCamera) {
+            const dom = renderer?.domElement;
 
-            if (x < offsetLeft || y < offsetTop ||
-                x > offsetLeft + this.props.width || y > offsetTop + this.props.height)
-                mouse.inside = false;
-            else {
-                mouse.x = ((x - offsetLeft) / this.props.width) * 2 - 1;
-                mouse.y = 1 - ((y - offsetTop) / this.props.height) * 2;
-                mouse.inside = true;
+            mouse.x = ((x -  dom.offsetLeft) / renderer?.domElement.clientWidth) * 2 - 1;
+            mouse.y = 1 - ((y - dom.offsetTop) / renderer?.domElement.clientHeight) * 2;
+            mouse.inside = true;
 
-                if (this.props.hasSelection())
-                {
-                    if (isDblClick)
-                    {
-                        this.props.onDblClick(-1);
-                        this.raycastScene(false);
-                    }
-                }
-                else
-                    this.raycastScene(isDblClick);
-            }
+            // if (this.props.hasSelection())
+            // {
+            //     if (isDblClick)
+            //     {
+            //         this.props.onDblClick(-1);
+            //         this.raycastScene(false);
+            //     }
+            // }
+            // else
+            //     this.raycastScene(isDblClick);
+            raycastScene(clicks);
         }
     };
 
-    const raycastScene = (isDblClick: boolean) => {
+    const raycastScene = (clicks: Clicks) => {
         if (mouse.inside && scene && perspectiveCamera) {
             const mousePoint = new THREE.Vector3(mouse.x, mouse.y, 1); //The mouse point in homogenous coordinates (1 at the end)
             mousePoint.unproject(perspectiveCamera);
             const raycaster = new THREE.Raycaster(perspectiveCamera.position, mousePoint.sub(perspectiveCamera.position).normalize());
-            raycaster.layers.enable(1); //only Michelangelo's objects
+            //mousePoint now contains direction
+            raycaster.layers.set(1); //only pickable objects
             //raycaster.params.Line = { threshold: 0.04 }
+            appstate.grabbed.value?.forEach((x: Seed) => x.move(raycaster));
 
             const intersections = raycaster.intersectObjects(scene.children, false);
+            batch(() => {
+                let seedPick = undefined;
+                if (intersections.length > 0) {
+                    const closest = intersections[0];
+                    if (closest.object.userData)
+                    {
+                        const ref = closest.object.userData as DataRef;
+                        switch (ref.type)
+                        {
+                            case "seed":
+                                seedPick = ref.seed;
+                                if (clicks == Clicks.Double)
+                                {
+                                    if (seedPick.state.value != "select")
+                                    seedPick.selecthover();
+                                }
+                                else if (clicks == Clicks.Down)
+                                {
+                                    if (seedPick.state.value == "selecthover")
+                                        seedPick.grab(raycaster);
+                                }
+                                else if (clicks == Clicks.Up)
+                                {
+                                    if (seedPick.state.value == "grab")
+                                        seedPick.ungrab("selecthover");
+                                }
+                                else switch (seedPick.state.value) {
+                                    case "none": seedPick.hover(); break;
+                                    case "select": seedPick.selecthover(); break;
+                                }
+                            break;
+                        }
+                    }
+                //     if (((hovered?.object.name != closest.object.name) || isDblClick))
+                //     {
+                //         //scene has/needs no dispose anymore, thus no need for hoveredScene.dispose();
+                //         hoveredScene = new THREE.Scene();
+                //         hoveredScene.overrideMaterial = this.materialHovered;
 
-            // if (intersections.length > 0) {
-            //     const closest = intersections[0];
-            //     if (((hovered?.object.name != closest.object.name) || isDblClick))
-            //     {
-            //         //scene has/needs no dispose anymore, thus no need for hoveredScene.dispose();
-            //         hoveredScene = new THREE.Scene();
-            //         hoveredScene.overrideMaterial = this.materialHovered;
+                //         hovered = closest;
+                //         if (hovered?.object)
+                //         {
+                //             const n = parseInt(hovered?.object.name);
+                //             this.props.onHover(n);
+                //             if (isDblClick)
+                //                 this.props.onDblClick(n)
 
-            //         hovered = closest;
-            //         if (hovered?.object)
-            //         {
-            //             const n = parseInt(hovered?.object.name);
-            //             this.props.onHover(n);
-            //             if (isDblClick)
-            //                 this.props.onDblClick(n)
+                //             const hoveredClone = hovered.object.clone();
+                //             hoveredScene?.add(hoveredClone);
 
-            //             const hoveredClone = hovered.object.clone();
-            //             hoveredScene?.add(hoveredClone);
+                //             this.renderOnce();
+                //         }
+                //     }
+                // } else {
+                //     if (hovered) {
+                //         hovered = undefined;
+                //         hoveredScene = undefined;
+                //         this.props.onHover(-1);
+                //         this.renderOnce();
+                //     }
+                }
 
-            //             this.renderOnce();
-            //         }
-            //     }
-            // } else {
-            //     if (hovered) {
-            //         hovered = undefined;
-            //         hoveredScene = undefined;
-            //         this.props.onHover(-1);
-            //         this.renderOnce();
-            //     }
-            // }
+                appstate.clearSeedHovers(seedPick);
+                if (clicks == Clicks.Double)
+                    appstate.clearSeedSelects(seedPick);
+                if (clicks == Clicks.Up)
+                    appstate.clearSeedGrabs(seedPick);
+            });
         }
     };
 
@@ -175,26 +264,36 @@ export default function ThreeSceneFn () {
         let material = singlePlantMaterial;
         switch(primitive.type)
         {
-            case 1: geometry = threeCirclePrimitive; break;
+            case 1: geometry = threeCirclePrimitive; material = doublePlantMaterial; break;
             case 2: geometry = threeCylinderPrimitive;
                     matrix = matrix
                     .scale(new THREE.Vector3(primitive.radius, primitive.length, primitive.radius))
                     .setPosition(new THREE.Vector3(primitive.affineTransform[3] + matrix.elements[4] * 0.5, primitive.affineTransform[7] + matrix.elements[5] * 0.5, primitive.affineTransform[11] + matrix.elements[6] * 0.5));
                     break;
             case 4: geometry = threeSpherePrimitive; break;
-            case 8: geometry = threePlanePrimitive;
-                    matrix = matrix.setPosition(new THREE.Vector3(primitive.affineTransform[3] - primitive.affineTransform[0] * 0.5, primitive.affineTransform[7] - primitive.affineTransform[4] * 0.5, primitive.affineTransform[11] - primitive.affineTransform[8] * 0.5));
-                    material = doublePlantMaterial;
-                    break;
+            case 8: geometry = threePlanePrimitive; material = doublePlantMaterial; break;
         }
 
         const mesh = new THREE.Mesh(geometry, material);
         mesh.name = `${index.entity.toString()}_${index.primitive.toString()}`;
         //mesh.layers.enable(1);
         mesh.applyMatrix4(matrix);
-        mesh.updateMatrix();
+        //mesh.updateMatrix();
         mesh.matrixAutoUpdate = false;
+        mesh.userData = { type: "plant", index: index };
         scene.add(mesh);
+    }
+
+    const buildTerrain = () => {
+        const w = appstate.fieldSizeX.value;
+        const d = appstate.fieldSizeD.value;
+        const l = appstate.fieldSizeZ.value;
+
+        const box = new THREE.Box3().setFromCenterAndSize(new THREE.Vector3(w * 0.5, -d*0.5, l * 0.5), new THREE.Vector3(w, d, l) );
+        const terrain = new THREE.Box3Helper( box, new THREE.Color("#cc9900") );
+        terrain.userData = { type: "terrain" };
+        terrain.layers.set(0);
+        scene.add(terrain);
     }
 
     //divContainer = createRef<HTMLDivElement>();
@@ -204,7 +303,7 @@ export default function ThreeSceneFn () {
     // let onHover: (id: number) => void;
     // let onDblClick: (id: number) => void;
     // let hasSelection: () => boolean;
-    const scene = new THREE.Scene();
+    const scene = appstate.threescene;
     const hemiLight = new THREE.HemisphereLight( 0xffffff, 0x707070, 3.175 );
     let perspectiveCamera: THREE.PerspectiveCamera;
     let renderer: THREE.WebGLRenderer;
@@ -236,9 +335,6 @@ export default function ThreeSceneFn () {
                 controls?.dispose();
                 controls = undefined;
             }
-        // }
-        // this.width = props.width;
-        // this.height = props.height;
 
         return () =>
         {
@@ -253,15 +349,25 @@ export default function ThreeSceneFn () {
 
 
     useSignalEffect(() => {
+        const anyGrab = appstate.grabbed.value?.length > 0;
+        if (controls) controls.enabled = !anyGrab;
+    });
+
+    useSignalEffect(() => {
+        const x = appstate.fieldSizeX.value;
+        const d = appstate.fieldSizeD.value;
+        const z = appstate.fieldSizeZ.value;
+        const r = appstate.fieldResolution.value;
         initScene();
-        const sceneData = appstate.scene.value;
-        for(let i = 0; i < sceneData.length; ++i)
-        {
-            const entity = sceneData[i];
-            for(let j = 0; j < entity.length; ++j)
-                buildObject3D(entity[j], {entity: i, primitive: j});
-        }
         renderOnce();
+    });
+
+    useSignalEffect(() => {
+        const go = appstate.needsRender.value;
+        if (go) {
+            appstate.needsRender.value = false;
+            renderOnce();
+        }
     });
 
     const divRef = useRef(null);
@@ -286,7 +392,6 @@ export default function ThreeSceneFn () {
         }
 
         initCameras();
-
 
         if (renderer && divRef.current) {
             renderer.setSize(window.innerWidth, window.innerHeight);
@@ -317,8 +422,8 @@ export default function ThreeSceneFn () {
 const threeBoxPrimitive = new THREE.BoxGeometry(1, 1, 1); //box
 const threeSpherePrimitive = new THREE.SphereGeometry(1, 16, 16); //sphere
 const threeCylinderPrimitive = new THREE.CylinderGeometry(1, 1, 1.0, 16); //cylinder
-const threePlanePrimitive = new THREE.PlaneGeometry(1, 1); //rect
-const threeCirclePrimitive = new THREE.CircleGeometry(1, 1); //disk
+const threePlanePrimitive = new THREE.PlaneGeometry(2, 2); //rect
+const threeCirclePrimitive = new THREE.CircleGeometry(1).rotateX(-Math.PI * 0.5); //disk
 
 let singlePlantMaterial: THREE.MeshStandardMaterial;
 let doublePlantMaterial: THREE.MeshStandardMaterial;

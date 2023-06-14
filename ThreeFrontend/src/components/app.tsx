@@ -3,15 +3,16 @@ import { Start } from './hud/Start'
 import { HoursPerTick } from './hud/HoursPerTick';
 import { TotalHours } from './hud/TotalHours';
 import { FieldResolution } from './hud/FieldResolution';
-import { FieldSizeX } from './hud/FieldSizeX';
-import { FieldSizeZ } from './hud/FieldSizeZ';
-import { FieldSizeD } from './hud/FieldSizeD';
+import { FieldCellsX } from './hud/FieldCellsX';
+import { FieldCellsZ } from './hud/FieldCellsZ';
+import { FieldCellsD } from './hud/FieldCellsD';
 import { InitNumber } from './hud/InitNumber';
 import { PlantsTable } from './viewport/PlantsTable';
 import { Randomize } from './hud/Randomize';
 import { Seeds } from './hud/Seeds';
 import ThreeSceneFn from './viewport/ThreeSceneFn';
 import { ProgressBar } from './hud/ProgressBar';
+import { Obstacles } from './hud/Obstacles';
 
 const App = () => {
 	return(
@@ -24,13 +25,15 @@ const App = () => {
 			<HoursPerTick/>
 			<TotalHours/>
 			<FieldResolution/>
-			<FieldSizeX/>
-			<FieldSizeZ/>
-			<FieldSizeD/>
+			<FieldCellsX/>
+			<FieldCellsZ/>
+			<FieldCellsD/>
 			<Randomize/>
 			<InitNumber/>
 			<hr/>
 			<Seeds/>
+			<hr/>
+			<Obstacles/>
 			<hr/>
 			<Start/>&nbsp;<ProgressBar/>
 			<PlantsTable/>

@@ -1,8 +1,11 @@
-import { Signal, batch, computed, signal } from "@preact/signals";
+import { batch, computed, signal } from "@preact/signals";
 import { BackendURI } from "./config";
 import BinaryReader from "./helpers/BinaryReader";
 import { Scene } from "./helpers/Scene";
 import * as SignalR from "@microsoft/signalr";
+import { Seed } from "./helpers/Seed";
+import * as THREE from 'three';
+import { Obstacle } from "./helpers/Obstacle";
 
 interface RetryContext {
     readonly previousRetryCount: number; //The number of consecutive failed tries so far.
@@ -48,41 +51,13 @@ hubConnection.on("result", (result: ISimResponse) => {
 
 const start = async() => hubConnection.start();
 hubConnection.onclose(start);
-//start();
 
-export interface IPlantRequest
-{
-    PX: Signal<number>,
-    PY: Signal<number>,
-    PZ: Signal<number>
-}
-
-export interface IWallObstacle extends IPlantRequest
-{
-    Type: "wall",
-    AngleX: Signal<number>,
-    AngleY: Signal<number>,
-    Length: Signal<number>,
-    Height: Signal<number>,
-    Thickness: Signal<number>,
-}
-
-export interface IUmbrellaObstacle extends IPlantRequest
-{
-    Type: "umbrella",
-    PoleThickness: Signal<number>,
-    DiskRadius: Signal<number>,
-    Height: Signal<number>,
-}
-
-export type IObstacleRequest = IWallObstacle | IUmbrellaObstacle
-
-export interface IPlantResponse
+interface IPlantResponse
 {
     V: number
 }
 
-export interface ISimResponse
+interface ISimResponse
 {
     plants: IPlantResponse[],
     scene: Uint8Array,
@@ -90,49 +65,16 @@ export interface ISimResponse
     debug: string,
 }
 
-const state = {
-    // SETTINGS
-    hoursPerTick: signal(1),
-    totalHours: signal(744),
-    fieldResolution: signal(0.5),
-    fieldSizeX: signal(10),
-    fieldSizeZ: signal(10),
-    fieldSizeD: signal(4),
-    initNumber: signal(42),
-    randomize: signal(false),
-
-    seeds: signal<IPlantRequest[]>([{PX: signal(0.5), PY: signal(-0.01), PZ: signal(0.5)}]),
-    seedsCount: computed(() => state.seeds.length),
-
-    obstacles: signal<IObstacleRequest[]>([]),
-    obstaclesCount: computed(() => state.obstacles.length),
-
-    //OPERATIONAL STATE
-    computing: signal(false),
-    simStep: signal(0),
-    simLength: signal(0),
-
-    //RESPONSE
-    plants: signal<IPlantResponse[]>([]),
-    scene: signal<Scene>([]),
-
-    //METHODS
-    run: run,
-    pushRndSeed : pushRndSeed,
-    removeSeedAt: removeSeed,
-};
-
-export default state;
-
 function requestBody() {
     return {
     HoursPerTick: Math.trunc(state.hoursPerTick.value),
     TotalHours: Math.trunc(state.totalHours.value),
     FieldResolution: state.fieldResolution.value,
-    FieldSize: { X: state.fieldSizeX.value, D: state.fieldSizeD.value, Z: state.fieldSizeZ.value },
+    FieldSize: { X: state.fieldCellsX.value, D: state.fieldCellsD.value, Z: state.fieldCellsZ.value },
     Seed: Math.trunc(state.randomize.value ? Math.random() * 4294967295 : state.initNumber.value),
 
-    Plants: state.seeds.value.map(p => ({ P: { X: p.PX.value, Y: p.PY.value, Z: p.PZ.value } })),
+    Plants: state.seeds.value.map((p: Seed) => ({ P: { X: p.px.value, Y: p.py.value, Z: p.pz.value } })),
+    Obstacles: state.obstacles.value.map((o: Obstacle) => exportObstacle(o)),
     "RequestGeometry": true
 }};
 
@@ -165,41 +107,107 @@ function base64ToArrayBuffer(base64) {
     return bytes;
 }
 
-function pushRndSeed(){
-    state.seeds.value = [ ...state.seeds.value, { PX: signal(Math.random() * state.fieldSizeX.value), PY: signal(0), PZ: signal(Math.random() * state.fieldSizeZ.value) }];
-}
-
 function removeSeed(i : number) {
-    if (i >= 0 && i < state.seeds.value.length)
-        state.seeds.value.splice(i, 1);
-        state.seeds.value = [...state.seeds.value];
-}
-
-function pushRndObstacle(){
-    const item = Math.random() > 0.5 ? {
-        Type: "wall",
-        Height: signal(3),
-        Length: signal(3),
-        Thickness: signal(0.4),
-        AngleX: signal(0),
-        AngleY: signal(0),
-        PX: signal(Math.random() * state.fieldSizeX.value),
-        PY: signal(0),
-        PZ: signal(Math.random() * state.fieldSizeZ.value)
-    } : {
-        Type: "umbrella",
-        PoleThickness: signal(0.08),
-        DiskRadius: signal(1),
-        Height: signal(2.2),
-        PX: signal(Math.random() * state.fieldSizeX.value),
-        PY: signal(0),
-        PZ: signal(Math.random() * state.fieldSizeZ.value)
-    };
-    state.obstacles.value = [ ...state.obstacles.value, item];
+    if (i >= 0 && i < state.seeds.value.length) {
+        const seed = state.seeds.value.splice(i, 1) as Seed;
+        state.threescene.remove(seed.mesh);
+        seed.mesh = undefined;
+    }
+    state.seeds.value = [...state.seeds.value];
 }
 
 function removeObstacle(i : number) {
-    if (i >= 0 && i < state.obstacles.value.length)
-        state.obstacles.value.splice(i, 1);
-        state.obstacles.value = [...state.obstacles.value];
+    // if (i >= 0 && i < state.obstacles.value.length)
+    //     state.obstacles.value.splice(i, 1);
+    //     state.obstacles.value = [...state.obstacles.value];
 }
+
+function exportObstacle(o: Obstacle) {
+    const base = { T: o.type.value, H: o.height.value, D: o.thickness.value,
+                    P: { X: o.px.value, Y: o.py.value, Z: o.pz.value },
+                    O: o.angleY.value };
+    switch (o.type.value) {
+        case "umbrella": return { ...base, R: o.wallLength_UmbrellaRadius.value };
+        default: return { ...base, L: o.wallLength_UmbrellaRadius.value };
+    }
+}
+
+function clearSeedHovers(except: Seed | undefined) {
+    state.seeds.value.forEach((s : Seed) => {
+        if (s !== except)
+            switch (s.state.value) {
+                case "hover": s.unhover(); break;
+                case "selecthover": s.select(); break;
+            }
+    });
+}
+
+function clearSeedSelects(except: Seed | undefined) {
+    state.seeds.value.forEach((s : Seed) => {
+        if (s !== except)
+            switch(s.state.value) {
+                case "select":
+                case "selecthover": s.unhover();
+            }
+    });
+}
+function clearSeedGrabs(except: Seed | undefined) {
+    state.seeds.value.forEach((s : Seed) => {
+        if (s !== except)
+            if (s.state.value == "grab")
+                s.ungrab("select");
+    });
+}
+
+const threescene = new THREE.Scene();
+const state = {
+    // SETTINGS
+    hoursPerTick: signal(8),
+    totalHours: signal(744),
+    fieldResolution: signal(0.5),
+    fieldCellsX: signal(10),
+    fieldCellsZ: signal(10),
+    fieldCellsD: signal(4),
+    fieldSizeX: computed(() => state.fieldCellsX.value * state.fieldResolution),
+    fieldSizeZ: computed(() => state.fieldCellsZ.value * state.fieldResolution),
+    fieldSizeD: computed(() => state.fieldCellsD.value * state.fieldResolution),
+    initNumber: signal(42),
+    randomize: signal(false),
+
+    seeds: signal<Seed[]>([]),
+    seedsCount: computed(() => state.seeds.length),
+
+    obstacles: signal<Obstacle[]>([Obstacle.debugWall()]),
+    obstaclesCount: computed(() => state.obstacles.length),
+
+    //RENDERING
+    threescene: threescene,
+    needsRender: signal(false),
+    grabbed: computed(() => state.seeds.value.filter((x: Seed) => x.state.value == "grab")),
+
+    //OPERATIONAL STATE
+    computing: signal(false),
+    simStep: signal(0),
+    simLength: signal(0),
+
+    //RESPONSE
+    plants: signal<IPlantResponse[]>([]),
+    scene: signal<Scene>([]),
+
+    //METHODS
+    run: run,
+    pushRndSeed : () => { state.seeds.value = [ ...state.seeds.value, Seed.rndItem()] },
+    removeSeedAt: removeSeed,
+    clearSeedHovers: clearSeedHovers,
+    clearSeedSelects: clearSeedSelects,
+    clearSeedGrabs: clearSeedGrabs,
+
+    pushRndObstacle: () => { state.obstacles.value = [ ...state.obstacles.value, Obstacle.rndObstacle()] },
+    removeObstacleAt: removeObstacle,
+
+};
+
+export default state;
+
+//now that the scene is assigned push in the default seed
+state.seeds.value = [ new Seed(0.5, -0.01, 0.05) ];
