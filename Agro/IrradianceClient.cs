@@ -607,6 +607,13 @@ public class IrradianceClient
 		using var writer = new BinaryWriter(binaryStream);
 		writer.WriteU8(3); //version 3 using primitives, each surface is individually marked as obstacle or sensor
 
+		if (SkipFormations.Count == 0)
+		{
+			for(int i = 0; i < formations.Count; ++i)
+				if (!(formations[i] is PlantFormation2 plant && plant.AG.Alive))
+					SkipFormations.Add(i);
+		}
+
 		//Formations
 		writer.WriteU32(formations.Count - SkipFormations.Count + obstacles.Count); //WRITE NUMBER OF PLANTS in this system
 		foreach(var obstacle in obstacles)
@@ -629,7 +636,7 @@ public class IrradianceClient
 						++sensorsCount;
 
 				var offsets = new int[count];
-				for(int i = 0; i < count; ++i)
+				for (int i = 0; i < count; ++i)
 					offsets[i] = ag.GetOrgan(i) == OrganTypes.Leaf ? offsetCounter++ : -1;
 
 				IrradianceFormationOffsets.Add(ag, offsets);
@@ -679,7 +686,7 @@ public class IrradianceClient
 						default: throw new NotImplementedException();
 					}
 				}
-			}
+            }
 		}
 
 		return offsetCounter;

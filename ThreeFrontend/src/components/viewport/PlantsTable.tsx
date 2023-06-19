@@ -5,7 +5,7 @@ export class PlantsTable extends Component
 {
     render() {
         return <>
-            <p>Renderer: {appstate.renderer}</p>
+            <p>Renderer: {appstate.renderer.value}</p>
             <ul>
                 {appstate.plants.value.map(plant => (<li>
                     Volume: {plant.V} m³

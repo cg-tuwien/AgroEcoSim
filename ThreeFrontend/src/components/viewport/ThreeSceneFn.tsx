@@ -11,7 +11,7 @@ import { batch, effect, useSignalEffect } from "@preact/signals";
 import { Obstacle } from "src/helpers/Obstacle";
 import { Seed } from "src/helpers/Seed";
 import { backgroundColor, neutralColor } from "../../helpers/Selection";
-
+import { TransformControls } from 'three/examples/jsm/controls/TransformControls';
 
 enum Clicks { None, Down, Up, Double };
 
@@ -34,6 +34,11 @@ interface ISeedRef {
     seed: Seed;
 }
 
+// interface ISeedHandle {
+//     type: "seed";
+//     seed: Seed;
+// }
+
 interface ITerrainRef {
     type: "terrain";
 }
@@ -50,6 +55,12 @@ interface IObstacleRef {
 
 type DataRef = ISeedRef | ITerrainRef | IPlantRef | IObstacleRef;
 
+// export const TerrainLayer = 0;
+// export const SeedsLayer = 1;
+// export const ObstaclesLayer = 2;
+// export const PlantsLayer = 3;
+
+
 const materialHovered = new THREE.MeshBasicMaterial({
     color: 'orange',
     polygonOffset: true,
@@ -63,10 +74,11 @@ const materialHovered = new THREE.MeshBasicMaterial({
 });
 
 export default function ThreeSceneFn () {
+    let initialized = false;
+
     const renderOnce = () => {
         if (scene && perspectiveCamera && renderer) {
             renderer.render(scene, perspectiveCamera);
-            console.log("render THREE");
             // if (hoveredScene)
             //     this.renderer.render(hoveredScene, perspectiveCamera);
         }
@@ -74,60 +86,69 @@ export default function ThreeSceneFn () {
 
     const initCameras = () => {
         perspectiveCamera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.025, 5000);
-        perspectiveCamera.position.set(0, 5, 10);
-        perspectiveCamera.layers.enableAll();
+        perspectiveCamera.position.set(0, 3, 5);
+        //perspectiveCamera.layers.enableAll();
         if (renderer){
-            controls = new OrbitControls(perspectiveCamera, renderer.domElement);
+            cameraControls = new OrbitControls(perspectiveCamera, renderer.domElement);
             //this.controls.enableKeys = false;
             //this.controls.keys = { LEFT: "", RIGHT: "", BOTTOM: "", UP: "" };
-            controls.enableRotate = true;
-            controls.screenSpacePanning = true;
+            cameraControls.enableRotate = true;
+            cameraControls.screenSpacePanning = true;
+            cameraControls.update();
 
-            //this.controls.addEventListener("start", () => { this.performRendering = true });
-            //this.controls.addEventListener("end", () => { this.performRendering = false });
-            controls.addEventListener("change", () => renderOnce());
+            cameraControls.addEventListener("change", () => renderOnce());
             renderer?.domElement.addEventListener('wheel', () => renderOnce());
             renderer?.domElement.addEventListener('mousemove', e => onMouseMove(e));
             renderer?.domElement.addEventListener('dblclick', e => onDblClick(e));
             renderer?.domElement.addEventListener('mousedown', e => onMouseDown(e));
             renderer?.domElement.addEventListener('mouseup', e => onMouseUp(e));
-        }
 
+            transformControls = new TransformControls(perspectiveCamera, renderer.domElement);
+            appstate.transformControls = transformControls;
+            transformControls.addEventListener('change', () => renderOnce());
+            transformControls.addEventListener('dragging-changed', (event) => cameraControls.enabled = ! event.value);
+        }
         //initData = { tanFOV: Math.tan( ( ( Math.PI / 180 ) * perspectiveCamera.fov / 2 ) ), windowHeight: window.innerHeight };
     }
 
     const initScene = () => {
-        scene.clear();
-        scene.background = backgroundColor;
-        singlePlantMaterial = new THREE.MeshStandardMaterial({ color: neutralColor});
-        doublePlantMaterial = new THREE.MeshStandardMaterial({ color: neutralColor, side: THREE.DoubleSide});
+        if (!initialized)
+        {
+            scene.clear();
+            scene.background = backgroundColor;
+            // hemiLight.color.setHSL( 0.6, 1, 0.6 );
+            // hemiLight.groundColor.setHSL( 0.2, 0.2, 0.2 );
+            hemiLight.position.set( 0, 10000, 0 );
+            scene.add( hemiLight );
+            initialized = true;
 
-        // hemiLight.color.setHSL( 0.6, 1, 0.6 );
-        // hemiLight.groundColor.setHSL( 0.2, 0.2, 0.2 );
-        hemiLight.position.set( 0, 10000, 0 );
-        scene.add( hemiLight );
+            scene.add(appstate.objSeeds);
+            appstate.seeds.value.forEach((s: Seed) => appstate.objSeeds.add(s.mesh));
 
+            scene.add(appstate.objTerrain);
+            scene.add(appstate.objObstacles);
+            scene.add(appstate.objPlants);
+
+            scene.add(transformControls);
+        }
+        else
+        {
+            appstate.objSeeds.clear();
+            appstate.objTerrain.clear();
+            appstate.objObstacles.clear();
+            appstate.objPlants.clear();
+        }
         //scene.add(new THREE.AxesHelper( 1 ))
 
-        //const mesh = new THREE.Mesh(threePlanePrimitive, new THREE.MeshBasicMaterial({color: new THREE.Color("#ff4411")}));
-        //mesh.translateY(10);
-        //const m = new THREE.Matrix4().scale(new THREE.Vector3(1, 1.4, 1));
-        //const m = new THREE.Matrix4().setPosition(new THREE.Vector3(0.5, 0.5, 0));
-        //mesh.applyMatrix4(m);
-        //scene.add(mesh);
-
-        appstate.seeds.value.forEach((s: Seed) => scene.add(s.mesh));
+        const mesh = new THREE.Mesh(threeBoxPrimitive, new THREE.MeshBasicMaterial({color: new THREE.Color("#ff4411")}));
+        // //mesh.translateY(10);
+        // //const m = new THREE.Matrix4().scale(new THREE.Vector3(1, 1.4, 1));
+        // //const m = new THREE.Matrix4().setPosition(new THREE.Vector3(0.5, 0.5, 0));
+        // //mesh.applyMatrix4(m);
+        // scene.add(mesh);
 
         buildTerrain();
-
-        const sceneData = appstate.scene.value;
-        for(let i = 0; i < sceneData.length; ++i)
-        {
-            const entity = sceneData[i];
-            for(let j = 0; j < entity.length; ++j)
-                buildObject3D(entity[j], {entity: i, primitive: j});
-        }
-
+        buildPlants();
         renderOnce();
     }
 
@@ -176,11 +197,15 @@ export default function ThreeSceneFn () {
             mousePoint.unproject(perspectiveCamera);
             const raycaster = new THREE.Raycaster(perspectiveCamera.position, mousePoint.sub(perspectiveCamera.position).normalize());
             //mousePoint now contains direction
-            raycaster.layers.set(1); //only pickable objects
+            //raycaster.layers.set(SeedsLayer); //only pickable objects
             //raycaster.params.Line = { threshold: 0.04 }
             appstate.grabbed.value?.forEach((x: Seed) => x.move(raycaster));
 
-            const intersections = raycaster.intersectObjects(scene.children, false);
+            const intersections = raycaster.intersectObjects(appstate.objSeeds.children, true);
+            //add other pickable items
+            //intersections.concat(raycaster.intersectObjects(appstate.objSeeds.children, false));
+            //intersections.sort((a,b) => a.distance < b.distance ? -1 : (a.distance > b.distance ? 1 : 0));
+
             batch(() => {
                 let seedPick = undefined;
                 if (intersections.length > 0) {
@@ -260,6 +285,7 @@ export default function ThreeSceneFn () {
             case 4: matrix = new THREE.Matrix4().fromArray([primitive.radius, 0, 0, primitive.center[0], 0, primitive.radius, 0, primitive.center[1], 0, 0, primitive.radius, primitive.center[2], 0, 0, 0, 1]).transpose(); break;
             default: matrix = new THREE.Matrix4().fromArray([...primitive.affineTransform, 0, 0, 0, 1]).transpose(); break;
         }
+        const isObstacle = index.entity >= appstate.obstaclesCount.peek();
 
         let material = singlePlantMaterial;
         switch(primitive.type)
@@ -276,24 +302,37 @@ export default function ThreeSceneFn () {
 
         const mesh = new THREE.Mesh(geometry, material);
         mesh.name = `${index.entity.toString()}_${index.primitive.toString()}`;
-        //mesh.layers.enable(1);
+        //mesh.layers.set(PlantsLayer);
         mesh.applyMatrix4(matrix);
-        //mesh.updateMatrix();
         mesh.matrixAutoUpdate = false;
         mesh.userData = { type: "plant", index: index };
-        scene.add(mesh);
+        appstate.objPlants.add(mesh);
     }
 
     const buildTerrain = () => {
+        appstate.objTerrain.clear();
         const w = appstate.fieldSizeX.value;
         const d = appstate.fieldSizeD.value;
         const l = appstate.fieldSizeZ.value;
 
         const box = new THREE.Box3().setFromCenterAndSize(new THREE.Vector3(w * 0.5, -d*0.5, l * 0.5), new THREE.Vector3(w, d, l) );
-        const terrain = new THREE.Box3Helper( box, new THREE.Color("#cc9900") );
-        terrain.userData = { type: "terrain" };
-        terrain.layers.set(0);
-        scene.add(terrain);
+        const terrainMesh = new THREE.Box3Helper( box, new THREE.Color("#cc9900") );
+        terrainMesh.userData = { type: "terrain" };
+        //terrainMesh.layers.set(TerrainLayer);
+        appstate.objTerrain.add(terrainMesh);
+        renderOnce();
+    }
+
+    const buildPlants = () => {
+        appstate.objPlants.clear();
+        const sceneData = appstate.scene.value;
+        for(let i = 0; i < sceneData.length; ++i)
+        {
+            const entity = sceneData[i];
+            for(let j = 0; j < entity.length; ++j)
+                buildObject3D(entity[j], {entity: i, primitive: j});
+        }
+        renderOnce();
     }
 
     //divContainer = createRef<HTMLDivElement>();
@@ -303,18 +342,18 @@ export default function ThreeSceneFn () {
     // let onHover: (id: number) => void;
     // let onDblClick: (id: number) => void;
     // let hasSelection: () => boolean;
-    const scene = appstate.threescene;
+    const scene = new THREE.Scene();
     const hemiLight = new THREE.HemisphereLight( 0xffffff, 0x707070, 3.175 );
     let perspectiveCamera: THREE.PerspectiveCamera;
     let renderer: THREE.WebGLRenderer;
-    let controls: OrbitControls;
+    let cameraControls: OrbitControls;
+    let transformControls: TransformControls | undefined;
 
     let animationRequest: number;
     let mouse = { inside: false, x: 0, y: 0};
 
-    useLayoutEffect(() => {
+    window.addEventListener("resize", () => {
         //if (this.width !== this.props.width || this.height !== this.props.height) {
-            console.log("Update SIZE");
             if (renderer)
                 renderer.setSize(window.innerWidth, window.innerHeight);
 
@@ -323,7 +362,7 @@ export default function ThreeSceneFn () {
                     perspectiveCamera.aspect = window.innerWidth / window.innerHeight;
                     //if (this.initData) perspectiveCamera.fov = ( 360 / Math.PI ) * Math.atan( this.initData.tanFOV * ( window.innerHeight / this.initData.windowHeight ) );
                     perspectiveCamera.updateProjectionMatrix();
-                    controls?.update();
+                    cameraControls?.update();
                 }
                 else
                     initCameras();
@@ -332,8 +371,8 @@ export default function ThreeSceneFn () {
             else
             {
                 perspectiveCamera = undefined;
-                controls?.dispose();
-                controls = undefined;
+                cameraControls?.dispose();
+                cameraControls = undefined;
             }
 
         return () =>
@@ -342,15 +381,15 @@ export default function ThreeSceneFn () {
             animationRequest = undefined;
             //scene has/needs no dispose anymore
             scene.clear();
-            controls?.dispose();
-            controls = undefined;
+            cameraControls?.dispose();
+            cameraControls = undefined;
         }
     });
 
 
     useSignalEffect(() => {
         const anyGrab = appstate.grabbed.value?.length > 0;
-        if (controls) controls.enabled = !anyGrab;
+        if (cameraControls) cameraControls.enabled = !anyGrab;
     });
 
     useSignalEffect(() => {
@@ -358,9 +397,14 @@ export default function ThreeSceneFn () {
         const d = appstate.fieldSizeD.value;
         const z = appstate.fieldSizeZ.value;
         const r = appstate.fieldResolution.value;
-        initScene();
-        renderOnce();
+        appstate.objTerrain.clear();
+        buildTerrain();
     });
+
+    useSignalEffect(() => {
+        const plants = appstate.scene.value;
+        buildPlants();
+    })
 
     useSignalEffect(() => {
         const go = appstate.needsRender.value;
@@ -411,7 +455,6 @@ export default function ThreeSceneFn () {
             initScene();
         }
 
-        console.log("render Component");
         return () => divRef.current.removeChild(renderer.domElement);
     });
 
@@ -419,11 +462,11 @@ export default function ThreeSceneFn () {
     return <div id="main3Dviewport" ref={divRef}></div>;
 }
 
-const threeBoxPrimitive = new THREE.BoxGeometry(1, 1, 1); //box
+const threeBoxPrimitive = new THREE.BoxGeometry().translate(0, 0.5, 0); //box
 const threeSpherePrimitive = new THREE.SphereGeometry(1, 16, 16); //sphere
 const threeCylinderPrimitive = new THREE.CylinderGeometry(1, 1, 1.0, 16); //cylinder
 const threePlanePrimitive = new THREE.PlaneGeometry(2, 2); //rect
-const threeCirclePrimitive = new THREE.CircleGeometry(1).rotateX(-Math.PI * 0.5); //disk
+const threeCirclePrimitive = new THREE.CircleGeometry(0.5).rotateX(-Math.PI * 0.5); //disk
 
-let singlePlantMaterial: THREE.MeshStandardMaterial;
-let doublePlantMaterial: THREE.MeshStandardMaterial;
+const singlePlantMaterial = new THREE.MeshStandardMaterial({ color: neutralColor});
+const doublePlantMaterial = new THREE.MeshStandardMaterial({ color: neutralColor, side: THREE.DoubleSide});

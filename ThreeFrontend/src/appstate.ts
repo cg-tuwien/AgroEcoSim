@@ -6,6 +6,7 @@ import * as SignalR from "@microsoft/signalr";
 import { Seed } from "./helpers/Seed";
 import * as THREE from 'three';
 import { Obstacle } from "./helpers/Obstacle";
+import { TransformControls } from 'three/examples/jsm/controls/TransformControls';
 
 interface RetryContext {
     readonly previousRetryCount: number; //The number of consecutive failed tries so far.
@@ -30,8 +31,8 @@ const hubConnection = new SignalR.HubConnectionBuilder().withUrl(`${BackendURI.s
 hubConnection.on("reject", () => { console.log("You have another simulation already running. Please wait until it is finished."); });
 hubConnection.on("progress", (step: number, length: number) => {
     batch(() => {
-        state.simStep.value = step;
-        state.simLength.value = length;
+        st.simStep.value = step;
+        st.simLength.value = length;
     });
 });
 
@@ -39,14 +40,21 @@ hubConnection.on("result", (result: ISimResponse) => {
     const binaryScene = base64ToArrayBuffer(result.scene);
     const reader = new BinaryReader(binaryScene);
     const scene = reader.readAgroScene();
-    console.log(result.debug);
+    if (result.debug?.length > 0)
+        console.log(result.debug);
     batch(() => {
-        state.plants.value = result.plants;
-        state.scene.value = scene;
-        state.computing.value = false;
-        state.renderer = result.renderer;
-        state.simLength.value = 0;
+        st.plants.value = result.plants;
+        st.scene.value = scene;
+        st.computing.value = false;
+        st.renderer.value = result.renderer;
+        st.simLength.value = 0;
     });
+});
+
+hubConnection.on("preview", (result: ISimPreview) => {
+    const reader = new BinaryReader(base64ToArrayBuffer(result.scene));
+    st.scene.value = reader.readAgroScene();
+    st.renderer.value = result.renderer;
 });
 
 const start = async() => hubConnection.start();
@@ -65,37 +73,11 @@ interface ISimResponse
     debug: string,
 }
 
-function requestBody() {
-    return {
-    HoursPerTick: Math.trunc(state.hoursPerTick.value),
-    TotalHours: Math.trunc(state.totalHours.value),
-    FieldResolution: state.fieldResolution.value,
-    FieldSize: { X: state.fieldCellsX.value, D: state.fieldCellsD.value, Z: state.fieldCellsZ.value },
-    Seed: Math.trunc(state.randomize.value ? Math.random() * 4294967295 : state.initNumber.value),
-
-    Plants: state.seeds.value.map((p: Seed) => ({ P: { X: p.px.value, Y: p.py.value, Z: p.pz.value } })),
-    Obstacles: state.obstacles.value.map((o: Obstacle) => exportObstacle(o)),
-    "RequestGeometry": true
-}};
-
-async function run() {
-    if (!state.computing.value)
-    {
-        state.computing.value = true;
-        if (hubConnection.state !== SignalR.HubConnectionState.Connected)
-            await start();
-
-        if (hubConnection.state == SignalR.HubConnectionState.Connected)
-            hubConnection.invoke("run", requestBody()).catch(e => {
-                console.error(e);
-                batch(() => {
-                    state.computing.value = false;
-                    state.renderer.value = "error";
-                });
-            });
-        else
-            state.computing.value = false;
-    }
+interface ISimPreview
+{
+    scene: Uint8Array,
+    renderer: string,
+    step: number,
 }
 
 function base64ToArrayBuffer(base64) {
@@ -107,107 +89,155 @@ function base64ToArrayBuffer(base64) {
     return bytes;
 }
 
-function removeSeed(i : number) {
-    if (i >= 0 && i < state.seeds.value.length) {
-        const seed = state.seeds.value.splice(i, 1) as Seed;
-        state.threescene.remove(seed.mesh);
-        seed.mesh = undefined;
-    }
-    state.seeds.value = [...state.seeds.value];
-}
-
-function removeObstacle(i : number) {
-    // if (i >= 0 && i < state.obstacles.value.length)
-    //     state.obstacles.value.splice(i, 1);
-    //     state.obstacles.value = [...state.obstacles.value];
-}
-
 function exportObstacle(o: Obstacle) {
-    const base = { T: o.type.value, H: o.height.value, D: o.thickness.value,
-                    P: { X: o.px.value, Y: o.py.value, Z: o.pz.value },
-                    O: o.angleY.value };
-    switch (o.type.value) {
-        case "umbrella": return { ...base, R: o.wallLength_UmbrellaRadius.value };
-        default: return { ...base, L: o.wallLength_UmbrellaRadius.value };
+    const base = { T: o.type.peek(), H: o.height.peek(), D: o.thickness.peek(),
+                    P: { X: o.px.peek(), Y: o.py.peek(), Z: o.pz.peek() },
+                    O: o.angleY.peek() };
+    switch (o.type.peek()) {
+        case "umbrella": return { ...base, R: o.wallLength_UmbrellaRadius.peek() };
+        default: return { ...base, L: o.wallLength_UmbrellaRadius.peek() };
     }
 }
 
-function clearSeedHovers(except: Seed | undefined) {
-    state.seeds.value.forEach((s : Seed) => {
-        if (s !== except)
-            switch (s.state.value) {
-                case "hover": s.unhover(); break;
-                case "selecthover": s.select(); break;
-            }
-    });
-}
 
-function clearSeedSelects(except: Seed | undefined) {
-    state.seeds.value.forEach((s : Seed) => {
-        if (s !== except)
-            switch(s.state.value) {
-                case "select":
-                case "selecthover": s.unhover();
-            }
-    });
-}
-function clearSeedGrabs(except: Seed | undefined) {
-    state.seeds.value.forEach((s : Seed) => {
-        if (s !== except)
-            if (s.state.value == "grab")
-                s.ungrab("select");
-    });
-}
-
-const threescene = new THREE.Scene();
-const state = {
+class State {
     // SETTINGS
-    hoursPerTick: signal(8),
-    totalHours: signal(744),
-    fieldResolution: signal(0.5),
-    fieldCellsX: signal(10),
-    fieldCellsZ: signal(10),
-    fieldCellsD: signal(4),
-    fieldSizeX: computed(() => state.fieldCellsX.value * state.fieldResolution),
-    fieldSizeZ: computed(() => state.fieldCellsZ.value * state.fieldResolution),
-    fieldSizeD: computed(() => state.fieldCellsD.value * state.fieldResolution),
-    initNumber: signal(42),
-    randomize: signal(false),
+    hoursPerTick = signal(1);
+    totalHours = signal(720);
+    fieldResolution = signal(0.5);
+    fieldCellsX = signal(10);
+    fieldCellsZ = signal(10);
+    fieldCellsD = signal(4);
+    fieldSizeX = computed(() => this.fieldCellsX.value * this.fieldResolution.value);
+    fieldSizeZ = computed(() => this.fieldCellsZ.value * this.fieldResolution.value);
+    fieldSizeD = computed(() => this.fieldCellsD.value * this.fieldResolution.value);
+    initNumber = signal(42);
+    randomize = signal(false);
 
-    seeds: signal<Seed[]>([]),
-    seedsCount: computed(() => state.seeds.length),
+    seeds = signal<Seed[]>([]);
+    seedsCount = computed(() => this.seeds.value.length);
 
-    obstacles: signal<Obstacle[]>([Obstacle.debugWall()]),
-    obstaclesCount: computed(() => state.obstacles.length),
+    obstacles = signal<Obstacle[]>([]);
+    obstaclesCount = computed(() => this.obstacles.value.length);
 
     //RENDERING
-    threescene: threescene,
-    needsRender: signal(false),
-    grabbed: computed(() => state.seeds.value.filter((x: Seed) => x.state.value == "grab")),
+    objSeeds = new THREE.Object3D();
+    objTerrain = new THREE.Object3D();
+    objObstacles = new THREE.Object3D();
+    objPlants = new THREE.Object3D();
+    needsRender = signal(false);
+
+    transformControls: TransformControls | undefined;
+
+    grabbed = computed(() => this.seeds.value.filter((x: Seed) => x.state.value == "grab"));
 
     //OPERATIONAL STATE
-    computing: signal(false),
-    simStep: signal(0),
-    simLength: signal(0),
+    computing = signal(false);
+    simStep = signal(0);
+    simLength = signal(0);
 
     //RESPONSE
-    plants: signal<IPlantResponse[]>([]),
-    scene: signal<Scene>([]),
+    plants = signal<IPlantResponse[]>([]);
+    scene = signal<Scene>([]);
+    renderer = signal("");
 
     //METHODS
-    run: run,
-    pushRndSeed : () => { state.seeds.value = [ ...state.seeds.value, Seed.rndItem()] },
-    removeSeedAt: removeSeed,
-    clearSeedHovers: clearSeedHovers,
-    clearSeedSelects: clearSeedSelects,
-    clearSeedGrabs: clearSeedGrabs,
+    private requestBody = () => {
+        return {
+        HoursPerTick: Math.trunc(this.hoursPerTick.peek()),
+        TotalHours: Math.trunc(this.totalHours.peek()),
+        FieldResolution: this.fieldResolution.peek(),
+        FieldSize: { X: this.fieldCellsX.peek(), D: this.fieldCellsD.peek(), Z: this.fieldCellsZ.peek() },
+        Seed: Math.trunc(this.randomize.peek() ? Math.random() * 4294967295 : this.initNumber.peek()),
 
-    pushRndObstacle: () => { state.obstacles.value = [ ...state.obstacles.value, Obstacle.rndObstacle()] },
-    removeObstacleAt: removeObstacle,
+        Plants: this.seeds.peek().map((p: Seed) => ({ P: { X: p.px.peek(), Y: p.py.peek(), Z: p.pz.peek() } })),
+        Obstacles: this.obstacles.peek().map((o: Obstacle) => exportObstacle(o)),
+        "RequestGeometry": true
+    }};
+
+    run = async() => {
+        if (!this.computing.peek())
+        {
+            batch(() => {
+                this.computing.value = true;
+                this.renderer.value = "";
+            });
+            if (hubConnection.state !== SignalR.HubConnectionState.Connected)
+                await start();
+
+            if (hubConnection.state == SignalR.HubConnectionState.Connected)
+                hubConnection.invoke("run", this.requestBody()).catch(e => {
+                    console.error(e);
+                    batch(() => {
+                        this.computing.value = false;
+                        this.renderer.value = "error";
+                    });
+                });
+            else
+                this.computing.value = false;
+        }
+    }
+
+    pushRndSeed = () => { this.seeds.value = [ ...this.seeds.peek(), Seed.rndItem()] };
+
+    removeSeedAt = (i : number) => {
+        const seeds = this.seeds.peek();
+        if (i >= 0 && i < seeds.length) {
+            const seed = seeds.splice(i, 1)[0];
+            this.objSeeds.remove(seed.mesh);
+            seed.mesh = undefined;
+        }
+        this.seeds.value = [...seeds];
+        this.needsRender.value = true;
+    };
+
+    clearSeedHovers = (except: Seed | undefined) => {
+        this.seeds.peek().forEach((s : Seed) => {
+            if (s !== except)
+                switch (s.state.peek()) {
+                    case "hover": s.unhover(); break;
+                    case "selecthover": s.select(); break;
+                }
+        });
+    };
+
+    clearSeedSelects = (except: Seed | undefined) => {
+        this.seeds.peek().forEach((s : Seed) => {
+            if (s !== except)
+                switch(s.state.peek()) {
+                    case "select":
+                    case "selecthover": s.unhover();
+                }
+        });
+    };
+
+    clearSeedGrabs = (except: Seed | undefined) => {
+        this.seeds.peek().forEach((s : Seed) => {
+            if (s !== except)
+                if (s.state.peek() == "grab")
+                    s.ungrab("select");
+        });
+    };
+
+    pushRndObstacle = () => { this.obstacles.value = [ ...this.obstacles.peek(), Obstacle.rndObstacle()] };
+
+    removeObstacleAt = (i : number) => {
+        const obstacles = this.obstacles.peek();
+        if (i >= 0 && i < obstacles.length)
+        {
+            const item = obstacles.splice(i, 1)[0];
+            this.objObstacles.remove(item.mesh);
+            item.mesh = undefined;
+        }
+
+        this.obstacles.value = [...obstacles];
+        this.needsRender.value = true;
+    };
 
 };
 
-export default state;
+const st = new State();
+export default st;
+//now that the singleton is exported push in the default seed
+st.seeds.value = [ new Seed(0.5, -0.01, 0.05) ];
 
-//now that the scene is assigned push in the default seed
-state.seeds.value = [ new Seed(0.5, -0.01, 0.05) ];

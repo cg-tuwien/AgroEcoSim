@@ -14,6 +14,7 @@ public interface IEditorHub
     Task Rejected();
     Task Progress(uint step, uint length);
     Task Result(SimulationResponse response);
+    Task Preview(PreviewResponse response);
 }
 
 public class SimulationHub : Hub<IEditorHub>
@@ -27,6 +28,7 @@ public class SimulationHub : Hub<IEditorHub>
 
     HashSet<string> ClientSimulations = new ();
 
+    static TimeSpan Second = TimeSpan.FromSeconds(0.5);
     public async Task Run(SimulationRequest request)
     {
         lock (ClientSimulations)
@@ -43,10 +45,15 @@ public class SimulationHub : Hub<IEditorHub>
         var world = Initialize.World(request);
         var start = DateTime.UtcNow.Ticks;
         var simulationLength = (uint)world.TimestepsTotal();
+        var prevTime = DateTime.UtcNow;
         for(uint i = 0; i < simulationLength; ++i)
         {
             world.Run(1U);
             _ = Clients.Caller.Progress(i, simulationLength);
+            var now = DateTime.UtcNow;
+            if (now.Subtract(prevTime) > Second)
+                _ = Clients.Caller.Preview(new(){ Step = i, Renderer = world.RendererName, Scene = world.ExportToStream() });
+            prevTime = now;
         }
         var stop = DateTime.UtcNow.Ticks;
         Debug.WriteLine($"Simulation time: {(stop - start) / TimeSpan.TicksPerMillisecond} ms");
