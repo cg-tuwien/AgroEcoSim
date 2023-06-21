@@ -87,9 +87,10 @@ foreach ENTITY
 public class IrradianceClient
 {
 	readonly HttpClient Client;
-	bool IsOnline = false;
+	public bool IsOnline {get; private set; }= false;
 	bool AddressFixed = false;
 
+	bool GlobalIllumination = true;
 
 	readonly List<float> Irradiances = new();
 	readonly List<int> SkipFormations = new();
@@ -101,16 +102,17 @@ public class IrradianceClient
 	byte[] EnvMap = null; //just for debug output
 	ushort EnvMapX = 0;
 
-	private IrradianceClient()
+	public IrradianceClient(float latitude, float longitude, bool constantLights)
 	{
 		Client = new() { BaseAddress = new Uri("http://localhost:9000"), Timeout = TimeSpan.FromHours(1) };
-		Client.DefaultRequestHeaders.Add("La", AgroWorld.Latitude.ToString());
-		Client.DefaultRequestHeaders.Add("Lo", AgroWorld.Longitude.ToString());
+		Client.DefaultRequestHeaders.Add("La", latitude.ToString());
+		Client.DefaultRequestHeaders.Add("Lo", longitude.ToString());
+		GlobalIllumination = !constantLights;
 	}
 
 	bool ProbeRenderer()
 	{
-		Singleton.AddressFixed = true;
+		AddressFixed = true;
 		//Probe if the client is online, else fallback to constant ambient light
 		try
 		{
@@ -125,29 +127,30 @@ public class IrradianceClient
 		return IsOnline;
 	}
 
-	public static string Address => Singleton.Client.BaseAddress?.ToString() ?? "null";
+	public string Address => Client.BaseAddress?.ToString() ?? "null";
 
-	public static void SetAddress(string addr)
+	public void SetAddress(string addr)
 	{
-		lock(Singleton.Client)
+		lock(Client)
 		{
-			if (!Singleton.AddressFixed && Singleton.Client.BaseAddress?.ToString() != addr)
+			if (!AddressFixed && Client.BaseAddress?.ToString() != addr)
 			{
-				Singleton.Client.BaseAddress = new Uri(addr);
-				Singleton.AddressFixed = true;
+				Client.BaseAddress = new Uri(addr);
+				AddressFixed = true;
 			}
 		}
 	}
 
-	public static void Tick(SimulationWorld world, uint timestep, IList<IFormation> formations, IList<IObstacle> obstacles)
+	public void Tick(SimulationWorld world, uint timestep, IList<IFormation> formations, IList<IObstacle> obstacles)
 	{
-		if (timestep == 0)
-			Singleton.ProbeRenderer();
+		if (timestep == 0 && GlobalIllumination)
+			ProbeRenderer();
 
-		if (Singleton.IsOnline)
-			Singleton.DoTick(world as AgroWorld, timestep, formations, obstacles);
+		var agroWorld = world as AgroWorld;
+		if (IsOnline && GlobalIllumination)
+			DoTick(agroWorld, timestep, formations, obstacles);
 		else
-			Singleton.DoFallbackTick(world as AgroWorld, timestep, formations);
+			DoFallbackTick(agroWorld, timestep, formations);
 	}
 
 	void DoTick(AgroWorld world, uint timestep, IList<IFormation> formations, IList<IObstacle> obstacles)
@@ -259,13 +262,13 @@ public class IrradianceClient
 		}
 	}
 
-	public static byte[] DebugIrradiance(AgroWorld world, uint timestep, IList<IFormation> formations, IList<IObstacle> obstacles, float[] cameraMatrix) => Singleton.DebugIrr(world, timestep, formations, obstacles, cameraMatrix);
-	public static byte[] DebugEnvironment() => Singleton.EnvMap;
-	public static ushort DebugEnvironmentX() => Singleton.EnvMapX;
+	public byte[] DebugIrradiance(AgroWorld world, uint timestep, IList<IFormation> formations, IList<IObstacle> obstacles, float[] cameraMatrix) => DebugIrr(world, timestep, formations, obstacles, cameraMatrix);
+	public byte[] DebugEnvironment() => EnvMap;
+	public ushort DebugEnvironmentX() => EnvMapX;
 
 	byte[] DebugIrr(AgroWorld world, uint timestep, IList<IFormation> formations, IList<IObstacle> obstacles, float[] camera)
 	{
-		if (Singleton.IsOnline)
+		if (IsOnline)
 		{
 			using var primBinaryStream = new MemoryStream();
 #if USE_TRIANGLES
@@ -607,13 +610,6 @@ public class IrradianceClient
 		using var writer = new BinaryWriter(binaryStream);
 		writer.WriteU8(3); //version 3 using primitives, each surface is individually marked as obstacle or sensor
 
-		if (SkipFormations.Count == 0)
-		{
-			for(int i = 0; i < formations.Count; ++i)
-				if (!(formations[i] is PlantFormation2 plant && plant.AG.Alive))
-					SkipFormations.Add(i);
-		}
-
 		//Formations
 		writer.WriteU32(formations.Count - SkipFormations.Count + obstacles.Count); //WRITE NUMBER OF PLANTS in this system
 		foreach(var obstacle in obstacles)
@@ -698,10 +694,10 @@ public class IrradianceClient
 		ExportAsBeautyPrimitives(formations, file);
 	}
 
-	internal void ExportAsBeautyPrimitives(IList<IFormation> formations, Stream binaryStream)
+	internal void ExportAsBeautyPrimitives(IList<IFormation> formations, Stream binaryStream, bool extended = false)
 	{
 		using var writer = new BinaryWriter(binaryStream);
-		writer.WriteU8(4); //version 4 is for the beauty pass; using primitives, each surface is individually marked as obstacle or sensor
+		writer.WriteU8(extended ? 5 : 4); //version 4 is for the beauty pass; using primitives, each surface is individually marked as obstacle or sensor}
 
 		//Formations
 		writer.WriteU32(formations.Count - SkipFormations.Count); //WRITE NUMBER OF PLANTS in this system
@@ -735,7 +731,8 @@ public class IrradianceClient
 					var y = Vector3.Transform(Vector3.UnitY, orientation);
 					var z = Vector3.Transform(Vector3.UnitZ, orientation);
 
-					writer.Write(ag.GetParent(i));
+					var parentIndex = ag.GetParent(i);
+					writer.Write(parentIndex);
 					switch (organ)
 					{
 						case OrganTypes.Leaf:
@@ -748,6 +745,12 @@ public class IrradianceClient
 								writer.WriteM32(ax, ay, az, c);
 								writer.Write(Math.Clamp(ag.GetWater(i) / ag.GetWaterStorageCapacity(i), 0, 1));
 								writer.Write(Math.Clamp(ag.GetEnergy(i) / ag.GetEnergyCapacity(i), 0, 1));
+								if (extended)
+								{
+									writer.Write(GetIrradiance(ag, i));
+									writer.Write(ag.GetDailyLightExposure(i));
+									writer.Write(ag.GetDailyEnergyProduction(i));
+								}
 							}
 							break;
 						case OrganTypes.Stem:
@@ -777,39 +780,46 @@ public class IrradianceClient
 		}
 	}
 
-	public static void ExportToFile(string fileName, byte version, IList<IFormation> formations, IList<IObstacle> obstacles = null)
+	public void ExportToFile(string fileName, byte version, IList<IFormation> formations, IList<IObstacle> obstacles = null)
     {
         using var file = File.OpenWrite(fileName);
         ExportToStream(version, formations, obstacles, file);
     }
 
-    static void ExportToStream(byte version, IList<IFormation> formations, IList<IObstacle> obstacles, Stream target)
+    void ExportToStream(byte version, IList<IFormation> formations, IList<IObstacle> obstacles, Stream target)
     {
+		if (SkipFormations.Count == 0)
+		{
+			for(int i = 0; i < formations.Count; ++i)
+				if (!(formations[i] is PlantFormation2 plant && plant.AG.Alive))
+					SkipFormations.Add(i);
+		}
+
         switch (version)
         {
-            default: Singleton.ExportAsTriangles(formations, obstacles, 0, target); break;
-            case 2: Singleton.ExportAsPrimitivesClustered(formations, obstacles, 0, target); break;
-            case 3: Singleton.ExportAsPrimitivesInterleaved(formations, obstacles, target); break;
-            case 4: Singleton.ExportAsBeautyPrimitives(formations, target); break;
+            default: ExportAsTriangles(formations, obstacles, 0, target); break;
+            case 2: ExportAsPrimitivesClustered(formations, obstacles, 0, target); break;
+            case 3: ExportAsPrimitivesInterleaved(formations, obstacles, target); break;
+            case 4: ExportAsBeautyPrimitives(formations, target); break;
+            case 5: ExportAsBeautyPrimitives(formations, target, true); break;
         }
     }
 
-    public static byte[] ExportToStream(byte version, IList<IFormation> formations, IList<IObstacle> obstacles = null)
+    public byte[] ExportToStream(byte version, IList<IFormation> formations, IList<IObstacle> obstacles = null)
 	{
 		using var stream = new MemoryStream();
 		ExportToStream(version, formations, obstacles, stream);
 		return stream.ToArray();
 	}
 
-	public static void ExportToObjFile(string fileName, IList<IFormation> formations, IList<IObstacle> obstacles)
+	public void ExportToObjFile(string fileName, IList<IFormation> formations, IList<IObstacle> obstacles)
 	{
 		using var objStream = File.Open(fileName, FileMode.Create);
 		using var objWriter = new StreamWriter(objStream, System.Text.Encoding.UTF8);
 		objWriter.WriteLine("o Field");
-		Singleton.ExportAsObj(formations, obstacles, objWriter);
+		ExportAsObj(formations, obstacles, objWriter);
 	}
 
-	public static bool IsRendererOnline => Singleton.IsOnline;
 
 	void DoFallbackTick(AgroWorld world, uint timestep, IList<IFormation> formations)
 	{
@@ -862,8 +872,8 @@ public class IrradianceClient
 	}
 
 	static string OF(int a, int b, int c) => $"f {a+1} {b+1} {c+1}";
-	public static float GetIrradiance(IFormation formation, int agentIndex) => Singleton.GetIrr(formation, agentIndex);
-	float GetIrr(IFormation formation, int agentIndex)
+
+	public float GetIrradiance(IFormation formation, int agentIndex)
 	{
 		if (!IsNight && IrradianceFormationOffsets.TryGetValue(formation, out var offset))
 		{
@@ -875,19 +885,16 @@ public class IrradianceClient
 	}
 
 	//TODO make this a ReadOnlySpan
-	public static (int[], IList<float>) GetIrradiance(IFormation formation) => Singleton.GetIrr(formation);
-	(int[], IList<float>) GetIrr(IFormation formation) =>
+	public (int[], IList<float>) GetIrradiance(IFormation formation) =>
 		(!IsNight && formation.Count > 0 && IrradianceFormationOffsets.TryGetValue(formation, out var offset) ? offset : null, Irradiances);
 
 
 	readonly Stopwatch SW = new();
 
-	public static long ElapsedMilliseconds => Singleton.SW.ElapsedMilliseconds;
+	public long ElapsedMilliseconds => SW.ElapsedMilliseconds;
 
 	~IrradianceClient()
 	{
 		Client.Dispose();
 	}
-
-	static readonly IrradianceClient Singleton = new();
 }

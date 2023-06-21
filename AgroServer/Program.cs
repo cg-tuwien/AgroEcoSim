@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using AgroServer.Hubs;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -27,7 +28,9 @@ builder.Services.AddSwaggerGen(options =>
     }
 });
 
-builder.Services.AddSignalR();
+builder.Services.AddSignalR(options => {
+    options.MaximumParallelInvocationsPerClient = 3;
+});
 
 builder.Configuration.AddEnvironmentVariables(prefix: "AGRO_");
 

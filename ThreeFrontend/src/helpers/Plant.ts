@@ -15,37 +15,36 @@ const selectMaterial = new THREE.MeshLambertMaterial({ color: seedColor.clone().
 const grabMaterial = selectMaterial;
 const selectHoverMaterial = selectMaterial;
 
-const seedMaterials : ReqObjMaterials = {
-    default: defaultMaterial,
-    hover: hoverMaterial,
-    select: selectMaterial,
-    grab: grabMaterial,
-    selectHover: selectHoverMaterial
-}
+// const seedMaterials : ReqObjMaterials = {
+//     default: defaultMaterial,
+//     hover: hoverMaterial,
+//     select: selectMaterial,
+//     grab: grabMaterial,
+//     selectHover: selectHoverMaterial
+// }
 
-export class Seed extends BaseRequestObject
-{
-    constructor(x: number, y: number, z: number) {
-        super(x, y, z, seedMaterials);
+// export class Plant
+// {
+//     constructor(x: number, y: number, z: number) {
 
-        this.mesh = new THREE.Mesh(dodecahedron, defaultMaterial);
+//         this.mesh = new THREE.Mesh(dodecahedron, defaultMaterial);
 
-        this.mesh.position.set(x, y, z);
-        this.mesh.userData = { type: "seed", seed: this };
-        //this.mesh.layers.set(1);
-        appstate.objSeeds.add(this.mesh);
-        appstate.needsRender.value = true;
+//         this.mesh.position.set(x, y, z);
+//         this.mesh.userData = { type: "seed", seed: this };
+//         //this.mesh.layers.set(1);
+//         appstate.objSeeds.add(this.mesh);
+//         appstate.needsRender.value = true;
 
-        effect(() => {
-            this.mesh.position.set(this.px.value, this.py.value, this.pz.value);
-            appstate.needsRender.value = true;
-        });
-    }
+//         effect(() => {
+//             this.mesh.position.set(this.px.value, this.py.value, this.pz.value);
+//             appstate.needsRender.value = true;
+//         });
+//     }
 
-    static rndItem() {
-        return new Seed(
-            Math.random() * appstate.fieldSizeX.value,
-            -Math.random() * 0.1,
-            Math.random() * appstate.fieldSizeZ.value);
-    }
-}
+//     static rndItem() {
+//         return new Seed(
+//             Math.random() * appstate.fieldSizeX.value,
+//             -Math.random() * 0.1,
+//             Math.random() * appstate.fieldSizeZ.value);
+//     }
+// }

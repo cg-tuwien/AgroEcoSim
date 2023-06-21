@@ -297,12 +297,14 @@ public partial class PlantFormation2 : IPlantFormation
 			AG.EnergyEfficiency = globalAG.EnergyEfficiency;
 			#endif
 
+			const double zero = 1e-12;
+
 			//Debug.WriteLine($"W: {water} / {waterRequirement}   {globalUG.WaterDiff} + {globalAG.WaterDiff}");
 			//Debug.WriteLine($"E: {energy} / {energyRequirement}   {globalUG.EnergyDiff} + {globalAG.EnergyDiff}");
 			if (energy < energyEmergencyThrehold)
 			{
-				var energyState = energy / energyRequirement;
-				var waterState = water / waterRequirement;
+				var energyState = energy / (energyRequirement >= zero ? energyRequirement : 1);
+				var waterState = water / (waterRequirement >= zero ? waterRequirement : 1);
 				if (energyState < waterState) //cut of a root
 				{
 
@@ -319,14 +321,14 @@ public partial class PlantFormation2 : IPlantFormation
 				// globalUG.DistributeEnergyByEmergency(factor, positiveEfficiencyUG);
 
 				var weights = globalAG.Weights4EnergyDistributionByRequirement(positiveEfficiencyAG) + globalUG.Weights4EnergyDistributionByRequirement(positiveEfficiencyUG);
-				var factor = (float)(energy / weights);
+				var factor = (float)(energy / (weights >= zero ? weights : 1));
 				globalAG.DistributeEnergyByRequirement(factor, positiveEfficiencyAG);
 				globalUG.DistributeEnergyByRequirement(factor, positiveEfficiencyUG);
 			}
 			else if (energy < energAlertThreshold || energyStorage < energyRequirement) //the plant is short on energy, it must be distributed
 			{
 				var weights = globalAG.Weights4EnergyDistributionByRequirement(positiveEfficiencyAG) + globalUG.Weights4EnergyDistributionByRequirement(positiveEfficiencyUG);
-				var factor = (float)(energy / weights);
+				var factor = (float)(energy / (weights >= zero ? weights : 1));
 				globalAG.DistributeEnergyByRequirement(factor, positiveEfficiencyAG);
 				globalUG.DistributeEnergyByRequirement(factor, positiveEfficiencyUG);
 			}
@@ -335,7 +337,7 @@ public partial class PlantFormation2 : IPlantFormation
 				var energyOverhead = energy - energyRequirement;
 				var weights = globalAG.Weights4EnergyDistributionByStorage(positiveEfficiencyAG) + globalUG.Weights4EnergyDistributionByStorage(positiveEfficiencyUG);
 
-				var factor = (float)(energyOverhead / weights);
+				var factor = (float)(energyOverhead / (weights >= zero ? weights : 1));
 				globalAG.DistributeEnergyByStorage(factor, positiveEfficiencyAG);
 				globalUG.DistributeEnergyByStorage(factor, positiveEfficiencyUG);
 			}
@@ -346,15 +348,16 @@ public partial class PlantFormation2 : IPlantFormation
 
 			if (water < waterRequirement || waterStorage < waterRequirement)
 			{
-				var factor = (float)(water / waterRequirement);
+				var factor = (float)(water / (waterRequirement >= zero ? waterRequirement : 1));
 				globalAG.DistributeWaterByRequirement(factor);
 				globalUG.DistributeWaterByRequirement(factor);
 			}
 			else
 			{
 				var waterOverhead = water - waterRequirement;
+				var waterWeight = waterStorage -  waterRequirement;
 
-				var factor = (float)(waterOverhead / (waterStorage - waterRequirement));
+				var factor = (float)(waterOverhead / (waterWeight >= zero ? waterWeight : 1));
 				globalAG.DistributeWaterByStorage(factor);
 				globalUG.DistributeWaterByStorage(factor);
 			}

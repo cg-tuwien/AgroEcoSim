@@ -14,13 +14,11 @@ namespace AgroServer.Controllers;
 public class SimulationController : ControllerBase
 {
     //private readonly ILogger<SimulationController> _logger;
-    //private readonly IConfiguration Configuration;
+    private readonly IConfiguration Configuration;
 
     public SimulationController(IConfiguration configuration)
     {
-        var ip = configuration["RendererIP"];
-        var port = configuration["RendererPort"];
-        IrradianceClient.SetAddress($"http://{ip}:{port}");
+        Configuration = configuration;
     }
 
     [HttpGet]
@@ -30,6 +28,8 @@ public class SimulationController : ControllerBase
     public async Task<ActionResult<SimulationResponse>> Post([FromBody]SimulationRequest request)
     {
         var world = Initialize.World(request);
+        world.Irradiance.SetAddress($"http://{Configuration["RendererIP"]}:{Configuration["RendererPort"]}");
+
         var start = DateTime.UtcNow.Ticks;
         world.Run((uint)world.TimestepsTotal());
         var stop = DateTime.UtcNow.Ticks;
@@ -46,10 +46,10 @@ public class SimulationController : ControllerBase
                 response.Plants.Add(new(){ Volume = plant.AG.GetVolume()});
         });
 
-        Debug.WriteLine($"RENDER TIME: {IrradianceClient.ElapsedMilliseconds} ms");
+        Debug.WriteLine($"RENDER TIME: {world.Irradiance.ElapsedMilliseconds} ms");
 
         if(request?.RequestGeometry ?? false)
-            response.Scene = world.ExportToStream();
+            response.Scene = world.ExportToStream(3);
 
         response.Renderer = world.RendererName;
 

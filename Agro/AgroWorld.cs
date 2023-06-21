@@ -64,6 +64,8 @@ public class AgroWorld : SimulationWorld
 
 	public TimeZoneInfo TimeZone = TimeZoneInfo.Local;
 
+	public readonly IrradianceClient Irradiance;
+
 	//clouds_coverage, precipitation
 	WeatherStats[] Weather;
 	BitArray Daylight;
@@ -113,6 +115,9 @@ public class AgroWorld : SimulationWorld
 			if (settings?.Seed.HasValue ?? false)
 				InitRNG(settings.Seed.Value);
 		}
+
+		Irradiance = new IrradianceClient(Latitude, Longitude, settings?.ConstantLights ?? false);
+
 		Init();
 	}
 	#endif

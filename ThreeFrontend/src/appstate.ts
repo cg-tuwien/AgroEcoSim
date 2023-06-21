@@ -1,4 +1,4 @@
-import { batch, computed, signal } from "@preact/signals";
+import { batch, computed, effect, signal } from "@preact/signals";
 import { BackendURI } from "./config";
 import BinaryReader from "./helpers/BinaryReader";
 import { Scene } from "./helpers/Scene";
@@ -7,6 +7,9 @@ import { Seed } from "./helpers/Seed";
 import * as THREE from 'three';
 import { Obstacle } from "./helpers/Obstacle";
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls';
+import { BaseRequestObject } from "./helpers/BaseRequestObject";
+import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter';
+import { scene } from "./components/viewport/ThreeSceneFn";
 
 interface RetryContext {
     readonly previousRetryCount: number; //The number of consecutive failed tries so far.
@@ -42,6 +45,7 @@ hubConnection.on("result", (result: ISimResponse) => {
     const scene = reader.readAgroScene();
     if (result.debug?.length > 0)
         console.log(result.debug);
+    console.log(result.stepTimes);
     batch(() => {
         st.plants.value = result.plants;
         st.scene.value = scene;
@@ -53,8 +57,12 @@ hubConnection.on("result", (result: ISimResponse) => {
 
 hubConnection.on("preview", (result: ISimPreview) => {
     const reader = new BinaryReader(base64ToArrayBuffer(result.scene));
-    st.scene.value = reader.readAgroScene();
-    st.renderer.value = result.renderer;
+    st.previewRequestAfterSceneUpdate = true;
+    batch(() => {
+        st.scene.value = reader.readAgroScene();
+        st.renderer.value = result.renderer;
+
+    });
 });
 
 const start = async() => hubConnection.start();
@@ -71,6 +79,8 @@ interface ISimResponse
     scene: Uint8Array,
     renderer: string,
     debug: string,
+    stepTimes: Uint32Array,
+    ticksPerMillisecond: number,
 }
 
 interface ISimPreview
@@ -99,7 +109,6 @@ function exportObstacle(o: Obstacle) {
     }
 }
 
-
 class State {
     // SETTINGS
     hoursPerTick = signal(1);
@@ -113,6 +122,7 @@ class State {
     fieldSizeD = computed(() => this.fieldCellsD.value * this.fieldResolution.value);
     initNumber = signal(42);
     randomize = signal(false);
+    constantLight = signal(false);
 
     seeds = signal<Seed[]>([]);
     seedsCount = computed(() => this.seeds.value.length);
@@ -133,6 +143,8 @@ class State {
 
     //OPERATIONAL STATE
     computing = signal(false);
+    previewRequest = signal(false);
+    previewRequestAfterSceneUpdate = false;
     simStep = signal(0);
     simLength = signal(0);
 
@@ -152,11 +164,16 @@ class State {
 
         Plants: this.seeds.peek().map((p: Seed) => ({ P: { X: p.px.peek(), Y: p.py.peek(), Z: p.pz.peek() } })),
         Obstacles: this.obstacles.peek().map((o: Obstacle) => exportObstacle(o)),
-        "RequestGeometry": true
+        RequestGeometry: true,
+        ConstantLights: this.constantLight.value
     }};
 
     run = async() => {
-        if (!this.computing.peek())
+        if (this.computing.peek())
+        {
+            hubConnection.invoke("abort");
+        }
+        else
         {
             batch(() => {
                 this.computing.value = true;
@@ -166,6 +183,7 @@ class State {
                 await start();
 
             if (hubConnection.state == SignalR.HubConnectionState.Connected)
+            {
                 hubConnection.invoke("run", this.requestBody()).catch(e => {
                     console.error(e);
                     batch(() => {
@@ -173,6 +191,8 @@ class State {
                         this.renderer.value = "error";
                     });
                 });
+                this.previewRequest.value = true;
+            }
             else
                 this.computing.value = false;
         }
@@ -191,18 +211,24 @@ class State {
         this.needsRender.value = true;
     };
 
-    clearSeedHovers = (except: Seed | undefined) => {
-        this.seeds.peek().forEach((s : Seed) => {
-            if (s !== except)
-                switch (s.state.peek()) {
-                    case "hover": s.unhover(); break;
-                    case "selecthover": s.select(); break;
+    clearHovers = (src: BaseRequestObject[], except: BaseRequestObject | undefined) => {
+        src.forEach((x : Seed) => {
+            if (x !== except)
+            {
+                switch (x.state.peek()) {
+                    case "hover": x.unhover(); break;
+                    case "selecthover": x.select(); break;
                 }
+            }
         });
     };
 
-    clearSeedSelects = (except: Seed | undefined) => {
-        this.seeds.peek().forEach((s : Seed) => {
+    clearSeedHovers = (except: Seed | undefined) => this.clearHovers(this.seeds.peek(), except);
+    clearObstacleHovers = (except: Obstacle | undefined) => this.clearHovers(this.obstacles.peek(), except);
+
+
+    clearSelects = (src: BaseRequestObject[], except: Seed | undefined) => {
+        src.forEach((s : Seed) => {
             if (s !== except)
                 switch(s.state.peek()) {
                     case "select":
@@ -211,13 +237,19 @@ class State {
         });
     };
 
-    clearSeedGrabs = (except: Seed | undefined) => {
-        this.seeds.peek().forEach((s : Seed) => {
+    clearSeedSelects = (except: Seed | undefined) => this.clearSelects(this.seeds.peek(), except);
+    clearObstacleSelects = (except: Obstacle | undefined) => this.clearSelects(this.obstacles.peek(), except);
+
+    clearGrabs = (src: BaseRequestObject[], except: Seed | undefined) => {
+        src.forEach((s : Seed) => {
             if (s !== except)
                 if (s.state.peek() == "grab")
                     s.ungrab("select");
         });
     };
+
+    clearSeedGrabs = (except: Seed | undefined) => this.clearGrabs(this.seeds.peek(), except);
+    clearObstacleGrabs = (except: Obstacle | undefined) => this.clearGrabs(this.obstacles.peek(), except);
 
     pushRndObstacle = () => { this.obstacles.value = [ ...this.obstacles.peek(), Obstacle.rndObstacle()] };
 
@@ -234,6 +266,113 @@ class State {
         this.needsRender.value = true;
     };
 
+    save = async () => {
+        const data = {
+            hoursPerTick: this.hoursPerTick.peek(),
+            totalHours: this.totalHours.peek(),
+            fieldResolution: this.fieldResolution.peek(),
+            fieldCellsX: this.fieldCellsX.peek(),
+            fieldCellsZ: this.fieldCellsZ.peek(),
+            fieldCellsD: this.fieldCellsD.peek(),
+            initNumber: this.initNumber.peek(),
+            randomize: this.randomize.peek(),
+            constantLight: this.constantLight.peek(),
+            seeds: this.saveSeeds(),
+            obstacles: this.saveObstacles()
+        };
+
+        this.saveTextFile(JSON.stringify(data), 'json');
+    }
+
+    saveSeeds = () => {
+        return this.seeds.value.map(s => ({
+            px: s.px.peek(),
+            py: s.py.peek(),
+            pz: s.pz.peek()
+        }));
+    }
+
+    saveObstacles = () => {
+        return this.obstacles.value.map(o => ({
+            px: o.px.peek(),
+            py: o.py.peek(),
+            pz: o.pz.peek(),
+            type: o.type.peek(),
+            l: o.wallLength_UmbrellaRadius.peek(),
+            h: o.height.peek(),
+            t: o.thickness.peek(),
+            ax: o.angleX.peek(),
+            ay: o.angleY.peek(),
+        }));
+    }
+
+    load = async() => {
+        const input = document.createElement("input");;
+        input.style.setProperty("display", "none")
+        input.type = "file";
+        input.accept = "text/json";
+        document.body.appendChild(input);
+        const self = this;
+        input.onchange = e => {
+            const target = (e.target as HTMLInputElement);
+            const reader = new FileReader();
+            reader.onload = function() {
+                const seeds = self.seeds.peek();
+                for(let i = seeds.length - 1; i >= 0; --i)
+                    self.removeSeedAt(i);
+
+                const obstacles = self.obstacles.peek();
+                for(let i = obstacles.length - 1; i >= 0; --i)
+                    self.removeObstacleAt(i);
+
+                const text = reader.result.toString();
+                const data = JSON.parse(text);
+
+                batch(() => {
+                    self.hoursPerTick.value = data.hoursPerTick;
+                    self.totalHours.value = data.totalHours;
+                    self.fieldResolution.value = data.fieldResolution;
+                    self.fieldCellsX.value = data.fieldCellsX;
+                    self.fieldCellsZ.value = data.fieldCellsZ;
+                    self.fieldCellsD.value = data.fieldCellsD;
+                    self.initNumber.value = data.initNumber;
+                    self.randomize.value = data.randomize;
+                    self.constantLight.value = data.constantLight;
+                    self.seeds.value = data.seeds.map(s => new Seed(s.px, s.py, s.pz));
+                    self.obstacles.value = data.obstacles.map(o => new Obstacle(o.type, o.px, o.py, o.pz, o.ax, o.ay, o.l, o.h, o.t));
+                });
+
+                input.remove();
+            };
+            reader.readAsText(target.files[0]);
+        };
+        input.click();
+    }
+
+    gltf = () => {
+        const exporter = new GLTFExporter();
+        exporter.parse(
+            scene,
+            // called when the gltf has been generated
+            gltf => this.saveTextFile(JSON.stringify(gltf), 'gltf'),
+            // called when there is an error in the generation
+            error => console.log('An error happened'),
+        );
+    }
+
+    private saveTextFile(data: string, ext: string) {
+        const blob = new Blob([data], { type: 'text/plain' });
+        const url = window.URL.createObjectURL(blob);
+
+        const a = document.createElement('a');
+        a.style.setProperty('display', 'none');
+        document.body.appendChild(a);
+        a.href = url;
+        a.download = `AgroEco-${new Date().toISOString().split("T")[0]}_${new Date().getHours()}-${new Date().getMinutes()}-${new Date().getSeconds()}.${ext}`;
+        a.click();
+        window.URL.revokeObjectURL(url);
+        a.remove();
+    }
 };
 
 const st = new State();
@@ -241,3 +380,9 @@ export default st;
 //now that the singleton is exported push in the default seed
 st.seeds.value = [ new Seed(0.5, -0.01, 0.05) ];
 
+effect(() => {
+    if (st.previewRequest.value && hubConnection.state == SignalR.HubConnectionState.Connected) {
+        hubConnection.invoke("preview");
+        st.previewRequest.value = false;
+    }
+});

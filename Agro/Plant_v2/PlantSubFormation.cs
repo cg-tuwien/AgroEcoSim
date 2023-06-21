@@ -820,11 +820,6 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 	///<summary>
 	public float GetVolume() => (ReadTMP ? AgentsTMP : Agents).Aggregate(0f, (sum, current) => sum + current.Volume());
 
-	///<summary>
-	///Irradiance in W / hm²
-	///<summary>
-	public float GetIrradiance(int index) => IrradianceClient.GetIrradiance(this, index);
-
 	#endregion
 
 	///////////////////////////

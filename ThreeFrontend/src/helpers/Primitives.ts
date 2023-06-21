@@ -1,6 +1,14 @@
 import * as THREE from "three";
 
-type PrimitiveBase = {
+type StatsBase = {
+    //water, energy, irradiance, dailyResources, dailyProduction
+    //water, energy, woodRatio
+    //water, energy
+    stats: Float32Array | undefined
+
+}
+
+type PrimitiveBase = StatsBase & {
     affineTransform: Float32Array
 }
 
@@ -18,7 +26,7 @@ export type Cylinder = PrimitiveBase & {
     radius: number;
 }
 
-export type Sphere = {
+export type Sphere = StatsBase & {
     type: 4;
     radius: number;
     center: Float32Array;

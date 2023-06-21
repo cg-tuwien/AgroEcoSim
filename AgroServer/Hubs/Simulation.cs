@@ -17,46 +17,89 @@ public interface IEditorHub
     Task Preview(PreviewResponse response);
 }
 
+public class SimRequests
+{
+    public bool Preview = false;
+    public bool Abort = false;
+    public List<uint> StepTimes = new(1000);
+}
+
 public class SimulationHub : Hub<IEditorHub>
 {
+    IConfiguration Config;
     public SimulationHub(IConfiguration configuration)
     {
-        var ip = configuration["RendererIP"];
-        var port = configuration["RendererPort"];
-        IrradianceClient.SetAddress($"http://{ip}:{port}");
+        Config = configuration;
     }
 
-    HashSet<string> ClientSimulations = new ();
+    static Dictionary<string, SimRequests> ClientSimulations = new ();
 
-    static TimeSpan Second = TimeSpan.FromSeconds(0.5);
+    //static TimeSpan Second = TimeSpan.FromSeconds(0.5);
+
+    public async Task Abort()
+    {
+        await Task.Run(() => {
+            lock (ClientSimulations)
+            {
+                if (ClientSimulations.TryGetValue(Context.ConnectionId, out var sim))
+                    sim.Abort = true;
+            }
+        });
+    }
+
+    public async Task<bool> Preview()
+    {
+        return await Task.Run(() => {
+            lock (ClientSimulations)
+            {
+                if (ClientSimulations.TryGetValue(Context.ConnectionId, out var sim))
+                {
+                    sim.Preview = true;
+                    return true;
+                }
+                else
+                    return false;
+            }});
+    }
+
     public async Task Run(SimulationRequest request)
     {
+        var requests = new SimRequests();
+        var me = Context.ConnectionId;
         lock (ClientSimulations)
         {
-            var me = Context.UserIdentifier;
-            if (ClientSimulations.Contains(me))
+            if (ClientSimulations.ContainsKey(me))
             {
                 Clients.Caller.Rejected();
                 return;
             }
             else
-                ClientSimulations.Add(me);
+                ClientSimulations.Add(me, requests);
         }
+
         var world = Initialize.World(request);
-        var start = DateTime.UtcNow.Ticks;
-        var simulationLength = (uint)world.TimestepsTotal();
-        var prevTime = DateTime.UtcNow;
-        for(uint i = 0; i < simulationLength; ++i)
-        {
-            world.Run(1U);
-            _ = Clients.Caller.Progress(i, simulationLength);
-            var now = DateTime.UtcNow;
-            if (now.Subtract(prevTime) > Second)
-                _ = Clients.Caller.Preview(new(){ Step = i, Renderer = world.RendererName, Scene = world.ExportToStream() });
-            prevTime = now;
-        }
-        var stop = DateTime.UtcNow.Ticks;
-        Debug.WriteLine($"Simulation time: {(stop - start) / TimeSpan.TicksPerMillisecond} ms");
+        await Task.Run(() => {
+            world.Irradiance.SetAddress($"http://{Config["RendererIP"]}:{Config["RendererPort"]}");
+            var start = DateTime.UtcNow.Ticks;
+            var simulationLength = (uint)world.TimestepsTotal();
+            long prevTime;
+            for(uint i = 0; i < simulationLength && !requests.Abort; ++i)
+            {
+                prevTime = DateTime.UtcNow.Ticks;
+                world.Run(1U);
+                var now = DateTime.UtcNow.Ticks;
+                requests.StepTimes.Add((uint)(now - prevTime));
+                _ = Clients.Caller.Progress(i, simulationLength);
+
+                if (requests.Preview)
+                {
+                    requests.Preview = false;
+                    _ = Clients.Caller.Preview(new(){ Step = i, Renderer = world.RendererName, Scene = world.ExportToStream(5) });
+                }
+            }
+            var stop = DateTime.UtcNow.Ticks;
+            Debug.WriteLine($"Simulation time: {(stop - start) / TimeSpan.TicksPerMillisecond} ms");
+        });
 
         var result = new SimulationResponse() { Plants = new(world.Count) };
         world.ForEach(formation =>
@@ -65,15 +108,15 @@ public class SimulationHub : Hub<IEditorHub>
                 result.Plants.Add(new(){ Volume = plant.AG.GetVolume()});
         });
 
-        Debug.WriteLine($"RENDER TIME: {IrradianceClient.ElapsedMilliseconds} ms");
-
         if(request?.RequestGeometry ?? false)
-            result.Scene = world.ExportToStream();
+            result.Scene = world.ExportToStream(5);
 
         result.Renderer = world.RendererName;
-        result.Debug = $"{IrradianceClient.Address}";
+        //result.Debug = $"{IrradianceClient.Address}";
+        result.StepTimes = requests.StepTimes;
 
         await Clients.Caller.Result(result);
-        lock (ClientSimulations) ClientSimulations.Remove(Context.UserIdentifier);
+        lock (ClientSimulations) ClientSimulations.Remove(me);
+
     }
 }

@@ -13,6 +13,8 @@ import { Seeds } from './hud/Seeds';
 import ThreeSceneFn from './viewport/ThreeSceneFn';
 import { ProgressBar } from './hud/ProgressBar';
 import { Obstacles } from './hud/Obstacles';
+import { ConstantLight } from './hud/ConstantLight';
+import { ExportImport } from './hud/ExportImport';
 
 const App = () => {
 	return(
@@ -30,11 +32,13 @@ const App = () => {
 			<FieldCellsD/>
 			<Randomize/>
 			<InitNumber/>
+			<ConstantLight/>
 			<hr/>
 			<Seeds/>
 			<hr/>
 			<Obstacles/>
 			<hr/>
+			<ExportImport/>
 			<Start/>&nbsp;<ProgressBar/>
 			<PlantsTable/>
 		</nav>

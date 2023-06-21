@@ -142,7 +142,7 @@ public partial class SimulationWorld
 
 	void TickSequential()
 	{
-		Debug.WriteLine($"TIMESTEP: {Timestep}");
+		//Debug.WriteLine($"TIMESTEP: {Timestep}");
 		for(int i = 0; i < Formations.Count; ++i)
 			Formations[i].Tick(this, Timestep, Stage);
 	}
@@ -299,7 +299,7 @@ public partial class SimulationWorld
 	}
 	#endif
 
-	public Func<List<IFormation>, List<IObstacle>, byte[]> StreamExporterFunc = null;
-	public byte[] ExportToStream() => StreamExporterFunc == null ? null : StreamExporterFunc(Formations, Obstacles);
+	public Func<byte, List<IFormation>, List<IObstacle>, byte[]> StreamExporterFunc = null;
+	public byte[] ExportToStream(byte version) => StreamExporterFunc == null ? null : StreamExporterFunc(version, Formations, Obstacles);
 	public string RendererName;
 }

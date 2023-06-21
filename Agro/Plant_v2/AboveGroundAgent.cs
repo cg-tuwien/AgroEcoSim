@@ -226,7 +226,7 @@ public partial struct AboveGroundAgent2 : IPlantAgent
 		//Photosynthesis
 		if ((Organ == OrganTypes.Stem || Organ == OrganTypes.Leaf) && Water > 0f)
 		{
-			var approxLight = IrradianceClient.GetIrradiance(formation, formationID); //in Watt per Hour per m²
+			var approxLight = world.Irradiance.GetIrradiance(formation, formationID); //in Watt per Hour per m²
 			if (approxLight > 0.01f)
 			{
 				var airTemp = world.GetTemperature(timestep);

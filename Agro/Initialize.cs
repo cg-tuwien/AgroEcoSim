@@ -11,10 +11,10 @@ public static class Initialize
 	public static AgroWorld World(SimulationRequest? settings = null)
 	{
 		var world = new AgroWorld(settings);
+		world.AddCallback(world.Irradiance.Tick);
 
-		world.AddCallback(IrradianceClient.Tick);
-		world.StreamExporterFunc = (f, o) => IrradianceClient.ExportToStream(3, f, o);
-		world.RendererName = IrradianceClient.IsRendererOnline ? "mts3" : "none";
+		world.StreamExporterFunc = world.Irradiance.ExportToStream;
+		world.RendererName = world.Irradiance.IsOnline ? "mts3" : "none";
 		//var soil = new SoilFormation(new Vector3i(AgroWorld.FieldSize / AgroWorld.FieldResolution), AgroWorld.FieldSize, 0);
 		var soil = new SoilFormationNew(world, new Vector3i(world.FieldSize / world.FieldResolution), world.FieldSize, Vector3.Zero);
 		world.Add(soil);

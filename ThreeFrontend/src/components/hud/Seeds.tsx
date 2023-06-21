@@ -3,7 +3,7 @@ import appstate from "../../appstate";
 import { Seed } from "../../helpers/Seed";
 import { SelectionState, backgroundColor, neutralColor } from "../../helpers/Selection";
 
-const hoverColor = backgroundColor.clone().lerp(neutralColor, 0.25).toArray().map(x => Math.round(255*x));
+const hoverColor = backgroundColor.clone().lerpHSL(neutralColor, 0.25).toArray().map(x => Math.round(255*x));
 const hoverColorStr = `rgb(${hoverColor[0]}, ${hoverColor[1]}, ${hoverColor[2]})`;
 
 export class Seeds extends Component

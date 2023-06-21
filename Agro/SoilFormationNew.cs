@@ -57,7 +57,7 @@ public partial class SoilFormationNew : IFormation, IGrid3D
 		//Just for fun a random heightfield
 		var heightfield = new float[size.X, size.Y];
 		for(int x = 0; x < size.X; ++x)
-			for(int y = 0; y < size.X; ++y)
+			for(int y = 0; y < size.Y; ++y)
 				heightfield[x, y] = metricSize.Z;
 
 		// var rnd = new Random(42);
@@ -85,7 +85,7 @@ public partial class SoilFormationNew : IFormation, IGrid3D
 
 		var heights = new int[size.X, size.Y];
 		for(int x = 0; x < size.X; ++x)
-			for(int y = 0; y < size.X; ++y)
+			for(int y = 0; y < size.Y; ++y)
 			{
 				var h = Size.Z * (heightfield[x, y] / metricSize.Z);
 				heights[x, y] = Math.Clamp((int)Math.Ceiling(h), 1, Size.Z - 1);
@@ -96,7 +96,7 @@ public partial class SoilFormationNew : IFormation, IGrid3D
 		GroundLevels = new ushort[GroundAddr.Length];
 		var addr = 0;
 		MaxLevel = 0;
-		for(int y = 0; y < size.X; ++y) //y must be outer so that neighboring x items stay adjacent
+		for(int y = 0; y < size.Y; ++y) //y must be outer so that neighboring x items stay adjacent
 			for(int x = 0; x < size.X; ++x)
 			{
 				var h = heights[x, y];

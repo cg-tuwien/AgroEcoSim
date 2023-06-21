@@ -41,4 +41,9 @@ public class SimulationRequest
     ///If true, returns also the geometry for frontend visualization (default: false)
     ///</summary>
     public bool? RequestGeometry { get; set; }
+
+    ///<summary>
+    ///If true, the global illumination is switched off, usually for debugging purposes (default: false)
+    ///</summary>
+    public bool? ConstantLights { get; set; }
 }
