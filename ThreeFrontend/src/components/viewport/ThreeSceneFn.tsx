@@ -13,6 +13,7 @@ import { Seed } from "src/helpers/Seed";
 import { backgroundColor, neutralColor } from "../../helpers/Selection";
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls';
 import { BaseRequestObject } from "src/helpers/BaseRequestObject";
+import { CreateBudMesh, CreateLeafMesh, CreateStemMesh, EncodePlantName, SetupMesh, UpdateBudMesh, UpdateLeafMesh, UpdateStemMesh, VisualizeBudMesh, VisualizeLeafMesh, VisualizeStemMesh, doubleBasicMaterial } from "../../helpers/Plant";
 
 enum Clicks { None, Down, Up, Double };
 
@@ -144,7 +145,7 @@ export default function ThreeSceneFn () {
         }
         //scene.add(new THREE.AxesHelper( 1 ))
 
-        const mesh = new THREE.Mesh(threeBoxPrimitive, new THREE.MeshBasicMaterial({color: new THREE.Color("#ff4411")}));
+        //const mesh = new THREE.Mesh(threeBoxPrimitive, new THREE.MeshBasicMaterial({color: new THREE.Color("#ff4411")}));
         // //mesh.translateY(10);
         // //const m = new THREE.Matrix4().scale(new THREE.Vector3(1, 1.4, 1));
         // //const m = new THREE.Matrix4().setPosition(new THREE.Vector3(0.5, 0.5, 0));
@@ -180,17 +181,6 @@ export default function ThreeSceneFn () {
             mouse.x = ((x -  dom.offsetLeft) / renderer?.domElement.clientWidth) * 2 - 1;
             mouse.y = 1 - ((y - dom.offsetTop) / renderer?.domElement.clientHeight) * 2;
             mouse.inside = true;
-
-            // if (this.props.hasSelection())
-            // {
-            //     if (isDblClick)
-            //     {
-            //         this.props.onDblClick(-1);
-            //         this.raycastScene(false);
-            //     }
-            // }
-            // else
-            //     this.raycastScene(isDblClick);
             raycastScene(clicks);
         }
     };
@@ -207,11 +197,13 @@ export default function ThreeSceneFn () {
 
             const intersections = raycaster.intersectObjects(appstate.objSeeds.children, true);
             intersections.push(...raycaster.intersectObjects(appstate.objObstacles.children, true));
+            intersections.push(...raycaster.intersectObjects(appstate.objPlants.children, true));
             intersections.sort((a,b) => a.distance < b.distance ? -1 : (a.distance > b.distance ? 1 : 0));
 
             batch(() => {
                 let seedPick: Seed = undefined;
                 let obstaclePick: Obstacle = undefined;
+                let plantPick: string = "";
                 if (intersections.length > 0) {
                     const closest = intersections[0];
                     if (closest.object.userData)
@@ -227,35 +219,12 @@ export default function ThreeSceneFn () {
                                 obstaclePick = ref.obstacle;
                                 pickingLogic(clicks, obstaclePick, raycaster);
                             break;
+                            case "plant":
+                                if (clicks == Clicks.None)
+                                    plantPick = EncodePlantName(ref.index);
+                            break;
                         }
                     }
-                //     if (((hovered?.object.name != closest.object.name) || isDblClick))
-                //     {
-                //         //scene has/needs no dispose anymore, thus no need for hoveredScene.dispose();
-                //         hoveredScene = new THREE.Scene();
-                //         hoveredScene.overrideMaterial = this.materialHovered;
-
-                //         hovered = closest;
-                //         if (hovered?.object)
-                //         {
-                //             const n = parseInt(hovered?.object.name);
-                //             this.props.onHover(n);
-                //             if (isDblClick)
-                //                 this.props.onDblClick(n)
-
-                //             const hoveredClone = hovered.object.clone();
-                //             hoveredScene?.add(hoveredClone);
-
-                //             this.renderOnce();
-                //         }
-                //     }
-                // } else {
-                //     if (hovered) {
-                //         hovered = undefined;
-                //         hoveredScene = undefined;
-                //         this.props.onHover(-1);
-                //         this.renderOnce();
-                //     }
                 }
 
                 appstate.clearSeedHovers(seedPick);
@@ -270,47 +239,65 @@ export default function ThreeSceneFn () {
                     appstate.clearSeedGrabs(seedPick);
                     appstate.clearObstacleGrabs(obstaclePick);
                 }
+                appstate.plantPick.value = plantPick;
             });
         }
     };
 
+    const updateObject3D = (mesh: THREE.Mesh, primitive: Primitive, index: Index) => {
+        switch(primitive.type)
+        {
+            case 4: mesh.matrix.fromArray([primitive.radius, 0, 0, primitive.center[0], 0, primitive.radius, 0, primitive.center[1], 0, 0, primitive.radius, primitive.center[2], 0, 0, 0, 1]).transpose(); break;
+            default: mesh.matrix.fromArray([...primitive.affineTransform, 0, 0, 0, 1]).transpose(); break;
+        }
+
+        switch(primitive.type)
+        {
+            case 1: mesh.geometry = threeCirclePrimitive;
+                    if (mesh.material !== doubleBasicMaterial)
+                    {
+                        const tmp = mesh.material;
+                        mesh.material = doubleBasicMaterial;
+                        if (Array.isArray(tmp))
+                            tmp.forEach(m => m.dispose());
+                        else
+                            tmp.dispose();
+                    }
+                    mesh = SetupMesh(primitive, index, mesh); break; //disk / no organ just obstacles in v3
+            case 2: UpdateStemMesh(mesh, primitive, index);
+                    mesh.matrix
+                        .scale(new THREE.Vector3(primitive.radius, primitive.length, primitive.radius))
+                        .setPosition(new THREE.Vector3(primitive.affineTransform[3] + mesh.matrix.elements[4] * 0.5, primitive.affineTransform[7] + mesh.matrix.elements[5] * 0.5, primitive.affineTransform[11] + mesh.matrix.elements[6] * 0.5));
+                    break; //cylinder / stem
+            case 4: mesh = UpdateBudMesh(mesh, primitive, index); break; //sphere / bud
+            case 8: mesh = UpdateLeafMesh(mesh, primitive, index); break; //plane / leafs
+        }
+    }
+
     const buildObject3D = (primitive: Primitive, index: Index) => {
         let matrix: THREE.Matrix4;
-        let geometry: THREE.BufferGeometry;
         switch(primitive.type)
         {
             case 4: matrix = new THREE.Matrix4().fromArray([primitive.radius, 0, 0, primitive.center[0], 0, primitive.radius, 0, primitive.center[1], 0, 0, primitive.radius, primitive.center[2], 0, 0, 0, 1]).transpose(); break;
             default: matrix = new THREE.Matrix4().fromArray([...primitive.affineTransform, 0, 0, 0, 1]).transpose(); break;
         }
-        const isObstacle = index.entity >= appstate.obstaclesCount.peek();
 
-        let material = singleBasicMaterial;
+        let mesh: THREE.Mesh;
         switch(primitive.type)
         {
-            case 1: geometry = threeCirclePrimitive; material = doubleBasicMaterial; break; //disk / no organ
-            case 2:
-                geometry = threeCylinderPrimitive;
-                matrix = matrix
-                    .scale(new THREE.Vector3(primitive.radius, primitive.length, primitive.radius))
-                    .setPosition(new THREE.Vector3(primitive.affineTransform[3] + matrix.elements[4] * 0.5, primitive.affineTransform[7] + matrix.elements[5] * 0.5, primitive.affineTransform[11] + matrix.elements[6] * 0.5));
-                material = primitive.stats ? new THREE.MeshStandardMaterial({ color: greenColor.clone().lerpHSL(woodColor, primitive.stats[2]) }) : singleBasicMaterial;
-            break; //sylinder / stem
-            case 4:
-                geometry = threeSpherePrimitive;
-                material = primitive.stats ? new THREE.MeshStandardMaterial({ color: greenColor }) : singleBasicMaterial;
-            break; //sphere / bud
-            case 8:
-                geometry = threePlanePrimitive;
-                material = primitive.stats ? new THREE.MeshStandardMaterial({ color: greenColor, side: THREE.DoubleSide }) : doubleBasicMaterial;
-            break; //plane / leafs
+            case 1: mesh = SetupMesh(primitive, index, new THREE.Mesh(threeCirclePrimitive, doubleBasicMaterial)); break; //disk / no organ just obstacles in v3
+            case 2: mesh = CreateStemMesh(primitive, index);
+                    matrix = matrix
+                        .scale(new THREE.Vector3(primitive.radius, primitive.length, primitive.radius))
+                        .setPosition(new THREE.Vector3(primitive.affineTransform[3] + matrix.elements[4] * 0.5, primitive.affineTransform[7] + matrix.elements[5] * 0.5, primitive.affineTransform[11] + matrix.elements[6] * 0.5));
+                    break; //cylinder / stem
+            case 4: mesh = CreateBudMesh(primitive, index); break; //sphere / bud
+            case 8: mesh = CreateLeafMesh(primitive, index); break; //plane / leafs
         }
 
-        const mesh = new THREE.Mesh(geometry, material);
-        mesh.name = `${index.entity.toString()}_${index.primitive.toString()}`;
-        //mesh.layers.set(PlantsLayer);
         mesh.applyMatrix4(matrix);
         mesh.matrixAutoUpdate = false;
-        mesh.userData = { type: "plant", index: index, customMaterial: primitive.type > 1 };
+
         appstate.objPlants.add(mesh);
     }
 
@@ -329,6 +316,42 @@ export default function ThreeSceneFn () {
     }
 
     const buildPlants = () => {
+        const sceneData = appstate.scene.value;
+        let counter = 0;
+        const plants = appstate.objPlants.children;
+        const entities = plants.length;
+
+        for(let i = 0; i < sceneData.length; ++i)
+        {
+            const entity = sceneData[i];
+            for(let j = 0; j < entity.length; ++j)
+                counter < entities ? updateObject3D(plants[counter++] as THREE.Mesh, entity[j], {entity: i, primitive: j}) : buildObject3D(entity[j], {entity: i, primitive: j});
+        }
+
+        //dispose the remaining ones
+        if (counter < entities)
+            for(let i = entities - 1; i >= counter; --i)
+                plants.splice(counter, entities - counter).map((x: THREE.Mesh) => {
+                    if (x.userData.type == "plant" && x.userData.customMaterial)
+                    {
+                        const material = x.material;
+                        if (Array.isArray(material))
+                            material.forEach(m => m.dispose());
+                        else
+                            material.dispose();
+                    }
+                });
+
+        renderOnce();
+
+        if (appstate.previewRequestAfterSceneUpdate)
+        {
+            appstate.previewRequestAfterSceneUpdate = false;
+            appstate.previewRequest.value = true;
+        }
+    }
+
+    const buildPlantsOld = () => {
         appstate.objPlants.traverseVisible((x: THREE.Mesh) => {
             if (x.userData.type == "plant" && x.userData.customMaterial)
             {
@@ -479,8 +502,23 @@ export default function ThreeSceneFn () {
         return () => divRef.current.removeChild(renderer.domElement);
     });
 
-
-    return <div id="main3Dviewport" ref={divRef}></div>;
+    useSignalEffect(() => {
+        const mapping = appstate.visualMapping.value;
+        appstate.objPlants.traverse((x: THREE.Mesh) => {
+            const data = x.userData as IPlantRef;
+            const material = x.material as THREE.MeshBasicMaterial;
+            if (data.customMaterial)
+            {
+                if (x.geometry == threePlanePrimitive) //leaf
+                    VisualizeLeafMesh(material, data.index);
+                else if (x.geometry == threeCylinderPrimitive) //stem
+                    VisualizeStemMesh(material, data.index);
+                else //bud
+                    VisualizeBudMesh(material, data.index);
+            }
+        })
+        renderOnce();
+    })
 
     function pickingLogic(clicks: Clicks, targetObject: BaseRequestObject, raycaster: THREE.Raycaster) {
         if (clicks == Clicks.Double) {
@@ -500,17 +538,13 @@ export default function ThreeSceneFn () {
             case "select": targetObject.selecthover(); break;
         }
     }
+
+    return <div id="main3Dviewport" ref={divRef}></div>;
 }
 
-const threeBoxPrimitive = new THREE.BoxGeometry().translate(0, 0.5, 0); //box
-const threeSpherePrimitive = new THREE.SphereGeometry(1, 16, 16); //sphere
-const threeCylinderPrimitive = new THREE.CylinderGeometry(1, 1, 1.0, 16); //cylinder
-const threePlanePrimitive = new THREE.PlaneGeometry(2, 2); //rect
-const threeCirclePrimitive = new THREE.CircleGeometry(0.5).rotateX(-Math.PI * 0.5); //disk
+export const threeBoxPrimitive = new THREE.BoxGeometry().translate(0, 0.5, 0); //box
+export const threeSpherePrimitive = new THREE.SphereGeometry(1, 16, 16); //sphere
+export const threeCylinderPrimitive = new THREE.CylinderGeometry(1, 1, 1.0, 16); //cylinder
+export const threePlanePrimitive = new THREE.PlaneGeometry(2, 2); //rect
+export const threeCirclePrimitive = new THREE.CircleGeometry(0.5).rotateX(-Math.PI * 0.5); //disk
 
-const neutral = new THREE.Color(neutralColor).lerpHSL(new THREE.Color(backgroundColor), 0.1);
-const singleBasicMaterial = new THREE.MeshStandardMaterial({ color: neutral});
-const doubleBasicMaterial = new THREE.MeshStandardMaterial({ color: neutral, side: THREE.DoubleSide});
-
-const woodColor = new THREE.Color("#7f4f1f");
-const greenColor = new THREE.Color("#009900");

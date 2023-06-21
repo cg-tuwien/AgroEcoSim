@@ -10,6 +10,7 @@ import { TransformControls } from 'three/examples/jsm/controls/TransformControls
 import { BaseRequestObject } from "./helpers/BaseRequestObject";
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter';
 import { scene } from "./components/viewport/ThreeSceneFn";
+import { VisualMappingOptions } from "./helpers/Plant";
 
 interface RetryContext {
     readonly previousRetryCount: number; //The number of consecutive failed tries so far.
@@ -61,7 +62,6 @@ hubConnection.on("preview", (result: ISimPreview) => {
     batch(() => {
         st.scene.value = reader.readAgroScene();
         st.renderer.value = result.renderer;
-
     });
 });
 
@@ -136,6 +136,8 @@ class State {
     objObstacles = new THREE.Object3D();
     objPlants = new THREE.Object3D();
     needsRender = signal(false);
+    visualMapping = signal(VisualMappingOptions.Natural);
+    plantPick = signal("");
 
     transformControls: TransformControls | undefined;
 
@@ -277,6 +279,7 @@ class State {
             initNumber: this.initNumber.peek(),
             randomize: this.randomize.peek(),
             constantLight: this.constantLight.peek(),
+            visualMapping: this.visualMapping.peek(),
             seeds: this.saveSeeds(),
             obstacles: this.saveObstacles()
         };
@@ -338,6 +341,7 @@ class State {
                     self.initNumber.value = data.initNumber;
                     self.randomize.value = data.randomize;
                     self.constantLight.value = data.constantLight;
+                    self.visualMapping.value = data.visualMapping;
                     self.seeds.value = data.seeds.map(s => new Seed(s.px, s.py, s.pz));
                     self.obstacles.value = data.obstacles.map(o => new Obstacle(o.type, o.px, o.py, o.pz, o.ax, o.ay, o.l, o.h, o.t));
                 });
@@ -356,7 +360,7 @@ class State {
             // called when the gltf has been generated
             gltf => this.saveTextFile(JSON.stringify(gltf), 'gltf'),
             // called when there is an error in the generation
-            error => console.log('An error happened'),
+            error => console.log('An error happened', error),
         );
     }
 

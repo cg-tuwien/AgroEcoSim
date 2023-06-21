@@ -1,9 +1,9 @@
 import * as THREE from "three";
 
 type StatsBase = {
-    //water, energy, irradiance, dailyResources, dailyProduction
-    //water, energy, woodRatio
-    //water, energy
+    //water, energy, irradiance, dailyResources, dailyProduction for leafs
+    //water, energy, woodRatio for stems
+    //water, energy for buds
     stats: Float32Array | undefined
 
 }

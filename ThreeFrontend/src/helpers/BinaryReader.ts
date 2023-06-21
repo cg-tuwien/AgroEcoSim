@@ -121,8 +121,8 @@ export default class BinaryReader {
                         const transform = this.readFloat32Vector(12);
                         const waterRatio = this.readFloat32();
                         const energyRatio = this.readFloat32();
-                        const lastIrradiance = this.readFloat32();
-                        const dailyResource = this.readFloat32();
+                        const lastIrradiance = this.readFloat32() / 1000;
+                        const dailyResource = this.readFloat32() / 1000;
                         const dailyProduction = this.readFloat32();
                         entity.push({ type: 8, affineTransform: transform, stats: new Float32Array([waterRatio, energyRatio, lastIrradiance, dailyResource, dailyProduction]) }); break;
                     }

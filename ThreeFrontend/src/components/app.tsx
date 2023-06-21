@@ -15,6 +15,7 @@ import { ProgressBar } from './hud/ProgressBar';
 import { Obstacles } from './hud/Obstacles';
 import { ConstantLight } from './hud/ConstantLight';
 import { ExportImport } from './hud/ExportImport';
+import { VisualMapping } from './hud/VisualMapping';
 
 const App = () => {
 	return(
@@ -38,8 +39,10 @@ const App = () => {
 			<hr/>
 			<Obstacles/>
 			<hr/>
-			<ExportImport/>
 			<Start/>&nbsp;<ProgressBar/>
+			<ExportImport/>
+			<VisualMapping/>
+			<hr/>
 			<PlantsTable/>
 		</nav>
 
