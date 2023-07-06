@@ -6,14 +6,14 @@ import { FlyControls } from "three/examples/jsm/controls/FlyControls"
 import WEBGL from "three/examples/jsm/capabilities/WebGL"
 import { Index, Scene } from "src/helpers/Scene";
 import { Primitive } from "src/helpers/Primitives";
-import appstate from "../../appstate";
+import appstate, { PlayState } from "../../appstate";
 import { batch, effect, useSignalEffect } from "@preact/signals";
 import { Obstacle } from "src/helpers/Obstacle";
 import { Seed } from "src/helpers/Seed";
 import { backgroundColor, neutralColor } from "../../helpers/Selection";
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls';
 import { BaseRequestObject } from "src/helpers/BaseRequestObject";
-import { CreateBudMesh, CreateLeafMesh, CreateStemMesh, EncodePlantName, SetupMesh, UpdateBudMesh, UpdateLeafMesh, UpdateStemMesh, VisualizeBudMesh, VisualizeLeafMesh, VisualizeStemMesh, doubleBasicMaterial } from "../../helpers/Plant";
+import { CreateBudMesh, CreateLeafMesh, CreateStemMesh, EncodePlantName, SetupMesh, UpdateBudMesh, UpdateLeafMesh, UpdateStemMesh, VisualizeBudMesh, VisualizeLeafMesh, VisualizeStemMesh, doubleGreyMaterial } from "../../helpers/Plant";
 
 enum Clicks { None, Down, Up, Double };
 
@@ -64,17 +64,17 @@ type DataRef = ISeedRef | ITerrainRef | IPlantRef | IObstacleRef;
 // export const PlantsLayer = 3;
 
 
-const materialHovered = new THREE.MeshBasicMaterial({
-    color: 'orange',
-    polygonOffset: true,
-    polygonOffsetFactor: -1,
-    wireframe: true,
-    wireframeLinewidth: 2,
-    transparent: true,
-    opacity: 0.8,
-    depthWrite: false,
-    depthTest: true
-});
+// const materialHovered = new THREE.MeshBasicMaterial({
+//     color: 'orange',
+//     polygonOffset: true,
+//     polygonOffsetFactor: -1,
+//     wireframe: true,
+//     wireframeLinewidth: 2,
+//     transparent: true,
+//     opacity: 0.8,
+//     depthWrite: false,
+//     depthTest: true
+// });
 
 export const scene = new THREE.Scene();
 
@@ -254,10 +254,10 @@ export default function ThreeSceneFn () {
         switch(primitive.type)
         {
             case 1: mesh.geometry = threeCirclePrimitive;
-                    if (mesh.material !== doubleBasicMaterial)
+                    if (mesh.material !== doubleGreyMaterial)
                     {
                         const tmp = mesh.material;
-                        mesh.material = doubleBasicMaterial;
+                        mesh.material = doubleGreyMaterial;
                         if (Array.isArray(tmp))
                             tmp.forEach(m => m.dispose());
                         else
@@ -285,7 +285,7 @@ export default function ThreeSceneFn () {
         let mesh: THREE.Mesh;
         switch(primitive.type)
         {
-            case 1: mesh = SetupMesh(primitive, index, new THREE.Mesh(threeCirclePrimitive, doubleBasicMaterial)); break; //disk / no organ just obstacles in v3
+            case 1: mesh = SetupMesh(primitive, index, new THREE.Mesh(threeCirclePrimitive, doubleGreyMaterial)); break; //disk / no organ just obstacles in v3
             case 2: mesh = CreateStemMesh(primitive, index);
                     matrix = matrix
                         .scale(new THREE.Vector3(primitive.radius, primitive.length, primitive.radius))
@@ -344,40 +344,14 @@ export default function ThreeSceneFn () {
 
         renderOnce();
 
-        if (appstate.previewRequestAfterSceneUpdate)
-        {
-            appstate.previewRequestAfterSceneUpdate = false;
-            appstate.previewRequest.value = true;
-        }
-    }
-
-    const buildPlantsOld = () => {
-        appstate.objPlants.traverseVisible((x: THREE.Mesh) => {
-            if (x.userData.type == "plant" && x.userData.customMaterial)
+        setTimeout(() => {
+            if (appstate.previewRequestAfterSceneUpdate)
             {
-                const material = x.material;
-                if (Array.isArray(material))
-                    material.forEach(m => m.dispose());
-                else
-                    material.dispose();
+                appstate.previewRequestAfterSceneUpdate = false;
+                appstate.previewRequest.value = true;
             }
-        });
-
-        appstate.objPlants.clear();
-        const sceneData = appstate.scene.value;
-        for(let i = 0; i < sceneData.length; ++i)
-        {
-            const entity = sceneData[i];
-            for(let j = 0; j < entity.length; ++j)
-                buildObject3D(entity[j], {entity: i, primitive: j});
-        }
-        renderOnce();
-
-        if (appstate.previewRequestAfterSceneUpdate)
-        {
-            appstate.previewRequestAfterSceneUpdate = false;
-            appstate.previewRequest.value = true;
-        }
+            appstate.playRequest.value = true;
+        }, appstate.playing.peek() == PlayState.ForwardWaiting ? 0 : 20);
     }
 
     //divContainer = createRef<HTMLDivElement>();
@@ -437,22 +411,16 @@ export default function ThreeSceneFn () {
     });
 
     useSignalEffect(() => {
-        const x = appstate.fieldSizeX.value;
-        const d = appstate.fieldSizeD.value;
-        const z = appstate.fieldSizeZ.value;
-        const r = appstate.fieldResolution.value;
         appstate.objTerrain.clear();
         buildTerrain();
     });
 
     useSignalEffect(() => {
-        const plants = appstate.scene.value;
         buildPlants();
     })
 
     useSignalEffect(() => {
-        const go = appstate.needsRender.value;
-        if (go) {
+        if (appstate.needsRender.value) {
             appstate.needsRender.value = false;
             renderOnce();
         }
@@ -503,10 +471,10 @@ export default function ThreeSceneFn () {
     });
 
     useSignalEffect(() => {
-        const mapping = appstate.visualMapping.value;
+        appstate.visualMapping.valueOf(); //manual subscription necessary
         appstate.objPlants.traverse((x: THREE.Mesh) => {
             const data = x.userData as IPlantRef;
-            const material = x.material as THREE.MeshBasicMaterial;
+            const material = x.material as THREE.MeshStandardMaterial;
             if (data.customMaterial)
             {
                 if (x.geometry == threePlanePrimitive) //leaf

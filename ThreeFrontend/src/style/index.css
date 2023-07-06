@@ -91,3 +91,7 @@ canvas {
 li {
 	margin: 8px;
 }
+
+.stepBtn {
+	text-size-adjust: 30%;
+}

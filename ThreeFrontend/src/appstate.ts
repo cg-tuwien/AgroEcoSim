@@ -41,6 +41,7 @@ hubConnection.on("progress", (step: number, length: number) => {
 });
 
 hubConnection.on("result", (result: ISimResponse) => {
+    st.history.push(result.scene);
     const binaryScene = base64ToArrayBuffer(result.scene);
     const reader = new BinaryReader(binaryScene);
     const scene = reader.readAgroScene();
@@ -53,16 +54,32 @@ hubConnection.on("result", (result: ISimResponse) => {
         st.computing.value = false;
         st.renderer.value = result.renderer;
         st.simLength.value = 0;
+        st.historySize.value += binaryScene.byteLength;
     });
 });
 
 hubConnection.on("preview", (result: ISimPreview) => {
-    const reader = new BinaryReader(base64ToArrayBuffer(result.scene));
-    st.previewRequestAfterSceneUpdate = true;
-    batch(() => {
-        st.scene.value = reader.readAgroScene();
-        st.renderer.value = result.renderer;
-    });
+    st.history.push(result.scene);
+    const binaryScene = base64ToArrayBuffer(result.scene);
+    if (st.playing.peek() == PlayState.ForwardWaiting)
+    {
+        st.previewRequestAfterSceneUpdate = true;
+        const reader = new BinaryReader(binaryScene);
+        const scene = reader.readAgroScene();
+        batch(() => {
+            st.scene.value = scene;
+            st.renderer.value = result.renderer;
+            st.historySize.value += binaryScene.byteLength;
+        });
+    }
+    else
+    {
+        batch(() => {
+            st.renderer.value = result.renderer;
+            st.historySize.value += binaryScene .byteLength;
+            st.previewRequest.value = true;
+        });
+    }
 });
 
 const start = async() => hubConnection.start();
@@ -109,6 +126,8 @@ function exportObstacle(o: Obstacle) {
     }
 }
 
+export enum PlayState { None, Backward, Forward, ForwardWaiting, SeekBackward, SeekForward, NextBackward, NextForward };
+
 class State {
     // SETTINGS
     hoursPerTick = signal(1);
@@ -145,6 +164,9 @@ class State {
 
     //OPERATIONAL STATE
     computing = signal(false);
+    playing = signal(PlayState.None);
+    playPointer = signal(0);
+    playRequest = signal(false);
     previewRequest = signal(false);
     previewRequestAfterSceneUpdate = false;
     simStep = signal(0);
@@ -154,6 +176,9 @@ class State {
     plants = signal<IPlantResponse[]>([]);
     scene = signal<Scene>([]);
     renderer = signal("");
+
+    history : Uint8Array[] = [];
+    historySize = signal(0);
 
     //METHODS
     private requestBody = () => {
@@ -172,15 +197,18 @@ class State {
 
     run = async() => {
         if (this.computing.peek())
-        {
             hubConnection.invoke("abort");
-        }
         else
         {
+            console.log(this.scene);
             batch(() => {
                 this.computing.value = true;
+                this.playing.value = PlayState.ForwardWaiting;
+                this.playPointer.value = 0;
                 this.renderer.value = "";
+                this.historySize.value = 0;
             });
+            this.history.length = 0;
             if (hubConnection.state !== SignalR.HubConnectionState.Connected)
                 await start();
 
@@ -198,6 +226,13 @@ class State {
             else
                 this.computing.value = false;
         }
+    }
+
+    play = async(state: PlayState) => {
+        if (state != PlayState.Forward || this.playPointer.peek() < this.history.length - 1)
+            this.playing.value = state;
+        else
+            this.playing.value = PlayState.ForwardWaiting;
     }
 
     pushRndSeed = () => { this.seeds.value = [ ...this.seeds.peek(), Seed.rndItem()] };
@@ -390,3 +425,67 @@ effect(() => {
         st.previewRequest.value = false;
     }
 });
+
+effect(() => {
+    switch (st.playing.value)
+    {
+        case PlayState.Backward: case PlayState.Forward: st.playRequest.value = true; break;
+    }
+});
+
+effect(() => {
+    if (st.playRequest.value)
+    {
+        let playPointer = st.playPointer.peek();
+        switch (st.playing.peek())
+        {
+            case PlayState.Forward:
+                playPointer += 1;
+                if (playPointer < st.history.length)
+                {
+                    st.scene.value = getScene(playPointer);
+                    batch(() => {
+                        st.playPointer.value = playPointer;
+                        st.playRequest.value = false;
+                    })
+                }
+                else
+                    batch(() => {
+                        st.playPointer.value = st.history.length - 1;
+                        st.playing.value = st.computing.peek() ? PlayState.ForwardWaiting : PlayState.None;
+                        st.playRequest.value = false;
+                    });
+                break;
+            case PlayState.ForwardWaiting:
+                batch(() => {
+                    st.playPointer.value = playPointer + 1;
+                    st.playRequest.value = false;
+                });
+                break;
+            case PlayState.Backward:
+                playPointer -= 1;
+                if (playPointer >= 0)
+                {
+                    batch(() => {
+                        st.playPointer.value = playPointer;
+                        st.scene.value = getScene(playPointer);
+                        st.playRequest.value = false;
+                    });
+                }
+                else
+                    batch(() => {
+                        st.playPointer.value = 0;
+                        st.playing.value = PlayState.None;
+                        st.playRequest.value = false;
+                    });
+                break;
+            default: st.playRequest.value = false;
+        }
+    }
+});
+
+const getScene = (index: number) => {
+    const src = st.history[index];
+    const reader = new BinaryReader(base64ToArrayBuffer(src));
+    return reader.readAgroScene();
+}
