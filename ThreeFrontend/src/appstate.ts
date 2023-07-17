@@ -427,32 +427,35 @@ effect(() => {
 });
 
 effect(() => {
-    switch (st.playing.value)
-    {
-        case PlayState.Backward: case PlayState.Forward: st.playRequest.value = true; break;
-    }
+    st.playRequest.value = st.playing.value != PlayState.None;
 });
 
 effect(() => {
     if (st.playRequest.value)
     {
-        let playPointer = st.playPointer.peek();
-        switch (st.playing.peek())
+        let playPointer = Math.max(0, Math.min(st.playPointer.peek(), st.history.length - 1));
+        const pv =  st.playing.peek();
+        switch (pv)
         {
-            case PlayState.Forward:
-                playPointer += 1;
+            case PlayState.Forward: case PlayState.NextForward: case PlayState.SeekForward:
+                if (pv == PlayState.SeekForward)
+                    playPointer = st.history.length - 1;
+                else
+                    playPointer += 1;
+
                 if (playPointer < st.history.length)
                 {
                     st.scene.value = getScene(playPointer);
                     batch(() => {
                         st.playPointer.value = playPointer;
                         st.playRequest.value = false;
+                        st.playing.value = pv == PlayState.NextForward || pv == PlayState.SeekForward ? PlayState.None : pv;
                     })
                 }
                 else
                     batch(() => {
                         st.playPointer.value = st.history.length - 1;
-                        st.playing.value = st.computing.peek() ? PlayState.ForwardWaiting : PlayState.None;
+                        st.playing.value = (pv == PlayState.Forward || pv == PlayState.NextForward) && st.computing.peek() ? PlayState.ForwardWaiting : PlayState.None;
                         st.playRequest.value = false;
                     });
                 break;
@@ -460,16 +463,22 @@ effect(() => {
                 batch(() => {
                     st.playPointer.value = playPointer + 1;
                     st.playRequest.value = false;
+                    st.playing.value = st.computing.peek() ? PlayState.ForwardWaiting : PlayState.None;
                 });
                 break;
-            case PlayState.Backward:
-                playPointer -= 1;
+            case PlayState.Backward: case PlayState.NextBackward: case PlayState.SeekBackward:
+                if (pv == PlayState.SeekBackward)
+                    playPointer = 0;
+                else
+                    playPointer -= 1;
+
                 if (playPointer >= 0)
                 {
                     batch(() => {
                         st.playPointer.value = playPointer;
                         st.scene.value = getScene(playPointer);
                         st.playRequest.value = false;
+                        st.playing.value = pv == PlayState.Backward ? PlayState.Backward : PlayState.None;
                     });
                 }
                 else
