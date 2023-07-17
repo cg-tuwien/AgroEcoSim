@@ -24,7 +24,7 @@ const App = () => {
 			<PlantsTable/>
 			<ThreeSceneFn />
 		</main>
-		<nav id="hud">
+		<nav id="hud" class="float-left">
 			<HoursPerTick/>
 			<TotalHours/>
 			<FieldResolution/>

@@ -126,7 +126,17 @@ function exportObstacle(o: Obstacle) {
     }
 }
 
-export enum PlayState { None, Backward, Forward, ForwardWaiting, SeekBackward, SeekForward, NextBackward, NextForward };
+export enum PlayState {
+    None, //noop
+    Backward, //playing backward
+    Forward, //playing forward
+    ForwardWaiting, //playing forward and waiting for new frames to come
+    SeekBackward, //jump to the first frame
+    SeekForward, //jump to the last frame
+    NextBackward, //one frame backward
+    NextForward, //one frame forward
+    Seek //jump to the specified frame
+};
 
 class State {
     // SETTINGS
@@ -487,6 +497,13 @@ effect(() => {
                         st.playing.value = PlayState.None;
                         st.playRequest.value = false;
                     });
+                break;
+            case PlayState.Seek:
+                st.scene.value = getScene(playPointer);
+                batch(() => {
+                    st.playRequest.value = false;
+                    st.playing.value = PlayState.None;
+                })
                 break;
             default: st.playRequest.value = false;
         }
