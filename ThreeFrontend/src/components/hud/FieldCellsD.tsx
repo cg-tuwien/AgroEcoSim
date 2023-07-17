@@ -6,6 +6,7 @@ const min = 0.1;
 const max = 1000;
 
 export function FieldCellsD() {
+    //const tooltiup = "Basic depth of the field. The height field adds soil on top of it.";
     return <div>
         <input min={min} max={max} type="number" name="fieldcellsd" value={appstate.fieldCellsD} onChange={e => {
             let step = 1;

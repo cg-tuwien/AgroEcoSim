@@ -1,5 +1,6 @@
 import { Component, h } from "preact";
 import appstate from "../../appstate";
+import { encodeTime } from "../../helpers/TimeUnits";
 
 const day = 24;
 const month = 30 * day;
@@ -36,5 +37,6 @@ export function TotalHours() {
             }
         }}/>
         <label for="totalhours">Total Hours to be simulated</label>
+        <label for="totalhours" class="unit">({encodeTime(appstate.totalHours.value)})</label>
     </div>;
 }
