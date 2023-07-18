@@ -19,49 +19,48 @@ import { VisualMapping } from './hud/VisualMapping';
 import { signal } from '@preact/signals';
 //import {Tab, initTE } from "tw-elements"; initTE({ Tab }); //tried but failed
 
-const tabs = signal("#tab-home");
+const tabs = signal("tab-home");
 
 const App = () => {
 	return(
 	<Fragment>
-		<main id="app" class="block overflow-hidden absolute">
+		<main id="app">
 			<ThreeSceneFn />
 		</main>
 		<nav id="hud">
 			<ul role="tablist">
-				<li role="presentation"><a role="tab" href="#tab-home" onClick={e => tabs.value = e.currentTarget.href} aria-selected={tabs.value.endsWith("tab-home")}>Home</a></li>
-				<li role="presentation"><a role="tab" href="#tab-sim" onClick={e => tabs.value = e.currentTarget.href} aria-selected={tabs.value.endsWith("tab-sim")}>Simulation</a></li>
-				<li role="presentation"><a role="tab" href="#tab-plants" onClick={e => tabs.value = e.currentTarget.href} aria-selected={tabs.value.endsWith("tab-plants")}>Plants</a></li>
-				<li role="presentation"><a role="tab" href="#tab-obstacles" onClick={e => tabs.value = e.currentTarget.href} aria-selected={tabs.value.endsWith("tab-obstacles")}>Obstacles</a></li>
-				<li role="presentation"><a role="tab" href="#tab-analysis" onClick={e => tabs.value = e.currentTarget.href} aria-selected={tabs.value.endsWith("tab-analysis")}>Analysis</a></li> {/*TODO make this a separate panel always visible*/}
+				<li role="presentation"><a role="tab" onClick={e => tabs.value = "tab-home"} aria-selected={tabs.value.endsWith("tab-home")}>Home</a></li>
+				<li role="presentation"><a role="tab" onClick={e => tabs.value = "tab-sim"} aria-selected={tabs.value.endsWith("tab-sim")}>Simulation</a></li>
+				<li role="presentation"><a role="tab" onClick={e => tabs.value = "tab-plants"} aria-selected={tabs.value.endsWith("tab-plants")}>Plants</a></li>
+				<li role="presentation"><a role="tab" onClick={e => tabs.value = "tab-obstacles"} aria-selected={tabs.value.endsWith("tab-obstacles")}>Obstacles</a></li>
+				<li role="presentation"><a role="tab" onClick={e => tabs.value = "tab-analysis"} aria-selected={tabs.value.endsWith("tab-analysis")}>Analysis</a></li>
+				{() => "TODO: make this a separate panel always visible"}
 			</ul>
 
-			<div>
-				<div role="tabpanel" id="tab-home" aria-selected={tabs.value.endsWith("tab-home")}>
-					<Start/>&nbsp;<ProgressBar/>
-					<ExportImport/>
-				</div>
-				<div role="tabpanel" id="tab-sim" aria-selected={tabs.value.endsWith("tab-sim")}>
-					<HoursPerTick/>
-					<TotalHours/>
-					<FieldResolution/>
-					<FieldCellsX/>
-					<FieldCellsZ/>
-					<FieldCellsD/>
-					<Randomize/>
-					<InitNumber/>
-					<ConstantLight/>
-				</div>
-				<div role="tabpanel" id="tab-plants" aria-selected={tabs.value.endsWith("tab-plants")}>
-					<Seeds/>
-				</div>
-				<div role="tabpanel" id="tab-obstacles" aria-selected={tabs.value.endsWith("tab-obstacles")}>
-					<Obstacles/>
-				</div>
-				<div role="tabpanel" id="tab-analysis" aria-selected={tabs.value.endsWith("tab-analysis")}>
-					<VisualMapping/>
-					<PlantsTable/>
-				</div>
+			<div role="tabpanel" id="tab-home" aria-selected={tabs.value.endsWith("tab-home")}>
+				<Start/>&nbsp;<ProgressBar/>
+				<ExportImport/>
+			</div>
+			<div role="tabpanel" id="tab-sim" aria-selected={tabs.value.endsWith("tab-sim")}>
+				<HoursPerTick/>
+				<TotalHours/>
+				<FieldResolution/>
+				<FieldCellsX/>
+				<FieldCellsZ/>
+				<FieldCellsD/>
+				<Randomize/>
+				<InitNumber/>
+				<ConstantLight/>
+			</div>
+			<div role="tabpanel" id="tab-plants" aria-selected={tabs.value.endsWith("tab-plants")}>
+				<Seeds/>
+			</div>
+			<div role="tabpanel" id="tab-obstacles" aria-selected={tabs.value.endsWith("tab-obstacles")}>
+				<Obstacles/>
+			</div>
+			<div role="tabpanel" id="tab-analysis" aria-selected={tabs.value.endsWith("tab-analysis")}>
+				<VisualMapping/>
+				<PlantsTable/>
 			</div>
 		</nav>
 	</Fragment>

@@ -2,16 +2,21 @@ nav ul[role="tablist"] {
     border-bottom: 1px solid;
     list-style: none;
     display: flex;
+    margin-top: 0px;
+}
+
+nav ul[role="tablist"] li{
+    margin-top: 0px;
 }
 
 nav a[role="tab"] {
     text-decoration: none;
     color: var(--fgcolor);
-
 }
 
 nav a[role="tab"]:hover {
     text-decoration: underline dotted;
+    cursor: pointer;
 }
 
 nav a[aria-selected="true"] {
