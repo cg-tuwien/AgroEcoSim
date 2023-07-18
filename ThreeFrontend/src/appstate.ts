@@ -326,7 +326,11 @@ class State {
             constantLight: this.constantLight.peek(),
             visualMapping: this.visualMapping.peek(),
             seeds: this.saveSeeds(),
-            obstacles: this.saveObstacles()
+            obstacles: this.saveObstacles(),
+
+            plants: this.plants,
+            history: this.history,
+            historySize: this.historySize.peek(),
         };
 
         this.saveTextFile(JSON.stringify(data), 'json');
@@ -375,6 +379,7 @@ class State {
 
                 const text = reader.result.toString();
                 const data = JSON.parse(text);
+                self.history = data.history;
 
                 batch(() => {
                     self.hoursPerTick.value = data.hoursPerTick;
@@ -389,7 +394,13 @@ class State {
                     self.visualMapping.value = data.visualMapping;
                     self.seeds.value = data.seeds.map(s => new Seed(s.px, s.py, s.pz));
                     self.obstacles.value = data.obstacles.map(o => new Obstacle(o.type, o.px, o.py, o.pz, o.ax, o.ay, o.l, o.h, o.t));
+
+                    self.plants.value = data.plants;
+                    self.historySize.value = data.historySize;
+                    self.scene.value = getScene(0);
                 });
+
+                self.play(PlayState.SeekBackward);
 
                 input.remove();
             };
