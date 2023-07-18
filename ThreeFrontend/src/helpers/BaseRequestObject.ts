@@ -44,7 +44,7 @@ export class BaseRequestObject {
         //this.mesh.remove(this.handleMesh);
         if (appstate.transformControls?.object == this.mesh)
             appstate.transformControls.detach();
-        appstate.transformControls.removeEventListener('change', this.transformMoveEvent);
+        appstate.transformControls?.removeEventListener('change', this.transformMoveEvent);
 
         appstate.needsRender.value = true;
     }

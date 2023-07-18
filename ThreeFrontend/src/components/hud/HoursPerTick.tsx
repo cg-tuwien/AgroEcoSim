@@ -1,5 +1,6 @@
 import { Component, h } from "preact";
 import appstate from "../../appstate";
+import { encodeTime } from "../../helpers/TimeUnits";
 //import "wired-elements"
 //import {FormField, Slider} from 'preact-material-components';
 //import 'preact-material-components/FormField/style.css';
@@ -8,15 +9,6 @@ import appstate from "../../appstate";
 const lookup = [1, 2, 3, 4, 6, 8, 12, 24, 48, 72, 96, 120, 144, 168];
 export class HoursPerTick extends Component
 {
-    encodeTime(t: number) {
-        if (t == 1) return  "1 hour";
-        else if (t < 24) return `${t} hours`;
-        else if (t == 24) return "1 day";
-        else if (t < 168) return `${t / 24} days`;
-        else if (t == 168) return `1 week`;
-        else return `${t / 168} weeks`;
-    }
-
     findIndex(v: number = appstate.hoursPerTick.value) {
         let result = -1;
         for(let i = 1; i < lookup.length; ++i)
@@ -61,7 +53,7 @@ export class HoursPerTick extends Component
                 e.currentTarget.value = appstate.hoursPerTick.value.toString(); //necessary at repeated value postings
             }}/>
             <label for="hourspertick">Hours per Tick</label>
-            <label for="hourspertick" class="unit">({this.encodeTime(appstate.hoursPerTick.value)})</label>
+            <label for="hourspertick" class="unit">({encodeTime(appstate.hoursPerTick.value)})</label>
         </div>;
     }
 }

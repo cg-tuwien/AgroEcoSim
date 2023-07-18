@@ -1,0 +1,23 @@
+nav ul[role="tablist"] {
+    border-bottom: 1px solid;
+    list-style: none;
+    display: flex;
+}
+
+nav a[role="tab"] {
+    text-decoration: none;
+    color: var(--fgcolor);
+
+}
+
+nav a[role="tab"]:hover {
+    text-decoration: underline dotted;
+}
+
+nav a[aria-selected="true"] {
+    text-decoration: underline;
+}
+
+div[role="tabpanel"][aria-selected="false"] {
+    display: none;
+}
