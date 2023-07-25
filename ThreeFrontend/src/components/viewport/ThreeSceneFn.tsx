@@ -1,30 +1,20 @@
-import { createRef, useEffect, useLayoutEffect, useRef } from "preact/compat";
-import { Component, h, render } from 'preact';
+import { useEffect, useRef } from "preact/compat";
+import { h } from 'preact';
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls"
-import { FlyControls } from "three/examples/jsm/controls/FlyControls"
 import WEBGL from "three/examples/jsm/capabilities/WebGL"
-import { Index, Scene } from "src/helpers/Scene";
+import { Index } from "src/helpers/Scene";
 import { Primitive } from "src/helpers/Primitives";
 import appstate, { PlayState } from "../../appstate";
-import { batch, effect, useSignalEffect } from "@preact/signals";
+import { batch, useSignalEffect } from "@preact/signals";
 import { Obstacle } from "src/helpers/Obstacle";
 import { Seed } from "src/helpers/Seed";
-import { backgroundColor, neutralColor } from "../../helpers/Selection";
+import { backgroundColor } from "../../helpers/Selection";
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls';
 import { BaseRequestObject } from "src/helpers/BaseRequestObject";
 import { CreateBudMesh, CreateLeafMesh, CreateStemMesh, EncodePlantName, SetupMesh, UpdateBudMesh, UpdateLeafMesh, UpdateStemMesh, VisualizeBudMesh, VisualizeLeafMesh, VisualizeStemMesh, doubleGreyMaterial } from "../../helpers/Plant";
 
 enum Clicks { None, Down, Up, Double };
-
-interface IProps {
-//     width: number,
-//     height: number,
-//     onHover(id: number): void,
-//     onDblClick(id: number): void,
-//     hasSelection(): boolean,
-    //parent: HTMLElement;
-};
 
 interface IInitData {
     tanFOV: number;
@@ -35,11 +25,6 @@ interface ISeedRef {
     type: "seed";
     seed: Seed;
 }
-
-// interface ISeedHandle {
-//     type: "seed";
-//     seed: Seed;
-// }
 
 interface ITerrainRef {
     type: "terrain";
@@ -77,6 +62,9 @@ type DataRef = ISeedRef | ITerrainRef | IPlantRef | IObstacleRef;
 // });
 
 export const scene = new THREE.Scene();
+let renderer: THREE.WebGLRenderer;
+let perspectiveCamera: THREE.PerspectiveCamera;
+let cameraControls: OrbitControls;
 
 export default function ThreeSceneFn () {
     let initialized = false;
@@ -89,29 +77,37 @@ export default function ThreeSceneFn () {
         }
     }
 
-    const initCameras = () => {
-        perspectiveCamera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.025, 5000);
-        perspectiveCamera.position.set(0, 3, 5);
+    const initCameras = (updateListeners: boolean) => {
+        if (!perspectiveCamera)
+        {
+            perspectiveCamera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.025, 5000);
+            perspectiveCamera.position.set(0, 3, 5);
+        }
         //perspectiveCamera.layers.enableAll();
-        if (renderer){
-            cameraControls = new OrbitControls(perspectiveCamera, renderer.domElement);
-            //this.controls.enableKeys = false;
-            //this.controls.keys = { LEFT: "", RIGHT: "", BOTTOM: "", UP: "" };
-            cameraControls.enableRotate = true;
-            cameraControls.screenSpacePanning = true;
-            cameraControls.update();
+        if (renderer) {
+            if (!cameraControls) {
+                cameraControls = new OrbitControls(perspectiveCamera, renderer.domElement);
+                //this.controls.enableKeys = false;
+                //this.controls.keys = { LEFT: "", RIGHT: "", BOTTOM: "", UP: "" };
+                cameraControls.enableRotate = true;
+                cameraControls.screenSpacePanning = true;
+                cameraControls.update();
 
-            cameraControls.addEventListener("change", () => renderOnce());
-            renderer?.domElement.addEventListener('wheel', () => renderOnce());
-            renderer?.domElement.addEventListener('mousemove', e => onMouseMove(e));
-            renderer?.domElement.addEventListener('dblclick', e => onDblClick(e));
-            renderer?.domElement.addEventListener('mousedown', e => onMouseDown(e));
-            renderer?.domElement.addEventListener('mouseup', e => onMouseUp(e));
+                cameraControls.addEventListener("change", renderOnce);
+                if (updateListeners){
+                    renderer.domElement.addEventListener('wheel', renderOnce);
+                    renderer.domElement.addEventListener('mousemove', onMouseMove);
+                    renderer.domElement.addEventListener('dblclick', onDblClick);
+                    renderer.domElement.addEventListener('mousedown', onMouseDown);
+                    renderer.domElement.addEventListener('mouseup', onMouseUp);
+                }
+            }
 
-            transformControls = new TransformControls(perspectiveCamera, renderer.domElement);
-            appstate.transformControls = transformControls;
-            transformControls.addEventListener('change', () => renderOnce());
-            transformControls.addEventListener('dragging-changed', (event) => cameraControls.enabled = ! event.value);
+            if (!appstate.transformControls) {
+                appstate.transformControls = new TransformControls(perspectiveCamera, renderer.domElement);
+                appstate.transformControls.addEventListener('change', renderOnce);
+                appstate.transformControls.addEventListener('dragging-changed', (event) => cameraControls.enabled = ! event.value);
+            }
         }
         //initData = { tanFOV: Math.tan( ( ( Math.PI / 180 ) * perspectiveCamera.fov / 2 ) ), windowHeight: window.innerHeight };
     }
@@ -134,7 +130,7 @@ export default function ThreeSceneFn () {
             scene.add(appstate.objObstacles);
             scene.add(appstate.objPlants);
 
-            scene.add(transformControls);
+            scene.add(appstate.transformControls);
         }
         else
         {
@@ -365,10 +361,8 @@ export default function ThreeSceneFn () {
     // let onDblClick: (id: number) => void;
     // let hasSelection: () => boolean;
     const hemiLight = new THREE.HemisphereLight( 0xffffff, 0x707070, 3.175 );
-    let perspectiveCamera: THREE.PerspectiveCamera;
-    let renderer: THREE.WebGLRenderer;
-    let cameraControls: OrbitControls;
-    let transformControls: TransformControls | undefined;
+
+    //let transformControls: TransformControls | undefined;
 
     let animationRequest: number;
     let mouse = { inside: false, x: 0, y: 0};
@@ -386,7 +380,7 @@ export default function ThreeSceneFn () {
                     cameraControls?.update();
                 }
                 else
-                    initCameras();
+                    initCameras(false);
                 renderOnce();
             }
             else
@@ -432,11 +426,15 @@ export default function ThreeSceneFn () {
     const divRef = useRef(null);
 
     useEffect(() => {
-        if (WEBGL.isWebGL2Available()){
+        let newRenderer = false;
+        if (!renderer && WEBGL.isWebGL2Available()){
             const canvas = document.createElement('canvas');
             const context = canvas.getContext('webgl2', { alpha: false });
             if (context)
+            {
                 renderer = new THREE.WebGLRenderer( { antialias: true, powerPreference: 'high-performance',  canvas: canvas, context: context as any } );
+                newRenderer = true;
+            }
         }
 
         if (!renderer) {
@@ -445,12 +443,13 @@ export default function ThreeSceneFn () {
                 const canvas = document.createElement('canvas');
                 const context = canvas.getContext('webgl', { alpha: false });
                 renderer = new THREE.WebGLRenderer( { antialias: true, powerPreference: 'high-performance',  canvas: canvas, context: context as any } );
+                newRenderer = true;
             }
             else
                 divRef.current.appendChild(WEBGL.getWebGLErrorMessage());
         }
 
-        initCameras();
+        initCameras(newRenderer);
 
         if (renderer && divRef.current) {
             renderer.setSize(window.innerWidth, window.innerHeight);
