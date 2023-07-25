@@ -6,7 +6,7 @@ namespace Agro;
 
 public interface IPlantFormation : IFormation
 {
-	PlantSettings Parameters { get; }
+	SpeciesSettings Parameters { get; }
 	bool SeedAlive { get; }
 	bool Send(int recipient, IMessage<SeedAgent> msg);
 	#if HISTORY_LOG || TICK_LOG

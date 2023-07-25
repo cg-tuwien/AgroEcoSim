@@ -11,6 +11,7 @@ import { BaseRequestObject } from "./helpers/BaseRequestObject";
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter';
 import { scene } from "./components/viewport/ThreeSceneFn";
 import { VisualMappingOptions } from "./helpers/Plant";
+import { Species } from "./helpers/Species";
 
 interface RetryContext {
     readonly previousRetryCount: number; //The number of consecutive failed tries so far.
@@ -41,7 +42,7 @@ hubConnection.on("progress", (step: number, length: number) => {
 });
 
 hubConnection.on("result", (result: ISimResponse) => {
-    st.history.push(result.scene);
+    st.history.push({ t: result.stepTimes.length - 1, s: result.scene });
     const binaryScene = base64ToArrayBuffer(result.scene);
     const reader = new BinaryReader(binaryScene);
     const scene = reader.readAgroScene();
@@ -54,12 +55,12 @@ hubConnection.on("result", (result: ISimResponse) => {
         st.computing.value = false;
         st.renderer.value = result.renderer;
         st.simLength.value = 0;
-        st.historySize.value += binaryScene.byteLength;
+        st.historySize.value += binaryScene.byteLength + 24;
     });
 });
 
 hubConnection.on("preview", (result: ISimPreview) => {
-    st.history.push(result.scene);
+    st.history.push({t: result.step, s: result.scene});
     const binaryScene = base64ToArrayBuffer(result.scene);
     if (st.playing.peek() == PlayState.ForwardWaiting)
     {
@@ -69,14 +70,14 @@ hubConnection.on("preview", (result: ISimPreview) => {
         batch(() => {
             st.scene.value = scene;
             st.renderer.value = result.renderer;
-            st.historySize.value += binaryScene.byteLength;
+            st.historySize.value += binaryScene.byteLength + 24;
         });
     }
     else
     {
         batch(() => {
             st.renderer.value = result.renderer;
-            st.historySize.value += binaryScene .byteLength;
+            st.historySize.value += binaryScene .byteLength + 24;
             st.previewRequest.value = true;
         });
     }
@@ -153,6 +154,10 @@ class State {
     randomize = signal(false);
     constantLight = signal(false);
 
+    //SPECIES
+    species = signal<Species[]>([Species.Default()]);
+
+    //INITIAL SCENE SETUP
     seeds = signal<Seed[]>([]);
     seedsCount = computed(() => this.seeds.value.length);
 
@@ -187,7 +192,7 @@ class State {
     scene = signal<Scene>([]);
     renderer = signal("");
 
-    history : Uint8Array[] = [];
+    history : {t: number, s: Uint8Array}[] = [];
     historySize = signal(0);
 
     //METHODS
@@ -198,8 +203,9 @@ class State {
         FieldResolution: this.fieldResolution.peek(),
         FieldSize: { X: this.fieldCellsX.peek(), D: this.fieldCellsD.peek(), Z: this.fieldCellsZ.peek() },
         Seed: Math.trunc(this.randomize.peek() ? Math.random() * 4294967295 : this.initNumber.peek()),
+        Species: this.species.peek().map(s => s.serialize()),
 
-        Plants: this.seeds.peek().map((p: Seed) => ({ P: { X: p.px.peek(), Y: p.py.peek(), Z: p.pz.peek() } })),
+        Plants: this.seeds.peek().map((p: Seed) => ({ S: p.species.peek(), P: { X: p.px.peek(), Y: p.py.peek(), Z: p.pz.peek() } })),
         Obstacles: this.obstacles.peek().map((o: Obstacle) => exportObstacle(o)),
         RequestGeometry: true,
         ConstantLights: this.constantLight.value
@@ -258,6 +264,18 @@ class State {
         this.needsRender.value = true;
     };
 
+    pushRndSpecies = () => {
+        this.species.value = [ ...this.species.peek(), new Species()]
+    };
+
+    removeSpeciesAt = (i : number) => {
+        const species = this.species.peek();
+        if (i >= 0 && i < species.length && species.length > 1) {
+            species.splice(i, 1)[0];
+        }
+        this.species.value = [...species];
+    };
+
     clearHovers = (src: BaseRequestObject[], except: BaseRequestObject | undefined) => {
         src.forEach((x : Seed) => {
             if (x !== except)
@@ -274,7 +292,7 @@ class State {
     clearObstacleHovers = (except: Obstacle | undefined) => this.clearHovers(this.obstacles.peek(), except);
 
 
-    clearSelects = (src: BaseRequestObject[], except: Seed | undefined) => {
+    clearSelects = (src: BaseRequestObject[], except: Seed | Obstacle | undefined) => {
         src.forEach((s : Seed) => {
             if (s !== except)
                 switch(s.state.peek()) {
@@ -287,7 +305,7 @@ class State {
     clearSeedSelects = (except: Seed | undefined) => this.clearSelects(this.seeds.peek(), except);
     clearObstacleSelects = (except: Obstacle | undefined) => this.clearSelects(this.obstacles.peek(), except);
 
-    clearGrabs = (src: BaseRequestObject[], except: Seed | undefined) => {
+    clearGrabs = (src: BaseRequestObject[], except: Seed | Obstacle | undefined) => {
         src.forEach((s : Seed) => {
             if (s !== except)
                 if (s.state.peek() == "grab")
@@ -325,8 +343,9 @@ class State {
             randomize: this.randomize.peek(),
             constantLight: this.constantLight.peek(),
             visualMapping: this.visualMapping.peek(),
-            seeds: this.saveSeeds(),
-            obstacles: this.saveObstacles(),
+            seeds: this.seeds.value.map(s => s.save()),
+            obstacles: this.obstacles.value.map(o => o.save()),
+            species: this.species.value.map(s => s.save()),
 
             plants: this.plants,
             history: this.history,
@@ -334,28 +353,6 @@ class State {
         };
 
         this.saveTextFile(JSON.stringify(data), 'json');
-    }
-
-    saveSeeds = () => {
-        return this.seeds.value.map(s => ({
-            px: s.px.peek(),
-            py: s.py.peek(),
-            pz: s.pz.peek()
-        }));
-    }
-
-    saveObstacles = () => {
-        return this.obstacles.value.map(o => ({
-            px: o.px.peek(),
-            py: o.py.peek(),
-            pz: o.pz.peek(),
-            type: o.type.peek(),
-            l: o.wallLength_UmbrellaRadius.peek(),
-            h: o.height.peek(),
-            t: o.thickness.peek(),
-            ax: o.angleX.peek(),
-            ay: o.angleY.peek(),
-        }));
     }
 
     load = async() => {
@@ -392,8 +389,9 @@ class State {
                     self.randomize.value = data.randomize;
                     self.constantLight.value = data.constantLight;
                     self.visualMapping.value = data.visualMapping;
-                    self.seeds.value = data.seeds.map(s => new Seed(s.px, s.py, s.pz));
+                    self.seeds.value = data.seeds.map(s => new Seed(s.species, s.px, s. py, s.pz));
                     self.obstacles.value = data.obstacles.map(o => new Obstacle(o.type, o.px, o.py, o.pz, o.ax, o.ay, o.l, o.h, o.t));
+                    self.species.value = data.species.map(s => new Species().load(s));
 
                     self.plants.value = data.plants;
                     self.historySize.value = data.historySize;
@@ -438,7 +436,7 @@ class State {
 const st = new State();
 export default st;
 //now that the singleton is exported push in the default seed
-st.seeds.value = [ new Seed(0.5, -0.01, 0.05) ];
+st.seeds.value = [ new Seed(st.species.peek()[0].name.peek(), 0.5, -0.01, 0.05) ];
 
 effect(() => {
     if (st.previewRequest.value && hubConnection.state == SignalR.HubConnectionState.Connected) {
@@ -522,7 +520,7 @@ effect(() => {
 });
 
 const getScene = (index: number) => {
-    const src = st.history[index];
+    const src = st.history[index].s;
     const reader = new BinaryReader(base64ToArrayBuffer(src));
     return reader.readAgroScene();
 }

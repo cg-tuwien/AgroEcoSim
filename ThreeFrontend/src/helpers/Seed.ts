@@ -1,4 +1,4 @@
-import { effect } from "@preact/signals"
+import { Signal, effect, signal } from "@preact/signals"
 import * as THREE from 'three';
 import { neutralColor } from "./Selection";
 import appstate from "../appstate";
@@ -25,8 +25,10 @@ const seedMaterials : ReqObjMaterials = {
 
 export class Seed extends BaseRequestObject
 {
-    constructor(x: number, y: number, z: number) {
+    species: Signal<string>;
+    constructor(spec: string, x: number, y: number, z: number) {
         super(x, y, z, seedMaterials);
+        this.species = signal(spec);
 
         this.mesh = new THREE.Mesh(dodecahedron, defaultMaterial);
 
@@ -42,10 +44,20 @@ export class Seed extends BaseRequestObject
         });
     }
 
+    public save() {
+        return {
+            species: this.species.peek(),
+            px: this.px.peek(),
+            py: this.py.peek(),
+            pz: this.pz.peek()
+        };
+    }
+
     static rndItem() {
         return new Seed(
-            Math.random() * appstate.fieldSizeX.value,
+            appstate.species.peek()[Math.floor(Math.random() * appstate.species.value.length)].name.peek(),
+            Math.random() * appstate.fieldSizeX.peek(),
             -Math.random() * 0.1,
-            Math.random() * appstate.fieldSizeZ.value);
+            Math.random() * appstate.fieldSizeZ.peek());
     }
 }

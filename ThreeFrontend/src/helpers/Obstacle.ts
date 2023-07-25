@@ -124,4 +124,18 @@ export class Obstacle extends BaseRequestObject
             appstate.needsRender.value = true;
         });
     }
+
+    public save() {
+        return {
+            px: this.px.peek(),
+            py: this.py.peek(),
+            pz: this.pz.peek(),
+            type: this.type.peek(),
+            l: this.wallLength_UmbrellaRadius.peek(),
+            h: this.height.peek(),
+            t: this.thickness.peek(),
+            ax: this.angleX.peek(),
+            ay: this.angleY.peek(),
+        }
+    }
 }

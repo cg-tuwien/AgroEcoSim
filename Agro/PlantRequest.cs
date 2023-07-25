@@ -5,7 +5,9 @@ namespace Agro;
 ///</summary>
 public class PlantRequest
 {
-    #if !GODOT
+    [System.Text.Json.Serialization.JsonPropertyName("S")]
+    public string? SpeciesName { get; set; }
+
     ///<summary>
     ///Position of the plant seed (OpenGL-like coordinates); Use X,Y,Z for its components, e.g. { "X": 1. "Y": 2, "Z": 3 } [default: 0,0,0]
     ///</summary>
@@ -13,7 +15,6 @@ public class PlantRequest
     //The converter was useful for System.Numerics.Vector3 but Swagger doesn't support including it among the examples.
     //[System.Text.Json.Serialization.JsonConverter(typeof(Utils.Json.Vector3JsonConverter))]
     [System.Text.Json.Serialization.JsonPropertyName("P")]
-    #endif
     public Utils.Json.Vector3XYZ? Position { get; set; }
     //public System.Numerics.Vector3? Position { get; set; }
 }

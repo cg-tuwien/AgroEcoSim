@@ -1,11 +1,13 @@
 import { Component, h } from "preact";
 import appstate, { PlayState } from "../../appstate";
 import { batch } from "@preact/signals-core";
+import { encodeTime } from "../../helpers/TimeUnits";
 //import "wired-elements"
 //import Button from 'preact-material-components/Button';
 //import 'preact-material-components/Button/style.css';
 
 export function Start() {
+    const time = () => appstate.playPointer.value < appstate.history.length ? appstate.history[appstate.playPointer.value].t : 0;
     return <div>
         <span>
             <button title="Simulate" onClick={async () => await appstate.run()}>{appstate.computing.value ? "⏹︎" : "🚀"}</button>&nbsp;
@@ -19,14 +21,14 @@ export function Start() {
         </span>
         &nbsp;
         <span>
-            <input title="Seek a frame" min={0} max={appstate.history.length - 1} type="range" name="frameslider" value={appstate.playPointer} onChange={e => {
+            <input title="Seek a frame" min={0} max={appstate.history.length - 1} type="range" name="frameslider" disabled={appstate.history.length == 0} value={appstate.playPointer} onChange={e => {
                 batch(() => {
                     appstate.playPointer.value = parseInt(e.currentTarget.value);
                     appstate.playRequest.value = true;
                     appstate.playing.value = PlayState.Seek;
                 });
             }}/>
-            <label for="frameslider">{appstate.playPointer.value}</label>
+            <label for="frameslider">{time()} h ({encodeTime(time())})</label>
         </span>
     </div>;
 }

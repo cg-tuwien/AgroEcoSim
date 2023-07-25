@@ -139,9 +139,9 @@ public partial class PlantFormation2 : IPlantFormation
 	/// <summary>
 	/// Species settings
 	/// </summary>
-	public PlantSettings Parameters { get; private set; }
+	public SpeciesSettings Parameters { get; private set; }
 
-	public PlantFormation2(PlantSettings parameters, SoilFormationNew soil, SeedAgent seed, Pcg parentRNG)
+	public PlantFormation2(SpeciesSettings parameters, SoilFormationNew soil, SeedAgent seed, Pcg parentRNG)
 	{
 		Parameters = parameters;
 		Soil = soil;
@@ -161,7 +161,7 @@ public partial class PlantFormation2 : IPlantFormation
 		, i => AG_Godot.RemoveSprite(i), i => AG_Godot.AddSprites(i)
 #endif
 );
-		Parameters = PlantSettings.Avocado;
+		Parameters = SpeciesSettings.Avocado;
 	}
 
 	/// <summary>
