@@ -36,27 +36,43 @@ const hubConnection = new SignalR.HubConnectionBuilder().withUrl(`${BackendURI.s
 hubConnection.on("reject", () => { console.log("You have another simulation already running. Please wait until it is finished."); });
 hubConnection.on("progress", (step: number, length: number) => {
     batch(() => {
-        st.simStep.value = step;
+        st.simStep.value = step + 1;
         st.simLength.value = length;
     });
 });
 
 hubConnection.on("result", (result: ISimResponse) => {
-    st.history.push({ t: result.stepTimes.length - 1, s: result.scene });
-    const binaryScene = base64ToArrayBuffer(result.scene);
-    const reader = new BinaryReader(binaryScene);
-    const scene = reader.readAgroScene();
     if (result.debug?.length > 0)
         console.log(result.debug);
-    console.log(result.stepTimes);
-    batch(() => {
-        st.plants.value = result.plants;
-        st.scene.value = scene;
-        st.computing.value = false;
-        st.renderer.value = result.renderer;
-        st.simLength.value = 0;
-        st.historySize.value += binaryScene.byteLength + 24;
-    });
+
+    const step = result.stepTimes.length - 1;
+    if (st.history.length == 0 || st.history[st.history.length - 1].t < step)
+    {
+        st.history.push({ t: result.stepTimes.length - 1, s: result.scene });
+        const binaryScene = base64ToArrayBuffer(result.scene);
+        const reader = new BinaryReader(binaryScene);
+        const scene = reader.readAgroScene();
+
+        console.log(result.stepTimes);
+        batch(() => {
+            st.plants.value = result.plants;
+            st.scene.value = scene;
+            st.computing.value = false;
+            st.renderer.value = result.renderer;
+            st.simLength.value = 0;
+            st.historySize.value += binaryScene.byteLength + 24;
+        });
+    }
+    else
+    {
+        console.log(result.stepTimes);
+        batch(() => {
+            st.plants.value = result.plants;
+            st.computing.value = false;
+            st.renderer.value = result.renderer;
+            st.simLength.value = 0;
+        });
+    }
 });
 
 hubConnection.on("preview", (result: ISimPreview) => {
