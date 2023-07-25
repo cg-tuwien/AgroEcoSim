@@ -307,8 +307,11 @@ export default function ThreeSceneFn () {
         const d = appstate.fieldSizeD.value;
         const l = appstate.fieldSizeZ.value;
 
-        const box = new THREE.Box3().setFromCenterAndSize(new THREE.Vector3(w * 0.5, -d*0.5, l * 0.5), new THREE.Vector3(w, d, l) );
-        const terrainMesh = new THREE.Box3Helper( box, new THREE.Color("#cc9900") );
+        //const box = new THREE.Box3().setFromCenterAndSize(new THREE.Vector3(w * 0.5, -d*0.5, l * 0.5), new THREE.Vector3(w, d, l) );
+        //const terrainMesh = new THREE.Box3Helper( box, new THREE.Color("#cc9900") );
+        const terrainMesh = new THREE.Mesh(threeBoxPrimitive, new THREE.MeshLambertMaterial({ color: 0x593700 }));
+        terrainMesh.scale.set(w, d, l);
+        terrainMesh.position.set(w * 0.5, -d*1, l * 0.5);
         terrainMesh.userData = { type: "terrain" };
         //terrainMesh.layers.set(TerrainLayer);
         appstate.objTerrain.add(terrainMesh);
