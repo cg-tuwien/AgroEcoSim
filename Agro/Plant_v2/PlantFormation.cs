@@ -143,7 +143,7 @@ public partial class PlantFormation2 : IPlantFormation
 
 	public PlantFormation2(SpeciesSettings parameters, SoilFormationNew soil, SeedAgent seed, Pcg parentRNG)
 	{
-		Parameters = parameters;
+		Parameters = parameters ?? SpeciesSettings.Avocado;
 		Soil = soil;
 		Seed[0] = seed;
 		Position = seed.Center;
@@ -161,7 +161,6 @@ public partial class PlantFormation2 : IPlantFormation
 		, i => AG_Godot.RemoveSprite(i), i => AG_Godot.AddSprites(i)
 #endif
 );
-		Parameters = SpeciesSettings.Avocado;
 	}
 
 	/// <summary>

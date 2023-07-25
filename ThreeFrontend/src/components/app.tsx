@@ -36,7 +36,7 @@ const App = () => {
 				<li role="presentation"><a role="tab" onClick={e => tabs.value = "tab-plants"} aria-selected={tabs.value.endsWith("tab-plants")}>Plants</a></li>
 				<li role="presentation"><a role="tab" onClick={e => tabs.value = "tab-obstacles"} aria-selected={tabs.value.endsWith("tab-obstacles")}>Obstacles</a></li>
 				<li role="presentation"><a role="tab" onClick={e => tabs.value = "tab-analysis"} aria-selected={tabs.value.endsWith("tab-analysis")}>Analysis</a></li>
-				{() => "TODO: make this a separate panel always visible"}
+				{() => "TODO: make analysis a separate panel always visible"}
 			</ul>
 
 			<div role="tabpanel" id="tab-home" aria-selected={tabs.value.endsWith("tab-home")}>

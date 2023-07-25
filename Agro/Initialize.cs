@@ -35,7 +35,8 @@ public static class Initialize
 				var seed = new SeedAgent(pos,
 										 rnd.NextFloat(0.02f),
 										 new Vector2(minVegTemp, minVegTemp + rnd.NextFloat(8f, 14f)));
-				plantsFormation[i] = new PlantFormation2(SpeciesSettings.Avocado, soil, seed, rnd);
+				var species = String.IsNullOrEmpty(settings.Plants[i].SpeciesName) ? null : settings.Species?.FirstOrDefault(x => x.Name == settings.Plants[i].SpeciesName);
+				plantsFormation[i] = new PlantFormation2(species ?? SpeciesSettings.Avocado, soil, seed, rnd);
 			}
 		}
 		else
@@ -50,7 +51,8 @@ public static class Initialize
 														world.FieldSize.Y * rnd.NextFloat()), //Y because Z is depth
 											rnd.NextFloat(0.02f),
 											new Vector2(minVegTemp, minVegTemp + rnd.NextFloat(8f, 14f)));
-				plantsFormation[i] = new PlantFormation2(SpeciesSettings.Avocado, soil, seed, rnd);
+				var species = String.IsNullOrEmpty(settings.Plants[i].SpeciesName) ? null : settings.Species?.FirstOrDefault(x => x.Name == settings.Plants[i].SpeciesName);
+				plantsFormation[i] = new PlantFormation2(species ?? SpeciesSettings.Avocado, soil, seed, rnd);
 			}
 		}
 		world.AddRange(plantsFormation);

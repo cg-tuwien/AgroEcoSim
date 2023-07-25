@@ -748,8 +748,8 @@ public class IrradianceClient
 								if (extended)
 								{
 									writer.Write(GetIrradiance(ag, i));
-									writer.Write(ag.GetDailyLightExposure(i));
-									writer.Write(ag.GetDailyEnergyProduction(i));
+									writer.Write(ag.GetDailyResources(i));
+									writer.Write(ag.GetDailyProduction(i));
 								}
 							}
 							break;

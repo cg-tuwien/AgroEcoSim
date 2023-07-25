@@ -791,11 +791,11 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 
 	public Vector3 GetBaseCenter(int index) => TreeCache.GetBaseCenter(index);
 
-	public float GetDailyEnergyProduction(int index) => ReadTMP
+	public float GetDailyProduction(int index) => ReadTMP
 		? (AgentsTMP.Length > index ? AgentsTMP[index].PreviousDayProduction : 0f)
 		: (Agents.Length > index ? Agents[index].PreviousDayProduction : 0f);
 
-	public float GetDailyLightExposure(int index) => ReadTMP
+	public float GetDailyResources(int index) => ReadTMP
 		? (AgentsTMP.Length > index ? AgentsTMP[index].PreviousDayEnvResources : 0f)
 		: (Agents.Length > index ? Agents[index].PreviousDayEnvResources : 0f);
 

@@ -244,7 +244,7 @@ public partial struct AboveGroundAgent2 : IPlantAgent
 				var photosynthesizedEnergy = Math.Min(possibleAmountByLight * mPhotoEfficiency, Math.Min(possibleAmountByWater, possibleAmountByCO2));
 
 				Water -= photosynthesizedEnergy;
-				//Energy += AgroWorld.W2J(photosynthesizedEnergy, 3600 / AgroWorld.TicksPerHour); //TODO in th efuture convert energy to cal
+				//Energy += AgroWorld.W2J(photosynthesizedEnergy, 3600 / AgroWorld.TicksPerHour); //TODO in the future convert energy to cal
 				Energy += photosynthesizedEnergy;
 				CurrentDayProduction += photosynthesizedEnergy;
 				CurrentDayEnvResources += approxLight;
@@ -256,16 +256,23 @@ public partial struct AboveGroundAgent2 : IPlantAgent
 		{
 			if (Organ != OrganTypes.Bud)
 			{
+				var currentSize = new Vector2(Length, Radius);
 				var isLeafStem = false;
-				Vector2 growth;
+				var growth = Vector2.Zero;
  				var childrenCount = children.Count + 1;
 				switch(Organ)
 				{
 					case OrganTypes.Leaf:
 					{
 						//TDMI take env res efficiency into account
-						//TDMI limit by avg growth
-						growth = new Vector2(2e-4f, 1e-4f) * world.HoursPerTick;
+						var sizeLimit = new Vector2(plant.Parameters.LeafLength, plant.Parameters.LeafRadius);
+						if (currentSize.X < sizeLimit.X && currentSize.Y < sizeLimit.Y)
+						{
+							//formation.GetDailyProduction(formationID) *
+							growth = sizeLimit * world.HoursPerTick / plant.Parameters.LeafGrowthTime;
+							var resultingSize = Vector2.Min(currentSize + growth, new Vector2(plant.Parameters.LeafLength, plant.Parameters.LeafRadius));
+							growth = resultingSize - currentSize;
+						}
 					}
 					break;
 					case OrganTypes.Stem:
@@ -285,7 +292,6 @@ public partial struct AboveGroundAgent2 : IPlantAgent
 						}
 					}
 					break;
-					default: growth = Vector2.Zero; break;
 				};
 
 				Length += growth.X;
