@@ -7,7 +7,11 @@ import { encodeTime } from "../../helpers/TimeUnits";
 //import 'preact-material-components/Button/style.css';
 
 export function Start() {
-    const time = () => appstate.playPointer.value < appstate.history.length ? appstate.history[appstate.playPointer.value].t : 0;
+    const time = () => {
+        let playPointer = Math.max(0, Math.min(appstate.playPointer.value, appstate.history.length - 1));
+        return appstate.history.length > 0 ? appstate.history[playPointer].t : 0;
+    }
+
     return <div>
         <span>
             <button title="Simulate" onClick={async () => await appstate.run()}>{appstate.computing.value ? "⏹︎" : "🚀"}</button>&nbsp;
