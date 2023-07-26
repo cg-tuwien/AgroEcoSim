@@ -102,7 +102,7 @@ public struct SeedAgent : IAgent
 				formation.AG.Birth(new AboveGroundAgent2(-1, OrganTypes.Stem, baseStemOrientation, Water * 0.4f)); //base stem
 				formation.AG.Birth(new AboveGroundAgent2(0, OrganTypes.Bud, baseStemOrientation, Water * 0.4f)); //terminal bud on top of the base stem
 				var leafStemOrientation = initialYaw * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, formation.RNG.NextFloat(0.3f * MathF.PI));
-				formation.AG.Birth(new AboveGroundAgent2(0, OrganTypes.Stem, leafStemOrientation, Water * 0.4f)); //leaf stem
+				formation.AG.Birth(new AboveGroundAgent2(0, OrganTypes.Petiole, leafStemOrientation, Water * 0.4f)); //leaf stem
 				formation.AG.Birth(new AboveGroundAgent2(2, OrganTypes.Leaf, initialYaw * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, -formation.RNG.NextFloat(0.25f) * MathF.PI), Water * 0.2f)); //leaf
 				formation.SeedDeath();
 				Water = 0f;

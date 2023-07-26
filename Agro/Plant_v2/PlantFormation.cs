@@ -415,7 +415,7 @@ public partial class PlantFormation2 : IPlantFormation
 		for(int i = 0; i < AG.Count; ++i)
 			switch (AG.GetOrgan(i))
 			{
-				case OrganTypes.Stem: triangles += 8; break;
+				case OrganTypes.Stem: case OrganTypes.Petiole: triangles += 8; break;
 				case OrganTypes.Bud: triangles += 4; break;
 				case OrganTypes.Leaf: ++sensors; triangles += 2; break;
 			}

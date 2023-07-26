@@ -224,14 +224,14 @@ public partial struct AboveGroundAgent2 : IPlantAgent
 		var enoughEnergyState = EnoughEnergy(lifeSupportPerHour);
 
 		//Photosynthesis
-		if ((Organ == OrganTypes.Stem || Organ == OrganTypes.Leaf) && Water > 0f)
+		if ((Organ == OrganTypes.Stem || Organ == OrganTypes.Leaf || Organ == OrganTypes.Petiole) && Water > 0f)
 		{
 			var approxLight = world.Irradiance.GetIrradiance(formation, formationID); //in Watt per Hour per m²
-			if (approxLight > 0.01f)
+			if (approxLight > 0.01f && mPhotoFactor > 0f)
 			{
 				var airTemp = world.GetTemperature(timestep);
 				var surface = Length * Radius * (Organ == OrganTypes.Leaf ? 2f : TwoPi);
-				var possibleAmountByLight = surface * approxLight * mPhotoFactor * (Organ == OrganTypes.Stem ? 0.1f : 1f);
+				var possibleAmountByLight = surface * approxLight * mPhotoFactor * (Organ != OrganTypes.Leaf ? 0.1f : 1f);
 				var possibleAmountByWater = Water;
 				var possibleAmountByCO2 = airTemp >= plant.VegetativeHighTemperature.Y
 					? 0f
@@ -257,7 +257,6 @@ public partial struct AboveGroundAgent2 : IPlantAgent
 			if (Organ != OrganTypes.Bud)
 			{
 				var currentSize = new Vector2(Length, Radius);
-				var isLeafStem = false;
 				var growth = Vector2.Zero;
  				var childrenCount = children.Count + 1;
 				switch(Organ)
@@ -265,31 +264,36 @@ public partial struct AboveGroundAgent2 : IPlantAgent
 					case OrganTypes.Leaf:
 					{
 						//TDMI take env res efficiency into account
+						//TDMI thickness of the parent and parent-parent decides the max. leaf size,
+						//  also the energy consumption of the siblings beyond the node should have effect
 						var sizeLimit = new Vector2(plant.Parameters.LeafLength, plant.Parameters.LeafRadius);
 						if (currentSize.X < sizeLimit.X && currentSize.Y < sizeLimit.Y)
 						{
 							//formation.GetDailyProduction(formationID) *
 							growth = sizeLimit * world.HoursPerTick / plant.Parameters.LeafGrowthTime;
-							var resultingSize = Vector2.Min(currentSize + growth, new Vector2(plant.Parameters.LeafLength, plant.Parameters.LeafRadius));
+							var resultingSize = Vector2.Min(currentSize + growth, sizeLimit);
+							growth = resultingSize - currentSize;
+						}
+					}
+					break;
+					case OrganTypes.Petiole:
+					{
+						var sizeLimit = new Vector2(plant.Parameters.PetioleLength, plant.Parameters.PetioleRadius);
+						if (currentSize.X < sizeLimit.X && currentSize.Y < sizeLimit.Y)
+						{
+							growth = sizeLimit * world.HoursPerTick / plant.Parameters.LeafGrowthTime;
+							var resultingSize = Vector2.Min(currentSize + growth, sizeLimit);
 							growth = resultingSize - currentSize;
 						}
 					}
 					break;
 					case OrganTypes.Stem:
 					{
-						isLeafStem = childrenCount == 2 && formation.GetOrgan(children[0]) == OrganTypes.Leaf;
-						if (isLeafStem)
-						{
-							growth = new Vector2(1e-4f, 3e-6f) * world.HoursPerTick;
-						}
-						else
-						{
-							//var waterUsage = Math.Clamp(Water / WaterTotalCapacityPerTick, 0f, 1f);
-							var energyUsage = Math.Clamp(Energy / EnergyStorageCapacity(), 0f, 1f);
-							//TDMI take relative inverse depth
-							var absDepth = formation.GetAbsInvDepth(formationID) + 1;
-							growth = new Vector2(5e-3f / (MathF.Pow(absDepth, 1.5f) * childrenCount * mPhotoFactor), 2e-5f) * (energyUsage * world.HoursPerTick);
-						}
+						//var waterUsage = Math.Clamp(Water / WaterTotalCapacityPerTick, 0f, 1f);
+						var energyUsage = Math.Clamp(Energy / EnergyStorageCapacity(), 0f, 1f);
+						//TDMI take relative inverse depth
+						var absDepth = formation.GetAbsInvDepth(formationID) + 1;
+						growth = new Vector2(5e-3f / (MathF.Pow(absDepth, 1.5f) * childrenCount * mPhotoFactor), 2e-5f) * (energyUsage * world.HoursPerTick);
 					}
 					break;
 				};
@@ -308,7 +312,7 @@ public partial struct AboveGroundAgent2 : IPlantAgent
 				}
 
 				//Chaining or branching
-				if (Organ == OrganTypes.Stem && !isLeafStem)
+				if (Organ == OrganTypes.Stem)
 				{
 					var thresholdFactor = (2f - mPhotoFactor) * 0.5f;
 					if (Length > PlantFormation2.RootSegmentLength * thresholdFactor + plant.RNG.NextFloat(PlantFormation2.RootSegmentLength * thresholdFactor))
@@ -352,8 +356,8 @@ public partial struct AboveGroundAgent2 : IPlantAgent
 							if (Water > 30f * water && Energy > 100f * energy)
 							{
 								var stem = formation.Birth(new(formationID, OrganTypes.Stem, orientation, energy) { Water = water } );
-								var leafStem = formation.Birth(new(stem, OrganTypes.Stem, orientation, energy) { Water = water });
-								formation.Birth(new(leafStem, OrganTypes.Leaf, orientation, energy) { Water = water } );
+								var leafPetiole = formation.Birth(new(stem, OrganTypes.Petiole, orientation, energy) { Water = water });
+								formation.Birth(new(leafPetiole, OrganTypes.Leaf, orientation, energy) { Water = water } );
 								Energy -= 100f * energy; //because some energy is needed for the birth itself
 								Water -= 30f * water;
 							}

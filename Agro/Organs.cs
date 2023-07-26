@@ -5,4 +5,4 @@ namespace Agro;
 //TODO Create properties computing the respective storages for water and energy. Just for clarity.
 //[Flags]  //flags are not needed anymore
 
-public enum OrganTypes : byte { Unspecified = 0, Seed = 1, Bud = 2, Root = 4, Stem = 8, Leaf = 16, Fruit = 32 };
+public enum OrganTypes : byte { Unspecified = 0, Seed = 1, Bud = 2, Root = 4, Stem = 8, Leaf = 16, Petiole = 32, Fruit = 64 };
