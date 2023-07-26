@@ -513,8 +513,8 @@ export default function ThreeSceneFn () {
 }
 
 export const threeBoxPrimitive = new THREE.BoxGeometry().translate(0, 0.5, 0); //box
-export const threeSpherePrimitive = new THREE.SphereGeometry(1, 16, 16); //sphere
-export const threeCylinderPrimitive = new THREE.CylinderGeometry(1, 1, 1.0, 16); //cylinder
-export const threePlanePrimitive = new THREE.PlaneGeometry(2, 2); //rect
-export const threeCirclePrimitive = new THREE.CircleGeometry(0.5).rotateX(-Math.PI * 0.5); //disk
+export const threeSpherePrimitive = new THREE.SphereGeometry(1, 8, 8); //sphere (type 4)
+export const threeCylinderPrimitive = new THREE.CylinderGeometry(1, 1, 1.0, 8); //cylinder (type 2)
+export const threePlanePrimitive = new THREE.PlaneGeometry(2, 2); //rect (type 8)
+export const threeCirclePrimitive = new THREE.CircleGeometry(0.5, 12).rotateX(-Math.PI * 0.5); //disk
 
