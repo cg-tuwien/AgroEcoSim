@@ -28,21 +28,18 @@ export function CreateLeafMesh(primitive: Primitive, index: Index) {
 }
 
 export function UpdateLeafMesh(mesh: THREE.Mesh, primitive: Primitive, index: Index) {
-    if (mesh.geometry != threePlanePrimitive) //having a constant color, it usually needs no updates
+    mesh.geometry = threePlanePrimitive;
+    if (mesh.userData.customMaterial)
     {
-        mesh.geometry = threePlanePrimitive;
-        if (mesh.userData.customMaterial)
-        {
-            const material = mesh.material as THREE.MeshStandardMaterial;
-            const c = LeafColor(primitive);
-            material.color = c.color;
-            material.emissive = c.emissive;
-            material.side = THREE.DoubleSide;
-            material.needsUpdate = true;
-        }
-        else
-            mesh.material = new THREE.MeshStandardMaterial({ ...LeafColor(primitive), side: THREE.DoubleSide });
+        const material = mesh.material as THREE.MeshStandardMaterial;
+        const c = LeafColor(primitive);
+        material.color = c.color;
+        material.emissive = c.emissive;
+        material.side = THREE.DoubleSide;
+        material.needsUpdate = true;
     }
+    else
+        mesh.material = new THREE.MeshStandardMaterial({ ...LeafColor(primitive), side: THREE.DoubleSide });
 
     return SetupMesh(primitive, index, mesh);
 }
