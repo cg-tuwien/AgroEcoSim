@@ -237,7 +237,7 @@ public class IrradianceClient
 							length = responseStream.Length / sizeof(float);
 
 						for (var i = 0; i < length; ++i)
-							Irradiances.Add(reader.ReadSingle() * 1e3f * world.HoursPerTick);
+							Irradiances.Add(reader.ReadSingle() * 1e6f * world.HoursPerTick);
 					}
 					catch (Exception)
                     {
@@ -334,7 +334,7 @@ public class IrradianceClient
 								obji.AppendLine(OF(p, p+2, p+3));
 							}
 							break;
-						case OrganTypes.Stem: case OrganTypes.Petiole:
+						case OrganTypes.Stem: case OrganTypes.Petiole: case OrganTypes.Meristem:
 							{
 								var halfRadiusY = new Vector3(0f, scale.Y * 0.5f, 0f);
 								var p = points.Count;
@@ -446,7 +446,7 @@ public class IrradianceClient
 								writer.WriteU32(p + 3);
 							}
 							break;
-						case OrganTypes.Stem: case OrganTypes.Petiole:
+						case OrganTypes.Stem: case OrganTypes.Petiole: case OrganTypes.Meristem:
 							{
 								var halfRadiusY = new Vector3(0f, scale.Y * 0.5f, 0f);
 								writer.WriteU8(8); //WRITE NUMBER OF TRIANGLES in this surface
@@ -579,7 +579,7 @@ public class IrradianceClient
 								writer.WriteM32(ax, ay, az, c);
 							}
 							break;
-						case OrganTypes.Stem: case OrganTypes.Petiole:
+						case OrganTypes.Stem: case OrganTypes.Petiole: case OrganTypes.Meristem:
 							{
 								writer.WriteU8(2); //PRIMITIVE TYPE 1 disk, 2 >CYLINDER<, 4 sphere, 8 rectangle
 								writer.Write(scale.X); //length
@@ -662,7 +662,7 @@ public class IrradianceClient
 								writer.Write(true);
 							}
 							break;
-						case OrganTypes.Stem: case OrganTypes.Petiole:
+						case OrganTypes.Stem: case OrganTypes.Petiole: case OrganTypes.Meristem:
 							{
 								writer.WriteU8(2); //PRIMITIVE TYPE 1 disk, 2 >CYLINDER<, 4 sphere, 8 rectangle
 								writer.Write(scale.X); //length
@@ -753,7 +753,7 @@ public class IrradianceClient
 								}
 							}
 							break;
-						case OrganTypes.Stem: case OrganTypes.Petiole:
+						case OrganTypes.Stem: case OrganTypes.Petiole: case OrganTypes.Meristem:
 							{
 								writer.WriteU8(2); //ORGAN 2 stem
 								writer.Write(scale.X); //length

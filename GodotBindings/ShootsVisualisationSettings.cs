@@ -6,7 +6,7 @@ public class ShootsVisualisationSettings
     public bool Visualise = true; //This can turn on/off the entire visualisation
 
     public Visibility StemsVisibility = Visibility.MakeVisible;
-    public Visibility LeafsVisibility = Visibility.MakeVisible;
+    public Visibility LeavesVisibility = Visibility.MakeVisible;
     public Visibility BudsVisibility = Visibility.MakeInvisible;
 
     public StandardMaterial3D Material = new() { AlbedoColor = new(0.5f, 0.5f, 0.5f) };

@@ -266,7 +266,7 @@ export default function ThreeSceneFn () {
                         .setPosition(new THREE.Vector3(primitive.affineTransform[3] + mesh.matrix.elements[4] * 0.5, primitive.affineTransform[7] + mesh.matrix.elements[5] * 0.5, primitive.affineTransform[11] + mesh.matrix.elements[6] * 0.5));
                     break; //cylinder / stem
             case 4: mesh = UpdateBudMesh(mesh, primitive, index); break; //sphere / bud
-            case 8: mesh = UpdateLeafMesh(mesh, primitive, index); break; //plane / leafs
+            case 8: mesh = UpdateLeafMesh(mesh, primitive, index); break; //plane / leaves
         }
     }
 
@@ -288,7 +288,7 @@ export default function ThreeSceneFn () {
                         .setPosition(new THREE.Vector3(primitive.affineTransform[3] + matrix.elements[4] * 0.5, primitive.affineTransform[7] + matrix.elements[5] * 0.5, primitive.affineTransform[11] + matrix.elements[6] * 0.5));
                     break; //cylinder / stem
             case 4: mesh = CreateBudMesh(primitive, index); break; //sphere / bud
-            case 8: mesh = CreateLeafMesh(primitive, index); break; //plane / leafs
+            case 8: mesh = CreateLeafMesh(primitive, index); break; //plane / leaves
         }
 
         mesh.applyMatrix4(matrix);

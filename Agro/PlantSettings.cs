@@ -20,6 +20,31 @@ public class SpeciesSettings
     public string Name { get; init; }
 
     ///<summary>
+    /// Standard height of the plant (in meters)
+    ///</summary>
+    [JsonPropertyName("H")]
+    public float Height { get; init; }
+
+
+    ///<summary>
+    /// For monopodial branching select 1, for dichotomous select 0 and for anisotomous select sth. between
+    ///</summary>
+    [JsonPropertyName("BMF")]
+    public float MonopodialFactor { get; init; }
+
+    ///<summary>
+    /// Number of lateral branches emerging from a node
+    ///</summary>
+    [JsonPropertyName("BLN")]
+    public int LateralsPerNode { get; init; }
+
+    ///<summary>
+    /// Angular offset (along growth axis) to the previous node, in radians
+    ///</summary>
+    [JsonPropertyName("BLA")]
+    public float LateralAngle { get; init; }
+
+    ///<summary>
     /// Standard leaf length along its main axis (in meters)
     ///</summary>
     [JsonPropertyName("LL")]
@@ -50,13 +75,6 @@ public class SpeciesSettings
     public float PetioleRadius { get; init; }
     // public float RootRadiusGrowthPerH { get; init; }
     // public float RootLengthGrowthPerH { get; init; }
-
-
-    ///<summary>
-    /// Standard height of the plant (in meters)
-    ///</summary>
-    [JsonPropertyName("H")]
-    public float Height { get; init; }
 
     //public int FirstFruitHour { get; init; }
 

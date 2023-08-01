@@ -142,7 +142,7 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 
     [StructLayout(LayoutKind.Auto)]
     [Message]
-    public readonly struct Energy_PullFrom_AG: IMessage<AboveGroundAgent2>
+    public readonly struct Energy_PullFrom_AG: IMessage<AboveGroundAgent3>
     {
         #if HISTORY_LOG || TICK_LOG
 		public readonly static List<PullMsgLog> MessagesHistory = new();
@@ -162,7 +162,7 @@ public partial struct UnderGroundAgent2 : IPlantAgent
         public bool Valid => Amount > 0f && DstFormation.CheckIndex(DstIndex);
         public Transaction Type => Transaction.Decrease;
 
-        public void Receive(ref AboveGroundAgent2 srcAgent, uint timestep, byte stage)
+        public void Receive(ref AboveGroundAgent3 srcAgent, uint timestep, byte stage)
         {
             var freeCapacity = Math.Max(0f, DstFormation.GetEnergyCapacity(DstIndex) - DstFormation.GetEnergy(DstIndex));
             var energy = srcAgent.TryDecEnergy(Math.Min(Amount, freeCapacity));
@@ -226,9 +226,9 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 		#endif
 
         public readonly float Amount;
-        public readonly PlantSubFormation2<AboveGroundAgent2> DstFormation;
+        public readonly PlantSubFormation2<AboveGroundAgent3> DstFormation;
         public readonly int DstIndex;
-        public Water_AG_PullFrom_UG(PlantSubFormation2<AboveGroundAgent2> dstFormation, float amount, int dstIndex)
+        public Water_AG_PullFrom_UG(PlantSubFormation2<AboveGroundAgent3> dstFormation, float amount, int dstIndex)
         {
             Amount = amount;
             DstFormation = dstFormation;
@@ -244,7 +244,7 @@ public partial struct UnderGroundAgent2 : IPlantAgent
             var water = srcAgent.TryDecWater(Amount);
             if (water > 0f)
             {
-                DstFormation.SendProtected(DstIndex, new AboveGroundAgent2.WaterInc(water));
+                DstFormation.SendProtected(DstIndex, new AboveGroundAgent3.WaterInc(water));
 			    #if HISTORY_LOG || TICK_LOG
 			    lock(MessagesHistory) MessagesHistory.Add(new(timestep, stage, ID, srcAgent.ID, DstFormation.GetID(DstIndex), water));
                 #endif

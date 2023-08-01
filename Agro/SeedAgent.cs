@@ -83,33 +83,46 @@ public struct SeedAgent : IAgent
 	public void Tick(SimulationWorld _world, IFormation _formation, int formationID, uint timestep, byte stage)
 	{
 		var world = _world as AgroWorld;
-		var formation = (PlantFormation2)_formation;
+		var plant = (PlantFormation2)_formation;
 		Water -= Radius * Radius * Radius * world.HoursPerTick; //life support
 		if (Water <= 0) //energy depleted
 		{
 			Water = 0f;
-			formation.SeedDeath();
+			plant.SeedDeath();
 		}
 		else
 		{
 			if (Water >= GerminationThreshold) //GERMINATION
 			{
 				Debug.WriteLine($"GERMINATION at {timestep}");
-				var initialYaw = Quaternion.CreateFromAxisAngle(Vector3.UnitY, formation.RNG.NextFloat(-MathF.PI, MathF.PI));
-				formation.UG.Birth(new UnderGroundAgent2(-1, initialYaw * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, -0.5f * MathF.PI), Water * 0.4f));
+				var initialYawAngle = plant.RNG.NextFloat(-MathF.PI, MathF.PI);
+				var initialYaw = Quaternion.CreateFromAxisAngle(Vector3.UnitY, initialYawAngle);
+				plant.UG.Birth(new UnderGroundAgent2(-1, initialYaw * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, -0.5f * MathF.PI), Water * 0.4f));
 
 				var baseStemOrientation = initialYaw * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, 0.5f * MathF.PI);
-				formation.AG.Birth(new AboveGroundAgent2(-1, OrganTypes.Stem, baseStemOrientation, Water * 0.4f)); //base stem
-				formation.AG.Birth(new AboveGroundAgent2(0, OrganTypes.Bud, baseStemOrientation, Water * 0.4f)); //terminal bud on top of the base stem
-				var leafStemOrientation = initialYaw * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, formation.RNG.NextFloat(0.3f * MathF.PI));
-				formation.AG.Birth(new AboveGroundAgent2(0, OrganTypes.Petiole, leafStemOrientation, Water * 0.4f)); //leaf stem
-				formation.AG.Birth(new AboveGroundAgent2(2, OrganTypes.Leaf, initialYaw * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, -formation.RNG.NextFloat(0.25f) * MathF.PI), Water * 0.2f)); //leaf
-				formation.SeedDeath();
+				plant.AG.Birth(new AboveGroundAgent3(-1, OrganTypes.Meristem, baseStemOrientation, Water * 0.4f)); //base stem
+
+				if (plant.Parameters.LateralsPerNode > 0)
+				{
+					var angleStep = 2f * MathF.PI / plant.Parameters.LateralsPerNode;
+					for(int l = 0; l < plant.Parameters.LateralsPerNode; ++l)
+					{
+						var oriantation = Quaternion.CreateFromAxisAngle(Vector3.UnitY, l * angleStep + initialYawAngle) * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, 0.25f * MathF.PI);
+						plant.AG.Birth(new AboveGroundAgent3(0, OrganTypes.Petiole, oriantation, Water * 0.4f)); //leaf stem
+						plant.AG.Birth(new AboveGroundAgent3(2*l + 1, OrganTypes.Leaf, oriantation * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, -plant.RNG.NextFloat(0.2f) * MathF.PI), Water * 0.2f)); //leaf
+					}
+				}
+
+				//formation.AG.Birth(new AboveGroundAgent3(0, OrganTypes.Bud, baseStemOrientation, Water * 0.4f)); //terminal bud on top of the base stem
+				// var leafStemOrientation = initialYaw * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, plant.RNG.NextFloat(0.3f * MathF.PI));
+				// plant.AG.Birth(new AboveGroundAgent3(0, OrganTypes.Petiole, leafStemOrientation, Water * 0.4f)); //leaf stem
+				// plant.AG.Birth(new AboveGroundAgent3(2, OrganTypes.Leaf, initialYaw * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, -plant.RNG.NextFloat(0.25f) * MathF.PI), Water * 0.2f)); //leaf
+				plant.SeedDeath();
 				Water = 0f;
 			}
 			else
 			{
-				var soil = formation.Soil;
+				var soil = plant.Soil;
 				//find all soild cells that the shpere intersects
 				var sources = soil.IntersectPoint(Center);
 				if (sources.Count > 0) //TODO this is a rough approximation taking only the first intersected soil cell

@@ -46,6 +46,20 @@ export function SpeciesItem(props: {species: Species, index: number})
             <input min={0.001} step={0.1} type="number" name={`height-${props.index}`} value={+props.species.height.value.toFixed(4)} onChange={e => props.species.height.value = parseFloat(e.currentTarget.value)}  />
             <label for={`trunkToWood-${props.index}`}>Plant height</label>
         </div>
+        <hr/>
+        <div>
+            <input min={0} max={1} step={0.1} type="number" name={`monopodialFactor-${props.index}`} value={+props.species.monopodialFactor.value.toFixed(4)} onChange={e => props.species.monopodialFactor.value = parseFloat(e.currentTarget.value)}  />
+            <label for={`monopodialFactor-${props.index}`}>Monopodial factor</label>
+        </div>
+        <div>
+            <input min={1} step={1} type="number" name={`lateralsPerNode-${props.index}`} value={+props.species.lateralsPerNode.value} onChange={e => props.species.lateralsPerNode.value = parseInt(e.currentTarget.value)}  />
+            <label for={`lateralsPerNode-${props.index}`}>Laterals per node</label>
+        </div>
+        <div>
+            <input min={0} max={360} step={0.1} type="number" name={`lateralAngle-${props.index}`} value={+props.species.lateralAngleDeg.value.toFixed(4)} onChange={e => props.species.lateralAngleDeg.value = parseFloat(e.currentTarget.value)}  />
+            <label for={`lateralAngle-${props.index}`}>Lateral angle (deg) increment per node</label>
+        </div>
+        <hr/>
         <div>
             <input min={0.001} step={0.01} type="number" name={`leafLength-${props.index}`} value={+props.species.leafLength.value.toFixed(4)} onChange={e => props.species.leafLength.value = parseFloat(e.currentTarget.value)}  />
             <label for={`leafLength-${props.index}`}>Leaf length</label>

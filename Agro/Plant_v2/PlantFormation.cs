@@ -26,7 +26,7 @@ public partial class PlantFormation2 : IPlantFormation
 	bool DeathSeed = false;
 
 	public readonly PlantSubFormation2<UnderGroundAgent2> UG;
-	public readonly PlantSubFormation2<AboveGroundAgent2> AG;
+	public readonly PlantSubFormation2<AboveGroundAgent3> AG;
 
 
 	internal const float RootSegmentLength = 0.1f;
@@ -59,7 +59,7 @@ public partial class PlantFormation2 : IPlantFormation
 #endif
 		);
 
-		AG = new(this, AboveGroundAgent2.Reindex
+		AG = new(this, AboveGroundAgent3.Reindex
 #if GODOT
 		, i => AG_Godot.RemoveSprite(i), i => AG_Godot.AddSprites(i)
 #endif
@@ -94,8 +94,7 @@ public partial class PlantFormation2 : IPlantFormation
 	}
 
 	public bool Send(int recipient, IMessage<UnderGroundAgent2> msg) => UG.SendProtected(recipient, msg);
-
-	public bool Send(int recipient, IMessage<AboveGroundAgent2> msg) => AG.SendProtected(recipient, msg);
+	public bool Send(int recipient, IMessage<AboveGroundAgent3> msg) => AG.SendProtected(recipient, msg);
 
 	public bool TransactionAG(int srcIndex, int dstIndex, PlantSubstances substance, float amount) => AG.SendProtected(srcIndex, dstIndex, substance, amount);
 	public bool TransactionUG(int srcIndex, int dstIndex, PlantSubstances substance, float amount) => UG.SendProtected(srcIndex, dstIndex, substance, amount);
@@ -318,7 +317,7 @@ public partial class PlantFormation2 : IPlantFormation
 		for(int i = 0; i < AG.Count; ++i)
 			switch (AG.GetOrgan(i))
 			{
-				case OrganTypes.Stem: case OrganTypes.Petiole: triangles += 8; break;
+				case OrganTypes.Stem: case OrganTypes.Petiole: case OrganTypes.Meristem: triangles += 8; break;
 				case OrganTypes.Bud: triangles += 4; break;
 				case OrganTypes.Leaf: ++sensors; triangles += 2; break;
 			}
@@ -349,4 +348,7 @@ public partial class PlantFormation2 : IPlantFormation
 	///////////////////////////
 	public List<Node> ExportToGLTF() => AG.ExportToGLTF();
 	#endregion
+
+	public static float TimeAccumulatedProbability(float hourlyProbability, int hours) => 1f - MathF.Pow(hourlyProbability, hours);
+	public static uint TimeAccumulatedProbabilityUInt(float hourlyProbability, int hours) => (uint)((1f - MathF.Pow(1f - hourlyProbability, hours)) * uint.MaxValue);
 }

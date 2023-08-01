@@ -430,7 +430,7 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 
 		if (dailyEnergyMax > 0f)
 		{
-			//assuming only leafs photosynthesize, efficiency of the parent will be th emax of its children
+			//assuming only leaves photosynthesize, efficiency of the parent will be th emax of its children
 			var nodesToSolve = new byte[dst.Length];
 			// var sumToSolve = 0;
 			// for(int i = 0; i < dst.Length; ++i)
@@ -725,7 +725,7 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 	///////////////////////////
 	#if HISTORY_LOG || TICK_LOG
 	readonly List<T[]> StatesHistory = new();
-	public string HistoryToJSON(int timestep = -1, byte stage = 0) => timestep >= 0 ? Export.Json(StatesHistory[timestep]) : Export.Json(StatesHistory);
+	public string HistoryToJSON(int timestep = -1, byte stage = 0) => timestep >= 0 ? Utils.Export.Json(StatesHistory[timestep]) : Utils.Export.Json(StatesHistory);
 
 	public ulong GetID(int index) => ReadTMP
 		? (AgentsTMP.Length > index ? AgentsTMP[index].ID : ulong.MaxValue)

@@ -28,7 +28,7 @@ public partial class Shoots : CanvasLayer
 		foreach(var item in TransferOptions)
 			rootsTransferNode.AddItem(item.ToString());
 		GetNode<CheckButton>("Visibility/StemsCheckButton").ButtonPressed = IsVisible(parameters.StemsVisibility);
-		GetNode<CheckButton>("Visibility/LeafsCheckButton").ButtonPressed = IsVisible(parameters.LeafsVisibility);
+		GetNode<CheckButton>("Visibility/LeavesCheckButton").ButtonPressed = IsVisible(parameters.LeavesVisibility);
 		GetNode<CheckButton>("Visibility/BudsCheckButton").ButtonPressed = IsVisible(parameters.BudsVisibility);
 		rootsTransferNode.Select(Array.IndexOf(TransferOptions, parameters.TransferFunc));
 		GetNode<CheckButton>("Color/UnshadedButton").ButtonPressed = parameters.IsUnshaded;
@@ -45,9 +45,9 @@ public partial class Shoots : CanvasLayer
 		UpdateRequest = true;
 	}
 
-	public void LeafsVisibility(bool flag)
+	public void LeavesVisibility(bool flag)
 	{
-		Parameters.LeafsVisibility = Vis(flag);
+		Parameters.LeavesVisibility = Vis(flag);
 		UpdateRequest = true;
 	}
 

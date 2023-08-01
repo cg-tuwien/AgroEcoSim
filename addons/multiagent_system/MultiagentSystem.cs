@@ -241,11 +241,11 @@ public partial class MultiagentSystem : Node3D
 		if (AgroWorldGodot.ShootsVisualization.StemsVisibility == Visibility.MakeInvisible)
 			AgroWorldGodot.ShootsVisualization.StemsVisibility = Visibility.Invisible;
 
-		if (AgroWorldGodot.ShootsVisualization.LeafsVisibility == Visibility.MakeVisible)
-			AgroWorldGodot.ShootsVisualization.LeafsVisibility = Visibility.Visible;
+		if (AgroWorldGodot.ShootsVisualization.LeavesVisibility == Visibility.MakeVisible)
+			AgroWorldGodot.ShootsVisualization.LeavesVisibility = Visibility.Visible;
 
-		if (AgroWorldGodot.ShootsVisualization.LeafsVisibility == Visibility.MakeInvisible)
-			AgroWorldGodot.ShootsVisualization.LeafsVisibility = Visibility.Invisible;
+		if (AgroWorldGodot.ShootsVisualization.LeavesVisibility == Visibility.MakeInvisible)
+			AgroWorldGodot.ShootsVisualization.LeavesVisibility = Visibility.Invisible;
 
 		if (AgroWorldGodot.ShootsVisualization.BudsVisibility == Visibility.MakeVisible)
 			AgroWorldGodot.ShootsVisualization.BudsVisibility = Visibility.Visible;

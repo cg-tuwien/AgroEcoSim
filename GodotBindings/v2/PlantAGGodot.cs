@@ -55,13 +55,13 @@ public partial class Plant_AG_Godot2 : PlantAbstractGodot2<AboveGroundAgent2>
 					GodotSprites[i].Hide();
 		}
 
-		if (AgroWorldGodot.ShootsVisualization.LeafsVisibility == Visibility.MakeVisible)
+		if (AgroWorldGodot.ShootsVisualization.LeavesVisibility == Visibility.MakeVisible)
 		{
 			for(int i = 0; i < GodotSprites.Count; ++i)
 				if (Formation.GetOrgan(i) == OrganTypes.Leaf)
 					GodotSprites[i].Show();
 		}
-		else if (AgroWorldGodot.ShootsVisualization.LeafsVisibility == Visibility.MakeInvisible)
+		else if (AgroWorldGodot.ShootsVisualization.LeavesVisibility == Visibility.MakeInvisible)
 		{
 			for(int i = 0; i < GodotSprites.Count; ++i)
 				if (Formation.GetOrgan(i) == OrganTypes.Leaf)

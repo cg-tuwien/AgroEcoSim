@@ -122,7 +122,7 @@ The body of the `POST` request contains the scene in a binary format as describe
 The renderer will receive the scene data in binary form as a set of triangle meshes. There are two variants a triangle-based and a primitive-based.
 Both contain a section with sensors that measure irradiance and a section with obstacles that only block and reflect light, but do not measure it.
 
-Plants correspond to entities. Their surfaces are typically light-sensitive plant organs like leafs. Each sensor surface must be associated with a sensor that measures the irradiance exposure (summed all over the surface) in W/m².
+Plants correspond to entities. Their surfaces are typically light-sensitive plant organs like leaves. Each sensor surface must be associated with a sensor that measures the irradiance exposure (summed all over the surface) in W/m².
 
 * The coordinate system is right-handed with `x: right`, `y: up`, `z: front`
 * For introducing the sun movement, north is oriented back `N = [0, 0, -1]` and east is right `E = [1, 0, 0]`

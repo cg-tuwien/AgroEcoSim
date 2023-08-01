@@ -80,7 +80,7 @@ offset_bottom = 31.0
 text = "Stems"
 metadata/_edit_use_anchors_ = true
 
-[node name="LeafsLabel" type="Label" parent="Visibility"]
+[node name="LeavesLabel" type="Label" parent="Visibility"]
 layout_mode = 1
 anchors_preset = -1
 anchor_left = 0.216814
@@ -89,7 +89,7 @@ offset_left = 118.0
 offset_top = 5.0
 offset_right = 220.0
 offset_bottom = 31.0
-text = "Leafs"
+text = "Leaves"
 metadata/_edit_use_anchors_ = true
 
 [node name="BudsLabel" type="Label" parent="Visibility"]
@@ -116,7 +116,7 @@ offset_top = 41.0
 offset_right = 44.0
 offset_bottom = 65.0
 
-[node name="LeafsCheckButton" type="CheckButton" parent="Visibility"]
+[node name="LeavesCheckButton" type="CheckButton" parent="Visibility"]
 layout_mode = 0
 offset_left = 120.0
 offset_top = 6.0
@@ -170,7 +170,7 @@ horizontal_alignment = 2
 metadata/_edit_use_anchors_ = true
 
 [connection signal="toggled" from="Visibility/StemsCheckButton" to="." method="StemsVisibility"]
-[connection signal="toggled" from="Visibility/LeafsCheckButton" to="." method="LeafsVisibility"]
+[connection signal="toggled" from="Visibility/LeavesCheckButton" to="." method="LeavesVisibility"]
 [connection signal="toggled" from="Color/UnshadedButton" to="." method="Unshaded"]
 [connection signal="item_selected" from="Color/OptionButton" to="." method="ShootsTransferFunction"]
 [connection signal="drag_ended" from="LightCutOff/HSlider" to="." method="MenuLeft"]

@@ -118,7 +118,7 @@ function LeafColor(primitive: Primitive) : { color: THREE.Color, emissive: THREE
         case VisualMappingOptions.Natural: return { color: greenColor, emissive: black } ;
         case VisualMappingOptions.Water: return { emissive: HeatColor(primitive.stats[0]), color: black };
         case VisualMappingOptions.Energy: return { emissive: HeatColor(primitive.stats[1]), color: black };
-        case VisualMappingOptions.Irradiance: return { emissive: HeatColor(primitive.stats[2]), color: black };
+        case VisualMappingOptions.Irradiance: return { emissive: HeatColor(primitive.stats[2] * 1e-3), color: black };
         case VisualMappingOptions.Resource: return { emissive: HeatColor(primitive.stats[3]), color: black };
         case VisualMappingOptions.Production: return { emissive: HeatColor(primitive.stats[4]), color: black };
         default: return { color: neutral, emissive: black };
