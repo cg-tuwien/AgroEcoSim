@@ -51,4 +51,9 @@ public class SimulationRequest
     ///If true, the global illumination is switched off, usually for debugging purposes (default: false)
     ///</summary>
     public bool? ConstantLights { get; init; }
+
+    ///<summary>
+    ///If true, the the backend will send a preview after each simulation step. Otherwise the previews are sent layzily. (default: false)
+    ///</summary>
+    public bool? ExactPreview { get; init; }
 }

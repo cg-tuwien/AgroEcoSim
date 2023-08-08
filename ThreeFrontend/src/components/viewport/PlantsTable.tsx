@@ -19,7 +19,7 @@ export function PlantsTable()
     {
         const index = DecodePlantName(pickName);
         const primitive = appstate.scene.value[index.entity][index.primitive];
-        return <>
+        return primitive ? (<>
             <p>Plant part: {appstate.plantPick.value}</p>
             <ul style={{listStyleType: "none"}}>
                 <li>Water ratio: {primitive.stats[0]}</li>
@@ -29,6 +29,6 @@ export function PlantsTable()
                 {primitive.type == 8 ? <li>Resources availability: {primitive.stats[3]}</li>: <></>}
                 {primitive.type == 8 ? <li>Production efficiency: {primitive.stats[4]}</li> : <></>}
             </ul>
-        </>;
+        </>) : (<></>);
     }
 }

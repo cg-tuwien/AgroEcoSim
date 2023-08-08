@@ -76,6 +76,7 @@ public class SimulationHub : Hub<IEditorHub>
             else
                 ClientSimulations.Add(me, requests);
         }
+        var lazyPreviews = !(request.ExactPreview ?? false);
 
         var world = Initialize.World(request);
         await Task.Run(() => {
@@ -83,20 +84,25 @@ public class SimulationHub : Hub<IEditorHub>
             var start = DateTime.UtcNow.Ticks;
             var simulationLength = (uint)world.TimestepsTotal();
             long prevTime;
-            for(uint i = 0; i < simulationLength && !requests.Abort; ++i)
-            {
-                prevTime = DateTime.UtcNow.Ticks;
-                world.Run(1U);
-                var now = DateTime.UtcNow.Ticks;
-                requests.StepTimes.Add((uint)(now - prevTime));
-                _ = Clients.Caller.Progress(i, simulationLength);
-
-                if (requests.Preview)
+            for(uint i = 0; i < simulationLength && !requests.Abort; )
+                if (lazyPreviews || requests.Preview)
                 {
-                    requests.Preview = false;
-                    _ = Clients.Caller.Preview(new(){ Step = i, Renderer = world.RendererName, Scene = world.ExportToStream(5) });
+                    prevTime = DateTime.UtcNow.Ticks;
+                    world.Run(1U);
+                    var now = DateTime.UtcNow.Ticks;
+                    requests.StepTimes.Add((uint)(now - prevTime));
+                    _ = Clients.Caller.Progress(i, simulationLength);
+
+                    if (requests.Preview)
+                    {
+                        requests.Preview = false;
+                        _ = Clients.Caller.Preview(new(){ Step = i, Renderer = world.RendererName, Scene = world.ExportToStream(5) });
+                    }
+
+                    ++i;
                 }
-            }
+                else
+                    Thread.Sleep(10);
             var stop = DateTime.UtcNow.Ticks;
             Debug.WriteLine($"Simulation time: {(stop - start) / TimeSpan.TicksPerMillisecond} ms");
         });

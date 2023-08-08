@@ -316,6 +316,7 @@ export default function ThreeSceneFn () {
 
     const buildPlants = () => {
         const sceneData = appstate.scene.value;
+        const debugBoxes = appstate.debugBoxes.value;
         let counter = 0;
         const plants = appstate.objPlants.children;
         const entities = plants.length;

@@ -62,6 +62,13 @@ public class SpeciesSettings
     [JsonPropertyName("LGT")]
     public float LeafGrowthTime { get; init; }
 
+
+    ///<summary>
+    /// Standard leaf pitch angle wrt. to its petiole (in radians)
+    ///</summary>
+    [JsonPropertyName("LP")]
+    public float LeafPitch { get; init; }
+
     ///<summary>
     /// Standard petiole length (in meters)
     ///</summary>
@@ -77,6 +84,8 @@ public class SpeciesSettings
     // public float RootLengthGrowthPerH { get; init; }
 
     //public int FirstFruitHour { get; init; }
+
+    public float[] DominanceFactors = new[] {1, 0.7f, MathF.Pow(0.7f, 2), MathF.Pow(0.7f, 3), MathF.Pow(0.7f, 4), MathF.Pow(0.7f, 5), MathF.Pow(0.7f, 6), MathF.Pow(0.7f, 7), MathF.Pow(0.7f, 8), MathF.Pow(0.7f, 9), MathF.Pow(0.7f, 10), MathF.Pow(0.7f, 11), MathF.Pow(0.7f, 12)};
 
     public static SpeciesSettings Avocado;
 

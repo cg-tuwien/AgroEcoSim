@@ -17,6 +17,7 @@ export class Species {
     leafLength = signal(0.2);
     leafRadius = signal(0.04);
     leafGrowthTime = signal(720);
+    leafPitch = signal(20);
 
     petioleLength = signal(0.05);
     petioleRadius = signal(0.007);
@@ -43,6 +44,7 @@ export class Species {
             leafLength: this.leafLength.peek(),
             leafRadius: this.leafRadius.peek(),
             leafGrowthTime: this.leafGrowthTime.peek(),
+            leafPitch: this.leafPitch.peek(),
 
             petioleLength: this.petioleLength.peek(),
             petioleRadius: this.petioleRadius.peek(),
@@ -61,6 +63,7 @@ export class Species {
         this.leafLength.value = s.leafLength;
         this.leafRadius.value = s.leafRadius;
         this.leafGrowthTime.value = s.leafGrowthTime;
+        this.leafPitch.value = s.leafPitch;
 
         this.petioleLength.value = s.petioleLength;
         this.petioleRadius.value = s.petioleRadius;
@@ -82,6 +85,7 @@ export class Species {
             LL: this.leafLength.peek(),
             LR: this.leafRadius.peek(),
             LGT: this.leafGrowthTime.peek(),
+            LP: this.leafPitch.peek() * Math.PI / 180.0,
 
             PL: this.petioleLength.peek(),
             PR: this.petioleRadius.peek(),

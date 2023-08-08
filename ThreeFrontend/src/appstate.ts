@@ -169,6 +169,7 @@ class State {
     initNumber = signal(42);
     randomize = signal(false);
     constantLight = signal(false);
+    exactPreview = signal(false);
 
     //SPECIES
     species = signal<Species[]>([Species.Default()]);
@@ -185,11 +186,13 @@ class State {
     objTerrain = new THREE.Object3D();
     objObstacles = new THREE.Object3D();
     objPlants = new THREE.Object3D();
+
     needsRender = signal(false);
     visualMapping = signal(VisualMappingOptions.Natural);
     plantPick = signal("");
 
     transformControls: TransformControls | undefined;
+    debugBoxes = signal(false);
 
     grabbed = computed(() => this.seeds.value.filter((x: Seed) => x.state.value == "grab"));
 
@@ -207,6 +210,7 @@ class State {
     plants = signal<IPlantResponse[]>([]);
     scene = signal<Scene>([]);
     renderer = signal("");
+    simHoursPerTick = 1;
 
     history : {t: number, s: Uint8Array}[] = [];
     historySize = signal(0);
@@ -224,7 +228,8 @@ class State {
         Plants: this.seeds.peek().map((p: Seed) => ({ S: p.species.peek(), P: { X: p.px.peek(), Y: p.py.peek(), Z: p.pz.peek() } })),
         Obstacles: this.obstacles.peek().map((o: Obstacle) => exportObstacle(o)),
         RequestGeometry: true,
-        ConstantLights: this.constantLight.value
+        ConstantLights: this.constantLight.value,
+        ExactPreview: this.exactPreview.value
     }};
 
     run = async() => {
@@ -232,7 +237,8 @@ class State {
             hubConnection.invoke("abort");
         else
         {
-            console.log(this.scene);
+            this.simHoursPerTick = this.hoursPerTick.peek();
+            //console.log(this.scene);
             batch(() => {
                 this.computing.value = true;
                 this.playing.value = PlayState.ForwardWaiting;
@@ -358,7 +364,9 @@ class State {
             initNumber: this.initNumber.peek(),
             randomize: this.randomize.peek(),
             constantLight: this.constantLight.peek(),
+            exactPreview: this.exactPreview.peek(),
             visualMapping: this.visualMapping.peek(),
+            debugDisplayOrientations: this.debugBoxes.peek(),
             seeds: this.seeds.value.map(s => s.save()),
             obstacles: this.obstacles.value.map(o => o.save()),
             species: this.species.value.map(s => s.save()),
@@ -366,6 +374,7 @@ class State {
             plants: this.plants,
             history: this.history,
             historySize: this.historySize.peek(),
+            simHoursPerTick: this.simHoursPerTick,
         };
 
         this.saveTextFile(JSON.stringify(data), 'json');
@@ -393,6 +402,7 @@ class State {
                 const text = reader.result.toString();
                 const data = JSON.parse(text);
                 self.history = data.history;
+                self.simHoursPerTick = data.simHoursPerTick ?? 1;
 
                 batch(() => {
                     self.hoursPerTick.value = data.hoursPerTick;
@@ -404,7 +414,9 @@ class State {
                     self.initNumber.value = data.initNumber;
                     self.randomize.value = data.randomize;
                     self.constantLight.value = data.constantLight;
+                    self.exactPreview.value = data.exactPreview;
                     self.visualMapping.value = data.visualMapping;
+                    self.debugBoxes.value = data.debugDisplayOrientations;
                     self.seeds.value = data.seeds.map(s => new Seed(s.species, s.px, s. py, s.pz));
                     self.obstacles.value = data.obstacles.map(o => new Obstacle(o.type, o.px, o.py, o.pz, o.ax, o.ay, o.l, o.h, o.t));
                     self.species.value = data.species.map(s => new Species().load(s));
@@ -536,7 +548,8 @@ effect(() => {
 });
 
 const getScene = (index: number) => {
-    const src = st.history[index].s;
+    const i = Math.min(index, st.history.length - 1);
+    const src = st.history[i].s;
     const reader = new BinaryReader(base64ToArrayBuffer(src));
     return reader.readAgroScene();
 }

@@ -61,16 +61,20 @@ export function SpeciesItem(props: {species: Species, index: number})
         </div>
         <hr/>
         <div>
-            <input min={0.001} step={0.01} type="number" name={`leafLength-${props.index}`} value={+props.species.leafLength.value.toFixed(4)} onChange={e => props.species.leafLength.value = parseFloat(e.currentTarget.value)}  />
+            <input min={0.001} step={0.0001} type="number" name={`leafLength-${props.index}`} value={+props.species.leafLength.value.toFixed(4)} onChange={e => props.species.leafLength.value = parseFloat(e.currentTarget.value)}  />
             <label for={`leafLength-${props.index}`}>Leaf length</label>
         </div>
         <div>
-            <input min={0.001} step={0.01} type="number" name={`leafRadius-${props.index}`} value={+props.species.leafRadius.value.toFixed(4)} onChange={e => props.species.leafRadius.value = parseFloat(e.currentTarget.value)}  />
+            <input min={0.001} step={0.001} type="number" name={`leafRadius-${props.index}`} value={+props.species.leafRadius.value.toFixed(4)} onChange={e => props.species.leafRadius.value = parseFloat(e.currentTarget.value)}  />
             <label for={`leafRadius-${props.index}`}>Leaf radius</label>
         </div>
         <div>
-            <input min={0.01} step={1} type="number" name={`leafGrowthTime-${props.index}`} value={+props.species.leafGrowthTime.value.toFixed(4)} onChange={e => props.species.leafGrowthTime.value = parseFloat(e.currentTarget.value)}  />
+            <input min={1} step={1} type="number" name={`leafGrowthTime-${props.index}`} value={+props.species.leafGrowthTime.value.toFixed(4)} onChange={e => props.species.leafGrowthTime.value = parseFloat(e.currentTarget.value)}  />
             <label for={`leafGrowthTime-${props.index}`}>Leaf growth time</label>
+        </div>
+        <div>
+            <input min={0.0} step={0.1} type="number" name={`leafPitch-${props.index}`} value={+props.species.leafPitch.value.toFixed(4)} onChange={e => props.species.leafPitch.value = parseFloat(e.currentTarget.value)}  />
+            <label for={`leafPitch-${props.index}`}>Leaf pitch angle (deg)</label>
         </div>
         <div>
             <input min={0.001} step={0.01} type="number" name={`petioleLength-${props.index}`} value={+props.species.petioleLength.value.toFixed(4)} onChange={e => props.species.petioleLength.value = parseFloat(e.currentTarget.value)}  />

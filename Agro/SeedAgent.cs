@@ -100,18 +100,11 @@ public struct SeedAgent : IAgent
 				plant.UG.Birth(new UnderGroundAgent2(-1, initialYaw * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, -0.5f * MathF.PI), Water * 0.4f));
 
 				var baseStemOrientation = initialYaw * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, 0.5f * MathF.PI);
-				plant.AG.Birth(new AboveGroundAgent3(-1, OrganTypes.Meristem, baseStemOrientation, Water * 0.4f)); //base stem
+				var meristem = new AboveGroundAgent3(-1, OrganTypes.Meristem, baseStemOrientation, Water * 0.4f);
+				var meristemIndex = plant.AG.Birth(meristem); //base stem
 
 				if (plant.Parameters.LateralsPerNode > 0)
-				{
-					var angleStep = 2f * MathF.PI / plant.Parameters.LateralsPerNode;
-					for(int l = 0; l < plant.Parameters.LateralsPerNode; ++l)
-					{
-						var oriantation = Quaternion.CreateFromAxisAngle(Vector3.UnitY, l * angleStep + initialYawAngle) * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, 0.25f * MathF.PI);
-						plant.AG.Birth(new AboveGroundAgent3(0, OrganTypes.Petiole, oriantation, Water * 0.4f)); //leaf stem
-						plant.AG.Birth(new AboveGroundAgent3(2*l + 1, OrganTypes.Leaf, oriantation * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, -plant.RNG.NextFloat(0.2f) * MathF.PI), Water * 0.2f)); //leaf
-					}
-				}
+					AboveGroundAgent3.CreateLeaves(meristem, plant, 0, meristemIndex);
 
 				//formation.AG.Birth(new AboveGroundAgent3(0, OrganTypes.Bud, baseStemOrientation, Water * 0.4f)); //terminal bud on top of the base stem
 				// var leafStemOrientation = initialYaw * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, plant.RNG.NextFloat(0.3f * MathF.PI));

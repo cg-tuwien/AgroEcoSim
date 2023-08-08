@@ -17,8 +17,15 @@ export function DecodePlantName(name: string) : Index {
 }
 
 export function SetupMesh(primitive: Primitive, index: Index, mesh: THREE.Mesh) {
+    if (appstate.debugBoxes.value)
+    {
+        mesh.geometry = debugGeometry;
+        mesh.material = debugMaterial;
+    }
+
     mesh.name = EncodePlantName(index);
-    mesh.userData = { type: "plant", index: index, customMaterial: primitive.type > 1 };
+    mesh.userData = { type: "plant", index: index, customMaterial: !appstate.debugBoxes.value && primitive.type > 1 };
+
     return mesh;
 }
 
@@ -167,3 +174,74 @@ const heatColors = [
 const heatColorsMax = heatColors.length - 1;
 
 const black = new THREE.Color("#000");
+
+const debugLeftColor = [1, 0.0, 0.1];
+const debugRightColor = [1, 0.1, 0.1];
+const debugBottomColor = [0.1, 1, 0.1];
+const debugTopColor = [0, 1, 0];
+const debugFrontColor = [0.1, 0.1, 1];
+const debugBackColor = [0, 0, 1];
+
+const boxVerts = [
+    // front
+    { pos: [-1, -1,  1], norm: [ 0,  0,  1], color: [...debugFrontColor], }, // 0
+    { pos: [ 1, -1,  1], norm: [ 0,  0,  1], color: [...debugFrontColor], }, // 1
+    { pos: [-1,  1,  1], norm: [ 0,  0,  1], color: [...debugFrontColor], }, // 2
+    { pos: [ 1,  1,  1], norm: [ 0,  0,  1], color: [...debugFrontColor], }, // 3
+    // right
+    { pos: [ 1, -1,  1], norm: [ 1,  0,  0], color: [...debugRightColor], }, // 4
+    { pos: [ 1, -1, -1], norm: [ 1,  0,  0], color: [...debugRightColor], }, // 5
+    { pos: [ 1,  1,  1], norm: [ 1,  0,  0], color: [...debugRightColor], }, // 6
+    { pos: [ 1,  1, -1], norm: [ 1,  0,  0], color: [...debugRightColor], }, // 7
+    // back
+    { pos: [ 1, -1, -1], norm: [ 0,  0, -1], color: [...debugBackColor], }, // 8
+    { pos: [-1, -1, -1], norm: [ 0,  0, -1], color: [...debugBackColor], }, // 9
+    { pos: [ 1,  1, -1], norm: [ 0,  0, -1], color: [...debugBackColor], }, // 10
+    { pos: [-1,  1, -1], norm: [ 0,  0, -1], color: [...debugBackColor], }, // 11
+    // left
+    { pos: [-1, -1, -1], norm: [-1,  0,  0], color: [...debugLeftColor], }, // 12
+    { pos: [-1, -1,  1], norm: [-1,  0,  0], color: [...debugLeftColor], }, // 13
+    { pos: [-1,  1, -1], norm: [-1,  0,  0], color: [...debugLeftColor], }, // 14
+    { pos: [-1,  1,  1], norm: [-1,  0,  0], color: [...debugLeftColor], }, // 15
+    // top
+    { pos: [ 1,  1, -1], norm: [ 0,  1,  0], color: [...debugTopColor], }, // 16
+    { pos: [-1,  1, -1], norm: [ 0,  1,  0], color: [...debugTopColor], }, // 17
+    { pos: [ 1,  1,  1], norm: [ 0,  1,  0], color: [...debugTopColor], }, // 18
+    { pos: [-1,  1,  1], norm: [ 0,  1,  0], color: [...debugTopColor], }, // 19
+    // bottom
+    { pos: [ 1, -1,  1], norm: [ 0, -1,  0], color: [...debugBottomColor], }, // 20
+    { pos: [-1, -1,  1], norm: [ 0, -1,  0], color: [...debugBottomColor], }, // 21
+    { pos: [ 1, -1, -1], norm: [ 0, -1,  0], color: [...debugBottomColor], }, // 22
+    { pos: [-1, -1, -1], norm: [ 0, -1,  0], color: [...debugBottomColor], }, // 23
+  ];
+
+const boxPositions = [];
+const boxNormals = [];
+const boxColors = [];
+for (const vertex of boxVerts) {
+    boxPositions.push(...vertex.pos);
+    boxNormals.push(...vertex.norm);
+    boxColors.push(...vertex.color);
+}
+
+  const debugGeometry = new THREE.BufferGeometry();
+debugGeometry.setAttribute(
+    'position',
+    new THREE.BufferAttribute(new Float32Array(boxPositions), 3));
+debugGeometry.setAttribute(
+    'normal',
+    new THREE.BufferAttribute(new Float32Array(boxNormals), 3));
+debugGeometry.setAttribute(
+    'color',
+    new THREE.BufferAttribute(new Float32Array(boxColors), 3));
+
+debugGeometry.setIndex([
+   0,  1,  2,   2,  1,  3,  // front
+   4,  5,  6,   6,  5,  7,  // right
+   8,  9, 10,  10,  9, 11,  // back
+  12, 13, 14,  14, 13, 15,  // left
+  16, 17, 18,  18, 17, 19,  // top
+  20, 21, 22,  22, 21, 23,  // bottom
+]);
+
+const debugMaterial = new THREE.MeshStandardMaterial({ vertexColors: true });

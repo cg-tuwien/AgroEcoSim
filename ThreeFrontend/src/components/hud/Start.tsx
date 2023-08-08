@@ -10,7 +10,7 @@ const tris = [0, 12, 32, 0, 128, 0, 0, 0, 2];
 export function Start() {
     const time = () => {
         let playPointer = Math.max(0, Math.min(appstate.playPointer.value, appstate.history.length - 1));
-        return appstate.history.length > 0 ? appstate.history[playPointer].t : 0;
+        return appstate.simHoursPerTick * (appstate.history.length > 0 ? appstate.history[playPointer].t : 0);
     }
 
     return <p>
@@ -24,7 +24,6 @@ export function Start() {
             <button title="Next frame" onClick={async () => await appstate.play(PlayState.NextForward)} disabled={appstate.playing.value != PlayState.None || appstate.historySize.value == 0 || appstate.playPointer.value >= appstate.history.length - 1} class="stepBtn">▹</button>
             <button title="Seek to end" onClick={async () => await appstate.play(PlayState.SeekForward)} disabled={appstate.historySize.value == 0 || appstate.playPointer.value >= appstate.history.length - 1}> ⏭︎</button>
         </span>
-        &nbsp;
         <span>
             <input title="Seek a frame" min={0} max={appstate.history.length - 1} type="range" name="frameslider" disabled={appstate.history.length == 0} value={appstate.playPointer} onChange={e => {
                 batch(() => {
