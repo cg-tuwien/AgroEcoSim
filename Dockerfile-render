@@ -17,7 +17,7 @@ COPY agroeco-mts3/epw/ epw/
 #RUN apk update && apk add --no-cache ca-certificates && apk upgrade -U --no-cache && apk add --no-cache musl-dev linux-headers g++ && rm -rf /var/cache/apk/*
 
 #RUN echo 'manylinux1_compatible = True' > /usr/local/lib/python3.10/site-packages/_manylinux.py
-RUN yes | pip install --no-cache-dir python-dateutil pysolar mitsuba numpy ladybug-radiance imageio matplotlib
+RUN yes | pip install --no-cache-dir python-dateutil pysolar numpy ladybug-radiance imageio matplotlib mitsuba==3.2.1
 
 #RUN apt-get purge python3-pip && apt-get autoremove -y
 #COPY --from=publish harden.sh .

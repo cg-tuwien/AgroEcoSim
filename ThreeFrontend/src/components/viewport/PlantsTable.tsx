@@ -28,6 +28,8 @@ export function PlantsTable()
                 {primitive.type == 8 ? <li>Irradiance: {primitive.stats[2]}</li> : <></>}
                 {primitive.type == 8 ? <li>Resources availability: {primitive.stats[3]}</li>: <></>}
                 {primitive.type == 8 ? <li>Production efficiency: {primitive.stats[4]}</li> : <></>}
+                {primitive.type == 8 ? <li>Relative Resources: {primitive.stats[5]}</li>: <></>}
+                {primitive.type == 8 ? <li>Relative Production: {primitive.stats[6]}</li> : <></>}
             </ul>
         </>) : (<></>);
     }

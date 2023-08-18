@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -26,21 +27,17 @@ public class PlantGlobalStats
 
 	public double UsefulnessTotal { get; set; }
 
-	public IList<float> LightEfficiency { get; set; }
-	public IList<float> EnergyEfficiency { get; set; }
-	public IList<float> LifeSupportEnergy { get; set; }
-	public IList<float> PhotosynthWater { get; set; }
-	public IList<float> EnergyCapacities { get; set; }
-	public IList<float> WaterCapacities { get; set; }
+	public List<GatherDataBase> Gathering = new();
+	public List<GatherEfficiency> Efficiencies = new();
 
 	public float[]? ReceivedEnergy;
 	public float[]? ReceivedWater;
 
 	internal void DistributeWaterByRequirement(float factor)
 	{
-		ReceivedWater = new float[PhotosynthWater.Count];
+		ReceivedWater = new float[Gathering.Count];
 		for(int i = 0; i < ReceivedWater.Length; ++i)
-			ReceivedWater[i] = PhotosynthWater[i] * factor;
+			ReceivedWater[i] = Gathering[i].PhotosynthWater * factor;
 	}
 
 	internal double Weights4EnergyDistributionByRequirement(bool positiveEfficiency)
@@ -48,8 +45,8 @@ public class PlantGlobalStats
 		if (positiveEfficiency)
 		{
 			var weightsTotal = 0.0;
-			for(int i = 0; i < EnergyEfficiency.Count; ++i)
-				weightsTotal = LifeSupportEnergy[i] * EnergyEfficiency[i];
+			for(int i = 0; i < Efficiencies.Count; ++i)
+				weightsTotal = Gathering[i].LifesupportEnergy * Efficiencies[i].ProductionEfficiency;
 			return weightsTotal;
 		}
 		else
@@ -60,50 +57,50 @@ public class PlantGlobalStats
 	{
 		var weightsTotal = 0.0;
 		if (positiveEfficiency)
-			for(int i = 0; i < LightEfficiency.Count; ++i)
-				weightsTotal += (EnergyCapacities[i] - LifeSupportEnergy[i]) * LightEfficiency[i];
+			for(int i = 0; i < Efficiencies.Count; ++i)
+				weightsTotal += (Gathering[i].CapacityEnergy - Gathering[i].LifesupportEnergy) * Efficiencies[i].ResourceEfficiency;
 		else
-			for(int i = 0; i < LightEfficiency.Count; ++i)
-				weightsTotal += EnergyCapacities[i] - LifeSupportEnergy[i];
+			for(int i = 0; i < Efficiencies.Count; ++i)
+				weightsTotal += Gathering[i].CapacityEnergy - Gathering[i].LifesupportEnergy;
 
 		return weightsTotal;
 	}
 
 	internal void DistributeEnergyByStorage(float factor, bool positiveEfficiency)
 	{
-		ReceivedEnergy = new float[LifeSupportEnergy.Count];
+		ReceivedEnergy = new float[Gathering.Count];
 		if (positiveEfficiency)
 			for(int i = 0; i < ReceivedEnergy.Length; ++i)
 			{
-				var w = (EnergyCapacities[i] - LifeSupportEnergy[i]) * LightEfficiency[i];
-				ReceivedEnergy[i] = LifeSupportEnergy[i] + w * factor;
+				var w = (Gathering[i].CapacityEnergy - Gathering[i].LifesupportEnergy) * Efficiencies[i].ResourceEfficiency;
+				ReceivedEnergy[i] = Gathering[i].LifesupportEnergy + w * factor;
 			}
 		else
 			for(int i = 0; i < ReceivedEnergy.Length; ++i)
-				ReceivedEnergy[i] = LifeSupportEnergy[i] + (EnergyCapacities[i] - LifeSupportEnergy[i]) * factor;
+				ReceivedEnergy[i] = Gathering[i].LifesupportEnergy + (Gathering[i].CapacityEnergy - Gathering[i].LifesupportEnergy) * factor;
 	}
 
 	internal void DistributeEnergyByRequirement(float factor, bool positiveEfficiency)
 	{
 		//factor is energyAvailableTotal / energyRequirementTotal
-		ReceivedEnergy = new float[LifeSupportEnergy.Count];
+		ReceivedEnergy = new float[Gathering.Count];
 
 		if (positiveEfficiency)
 		{
 			for(int i = 0; i < ReceivedEnergy.Length; ++i)
-				ReceivedEnergy[i] = LifeSupportEnergy[i] * EnergyEfficiency[i] * factor; //in sum over all i: LifeSupportEnergy[i] / energyRequirementTotal yields 1
+				ReceivedEnergy[i] = Gathering[i].LifesupportEnergy * Efficiencies[i].ProductionEfficiency * factor; //in sum over all i: LifeSupportEnergy[i] / energyRequirementTotal yields 1
 		}
 		else
 		{
 			for(int i = 0; i < ReceivedEnergy.Length; ++i)
-				ReceivedEnergy[i] = LifeSupportEnergy[i] * factor; //in sum over all i: LifeSupportEnergy[i] / energyRequirementTotal yields 1
+				ReceivedEnergy[i] = Gathering[i].LifesupportEnergy * factor; //in sum over all i: LifeSupportEnergy[i] / energyRequirementTotal yields 1
 		}
 	}
 
 	internal void DistributeWaterByStorage(float factor)
 	{
-		ReceivedWater = new float[PhotosynthWater.Count];
+		ReceivedWater = new float[Gathering.Count];
 		for(int i = 0; i < ReceivedWater.Length; ++i)
-			ReceivedWater[i] = PhotosynthWater[i] + (WaterCapacities[i] - PhotosynthWater[i]) * factor;
+			ReceivedWater[i] = Gathering[i].PhotosynthWater + (Gathering[i].CapacityWater - Gathering[i].PhotosynthWater) * factor;
 	}
 }

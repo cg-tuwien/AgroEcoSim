@@ -43,8 +43,15 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 	/// </summary>
 	public float Water { get; private set; }
 
-	public float PreviousDayProduction => 0f;
-	public float PreviousDayEnvResources => 0f;
+	/// <summary>
+	/// Production during the previous day, per m² i.e. invariant of size
+	/// </summary>
+	public float PreviousDayProductionInv => 0f;
+
+	/// <summary>
+	/// Resources allocated during the previous day, per m² i.e. invariant of size
+	/// </summary>
+	public float PreviousDayEnvResourcesInv => 0f;
 
 	/// <summary>
 	/// Inverse woodyness ∈ [0, 1]. The more woody (towards 0) the less water the root can absorb.

@@ -346,6 +346,10 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 		ReadTMP = !ReadTMP;
 	}
 
+
+	List<GatherDataBase> Gathering = new();
+	List<GatherEfficiency> Efficiencies = new();
+
 	public PlantGlobalStats Gather(AgroWorld world)
 	{
 		var energy = 0.0;
@@ -357,12 +361,18 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 		var energyRequirement = 0.0;
 		var waterRequirement = 0.0;
 		var (dst, src) = SrcDst(); //since Tick already swapped them
-		var lightEfficiency = new float[src.Length];
-		var energyEfficiency = new float[src.Length];
-		var lifesupportEnergy = new float[src.Length];
-		var photosynthWater = new float[src.Length];
-		var capacityEnergy = new float[src.Length];
-		var capacityWater = new float[src.Length];
+		var prevLength = Gathering.Count;
+		for(int i = 0; i < prevLength; ++i)
+		{
+			Gathering[i] = default;
+			Efficiencies[i] = default;
+		}
+
+		for(int i = prevLength; i < dst.Length; ++i)
+		{
+			Gathering.Add(default);
+			Efficiencies.Add(default);
+		}
 		//var maxIrradiance = IrradianeClient.MaxIrradiance(this);
 
 		//var (irradianceOffsets, irradiances) = IrradianceClient.GetIrradiance(this);
@@ -389,48 +399,41 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 			waterDiff -= src[i].Water;
 
 			var lifeSupport = dst[i].LifeSupportPerTick(world);
-			lifesupportEnergy[i] = lifeSupport;
 			energyRequirement += lifeSupport;
 
-			var photosynthSupport = dst[i].PhotosynthPerTick(); //*maxIrradiance
-			photosynthWater[i] = photosynthSupport;
+			var photosynthSupport = dst[i].PhotosynthPerTick();
 			waterRequirement += photosynthSupport;
 
 			var energyStorageCapacity = dst[i].EnergyStorageCapacity();
-			capacityEnergy[i] = energyStorageCapacity;
 			energyCapacity += energyStorageCapacity;
 
 			var waterStorageCapacity = dst[i].WaterStorageCapacity();
-			capacityWater[i] = waterStorageCapacity;
 			waterCapacity += waterStorageCapacity;
+
+			Gathering[i] = new(lifeSupport, photosynthSupport, energyStorageCapacity, waterStorageCapacity);
 		}
 
 		//this is faster than probing .Contains() for each i
 		foreach(var i in Deaths)
 		{
-			lifesupportEnergy[i] = 0f;
+			Gathering[i] = default;
 			energyRequirement -= dst[i].LifeSupportPerTick(world);
-
-			photosynthWater[i] = 0f;
 			waterRequirement -= dst[i].PhotosynthPerTick();
-
-			capacityEnergy[i] = 0f;
 			energyCapacity -= dst[i].EnergyStorageCapacity();
-
-			capacityWater[i] = 0f;
 			waterCapacity -= dst[i].WaterStorageCapacity();
 		}
 
-		var dailyLightMax = 0f;
-		var dailyEnergyMax = 0f;
+		var dailyResourceMax = 0f;
+		var dailyProductionMax = 0f;
 		for(int i = 0; i < dst.Length; ++i)
-			if (dailyLightMax < dst[i].PreviousDayEnvResources) dailyLightMax = dst[i].PreviousDayEnvResources;
-		for(int i = 0; i < dst.Length; ++i)
-			if (dailyEnergyMax < dst[i].PreviousDayProduction) dailyEnergyMax = dst[i].PreviousDayProduction;
-
-		if (dailyEnergyMax > 0f)
 		{
-			//assuming only leaves photosynthesize, efficiency of the parent will be th emax of its children
+			if (dailyResourceMax < dst[i].PreviousDayEnvResourcesInv) dailyResourceMax = dst[i].PreviousDayEnvResourcesInv;
+			if (dailyProductionMax < dst[i].PreviousDayProductionInv) dailyProductionMax = dst[i].PreviousDayProductionInv;
+		}
+
+		if (dailyProductionMax > 0f)
+		{
+			//assuming only leaves photosynthesize, efficiency of the parent will be the max of its children
 			var nodesToSolve = new byte[dst.Length];
 			// var sumToSolve = 0;
 			// for(int i = 0; i < dst.Length; ++i)
@@ -453,10 +456,7 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 			for(int i = 0; i < dst.Length; ++i)
 			{
 				if (dst[i].Organ == OrganTypes.Leaf)
-				{
-					lightEfficiency[i] = dst[i].PreviousDayEnvResources / dailyLightMax;
-					energyEfficiency[i] = dst[i].PreviousDayProduction / dailyEnergyMax;
-				}
+					Efficiencies[i] = new(dst[i].PreviousDayEnvResourcesInv / dailyResourceMax, dst[i].PreviousDayProductionInv / dailyProductionMax);
 				else
 				{
 					Debug.Assert(GetChildren(i).Count < 256);
@@ -473,14 +473,7 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 					if (nodesToSolve[i] == 0)
 					{
 						var parent = dst[i].Parent;
-
-						var l = lightEfficiency[i];
-						if (lightEfficiency[parent] < l)
-							lightEfficiency[parent] = l;
-
-						var e = energyEfficiency[i];
-						if (energyEfficiency[parent] < e)
-							energyEfficiency[parent] = e;
+						Efficiencies[parent] = Efficiencies[parent].Max(Efficiencies[i]);
 
 						--nodesToSolve[parent];
 						nodesToSolve[i] = byte.MaxValue;
@@ -490,10 +483,7 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 
 			for(int i = 0; i < dst.Length; ++i)
 				if (GetOrgan(i) == OrganTypes.Bud)
-				{
-					lightEfficiency[i] = 1f;
-					energyEfficiency[i] = 1f;
-				}
+					Efficiencies[i] = GatherEfficiency.ONE;
 
 			// for(int i = 0; i < dst.Length; ++i)
 			// {
@@ -514,19 +504,37 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 			WaterCapacity = waterCapacity,
 			EnergyRequirement = energyRequirement,
 			WaterRequirement = waterRequirement,
-			LightEfficiency = lightEfficiency,
-			EnergyEfficiency = energyEfficiency,
-			LifeSupportEnergy = lifesupportEnergy,
-			PhotosynthWater = photosynthWater,
-			EnergyCapacities = capacityEnergy,
-			WaterCapacities = capacityWater
+			Gathering = Gathering,
+			Efficiencies = Efficiencies
 		};
+	}
+
+	List<int> Leaves = new();
+	List<float> Weights = new();
+
+	public void Gravity(AgroWorld world)
+	{
+		var dst = Src(); //since Tick already swapped them
+		Leaves.Clear();
+		Weights.Clear();
+		for(int i = 0; i < dst.Length; ++i)
+		{
+			var weight = GetWeight(i, Plant.Parameters);
+			Weights.Add(weight);
+			if (GetChildren(i).Count == 0)
+				Leaves.Add(i);
+
+			var dir = Vector3.Transform(Vector3.UnitX, GetDirection(i));
+			// var segmentsCount = GetSegmentsCount(i);
+			// var firstSegment = GetFirstSegment(i);
+			// var segmentWeight = w / segmentsCount;
+		}
 	}
 
 	internal void Distribute(PlantGlobalStats stats)
 	{
 		var dst = Src();
-		for(int i = 0; i < stats.ReceivedEnergy.Length; ++i)
+		for(int i = 0; i < dst.Length; ++i)
 			dst[i].Distribute(stats.ReceivedWater[i], stats.ReceivedEnergy[i]);
 	}
 
@@ -683,13 +691,19 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 
 	public Vector3 GetBaseCenter(int index) => TreeCache.GetBaseCenter(index);
 
-	public float GetDailyProduction(int index) => ReadTMP
-		? (AgentsTMP.Length > index ? AgentsTMP[index].PreviousDayProduction : 0f)
-		: (Agents.Length > index ? Agents[index].PreviousDayProduction : 0f);
+	/// <summary>
+	/// Production during the previous day, per m² i.e. invariant of size
+	/// </summary>
+	public float GetDailyProductionInv(int index) => ReadTMP
+		? (AgentsTMP.Length > index ? AgentsTMP[index].PreviousDayProductionInv : 0f)
+		: (Agents.Length > index ? Agents[index].PreviousDayProductionInv : 0f);
 
-	public float GetDailyResources(int index) => ReadTMP
-		? (AgentsTMP.Length > index ? AgentsTMP[index].PreviousDayEnvResources : 0f)
-		: (Agents.Length > index ? Agents[index].PreviousDayEnvResources : 0f);
+	/// <summary>
+	/// Resources allocated during the previous day, per m² i.e. invariant of size
+	/// </summary>
+	public float GetDailyResourcesInv(int index) => ReadTMP
+		? (AgentsTMP.Length > index ? AgentsTMP[index].PreviousDayEnvResourcesInv : 0f)
+		: (Agents.Length > index ? Agents[index].PreviousDayEnvResourcesInv : 0f);
 
 	public Vector3 GetScale(int index) => ReadTMP
 		? (AgentsTMP.Length > index ? AgentsTMP[index].Scale() : Vector3.Zero)
@@ -711,6 +725,21 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 	///Volume in m³
 	///<summary>
 	public float GetVolume() => (ReadTMP ? AgentsTMP : Agents).Aggregate(0f, (sum, current) => sum + current.Volume());
+
+	///<summary>
+	///Weight in g
+	///<summary>
+	public float GetWeight(int index, SpeciesSettings species)
+	{
+		var src = ReadTMP ? AgentsTMP : Agents;
+		if (index >= src.Length)
+			return 0f;
+		else
+		{
+			var woodRatio = src[index].WoodRatio();
+			return (woodRatio * species.DensityDryWood + (1f - woodRatio * species.DensityDryStem)) * 1e3f * src[index].Volume() + src[index].Water;
+		}
+	}
 
 	#endregion
 

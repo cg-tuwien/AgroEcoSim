@@ -87,7 +87,7 @@ foreach ENTITY
 public class IrradianceClient
 {
 	readonly HttpClient Client;
-	public bool IsOnline {get; private set; }= false;
+	public bool IsOnline {get; private set; } = false;
 	bool AddressFixed = false;
 
 	bool GlobalIllumination = true;
@@ -144,7 +144,10 @@ public class IrradianceClient
 	public void Tick(SimulationWorld world, uint timestep, IList<IFormation> formations, IList<IObstacle> obstacles)
 	{
 		if (timestep == 0 && GlobalIllumination)
+		{
 			ProbeRenderer();
+			world.RendererName = IsOnline ? "mts3" : "none";
+		}
 
 		var agroWorld = world as AgroWorld;
 		if (IsOnline && GlobalIllumination)
@@ -236,13 +239,15 @@ public class IrradianceClient
 						else
 							length = responseStream.Length / sizeof(float);
 
+						//var multiplier = world.HoursPerTick * 3600;
 						for (var i = 0; i < length; ++i)
-							Irradiances.Add(reader.ReadSingle() * 1e6f * world.HoursPerTick);
+							Irradiances.Add(reader.ReadSingle());
 					}
 					catch (Exception)
                     {
 						IsOnline = false;
 						SW.Stop();
+						world.RendererName = "none (after failure)";
 						DoFallbackTick(world, timestep, formations);
 					}
 					// Debug.WriteLine($"Irradiances length: {length} count: {Irradiances.Count}");
@@ -748,8 +753,8 @@ public class IrradianceClient
 								if (extended)
 								{
 									writer.Write(GetIrradiance(ag, i));
-									writer.Write(ag.GetDailyResources(i));
-									writer.Write(ag.GetDailyProduction(i));
+									writer.Write(ag.GetDailyResourcesInv(i));
+									writer.Write(ag.GetDailyProductionInv(i));
 								}
 							}
 							break;
@@ -886,7 +891,7 @@ public class IrradianceClient
 
 	//TODO make this a ReadOnlySpan
 	public (int[], IList<float>) GetIrradiance(IFormation formation) =>
-		(!IsNight && formation.Count > 0 && IrradianceFormationOffsets.TryGetValue(formation, out var offset) ? offset : null, Irradiances);
+        (!IsNight && formation.Count > 0 && IrradianceFormationOffsets.TryGetValue(formation, out var offset) ? offset : null, Irradiances);
 
 
 	readonly Stopwatch SW = new();

@@ -123,11 +123,11 @@ export function VisualizeBudMesh(material: THREE.MeshStandardMaterial, index: In
 function LeafColor(primitive: Primitive) : { color: THREE.Color, emissive: THREE.Color } {
     switch (appstate.visualMapping.peek()) {
         case VisualMappingOptions.Natural: return { color: greenColor, emissive: black } ;
-        case VisualMappingOptions.Water: return { emissive: HeatColor(primitive.stats[0]), color: black };
-        case VisualMappingOptions.Energy: return { emissive: HeatColor(primitive.stats[1]), color: black };
-        case VisualMappingOptions.Irradiance: return { emissive: HeatColor(primitive.stats[2] * 1e-3), color: black };
-        case VisualMappingOptions.Resource: return { emissive: HeatColor(primitive.stats[3]), color: black };
-        case VisualMappingOptions.Production: return { emissive: HeatColor(primitive.stats[4]), color: black };
+        case VisualMappingOptions.Water: return { emissive: WaterColor(primitive.stats[0]), color: black };
+        case VisualMappingOptions.Energy: return { emissive: EnergyColor(primitive.stats[1]), color: black };
+        case VisualMappingOptions.Irradiance: return { emissive: IrradianceColor(primitive.stats[2] * 1e-3), color: black };
+        case VisualMappingOptions.Resource: return { emissive: EfficiencyColor(primitive.stats[5]), color: black };
+        case VisualMappingOptions.Production: return { emissive: EfficiencyColor(primitive.stats[6]), color: black };
         default: return { color: neutral, emissive: black };
     }
 }
@@ -135,8 +135,8 @@ function LeafColor(primitive: Primitive) : { color: THREE.Color, emissive: THREE
 function StemColor(primitive: Primitive) : { color: THREE.Color, emissive: THREE.Color } {
     switch (appstate.visualMapping.peek()) {
         case VisualMappingOptions.Natural: return { color: greenColor.clone().lerpHSL(woodColor, primitive.stats[2]), emissive: black };
-        case VisualMappingOptions.Water: return { emissive: HeatColor(primitive.stats[0]), color: black };
-        case VisualMappingOptions.Energy: return { emissive: HeatColor(primitive.stats[1]), color: black };
+        case VisualMappingOptions.Water: return { emissive: WaterColor(primitive.stats[0]), color: black };
+        case VisualMappingOptions.Energy: return { emissive: EnergyColor(primitive.stats[1]), color: black };
         default: return { color: neutral, emissive: black };
     }
 }
@@ -144,16 +144,10 @@ function StemColor(primitive: Primitive) : { color: THREE.Color, emissive: THREE
 function BudColor(primitive: Primitive) : { color: THREE.Color, emissive: THREE.Color } {
     switch (appstate.visualMapping.peek()) {
         case VisualMappingOptions.Natural: return {color: greenColor, emissive: black } ;
-        case VisualMappingOptions.Water: return { emissive: HeatColor(primitive.stats[0]), color: black };
-        case VisualMappingOptions.Energy: return { emissive: HeatColor(primitive.stats[1]), color: black };
+        case VisualMappingOptions.Water: return { emissive: WaterColor(primitive.stats[0]), color: black };
+        case VisualMappingOptions.Energy: return { emissive: EnergyColor(primitive.stats[1]), color: black };
         default: return { color: neutral, emissive: black };
     }
-}
-
-function HeatColor(value: number) {
-    const p = Math.max(0, Math.min(1, value)) * heatColorsMax;
-    const s = Math.floor(p);
-    return s == heatColorsMax ? heatColors[heatColorsMax] : heatColors[s].clone().lerpHSL(heatColors[s + 1], p - s);
 }
 
 const neutral = new THREE.Color(neutralColor).lerpHSL(new THREE.Color(backgroundColor), 0.1);
@@ -172,6 +166,37 @@ const heatColors = [
 ];
 
 const heatColorsMax = heatColors.length - 1;
+
+function HeatColor(value: number) {
+    const p = Math.max(0, Math.min(1, value)) * heatColorsMax;
+    const s = Math.floor(p);
+    return s == heatColorsMax ? heatColors[heatColorsMax] : heatColors[s].clone().lerpHSL(heatColors[s + 1], p - s);
+}
+
+
+const waterEmpty = new THREE.Color("#909090");
+const waterFull = new THREE.Color("#00BFE6");
+function WaterColor(value: number) {
+    return waterEmpty.clone().lerpHSL(waterFull, value);
+}
+
+const energyFull = new THREE.Color("#ffc757");
+function EnergyColor(value: number) {
+    return waterEmpty.clone().lerpHSL(energyFull, value);
+}
+
+const irrEmpty = new THREE.Color("#424d62");
+//const irrEmpty = new THREE.Color("#422c00");
+const irrFull = new THREE.Color("#ffcc66");
+function IrradianceColor(value: number) {
+    return irrEmpty.clone().lerp(irrFull, value);
+}
+
+const effEmpty = new THREE.Color("#0a95ff");
+const effFull = new THREE.Color("#ff0a91");
+function EfficiencyColor(value: number) {
+    return effEmpty.clone().lerp(effFull, value);
+}
 
 const black = new THREE.Color("#000");
 

@@ -28,6 +28,7 @@ public partial class PlantFormation2 : IPlantFormation
 	public readonly PlantSubFormation2<UnderGroundAgent2> UG;
 	public readonly PlantSubFormation2<AboveGroundAgent3> AG;
 
+	public readonly List<Quaternion> SegmentOrientations;
 
 	internal const float RootSegmentLength = 0.1f;
 
@@ -64,6 +65,7 @@ public partial class PlantFormation2 : IPlantFormation
 		, i => AG_Godot.RemoveSprite(i), i => AG_Godot.AddSprites(i)
 #endif
 );
+		SegmentOrientations = new();
 	}
 
 	/// <summary>
@@ -265,6 +267,9 @@ public partial class PlantFormation2 : IPlantFormation
 
 			UG.Distribute(globalUG);
 			AG.Distribute(globalAG);
+
+			//Physics
+			//AG.Gravity(world);
 		}
 		#if TICK_LOG
 		StatesHistory.Clear();
@@ -351,4 +356,13 @@ public partial class PlantFormation2 : IPlantFormation
 
 	public static float TimeAccumulatedProbability(float hourlyProbability, int hours) => 1f - MathF.Pow(hourlyProbability, hours);
 	public static uint TimeAccumulatedProbabilityUInt(float hourlyProbability, int hours) => (uint)((1f - MathF.Pow(1f - hourlyProbability, hours)) * uint.MaxValue);
+
+    internal int InsertSegments(byte segmentsCount, Quaternion orientation)
+    {
+        var result = SegmentOrientations.Count;
+		for(int i = 0; i < segmentsCount; ++i)
+			SegmentOrientations.Add(orientation);
+
+		return result;
+    }
 }

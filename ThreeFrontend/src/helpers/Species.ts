@@ -8,23 +8,33 @@ export class Species {
     //trunkToWood = signal(1);
     height = signal(12);
 
+    nodeDist = signal(0.1);
+    nodeDistVar = signal(0.01);
+
     //https://sites.google.com/view/plant-diversity/
     monopodialFactor = signal(1); //at 0 it is fully dipodial, between 0 and 1 it is anisotomous see https://sites.google.com/site/paleoplant/terminology/branching
+    dominanceFactor = signal(0.7);
     lateralsPerNode = signal(2);
-    lateralAngleDeg = signal(0); //opposite = 0, alternate = 180, others are possible as well
+    lateralRollDeg = signal(0); //opposite = 0, alternate = 180, others are possible as well
+    lateralRollDegVar = signal(5);
+    lateralPitchDeg = signal(45);
+    lateralPitchDegVar = signal(5);
 
-
-    leafLength = signal(0.2);
+    leafLength = signal(0.16);
+    leafLengthVar = signal(0.01);
     leafRadius = signal(0.04);
+    leafRadiusVar = signal(0.01);
     leafGrowthTime = signal(720);
-    leafPitch = signal(20);
+    leafGrowthTimeVar = signal(120);
+    leafPitchDeg = signal(20);
+    leafPitchDegVar = signal(5);
 
     petioleLength = signal(0.05);
-    petioleRadius = signal(0.007);
+    petioleLengthVar = signal(0.01);
+    petioleRadius = signal(0.0015);
+    petioleRadiusVar = signal(0.0005);
     // RootLengthGrowthPerH = 0.023148148f,
     // RootRadiusGrowthPerH = 0.00297619f,
-
-
 
     public static Default() {
         const result = new Species();
@@ -37,38 +47,60 @@ export class Species {
             name: this.name.peek(),
             height: this.height.peek(),
 
+            nodeDist: this.nodeDist.peek(),
+            nodeDistVar: this.nodeDistVar.peek(),
+
             monopodialFactor: this.monopodialFactor.peek(),
+            dominanceFactor: this.dominanceFactor.peek(),
+
             lateralsPerNode: this.lateralsPerNode.peek(),
-            lateralAngleDeg: this.lateralAngleDeg.peek(),
+            lateralRollDeg: this.lateralRollDeg.peek(),
+            lateralRollDegVar: this.lateralRollDegVar.peek(),
+            lateralPitchDeg: this.lateralPitchDeg.peek(),
+            lateralPitchDegVar: this.lateralPitchDegVar.peek(),
 
             leafLength: this.leafLength.peek(),
+            leafLengthVar: this.leafLengthVar.peek(),
             leafRadius: this.leafRadius.peek(),
+            leafRadiusVar: this.leafRadiusVar.peek(),
             leafGrowthTime: this.leafGrowthTime.peek(),
-            leafPitch: this.leafPitch.peek(),
+            leafGrowthTimeVar: this.leafGrowthTimeVar.peek(),
+            leafPitchDeg: this.leafPitchDeg.peek(),
+            leafPitchDegVar: this.leafPitchDegVar.peek(),
 
             petioleLength: this.petioleLength.peek(),
             petioleRadius: this.petioleRadius.peek(),
-
-
         };
     }
 
     public load(s: any) {
         this.name.value = s.name;
+        this.height.value = s.height;
+        this.nodeDist.value = s.nodeDist;
+        this.nodeDistVar.value = s.nodeDistVar;
 
         this.monopodialFactor.value = s.monopodialFactor;
+        this.dominanceFactor.value = s.dominanceFactor;
+
         this.lateralsPerNode.value = s.lateralsPerNode;
-        this.lateralAngleDeg.value = s.lateralAngleDeg;
+        this.lateralRollDeg.value = s.lateralRollDeg;
+        this.lateralRollDegVar.value = s.lateralRollDegVar;
+        this.lateralPitchDeg.value = s.lateralPitchDeg;
+        this.lateralPitchDegVar.value = s.lateralPitchDegVar;
 
         this.leafLength.value = s.leafLength;
+        this.leafLengthVar.value = s.leafLengthVar;
         this.leafRadius.value = s.leafRadius;
+        this.leafRadiusVar.value = s.leafRadiusVar;
         this.leafGrowthTime.value = s.leafGrowthTime;
-        this.leafPitch.value = s.leafPitch;
+        this.leafGrowthTimeVar.value = s.leafGrowthTimeVar;
+        this.leafPitchDeg.value = s.leafPitch;
+        this.leafPitchDegVar.value = s.leafPitchVar;
 
         this.petioleLength.value = s.petioleLength;
+        this.petioleLengthVar.value = s.petioleLengthVar;
         this.petioleRadius.value = s.petioleRadius;
-
-        this.height.value = s.height;
+        this.petioleRadiusVar.value = s.petioleRadiusVar;
         return this;
     }
 
@@ -77,18 +109,31 @@ export class Species {
             N: this.name.peek(),
 
             H: this.height.peek(),
+            ND: this.nodeDist.peek(),
+            NDv: this.nodeDistVar.peek(),
 
             BMF: this.monopodialFactor.peek(),
+            BDF: this.dominanceFactor.peek(),
+
             BLN: this.lateralsPerNode.peek(),
-            BLA: this.lateralAngleDeg.peek() * DegToRad,
+            BR: this.lateralRollDeg.peek() * DegToRad,
+            BRv: this.lateralRollDegVar.peek() * DegToRad,
+            BP: this.lateralPitchDeg.peek() * DegToRad,
+            BPv: this.lateralPitchDegVar.peek() * DegToRad,
 
             LL: this.leafLength.peek(),
+            LLv: this.leafLengthVar.peek(),
             LR: this.leafRadius.peek(),
+            LRv: this.leafRadiusVar.peek(),
             LGT: this.leafGrowthTime.peek(),
-            LP: this.leafPitch.peek() * Math.PI / 180.0,
+            LGTv: this.leafGrowthTimeVar.peek(),
+            LP: this.leafPitchDeg.peek() * DegToRad,
+            LPv: this.leafPitchDegVar.peek() * DegToRad,
 
             PL: this.petioleLength.peek(),
+            PLv: this.petioleLengthVar.peek(),
             PR: this.petioleRadius.peek(),
+            PRv: this.petioleRadiusVar.peek(),
         });
     }
 }

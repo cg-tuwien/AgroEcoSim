@@ -14,7 +14,7 @@ public static class Initialize
 		world.AddCallback(world.Irradiance.Tick);
 
 		world.StreamExporterFunc = world.Irradiance.ExportToStream;
-		world.RendererName = world.Irradiance.IsOnline ? "mts3" : "none";
+		world.RendererName = "unknown";
 		//var soil = new SoilFormation(new Vector3i(AgroWorld.FieldSize / AgroWorld.FieldResolution), AgroWorld.FieldSize, 0);
 		var soil = new SoilFormationNew(world, new Vector3i(world.FieldSize / world.FieldResolution), world.FieldSize, Vector3.Zero);
 		world.Add(soil);

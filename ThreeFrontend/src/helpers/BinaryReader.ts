@@ -1,5 +1,9 @@
 import { Primitive } from "./Primitives";
 
+const Leaf = 8;
+const Stem = 2;
+const Bud = 4;
+
 export default class BinaryReader {
     source: Uint8Array;
     pos: 0;
@@ -112,6 +116,8 @@ export default class BinaryReader {
         {
             const entity : Primitive[] = [];
             const primitivesCount = this.readUInt32();
+            let maxDailyResource = 0;
+            let maxDailyProduction = 0;
             for(let j = 0; j < primitivesCount; ++j)
             {
                 const parentIndex = this.readInt32();
@@ -124,8 +130,11 @@ export default class BinaryReader {
                         const lastIrradiance = this.readFloat32();
                         const dailyResource = this.readFloat32();
                         const dailyProduction = this.readFloat32();
-                        entity.push({ type: 8, affineTransform: transform, stats: new Float32Array([waterRatio, energyRatio, lastIrradiance, dailyResource, dailyProduction]) }); break;
+                        entity.push({ type: Leaf, affineTransform: transform, stats: new Float32Array([waterRatio, energyRatio, lastIrradiance, dailyResource, dailyProduction, 0, 0]) });
+                        maxDailyProduction = Math.max(dailyProduction, maxDailyProduction);
+                        maxDailyResource = Math.max(dailyResource, maxDailyResource);
                     }
+                    break;
                     case 2: { //stem
                         const length = this.readFloat32();
                         const radius = this.readFloat32();
@@ -133,7 +142,7 @@ export default class BinaryReader {
                         const waterRatio = this.readFloat32();
                         const energyRatio = this.readFloat32();
                         const woodRatio = this.readFloat32();
-                        entity.push({ type: 2, affineTransform: transform, length: length, radius: radius, stats: new Float32Array([waterRatio, energyRatio, woodRatio]) });
+                        entity.push({ type: Stem, affineTransform: transform, length: length, radius: radius, stats: new Float32Array([waterRatio, energyRatio, woodRatio]) });
                     }
                     break;
                     case 3: { //bud
@@ -141,11 +150,19 @@ export default class BinaryReader {
                         const radius = this.readFloat32();
                         const waterRatio = this.readFloat32();
                         const energyRatio = this.readFloat32();
-                        entity.push({ type: 4, center: center, radius: radius, stats: new Float32Array([waterRatio, energyRatio]) });
+                        entity.push({ type: Bud, center: center, radius: radius, stats: new Float32Array([waterRatio, energyRatio]) });
                     }
                     break;
                 }
             }
+
+            for(let j = 0; j < entity.length; ++j)
+                if (entity[j].type == Leaf)
+                {
+                    entity[j].stats[5] = entity[j].stats[3] / maxDailyResource;
+                    entity[j].stats[6] = entity[j].stats[4] / maxDailyProduction;
+                }
+
             result.push(entity);
         }
         return result;

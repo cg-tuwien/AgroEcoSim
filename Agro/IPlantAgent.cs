@@ -29,10 +29,18 @@ public interface IPlantAgent : ITreeAgent
 	/// <summary>
 	/// Plant organ, e.g. stem, leaft, fruit
 	/// </summary>
+
 	OrganTypes Organ { get; }
 
-	float PreviousDayProduction { get; }
-	float PreviousDayEnvResources { get; }
+	/// <summary>
+	/// Production during the previous day, per m² i.e. invariant of size
+	/// </summary>
+	float PreviousDayProductionInv { get; }
+
+	/// <summary>
+	/// Resources allocated during the previous day, per m² i.e. invariant of size
+	/// </summary>
+	float PreviousDayEnvResourcesInv { get; }
 
 	float EnergyStorageCapacity();
 	float WaterStorageCapacity();
