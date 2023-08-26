@@ -68,7 +68,7 @@
             "type": "python",
             "request": "launch",
             "program": "render-server.py",
-            "args": ["--port", "9000"],
+            "args": ["--port", "9001"],
             "cwd": "${workspaceFolder}/agroeco-mts3",
             "console": "internalConsole",
             "justMyCode":true

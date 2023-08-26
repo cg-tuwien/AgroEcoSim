@@ -8,6 +8,7 @@ COPY agroeco-mts3/batch-sensor.py .
 COPY agroeco-mts3/RendererMts3.py .
 COPY agroeco-mts3/cumulative_sky.py .
 COPY agroeco-mts3/batch-sensor.py .
+RUN mkdir epw
 COPY agroeco-mts3/epw/ epw/
 #COPY agroeco-mts3/requirements.txt .
 
@@ -40,6 +41,6 @@ RUN groupadd -g 61000 docker && useradd -g 61000 -l -m -s /bin/false -u 61000 do
 USER docker
 
 #does nothing, just documents the exposed port
-EXPOSE 9000
+EXPOSE 9001
 ENTRYPOINT ["python3", "render-server.py"]
-CMD ["--port", "9000"]
+CMD ["--port", "9001"]

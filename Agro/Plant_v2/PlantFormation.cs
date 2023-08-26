@@ -45,9 +45,10 @@ public partial class PlantFormation2 : IPlantFormation
 	/// </summary>
 	public SpeciesSettings Parameters { get; private set; }
 
-	public PlantFormation2(SpeciesSettings parameters, SoilFormationNew soil, SeedAgent seed, Pcg parentRNG)
+	public PlantFormation2(SpeciesSettings parameters, SoilFormationNew soil, SeedAgent seed, Pcg parentRNG, int hoursPerTick)
 	{
 		Parameters = parameters ?? SpeciesSettings.Avocado;
+		Parameters.Init(hoursPerTick);
 		Soil = soil;
 		Seed[0] = seed;
 		Position = seed.Center;
@@ -267,6 +268,8 @@ public partial class PlantFormation2 : IPlantFormation
 
 			UG.Distribute(globalUG);
 			AG.Distribute(globalAG);
+
+			//AG.Hormones();
 
 			//Physics
 			//AG.Gravity(world);

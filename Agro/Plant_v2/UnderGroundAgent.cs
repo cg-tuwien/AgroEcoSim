@@ -44,6 +44,15 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 	public float Water { get; private set; }
 
 	/// <summary>
+	/// Hormones level (in custom units)
+	/// </summary>
+	public float Auxins { get; set; }
+	/// <summary>
+	/// Hormones level (in custom units)
+	/// </summary>
+	public float Cytokinins { get; set; }
+
+	/// <summary>
 	/// Production during the previous day, per m² i.e. invariant of size
 	/// </summary>
 	public float PreviousDayProductionInv => 0f;
@@ -177,6 +186,9 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 		Energy = initialEnergy;
 		Water = initialWater;
 		mWaterAbsorbtionFactor = initialWaterIntake;
+
+		Auxins = 0f;
+		Cytokinins = 0f;
 	}
 
 	/// <summary>

@@ -1,4 +1,4 @@
-import { Component, h } from "preact";
+import { Component, h, Fragment } from "preact";
 import appstate, { PlayState } from "../../appstate";
 import { batch } from "@preact/signals-core";
 import { encodeTime } from "../../helpers/TimeUnits";
@@ -7,7 +7,7 @@ import { encodeTime } from "../../helpers/TimeUnits";
 //import 'preact-material-components/Button/style.css';
 
 const tris = [0, 12, 32, 0, 128, 0, 0, 0, 2];
-export function Start() {
+export function Start(props: { inclStats: boolean }) {
     const time = () => {
         let playPointer = Math.max(0, Math.min(appstate.playPointer.value, appstate.history.length - 1));
         return appstate.simHoursPerTick * (appstate.history.length > 0 ? appstate.history[playPointer].t : 0);
@@ -34,10 +34,12 @@ export function Start() {
             }}/>
             <label for="frameslider">{time()} h ({encodeTime(time())})</label>
         </span>
-        <div>Seeds: {appstate.seeds.value.length}</div>
-        <div>Obstacles: {appstate.obstacles.value.length}</div>
-        <div>Objects: {Math.floor(appstate.scene.value.reduce((a,c) => a + c.length, 0) + appstate.playPointer.value * 0.01)}</div>
-        <div>Triangles: {Math.floor(appstate.scene.value.reduce((a,c) => a + c.reduce((b,d)=> b + tris[d.type], 0), 0) + appstate.playPointer.value * 0.01)}</div>
-        <div>Backend Renderer: {appstate.renderer.value}</div>
+        {props.inclStats ? <>
+            <div>Seeds: {appstate.seeds.value.length}</div>
+            <div>Obstacles: {appstate.obstacles.value.length}</div>
+            <div>Objects: {Math.floor(appstate.scene.value.reduce((a,c) => a + c.length, 0) + appstate.playPointer.value * 0.01)}</div>
+            <div>Triangles: {Math.floor(appstate.scene.value.reduce((a,c) => a + c.reduce((b,d)=> b + tris[d.type], 0), 0) + appstate.playPointer.value * 0.01)}</div>
+            <div>Backend Renderer: {appstate.renderer.value}</div>
+        </> : <></>}
     </p>;
 }

@@ -512,7 +512,7 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 	List<int> Leaves = new();
 	List<float> Weights = new();
 
-	public void Gravity(AgroWorld world)
+	internal void Gravity(AgroWorld world)
 	{
 		var dst = Src(); //since Tick already swapped them
 		Leaves.Clear();
@@ -536,6 +536,19 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 		var dst = Src();
 		for(int i = 0; i < dst.Length; ++i)
 			dst[i].Distribute(stats.ReceivedWater[i], stats.ReceivedEnergy[i]);
+	}
+
+	List<Vector2> HormonesData = new();
+	internal void Hormones(AgroWorld world)
+	{
+		var degradation = new Vector2(Plant.Parameters.AuxinsDegradation, Plant.Parameters.CytokininsDegradation);
+		HormonesData.Clear();
+		var dst = Src();
+		for(int i = 0; i < dst.Length; ++i)
+		{
+			HormonesData.Add(GetHormones(i));
+		}
+
 	}
 
 	public void DeliverPost(uint timestep, byte stage)
@@ -740,6 +753,10 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 			return (woodRatio * species.DensityDryWood + (1f - woodRatio * species.DensityDryStem)) * 1e3f * src[index].Volume() + src[index].Water;
 		}
 	}
+
+	public Vector2 GetHormones(int index) => ReadTMP
+		? (index < AgentsTMP.Length ? new(AgentsTMP[index].Auxins, AgentsTMP[index].Cytokinins) : Vector2.Zero)
+		: (index < Agents.Length ? new(Agents[index].Auxins, Agents[index].Cytokinins) : Vector2.Zero);
 
 	#endregion
 

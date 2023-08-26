@@ -80,7 +80,7 @@ public class SimulationHub : Hub<IEditorHub>
 
         var world = Initialize.World(request);
         await Task.Run(() => {
-            world.Irradiance.SetAddress($"http://{Config["RendererIP"]}:{Config["RendererPort"]}");
+            world.Irradiance.SetAddress(Config["RendererIPMitsuba"], Config["RendererPortMitsuba"], Config["RendererIPTamashii"], Config["RendererPortTamashii"], request.RenderMode);
             var start = DateTime.UtcNow.Ticks;
             var simulationLength = (uint)world.TimestepsTotal();
             long prevTime;

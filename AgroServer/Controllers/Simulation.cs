@@ -28,7 +28,7 @@ public class SimulationController : ControllerBase
     public async Task<ActionResult<SimulationResponse>> Post([FromBody]SimulationRequest request)
     {
         var world = Initialize.World(request);
-        world.Irradiance.SetAddress($"http://{Configuration["RendererIP"]}:{Configuration["RendererPort"]}");
+        world.Irradiance.SetAddress(Configuration["RendererIPMitsuba"], Configuration["RendererPortMitsuba"], Configuration["RendererIPTamashii"], Configuration["RendererPortTamashii"], request.RenderMode);
 
         var start = DateTime.UtcNow.Ticks;
         world.Run((uint)world.TimestepsTotal());

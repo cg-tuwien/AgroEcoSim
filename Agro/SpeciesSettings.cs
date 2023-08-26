@@ -162,12 +162,22 @@ public class SpeciesSettings
     ///</summary>
     [JsonPropertyName("PRv")]
     public float PetioleRadiusVar { get; init; }
+
     // public float RootRadiusGrowthPerH { get; init; }
     // public float RootLengthGrowthPerH { get; init; }
 
     //public int FirstFruitHour { get; init; }
 
-	public float DensityDryWood = 700; //in kg/m³
+    public float AuxinsDegradation { get; init; }
+
+    public float CytokininsDegradation { get; init; }
+
+    public float AuxinsDegradationPerTick { get; private set; }
+
+    public float CytokininsDegradationPerTick { get; private set; }
+
+
+    public float DensityDryWood = 700; //in kg/m³
 	public float DensityDryStem = 200; //in kg/m³
 
     public static SpeciesSettings Avocado;
@@ -187,5 +197,18 @@ public class SpeciesSettings
             Height = 12f,
             //FirstFruitHour = 113952,
         };
+    }
+
+    private bool Initialized = false;
+
+    public void Init(int hoursPerTick)
+    {
+        if (!Initialized)
+        {
+            AuxinsDegradationPerTick = AuxinsDegradation * hoursPerTick;
+            CytokininsDegradationPerTick = CytokininsDegradation * hoursPerTick;
+
+            Initialized = true;
+        }
     }
 }

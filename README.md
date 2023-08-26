@@ -29,7 +29,7 @@ Also make sure to select `dotnet CLI` for Godot builds under Editor > Mono > Bui
 
 ## Usage
 Outside of VS Code, you need to start the rendering server first:
-* `cd whatever_path/AgroGodot/agroeco-mts3` then `python3 render-server.py --port 9000` and keep it running
+* `cd whatever_path/AgroGodot/agroeco-mts3` then `python3 render-server.py --port 9001` and keep it running
 * In VS code there are combined launchers provided, but they often fail at exceptions and keep the port reserved until reboot.
 * There is an internal check for the presence of a rendering server that falls back to constant light if the server can't be reached.
 
@@ -103,7 +103,7 @@ Some classes are denoted by v1/v2 or just 1/2 or stored in folders called v1/v2.
 
 # Renderer interface
 The renderer is called via `http`. The primary renderer is Mitsuba 3 in the [agroeco-mts3](https://github.com/cfreude/agroeco-mts3/). Attention, Mitsuba requires AVX instructions, so it won't run on older CPUs. To plug-in a different renderer, it has to follow these guidelines:
-* Listening at port `9000`
+* Listening at port `9001`
 * Respond with a status code `200` (OK) to a `GET` request, this is a check for whether the server is up
 * Respond to `POST` requests with scene data by returning accummulated irradiances in (W/m²)
 * The energy should be accumulated around the `570 nm` wavelength

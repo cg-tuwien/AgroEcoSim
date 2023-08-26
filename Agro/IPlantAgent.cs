@@ -26,6 +26,9 @@ public interface IPlantAgent : ITreeAgent
 	/// </summary>
 	float Water { get; }
 
+	float Auxins { get; }
+	float Cytokinins { get; }
+
 	/// <summary>
 	/// Plant organ, e.g. stem, leaft, fruit
 	/// </summary>

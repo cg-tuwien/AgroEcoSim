@@ -168,7 +168,7 @@ class State {
     fieldSizeD = computed(() => this.fieldCellsD.value * this.fieldResolution.value);
     initNumber = signal(42);
     randomize = signal(false);
-    constantLight = signal(false);
+    renderMode = signal(1); //1 is Mitsuba
     exactPreview = signal(false);
 
     //SPECIES
@@ -228,7 +228,7 @@ class State {
         Plants: this.seeds.peek().map((p: Seed) => ({ S: p.species.peek(), P: { X: p.px.peek(), Y: p.py.peek(), Z: p.pz.peek() } })),
         Obstacles: this.obstacles.peek().map((o: Obstacle) => exportObstacle(o)),
         RequestGeometry: true,
-        ConstantLights: this.constantLight.value,
+        RenderMode: this.renderMode.value,
         ExactPreview: this.exactPreview.value
     }};
 
@@ -363,7 +363,7 @@ class State {
             fieldCellsD: this.fieldCellsD.peek(),
             initNumber: this.initNumber.peek(),
             randomize: this.randomize.peek(),
-            constantLight: this.constantLight.peek(),
+            constantLight: this.renderMode.peek(),
             exactPreview: this.exactPreview.peek(),
             visualMapping: this.visualMapping.peek(),
             debugDisplayOrientations: this.debugBoxes.peek(),
@@ -413,7 +413,7 @@ class State {
                     self.fieldCellsD.value = data.fieldCellsD;
                     self.initNumber.value = data.initNumber;
                     self.randomize.value = data.randomize;
-                    self.constantLight.value = data.constantLight;
+                    self.renderMode.value = data.constantLight;
                     self.exactPreview.value = data.exactPreview;
                     self.visualMapping.value = data.visualMapping;
                     self.debugBoxes.value = data.debugDisplayOrientations;

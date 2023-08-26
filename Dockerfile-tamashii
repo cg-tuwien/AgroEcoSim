@@ -2,13 +2,19 @@
 #DOCKER_BUILDKIT=1 token_here docker build --rm -f "Dockerfile" -t tamashii --secret id=usr,src=usr.txt --secret id=token,src=token.txt "." && docker save tamashii | gzip > tamashii.tar.gz
 #--progress plain --no-cache
 
-FROM ubuntu:jammy AS build
-#FROM python:3-slim AS build
+#For getting Vulkan to run inside of Docker follow
+#https://gitlab.com/nvidia/container-images/vulkan
+
+#FROM ubuntu:jammy AS build
+FROM python:3-slim AS build
 
 ENV DEBIAN_FRONTEND=noninteractive
+ENV NVIDIA_DISABLE_REQUIRE=1
+ENV NVIDIA_DRIVER_CAPABILITIES=all
+
 RUN apt-get update -qq && \
     apt-get -qq -y upgrade && \
-    apt-get install -qq -y git curl zip unzip tar gcc pkg-config cmake wget gnupg build-essential software-properties-common \
+    apt-get install -qq -y git curl zip unzip tar gcc pkg-config cmake wget gnupg build-essential software-properties-common unzip \
                         python3-dev python3-pip libtinfo5 \
                         libspdlog-dev libxcb-keysyms1-dev libxcb-xfixes0-dev libxcb-cursor-dev libxcb-xkb-dev \
                         libxcb-util-dev libncurses5 libncurses5-dev
@@ -18,38 +24,74 @@ RUN sh vcpkg/bootstrap-vcpkg.sh -disableMetrics
 RUN vcpkg/vcpkg install spdlog:x64-linux
 
 #jammy
-RUN wget -qO- https://packages.lunarg.com/lunarg-signing-key-pub.asc | tee /etc/apt/trusted.gpg.d/lunarg.asc && \
-    wget -qO /etc/apt/sources.list.d/lunarg-vulkan-jammy.list http://packages.lunarg.com/vulkan/lunarg-vulkan-jammy.list
+#RUN wget -qO- https://packages.lunarg.com/lunarg-signing-key-pub.asc | tee /etc/apt/trusted.gpg.d/lunarg.asc && \
+#    wget -qO /etc/apt/sources.list.d/lunarg-vulkan-jammy.list http://packages.lunarg.com/vulkan/lunarg-vulkan-jammy.list
 
 #focal
-# RUN wget -qO - http://packages.lunarg.com/lunarg-signing-key-pub.asc | apt-key add - && \
-#     wget -qO /etc/apt/sources.list.d/lunarg-vulkan-focal.list http://packages.lunarg.com/vulkan/lunarg-vulkan-focal.list
+RUN wget -qO - http://packages.lunarg.com/lunarg-signing-key-pub.asc | apt-key add - && \
+    wget -qO /etc/apt/sources.list.d/lunarg-vulkan-focal.list http://packages.lunarg.com/vulkan/lunarg-vulkan-focal.list
 
-RUN apt-get update -qq && apt-get install -qq -y xorg-dev libvulkan-dev vulkan-headers vulkan-validationlayers
+RUN pip install nanobind numpy matplotlib
 
-#ENV DUMMY="Dummy9"
-RUN --mount=type=secret,id=token git clone --quiet --recursive https://$(cat /run/secrets/usr):$(cat /run/secrets/token)@gitlab.cg.tuwien.ac.at/llipp/tamashii.git -b dev-dh-fork-cf-ecosys
-#-b dev-dh-python
+RUN apt-get update -qq && apt-get install -qq -y libglvnd0 libgl1 libglx0 libegl1 libgles2 libxcb1-dev xorg-dev libvulkan-dev vulkan-headers vulkan-validationlayers vulkan-utils vulkan-tools --no-install-recommends
 
-WORKDIR tamashii/build
-#RUN pip install nanobind numpy
-#RUN printf '# Detect the installed nanobind package and import it into CMake\nexecute_process(COMMAND "${Python_EXECUTABLE}" -m nanobind --cmake_dir OUTPUT_STRIP_TRAILING_WHITESPACE OUTPUT_VARIABLE NB_DIR)\nlist(APPEND CMAKE_PREFIX_PATH "${NB_DIR}")\nfind_package(nanobind CONFIG REQUIRED)' >> ../CMakeLists.txt
-#RUN sed -i "s/option(BUILD_PYTHON_BINDINGS \"Build Python bindings\" ON)/option(BUILD_PYTHON_BINDINGS \"Build Python bindings\" OFF)/g" ../CMakeLists.txt
-#RUN sed -i "s/Matrix.hpp/matrix.hpp/g" ../include/tamashii/bindings/*.hpp
-RUN sed -i "s/tan((0.01745329251994329576923690768489f/(float)tan((0.01745329251994329576923690768489f/g" ../external/imoguizmo/imoguizmo.hpp
+WORKDIR /radiance
+RUN wget -q https://github.com/LBNL-ETA/Radiance/releases/download/c0834caa/Radiance_c0834caa_Linux.zip && unzip Radiance_c0834caa_Linux.zip && tar -xf radiance-5.4.c0834caa58-Linux.tar.gz && cp radiance-5.4.c0834caa58-Linux/usr / -R
+
+WORKDIR /
+ENV DUMMY="Dummy11"
+RUN --mount=type=secret,id=token --mount=type=secret,id=usr git clone --quiet --recursive https://$(cat /run/secrets/usr):$(cat /run/secrets/token)@gitlab.cg.tuwien.ac.at/llipp/tamashii.git -b dev-dh-fork-cf-ecosys
+
+WORKDIR /tamashii
+
+#RUN printf '# Detect the installed nanobind package and import it into CMake\nexecute_process(COMMAND "${Python_EXECUTABLE}" -m nanobind --cmake_dir OUTPUT_STRIP_TRAILING_WHITESPACE OUTPUT_VARIABLE NB_DIR)\nlist(APPEND CMAKE_PREFIX_PATH "${NB_DIR}")\nfind_package(nanobind CONFIG REQUIRED)' >> CMakeLists.txt
+#RUN sed -i "s/option(BUILD_PYTHON_BINDINGS \"Build Python bindings\" ON)/option(BUILD_PYTHON_BINDINGS \"Build Python bindings\" OFF)/g" CMakeLists.txt
+#RUN sed -i "s/Matrix.hpp/matrix.hpp/g" include/tamashii/bindings/*.hpp
+RUN sed -i "s/tan((0.01745329251994329576923690768489f/(float)tan((0.01745329251994329576923690768489f/g" external/imoguizmo/imoguizmo.hpp
+#RUN sed -i "s/_project/\/tamashii\/build/g" test/PYTHON/render_test.py
 
 #ENV CC=/usr/bin/clang
 #ENV CXX=/usr/bin/clang++
 #ENV CC=/usr/bin/gcc
 #ENV CXX=/usr/bin/g++
-
-RUN cmake .. -DCMAKE_CXX_FLAGS="-w -Wno-unused-result"
+##RUN cmake ..  -DCMAKE_CXX_FLAGS="-w -Wno-unused-result"
 #RUN cmake -DCMAKE_POSITION_INDEPENDENT_CODE=ON ..
     # -DPYTHON_INCLUDE_DIR=$(python -c "import sysconfig; print(sysconfig.get_path('include'))")  \
     # -DPYTHON_LIBRARY=$(python -c "import sysconfig; print(sysconfig.get_config_var('LIBDIR'))") \
     # -DPYTHON_EXECUTABLE:FILEPATH=`which python`
 
-RUN make -j
-#RUN make -j -n
+#RUN make -j
+##RUN cmake --build . --config Release --target inter_adj_light_trace_sh -j
+#RUN make install -j
 
-ENTRYPOINT ["/bin/sh"]
+RUN cmake -H. -B_project -DCMAKE_INSTALL_PREFIX="_install" -DCMAKE_CXX_COMPILER=/usr/bin/g++ -DCMAKE_C_COMPILER=/usr/bin/gcc -DCMAKE_CXX_FLAGS="-w -Wno-unused-result"
+RUN cmake --build _project --config Release --target install -j
+
+FROM ubuntu:jammy AS final
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV NVIDIA_DISABLE_REQUIRE=1
+ENV NVIDIA_DRIVER_CAPABILITIES compute,graphics,utility
+
+COPY --from=build /usr/local/radiance /usr/local/radiance
+COPY --from=build /tamashii/_project /tamashii/_project
+COPY --from=build /tamashii/_install /tamashii/_install
+
+WORKDIR /tamashii/_install/bin
+
+RUN apt-get update -qq && apt-get upgrade -qq -y && apt-get install wget -y
+
+RUN wget -qO- https://packages.lunarg.com/lunarg-signing-key-pub.asc | tee /etc/apt/trusted.gpg.d/lunarg.asc && \
+    wget -qO /etc/apt/sources.list.d/lunarg-vulkan-jammy.list http://packages.lunarg.com/vulkan/lunarg-vulkan-jammy.list
+
+RUN apt-get update -qq && apt-get install -qq -y --no-install-recommends \
+                                          libglvnd0 libgl1 libglx0 libegl1 libgles2 libxcb1-dev xorg-dev libvulkan-dev vulkan-headers vulkan-validationlayers vulkan-utils vulkan-tools \
+                                          libxcb-xkb1 libxcb-cursor0 libxcb-keysyms1
+
+RUN apt purge wget -y && apt autoremove -y && apt autoclean
+
+#ENTRYPOINT ["/bin/bash"]
+ENTRYPOINT ["inter_adj_light_trace_sh", "/usr/local/radiance/bin"]
+#/tamashii/_install/bin/inter_adj_light_trace_sh /usr/local/radiance/bin
+#python3 /tamashii/test/PYTHON/render_Test.py
+

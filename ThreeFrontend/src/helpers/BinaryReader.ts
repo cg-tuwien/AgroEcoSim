@@ -130,7 +130,9 @@ export default class BinaryReader {
                         const lastIrradiance = this.readFloat32();
                         const dailyResource = this.readFloat32();
                         const dailyProduction = this.readFloat32();
-                        entity.push({ type: Leaf, affineTransform: transform, stats: new Float32Array([waterRatio, energyRatio, lastIrradiance, dailyResource, dailyProduction, 0, 0]) });
+                        const auxins = this.readFloat32();
+                        const cytokianins = this.readFloat32();
+                        entity.push({ type: Leaf, affineTransform: transform, stats: new Float32Array([waterRatio, energyRatio, lastIrradiance, dailyResource, dailyProduction, 0, 0, auxins, cytokianins]) });
                         maxDailyProduction = Math.max(dailyProduction, maxDailyProduction);
                         maxDailyResource = Math.max(dailyResource, maxDailyResource);
                     }
@@ -142,7 +144,9 @@ export default class BinaryReader {
                         const waterRatio = this.readFloat32();
                         const energyRatio = this.readFloat32();
                         const woodRatio = this.readFloat32();
-                        entity.push({ type: Stem, affineTransform: transform, length: length, radius: radius, stats: new Float32Array([waterRatio, energyRatio, woodRatio]) });
+                        const auxins = this.readFloat32();
+                        const cytokianins = this.readFloat32();
+                        entity.push({ type: Stem, affineTransform: transform, length: length, radius: radius, stats: new Float32Array([waterRatio, energyRatio, woodRatio, auxins, cytokianins]) });
                     }
                     break;
                     case 3: { //bud
@@ -150,7 +154,9 @@ export default class BinaryReader {
                         const radius = this.readFloat32();
                         const waterRatio = this.readFloat32();
                         const energyRatio = this.readFloat32();
-                        entity.push({ type: Bud, center: center, radius: radius, stats: new Float32Array([waterRatio, energyRatio]) });
+                        const auxins = this.readFloat32();
+                        const cytokianins = this.readFloat32();
+                        entity.push({ type: Bud, center: center, radius: radius, stats: new Float32Array([waterRatio, energyRatio, auxins, cytokianins]) });
                     }
                     break;
                 }

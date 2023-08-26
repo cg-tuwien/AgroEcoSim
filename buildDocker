@@ -19,6 +19,6 @@ docker save agroecosim | gzip > agroecoSim.tar.gz
 docker save agroecoweb | gzip > agroecoWeb.tar.gz
 
 NOW=$(date +"%Y%m%d_%H%M%S")
-zip -r "AgroEcoSim-${NOW}.zip" agroecoRender.tar.gz agroecoSim.tar.gz agroecoWeb.tar.gz deployDocker docker-compose.yml #\
+zip -r "AgroEcoSim-${NOW}.zip" agroecoRender.tar.gz agroecoSim.tar.gz agroecoWeb.tar.gz tamashii.tar.gz deployDocker docker-compose.yml #\
     #Dockerfile-render \
     #agroeco-mts3/binary_loader.py agroeco-mts3/batch-sensor.py agroeco-mts3/render-server.py agroeco-mts3/RendererMts3.py

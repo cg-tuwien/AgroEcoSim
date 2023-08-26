@@ -48,9 +48,9 @@ public class SimulationRequest
     public bool? RequestGeometry { get; init; }
 
     ///<summary>
-    ///If true, the global illumination is switched off, usually for debugging purposes (default: false)
+    ///Selects the renderer, 0 = no renderer, constant light; 1 = Mitsuba3, 2 = Tamashii (default: 0)
     ///</summary>
-    public bool? ConstantLights { get; init; }
+    public byte RenderMode { get; init; }
 
     ///<summary>
     ///If true, the the backend will send a preview after each simulation step. Otherwise the previews are sent layzily. (default: false)

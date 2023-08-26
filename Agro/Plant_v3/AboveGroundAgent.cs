@@ -60,6 +60,23 @@ public partial struct AboveGroundAgent3 : IPlantAgent
 	/// </summary>
 	public float Water { get; private set; }
 
+	// /// <summary>
+	// /// Hormones level (in custom units)
+	// /// </summary>
+	// public float AbscisicAcid { get; set; }
+	/// <summary>
+	/// Hormones level (in custom units)
+	/// </summary>
+	public float Auxins { get; set; }
+	/// <summary>
+	/// Hormones level (in custom units)
+	/// </summary>
+	public float Cytokinins { get; set; }
+	// /// <summary>
+	// /// Hormones level (in custom units)
+	// /// </summary>
+	// public float Gibberellins { get; set; }
+
 	///<summary>
 	///Accumulated energy output of this agent for the last 24 steps, per m² i.e. invariant of size
 	///</summary>
@@ -196,6 +213,9 @@ public partial struct AboveGroundAgent3 : IPlantAgent
 		CurrentDayEnvResourcesInv = 0f;
 		//Children = null;
 		FirstSegmentIndex = plant.InsertSegments(SegmentsCount, orientation);
+
+		Auxins = 0f;
+		Cytokinins = 0f;
 	}
 
 	/// <summary>
@@ -269,6 +289,8 @@ public partial struct AboveGroundAgent3 : IPlantAgent
 				CurrentDayEnvResourcesInv += approxLight;
 			}
 		}
+		else if (Organ == OrganTypes.Meristem)
+			Auxins += TwoPi * Radius * world.HoursPerTick;
 
 		//just for DEBUG
 		if (Organ == OrganTypes.Petiole && formation.GetOrgan(Parent) != OrganTypes.Meristem && plant.RNG.NextUInt((uint)8760 / world.HoursPerTick) <= 2)

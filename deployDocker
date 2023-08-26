@@ -4,3 +4,4 @@
 docker load < agroecoRender.tar.gz
 docker load < agroecoSim.tar.gz
 docker load < agroecoWeb.tar.gz
+docker load < tamashii.tar.gz

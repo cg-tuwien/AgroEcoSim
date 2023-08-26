@@ -13,7 +13,7 @@ import { Seeds } from './hud/Seeds';
 import ThreeSceneFn from './viewport/ThreeSceneFn';
 import { ProgressBar } from './hud/ProgressBar';
 import { Obstacles } from './hud/Obstacles';
-import { ConstantLight } from './hud/ConstantLight';
+import { Renderer } from './hud/RenderMode';
 import { ExportImport } from './hud/ExportImport';
 import { VisualMapping } from './hud/VisualMapping';
 import { signal } from '@preact/signals';
@@ -41,7 +41,7 @@ const App = () => {
 			</ul>
 
 			<div role="tabpanel" id="tab-home" aria-selected={tabs.value.endsWith("tab-home")}>
-				<Start/>&nbsp;<ProgressBar/>
+				<Start  inclStats={true}/>&nbsp;<ProgressBar/>
 				<ExportImport/>
 			</div>
 			<div role="tabpanel" id="tab-sim" aria-selected={tabs.value.endsWith("tab-spec")}>
@@ -56,7 +56,7 @@ const App = () => {
 				<FieldCellsD/>
 				<Randomize/>
 				<InitNumber/>
-				<ConstantLight/>
+				<Renderer/>
 				<ExactPreview/>
 			</div>
 			<div role="tabpanel" id="tab-plants" aria-selected={tabs.value.endsWith("tab-plants")}>
@@ -66,6 +66,7 @@ const App = () => {
 				<Obstacles/>
 			</div>
 			<div role="tabpanel" id="tab-analysis" aria-selected={tabs.value.endsWith("tab-analysis")}>
+				<Start inclStats={false}/>
 				<VisualMapping/>
 				<PlantsTable/>
 			</div>
