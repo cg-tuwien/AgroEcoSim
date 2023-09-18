@@ -59,8 +59,9 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 
 	// public void Update(int index) => ParentUpdates = true;
 
-	public void Death(int index)
+	public List<int>? Death(int index)
 	{
+		List<int> result = null;
 		if (Deaths.Add(index))
 		{
 			var buffer = new Queue<int>();
@@ -73,10 +74,15 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 					foreach(var child in children)
 					{
 						if (Deaths.Add(child))
+						{
+							result ??= new();
+							result.Add(child);
 							buffer.Enqueue(child);
+						}
 					}
 			}
 		}
+		return result;
 	}
 
 	public bool SendProtected(int dst, IMessage<T> msg)
@@ -138,6 +144,7 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 			}
 
 			var diff = Births.Count + Inserts.Count - Deaths.Count;
+			Debug.Assert(src.Length + diff >= 0);
 
 			//filter out addidions to death parts
 			BitArray? birthsHelper = null, insertsHelper = null;
@@ -226,25 +233,34 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 				// 		Agents[Agents[index].Parent].RemoveChild(index);
 
 				int a = 0;
-				var deathsCount = DeathsHelper.Count;
-				for(int s = 0, d = 0; s < src.Length;) //iterate all existing agents
 				{
-					if (DeathsHelper[d] == s) //if this one is dead skip it ...
+					if (DeathsHelper[0] > 0)
 					{
-						++s;
-						if (++d == deathsCount && s < src.Length) // ... but if it is the last one, copy the rest of src and done
+						var stop = DeathsHelper[0];
+						Array.Copy(src, 0, tmp, 0, stop);
+						for(int s = 0; s < stop; ++s)
+							indexMap[s] = a++;
+					}
+
+					var deathsCount = DeathsHelper.Count;
+					for(int d = 1; d < deathsCount; ++d)
+					{
+						var range = DeathsHelper[d] - DeathsHelper[d - 1];
+						if (range > 1) //there were some alive inbewteen
 						{
-							Array.Copy(src, s, tmp, a, src.Length - s);
-							for(int j = s; j < src.Length; ++j)
-								indexMap[j] = a++;
-							break;
+							var s = DeathsHelper[d - 1] + 1;
+							Array.Copy(src, s, tmp, a, range - 1);
+							var stop = DeathsHelper[d];
+							while(s < stop)
+								indexMap[s++] = a++;
 						}
 					}
-					else //if this one is alive
+
+					if (DeathsHelper[^1] < src.Length)
 					{
-						indexMap[s] = a;
-						//TODO this could be more efficient using Array.Copy for continuous blocks
-						tmp[a++] = src[s++];
+						Array.Copy(src, DeathsHelper[^1] + 1, tmp, a, src.Length - 1 - DeathsHelper[^1]);
+						for(int s = DeathsHelper[^1] + 1; s < src.Length; ++s)
+							indexMap[s] = a++;
 					}
 				}
 
@@ -281,8 +297,8 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 				var a = src.Length;
 
 				var birthsCount = Births.Count;
-				for(int b = 0; b < birthsCount; ++a, ++b)
-					tmp[a] = Births[b];
+				Births.CopyTo(tmp, a);
+				a += Births.Count;
 
 				var insertsCount = Inserts.Count;
 				for(int i = 0; i < insertsCount; ++i, ++a)
@@ -363,9 +379,12 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 		var (dst, src) = SrcDst(); //since Tick already swapped them
 		var prevLength = Gathering.Count;
 		for(int i = 0; i < prevLength; ++i)
-		{
-			Gathering[i] = default;
 			Efficiencies[i] = default;
+
+		if (prevLength > dst.Length)
+		{
+			Gathering.RemoveRange(dst.Length, Gathering.Count - dst.Length);
+			Efficiencies.RemoveRange(dst.Length, Efficiencies.Count - dst.Length);
 		}
 
 		for(int i = prevLength; i < dst.Length; ++i)
@@ -373,20 +392,6 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 			Gathering.Add(default);
 			Efficiencies.Add(default);
 		}
-		//var maxIrradiance = IrradianeClient.MaxIrradiance(this);
-
-		//var (irradianceOffsets, irradiances) = IrradianceClient.GetIrradiance(this);
-		// var irradianceMax = 0f;
-		// if (irradianceOffsets != null)
-		// {
-		// 	for(int i = 0; i < irradianceOffsets.Length; ++i)
-		// 		if (irradianceOffsets[i] >= 0)
-		// 		{
-		// 			var val = irradiances[irradianceOffsets[i]];
-		// 			if (irradianceMax < val)
-		// 				irradianceMax = val;
-		// 		}
-		// }
 
 		for(int i = 0; i < dst.Length; ++i)
 		{
@@ -417,6 +422,7 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 		foreach(var i in Deaths)
 		{
 			Gathering[i] = default;
+			Efficiencies[i] = default;
 			energyRequirement -= dst[i].LifeSupportPerTick(world);
 			waterRequirement -= dst[i].PhotosynthPerTick();
 			energyCapacity -= dst[i].EnergyStorageCapacity();
@@ -482,7 +488,7 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 				}
 
 			for(int i = 0; i < dst.Length; ++i)
-				if (GetOrgan(i) == OrganTypes.Bud)
+				if (GetOrgan(i) == OrganTypes.Bud || GetOrgan(i) == OrganTypes.Meristem)
 					Efficiencies[i] = GatherEfficiency.ONE;
 
 			// for(int i = 0; i < dst.Length; ++i)
@@ -502,8 +508,8 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 			WaterDiff = waterDiff,
 			EnergyCapacity = energyCapacity,
 			WaterCapacity = waterCapacity,
-			EnergyRequirement = energyRequirement,
-			WaterRequirement = waterRequirement,
+			EnergyRequirementPerTick = energyRequirement,
+			WaterRequirementPerTick = waterRequirement,
 			Gathering = Gathering,
 			Efficiencies = Efficiencies
 		};

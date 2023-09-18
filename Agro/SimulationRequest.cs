@@ -53,7 +53,12 @@ public class SimulationRequest
     public byte RenderMode { get; init; }
 
     ///<summary>
-    ///If true, the the backend will send a preview after each simulation step. Otherwise the previews are sent layzily. (default: false)
+    ///If true, the backend will send a preview after each simulation step. Otherwise the previews are sent layzily. (default: false)
     ///</summary>
     public bool? ExactPreview { get; init; }
+
+    /// <summary>
+    /// If true, the backend will send the roots geometry along with the shoots. Attention, involves large data volumes. (default: false)
+    /// </summary>
+    public bool? DownloadRoots { get; init; }
 }

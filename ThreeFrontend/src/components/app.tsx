@@ -19,6 +19,7 @@ import { VisualMapping } from './hud/VisualMapping';
 import { signal } from '@preact/signals';
 import { SpeciesList } from './hud/Species';
 import { ExactPreview } from './hud/ExactPreview';
+import { DownloadRoots } from './hud/DownloadRoots';
 //import {Tab, initTE } from "tw-elements"; initTE({ Tab }); //tried but failed
 
 const tabs = signal("tab-home");
@@ -58,6 +59,7 @@ const App = () => {
 				<InitNumber/>
 				<Renderer/>
 				<ExactPreview/>
+				<DownloadRoots/>
 			</div>
 			<div role="tabpanel" id="tab-plants" aria-selected={tabs.value.endsWith("tab-plants")}>
 				<Seeds/>

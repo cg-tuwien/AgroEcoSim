@@ -723,10 +723,10 @@ public class IrradianceClient
 		ExportAsBeautyPrimitives(formations, file);
 	}
 
-	internal void ExportAsBeautyPrimitives(IList<IFormation> formations, Stream binaryStream, bool extended = false)
+	internal void ExportAsBeautyPrimitives(IList<IFormation> formations, Stream binaryStream, bool extended = false, bool roots = false)
 	{
 		using var writer = new BinaryWriter(binaryStream);
-		writer.WriteU8(extended ? 5 : 4); //version 4 is for the beauty pass; using primitives, each surface is individually marked as obstacle or sensor}
+		writer.WriteU8(extended ? (roots ? 6 : 5) : 4); //version 4 is for the beauty pass; using primitives, each surface is individually marked as obstacle or sensor}
 
 		//Formations
 		writer.WriteU32(formations.Count - SkipFormations.Count); //WRITE NUMBER OF PLANTS in this system
@@ -747,7 +747,7 @@ public class IrradianceClient
 					if (ag.GetOrgan(i) == OrganTypes.Leaf)
 						++sensorsCount;
 
-				writer.WriteU32(count); //WRITE NUMBER OF SURFACES in this plant
+				writer.WriteU32(count); //WRITE NUMBER OF ABOVE-GROUND SURFACES in this plant
 
 				for (int i = 0; i < count; ++i)
 				{
@@ -811,6 +811,48 @@ public class IrradianceClient
 						writer.Write(h.Y);
 					}
 				}
+
+				if (roots)
+				{
+					var ug = plant.UG;
+					count = ug.Count;
+					writer.WriteU32(count); //WRITE NUMBER OF UNDER-GROUND SURFACES in this plant
+
+					for (int i = 0; i < count; ++i)
+					{
+						var organ = ug.GetOrgan(i);
+						var center = ug.GetBaseCenter(i);
+						var scale = ug.GetScale(i);
+						var orientation = ug.GetDirection(i);
+
+						var x = Vector3.Transform(Vector3.UnitX, orientation);
+						var y = Vector3.Transform(Vector3.UnitY, orientation);
+						var z = Vector3.Transform(Vector3.UnitZ, orientation);
+
+						var parentIndex = ug.GetParent(i);
+						writer.Write(parentIndex);
+
+						switch (organ)
+						{
+							case OrganTypes.Root:
+								{
+									writer.WriteU8(1); //ORGAN 1 root
+									writer.Write(scale.X); //length
+									writer.Write(scale.Z * 0.5f); //radius
+									writer.WriteM32(z, x, y, center);
+									writer.Write(Math.Clamp(ag.GetWater(i) / ag.GetWaterStorageCapacity(i), 0, 1));
+									writer.Write(Math.Clamp(ag.GetEnergy(i) / ag.GetEnergyCapacity(i), 0, 1));
+									writer.Write(Math.Clamp(ag.GetWoodRatio(i), 0, 1));
+									if (extended)
+									{
+										writer.Write(ag.GetDailyResourcesInv(i));
+										writer.Write(ag.GetDailyProductionInv(i));
+									}
+								}
+								break;
+						}
+					}
+				}
 			}
 		}
 	}
@@ -836,7 +878,8 @@ public class IrradianceClient
             case 2: ExportAsPrimitivesClustered(formations, obstacles, 0, target); break;
             case 3: ExportAsPrimitivesInterleaved(formations, obstacles, target); break;
             case 4: ExportAsBeautyPrimitives(formations, target); break;
-            case 5: ExportAsBeautyPrimitives(formations, target, true); break;
+            case 5: ExportAsBeautyPrimitives(formations, target, extended: true); break;
+			case 6: ExportAsBeautyPrimitives(formations, target, extended: true, roots: true); break;
         }
     }
 

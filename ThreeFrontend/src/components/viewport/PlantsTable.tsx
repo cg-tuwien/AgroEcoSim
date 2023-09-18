@@ -1,6 +1,7 @@
 import { Component, h, Fragment } from "preact";
 import appstate from "../../appstate";
 import { DecodePlantName } from "../../helpers/Plant";
+import { Primitives } from "../../helpers/Primitives";
 
 export function PlantsTable()
 {
@@ -24,12 +25,12 @@ export function PlantsTable()
             <ul style={{listStyleType: "none"}}>
                 <li>Water ratio: {primitive.stats[0]}</li>
                 <li>Energy ratio: {primitive.stats[1]}</li>
-                {primitive.type == 2 ? <li>Wood ratio: {primitive.stats[2]}</li> : <></>}
-                {primitive.type == 8 ? <li>Irradiance: {primitive.stats[2]}</li> : <></>}
-                {primitive.type == 8 ? <li>Resources availability: {primitive.stats[3]}</li>: <></>}
-                {primitive.type == 8 ? <li>Production efficiency: {primitive.stats[4]}</li> : <></>}
-                {primitive.type == 8 ? <li>Relative Resources: {primitive.stats[5]}</li>: <></>}
-                {primitive.type == 8 ? <li>Relative Production: {primitive.stats[6]}</li> : <></>}
+                {primitive.type == Primitives.Cylinder || primitive.type == Primitives.Box ? <li>Wood ratio: {primitive.stats[2]}</li> : <></>}
+                {primitive.type == Primitives.Rectangle ? <li>Irradiance: {primitive.stats[2]}</li> : <></>}
+                {primitive.type == Primitives.Rectangle || primitive.type == Primitives.Box ? <li>Resources availability: {primitive.stats[3]}</li>: <></>}
+                {primitive.type == Primitives.Rectangle || primitive.type == Primitives.Box ? <li>Production efficiency: {primitive.stats[4]}</li> : <></>}
+                {primitive.type == Primitives.Rectangle || primitive.type == Primitives.Box ? <li>Relative Resources: {primitive.stats[5]}</li>: <></>}
+                {primitive.type == Primitives.Rectangle || primitive.type == Primitives.Box ? <li>Relative Production: {primitive.stats[6]}</li> : <></>}
             </ul>
         </>) : (<></>);
     }

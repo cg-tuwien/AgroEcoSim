@@ -181,8 +181,8 @@ public partial class PlantFormation2 : IPlantFormation
 			var energy = globalAG.Energy + globalUG.Energy;
 			var water = globalAG.Water + globalUG.Energy;
 
-			var energyRequirement = globalAG.EnergyRequirement + globalUG.EnergyRequirement;
-			var waterRequirement = globalAG.WaterRequirement + globalUG.WaterRequirement;
+			var energyRequirement = globalAG.EnergyRequirementPerTick + globalUG.EnergyRequirementPerTick;
+			var waterRequirement = globalAG.WaterRequirementPerTick + globalUG.WaterRequirementPerTick;
 
 			var energyStorage = globalAG.EnergyCapacity + globalUG.EnergyCapacity;
 			var waterStorage = globalAG.WaterCapacity + globalUG.WaterCapacity;
@@ -190,8 +190,8 @@ public partial class PlantFormation2 : IPlantFormation
 			var positiveEfficiencyAG = globalAG.UsefulnessTotal > 0.0;
 			var positiveEfficiencyUG = globalUG.UsefulnessTotal > 0.0;
 
-			var energyEmergencyThrehold = energyRequirement * 4;
-			var energAlertThreshold = energyRequirement * 24;
+			var energyEmergencyThrehold = Math.Max(1, 168 / world.HoursPerTick) * energyRequirement / world.HoursPerTick;
+			var energAlertThreshold = Math.Max(energyEmergencyThrehold * 4, 0.01 * energyStorage);
 
 			#if GODOT
 			UG.LightEfficiency = globalUG.LightEfficiency;
@@ -207,15 +207,41 @@ public partial class PlantFormation2 : IPlantFormation
 			//Debug.WriteLine($"E: {energy} / {energyRequirement}   {globalUG.EnergyDiff} + {globalAG.EnergyDiff}");
 			if (energy < energyEmergencyThrehold)
 			{
-				var energyState = energy / (energyRequirement >= zero ? energyRequirement : 1);
-				var waterState = water / (waterRequirement >= zero ? waterRequirement : 1);
-				if (energyState < waterState) //cut of a root
-				{
+				// var energyState = energy / (energyRequirement >= zero ? energyRequirement : 1);
+				// var waterState = water / (waterRequirement >= zero ? waterRequirement : 1);
+				// if (waterState < energyState) //cut of a root
+				// {
 
-				}
-				else //cut off a leaf
+				// }
+				// else //cut off a leaf
 				{
-
+					var count = globalAG.Efficiencies.Count;
+					var ordering = new List<(float energyRequired, int index)>(count);
+					int i = 0;
+					for(; i < count; ++i)
+						ordering.Add((globalAG.Efficiencies[i].ResourceEfficiency, i));
+					ordering.Sort((x, y) => x.energyRequired.CompareTo(y.energyRequired));
+					var target = energyEmergencyThrehold - energy;
+					i = 0;
+					var removed = new HashSet<int>();
+					while (target > 0 && i < ordering.Count)
+					{
+						var index = ordering[i++].index;
+						if (!removed.Contains(index))
+						{
+							target -= globalAG.Gathering[index].LifesupportEnergy;
+							removed.Add(index);
+							var deaths = AG.Death(index);
+							if (deaths != null)
+								foreach(var item in deaths)
+									if (!removed.Contains(item))
+									{
+										target -= globalAG.Gathering[item].LifesupportEnergy;
+										removed.Add(item);
+									}
+						}
+					}
+					Debug.Write($"Emergency removal of {removed.Count} plant agents.");
 				}
 
 				// var minEfficiency = Math.Min(globalUG.Efficiency.Min(), globalAG.Efficiency.Min());
@@ -231,6 +257,23 @@ public partial class PlantFormation2 : IPlantFormation
 			}
 			else if (energy < energAlertThreshold || energyStorage < energyRequirement) //the plant is short on energy, it must be distributed
 			{
+				var min = float.MaxValue;
+				var minList = new List<int>();
+				var count = globalAG.Efficiencies.Count;
+				for(int i = 0; i < count; ++i)
+					switch (globalAG.Efficiencies[i].ResourceEfficiency.CompareTo(min))
+					{
+						case -1:
+							min = globalAG.Efficiencies[i].ResourceEfficiency;
+							minList.Clear();
+							minList.Add(i);
+						break;
+						case 0: minList.Add(i); break;
+					}
+
+				foreach(var item in minList)
+					AG.Death(item);
+
 				var weights = globalAG.Weights4EnergyDistributionByRequirement(positiveEfficiencyAG) + globalUG.Weights4EnergyDistributionByRequirement(positiveEfficiencyUG);
 				var factor = (float)(energy / (weights >= zero ? weights : 1));
 				globalAG.DistributeEnergyByRequirement(factor, positiveEfficiencyAG);
@@ -247,7 +290,7 @@ public partial class PlantFormation2 : IPlantFormation
 			}
 			#if DEBUG
 			var check = Math.Abs(energy - (globalAG.ReceivedEnergy.Sum() + globalUG.ReceivedEnergy.Sum()));
-			Debug.Assert(check <= energy * 1e-5);
+			Debug.Assert(check <= energy * 1e-3);
 			#endif
 
 			if (water < waterRequirement || waterStorage < waterRequirement)

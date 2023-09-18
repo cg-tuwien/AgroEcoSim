@@ -192,6 +192,7 @@ class State {
     plantPick = signal("");
 
     transformControls: TransformControls | undefined;
+    downloadRoots = signal(false);
     debugBoxes = signal(false);
 
     grabbed = computed(() => this.seeds.value.filter((x: Seed) => x.state.value == "grab"));
@@ -229,7 +230,8 @@ class State {
         Obstacles: this.obstacles.peek().map((o: Obstacle) => exportObstacle(o)),
         RequestGeometry: true,
         RenderMode: this.renderMode.value,
-        ExactPreview: this.exactPreview.value
+        ExactPreview: this.exactPreview.value,
+        DownloadRoots: this.downloadRoots.value
     }};
 
     run = async() => {
@@ -364,6 +366,7 @@ class State {
             initNumber: this.initNumber.peek(),
             randomize: this.randomize.peek(),
             constantLight: this.renderMode.peek(),
+            downloadRoots: this.downloadRoots.peek(),
             exactPreview: this.exactPreview.peek(),
             visualMapping: this.visualMapping.peek(),
             debugDisplayOrientations: this.debugBoxes.peek(),
@@ -414,6 +417,7 @@ class State {
                     self.initNumber.value = data.initNumber;
                     self.randomize.value = data.randomize;
                     self.renderMode.value = data.constantLight;
+                    self.downloadRoots.value = data.downloadRoots;
                     self.exactPreview.value = data.exactPreview;
                     self.visualMapping.value = data.visualMapping;
                     self.debugBoxes.value = data.debugDisplayOrientations;

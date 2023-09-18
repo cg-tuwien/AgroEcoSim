@@ -22,8 +22,8 @@ public class PlantGlobalStats
 	public double EnergyCapacity { get; set; }
 	public double WaterCapacity { get; set; }
 
-	public double EnergyRequirement{ get; set; }
-	public double WaterRequirement { get; set; }
+	public double EnergyRequirementPerTick{ get; set; }
+	public double WaterRequirementPerTick { get; set; }
 
 	public double UsefulnessTotal { get; set; }
 
@@ -50,7 +50,7 @@ public class PlantGlobalStats
 			return weightsTotal;
 		}
 		else
-			return EnergyRequirement;
+			return EnergyRequirementPerTick;
 	}
 
 	internal double Weights4EnergyDistributionByStorage(bool positiveEfficiency)

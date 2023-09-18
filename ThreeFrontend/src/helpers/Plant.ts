@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { backgroundColor, neutralColor } from "./Selection";
 import appstate from "../appstate";
-import { threeCylinderPrimitive, threePlanePrimitive, threeSpherePrimitive } from "../components/viewport/ThreeSceneFn";
+import { threeBoxPrimitive, threeCylinderPrimitive, threePlanePrimitive, threeSpherePrimitive } from "../components/viewport/ThreeSceneFn";
 import { Primitive } from "./Primitives";
 import { Index } from "./Scene";
 
@@ -88,6 +88,36 @@ export function VisualizeStemMesh(material: THREE.MeshStandardMaterial, index: I
     material.needsUpdate = true;
 }
 
+export function CreateRootMesh(primitive: Primitive, index: Index) {
+    const material = primitive.stats ? new THREE.MeshStandardMaterial(RootColor(primitive)) : singleGreyMaterial;
+    return SetupMesh(primitive, index, new THREE.Mesh(threeBoxPrimitive, material));
+}
+
+export function UpdateRootMesh(mesh: THREE.Mesh, primitive: Primitive, index: Index) {
+    mesh.geometry = threeBoxPrimitive;
+    if (mesh.userData.customMaterial)
+    {
+        const material = mesh.material as THREE.MeshStandardMaterial;
+        const c = RootColor(primitive);
+        material.color = c.color;
+        material.emissive = c.emissive;
+        material.side = THREE.FrontSide;
+        material.needsUpdate = true;
+    }
+    else
+        mesh.material = new THREE.MeshStandardMaterial(RootColor(primitive));
+
+    return SetupMesh(primitive, index, mesh);
+}
+
+export function VisualizeRootMesh(material: THREE.MeshStandardMaterial, index: Index) {
+    const primitive = appstate.scene.peek()[index.entity][index.primitive];
+    const c = RootColor(primitive);
+    material.color = c.color;
+    material.emissive = c.emissive;
+    material.needsUpdate = true;
+}
+
 export function CreateBudMesh(primitive: Primitive, index: Index) {
     const material = primitive.stats ? new THREE.MeshStandardMaterial(BudColor(primitive)) : singleGreyMaterial;
     return SetupMesh(primitive, index, new THREE.Mesh(threeSpherePrimitive, material));
@@ -140,6 +170,16 @@ function StemColor(primitive: Primitive) : { color: THREE.Color, emissive: THREE
         default: return { color: neutral, emissive: black };
     }
 }
+function RootColor(primitive: Primitive) : { color: THREE.Color, emissive: THREE.Color } {
+    switch (appstate.visualMapping.peek()) {
+        case VisualMappingOptions.Natural: return { color: greyColor.clone().lerpHSL(woodColor, primitive.stats[2]), emissive: black };
+        case VisualMappingOptions.Water: return { emissive: WaterColor(primitive.stats[0]), color: black };
+        case VisualMappingOptions.Energy: return { emissive: EnergyColor(primitive.stats[1]), color: black };
+        case VisualMappingOptions.Resource: return { emissive: EfficiencyColor(primitive.stats[5]), color: black };
+        case VisualMappingOptions.Production: return { emissive: EfficiencyColor(primitive.stats[6]), color: black };
+        default: return { color: neutral, emissive: black };
+    }
+}
 
 function BudColor(primitive: Primitive) : { color: THREE.Color, emissive: THREE.Color } {
     switch (appstate.visualMapping.peek()) {
@@ -156,6 +196,7 @@ export const doubleGreyMaterial = new THREE.MeshStandardMaterial({ color: neutra
 
 const woodColor = new THREE.Color("#7f4f1f");
 const greenColor = new THREE.Color("#009900");
+const greyColor = new THREE.Color("#898989");
 
 const heatColors = [
     new THREE.Color("#003f5c"),
