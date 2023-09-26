@@ -69,7 +69,9 @@ export class Species {
             leafPitchDegVar: this.leafPitchDegVar.peek(),
 
             petioleLength: this.petioleLength.peek(),
+            petioleLengthVar: this.petioleLengthVar.peek(),
             petioleRadius: this.petioleRadius.peek(),
+            petioleRadiusVar: this.petioleRadiusVar.peek(),
         };
     }
 
@@ -94,8 +96,8 @@ export class Species {
         this.leafRadiusVar.value = s.leafRadiusVar;
         this.leafGrowthTime.value = s.leafGrowthTime;
         this.leafGrowthTimeVar.value = s.leafGrowthTimeVar;
-        this.leafPitchDeg.value = s.leafPitch;
-        this.leafPitchDegVar.value = s.leafPitchVar;
+        this.leafPitchDeg.value = s.leafPitchDeg;
+        this.leafPitchDegVar.value = s.leafPitchDegVar;
 
         this.petioleLength.value = s.petioleLength;
         this.petioleLengthVar.value = s.petioleLengthVar;

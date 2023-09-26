@@ -80,10 +80,10 @@ public struct SeedAgent : IAgent
 		mVegetativeTemperature = vegetativeTemperature;
 	}
 
-	public void Tick(SimulationWorld _world, IFormation _formation, int formationID, uint timestep, byte stage)
+	public void Tick(IFormation _formation, int formationID, uint timestep, byte stage)
 	{
-		var world = _world as AgroWorld;
 		var plant = (PlantFormation2)_formation;
+		var world = plant.World;
 		Water -= Radius * Radius * Radius * world.HoursPerTick; //life support
 		if (Water <= 0) //energy depleted
 		{
@@ -130,7 +130,8 @@ public struct SeedAgent : IAgent
 							waterRequest += amount;
 						}
 					}
-					Water += soil.RequestWater(sources[0], waterRequest);
+					//Water +=
+					soil.RequestWater(sources[0], waterRequest, plant);
 				}
 			}
 		}

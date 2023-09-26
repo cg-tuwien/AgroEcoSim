@@ -25,9 +25,9 @@ public readonly struct Vector3i : IEquatable<Vector3i>, IComparable<Vector3i>
 
     public Vector3i(Vector3 vector)
     {
-        X = (int)vector.X;
-        Y = (int)vector.Y;
-        Z = (int)vector.Z;
+        X = (int)Math.Floor(vector.X);
+        Y = (int)Math.Floor(vector.Y);
+        Z = (int)Math.Floor(vector.Z);
     }
 
     public Vector3i(ReadOnlySpan<int> readOnlySpan) : this()

@@ -47,6 +47,7 @@ public readonly struct WeatherStats
 public class AgroWorld : SimulationWorld
 {
 	public ushort HoursPerTick = 1;
+	public byte TicksPerDay = 24;
 	//public const int TotalHours = 24 * 365 * 10;
 	public int TotalHours = 24 * 31 * 12;
 
@@ -101,6 +102,8 @@ public class AgroWorld : SimulationWorld
 					HoursPerTick = (ushort)(24 * (HoursPerTick / 24));
 
 				StatsBlockLength = (byte)(23 / HoursPerTick + 1);
+
+				TicksPerDay = (byte)(HoursPerTick >= 24 ? 1 : 24 / HoursPerTick);
 			}
 
 			if (settings?.TotalHours.HasValue ?? false)

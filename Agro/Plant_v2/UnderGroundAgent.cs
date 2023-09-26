@@ -55,12 +55,14 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 	/// <summary>
 	/// Production during the previous day, per m² i.e. invariant of size
 	/// </summary>
-	public float PreviousDayProductionInv => 0f;
+	public float PreviousDayProductionInv {get; private set; }
+	public float CurrentDayProductionInv { get; set; }
 
 	/// <summary>
 	/// Resources allocated during the previous day, per m² i.e. invariant of size
 	/// </summary>
-	public float PreviousDayEnvResourcesInv => 0f;
+	public float PreviousDayEnvResourcesInv { get; private set; }
+	public float CurrentDayEnvResources { get; set; }
 
 	/// <summary>
 	/// Inverse woodyness ∈ [0, 1]. The more woody (towards 0) the less water the root can absorb.
@@ -100,18 +102,17 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 	/// <summary>
 	/// Water volume in m³ that can be absorbed per m² of root surface per hour
 	/// </summary>
-	public const float WaterAbsortionRatio = 1f;
+	public const float WaterAbsortionRatio = 0.04f;
 
 	/// <summary>
 	/// Water volume in m³ which can be absorbed from soil per hour
 	/// </summary>
-	public float WaterAbsorbtionPerHour() => Radius * 8f * Length * WaterAbsortionRatio;
+	public float WaterAbsorbtionPerHour() => Radius * Length * WaterAbsortionRatio;
 
 	/// <summary>
 	/// Water volume in m³ which can be absorbed from soil per timestep
 	/// </summary>
 	public float WaterAbsorbtionPerTick(AgroWorld world) => WaterAbsorbtionPerHour() * world.HoursPerTick;
-
 
 	//Let's assume (I might be fully wrong) that the plan can push the water 0.5mm in 1s, then in 1h it can push it 0.001 * 30 * 60 = 1.8m
 	//also see - interestingly it states that while pholem is not photosensitive, xylem is
@@ -170,7 +171,7 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 
 	public float LifeSupportPerTick(AgroWorld world) => LifeSupportPerHour() * world.HoursPerTick;
 
-	public float PhotosynthPerTick() => 0f;
+	public float PhotosynthPerTick(AgroWorld world) => 0f;
 
 	public static Quaternion OrientationDown = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, -MathF.PI * 0.5f);
 
@@ -189,6 +190,11 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 
 		Auxins = 0f;
 		Cytokinins = 0f;
+
+		PreviousDayProductionInv = 0f;
+		CurrentDayProductionInv = 0f;
+		PreviousDayEnvResourcesInv = 0f;
+		CurrentDayEnvResources = 0f;
 	}
 
 	/// <summary>
@@ -205,12 +211,20 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 	///</summary>
 	public void CensusUpdateParent(int newParent) => Parent = newParent;
 
-	public void Tick(SimulationWorld _world, IFormation _formation, int formationID, uint timestep, byte stage)
+	public void Tick(IFormation _formation, int formationID, uint timestep, byte stage)
 	{
-		var world = _world as AgroWorld;
 		//Console.WriteLine($"{timestep} x {formationID}: w={Water} e={Energy} waf={WaterAbsorbtionFactor}");
 		var formation = (PlantSubFormation2<UnderGroundAgent2>)_formation;
 		var plant = formation.Plant;
+		var world = plant.World;
+
+		if (plant.IsNewDay())
+		{
+			PreviousDayProductionInv = CurrentDayProductionInv;
+			PreviousDayEnvResourcesInv = CurrentDayEnvResources / world.TicksPerDay;
+			CurrentDayProductionInv = 0f;
+			CurrentDayEnvResources = 0f;
+		}
 
 		//TODO perhaps it should somehow reflect temperature
 		var diameter = 2f * Radius;
@@ -223,7 +237,7 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 
 		var children = formation.GetChildren(formationID);
 
-		var waterFactor = Math.Clamp(Water / WaterStorageCapacity(), 0f, 1f);
+		//var waterFactor = Math.Clamp(Water / WaterStorageCapacity(), 0f, 1f);
 		///////////////////////////
 		#region Growth
 		///////////////////////////
@@ -266,7 +280,7 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 			//Branching
 			if (children.Count > 0)
 			{
-				var pool = MathF.Pow(childrenCount, childrenCount << 2) / world.HoursPerTick;
+				var pool = 4 * MathF.Pow(childrenCount, childrenCount << 2) / world.HoursPerTick;
 				if (pool < uint.MaxValue && plant.RNG.NextUInt((uint)pool) == 1 /*&& waterFactor > plant.RNG.NextFloat()*/) //TODO MI 2023-03-07 Revive waterfactor weighting
 				{
 					var qx = Quaternion.CreateFromAxisAngle(Vector3.UnitX, plant.RNG.NextFloat(-MathF.PI * yFactor, MathF.PI * yFactor));
@@ -298,8 +312,11 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 			{
 				var soil = plant.Soil;
 				var baseCenter = formation.GetBaseCenter(formationID);
+				var samplePoint = baseCenter + Vector3.Transform(Vector3.UnitX, Orientation) * Length * 0.75f;
+				if (samplePoint.Z < 0 || samplePoint.X < 0)
+					Console.Beep();
 				//find all soild cells that the shpere intersects
-				var sources = soil.IntersectPoint(baseCenter + Vector3.Transform(Vector3.UnitX, Orientation) * Length * 0.75f); //TODO make a tube intersection
+				var sources = soil.IntersectPoint(samplePoint); //TODO make a tube intersection
 
 				var vegetativeTemp = plant.VegetativeLowTemperature;
 
@@ -311,9 +328,13 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 					{
 						if (soilTemperature < vegetativeTemp.Y)
 							amount *= (soilTemperature - vegetativeTemp.X) / (vegetativeTemp.Y - vegetativeTemp.X);
-						Water += soil.RequestWater(sources[0], Math.Min(waterCapacity - Water, amount)); //TODO change to tube surface!
+						soil.RequestWater(sources[0], Math.Min(waterCapacity - Water, amount), formation, formationID); //TODO change to tube surface!
 					}
+
+					CurrentDayEnvResources += soil.GetWater(sources[0]);
 				}
+				else
+					formation.Death(formationID);
 			}
 		}
 		else
@@ -325,6 +346,7 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 	{
 		Debug.Assert(amount >= 0f);
 		Water += amount;
+		CurrentDayProductionInv += amount / (Radius * Length);
 	}
 	void IncEnergy(float amount)
 	{

@@ -14,6 +14,7 @@ namespace Agro;
 
 public partial class PlantFormation2 : IPlantFormation
 {
+	internal readonly AgroWorld World;
 	[System.Text.Json.Serialization.JsonIgnore]
 	public byte Stages => 1;
 
@@ -45,8 +46,9 @@ public partial class PlantFormation2 : IPlantFormation
 	/// </summary>
 	public SpeciesSettings Parameters { get; private set; }
 
-	public PlantFormation2(SpeciesSettings parameters, SoilFormationNew soil, SeedAgent seed, Pcg parentRNG, int hoursPerTick)
+	public PlantFormation2(AgroWorld world, SpeciesSettings parameters, SoilFormationNew soil, SeedAgent seed, Pcg parentRNG, int hoursPerTick)
 	{
+		World = world;
 		Parameters = parameters ?? SpeciesSettings.Avocado;
 		Parameters.Init(hoursPerTick);
 		Soil = soil;
@@ -122,14 +124,13 @@ public partial class PlantFormation2 : IPlantFormation
 	bool NewStatsBlock = true;
 	internal bool IsNewDay() => NewStatsBlock;
 
-	public void Tick(SimulationWorld _world, uint timestep, byte stage)
+	public void Tick(uint timestep, byte stage)
 	{
-		var world = _world as AgroWorld;
 		if (DeathSeed && !UG.Alive && !AG.Alive)
 			return;
 
 		//NewStatsBlock = AgroWorld.HoursPerTick >= 24 || timestep == 0 || ((timestep - 1) * AgroWorld.HoursPerTick) / 24 < (timestep * AgroWorld.HoursPerTick) / 24; //MI 2023-03-07 This was used for timesteps shorter than one hour
-		NewStatsBlock = timestep % world.StatsBlockLength == 0;
+		NewStatsBlock = timestep % World.StatsBlockLength == 0;
 
 		//Ready for List and Span combination
 
@@ -168,15 +169,56 @@ public partial class PlantFormation2 : IPlantFormation
 		if (Seed.Length > 0)
 		{
 			Array.Copy(srcSeed, dstSeed, srcSeed.Length);
-			dstSeed[0].Tick(world, this, 0, timestep, stage);
+			dstSeed[0].Tick(this, 0, timestep, stage);
 		}
 		else
 		{
-			UG.Tick(world, timestep, stage);
-			AG.Tick(world, timestep, stage);
+			UG.Tick(timestep, stage);
+			AG.Tick(timestep, stage);
 
-			var globalUG = UG.Gather(world);
-			var globalAG = AG.Gather(world);
+			//AG.Hormones();
+
+			//Physics
+			//AG.Gravity(world);
+		}
+		#if TICK_LOG
+		StatesHistory.Clear();
+		#endif
+		#if HISTORY_LOG || TICK_LOG
+		if (dstSeed.Length > 0)
+			StatesHistory.Add(dstSeed[0]);
+		else
+			StatesHistory.Add(null);
+		#endif
+		ReadTMP = !ReadTMP;
+
+		//Just testing
+		// var gltf = GlftHelper.Create(AG.ExportToGLTF());
+		// GlftHelper.Export(gltf, $"T{timestep}.gltf");
+	}
+
+	public void DeliverPost(uint timestep, byte stage)
+	{
+		if (Seed.Length > 0)
+		{
+			var (src, dst) = SrcDst_Seed();
+			Array.Copy(src, dst, src.Length);
+			PostboxSeed.Process(timestep, stage, dst);
+		}
+		else if (PostboxSeed.AnyMessages)
+			PostboxSeed.Clear();
+
+		ReadTMP = !ReadTMP;
+
+		if (UG.HasUndeliveredPost)
+			UG.DeliverPost(timestep, stage);
+		if (AG.HasUndeliveredPost)
+			AG.DeliverPost(timestep, stage);
+
+		if (Seed.Length == 0)
+		{
+			var globalUG = UG.Gather(World, false);
+			var globalAG = AG.Gather(World, true);
 
 			var energy = globalAG.Energy + globalUG.Energy;
 			var water = globalAG.Water + globalUG.Energy;
@@ -190,7 +232,7 @@ public partial class PlantFormation2 : IPlantFormation
 			var positiveEfficiencyAG = globalAG.UsefulnessTotal > 0.0;
 			var positiveEfficiencyUG = globalUG.UsefulnessTotal > 0.0;
 
-			var energyEmergencyThrehold = Math.Max(1, 168 / world.HoursPerTick) * energyRequirement / world.HoursPerTick;
+			var energyEmergencyThrehold = Math.Max(1, 168 / World.HoursPerTick) * energyRequirement / World.HoursPerTick;
 			var energAlertThreshold = Math.Max(energyEmergencyThrehold * 4, 0.01 * energyStorage);
 
 			#if GODOT
@@ -296,6 +338,7 @@ public partial class PlantFormation2 : IPlantFormation
 			if (water < waterRequirement || waterStorage < waterRequirement)
 			{
 				var factor = (float)(water / (waterRequirement >= zero ? waterRequirement : 1));
+
 				globalAG.DistributeWaterByRequirement(factor);
 				globalUG.DistributeWaterByRequirement(factor);
 			}
@@ -311,42 +354,7 @@ public partial class PlantFormation2 : IPlantFormation
 
 			UG.Distribute(globalUG);
 			AG.Distribute(globalAG);
-
-			//AG.Hormones();
-
-			//Physics
-			//AG.Gravity(world);
 		}
-		#if TICK_LOG
-		StatesHistory.Clear();
-		#endif
-		#if HISTORY_LOG || TICK_LOG
-		if (dstSeed.Length > 0)
-			StatesHistory.Add(dstSeed[0]);
-		else
-			StatesHistory.Add(null);
-		#endif
-		ReadTMP = !ReadTMP;
-
-		//Just testing
-		// var gltf = GlftHelper.Create(AG.ExportToGLTF());
-		// GlftHelper.Export(gltf, $"T{timestep}.gltf");
-	}
-
-	public void DeliverPost(uint timestep, byte stage)
-	{
-		if (Seed.Length > 0)
-		{
-			var (src, dst) = SrcDst_Seed();
-			Array.Copy(src, dst, src.Length);
-			PostboxSeed.Process(timestep, stage, dst);
-		}
-		ReadTMP = !ReadTMP;
-
-		if (UG.HasUndeliveredPost)
-			UG.DeliverPost(timestep, stage);
-		if (AG.HasUndeliveredPost)
-			AG.DeliverPost(timestep, stage);
 
 		// if (!DeathSeed)
 		// 	Console.WriteLine("R: {0} E: {1}", Seed[0].Radius, Seed[0].StoredEnergy);
@@ -354,12 +362,12 @@ public partial class PlantFormation2 : IPlantFormation
 		// 	Console.WriteLine("R: {0}x{1} E: {2} W: {3}", UnderGround[0].Radius, UnderGround[0].Length, UnderGround[0].Energy, UnderGround[0].Water);
 	}
 
-	public void ProcessTransactions(SimulationWorld world, uint timestep, byte stage)
+	public void ProcessTransactions(uint timestep, byte stage)
 	{
 		if (UG.HasUnprocessedTransactions)
-			UG.ProcessTransactions(world, timestep, stage);
+			UG.ProcessTransactions(timestep, stage);
 		if (AG.HasUnprocessedTransactions)
-			AG.ProcessTransactions(world, timestep, stage);
+			AG.ProcessTransactions(timestep, stage);
 	}
 
 	public (uint, uint, uint) GeometryStats()

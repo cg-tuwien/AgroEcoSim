@@ -8,11 +8,13 @@ namespace Agro;
 
 public partial class SoilFormation : Formation3iTransformed<SoilAgent>
 {
+	internal readonly AgroWorld World;
 	readonly int TrueSizeZ;
 
 	public override byte Stages => 1;
 	public SoilFormation(AgroWorld world, Vector3i size, Vector3 fieldSize, uint timestep) : base(size.X, size.Y, size.Z + 1)
 	{
+		World = world;
 		TrueSizeZ = size.Z;
 		const float coldFactor = 0.75f; //earth gets 1 degree colder each x meters (where x is the value of this constant)
 		var airTemp = world.GetTemperature(timestep);

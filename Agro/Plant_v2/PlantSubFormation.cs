@@ -341,7 +341,7 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 			TreeCache.UpdateBases(this);
 	}
 
-	public void Tick(SimulationWorld world, uint timestep, byte stage)
+	public void Tick(uint timestep, byte stage)
 	{
 		var (src, dst) = SrcDst();
 		Array.Copy(src, dst, src.Length);
@@ -349,7 +349,7 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 		// StemsTMP.AddRange(Stems);
 
 		for(int i = 0; i < dst.Length; ++i)
-			dst[i].Tick(world, this, i, timestep, stage);
+			dst[i].Tick(this, i, timestep, stage);
 
 		#if TICK_LOG
 		StatesHistory.Clear();
@@ -366,7 +366,7 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 	List<GatherDataBase> Gathering = new();
 	List<GatherEfficiency> Efficiencies = new();
 
-	public PlantGlobalStats Gather(AgroWorld world)
+	public PlantGlobalStats Gather(AgroWorld world, bool aboveGround)
 	{
 		var energy = 0.0;
 		var water = 0.0;
@@ -406,8 +406,14 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 			var lifeSupport = dst[i].LifeSupportPerTick(world);
 			energyRequirement += lifeSupport;
 
-			var photosynthSupport = dst[i].PhotosynthPerTick();
-			waterRequirement += photosynthSupport;
+			float photosynthSupport;
+			if (aboveGround)
+			{
+				photosynthSupport = dst[i].PhotosynthPerTick(world);
+				waterRequirement += photosynthSupport;
+			}
+			else
+				photosynthSupport = 0;
 
 			var energyStorageCapacity = dst[i].EnergyStorageCapacity();
 			energyCapacity += energyStorageCapacity;
@@ -424,7 +430,7 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 			Gathering[i] = default;
 			Efficiencies[i] = default;
 			energyRequirement -= dst[i].LifeSupportPerTick(world);
-			waterRequirement -= dst[i].PhotosynthPerTick();
+			waterRequirement -= dst[i].PhotosynthPerTick(world);
 			energyCapacity -= dst[i].EnergyStorageCapacity();
 			waterCapacity -= dst[i].WaterStorageCapacity();
 		}
@@ -568,7 +574,7 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 		ReadTMP = !ReadTMP;
 	}
 
-	public void ProcessTransactions(SimulationWorld _world, uint timestep, byte stage)
+	public void ProcessTransactions(uint timestep, byte stage)
 	{
 		var (src, dst) = SrcDst();
 		Array.Copy(src, dst, src.Length);
@@ -592,10 +598,9 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 				var scale = new float[src.Length];
 				Array.Fill(scale, 1f);
 				var anyScale = false;
-				var world = _world as AgroWorld;
 				for(int d = 0; d < sumPerAgent.Length; ++d)
 				{
-					var dstCapacity = GetCapacity(world, d, substanceIndex);
+					var dstCapacity = GetCapacity(Plant.World, d, substanceIndex);
 					if (sumPerAgent[d] > dstCapacity)
 					{
 						scale[d] = dstCapacity / sumPerAgent[d];
@@ -675,6 +680,18 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 	internal float GetWaterTotalCapacity(AgroWorld world, int index) => ReadTMP
 		? (AgentsTMP.Length > index ? AgentsTMP[index].WaterTotalCapacityPerTick(world) : 0f)
 		: (Agents.Length > index ? Agents[index].WaterTotalCapacityPerTick(world) : 0f);
+
+	internal float GetWaterEfficientCapacity(AgroWorld world, int index)
+	{
+		var src = ReadTMP ? AgentsTMP : Agents;
+		if (AgentsTMP.Length > index)
+		{
+			var agent = src[index];
+			return agent.WaterStorageCapacity() + agent.PhotosynthPerTick(world);
+		}
+		else
+			return 0f;
+	}
 
 	public float GetEnergy(int index) => ReadTMP
 		? (AgentsTMP.Length > index ? AgentsTMP[index].Energy : 0f)

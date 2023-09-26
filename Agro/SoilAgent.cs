@@ -42,11 +42,11 @@ public partial struct SoilAgent : IAgent
 		Temperature = temperature;
 	}
 
-	public void Tick(SimulationWorld _world, IFormation _formation, int formationID, uint timestep, byte stage)
+	public void Tick(IFormation _formation, int formationID, uint timestep, byte stage)
 	{
-		var world = _world as AgroWorld;
 		var formation = (SoilFormation)_formation;
 		var coords = formation.Coords(formationID);
+		var world = formation.World;
 
 		//CodeReview: I used this trick to better visualize the lateral flow.
 		//  Now only one corner cell gets water, so in order to spread it needs the lateral flow

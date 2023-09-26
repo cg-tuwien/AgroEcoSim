@@ -13,8 +13,6 @@ public partial class SimulationWorld
 	public uint Timestep { get; private set; } = 0U;
 	public byte Stage { get; private set; }
 
-	public ushort UnitsPerTick = 1;
-
 	byte Stages = 1;
 
 	#if TICK_LOG
@@ -144,10 +142,10 @@ public partial class SimulationWorld
 	{
 		//Debug.WriteLine($"TIMESTEP: {Timestep}");
 		for(int i = 0; i < Formations.Count; ++i)
-			Formations[i].Tick(this, Timestep, Stage);
+			Formations[i].Tick(Timestep, Stage);
 	}
 
-	void TickParallel() => Parallel.For(0, Formations.Count, i => Formations[i].Tick(this, Timestep, Stage));
+	void TickParallel() => Parallel.For(0, Formations.Count, i => Formations[i].Tick(Timestep, Stage));
 
 	public void ProcessTransactionsSequential()
 	{
@@ -158,7 +156,7 @@ public partial class SimulationWorld
 			for(int i = 0; i < Formations.Count; ++i)
 				if (Formations[i].HasUnprocessedTransactions)
 				{
-					Formations[i].ProcessTransactions(this, Timestep, Stage);
+					Formations[i].ProcessTransactions(Timestep, Stage);
 					anyDelivered = true;
 				}
 		}
@@ -177,7 +175,7 @@ public partial class SimulationWorld
 			Parallel.For(0, Formations.Count, i => {
 				if (Formations[i].HasUnprocessedTransactions)
 				{
-					Formations[i].ProcessTransactions(this, Timestep, Stage);
+					Formations[i].ProcessTransactions(Timestep, Stage);
 					anyDelivered = true;
 				}
 			});

@@ -188,8 +188,8 @@ public partial struct AboveGroundAgent3 : IPlantAgent
 	public float LifeSupportPerTick(AgroWorld world) => LifeSupportPerHour() * world.HoursPerTick;
 
 	public const float mPhotoEfficiency = 0.025f;
-	public const float ExpectedIrradiance = 400f; //in W/m² see https://en.wikipedia.org/wiki/Solar_irradiance
-	public float PhotosynthPerTick() => Length * Radius * (Organ == OrganTypes.Leaf ? 2f : TwoPiTenth) * mPhotoFactor * mPhotoEfficiency * ExpectedIrradiance;
+	public const float ExpectedIrradiance = 500f; //in W/m² per hour see https://en.wikipedia.org/wiki/Solar_irradiance
+	public float PhotosynthPerTick(AgroWorld world) => Length * Radius * (Organ == OrganTypes.Leaf ? 2f : TwoPiTenth) * mPhotoFactor * mPhotoEfficiency * ExpectedIrradiance * world.HoursPerTick;
 
 	float EnoughEnergy(float? lifeSupportPerHour = null) => (lifeSupportPerHour ?? LifeSupportPerHour()) * 320;
 
@@ -235,12 +235,12 @@ public partial struct AboveGroundAgent3 : IPlantAgent
 	const float TwoPi = MathF.PI * 2f;
 	const float TwoPiTenth = MathF.PI * 0.2f;
 	public const float LeafThickness = 0.0001f;
-	public void Tick(SimulationWorld _world, IFormation _formation, int formationID, uint timestep, byte stage)
+	public void Tick(IFormation _formation, int formationID, uint timestep, byte stage)
 	{
-		var world = _world as AgroWorld;
 		var formation = (PlantSubFormation2<AboveGroundAgent3>)_formation;
 		var plant = formation.Plant;
 		var species = plant.Parameters;
+		var world = plant.World;
 
 		if (plant.IsNewDay())
 		{

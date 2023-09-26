@@ -741,6 +741,7 @@ public class IrradianceClient
 				var plant = formations[pi] as PlantFormation2;
 				var ag = plant.AG;
 				var count = ag.Count;
+				var world = plant.World;
 
 				var sensorsCount = 0;
 				for (int i = 0; i < count; ++i)
@@ -772,7 +773,7 @@ public class IrradianceClient
 								var az = y * scale.Y * 0.5f;
 								var c = center + ax;
 								writer.WriteM32(ax, ay, az, c);
-								writer.Write(Math.Clamp(ag.GetWater(i) / ag.GetWaterStorageCapacity(i), 0, 1));
+								writer.Write(Math.Clamp(ag.GetWater(i) / ag.GetWaterEfficientCapacity(world, i), 0, 1));
 								writer.Write(Math.Clamp(ag.GetEnergy(i) / ag.GetEnergyCapacity(i), 0, 1));
 								if (extended)
 								{
@@ -788,7 +789,7 @@ public class IrradianceClient
 								writer.Write(scale.X); //length
 								writer.Write(scale.Z * 0.5f); //radius
 								writer.WriteM32(z, x, y, center);
-								writer.Write(Math.Clamp(ag.GetWater(i) / ag.GetWaterStorageCapacity(i), 0, 1));
+								writer.Write(Math.Clamp(ag.GetWater(i) / ag.GetWaterEfficientCapacity(world, i), 0, 1));
 								writer.Write(Math.Clamp(ag.GetEnergy(i) / ag.GetEnergyCapacity(i), 0, 1));
 								writer.Write(Math.Clamp(ag.GetWoodRatio(i), 0, 1));
 							}
@@ -798,7 +799,7 @@ public class IrradianceClient
 								writer.WriteU8(3); //ORGAN 3 bud
 								writer.WriteV32(center);
 								writer.Write(scale.X); //radius
-								writer.Write(Math.Clamp(ag.GetWater(i) / ag.GetWaterStorageCapacity(i), 0, 1));
+								writer.Write(Math.Clamp(ag.GetWater(i) / ag.GetWaterEfficientCapacity(world, i), 0, 1));
 								writer.Write(Math.Clamp(ag.GetEnergy(i) / ag.GetEnergyCapacity(i), 0, 1));
 							}
 							break;
@@ -817,7 +818,6 @@ public class IrradianceClient
 					var ug = plant.UG;
 					count = ug.Count;
 					writer.WriteU32(count); //WRITE NUMBER OF UNDER-GROUND SURFACES in this plant
-
 					for (int i = 0; i < count; ++i)
 					{
 						var organ = ug.GetOrgan(i);
@@ -840,13 +840,14 @@ public class IrradianceClient
 									writer.Write(scale.X); //length
 									writer.Write(scale.Z * 0.5f); //radius
 									writer.WriteM32(z, x, y, center);
-									writer.Write(Math.Clamp(ag.GetWater(i) / ag.GetWaterStorageCapacity(i), 0, 1));
-									writer.Write(Math.Clamp(ag.GetEnergy(i) / ag.GetEnergyCapacity(i), 0, 1));
-									writer.Write(Math.Clamp(ag.GetWoodRatio(i), 0, 1));
+									//writer.Write(Math.Clamp(ug.GetWater(i) / ug.GetWaterStorageCapacity(i), 0, 1));
+									writer.Write(ug.GetWater(i));
+									writer.Write(Math.Clamp(ug.GetEnergy(i) / ug.GetEnergyCapacity(i), 0, 1));
+									writer.Write(Math.Clamp(ug.GetWoodRatio(i), 0, 1));
 									if (extended)
 									{
-										writer.Write(ag.GetDailyResourcesInv(i));
-										writer.Write(ag.GetDailyProductionInv(i));
+										writer.Write(ug.GetDailyResourcesInv(i));
+										writer.Write(ug.GetDailyProductionInv(i));
 									}
 								}
 								break;

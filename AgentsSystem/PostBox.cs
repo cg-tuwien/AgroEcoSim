@@ -22,6 +22,12 @@ public class PostBox<T> where T : struct, IAgent
         }
     }
 
+    public void Clear()
+    {
+        var src = WriteTMP ? BufferTMP : Buffer;
+        lock(src) src.Clear();
+    }
+
     //There MUST NOT be a non-array Process method. Otherwise refs will not work
     public void Process(uint timestep, byte stage, T[] agents)
     {

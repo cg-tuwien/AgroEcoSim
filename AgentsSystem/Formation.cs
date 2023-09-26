@@ -89,13 +89,13 @@ public abstract class Formation<T> : IFormation where T : struct, IAgent
 		}
 	}
 
-	public virtual void Tick(SimulationWorld world, uint timestep, byte stage)
+	public virtual void Tick(uint timestep, byte stage)
 	{
 		var (src, dst) = SrcDst();
 
 		Array.Copy(src, dst, src.Length);
 		for(int i = 0; i < dst.Length; ++i)
-			dst[i].Tick(world, this, i, timestep, stage);
+			dst[i].Tick(this, i, timestep, stage);
 
 		#if TICK_LOG
 		StatesHistory.Clear();
@@ -146,7 +146,7 @@ public abstract class Formation<T> : IFormation where T : struct, IAgent
 		ReadTMP = !ReadTMP;
 	}
 
-	public virtual void ProcessTransactions(SimulationWorld world, uint timestep, byte stage) { }
+	public virtual void ProcessTransactions(uint timestep, byte stage) { }
 
 	public virtual bool HasUndeliveredPost => Postbox.AnyMessages;
 	public virtual bool HasUnprocessedTransactions => false;
