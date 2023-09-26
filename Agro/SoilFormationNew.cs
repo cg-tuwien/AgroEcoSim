@@ -33,7 +33,6 @@ public partial class SoilFormationNew : IFormation, IGrid3D
 	readonly int SizeXY;
 	readonly float CellSurface;
 	readonly float CellVolume;
-	readonly Vector3 Position;
 	readonly Vector3 CellSize;
 	readonly Vector3 CellSize4Intersect;
 	readonly float WaterCapacityPerCell;
@@ -45,7 +44,7 @@ public partial class SoilFormationNew : IFormation, IGrid3D
 	readonly List<(PlantSubFormation2<UnderGroundAgent2> Plant, int Part, float Amount)>[] WaterRequestsRoots;
 
 
-	public SoilFormationNew(AgroWorld world, Vector3i size, Vector3 metricSize, Vector3 position)
+	public SoilFormationNew(AgroWorld world, Vector3i size, Vector3 metricSize)
 	{
 		World = world;
 		if (size.X >= ushort.MaxValue-1 || size.Y >= ushort.MaxValue-1 || size.Z >= ushort.MaxValue-1)
@@ -53,7 +52,6 @@ public partial class SoilFormationNew : IFormation, IGrid3D
 		//Z is depth
 		Size = size;
 		SizeXY = size.X * size.Y;
-		Position = position;
 
 		CellSize = new (metricSize.X / size.X, metricSize.Y / size.Y, metricSize.Z / size.Z);
 		CellSize4Intersect = new (CellSize.X, CellSize.Y, -CellSize.Z);
@@ -95,7 +93,7 @@ public partial class SoilFormationNew : IFormation, IGrid3D
 			for(int y = 0; y < size.Y; ++y)
 			{
 				var h = Size.Z * (heightfield[x, y] / metricSize.Z);
-				heights[x, y] = Math.Clamp((int)Math.Ceiling(h), 1, Size.Z - 1);
+				heights[x, y] = Math.Clamp((int)Math.Ceiling(h), 1, Size.Z);
 				//Console.WriteLine($"rH({x}, {y}) = {heights[x, y]}");
 			}
 
@@ -194,8 +192,8 @@ public partial class SoilFormationNew : IFormation, IGrid3D
 
 	public IReadOnlyList<int> IntersectPoint(Vector3 center)
 	{
-		Debug.WriteLine($"{center}");
-		center = new Vector3(center.X, center.Z, center.Y) - Position;
+		// Debug.WriteLine($"{center}");
+		center = new Vector3(center.X, center.Z, center.Y);
 		center /= CellSize4Intersect;
 
 		var iCenter = new Vector3i(center);
@@ -204,9 +202,10 @@ public partial class SoilFormationNew : IFormation, IGrid3D
 			var (groundAddr, groundLevel) = GroundWithLevel(iCenter);
 			if (iCenter.Z < groundLevel)
 			{
-				var r = groundAddr - (iCenter.Z <= MaxLevel - groundLevel ? 1 + iCenter.Z : 0);
-				Debug.WriteLine($"{center} -> [{iCenter}] -> ({groundAddr}, {groundLevel}) => {r}  +W {Water[r]}");
-				return new List<int>(){ groundAddr - (iCenter.Z <= MaxLevel - groundLevel ? 1 + iCenter.Z : 0) };
+				// var r = groundAddr - 1 - iCenter.Z;
+				// Debug.WriteLine($"{center} -> [{iCenter}] -> ({groundAddr}, {groundLevel}) => {r}  +W {Water[r]}");
+				//return new List<int>(){ groundAddr - (iCenter.Z <= MaxLevel - groundLevel ? 1 + iCenter.Z : 0) };
+				return new List<int>(){ groundAddr - 1 - iCenter.Z}; //TODO this is a temporary fix for flat heightfields
 			}
 		}
 
@@ -215,7 +214,7 @@ public partial class SoilFormationNew : IFormation, IGrid3D
 
 	internal float GetMetricHeight(float x, float z)
 	{
-		var center = new Vector3(x, z, 0) - Position;
+		var center = new Vector3(x, z, 0);
 
 		center /= CellSize;
 
@@ -225,7 +224,7 @@ public partial class SoilFormationNew : IFormation, IGrid3D
 
 	internal float GetMetricGroundDepth(float x, float z)
 	{
-		var center = new Vector3(x, z, 0) - Position;
+		var center = new Vector3(x, z, 0);
 
 		center /= CellSize;
 
