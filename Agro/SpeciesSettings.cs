@@ -163,6 +163,18 @@ public class SpeciesSettings
     [JsonPropertyName("PRv")]
     public float PetioleRadiusVar { get; init; }
 
+    ///<summary>
+    /// Density of the roots system (affects branching probabiilty). Valued 1 to 100 (with one being the most dense)
+    ///</summary>
+    [JsonPropertyName("RS")]
+    public float RootsSparsity { get; init; }
+
+    ///<summary>
+    /// Correction factor to point the roots growth downwards
+    ///</summary>
+    [JsonPropertyName("RG")]
+    public float RootsGravitaxis { get; init; }
+
     // public float RootRadiusGrowthPerH { get; init; }
     // public float RootLengthGrowthPerH { get; init; }
 

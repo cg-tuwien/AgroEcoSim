@@ -116,5 +116,14 @@ export function SpeciesItem(props: {species: Species, index: number})
             <span>var:&nbsp;</span>
             <input min={0} step={0.001} type="number" name={`petioleRadius-${props.index}`} value={+props.species.petioleRadiusVar.value.toFixed(4)} onChange={e => props.species.petioleRadiusVar.value = parseFloat(e.currentTarget.value)}  />
         </div>
+        <br/>
+        <div>
+            <input min={1} max={1} step={0.01} type="number" name={`rootsDensity-${props.index}`} value={+props.species.rootsDensity.value.toFixed(1)} onChange={e => props.species.rootsDensity.value = parseFloat(e.currentTarget.value)}  />
+            <label for={`rootsDensity-${props.index}`}>Roots density</label>
+        </div>
+        <div>
+            <input min={0} max={1} step={0.01} type="number" name={`rootsGravitaxis-${props.index}`} value={+props.species.rootsGravitaxis.value.toFixed(1)} onChange={e => props.species.rootsGravitaxis.value = parseFloat(e.currentTarget.value)}  />
+            <label for={`rootsGravitaxis-${props.index}`}>Roots gravitaxis</label>
+        </div>
     </li>;
 }

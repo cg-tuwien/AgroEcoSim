@@ -36,6 +36,9 @@ export class Species {
     // RootLengthGrowthPerH = 0.023148148f,
     // RootRadiusGrowthPerH = 0.00297619f,
 
+    rootsDensity = signal(50);
+    rootsGravitaxis = signal(0.2);
+
     public static Default() {
         const result = new Species();
         result.name.value = "default";
@@ -72,6 +75,9 @@ export class Species {
             petioleLengthVar: this.petioleLengthVar.peek(),
             petioleRadius: this.petioleRadius.peek(),
             petioleRadiusVar: this.petioleRadiusVar.peek(),
+
+            rootsDensity: this.rootsDensity.peek(),
+            rootsGravitaxis: this.rootsGravitaxis.peek()
         };
     }
 
@@ -103,6 +109,9 @@ export class Species {
         this.petioleLengthVar.value = s.petioleLengthVar;
         this.petioleRadius.value = s.petioleRadius;
         this.petioleRadiusVar.value = s.petioleRadiusVar;
+
+        this.rootsDensity.value = s.rootsDensity;
+        this.rootsGravitaxis.value = s.rootsGravitaxis;
         return this;
     }
 
@@ -136,6 +145,9 @@ export class Species {
             PLv: this.petioleLengthVar.peek(),
             PR: this.petioleRadius.peek(),
             PRv: this.petioleRadiusVar.peek(),
+
+            RS: 100 - 99 * Math.min(1, Math.max(0, this.rootsDensity.peek())), //roots sparsity
+            RG: this.rootsGravitaxis.peek()
         });
     }
 }

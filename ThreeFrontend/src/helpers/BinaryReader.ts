@@ -164,7 +164,6 @@ export default class BinaryReader {
 
             if (roots)
             {
-                debugger;
                 const rootsCount =  this.readUInt32();
                 for(let j = 0; j < rootsCount; ++j)
                 {
@@ -183,7 +182,6 @@ export default class BinaryReader {
                             //const auxins = this.readFloat32();
                             //const cytokianins = this.readFloat32();
                             entity.push({ type: Primitives.Box, affineTransform: transform, length: length, radius: radius, stats: new Float32Array([waterRatio, energyRatio, woodRatio, dailyResource, dailyProduction, 0, 0]) });
-                            console.log(entity[entity.length - 1]);
                             maxDailyProductionRoots = Math.max(dailyProduction, maxDailyProductionRoots);
                             maxDailyResourceRoots = Math.max(dailyResource, maxDailyResourceRoots);
                         }

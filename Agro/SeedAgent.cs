@@ -113,10 +113,10 @@ public struct SeedAgent : IAgent
 			{
 				var soil = plant.Soil;
 				//find all soild cells that the shpere intersects
-				var sources = soil.IntersectPoint(Center);
-				if (sources.Count > 0) //TODO this is a rough approximation taking only the first intersected soil cell
+				var source = soil.IntersectPoint(Center);
+				if (source >= 0) //TODO this is a rough approximation taking only the first intersected soil cell
 				{
-					var soilTemperature = soil.GetTemperature(sources[0]);
+					var soilTemperature = soil.GetTemperature(source);
 					var waterRequest = 0f;
 					for(int i = 0; i < world.HoursPerTick; ++i)
 					{
@@ -131,7 +131,7 @@ public struct SeedAgent : IAgent
 						}
 					}
 					//Water +=
-					soil.RequestWater(sources[0], waterRequest, plant);
+					soil.RequestWater(source, waterRequest, plant);
 				}
 			}
 		}

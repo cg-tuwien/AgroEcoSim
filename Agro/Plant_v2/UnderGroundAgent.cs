@@ -53,13 +53,13 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 	public float Cytokinins { get; set; }
 
 	/// <summary>
-	/// Production during the previous day, per m² i.e. invariant of size
+	/// Allocation of water during the previous day, m³ of water per m² i.e. invariant of surface
 	/// </summary>
 	public float PreviousDayProductionInv {get; private set; }
 	public float CurrentDayProductionInv { get; set; }
 
 	/// <summary>
-	/// Resources allocated during the previous day, per m² i.e. invariant of size
+	/// Resources available during the previous day, averaged, in m³ of water
 	/// </summary>
 	public float PreviousDayEnvResourcesInv { get; private set; }
 	public float CurrentDayEnvResources { get; set; }
@@ -217,10 +217,11 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 		var formation = (PlantSubFormation2<UnderGroundAgent2>)_formation;
 		var plant = formation.Plant;
 		var world = plant.World;
+		var species = plant.Parameters;
 
 		if (plant.IsNewDay())
 		{
-			PreviousDayProductionInv = CurrentDayProductionInv;
+			PreviousDayProductionInv = CurrentDayProductionInv / world.TicksPerDay;
 			PreviousDayEnvResourcesInv = CurrentDayEnvResources / world.TicksPerDay;
 			CurrentDayProductionInv = 0f;
 			CurrentDayEnvResources = 0f;
@@ -245,15 +246,19 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 		{
 			var childrenCount = children.Count + 1;
 			//TODO MI 2023-03-07 Incorporate water capacity factor
-			var lengthGrowth = 2e-4f * world.HoursPerTick / (MathF.Pow(childrenCount, GrowthDeclineByExpChildren + 1) * MathF.Pow(lr * Length, 0.1f));
-			var widthGrowth = 2e-5f * world.HoursPerTick / (MathF.Pow(childrenCount, GrowthDeclineByExpChildren / 2) * MathF.Pow(volume, 0.1f)); //just optimized the number of multiplications
+			var widthGrowth = PreviousDayProductionInv * 2e-5f * world.HoursPerTick / (MathF.Pow(childrenCount, GrowthDeclineByExpChildren / 2) * MathF.Pow(volume, 0.1f)); //just optimized the number of multiplications
+			var newRadius = Radius + widthGrowth;
+			if (Parent == -1 || formation.GetBaseRadius(Parent) >= newRadius)
+			{
+				var lengthGrowth = PreviousDayProductionInv * 2e-4f * world.HoursPerTick / (MathF.Pow(childrenCount, GrowthDeclineByExpChildren + 1) * MathF.Pow(lr * Length, 0.1f));
 
-			Length += lengthGrowth;
-			Radius += widthGrowth;
+				Length += lengthGrowth;
+				Radius = newRadius;
 
-			mWaterAbsorbtionFactor -= widthGrowth * childrenCount;  //become wood faster with children
-			if (mWaterAbsorbtionFactor < 0f)
-				mWaterAbsorbtionFactor = 0f;
+				mWaterAbsorbtionFactor -= widthGrowth * childrenCount;  //become wood faster with children
+				if (mWaterAbsorbtionFactor < 0f)
+					mWaterAbsorbtionFactor = 0f;
+			}
 
 			const float yFactor = 0.5f;
 			const float zFactor = 0.2f;
@@ -268,9 +273,10 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 				var orientation = Orientation * qx * qz;
 				var y = Vector3.Transform(Vector3.UnitX, orientation).Y;
 				if (y > 0)
-					orientation = Quaternion.Slerp(orientation, OrientationDown, plant.RNG.NextFloat(y));
+					orientation = Quaternion.Slerp(orientation, OrientationDown, plant.RNG.NextFloat(MathF.Pow(y, 1f/ world.HoursPerTick)));
 				else
-					orientation = Quaternion.Slerp(orientation, OrientationDown, plant.RNG.NextFloat(0.2f * world.HoursPerTick));
+					orientation = Quaternion.Slerp(orientation, OrientationDown, plant.RNG.NextFloat(species.RootsGravitaxis));
+
 				var energy = EnergyCapacityFunc(InitialRadius, InitialLength);
 				formation.Birth(new(formationID, orientation, energy));
 				Energy -= 2f * energy; //twice because some energy is needed for the birth itself
@@ -280,7 +286,7 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 			//Branching
 			if (children.Count > 0)
 			{
-				var pool = 4 * MathF.Pow(childrenCount, childrenCount << 2) / world.HoursPerTick;
+				var pool = species.RootsSparsity * MathF.Pow(childrenCount, childrenCount << 2) / (world.HoursPerTick * PreviousDayProductionInv);
 				if (pool < uint.MaxValue && plant.RNG.NextUInt((uint)pool) == 1 /*&& waterFactor > plant.RNG.NextFloat()*/) //TODO MI 2023-03-07 Revive waterfactor weighting
 				{
 					var qx = Quaternion.CreateFromAxisAngle(Vector3.UnitX, plant.RNG.NextFloat(-MathF.PI * yFactor, MathF.PI * yFactor));
@@ -316,22 +322,22 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 				if (samplePoint.Z < 0 || samplePoint.X < 0)
 					Console.Beep();
 				//find all soild cells that the shpere intersects
-				var sources = soil.IntersectPoint(samplePoint); //TODO make a tube intersection
+				var source = soil.IntersectPoint(samplePoint); //TODO make a tube intersection
 
 				var vegetativeTemp = plant.VegetativeLowTemperature;
 
-				if (sources.Count > 0) //TODO this is a rough approximation taking only the first intersected soil cell
+				if (source >= 0) //TODO this is a rough approximation taking only the first intersected soil cell
 				{
 					var amount = WaterAbsorbtionPerTick(world);
-					var soilTemperature = soil.GetTemperature(sources[0]);
+					var soilTemperature = soil.GetTemperature(source);
 					if (soilTemperature > vegetativeTemp.X)
 					{
 						if (soilTemperature < vegetativeTemp.Y)
 							amount *= (soilTemperature - vegetativeTemp.X) / (vegetativeTemp.Y - vegetativeTemp.X);
-						soil.RequestWater(sources[0], Math.Min(waterCapacity - Water, amount), formation, formationID); //TODO change to tube surface!
+						soil.RequestWater(source, Math.Min(waterCapacity - Water, amount), formation, formationID); //TODO change to tube surface!
 					}
 
-					CurrentDayEnvResources += soil.GetWater(sources[0]);
+					CurrentDayEnvResources += soil.GetWater(source);
 				}
 				else
 					formation.Death(formationID);
@@ -342,11 +348,11 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 		#endregion
 	}
 
-	void IncWater(float amount)
+	void IncWater(float amount, float factor)
 	{
 		Debug.Assert(amount >= 0f);
 		Water += amount;
-		CurrentDayProductionInv += amount / (Radius * Length);
+		CurrentDayProductionInv += factor;
 	}
 	void IncEnergy(float amount)
 	{

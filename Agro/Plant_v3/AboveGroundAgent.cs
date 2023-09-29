@@ -386,8 +386,8 @@ public partial struct AboveGroundAgent3 : IPlantAgent
 
 				if (Organ == OrganTypes.Meristem)
 				{
-					var waterAvailable = Math.Clamp(Water / WaterStorageCapacity(), 0f, 1f);
-					var energyAvailable = Math.Clamp(Energy / EnergyStorageCapacity(), 0f, 1f);
+					//var waterAvailable = Math.Clamp(Water / WaterStorageCapacity(), 0f, 1f);
+					//var energyAvailable = Math.Clamp(Energy / EnergyStorageCapacity(), 0f, 1f);
 					const float lengthStochasticScale = 0.1f;
 					if (
 						Length > species.NodeDistance

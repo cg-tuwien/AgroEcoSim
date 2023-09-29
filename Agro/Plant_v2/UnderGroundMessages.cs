@@ -23,12 +23,22 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 		#endif
 
         public readonly float Amount;
-        public WaterInc(float amount) => Amount = amount;
+        public readonly float Factor;
+        public WaterInc(float amount)
+        {
+            Amount = amount;
+            Factor = 1;
+        }
+        public WaterInc(float amount, float factor)
+        {
+            Amount = amount * factor;
+            Factor = factor;
+        }
         public bool Valid => Amount > 0f;
         public Transaction Type => Transaction.Increase;
         public void Receive(ref UnderGroundAgent2 dstAgent, uint timestep, byte stage)
         {
-            dstAgent.IncWater(Amount);
+            dstAgent.IncWater(Amount, Factor);
 			#if HISTORY_LOG || TICK_LOG
 			lock(MessagesHistory) MessagesHistory.Add(new(timestep, stage, ID, dstAgent.ID, Amount));
 			#endif

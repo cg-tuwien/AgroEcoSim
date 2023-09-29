@@ -515,7 +515,7 @@ export default function ThreeSceneFn () {
     return <div id="main3Dviewport" ref={divRef}></div>;
 }
 
-export const terrainBoxPrimitive = new THREE.BoxGeometry().translate(0, 0.5, 0); //box
+export const terrainBoxPrimitive = new THREE.BoxGeometry().scale(2, 2, 2).translate(0, 0, 0); //box
 export const threeBoxPrimitive = new THREE.BoxGeometry(); //box
 export const threeSpherePrimitive = new THREE.SphereGeometry(1, 8, 8); //sphere (type 4)
 export const threeCylinderPrimitive = new THREE.CylinderGeometry(1, 1, 1.0, 8); //cylinder (type 2)
