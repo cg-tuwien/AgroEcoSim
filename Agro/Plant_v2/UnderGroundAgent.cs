@@ -404,6 +404,9 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 		Water = water;
 	}
 
+	public void IncAuxins(float amount) => Auxins += amount;
+	public void IncCytokinins(float amount) => Cytokinins += amount;
+
 	///////////////////////////
 	#region LOG
 	///////////////////////////

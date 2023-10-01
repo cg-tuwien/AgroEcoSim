@@ -4,6 +4,7 @@ using AgentsSystem;
 using glTFLoader.Schema;
 using NumericHelpers;
 using System.Collections;
+using System.Runtime.InteropServices;
 
 namespace Agro;
 
@@ -521,26 +522,131 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 		};
 	}
 
-	List<int> Leaves = new();
 	List<float> Weights = new();
 
-	internal void Gravity(AgroWorld world)
+	internal void Gravity()
 	{
 		var dst = Src(); //since Tick already swapped them
-		Leaves.Clear();
+		var leaves = GetLeaves();
 		Weights.Clear();
 		for(int i = 0; i < dst.Length; ++i)
 		{
 			var weight = GetWeight(i, Plant.Parameters);
 			Weights.Add(weight);
-			if (GetChildren(i).Count == 0)
-				Leaves.Add(i);
 
 			var dir = Vector3.Transform(Vector3.UnitX, GetDirection(i));
 			// var segmentsCount = GetSegmentsCount(i);
 			// var firstSegment = GetFirstSegment(i);
 			// var segmentWeight = w / segmentsCount;
 		}
+	}
+
+	[StructLayout(LayoutKind.Auto)]
+	readonly struct PathData
+	{
+		public readonly int Index;
+		public readonly int SegDist;
+		public readonly float MetricDist;
+		public readonly float BranchDist;
+		public readonly bool Dir;
+
+		public PathData(int index, int segDist, float metricDist, float branchDist)
+		{
+			Index = index;
+			SegDist = segDist;
+			MetricDist = metricDist;
+			BranchDist = branchDist;
+		}
+	}
+
+	internal void Hormones(bool isAG)
+	{
+		//Auxin
+		if (isAG)
+		{
+			var dst = Src();
+			var path = new List<PathData>();
+			for(int i = 0; i < dst.Length; ++i)
+				if (dst[i].Organ == OrganTypes.Meristem || (Births.Count > 0 && dst[i].Organ == OrganTypes.Stem && dst[i].Auxins == Plant.Parameters.AuxinsProduction))
+					DistributeAuxin(dst, i, path);
+		}
+	}
+
+	void DistributeAuxin(T[] dst, int initNode, List<PathData> path)
+	{
+		path.Clear();
+
+		var auxinsReach = Plant.Parameters.AuxinsReach;
+		var bufferSrc = new List<(int, float)>();
+		var bufferDst = new List<(int, float)>();
+
+		{
+			var p = GetParent(initNode);
+			if (p >= 0)
+			{
+				foreach(var child in GetChildren(p))
+					if (child != initNode && dst[child].Organ == OrganTypes.Stem)
+						bufferSrc.Add((-(child+1), 0));
+
+				bufferSrc.Add((++p, 0));
+			}
+		}
+
+		var segSum = 0;
+		var c = 1; //seg Sums count from 1
+		while (bufferSrc.Count > 0)
+		{
+			bufferDst.Clear();
+			for(int i = 0; i < bufferSrc.Count; ++i)
+			{
+				segSum += c;
+				var (prev, distSum) = bufferSrc[i];
+				if (prev > 0) //hence we follow roots
+				{
+					--prev;
+					var d = GetLength(prev);
+					distSum += d;
+					if (distSum < auxinsReach)
+					{
+						path.Add(new(prev, c, d, distSum));
+
+						var next = GetParent(prev);
+						if (next >= 0)
+						{
+							foreach(var child in GetChildren(next))
+								if (child != prev && dst[child].Organ == OrganTypes.Stem)
+									bufferDst.Add((-(child+1), distSum));
+
+							bufferDst.Add((++next, distSum));
+						}
+					}
+				}
+				else // p < 0, hence we follow children
+				{
+					prev = -++prev;
+					var d = GetLength(prev);
+					distSum += d;
+					if (distSum < auxinsReach)
+					{
+						path.Add(new(prev, c, d, distSum));
+
+						foreach(var child in GetChildren(prev))
+							if (child != prev && dst[child].Organ == OrganTypes.Stem)
+								bufferDst.Add((-(child+1), distSum));
+					}
+				}
+			}
+			++c;
+			(bufferDst, bufferSrc) = (bufferSrc, bufferDst);
+		}
+
+		var auxin = Plant.Parameters.AuxinsProduction;
+
+		var factor = auxin / segSum;
+
+		var maxSegDist = c;
+		for(int i = 0; i < path.Count; ++i)
+			dst[path[i].Index].IncAuxins(path[i].MetricDist * (maxSegDist - path[i].SegDist) * factor / path[i].BranchDist);
 	}
 
 	internal void Distribute(PlantGlobalStats stats)
@@ -550,18 +656,18 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 			dst[i].Distribute(stats.ReceivedWater[i], stats.ReceivedEnergy[i]);
 	}
 
-	List<Vector2> HormonesData = new();
-	internal void Hormones(AgroWorld world)
-	{
-		var degradation = new Vector2(Plant.Parameters.AuxinsDegradation, Plant.Parameters.CytokininsDegradation);
-		HormonesData.Clear();
-		var dst = Src();
-		for(int i = 0; i < dst.Length; ++i)
-		{
-			HormonesData.Add(GetHormones(i));
-		}
+	// List<Vector2> HormonesData = new();
+	// internal void Hormones(AgroWorld world)
+	// {
+	// 	var degradation = new Vector2(Plant.Parameters.AuxinsDegradation, Plant.Parameters.CytokininsDegradation);
+	// 	HormonesData.Clear();
+	// 	var dst = Src();
+	// 	for(int i = 0; i < dst.Length; ++i)
+	// 	{
+	// 		HormonesData.Add(GetHormones(i));
+	// 	}
 
-	}
+	// }
 
 	public void DeliverPost(uint timestep, byte stage)
 	{
@@ -668,6 +774,7 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 	public int GetAbsInvDepth(int index) => TreeCache.GetAbsInvDepth(index);
 	public float GetRelDepth(int index) => TreeCache.GetRelDepth(index);
 	public ICollection<int> GetRoots() => TreeCache.GetRoots();
+	public IEnumerable<int> GetLeaves() => TreeCache.GetLeaves();
 
 	internal float GetEnergyCapacity(int index) => ReadTMP
 		? (AgentsTMP.Length > index ? AgentsTMP[index].EnergyStorageCapacity() : 0f)

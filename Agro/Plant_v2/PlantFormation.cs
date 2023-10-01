@@ -175,8 +175,9 @@ public partial class PlantFormation2 : IPlantFormation
 		{
 			UG.Tick(timestep, stage);
 			AG.Tick(timestep, stage);
-
-			//AG.Hormones();
+// if (timestep >= 1664)
+// 	Debug.Write(timestep);
+			AG.Hormones(true);
 
 			//Physics
 			//AG.Gravity(world);

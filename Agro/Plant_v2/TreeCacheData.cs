@@ -9,6 +9,9 @@ internal class TreeCacheData2
 	ushort[] DepthNodes;
 	Vector3[] PointNodes;
 	readonly List<int> Roots = new();
+	readonly List<int> Leaves = new();
+	readonly List<int> Meristems = new();
+
 	ushort MaxDepth = 0;
 
 	public TreeCacheData2()
@@ -22,6 +25,7 @@ internal class TreeCacheData2
 	public void Clear(int newSize)
 	{
 		Roots.Clear();
+		Leaves.Clear();
 		if (newSize > ChildrenNodes.Length)
 		{
 			var l = ChildrenNodes.Length;
@@ -64,10 +68,15 @@ internal class TreeCacheData2
 		}
 
 		++MaxDepth;
+
+		for(int i = 0; i < ChildrenNodes[i].Count; ++i)
+			if (ChildrenNodes[i].Count == 0)
+				Leaves.Add(i);
 	}
 
 	internal IList<int> GetChildren(int index) => ChildrenNodes[index];
 	internal ICollection<int> GetRoots() => Roots;
+	internal ICollection<int> GetLeaves() => Leaves;
 	internal ushort GetAbsDepth(int index) => DepthNodes[index];
 	internal ushort GetAbsInvDepth(int index) => (ushort)(MaxDepth - DepthNodes[index]);
 	internal float GetRelDepth(int index) => MaxDepth > 0 ? (DepthNodes[index] + 1) / (float)MaxDepth : 1f;

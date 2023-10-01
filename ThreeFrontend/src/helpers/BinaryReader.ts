@@ -131,8 +131,8 @@ export default class BinaryReader {
                         const dailyResource = this.readFloat32();
                         const dailyProduction = this.readFloat32();
                         const auxins = this.readFloat32();
-                        const cytokianins = this.readFloat32();
-                        entity.push({ type: Primitives.Rectangle, affineTransform: transform, stats: new Float32Array([waterRatio, energyRatio, lastIrradiance, dailyResource, dailyProduction, 0, 0, auxins, cytokianins]) });
+                        const cytokinins = this.readFloat32();
+                        entity.push({ type: Primitives.Rectangle, affineTransform: transform, stats: new Float32Array([waterRatio, energyRatio, auxins, cytokinins, lastIrradiance, dailyResource, dailyProduction, 0, 0]) });
                         maxDailyProductionShoots = Math.max(dailyProduction, maxDailyProductionShoots);
                         maxDailyResourceShoots = Math.max(dailyResource, maxDailyResourceShoots);
                     }
@@ -145,8 +145,8 @@ export default class BinaryReader {
                         const energyRatio = this.readFloat32();
                         const woodRatio = this.readFloat32();
                         const auxins = this.readFloat32();
-                        const cytokianins = this.readFloat32();
-                        entity.push({ type: Primitives.Cylinder, affineTransform: transform, length: length, radius: radius, stats: new Float32Array([waterRatio, energyRatio, woodRatio, auxins, cytokianins]) });
+                        const cytokinins = this.readFloat32();
+                        entity.push({ type: Primitives.Cylinder, affineTransform: transform, length: length, radius: radius, stats: new Float32Array([waterRatio, energyRatio, auxins, cytokinins, woodRatio]) });
                     }
                     break;
                     case 3: { //bud
@@ -155,8 +155,8 @@ export default class BinaryReader {
                         const waterRatio = this.readFloat32();
                         const energyRatio = this.readFloat32();
                         const auxins = this.readFloat32();
-                        const cytokianins = this.readFloat32();
-                        entity.push({ type: Primitives.Sphere, center: center, radius: radius, stats: new Float32Array([waterRatio, energyRatio, auxins, cytokianins]) });
+                        const cytokinins = this.readFloat32();
+                        entity.push({ type: Primitives.Sphere, center: center, radius: radius, stats: new Float32Array([waterRatio, energyRatio, auxins, cytokinins]) });
                     }
                     break;
                 }
@@ -179,9 +179,9 @@ export default class BinaryReader {
                             const woodRatio = this.readFloat32();
                             const dailyResource = this.readFloat32();
                             const dailyProduction = this.readFloat32();
-                            //const auxins = this.readFloat32();
-                            //const cytokianins = this.readFloat32();
-                            entity.push({ type: Primitives.Box, affineTransform: transform, length: length, radius: radius, stats: new Float32Array([waterRatio, energyRatio, woodRatio, dailyResource, dailyProduction, 0, 0]) });
+                            const auxins = 0;//this.readFloat32();
+                            const cytokinins = 0;//this.readFloat32();
+                            entity.push({ type: Primitives.Box, affineTransform: transform, length: length, radius: radius, stats: new Float32Array([waterRatio, energyRatio, auxins, cytokinins, woodRatio, dailyResource, dailyProduction, 0, 0]) });
                             maxDailyProductionRoots = Math.max(dailyProduction, maxDailyProductionRoots);
                             maxDailyResourceRoots = Math.max(dailyResource, maxDailyResourceRoots);
                         }
@@ -190,21 +190,24 @@ export default class BinaryReader {
             }
 
             for(let j = 0; j < entity.length; ++j)
-                switch (entity[j].type)
+            {
+                const ent = entity[j];
+                switch (ent.type)
                 {
                     case Primitives.Rectangle:
                     {
-                        entity[j].stats[5] = entity[j].stats[3] / maxDailyResourceShoots;
-                        entity[j].stats[6] = entity[j].stats[4] / maxDailyProductionShoots;
+                        ent.stats[7] = ent.stats[5] / maxDailyResourceShoots;
+                        ent.stats[8] = ent.stats[6] / maxDailyProductionShoots;
                     }
                     break;
                     case Primitives.Box:
                     {
-                        entity[j].stats[5] = entity[j].stats[3] / maxDailyResourceRoots;
-                        entity[j].stats[6] = entity[j].stats[4] / maxDailyProductionRoots;
+                        ent.stats[7] = ent.stats[5] / maxDailyResourceRoots;
+                        ent.stats[8] = ent.stats[6] / maxDailyProductionRoots;
                     }
                     break;
                 }
+            }
 
             result.push(entity);
         }

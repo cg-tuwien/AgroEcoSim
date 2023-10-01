@@ -259,7 +259,7 @@ public partial struct AboveGroundAgent3 : IPlantAgent
 		var children = formation.GetChildren(formationID);
 
 		var enoughEnergyState = EnoughEnergy(lifeSupportPerHour);
-
+		var wasMeristem = false;
 		//Photosynthesis
 		if (Organ == OrganTypes.Leaf && Water > 0f)
 		{
@@ -290,9 +290,9 @@ public partial struct AboveGroundAgent3 : IPlantAgent
 			}
 		}
 		else if (Organ == OrganTypes.Meristem)
-			Auxins += TwoPi * Radius * world.HoursPerTick;
+			wasMeristem = true;
 
-		//just for DEBUG
+		//just for DEBUG, replace by auxin determined branching in combination with age and strength based dying
 		if (Organ == OrganTypes.Petiole && formation.GetOrgan(Parent) != OrganTypes.Meristem && plant.RNG.NextUInt((uint)8760 / world.HoursPerTick) <= 2)
 			Energy = 0f;
 
@@ -301,7 +301,7 @@ public partial struct AboveGroundAgent3 : IPlantAgent
 		{
 			if (Organ == OrganTypes.Bud) //Monopodial branching
 			{
-				if (Energy > EnergyStorageCapacity() && plant.RNG.NextUInt((uint)730 / world.HoursPerTick) <= 2)
+				if (Energy > EnergyStorageCapacity() && /*plant.RNG.NextUInt((uint)730 / world.HoursPerTick) <= 2*/ Auxins < 10)
 				{
 					Organ = OrganTypes.Meristem;
 					LateralAngle = MathF.PI * 0.5f;
@@ -453,6 +453,8 @@ public partial struct AboveGroundAgent3 : IPlantAgent
 
 			return;
 		}
+
+		Auxins = wasMeristem || Organ == OrganTypes.Meristem ? species.AuxinsProduction : 0;
 	}
 
     internal static void CreateLeaves(AboveGroundAgent3 parent, PlantFormation2 plant, float la, int meristem)
@@ -550,6 +552,8 @@ public partial struct AboveGroundAgent3 : IPlantAgent
 		Water = water;
 	}
 
+	public void IncAuxins(float amount) => Auxins += amount;
+	public void IncCytokinins(float amount) => Cytokinins += amount;
 	///////////////////////////
 	#region LOG
 	///////////////////////////

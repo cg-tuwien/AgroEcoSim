@@ -5,7 +5,7 @@ import { threeBoxPrimitive, threeCylinderPrimitive, threePlanePrimitive, threeSp
 import { Primitive } from "./Primitives";
 import { Index } from "./Scene";
 
-export enum VisualMappingOptions { Natural = "natural", Water = "water", Energy = "energy", Irradiance = "irradiance", Resource = "resource", Production = "production" }
+export enum VisualMappingOptions { Natural = "natural", Water = "water", Auxins = "auxins", Cytokinins = "cytokinins", Energy = "energy", Irradiance = "irradiance", Resource = "resource", Production = "production" }
 
 export function EncodePlantName(index: Index) {
     return `${index.entity.toString()}_${index.primitive.toString()}`;
@@ -155,28 +155,34 @@ function LeafColor(primitive: Primitive) : { color: THREE.Color, emissive: THREE
         case VisualMappingOptions.Natural: return { color: greenColor, emissive: black } ;
         case VisualMappingOptions.Water: return { emissive: WaterColor(primitive.stats[0]), color: black };
         case VisualMappingOptions.Energy: return { emissive: EnergyColor(primitive.stats[1]), color: black };
-        case VisualMappingOptions.Irradiance: return { emissive: IrradianceColor(primitive.stats[2] * 1e-3), color: black };
-        case VisualMappingOptions.Resource: return { emissive: EfficiencyColor(primitive.stats[5]), color: black };
-        case VisualMappingOptions.Production: return { emissive: EfficiencyColor(primitive.stats[6]), color: black };
+        case VisualMappingOptions.Auxins: return { emissive: AuxinsColor(primitive.stats[2]), color: black };
+        case VisualMappingOptions.Cytokinins: return { emissive: CytokininsColor(primitive.stats[3]), color: black };
+        case VisualMappingOptions.Irradiance: return { emissive: IrradianceColor(primitive.stats[4] * 1e-3), color: black };
+        case VisualMappingOptions.Resource: return { emissive: EfficiencyColor(primitive.stats[7]), color: black };
+        case VisualMappingOptions.Production: return { emissive: EfficiencyColor(primitive.stats[8]), color: black };
         default: return { color: neutral, emissive: black };
     }
 }
 
 function StemColor(primitive: Primitive) : { color: THREE.Color, emissive: THREE.Color } {
     switch (appstate.visualMapping.peek()) {
-        case VisualMappingOptions.Natural: return { color: greenColor.clone().lerpHSL(woodColor, primitive.stats[2]), emissive: black };
+        case VisualMappingOptions.Natural: return { color: greenColor.clone().lerpHSL(woodColor, primitive.stats[4]), emissive: black };
         case VisualMappingOptions.Water: return { emissive: WaterColor(primitive.stats[0]), color: black };
         case VisualMappingOptions.Energy: return { emissive: EnergyColor(primitive.stats[1]), color: black };
+        case VisualMappingOptions.Auxins: return { emissive: AuxinsColor(primitive.stats[2]), color: black };
+        case VisualMappingOptions.Cytokinins: return { emissive: CytokininsColor(primitive.stats[3]), color: black };
         default: return { color: neutral, emissive: black };
     }
 }
 function RootColor(primitive: Primitive) : { color: THREE.Color, emissive: THREE.Color } {
     switch (appstate.visualMapping.peek()) {
-        case VisualMappingOptions.Natural: return { color: greyColor.clone().lerpHSL(woodColor, primitive.stats[2]), emissive: black };
+        case VisualMappingOptions.Natural: return { color: greyColor.clone().lerpHSL(woodColor, primitive.stats[4]), emissive: black };
         case VisualMappingOptions.Water: return { emissive: WaterColor(primitive.stats[0]), color: black };
         case VisualMappingOptions.Energy: return { emissive: EnergyColor(primitive.stats[1]), color: black };
-        case VisualMappingOptions.Resource: return { emissive: EfficiencyColor(primitive.stats[5]), color: black };
-        case VisualMappingOptions.Production: return { emissive: EfficiencyColor(primitive.stats[6]), color: black };
+        case VisualMappingOptions.Auxins: return { emissive: AuxinsColor(primitive.stats[2]), color: black };
+        case VisualMappingOptions.Cytokinins: return { emissive: CytokininsColor(primitive.stats[3]), color: black };
+        case VisualMappingOptions.Resource: return { emissive: EfficiencyColor(primitive.stats[7]), color: black };
+        case VisualMappingOptions.Production: return { emissive: EfficiencyColor(primitive.stats[8]), color: black };
         default: return { color: neutral, emissive: black };
     }
 }
@@ -186,6 +192,8 @@ function BudColor(primitive: Primitive) : { color: THREE.Color, emissive: THREE.
         case VisualMappingOptions.Natural: return {color: greenColor, emissive: black } ;
         case VisualMappingOptions.Water: return { emissive: WaterColor(primitive.stats[0]), color: black };
         case VisualMappingOptions.Energy: return { emissive: EnergyColor(primitive.stats[1]), color: black };
+        case VisualMappingOptions.Auxins: return { emissive: AuxinsColor(primitive.stats[2]), color: black };
+        case VisualMappingOptions.Cytokinins: return { emissive: CytokininsColor(primitive.stats[3]), color: black };
         default: return { color: neutral, emissive: black };
     }
 }
@@ -224,6 +232,16 @@ function WaterColor(value: number) {
 const energyFull = new THREE.Color("#ffc757");
 function EnergyColor(value: number) {
     return waterEmpty.clone().lerpHSL(energyFull, value);
+}
+
+const auxinsFull = new THREE.Color("#FDDE81");
+function AuxinsColor(value: number) {
+    return waterEmpty.clone().lerpHSL(auxinsFull, Math.min(1, Math.max(0, value - 10) * 0.1));
+}
+
+const cytokininsFull = new THREE.Color("#D84315");
+function CytokininsColor(value: number) {
+    return waterEmpty.clone().lerpHSL(cytokininsFull, value);
 }
 
 const irrEmpty = new THREE.Color("#424d62");

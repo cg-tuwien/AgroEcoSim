@@ -180,13 +180,13 @@ public class SpeciesSettings
 
     //public int FirstFruitHour { get; init; }
 
-    public float AuxinsDegradation { get; init; }
+    public float AuxinsProduction { get; init; } = 1000f;
 
-    public float CytokininsDegradation { get; init; }
+    public float CytokininsProduction { get; init; }
 
-    public float AuxinsDegradationPerTick { get; private set; }
+    public float AuxinsReach { get; private set; } = 1f;
 
-    public float CytokininsDegradationPerTick { get; private set; }
+    public float CytokininsReach { get; private set; }
 
 
     public float DensityDryWood = 700; //in kg/m³
@@ -217,8 +217,8 @@ public class SpeciesSettings
     {
         if (!Initialized)
         {
-            AuxinsDegradationPerTick = AuxinsDegradation * hoursPerTick;
-            CytokininsDegradationPerTick = CytokininsDegradation * hoursPerTick;
+            // AuxinsDegradationPerTick = AuxinsReach * hoursPerTick;
+            // CytokininsDegradationPerTick = CytokininsReach * hoursPerTick;
 
             Initialized = true;
         }
