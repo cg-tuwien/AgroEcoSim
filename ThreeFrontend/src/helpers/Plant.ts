@@ -24,7 +24,7 @@ export function SetupMesh(primitive: Primitive, index: Index, mesh: THREE.Mesh) 
     }
 
     mesh.name = EncodePlantName(index);
-    mesh.userData = { type: "plant", index: index, customMaterial: !appstate.debugBoxes.value && primitive.type > 1 };
+    mesh.userData = { type: "plant", index: index };
 
     return mesh;
 }
@@ -36,17 +36,17 @@ export function CreateLeafMesh(primitive: Primitive, index: Index) {
 
 export function UpdateLeafMesh(mesh: THREE.Mesh, primitive: Primitive, index: Index) {
     mesh.geometry = threePlanePrimitive;
-    if (mesh.userData.customMaterial)
+    const material = mesh.material as THREE.MeshStandardMaterial;
+    if (material.name)
+        mesh.material = new THREE.MeshStandardMaterial({ ...LeafColor(primitive), side: THREE.DoubleSide });
+    else
     {
-        const material = mesh.material as THREE.MeshStandardMaterial;
         const c = LeafColor(primitive);
         material.color = c.color;
         material.emissive = c.emissive;
         material.side = THREE.DoubleSide;
         material.needsUpdate = true;
     }
-    else
-        mesh.material = new THREE.MeshStandardMaterial({ ...LeafColor(primitive), side: THREE.DoubleSide });
 
     return SetupMesh(primitive, index, mesh);
 }
@@ -65,17 +65,17 @@ export function CreateStemMesh(primitive: Primitive, index: Index) {
 
 export function UpdateStemMesh(mesh: THREE.Mesh, primitive: Primitive, index: Index) {
     mesh.geometry = threeCylinderPrimitive;
-    if (mesh.userData.customMaterial)
+    const material = mesh.material as THREE.MeshStandardMaterial;
+    if (material.name)
+        mesh.material = new THREE.MeshStandardMaterial(StemColor(primitive));
+    else
     {
-        const material = mesh.material as THREE.MeshStandardMaterial;
         const c = StemColor(primitive);
         material.color = c.color;
         material.emissive = c.emissive;
         material.side = THREE.FrontSide;
         material.needsUpdate = true;
     }
-    else
-        mesh.material = new THREE.MeshStandardMaterial(StemColor(primitive));
 
     return SetupMesh(primitive, index, mesh);
 }
@@ -95,17 +95,17 @@ export function CreateRootMesh(primitive: Primitive, index: Index) {
 
 export function UpdateRootMesh(mesh: THREE.Mesh, primitive: Primitive, index: Index) {
     mesh.geometry = threeBoxPrimitive;
-    if (mesh.userData.customMaterial)
+    const material = mesh.material as THREE.MeshStandardMaterial;
+    if (material.name)
+        mesh.material = new THREE.MeshStandardMaterial(RootColor(primitive));
+    else
     {
-        const material = mesh.material as THREE.MeshStandardMaterial;
         const c = RootColor(primitive);
         material.color = c.color;
         material.emissive = c.emissive;
         material.side = THREE.FrontSide;
         material.needsUpdate = true;
     }
-    else
-        mesh.material = new THREE.MeshStandardMaterial(RootColor(primitive));
 
     return SetupMesh(primitive, index, mesh);
 }
@@ -126,17 +126,17 @@ export function CreateBudMesh(primitive: Primitive, index: Index) {
 
 export function UpdateBudMesh(mesh: THREE.Mesh, primitive: Primitive, index: Index) {
     mesh.geometry = threeSpherePrimitive;
-    if (mesh.userData.customMaterial)
+    const material = mesh.material as THREE.MeshStandardMaterial;
+    if (material.name)
+        mesh.material = new THREE.MeshStandardMaterial(BudColor(primitive));
+    else
     {
-        const material = mesh.material as THREE.MeshStandardMaterial;
         const c = BudColor(primitive);
         material.color = c.color;
         material.emissive = c.emissive;
         material.side = THREE.FrontSide;
         material.needsUpdate = true;
     }
-    else
-        mesh.material = new THREE.MeshStandardMaterial(BudColor(primitive));
 
     return SetupMesh(primitive, index, mesh);
 }
@@ -199,8 +199,8 @@ function BudColor(primitive: Primitive) : { color: THREE.Color, emissive: THREE.
 }
 
 const neutral = new THREE.Color(neutralColor).lerpHSL(new THREE.Color(backgroundColor), 0.1);
-const singleGreyMaterial = new THREE.MeshStandardMaterial({ color: neutral});
-export const doubleGreyMaterial = new THREE.MeshStandardMaterial({ color: neutral, side: THREE.DoubleSide});
+const singleGreyMaterial = new THREE.MeshStandardMaterial({ color: neutral, name: "singleGrey" });
+export const doubleGreyMaterial = new THREE.MeshStandardMaterial({ color: neutral, side: THREE.DoubleSide, name: "doubleGrey" });
 
 const woodColor = new THREE.Color("#7f4f1f");
 const greenColor = new THREE.Color("#009900");
@@ -236,7 +236,7 @@ function EnergyColor(value: number) {
 
 const auxinsFull = new THREE.Color("#FDDE81");
 function AuxinsColor(value: number) {
-    return waterEmpty.clone().lerpHSL(auxinsFull, Math.min(1, Math.max(0, value - 10) * 0.1));
+    return waterEmpty.clone().lerpHSL(auxinsFull, Math.min(1, Math.max(0, value - 1)));
 }
 
 const cytokininsFull = new THREE.Color("#D84315");
@@ -328,4 +328,4 @@ debugGeometry.setIndex([
   20, 21, 22,  22, 21, 23,  // bottom
 ]);
 
-const debugMaterial = new THREE.MeshStandardMaterial({ vertexColors: true });
+const debugMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, name: "debug" });

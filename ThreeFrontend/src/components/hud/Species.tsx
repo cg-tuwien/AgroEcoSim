@@ -19,6 +19,9 @@ export function SpeciesList()
 }
 
 const dominanceFactorTooltip = "Reduces the growth of lateral branches. Multiplies with each recursion level.";
+const auxinsProductionTooltip = "Each meristem node generates this amount of auxins (given in unspecified units).";
+const auxinsReachTooltip = "Auxines propagate this far within the plant with a linear falloff.";
+const maxLeafLevelTooltip = "Limits the level of branches that support petioles. Technically it coresponds to the maximum possible level of descendants.";
 
 export function SpeciesItem(props: {species: Species, index: number})
 {
@@ -64,22 +67,34 @@ export function SpeciesItem(props: {species: Species, index: number})
             <label for={`dominanceFactor-${props.index}`} title={dominanceFactorTooltip}>Dominance factor</label>
         </div>
         <div>
+            <input min={0} max={2} step={0.1} type="number" name={`auxinsProduction-${props.index}`} title={auxinsProductionTooltip} value={+props.species.auxinsProduction.value} onChange={e => props.species.auxinsProduction.value = parseFloat(e.currentTarget.value)}  />
+            <label for={`auxinsProduction-${props.index}`} title={auxinsProductionTooltip}>Auxins production</label>
+        </div>
+        <div>
+            <input min={0} max={2} step={0.1} type="number" name={`auxinsReach-${props.index}`} title={auxinsReachTooltip} value={+props.species.auxinsReach.value} onChange={e => props.species.auxinsReach.value = parseFloat(e.currentTarget.value)}  />
+            <label for={`auxinsReach-${props.index}`} title={auxinsReachTooltip}>Auxins reach</label>
+        </div>
+        <div>
             <input min={1} step={1} type="number" name={`lateralsPerNode-${props.index}`} value={+props.species.lateralsPerNode.value} onChange={e => props.species.lateralsPerNode.value = parseInt(e.currentTarget.value)}  />
             <label for={`lateralsPerNode-${props.index}`}>Laterals per node</label>
         </div>
         <div>
             <input min={0} max={360} step={0.1} type="number" name={`lateralRoll-${props.index}`} value={+props.species.lateralRollDeg.value.toFixed(4)} onChange={e => props.species.lateralRollDeg.value = parseFloat(e.currentTarget.value)}  />
-            <label for={`lateralRoll-${props.index}`}>Lateral roll angle (deg) increment</label>
+            <label for={`lateralRoll-${props.index}`}>Lateral roll (deg) increment</label>
             <span>var:&nbsp;</span>
             <input min={0} step={0.1} type="number" name={`lateralRollVar-${props.index}`} value={+props.species.lateralRollDegVar.value.toFixed(4)} onChange={e => props.species.lateralRollDegVar.value = parseFloat(e.currentTarget.value)}  />
         </div>
         <div>
             <input min={0} max={180} step={0.1} type="number" name={`lateralPitch-${props.index}`} value={+props.species.lateralPitchDeg.value.toFixed(4)} onChange={e => props.species.lateralPitchDeg.value = parseFloat(e.currentTarget.value)}  />
-            <label for={`lateralPitch-${props.index}`}>Lateral pitch angle (deg)</label>
+            <label for={`lateralPitch-${props.index}`}>Lateral pitch (deg)</label>
             <span>var:&nbsp;</span>
             <input min={0} step={0.1} type="number" name={`lateralPitchVar-${props.index}`} value={+props.species.lateralPitchDegVar.value.toFixed(4)} onChange={e => props.species.lateralPitchDegVar.value = parseFloat(e.currentTarget.value)}  />
         </div>
         <hr/>
+        <div>
+            <input min={0} step={0.0001} type="number" name={`leafLevel-${props.index}`} title={auxinsReachTooltip} value={+props.species.leafLevel.value} onChange={e => props.species.leafLevel.value = parseFloat(e.currentTarget.value)}  />
+            <label for={`leafLevel-${props.index}`} title={auxinsReachTooltip}>Max. leaf level</label>
+        </div>
         <div>
             <input min={0} step={0.0001} type="number" name={`leafLength-${props.index}`} value={+props.species.leafLength.value.toFixed(4)} onChange={e => props.species.leafLength.value = parseFloat(e.currentTarget.value)}  />
             <label for={`leafLength-${props.index}`}>Leaf length</label>
@@ -100,7 +115,7 @@ export function SpeciesItem(props: {species: Species, index: number})
         </div>
         <div>
             <input min={0} step={0.1} type="number" name={`leafPitch-${props.index}`} value={+props.species.leafPitchDeg.value.toFixed(4)} onChange={e => props.species.leafPitchDeg.value = parseFloat(e.currentTarget.value)}  />
-            <label for={`leafPitch-${props.index}`}>Leaf pitch angle (deg)</label>
+            <label for={`leafPitch-${props.index}`}>Leaf pitch (deg)</label>
             <span>var:&nbsp;</span>
             <input min={0} step={0.1} type="number" name={`leafPitchVar-${props.index}`} value={+props.species.leafPitchDegVar.value.toFixed(4)} onChange={e => props.species.leafPitchDegVar.value = parseFloat(e.currentTarget.value)}  />
         </div>

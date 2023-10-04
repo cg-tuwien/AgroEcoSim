@@ -33,7 +33,6 @@ interface ITerrainRef {
 interface IPlantRef {
     type: "plant";
     index: Index;
-    customMaterial: boolean;
 }
 
 interface IObstacleRef {
@@ -305,7 +304,7 @@ export default function ThreeSceneFn () {
 
         //const box = new THREE.Box3().setFromCenterAndSize(new THREE.Vector3(w * 0.5, -d*0.5, l * 0.5), new THREE.Vector3(w, d, l) );
         //const terrainMesh = new THREE.Box3Helper( box, new THREE.Color("#cc9900") );
-        const terrainMesh = new THREE.Mesh(terrainBoxPrimitive, new THREE.MeshLambertMaterial({ color: 0x593700 }));
+        const terrainMesh = new THREE.Mesh(terrainBoxPrimitive, new THREE.MeshLambertMaterial({ color: 0x593700, name: "terrainMesh" }));
         terrainMesh.scale.set(w, d, l);
         terrainMesh.position.set(w * 0.5, -d*1, l * 0.5);
         terrainMesh.userData = { type: "terrain" };
@@ -332,12 +331,12 @@ export default function ThreeSceneFn () {
         if (counter < entities)
             for(let i = entities - 1; i >= counter; --i)
                 plants.splice(counter, entities - counter).map((x: THREE.Mesh) => {
-                    if (x.userData.type == "plant" && x.userData.customMaterial)
+                    if (x.userData.type == "plant")
                     {
                         const material = x.material;
                         if (Array.isArray(material))
-                            material.forEach(m => m.dispose());
-                        else
+                            material.forEach(m => {if (!m.name) m.dispose()});
+                        else if (!material.name)
                             material.dispose();
                     }
                 });
@@ -478,7 +477,7 @@ export default function ThreeSceneFn () {
         appstate.objPlants.traverse((x: THREE.Mesh) => {
             const data = x.userData as IPlantRef;
             const material = x.material as THREE.MeshStandardMaterial;
-            if (data.customMaterial)
+            if (material)
             {
                 if (x.geometry == threePlanePrimitive) //leaf
                     VisualizeLeafMesh(material, data.index);

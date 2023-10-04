@@ -14,12 +14,15 @@ export class Species {
     //https://sites.google.com/view/plant-diversity/
     monopodialFactor = signal(1); //at 0 it is fully dipodial, between 0 and 1 it is anisotomous see https://sites.google.com/site/paleoplant/terminology/branching
     dominanceFactor = signal(0.7);
+    auxinsProduction = signal(100);
+    auxinsReach = signal(1);
     lateralsPerNode = signal(2);
     lateralRollDeg = signal(0); //opposite = 0, alternate = 180, others are possible as well
     lateralRollDegVar = signal(5);
     lateralPitchDeg = signal(45);
     lateralPitchDegVar = signal(5);
 
+    leafLevel = signal(2);
     leafLength = signal(0.16);
     leafLengthVar = signal(0.01);
     leafRadius = signal(0.04);
@@ -36,7 +39,7 @@ export class Species {
     // RootLengthGrowthPerH = 0.023148148f,
     // RootRadiusGrowthPerH = 0.00297619f,
 
-    rootsDensity = signal(50);
+    rootsDensity = signal(0.5);
     rootsGravitaxis = signal(0.2);
 
     public static Default() {
@@ -56,12 +59,16 @@ export class Species {
             monopodialFactor: this.monopodialFactor.peek(),
             dominanceFactor: this.dominanceFactor.peek(),
 
+            auxinsProduction: this.auxinsProduction.peek(),
+            auxinsReach: this.auxinsReach.peek(),
+
             lateralsPerNode: this.lateralsPerNode.peek(),
             lateralRollDeg: this.lateralRollDeg.peek(),
             lateralRollDegVar: this.lateralRollDegVar.peek(),
             lateralPitchDeg: this.lateralPitchDeg.peek(),
             lateralPitchDegVar: this.lateralPitchDegVar.peek(),
 
+            leafLevel: this.leafLevel.peek(),
             leafLength: this.leafLength.peek(),
             leafLengthVar: this.leafLengthVar.peek(),
             leafRadius: this.leafRadius.peek(),
@@ -90,12 +97,16 @@ export class Species {
         this.monopodialFactor.value = s.monopodialFactor;
         this.dominanceFactor.value = s.dominanceFactor;
 
+        this.auxinsProduction.value = s.auxinsProduction;
+        this.auxinsReach.value = s.auxinsReach;
+
         this.lateralsPerNode.value = s.lateralsPerNode;
         this.lateralRollDeg.value = s.lateralRollDeg;
         this.lateralRollDegVar.value = s.lateralRollDegVar;
         this.lateralPitchDeg.value = s.lateralPitchDeg;
         this.lateralPitchDegVar.value = s.lateralPitchDegVar;
 
+        this.leafLevel.value = s.leafLevel;
         this.leafLength.value = s.leafLength;
         this.leafLengthVar.value = s.leafLengthVar;
         this.leafRadius.value = s.leafRadius;
@@ -126,12 +137,16 @@ export class Species {
             BMF: this.monopodialFactor.peek(),
             BDF: this.dominanceFactor.peek(),
 
+            AP: this.auxinsProduction.peek(),
+            AR: this.auxinsReach.peek(),
+
             BLN: this.lateralsPerNode.peek(),
             BR: this.lateralRollDeg.peek() * DegToRad,
             BRv: this.lateralRollDegVar.peek() * DegToRad,
             BP: this.lateralPitchDeg.peek() * DegToRad,
             BPv: this.lateralPitchDegVar.peek() * DegToRad,
 
+            LV: this.leafLevel.peek(),
             LL: this.leafLength.peek(),
             LLv: this.leafLengthVar.peek(),
             LR: this.leafRadius.peek(),
@@ -146,7 +161,7 @@ export class Species {
             PR: this.petioleRadius.peek(),
             PRv: this.petioleRadiusVar.peek(),
 
-            RS: 100 - 99 * Math.min(1, Math.max(0, this.rootsDensity.peek())), //roots sparsity
+            RS: 100 - 99.999 * Math.min(1, Math.max(0, this.rootsDensity.peek())), //roots sparsity
             RG: this.rootsGravitaxis.peek()
         });
     }

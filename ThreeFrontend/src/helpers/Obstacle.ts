@@ -11,10 +11,11 @@ const defaultMaterial = new THREE.MeshLambertMaterial({
     color: color,
     polygonOffset: true,
     polygonOffsetFactor: -2,
-    side: THREE.DoubleSide
+    side: THREE.DoubleSide,
+    name: "obstacleDefault"
 });
-const hoverMaterial = new THREE.MeshStandardMaterial({ color: color.clone().lerpHSL(neutralColor, 0.1) });
-const selectMaterial = new THREE.MeshStandardMaterial({ color: color.clone().lerpHSL(neutralColor, 0.2) });
+const hoverMaterial = new THREE.MeshStandardMaterial({ color: color.clone().lerpHSL(neutralColor, 0.1), name: "obstacleHover "});
+const selectMaterial = new THREE.MeshStandardMaterial({ color: color.clone().lerpHSL(neutralColor, 0.2), name: "obstacleSelect" });
 //disabled when using the gizmo
 //const grabMaterial = new THREE.MeshStandardMaterial({ color: color.clone().lerpHSL(new THREE.Color("#06a"), 0.5) });
 //const selectHoverMaterial = new THREE.MeshStandardMaterial({ color: grabMaterial.color.clone().lerpHSL(selectMaterial.color, 0.5) });

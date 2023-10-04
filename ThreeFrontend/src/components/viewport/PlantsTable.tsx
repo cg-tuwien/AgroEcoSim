@@ -1,7 +1,7 @@
 import { Component, h, Fragment } from "preact";
 import appstate from "../../appstate";
 import { DecodePlantName } from "../../helpers/Plant";
-import { Primitives } from "../../helpers/Primitives";
+import { Primitive, Primitives } from "../../helpers/Primitives";
 
 export function PlantsTable()
 {
@@ -19,7 +19,14 @@ export function PlantsTable()
     else
     {
         const index = DecodePlantName(pickName);
-        const primitive = appstate.scene.value[index.entity][index.primitive];
+        let primitive : Primitive = undefined;
+        if (appstate.scene.value.length > index.entity)
+        {
+            const ent = appstate.scene.value[index.entity];
+            if (ent.length > index.primitive)
+                primitive = ent[index.primitive];
+        }
+
         return primitive ? (<>
             <p>Plant part: {appstate.plantPick.value}</p>
             <ul style={{listStyleType: "none"}}>

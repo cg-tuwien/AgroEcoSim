@@ -6,9 +6,9 @@ import { BaseRequestObject, ReqObjMaterials } from "./BaseRequestObject";
 
 const seedColor = new THREE.Color("#008");
 const dodecahedron = new THREE.DodecahedronGeometry(0.03);
-const defaultMaterial = new THREE.MeshLambertMaterial({ color: seedColor});
-const hoverMaterial = new THREE.MeshLambertMaterial({ color: seedColor.clone().lerpHSL(neutralColor, 0.1) });
-const selectMaterial = new THREE.MeshLambertMaterial({ color: seedColor.clone().lerpHSL(neutralColor, 0.2) });
+const defaultMaterial = new THREE.MeshLambertMaterial({ color: seedColor, name: "seedDefault" });
+const hoverMaterial = new THREE.MeshLambertMaterial({ color: seedColor.clone().lerpHSL(neutralColor, 0.1), name: "seedHover" });
+const selectMaterial = new THREE.MeshLambertMaterial({ color: seedColor.clone().lerpHSL(neutralColor, 0.2), name: "seedSelect" });
 //disabled when using the gizmo
 // const grabMaterial = new THREE.MeshLambertMaterial({ color: seedColor.clone().lerpHSL(new THREE.Color("#900"), 0.5) });
 // const selectHoverMaterial = new THREE.MeshLambertMaterial({ color: grabMaterial.color.clone().lerpHSL(selectMaterial.color, 0.5) });
