@@ -287,7 +287,7 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 			if (children.Count > 0)
 			{
 				var pool = species.RootsSparsity * MathF.Pow(childrenCount, childrenCount << 2) / (world.HoursPerTick * PreviousDayProductionInv);
-				if (pool < uint.MaxValue && plant.RNG.NextUInt((uint)pool) == 1 /*&& waterFactor > plant.RNG.NextFloat()*/) //TODO MI 2023-03-07 Revive waterfactor weighting
+				if (pool < uint.MaxValue && plant.RNG.NextUInt((uint)pool) == 1 && (PreviousDayProductionInv >= 1f || PreviousDayProductionInv > plant.RNG.NextFloat())) //TODO MI 2023-03-07 Revive waterfactor weighting
 				{
 					var qx = Quaternion.CreateFromAxisAngle(Vector3.UnitX, plant.RNG.NextFloat(-MathF.PI * yFactor, MathF.PI * yFactor));
 					var qz = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, plant.RNG.NextFloat(MathF.PI * zFactor, MathF.PI * zFactor * 2f));

@@ -63,4 +63,5 @@ public interface IPlantAgent : ITreeAgent
 	bool ChangeAmount(PlantFormation2 plant, int index, int substanceIndex, float amount, bool increase);
 
 	void Distribute(float water, float energy);
+	void IncAuxins(float amount);
 }

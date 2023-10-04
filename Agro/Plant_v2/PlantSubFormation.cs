@@ -567,7 +567,7 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 			var dst = Src();
 			var path = new List<PathData>();
 			for(int i = 0; i < dst.Length; ++i)
-				if (dst[i].Organ == OrganTypes.Meristem || (Births.Count > 0 && dst[i].Organ == OrganTypes.Stem && dst[i].Auxins == Plant.Parameters.AuxinsProduction))
+				if (dst[i].Organ == OrganTypes.Meristem || (Births.Count > 0 && dst[i].Organ == OrganTypes.Stem && dst[i].Auxins >= Plant.Parameters.AuxinsProduction))
 					DistributeAuxin(dst, i, path);
 		}
 	}

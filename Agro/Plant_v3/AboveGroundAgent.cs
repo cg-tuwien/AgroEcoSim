@@ -293,15 +293,86 @@ public partial struct AboveGroundAgent3 : IPlantAgent
 			wasMeristem = true;
 
 		//just for DEBUG, replace by auxin determined branching in combination with age and strength based dying
-		if (Organ == OrganTypes.Petiole && formation.GetOrgan(Parent) != OrganTypes.Meristem && plant.RNG.NextUInt((uint)8760 / world.HoursPerTick) <= 2)
+		if (Organ == OrganTypes.Petiole && formation.GetOrgan(Parent) != OrganTypes.Meristem && plant.RNG.NextUInt((uint)8760 / world.HoursPerTick) < 0)
 			Energy = 0f;
+
+		//Swap a leaf to a twig
+		if (Parent >= 0 && (Organ == OrganTypes.Petiole || Organ == OrganTypes.Bud))
+		{
+			var parentAuxins = formation.GetHormones(Parent).X;
+			if (parentAuxins < species.AuxinsThreshold)
+			{
+				var localMinimum = true;
+				var ascendantIndex = formation.GetParent(Parent);
+				var ascendantAuxins = 0f;
+
+				//propagation down towards the roots
+				while (localMinimum && ascendantIndex >= 0 && ascendantAuxins < species.AuxinsThreshold)
+				{
+					ascendantAuxins = formation.GetHormones(ascendantIndex).X;
+					localMinimum = ascendantAuxins > parentAuxins;
+					ascendantIndex = formation.GetParent(ascendantIndex);
+				}
+
+				//propagation up towards the leaves
+				if (localMinimum)
+				{
+					var buffer = new Stack<int>();
+					buffer.Push(Parent);
+					while (localMinimum && buffer.Count > 0)
+					{
+						var descendant = buffer.Pop();
+						foreach(var child in formation.GetChildren(descendant))
+							if (localMinimum && child != formationID && formation.GetOrgan(child) == OrganTypes.Stem)
+							{
+								var descendantAuxins = formation.GetHormones(child).X;
+								if (descendantAuxins < species.AuxinsThreshold)
+								{
+									if (descendantAuxins < parentAuxins)
+										localMinimum = false;
+									else
+										buffer.Push(child);
+								}
+							}
+					}
+				}
+
+				if (localMinimum)
+				{
+					var makeTwig = false;
+					if (Organ == OrganTypes.Petiole)
+					{
+						if (formation.GetOrgan(Parent) != OrganTypes.Meristem)
+						{
+							if (children != null)
+								foreach(var child in children)
+									formation.Death(child);
+							makeTwig = true;
+						}
+					}
+					else if (Organ == OrganTypes.Bud)
+						makeTwig = true;
+
+					if (makeTwig)
+					{
+						Organ = OrganTypes.Meristem;
+						LateralAngle = MathF.PI * 0.5f;
+						++DominanceLevel;
+						Orientation = TurnUpwards(Orientation);
+
+						if (species.LateralsPerNode > 0)
+							CreateLeaves(this, plant, LateralAngle + species.LateralRoll, formationID);
+					}
+				}
+			}
+		}
 
 		//Growth
 		if (Energy > enoughEnergyState) //maybe make it a factor storedEnergy/lifeSupport so that it grows fast when it has full storage
 		{
 			if (Organ == OrganTypes.Bud) //Monopodial branching
 			{
-				if (Energy > EnergyStorageCapacity() && /*plant.RNG.NextUInt((uint)730 / world.HoursPerTick) <= 2*/ Auxins < 10)
+				if (Energy > EnergyStorageCapacity() && plant.RNG.NextUInt((uint)730 / world.HoursPerTick) < 0)
 				{
 					Organ = OrganTypes.Meristem;
 					LateralAngle = MathF.PI * 0.5f;
@@ -394,6 +465,7 @@ public partial struct AboveGroundAgent3 : IPlantAgent
 						//plant.RNG.NextUInt() < PlantFormation2.TimeAccumulatedProbabilityUInt(Length * lengthStochasticScale * waterAvailable, world.HoursPerTick)
 					){
 						Organ = OrganTypes.Stem;
+						wasMeristem = true;
 						if (species.MonopodialFactor < 1) //Dichotomous
 						{
 							if (DominanceLevel < 255)

@@ -148,13 +148,17 @@ public class Pcg
 	{
 		if (!maxExclusive) ++max;
 
-		uint threshold = (uint)(-max) % max; //What is this? I don't remember anymore :(
-
-		while (true)
+		if (max == 0) return 0;
+		else
 		{
-			uint result = NextUInt();
-			if (result >= threshold)
-				return result % max;
+			uint threshold = (uint)(-max) % max; //What is this? I don't remember anymore :(
+
+			while (true)
+			{
+				uint result = NextUInt();
+				if (result >= threshold)
+					return result % max;
+			}
 		}
 	}
 
@@ -165,13 +169,17 @@ public class Pcg
 			throw new ArgumentException();
 
 		uint diff = max - min + (maxExclusive ? 0U : 1U);
-		uint threshold = (uint)(-diff) % diff;
-
-		while (true)
+		if (diff == 0) return min;
+		else
 		{
-			uint result = NextUInt();
-			if (result >= threshold)
-				return (result % diff) + min;
+			uint threshold = (uint)(-diff) % diff;
+
+			while (true)
+			{
+				uint result = NextUInt();
+				if (result >= threshold)
+					return (result % diff) + min;
+			}
 		}
 	}
 

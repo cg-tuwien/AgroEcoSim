@@ -91,6 +91,12 @@ public class SpeciesSettings
     public float LateralPitchVar { get; init; }
 
     ///<summary>
+    /// Maximum branch level that supports leaves (here level denotes the max. subtree depth)
+    ///</summary>
+    [JsonPropertyName("LV")]
+    public int LeafLevel { get; init; }
+
+    ///<summary>
     /// Standard leaf length along its main axis (in meters)
     ///</summary>
     [JsonPropertyName("LL")]
@@ -180,14 +186,18 @@ public class SpeciesSettings
 
     //public int FirstFruitHour { get; init; }
 
-    public float AuxinsProduction { get; init; } = 1000f;
+
+    [JsonPropertyName("AP")]
+    public float AuxinsProduction { get; init; }
 
     public float CytokininsProduction { get; init; }
 
-    public float AuxinsReach { get; private set; } = 1f;
+    [JsonPropertyName("AR")]
+    public float AuxinsReach { get; init; }
 
-    public float CytokininsReach { get; private set; }
+    public float CytokininsReach { get; init; }
 
+    public float AuxinsThreshold => 1f;
 
     public float DensityDryWood = 700; //in kg/m³
 	public float DensityDryStem = 200; //in kg/m³
