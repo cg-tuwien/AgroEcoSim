@@ -8,7 +8,7 @@ export class Species {
     //trunkToWood = signal(1);
     height = signal(12);
 
-    nodeDist = signal(0.1);
+    nodeDist = signal(0.05);
     nodeDistVar = signal(0.01);
 
     //https://sites.google.com/view/plant-diversity/
@@ -23,8 +23,8 @@ export class Species {
     lateralPitchDegVar = signal(5);
 
     leafLevel = signal(2);
-    leafLength = signal(0.16);
-    leafLengthVar = signal(0.01);
+    leafLength = signal(0.12);
+    leafLengthVar = signal(0.02);
     leafRadius = signal(0.04);
     leafRadiusVar = signal(0.01);
     leafGrowthTime = signal(720);

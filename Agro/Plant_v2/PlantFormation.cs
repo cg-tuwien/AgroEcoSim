@@ -36,6 +36,9 @@ public partial class PlantFormation2 : IPlantFormation
 	internal readonly Vector2 VegetativeLowTemperature = new(10, 15);
 	internal readonly Vector2 VegetativeHighTemperature = new(35, 40);
 
+	internal float WaterBalance = 0f;
+	internal float EnergyBalance = 0f;
+
 	/// <summary>
 	/// Random numbers generator
 	/// </summary>
@@ -355,6 +358,9 @@ public partial class PlantFormation2 : IPlantFormation
 
 			UG.Distribute(globalUG);
 			AG.Distribute(globalAG);
+
+			WaterBalance = waterRequirement > 1e-6 ? (float)(water / waterRequirement) : 1;
+			EnergyBalance = energyRequirement > 1e-6 ? (float)(energy / energyRequirement) : 1;
 		}
 
 		// if (!DeathSeed)

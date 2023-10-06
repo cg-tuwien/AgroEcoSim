@@ -102,7 +102,7 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 	/// <summary>
 	/// Water volume in m³ that can be absorbed per m² of root surface per hour
 	/// </summary>
-	public const float WaterAbsortionRatio = 0.04f;
+	public const float WaterAbsortionRatio = 0.05f;
 
 	/// <summary>
 	/// Water volume in m³ which can be absorbed from soil per hour
@@ -250,7 +250,7 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 			var newRadius = Radius + widthGrowth;
 			if (Parent == -1 || formation.GetBaseRadius(Parent) >= newRadius)
 			{
-				var lengthGrowth = PreviousDayProductionInv * 2e-4f * world.HoursPerTick / (MathF.Pow(childrenCount, GrowthDeclineByExpChildren + 1) * MathF.Pow(lr * Length, 0.1f));
+				var lengthGrowth = PreviousDayProductionInv * 3e-4f * world.HoursPerTick / (MathF.Pow(childrenCount, GrowthDeclineByExpChildren + 1) * MathF.Pow(lr * Length, 0.1f));
 
 				Length += lengthGrowth;
 				Radius = newRadius;
@@ -286,7 +286,9 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 			//Branching
 			if (children.Count > 0)
 			{
-				var pool = species.RootsSparsity * MathF.Pow(childrenCount, childrenCount << 2) / (world.HoursPerTick * PreviousDayProductionInv);
+				//Debug.WriteLine($"{plant.WaterBalance * species.RootsSparsity * MathF.Pow(childrenCount, childrenCount << 2) / (world.HoursPerTick * PreviousDayProductionInv)} = {plant.WaterBalance} * {species.RootsSparsity} * {MathF.Pow(childrenCount, childrenCount << 2)} / ({world.HoursPerTick * PreviousDayProductionInv})");
+				//Debug.WriteLine($"{PreviousDayEnvResourcesInv} {PreviousDayProductionInv}");
+				var pool = plant.WaterBalance * species.RootsSparsity * MathF.Pow(childrenCount, childrenCount << 2) / (world.HoursPerTick * PreviousDayProductionInv);
 				if (pool < uint.MaxValue && plant.RNG.NextUInt((uint)pool) == 1 && (PreviousDayProductionInv >= 1f || PreviousDayProductionInv > plant.RNG.NextFloat())) //TODO MI 2023-03-07 Revive waterfactor weighting
 				{
 					var qx = Quaternion.CreateFromAxisAngle(Vector3.UnitX, plant.RNG.NextFloat(-MathF.PI * yFactor, MathF.PI * yFactor));

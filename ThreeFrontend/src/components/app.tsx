@@ -3,9 +3,9 @@ import { Start } from './hud/Start'
 import { HoursPerTick } from './hud/HoursPerTick';
 import { TotalHours } from './hud/TotalHours';
 import { FieldResolution } from './hud/FieldResolution';
-import { FieldCellsX } from './hud/FieldCellsX';
-import { FieldCellsZ } from './hud/FieldCellsZ';
-import { FieldCellsD } from './hud/FieldCellsD';
+import { FieldSizeX } from './hud/FieldCellsX';
+import { FieldSizeZ } from './hud/FieldCellsZ';
+import { FieldSizeD } from './hud/FieldCellsD';
 import { InitNumber } from './hud/InitNumber';
 import { PlantsTable } from './viewport/PlantsTable';
 import { Randomize } from './hud/Randomize';
@@ -52,9 +52,9 @@ const App = () => {
 				<HoursPerTick/>
 				<TotalHours/>
 				<FieldResolution/>
-				<FieldCellsX/>
-				<FieldCellsZ/>
-				<FieldCellsD/>
+				<FieldSizeX/>
+				<FieldSizeZ/>
+				<FieldSizeD/>
 				<Randomize/>
 				<InitNumber/>
 				<Renderer/>

@@ -5,20 +5,20 @@ import appstate from "../../appstate";
 const min = 1;
 const max = 100000;
 
-export function FieldCellsX() {
+export function FieldSizeX() {
     return <div>
-        <input min={min} max={max} type="number" name="fieldcellsx" value={appstate.fieldCellsX} onChange={e => {
+        <input min={min} max={max} type="number" name="fieldSizeX" value={appstate.fieldSizeX} onChange={e => {
             let step = 1;
-            if (appstate.fieldCellsX.value >= 1000) step = 1000;
-            else if (appstate.fieldCellsX.value >= 100) step = 100;
-            else if (appstate.fieldCellsX.value >= 20) step = 10;
+            if (appstate.fieldSizeX.value >= 1000) step = 1000;
+            else if (appstate.fieldSizeX.value >= 100) step = 100;
+            else if (appstate.fieldSizeX.value >= 20) step = 10;
             else step = 1;
 
-            if (parseInt(e.currentTarget.value) > appstate.fieldCellsX.value)
-                appstate.fieldCellsX.value = Math.round(Math.min(max, appstate.fieldCellsX.value + step));
+            if (parseInt(e.currentTarget.value) > appstate.fieldSizeX.value)
+                appstate.fieldSizeX.value = Math.round(Math.min(max, appstate.fieldSizeX.value + step));
             else
-                appstate.fieldCellsX.value = Math.round(Math.max(min, appstate.fieldCellsX.value - step));
+                appstate.fieldSizeX.value = Math.round(Math.max(min, appstate.fieldSizeX.value - step));
         }}/>
-        <label for="fieldcellsx">Width of the field (in meters)</label>
+        <label for="fieldSizeX">Width of the field (in meters)</label>
     </div>;
 }

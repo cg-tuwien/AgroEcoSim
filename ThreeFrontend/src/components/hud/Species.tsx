@@ -52,10 +52,10 @@ export function SpeciesItem(props: {species: Species, index: number})
             <label for={`height-${props.index}`}>Plant height</label>
         </div>
         <div>
-            <input min={0} step={0.1} type="number" name={`nodeDist-${props.index}`} value={+props.species.nodeDist.value.toFixed(4)} onChange={e => props.species.nodeDist.value = parseFloat(e.currentTarget.value)}  />
+            <input min={0} step={0.01} type="number" name={`nodeDist-${props.index}`} value={+props.species.nodeDist.value.toFixed(4)} onChange={e => props.species.nodeDist.value = parseFloat(e.currentTarget.value)}  />
             <label for={`nodeDist-${props.index}`}>Nodes distance</label>
             <span>var:&nbsp;</span>
-            <input min={0} step={0.1} type="number" name={`nodeDistVar-${props.index}`} value={+props.species.nodeDistVar.value.toFixed(4)} onChange={e => props.species.nodeDistVar.value = parseFloat(e.currentTarget.value)}  />
+            <input min={0} step={0.01} type="number" name={`nodeDistVar-${props.index}`} value={+props.species.nodeDistVar.value.toFixed(4)} onChange={e => props.species.nodeDistVar.value = parseFloat(e.currentTarget.value)}  />
         </div>
         <hr/>
         <div>

@@ -91,12 +91,13 @@ export default class BinaryReader {
                         entity.push({ type: Primitives.Cylinder, affineTransform: transform, length: length, radius: radius, stats: undefined });
                     }
                     break;
-                    case 4: { //sphere / bud
-                        const center = this.readFloat32Vector(3);
-                        const radius = this.readFloat32();
-                        entity.push({ type: Primitives.Sphere, center: center, radius: radius, stats: undefined });
-                    }
-                    break;
+                    //buds disabled
+                    // case 4: { //sphere / bud
+                    //     const center = this.readFloat32Vector(3);
+                    //     const radius = this.readFloat32();
+                    //     entity.push({ type: Primitives.Sphere, center: center, radius: radius, stats: undefined });
+                    // }
+                    // break;
                     case 8: entity.push({ type: Primitives.Rectangle, affineTransform: this.readFloat32Vector(12), stats: undefined }); break; //plane / leaf
                 }
                 const isSensor = this.readUInt8();
@@ -149,16 +150,17 @@ export default class BinaryReader {
                         entity.push({ type: Primitives.Cylinder, affineTransform: transform, length: length, radius: radius, stats: new Float32Array([waterRatio, energyRatio, auxins, cytokinins, woodRatio]) });
                     }
                     break;
-                    case 3: { //bud
-                        const center = this.readFloat32Vector(3);
-                        const radius = this.readFloat32();
-                        const waterRatio = this.readFloat32();
-                        const energyRatio = this.readFloat32();
-                        const auxins = this.readFloat32();
-                        const cytokinins = this.readFloat32();
-                        entity.push({ type: Primitives.Sphere, center: center, radius: radius, stats: new Float32Array([waterRatio, energyRatio, auxins, cytokinins]) });
-                    }
-                    break;
+                    //buds disabled
+                    // case 3: { //bud
+                    //     const center = this.readFloat32Vector(3);
+                    //     const radius = this.readFloat32();
+                    //     const waterRatio = this.readFloat32();
+                    //     const energyRatio = this.readFloat32();
+                    //     const auxins = this.readFloat32();
+                    //     const cytokinins = this.readFloat32();
+                    //     entity.push({ type: Primitives.Sphere, center: center, radius: radius, stats: new Float32Array([waterRatio, energyRatio, auxins, cytokinins]) });
+                    // }
+                    // break;
                 }
             }
 

@@ -242,7 +242,8 @@ export default function ThreeSceneFn () {
     const updateObject3D = (mesh: THREE.Mesh, primitive: Primitive, index: Index) => {
         switch(primitive.type)
         {
-            case Primitives.Sphere: mesh.matrix.fromArray([primitive.radius, 0, 0, primitive.center[0], 0, primitive.radius, 0, primitive.center[1], 0, 0, primitive.radius, primitive.center[2], 0, 0, 0, 1]).transpose(); break;
+            //buds diabled case Primitives.Sphere: mesh.matrix.fromArray([primitive.radius, 0, 0, primitive.center[0], 0, primitive.radius, 0, primitive.center[1], 0, 0, primitive.radius, primitive.center[2], 0, 0, 0, 1]).transpose(); break;
+            case Primitives.Sphere: return; //sphere / bud
             default: mesh.matrix.fromArray([...primitive.affineTransform, 0, 0, 0, 1]).transpose(); break;
         }
 
@@ -264,7 +265,7 @@ export default function ThreeSceneFn () {
                         .scale(new THREE.Vector3(primitive.radius, primitive.length, primitive.radius))
                         .setPosition(new THREE.Vector3(primitive.affineTransform[3] + mesh.matrix.elements[4] * 0.5, primitive.affineTransform[7] + mesh.matrix.elements[5] * 0.5, primitive.affineTransform[11] + mesh.matrix.elements[6] * 0.5));
                     break; //cylinder / stem
-            case Primitives.Sphere: mesh = UpdateBudMesh(mesh, primitive, index); break; //sphere / bud
+            //buds disabled case Primitives.Sphere: mesh = UpdateBudMesh(mesh, primitive, index); break; //sphere / bud
             case Primitives.Rectangle: mesh = UpdateLeafMesh(mesh, primitive, index); break; //plane / leaves
         }
     }
@@ -273,7 +274,8 @@ export default function ThreeSceneFn () {
         let matrix: THREE.Matrix4;
         switch(primitive.type)
         {
-            case Primitives.Sphere: matrix = new THREE.Matrix4().fromArray([primitive.radius, 0, 0, primitive.center[0], 0, primitive.radius, 0, primitive.center[1], 0, 0, primitive.radius, primitive.center[2], 0, 0, 0, 1]).transpose(); break;
+            //buds disabled case Primitives.Sphere: matrix = new THREE.Matrix4().fromArray([primitive.radius, 0, 0, primitive.center[0], 0, primitive.radius, 0, primitive.center[1], 0, 0, primitive.radius, primitive.center[2], 0, 0, 0, 1]).transpose(); break;
+            case Primitives.Sphere: return; //sphere / bud
             default: matrix = new THREE.Matrix4().fromArray([...primitive.affineTransform, 0, 0, 0, 1]).transpose(); break;
         }
 
@@ -305,8 +307,9 @@ export default function ThreeSceneFn () {
         //const box = new THREE.Box3().setFromCenterAndSize(new THREE.Vector3(w * 0.5, -d*0.5, l * 0.5), new THREE.Vector3(w, d, l) );
         //const terrainMesh = new THREE.Box3Helper( box, new THREE.Color("#cc9900") );
         const terrainMesh = new THREE.Mesh(terrainBoxPrimitive, new THREE.MeshLambertMaterial({ color: 0x593700, name: "terrainMesh" }));
+        console.log(w, d, l);
         terrainMesh.scale.set(w, d, l);
-        terrainMesh.position.set(w * 0.5, -d*1, l * 0.5);
+        terrainMesh.position.set(w * 0.5, -d, l * 0.5);
         terrainMesh.userData = { type: "terrain" };
         //terrainMesh.layers.set(TerrainLayer);
         appstate.objTerrain.add(terrainMesh);

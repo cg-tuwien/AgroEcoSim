@@ -160,12 +160,12 @@ class State {
     hoursPerTick = signal(1);
     totalHours = signal(720);
     fieldResolution = signal(0.5);
-    fieldCellsX = signal(10);
-    fieldCellsZ = signal(10);
-    fieldCellsD = signal(4);
-    fieldSizeX = computed(() => this.fieldCellsX.value * this.fieldResolution.value);
-    fieldSizeZ = computed(() => this.fieldCellsZ.value * this.fieldResolution.value);
-    fieldSizeD = computed(() => this.fieldCellsD.value * this.fieldResolution.value);
+    fieldSizeX = signal(10);
+    fieldSizeZ = signal(10);
+    fieldSizeD = signal(4);
+    fieldCellsX = computed(() => Math.ceil(this.fieldSizeX.value / this.fieldResolution.value));
+    fieldCellsZ = computed(() => Math.ceil(this.fieldSizeZ.value / this.fieldResolution.value));
+    fieldCellsD = computed(() => Math.ceil(this.fieldSizeD.value / this.fieldResolution.value));
     initNumber = signal(42);
     randomize = signal(false);
     renderMode = signal(1); //1 is Mitsuba
@@ -222,7 +222,7 @@ class State {
         HoursPerTick: Math.trunc(this.hoursPerTick.peek()),
         TotalHours: Math.trunc(this.totalHours.peek()),
         FieldResolution: this.fieldResolution.peek(),
-        FieldSize: { X: this.fieldCellsX.peek(), D: this.fieldCellsD.peek(), Z: this.fieldCellsZ.peek() },
+        FieldSize: { X: this.fieldSizeX.peek(), D: this.fieldSizeD.peek(), Z: this.fieldSizeZ.peek() },
         Seed: Math.trunc(this.randomize.peek() ? Math.random() * 4294967295 : this.initNumber.peek()),
         Species: this.species.peek().map(s => s.serialize()),
 
@@ -360,9 +360,9 @@ class State {
             hoursPerTick: this.hoursPerTick.peek(),
             totalHours: this.totalHours.peek(),
             fieldResolution: this.fieldResolution.peek(),
-            fieldCellsX: this.fieldCellsX.peek(),
-            fieldCellsZ: this.fieldCellsZ.peek(),
-            fieldCellsD: this.fieldCellsD.peek(),
+            fieldSizeX: this.fieldSizeX.peek(),
+            fieldSizeZ: this.fieldSizeZ.peek(),
+            fieldSizeD: this.fieldSizeD.peek(),
             initNumber: this.initNumber.peek(),
             randomize: this.randomize.peek(),
             constantLight: this.renderMode.peek(),
@@ -411,9 +411,9 @@ class State {
                     self.hoursPerTick.value = data.hoursPerTick;
                     self.totalHours.value = data.totalHours;
                     self.fieldResolution.value = data.fieldResolution;
-                    self.fieldCellsX.value = data.fieldCellsX;
-                    self.fieldCellsZ.value = data.fieldCellsZ;
-                    self.fieldCellsD.value = data.fieldCellsD;
+                    self.fieldSizeX.value = data.fieldSizeX;
+                    self.fieldSizeZ.value = data.fieldSizeZ;
+                    self.fieldSizeD.value = data.fieldSizeD;
                     self.initNumber.value = data.initNumber;
                     self.randomize.value = data.randomize;
                     self.renderMode.value = data.constantLight;

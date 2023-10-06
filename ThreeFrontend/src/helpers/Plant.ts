@@ -226,7 +226,7 @@ function HeatColor(value: number) {
 const waterEmpty = new THREE.Color("#909090");
 const waterFull = new THREE.Color("#00BFE6");
 function WaterColor(value: number) {
-    return waterEmpty.clone().lerpHSL(waterFull, value);
+    return waterEmpty.clone().lerp(waterFull, value);
 }
 
 const energyFull = new THREE.Color("#ffc757");
