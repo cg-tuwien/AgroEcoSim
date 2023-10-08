@@ -22,7 +22,7 @@ public partial struct AboveGroundAgent3 : IPlantAgent
 	/// <summary>
 	/// Radius of the parent at birth of this agent. Used for sheding leaves and removing buds from older branches as they grow thicker
 	/// </summary>
-	public float ParentRadiusAtBirth { get; private set; }
+	public float ParentRadiusAtBirth { get; private set; } = 0f;
 
 	//subdivions of this node
 	public int FirstSegmentIndex { get; private set; }

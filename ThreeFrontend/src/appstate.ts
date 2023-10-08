@@ -450,6 +450,11 @@ class State {
         );
     }
 
+    prim = () => {
+        const i = Math.min(this.playPointer.peek(), st.history.length - 1);
+        this.saveBinaryFile(this.history[i].s, `_${st.history[i].t}`, 'prim');
+    }
+
     private saveTextFile(data: string, ext: string) {
         const blob = new Blob([data], { type: 'text/plain' });
         const url = window.URL.createObjectURL(blob);
@@ -459,6 +464,20 @@ class State {
         document.body.appendChild(a);
         a.href = url;
         a.download = `AgroEco-${new Date().toISOString().split("T")[0]}_${new Date().getHours()}-${new Date().getMinutes()}-${new Date().getSeconds()}.${ext}`;
+        a.click();
+        window.URL.revokeObjectURL(url);
+        a.remove();
+    }
+
+    private saveBinaryFile(data: Uint8Array, frame: string, ext: string) {
+        const blob = new Blob([data], { type: 'application/octet-stream' });
+        const url = window.URL.createObjectURL(blob);
+
+        const a = document.createElement('a');
+        a.style.setProperty('display', 'none');
+        document.body.appendChild(a);
+        a.href = url;
+        a.download = `AgroEco-${new Date().toISOString().split("T")[0]}_${new Date().getHours()}-${new Date().getMinutes()}-${new Date().getSeconds()}${frame}.${ext}`;
         a.click();
         window.URL.revokeObjectURL(url);
         a.remove();

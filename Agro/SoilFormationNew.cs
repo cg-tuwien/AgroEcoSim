@@ -505,7 +505,10 @@ public partial class SoilFormationNew : IFormation, IGrid3D
 					var reqs = WaterRequestsRoots[i];
 					var limit = reqs.Count;
 					for(int j = 0; j < limit; ++j)
-						reqs[j].Plant.SendProtected(reqs[j].Part, new UnderGroundAgent2.WaterInc(reqs[j].Amount));
+					{
+						var (Plant, Part, Amount) = reqs[j];
+						Plant?.SendProtected(Part, new UnderGroundAgent2.WaterInc(Amount));
+					}
 					reqs.Clear();
 				}
 			}

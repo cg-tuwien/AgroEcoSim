@@ -548,7 +548,7 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 		public readonly int SegDist;
 		public readonly float MetricDist;
 		public readonly float BranchDist;
-		public readonly bool Dir;
+		//public readonly bool Dir;
 
 		public PathData(int index, int segDist, float metricDist, float branchDist)
 		{
@@ -866,12 +866,12 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 
 	///<summary>
 	///Volume in m³
-	///<summary>
+	///</summary>
 	public float GetVolume() => (ReadTMP ? AgentsTMP : Agents).Aggregate(0f, (sum, current) => sum + current.Volume());
 
 	///<summary>
 	///Weight in g
-	///<summary>
+	///</summary>
 	public float GetWeight(int index, SpeciesSettings species)
 	{
 		var src = ReadTMP ? AgentsTMP : Agents;

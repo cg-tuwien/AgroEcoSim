@@ -245,7 +245,7 @@ public class AgroWorld : SimulationWorld
 
 	internal DateTime GetTime(uint timestep) => TimeZoneInfo.ConvertTimeToUtc(InitialTime, TimeZone) + TimeSpan.FromHours(timestep * HoursPerTick);
 	///<summary>
-	//Rainfall in the given timestep in gramm
+	///Rainfall in the given timestep in gramm
 	///</summary>
 	internal float GetWater(uint timestep) => Weather[timestep].Precipitation;
 	internal float GetTemperature(uint timestep) => 20;

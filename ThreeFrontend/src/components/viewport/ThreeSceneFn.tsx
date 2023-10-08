@@ -288,7 +288,7 @@ export default function ThreeSceneFn () {
                         .scale(new THREE.Vector3(primitive.radius, primitive.length, primitive.radius))
                         .setPosition(new THREE.Vector3(primitive.affineTransform[3] + matrix.elements[4] * 0.5, primitive.affineTransform[7] + matrix.elements[5] * 0.5, primitive.affineTransform[11] + matrix.elements[6] * 0.5));
                     break; //cylinder / stem
-            case Primitives.Sphere: mesh = CreateBudMesh(primitive, index); break; //sphere / bud
+            //buds disabled case Primitives.Sphere: mesh = CreateBudMesh(primitive, index); break; //sphere / bud
             case Primitives.Rectangle: mesh = CreateLeafMesh(primitive, index); break; //plane / leaves
         }
 

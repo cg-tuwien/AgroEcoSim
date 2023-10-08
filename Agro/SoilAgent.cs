@@ -15,15 +15,15 @@ public partial struct SoilAgent : IAgent
 	internal static float GravitationDiffusionCoefPerTick(AgroWorld world) => 1.5f * SoilDiffusionCoefPerTick(world);
 
 	///<summary>
-	//Water ammount (g)
+	///Water ammount (g)
 	///</summary>
 	public float Water { get; private set; }
 	///<summary>
-	//Steam ammount (g)
+	///Steam ammount (g)
 	///</summary>
 	public float Steam { get; private set; }
 	///<summary>
-	//Temperature (°C)
+	///Temperature (°C)
 	///</summary>
 	public float Temperature { get; private set; }
 

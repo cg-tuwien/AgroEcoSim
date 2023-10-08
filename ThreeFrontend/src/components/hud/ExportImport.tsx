@@ -12,5 +12,6 @@ export function ExportImport()
         <button onClick={async () => await appstate.load()} title={tooltipLoad}>Load</button>
         <button onClick={async () => await appstate.save()} title={tooltipSave}>Save</button>
         <button onClick={async () => await appstate.gltf()} title={tooltipGltf}>gltf</button>
+        <button onClick={async () => await appstate.prim()} title={tooltipGltf}>prim</button>
     </div>;
 }

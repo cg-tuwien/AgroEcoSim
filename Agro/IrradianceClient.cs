@@ -102,7 +102,7 @@ public class IrradianceClient
 
 	bool IsNight = true;
 
-	byte[] EnvMap = null; //just for debug output
+	byte[]? EnvMap = null; //just for debug output
 	ushort EnvMapX = 0;
 
 	public IrradianceClient(float latitude, float longitude, int _mode)
@@ -267,7 +267,7 @@ public class IrradianceClient
 						for (var i = 0; i < length; ++i)
 							Irradiances.Add(reader.ReadSingle() / 3600f);
 					}
-					catch (Exception e)
+					catch (Exception)
                     {
 						IsOnline = false;
 						SW.Stop();
@@ -291,11 +291,11 @@ public class IrradianceClient
 		}
 	}
 
-	public byte[] DebugIrradiance(AgroWorld world, uint timestep, IList<IFormation> formations, IList<IObstacle> obstacles, float[] cameraMatrix) => DebugIrr(world, timestep, formations, obstacles, cameraMatrix);
+	public byte[]? DebugIrradiance(AgroWorld world, uint timestep, IList<IFormation> formations, IList<IObstacle> obstacles, float[] cameraMatrix) => DebugIrr(world, timestep, formations, obstacles, cameraMatrix);
 	public byte[] DebugEnvironment() => EnvMap;
 	public ushort DebugEnvironmentX() => EnvMapX;
 
-	byte[] DebugIrr(AgroWorld world, uint timestep, IList<IFormation> formations, IList<IObstacle> obstacles, float[] camera)
+	byte[]? DebugIrr(AgroWorld world, uint timestep, IList<IFormation> formations, IList<IObstacle> obstacles, float[] camera)
 	{
 		if (IsOnline)
 		{
@@ -324,7 +324,7 @@ public class IrradianceClient
 		return null;
 	}
 
-	private void ExportAsObj(IList<IFormation> formations, IList<IObstacle> obstacles, StreamWriter writer)
+	private void ExportAsObj(IList<IFormation> formations, IList<IObstacle>? obstacles, StreamWriter writer)
 	{
 		var obji = new System.Text.StringBuilder();
 		var points = new List<Vector3>();
@@ -414,16 +414,21 @@ public class IrradianceClient
 		writer.WriteLine(obji.ToString());
 	}
 
-	private int ExportAsTriangles(IList<IFormation> formations, IList<IObstacle> obstacles, int offsetCounter, Stream binaryStream)
+	private int ExportAsTriangles(IList<IFormation> formations, IList<IObstacle>? obstacles, int offsetCounter, Stream binaryStream)
 	{
 		IrradianceFormationOffsets.Clear();
 		using var writer = new BinaryWriter(binaryStream);
 		writer.WriteU8(1); //version 1 using triangular meshes
 
 		//Obstacles
-		writer.WriteU32(obstacles.Count);
-		foreach(var obstacle in obstacles)
-			obstacle.ExportTriangles(IrradiancePoints, writer);
+		if (obstacles == null)
+			writer.WriteU32(0);
+		else
+		{
+			writer.WriteU32(obstacles.Count);
+			foreach(var obstacle in obstacles)
+				obstacle.ExportTriangles(IrradiancePoints, writer);
+		}
 
 		//Formations
 		writer.WriteU32(formations.Count - SkipFormations.Count); //WRITE NUMBER OF PLANTS in this system
@@ -554,7 +559,7 @@ public class IrradianceClient
 		return offsetCounter;
 	}
 
-	private int ExportAsPrimitivesClustered(IList<IFormation> formations, IList<IObstacle> obstacles, int offsetCounter, Stream binaryStream)
+	private int ExportAsPrimitivesClustered(IList<IFormation> formations, IList<IObstacle>? obstacles, int offsetCounter, Stream binaryStream)
 	{
 		IrradianceFormationOffsets.Clear();
 		using var writer = new BinaryWriter(binaryStream);
@@ -632,7 +637,7 @@ public class IrradianceClient
 		return offsetCounter;
 	}
 
-	private int ExportAsPrimitivesInterleaved(IList<IFormation> formations, IList<IObstacle> obstacles, Stream binaryStream)
+	private int ExportAsPrimitivesInterleaved(IList<IFormation> formations, IList<IObstacle>? obstacles, Stream binaryStream)
 	{
 		int offsetCounter = 0;
 		IrradianceFormationOffsets.Clear();
@@ -858,13 +863,13 @@ public class IrradianceClient
 		}
 	}
 
-	public void ExportToFile(string fileName, byte version, IList<IFormation> formations, IList<IObstacle> obstacles = null)
+	public void ExportToFile(string fileName, byte version, IList<IFormation> formations, IList<IObstacle>? obstacles = null)
     {
         using var file = File.OpenWrite(fileName);
         ExportToStream(version, formations, obstacles, file);
     }
 
-    void ExportToStream(byte version, IList<IFormation> formations, IList<IObstacle> obstacles, Stream target)
+    void ExportToStream(byte version, IList<IFormation> formations, IList<IObstacle>? obstacles, Stream target)
     {
 		if (SkipFormations.Count == 0)
 		{
@@ -884,14 +889,14 @@ public class IrradianceClient
         }
     }
 
-    public byte[] ExportToStream(byte version, IList<IFormation> formations, IList<IObstacle> obstacles = null)
+    public byte[] ExportToStream(byte version, IList<IFormation> formations, IList<IObstacle>? obstacles = null)
 	{
 		using var stream = new MemoryStream();
 		ExportToStream(version, formations, obstacles, stream);
 		return stream.ToArray();
 	}
 
-	public void ExportToObjFile(string fileName, IList<IFormation> formations, IList<IObstacle> obstacles)
+	public void ExportToObjFile(string fileName, IList<IFormation> formations, IList<IObstacle>? obstacles)
 	{
 		using var objStream = File.Open(fileName, FileMode.Create);
 		using var objWriter = new StreamWriter(objStream, System.Text.Encoding.UTF8);
@@ -964,7 +969,7 @@ public class IrradianceClient
 	}
 
 	//TODO make this a ReadOnlySpan
-	public (int[], IList<float>) GetIrradiance(IFormation formation) =>
+	public (int[]?, IList<float>) GetIrradiance(IFormation formation) =>
         (!IsNight && formation.Count > 0 && IrradianceFormationOffsets.TryGetValue(formation, out var offset) ? offset : null, Irradiances);
 
 
