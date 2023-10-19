@@ -67,5 +67,7 @@ public interface IPlantAgent : ITreeAgent
 	void Distribute(float water, float energy);
 	void IncAuxins(float amount);
 	void DailyMax(float resources, float production);
+	void DailyAdd(float resources, float production);
 	void DailySet(float resources, float production);
+	void DailyDiv(uint count);
 }

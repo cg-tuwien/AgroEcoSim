@@ -797,13 +797,17 @@ public class IrradianceClient
 								writer.Write(scale.X); //length
 								writer.Write(scale.Z * 0.5f); //radius
 								writer.WriteM32(z, x, y, center);
-								var xl = Math.Abs(1f - x.LengthSquared());
-								var yl = Math.Abs(1f - y.LengthSquared());
-								var zl = Math.Abs(1f - z.LengthSquared());
-								if (xl > 1e-2 || yl > 1e-2 || zl > 1e-2)
-								{
-									Debug.WriteLine($"stem xyz {xl} {yl} {zl}");
-								}
+								#if DEBUG
+								// 2023-10 Mitsuba sometimes complains about non-uniform scaling of cylinders as well as about shearing that should not be present.
+								// The following debugging did not catch anything suspicious so far.
+								// var xl = Math.Abs(1f - x.LengthSquared());
+								// var yl = Math.Abs(1f - y.LengthSquared());
+								// var zl = Math.Abs(1f - z.LengthSquared());
+								// if (xl > 1e-2 || yl > 1e-2 || zl > 1e-2)
+								// {
+								// 	Debug.WriteLine($"stem xyz {xl} {yl} {zl}");
+								// }
+								#endif
 								writer.Write(Math.Clamp(ag.GetWater(i) / ag.GetWaterEfficientCapacity(world, i), 0, 1));
 								writer.Write(Math.Clamp(ag.GetEnergy(i) / ag.GetEnergyCapacity(i), 0, 1));
 								writer.Write(Math.Clamp(ag.GetWoodRatio(i), 0, 1));

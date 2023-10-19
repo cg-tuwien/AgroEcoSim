@@ -221,7 +221,7 @@ public partial struct AboveGroundAgent3 : IPlantAgent
 		CurrentDayProductionInv = 0f;
 		PreviousDayEnvResourcesInv = initialResources;
 		CurrentDayEnvResourcesInv = 0f;
-		//Children = null;
+
 		FirstSegmentIndex = plant.InsertSegments(SegmentsCount, orientation);
 
 		Auxins = 0f;
@@ -494,71 +494,64 @@ public partial struct AboveGroundAgent3 : IPlantAgent
 					mPhotoFactor -= 8f * growth.Y;
 					mPhotoFactor = Math.Clamp(mPhotoFactor, 0f, 1f);
 					//chaining (meristem continues in a new segment)
-					if (Organ == OrganTypes.Meristem)
+					if (Organ == OrganTypes.Meristem && Length > LengthVar)
 					{
-						//var waterAvailable = Math.Clamp(Water / WaterStorageCapacity(), 0f, 1f);
-						//var energyAvailable = Math.Clamp(Energy / EnergyStorageCapacity(), 0f, 1f);
-						//const float lengthStochasticScale = 0.1f;
-						if (
-							Length > LengthVar /* * (dominanceFactor + 1f) * 0.5f */
-							//plant.RNG.NextUInt() < PlantFormation2.TimeAccumulatedProbabilityUInt(Length * lengthStochasticScale * waterAvailable, world.HoursPerTick)
-						){
-							Organ = OrganTypes.Stem;
-							wasMeristem = true;
-							float prevResources, prevProduction;
-							if (timestep - BirthTime > world.HoursPerTick)
-							{
-								prevResources = PreviousDayEnvResourcesInv;
-								prevProduction = PreviousDayProductionInv;
-							}
-							else
-							{
-								prevResources = formation.DailyResourceMax;
-								prevProduction = formation.DailyProductionMax;
-								//Debug.WriteLine($"PREV res {prevResources} prod {prevProduction}");
-							}
+						Organ = OrganTypes.Stem;
+						wasMeristem = true;
+						float prevResources, prevProduction;
+						if (timestep - BirthTime > world.HoursPerTick)
+						{
+							prevResources = PreviousDayEnvResourcesInv;
+							prevProduction = PreviousDayProductionInv;
+						}
+						else
+						{
+							prevResources = formation.DailyResourceMax;
+							prevProduction = formation.DailyProductionMax;
+							//Debug.WriteLine($"PREV res {prevResources} prod {prevProduction}");
+						}
 
-							if (species.MonopodialFactor < 1) //Dichotomous
+						if (species.MonopodialFactor < 1) //Dichotomous
+						{
+							if (DominanceLevel < 255)
 							{
-								if (DominanceLevel < 255)
+								var lateralPitch = 0.25f * MathF.PI * species.MonopodialFactor;
+
+								var ou = TurnUpwards(Orientation);
+								var orientation1 = ou * Quaternion.CreateFromAxisAngle(Vector3.UnitX, 0.5f * MathF.PI) * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, -lateralPitch - 0.25f * MathF.PI);
+								var meristem1 = formation.Birth(new(plant, formationID, OrganTypes.Meristem, RandomOrientation(plant, species, orientation1), 0.1f * Energy, initialResources: prevResources, initialProduction: prevProduction) { Water = 0.1f * Water, LateralAngle = lateralPitch, DominanceLevel = (byte)(DominanceLevel + 1) } );
+								var orientation2 = ou * Quaternion.CreateFromAxisAngle(Vector3.UnitX, -0.5f * MathF.PI) * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, lateralPitch - 0.25f * MathF.PI);
+								var meristem2 = formation.Birth(new(plant, formationID, OrganTypes.Meristem, RandomOrientation(plant, species, orientation2), 0.1f * Energy, initialResources: prevResources, initialProduction: prevProduction) { Water = 0.1f * Water, LateralAngle = lateralPitch, DominanceLevel = (byte)(DominanceLevel + 1) } );
+
+								Energy *= 0.8f;
+								Water *= 0.8f;
+								if (species.LateralsPerNode > 0)
 								{
-									var lateralPitch = 0.25f * MathF.PI * species.MonopodialFactor;
-
-									var ou = TurnUpwards(Orientation);
-									var orientation1 = ou * Quaternion.CreateFromAxisAngle(Vector3.UnitX, 0.5f * MathF.PI) * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, -lateralPitch - 0.25f * MathF.PI);
-									var meristem1 = formation.Birth(new(plant, formationID, OrganTypes.Meristem, RandomOrientation(plant, species, orientation1), 0.1f * Energy, initialResources: prevResources, initialProduction: prevProduction) { Water = 0.1f * Water, LateralAngle = lateralPitch, DominanceLevel = (byte)(DominanceLevel + 1) } );
-									var orientation2 = ou * Quaternion.CreateFromAxisAngle(Vector3.UnitX, -0.5f * MathF.PI) * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, lateralPitch - 0.25f * MathF.PI);
-									var meristem2 = formation.Birth(new(plant, formationID, OrganTypes.Meristem, RandomOrientation(plant, species, orientation2), 0.1f * Energy, initialResources: prevResources, initialProduction: prevProduction) { Water = 0.1f * Water, LateralAngle = lateralPitch, DominanceLevel = (byte)(DominanceLevel + 1) } );
-
-									Energy *= 0.8f;
-									Water *= 0.8f;
-									if (species.LateralsPerNode > 0)
-									{
-										CreateLeaves(this, plant, lateralPitch, meristem1);
-										CreateLeaves(this, plant, lateralPitch, meristem2);
-									}
+									CreateLeaves(this, plant, lateralPitch, meristem1);
+									CreateLeaves(this, plant, lateralPitch, meristem2);
 								}
 							}
-							else
-							{
-								var lateralPitch = LateralAngle + species.LateralRoll;
-								var meristem = formation.Birth(new(plant, formationID, OrganTypes.Meristem, TurnUpwards(RandomOrientation(plant, species, Orientation)), 0.1f * Energy, initialResources: prevResources, initialProduction: prevProduction) { Water = 0.1f * Water, LateralAngle = lateralPitch, DominanceLevel = DominanceLevel } );
-								Energy *= 0.9f;
-								Water *= 0.9f;
+						}
+						else
+						{
+							var lateralPitch = LateralAngle + species.LateralRoll;
+							var meristem = formation.Birth(new(plant, formationID, OrganTypes.Meristem, TurnUpwards(RandomOrientation(plant, species, Orientation)), 0.1f * Energy, initialResources: prevResources, initialProduction: prevProduction) { Water = 0.1f * Water, LateralAngle = lateralPitch, DominanceLevel = DominanceLevel } );
+							Energy *= 0.9f;
+							Water *= 0.9f;
 
-								if (species.LateralsPerNode > 0)
-									CreateLeaves(this, plant, lateralPitch, meristem);
-							}
+							if (species.LateralsPerNode > 0)
+								CreateLeaves(this, plant, lateralPitch, meristem);
 						}
 					}
 				}
 				else
 				{
 					//if the stem grows too thick so that it already covers the whole bud or a portion of a petiole, they are removed. This way
-					if ((Organ == OrganTypes.Bud && (ParentRadiusAtBirth + Radius < formation.GetBaseRadius(Parent)))
-					 || (Organ == OrganTypes.Petiole && ParentRadiusAtBirth + species.PetioleCoverThreshold < formation.GetBaseRadius(Parent))
-					)
+					if (Organ == OrganTypes.Bud && (ParentRadiusAtBirth + Radius < formation.GetBaseRadius(Parent)))
 						formation.Death(formationID);
+					else if (Organ == OrganTypes.Petiole && ParentRadiusAtBirth + species.PetioleCoverThreshold < formation.GetBaseRadius(Parent))
+						MakeBud(formation, children);
+
 
 					if (Organ == OrganTypes.Petiole)
 					{
@@ -587,16 +580,7 @@ public partial struct AboveGroundAgent3 : IPlantAgent
 		{
 			switch (Organ)
 			{
-				case OrganTypes.Petiole:
-				{
-					Organ = OrganTypes.Bud;
-					ParentRadiusAtBirth = formation.GetBaseRadius(Parent);
-					Length = 2.8f * Radius;
-					if (children != null)
-						foreach(var child in children)
-							formation.Death(child);
-				}
-				break;
+				case OrganTypes.Petiole: MakeBud(formation, children); break;
 				case OrganTypes.Leaf:
 				{
 					formation.Death(formationID);
@@ -612,7 +596,17 @@ public partial struct AboveGroundAgent3 : IPlantAgent
 		Auxins = wasMeristem || Organ == OrganTypes.Meristem ? species.AuxinsProduction : 0;
 	}
 
-	internal static void CreateFirstLeaves(AboveGroundAgent3 parent, PlantFormation2 plant, float lateralAngle, int meristem) => CreateLeavesBase(parent, plant, lateralAngle, meristem, 1f, 1f);
+    private void MakeBud(PlantSubFormation2<AboveGroundAgent3> formation, IList<int>? children)
+    {
+        Organ = OrganTypes.Bud;
+        ParentRadiusAtBirth = formation.GetBaseRadius(Parent);
+        Length = 2.8f * Radius;
+        if (children != null)
+            foreach (var child in children)
+                formation.Death(child);
+    }
+
+    internal static void CreateFirstLeaves(AboveGroundAgent3 parent, PlantFormation2 plant, float lateralAngle, int meristem) => CreateLeavesBase(parent, plant, lateralAngle, meristem, 1f, 1f);
 	internal void CreateLeaves(AboveGroundAgent3 parent, PlantFormation2 plant, float lateralAngle, int meristem) => CreateLeavesBase(parent, plant, lateralAngle, meristem, PreviousDayEnvResourcesInv, PreviousDayProductionInv);
     static void CreateLeavesBase(AboveGroundAgent3 parent, PlantFormation2 plant, float lateralAngle, int meristem, float initialResources, float initialProduction)
     {
@@ -778,11 +772,24 @@ public partial struct AboveGroundAgent3 : IPlantAgent
 		if (production > PreviousDayProductionInv) PreviousDayProductionInv = production;
 	}
 
+	public void DailyAdd(float resources, float production)
+	{
+		PreviousDayEnvResourcesInv += resources;
+		PreviousDayProductionInv += production;
+	}
+
 	public void DailySet(float resources, float production)
 	{
 		PreviousDayEnvResourcesInv = resources;
 		PreviousDayProductionInv = production;
 	}
+
+	public void DailyDiv(uint count)
+	{
+		PreviousDayEnvResourcesInv /= count;
+		PreviousDayProductionInv /= count;
+	}
+
 	///////////////////////////
 	#region LOG
 	///////////////////////////

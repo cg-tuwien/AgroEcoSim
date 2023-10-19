@@ -248,7 +248,7 @@ public class SpeciesSettings
             ShootsGravitaxis *= 0.2f;
             Initialized = true;
 
-            PetioleCoverThreshold = MathF.Cos(MathF.PI * 0.5f - LateralPitch) * PetioleLength * 0.2f;
+            PetioleCoverThreshold = MathF.Cos(MathF.PI * 0.5f - LateralPitch) * PetioleLength * 0.25f;
 
             //BUG with petiole -> stem and not meristem
             //Remove length factor at apex distribution for the current segment

@@ -821,6 +821,7 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 	#endregion
 
 	List<byte> ChildrenToWaitFor = new();
+	List<uint> LeavesCount = new();
 	List<int> ReadyNodes0 = new(), ReadyNodes1 = new();
 	List<int> NewDayIncomplete = new();
 	public void NewDay(uint timestep, byte ticksPerDay)
@@ -835,10 +836,12 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 		{
 			ReadyNodes0.Clear();
 			ChildrenToWaitFor.Clear();
+			LeavesCount.Clear();
 
 			for(int i = 0; i < src.Length; ++i)
 			{
 				var complete = src[i].NewDay(timestep, ticksPerDay); //for all organs as non-leaves also need to be reset to zero
+				//assuming only leaves photosynthesize
 				if (src[i].Organ == OrganTypes.Leaf)
 				{
 					if (complete)
@@ -851,12 +854,14 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 
 					ReadyNodes0.Add(i);
 					ChildrenToWaitFor.Add(0);
+					LeavesCount.Add(1);
 				}
 				else
 				{
 					Debug.Assert(GetChildren(i).Count < 255);
 					var children = (byte)GetChildren(i).Count;
 					ChildrenToWaitFor.Add(children);
+					LeavesCount.Add(0);
 					if (children == 0) //for those tips of twigs that have no leaves
 						ReadyNodes0.Add(i);
 				}
@@ -874,25 +879,6 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 
 			Debug.Assert(DailyProductionMax > 0f);
 
-			//assuming only leaves photosynthesize, efficiency of the parent will be the max of its children
-
-			// var sumToSolve = 0;
-			// for(int i = 0; i < dst.Length; ++i)
-			// {
-			// 	var o = irradianceOffsets[i];
-			// 	if (o >= 0)
-			// 		efficiency[i] = irradiances[o] / irradianceMax;
-			// 	else if (GetOrgan(i) == OrganTypes.Fruit)
-			// 		efficiency[i] = 1f;
-			// 	else
-			// 	{
-			// 		Debug.Assert(GetChildren(i).Count < 256);
-			// 		var children = (byte)GetChildren(i).Count;
-			// 		nodesToSolve[i] = children;
-			// 		sumToSolve += children;
-			// 	}
-			// }
-
 			//now bubble up the tree to the root(s) and propagate the maximum
 			while (ReadyNodes0.Count > 0)
 			{
@@ -902,7 +888,13 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 					var parent = src[i].Parent;
 					if (parent >= 0)
 					{
-						src[parent].DailyMax(src[i].PreviousDayEnvResourcesInv, src[i].PreviousDayProductionInv);
+						var lc = LeavesCount[i];
+						//src[parent].DailyMax(src[i].PreviousDayEnvResourcesInv, src[i].PreviousDayProductionInv);
+						if (lc > 0)
+						{
+							src[parent].DailyAdd(src[i].PreviousDayEnvResourcesInv, src[i].PreviousDayProductionInv);
+							LeavesCount[parent] += LeavesCount[i];
+						}
 
 						--ChildrenToWaitFor[parent];
 						if (ChildrenToWaitFor[parent] == 0)
@@ -912,12 +904,16 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 				(ReadyNodes1, ReadyNodes0) = (ReadyNodes0, ReadyNodes1);
 			}
 
+			Debug.Assert(ChildrenToWaitFor.All(x => x == 0));
+
 			for(int i = 0; i < src.Length; ++i)
 				if (src[i].Organ == OrganTypes.Bud)
 				{
 					var parent = src[i].Parent;
 					src[i].DailySet(src[parent].PreviousDayEnvResourcesInv, src[parent].PreviousDayProductionInv);
 				}
+				else if (LeavesCount[i] > 1)
+					src[i].DailyDiv(LeavesCount[i]);
 		}
 		else
 		{

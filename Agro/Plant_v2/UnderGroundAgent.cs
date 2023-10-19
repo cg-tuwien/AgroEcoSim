@@ -424,10 +424,22 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 		if (production > PreviousDayProductionInv) PreviousDayProductionInv = production;
 	}
 
+	public void DailyAdd(float resources, float production)
+	{
+		PreviousDayEnvResourcesInv += resources;
+		PreviousDayProductionInv += production;
+	}
+
 	public void DailySet(float resources, float production)
 	{
 		PreviousDayEnvResourcesInv = resources;
 		PreviousDayProductionInv = production;
+	}
+
+	public void DailyDiv(uint count)
+	{
+		PreviousDayEnvResourcesInv /= count;
+		PreviousDayProductionInv /= count;
 	}
 
 	///////////////////////////
