@@ -50,7 +50,12 @@ public class SimulationRequest
     ///<summary>
     ///Selects the renderer, 0 = no renderer, constant light; 1 = Mitsuba3, 2 = Tamashii (default: 0)
     ///</summary>
-    public byte RenderMode { get; init; }
+    public byte? RenderMode { get; init; }
+
+    /// <summary>
+    /// Number of samples to render per pixel (usually a power of two between 64 and 4096)
+    /// </summary>
+    public ushort? SamplesPerPixel { get; init; }
 
     ///<summary>
     ///If true, the backend will send a preview after each simulation step. Otherwise the previews are sent layzily. (default: false)

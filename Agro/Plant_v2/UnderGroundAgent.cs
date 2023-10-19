@@ -15,6 +15,8 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 	#region DATA
 	///////////////////////////
 
+	readonly uint BirthTime;
+
 	/// <summary>
 	/// Orientation with respect to the parent. If there is no parent, this is the initial orientation.
 	/// </summary>
@@ -167,7 +169,7 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 
 	public float EnergyStorageCapacity() => EnergyCapacityFunc(Radius, Length);
 
-	float LifeSupportPerHour() => Length * Radius * Radius * 4f * mWaterAbsorbtionFactor;
+	float LifeSupportPerHour() => 0.01f * Length * Radius * Radius * 4f * mWaterAbsorbtionFactor;
 
 	public float LifeSupportPerTick(AgroWorld world) => LifeSupportPerHour() * world.HoursPerTick;
 
@@ -177,8 +179,9 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 
 	#endregion
 
-	public UnderGroundAgent2(int parent, Quaternion orientation, float initialEnergy, float initialWater = 0f, float initialWaterIntake = 1f, float radius = InitialRadius, float length = InitialLength)
+	public UnderGroundAgent2(uint timestep, int parent, Quaternion orientation, float initialEnergy, float initialWater = 0f, float initialWaterIntake = 1f, float radius = InitialRadius, float length = InitialLength, float initialResources = 0f, float initialProduction = 0f)
 	{
+		BirthTime = timestep;
 		Parent = parent;
 		Radius = radius;
 		Length = length;
@@ -191,9 +194,9 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 		Auxins = 0f;
 		Cytokinins = 0f;
 
-		PreviousDayProductionInv = 0f;
+		PreviousDayProductionInv = initialProduction;
 		CurrentDayProductionInv = 0f;
-		PreviousDayEnvResourcesInv = 0f;
+		PreviousDayEnvResourcesInv = initialResources;
 		CurrentDayEnvResources = 0f;
 	}
 
@@ -211,21 +214,13 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 	///</summary>
 	public void CensusUpdateParent(int newParent) => Parent = newParent;
 
-	public void Tick(IFormation _formation, int formationID, uint timestep, byte stage)
+	public void Tick(IFormation _formation, int formationID, uint timestep)
 	{
 		//Console.WriteLine($"{timestep} x {formationID}: w={Water} e={Energy} waf={WaterAbsorbtionFactor}");
 		var formation = (PlantSubFormation2<UnderGroundAgent2>)_formation;
 		var plant = formation.Plant;
 		var world = plant.World;
 		var species = plant.Parameters;
-
-		if (plant.IsNewDay())
-		{
-			PreviousDayProductionInv = CurrentDayProductionInv / world.TicksPerDay;
-			PreviousDayEnvResourcesInv = CurrentDayEnvResources / world.TicksPerDay;
-			CurrentDayProductionInv = 0f;
-			CurrentDayEnvResources = 0f;
-		}
 
 		//TODO perhaps it should somehow reflect temperature
 		var diameter = 2f * Radius;
@@ -246,11 +241,12 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 		{
 			var childrenCount = children.Count + 1;
 			//TODO MI 2023-03-07 Incorporate water capacity factor
-			var widthGrowth = PreviousDayProductionInv * 2e-5f * world.HoursPerTick / (MathF.Pow(childrenCount, GrowthDeclineByExpChildren / 2) * MathF.Pow(volume, 0.1f)); //just optimized the number of multiplications
+			var growthBase = world.HoursPerTick * PreviousDayProductionInv / formation.DailyProductionMax;
+			var widthGrowth = 2e-5f * growthBase / (MathF.Pow(childrenCount, GrowthDeclineByExpChildren / 2) * MathF.Pow(volume, 0.1f)); //just optimized the number of multiplications
 			var newRadius = Radius + widthGrowth;
 			if (Parent == -1 || formation.GetBaseRadius(Parent) >= newRadius)
 			{
-				var lengthGrowth = PreviousDayProductionInv * 3e-4f * world.HoursPerTick / (MathF.Pow(childrenCount, GrowthDeclineByExpChildren + 1) * MathF.Pow(lr * Length, 0.1f));
+				var lengthGrowth = 3e-4f * growthBase / (MathF.Pow(childrenCount, GrowthDeclineByExpChildren + 1) * MathF.Pow(lr * Length, 0.1f));
 
 				Length += lengthGrowth;
 				Radius = newRadius;
@@ -263,7 +259,7 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 			const float yFactor = 0.5f;
 			const float zFactor = 0.2f;
 			//Chaining
-			if (children.Count == 0 && Length > PlantFormation2.RootSegmentLength * 0.5f + plant.RNG.NextFloat(PlantFormation2.RootSegmentLength * 0.5f))
+			if (children.Count == 0 && Length > PlantFormation2.RootSegmentLength * 0.5f + plant.RNG.NextPositiveFloat(PlantFormation2.RootSegmentLength * 0.5f))
 			{
 				var ax = plant.RNG.NextFloat(-MathF.PI * yFactor, MathF.PI * yFactor);
 				var qx = Quaternion.CreateFromAxisAngle(Vector3.UnitX, ax);
@@ -273,12 +269,12 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 				var orientation = Orientation * qx * qz;
 				var y = Vector3.Transform(Vector3.UnitX, orientation).Y;
 				if (y > 0)
-					orientation = Quaternion.Slerp(orientation, OrientationDown, plant.RNG.NextFloat(MathF.Pow(y, 1f/ world.HoursPerTick)));
+					orientation = Quaternion.Slerp(orientation, OrientationDown, plant.RNG.NextPositiveFloat(MathF.Pow(y, 1f/ world.HoursPerTick)));
 				else
-					orientation = Quaternion.Slerp(orientation, OrientationDown, plant.RNG.NextFloat(species.RootsGravitaxis));
+					orientation = Quaternion.Slerp(orientation, OrientationDown, plant.RNG.NextPositiveFloat(species.RootsGravitaxis));
 
 				var energy = EnergyCapacityFunc(InitialRadius, InitialLength);
-				formation.Birth(new(formationID, orientation, energy));
+				formation.Birth(new(timestep, formationID, orientation, energy, initialResources: PreviousDayEnvResourcesInv, initialProduction: PreviousDayProductionInv));
 				Energy -= 2f * energy; //twice because some energy is needed for the birth itself
 				//Console.WriteLine($"New root chained to {formationID} at time {timestep}");
 			}
@@ -296,7 +292,7 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 					//var q = qz * qx * Orientation;
 					var orientation = Orientation * qx * qz;
 					var energy = EnergyCapacityFunc(InitialRadius, InitialLength);
-					formation.Birth(new(formationID, orientation, energy));
+					formation.Birth(new(timestep, formationID, orientation, energy, initialResources: PreviousDayEnvResourcesInv, initialProduction: PreviousDayProductionInv));
 					Energy -= 2f * energy; //twice because some energy is needed for the birth itself
 					//Console.WriteLine($"New root branched to {formationID} at time {timestep}");
 				}
@@ -321,8 +317,6 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 				var soil = plant.Soil;
 				var baseCenter = formation.GetBaseCenter(formationID);
 				var samplePoint = baseCenter + Vector3.Transform(Vector3.UnitX, Orientation) * Length * 0.75f;
-				if (samplePoint.Z < 0 || samplePoint.X < 0)
-					Console.Beep();
 				//find all soild cells that the shpere intersects
 				var source = soil.IntersectPoint(samplePoint); //TODO make a tube intersection
 
@@ -348,6 +342,21 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 		else
 			mWaterAbsorbtionFactor = 0f;
 		#endregion
+	}
+
+	public bool NewDay(uint timestep, byte ticksPerDay)
+	{
+		var complete = timestep - BirthTime >= ticksPerDay;
+		if (complete)
+		{
+			PreviousDayProductionInv = CurrentDayProductionInv;
+			PreviousDayEnvResourcesInv = CurrentDayEnvResources;
+		}
+
+		CurrentDayProductionInv = 0f;
+		CurrentDayEnvResources = 0f;
+
+		return complete;
 	}
 
 	void IncWater(float amount, float factor)
@@ -408,6 +417,18 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 
 	public void IncAuxins(float amount) => Auxins += amount;
 	public void IncCytokinins(float amount) => Cytokinins += amount;
+
+	public void DailyMax(float resources, float production)
+	{
+		if (resources > PreviousDayEnvResourcesInv) PreviousDayEnvResourcesInv = resources;
+		if (production > PreviousDayProductionInv) PreviousDayProductionInv = production;
+	}
+
+	public void DailySet(float resources, float production)
+	{
+		PreviousDayEnvResourcesInv = resources;
+		PreviousDayProductionInv = production;
+	}
 
 	///////////////////////////
 	#region LOG

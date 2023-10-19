@@ -254,11 +254,9 @@ public class Pcg
 
 	[M(AI)]public float NextFloat() => (float)(NextUInt() * ToDouble01);
 
-	[M(AI)]public float NextFloat(float maxInclusive)
+	[M(AI)]public float NextPositiveFloat(float maxInclusive)
 	{
-		if (maxInclusive <= 0)
-			throw new ArgumentException("MaxInclusive must be larger than 0");
-
+		if (maxInclusive <= 0) return 0f;
 		return (float)(NextUInt() * ToDouble01) * maxInclusive;
 	}
 
@@ -284,7 +282,7 @@ public class Pcg
 		return resultA;
 	}
 
-	[M(AI)]public float[] NextFloats(int count, float maxInclusive)
+	[M(AI)]public float[] NextPositiveFloats(int count, float maxInclusive)
 	{
 		if (count <= 0)
 			return Array.Empty<float>();
@@ -292,7 +290,7 @@ public class Pcg
 		var resultA = new float[count];
 		for (int i = 0; i < count; i++)
 		{
-			resultA[i] = NextFloat(maxInclusive);
+			resultA[i] = NextPositiveFloat(maxInclusive);
 		}
 		return resultA;
 	}
@@ -312,10 +310,9 @@ public class Pcg
 
 	[M(AI)]public double NextDouble() => NextUInt() * ToDouble01;
 
-	[M(AI)]public double NextDouble(double maxInclusive)
+	[M(AI)]public double NextPositiveDouble(double maxInclusive)
 	{
-		if (maxInclusive <= 0)
-			throw new ArgumentException("Max must be larger than 0");
+		if (maxInclusive <= 0) return 0.0;
 
 		return NextUInt() * ToDouble01 * maxInclusive;
 	}
@@ -340,14 +337,14 @@ public class Pcg
 		return resultA;
 	}
 
-	[M(AI)]public double[] NextDoubles(int count, double maxInclusive)
+	[M(AI)]public double[] NextPositiveDoubles(int count, double maxInclusive)
 	{
 		if (count <= 0)
 			return Array.Empty<double>();
 
 		var resultA = new double[count];
 		for (int i = 0; i < count; i++)
-			resultA[i] = NextDouble(maxInclusive);
+			resultA[i] = NextPositiveDouble(maxInclusive);
 
 		return resultA;
 	}

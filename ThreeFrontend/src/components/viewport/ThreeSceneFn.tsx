@@ -307,7 +307,6 @@ export default function ThreeSceneFn () {
         //const box = new THREE.Box3().setFromCenterAndSize(new THREE.Vector3(w * 0.5, -d*0.5, l * 0.5), new THREE.Vector3(w, d, l) );
         //const terrainMesh = new THREE.Box3Helper( box, new THREE.Color("#cc9900") );
         const terrainMesh = new THREE.Mesh(terrainBoxPrimitive, new THREE.MeshLambertMaterial({ color: 0x593700, name: "terrainMesh" }));
-        console.log(w, d, l);
         terrainMesh.scale.set(w, d, l);
         terrainMesh.position.set(w * 0.5, -d, l * 0.5);
         terrainMesh.userData = { type: "terrain" };
@@ -414,6 +413,11 @@ export default function ThreeSceneFn () {
         appstate.objTerrain.clear();
         buildTerrain();
     });
+
+    useSignalEffect(() => {
+        appstate.objTerrain.visible = appstate.showTerrain.value;
+        renderOnce();
+    })
 
     useSignalEffect(() => {
         buildPlants();

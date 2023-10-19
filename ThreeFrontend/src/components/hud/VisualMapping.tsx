@@ -20,8 +20,20 @@ export function VisualMapping() {
             <label for='visualmapping' title={tooltipVisualMapping}>visual mapping</label>
         </div>
         <div>
-            <input type="checkbox" name="debugOrientations" title={tooltipDebugOrientations } checked={appstate.debugBoxes} onChange={e => appstate.debugBoxes.value = e.currentTarget.checked }/>
-            <label for='debugOrientations' title={tooltipDebugOrientations }>debug orientations</label>
+            <input type="checkbox" name="debugOrientations" title={tooltipDebugOrientations} checked={appstate.debugBoxes} onChange={e => appstate.debugBoxes.value = e.currentTarget.checked }/>
+            <label for='debugOrientations' title={tooltipDebugOrientations}>debug orientations</label>
+        </div>
+        <div>
+            <input type="checkbox" name="showLeaves" checked={appstate.showLeaves} onChange={e => appstate.showLeaves.value = e.currentTarget.checked }/>
+            <label for='showLeaves'>show leaves</label>
+        </div>
+        <div>
+            <input type="checkbox" name="showTerrain" checked={appstate.showTerrain} onChange={e => appstate.showTerrain.value = e.currentTarget.checked }/>
+            <label for='showTerain'>show terrain</label>
+        </div>
+        <div>
+            <input type="checkbox" name="showRoots" checked={appstate.showRoots} onChange={e => appstate.showRoots.value = e.currentTarget.checked }/>
+            <label for='showRoots'>show roots</label>
         </div>
     </>;
 }

@@ -53,10 +53,11 @@ public class SpeciesSettings
     public float DominanceFactor { get => dominanceFactor; init {
         dominanceFactor = value;
         const int factors = 16;
-        DominanceFactors = new float[factors];
+        DominanceFactors = new float[factors + 1];
         DominanceFactors[0] = 1;
-        DominanceFactors[1] = dominanceFactor;
-        for(int i = 2; i < factors; ++i)
+        DominanceFactors[1] = 1;
+        DominanceFactors[2] = dominanceFactor;
+        for(int i = 3; i < factors; ++i)
             DominanceFactors[i] = MathF.Pow(dominanceFactor, i);
     } }
 
@@ -89,6 +90,18 @@ public class SpeciesSettings
     ///</summary>
     [JsonPropertyName("BPv")]
     public float LateralPitchVar { get; init; }
+
+
+    [JsonPropertyName("TB")]
+    public float TwigsBending { get; init; }
+    [JsonPropertyName("TBL")]
+    public float TwigsBendingLevel { get; init; }
+
+    [JsonPropertyName("TBA")]
+    public float TwigsBendingApical { get; set; }
+
+    [JsonPropertyName("SG")]
+    public float ShootsGravitaxis { get; set; }
 
     ///<summary>
     /// Maximum branch level that supports leaves (here level denotes the max. subtree depth)
@@ -202,6 +215,8 @@ public class SpeciesSettings
     public float DensityDryWood = 700; //in kg/m³
 	public float DensityDryStem = 200; //in kg/m³
 
+    public float PetioleCoverThreshold { get; private set; } = float.MaxValue;
+
     public static SpeciesSettings Avocado;
 
     static SpeciesSettings()
@@ -229,8 +244,16 @@ public class SpeciesSettings
         {
             // AuxinsDegradationPerTick = AuxinsReach * hoursPerTick;
             // CytokininsDegradationPerTick = CytokininsReach * hoursPerTick;
-
+            TwigsBendingApical = TwigsBendingApical * TwigsBendingLevel;
+            ShootsGravitaxis *= 0.2f;
             Initialized = true;
+
+            PetioleCoverThreshold = MathF.Cos(MathF.PI * 0.5f - LateralPitch) * PetioleLength * 0.2f;
+
+            //BUG with petiole -> stem and not meristem
+            //Remove length factor at apex distribution for the current segment
+            //Bending suddenly does not work
+            //BUG water distribution
         }
     }
 }

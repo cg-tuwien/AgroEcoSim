@@ -58,10 +58,14 @@ public interface IPlantAgent : ITreeAgent
 	Vector3 Scale();
 	float Volume();
 
+	bool NewDay(uint timestep, byte ticksPerDay);
+
 	static void Reindex(IPlantAgent[] data, int[] map) => throw new NotImplementedException();
 
 	bool ChangeAmount(PlantFormation2 plant, int index, int substanceIndex, float amount, bool increase);
 
 	void Distribute(float water, float energy);
 	void IncAuxins(float amount);
+	void DailyMax(float resources, float production);
+	void DailySet(float resources, float production);
 }

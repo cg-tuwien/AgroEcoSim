@@ -119,7 +119,7 @@ public class AgroWorld : SimulationWorld
 				InitRNG(settings.Seed.Value);
 		}
 
-		Irradiance = new IrradianceClient(Latitude, Longitude, settings?.RenderMode ?? 0);
+		Irradiance = new IrradianceClient(Latitude, Longitude, settings?.RenderMode ?? 0, settings?.SamplesPerPixel ?? 512);
 
 		Init();
 	}

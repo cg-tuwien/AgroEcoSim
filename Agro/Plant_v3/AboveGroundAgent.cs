@@ -14,6 +14,7 @@ namespace Agro;
 [StructLayout(LayoutKind.Auto)]
 public partial struct AboveGroundAgent3 : IPlantAgent
 {
+	readonly uint BirthTime;
 	/// <summary>
 	/// Orientation with respect to the parent. If there is no parent, this is the initial orientation.
 	/// </summary>
@@ -201,8 +202,9 @@ public partial struct AboveGroundAgent3 : IPlantAgent
 
 	float EnoughEnergy(float? lifeSupportPerHour = null) => (lifeSupportPerHour ?? LifeSupportPerHour()) * 320;
 
-	public AboveGroundAgent3(PlantFormation2 plant, int parent, OrganTypes organ, Quaternion orientation, float initialEnergy, float radius = InitialRadius, float length = InitialLength)
+	public AboveGroundAgent3(PlantFormation2 plant, int parent, OrganTypes organ, Quaternion orientation, float initialEnergy, float radius = InitialRadius, float length = InitialLength, float initialResources = 0f, float initialProduction = 0f)
 	{
+		BirthTime = plant.World.Timestep;
 		Parent = parent;
 		Radius = radius;
 		Length = length;
@@ -215,9 +217,9 @@ public partial struct AboveGroundAgent3 : IPlantAgent
 
 		Water = 0f;
 
-		PreviousDayProductionInv = 0f;
+		PreviousDayProductionInv = initialProduction;
 		CurrentDayProductionInv = 0f;
-		PreviousDayEnvResourcesInv = 0f;
+		PreviousDayEnvResourcesInv = initialResources;
 		CurrentDayEnvResourcesInv = 0f;
 		//Children = null;
 		FirstSegmentIndex = plant.InsertSegments(SegmentsCount, orientation);
@@ -280,20 +282,12 @@ public partial struct AboveGroundAgent3 : IPlantAgent
 	const float TwoPi = MathF.PI * 2f;
 	const float TwoPiTenth = MathF.PI * 0.2f;
 	public const float LeafThickness = 0.0001f;
-	public void Tick(IFormation _formation, int formationID, uint timestep, byte stage)
+	public void Tick(IFormation _formation, int formationID, uint timestep)
 	{
 		var formation = (PlantSubFormation2<AboveGroundAgent3>)_formation;
 		var plant = formation.Plant;
 		var species = plant.Parameters;
 		var world = plant.World;
-
-		if (plant.IsNewDay())
-		{
-			PreviousDayProductionInv = CurrentDayProductionInv;
-			PreviousDayEnvResourcesInv = CurrentDayEnvResourcesInv;
-			CurrentDayProductionInv = 0f;
-			CurrentDayEnvResourcesInv = 0f;
-		}
 
 		//TODO perhaps growth should somehow reflect temperature
 		var lifeSupportPerHour = LifeSupportPerHour();
@@ -404,6 +398,7 @@ public partial struct AboveGroundAgent3 : IPlantAgent
 						LateralAngle = MathF.PI * 0.5f;
 						++DominanceLevel;
 						Orientation = TurnUpwards(Orientation);
+						LengthVar = species.NodeDistance + plant.RNG.NextFloatVar(species.NodeDistanceVar);
 
 						if (species.LateralsPerNode > 0)
 							CreateLeaves(this, plant, LateralAngle + species.LateralRoll, formationID);
@@ -469,7 +464,7 @@ public partial struct AboveGroundAgent3 : IPlantAgent
 					{
 						var energyReserve = Math.Clamp(Energy / EnergyStorageCapacity(), 0f, 1f);
 						var waterReserve = Math.Min(1f, plant.WaterBalance);
-						growth = new Vector2(0.5f + mPhotoFactor * 0.5f, 0.01f) * (2e-3f * dominanceFactor * energyReserve * waterReserve * world.HoursPerTick);
+						growth = new Vector2(0.5f + mPhotoFactor * 0.5f, 0.01f) * (1e-3f * dominanceFactor * energyReserve * waterReserve * world.HoursPerTick);
 
 						var parentRadius = Parent >= 0 ? formation.GetBaseRadius(Parent) : float.MaxValue;
 						if (currentSize.Y + growth.Y > parentRadius)
@@ -498,6 +493,7 @@ public partial struct AboveGroundAgent3 : IPlantAgent
 					// or world.HoursPerTick / 8760f; means it takes 1 year
 					mPhotoFactor -= 8f * growth.Y;
 					mPhotoFactor = Math.Clamp(mPhotoFactor, 0f, 1f);
+					//chaining (meristem continues in a new segment)
 					if (Organ == OrganTypes.Meristem)
 					{
 						//var waterAvailable = Math.Clamp(Water / WaterStorageCapacity(), 0f, 1f);
@@ -509,6 +505,19 @@ public partial struct AboveGroundAgent3 : IPlantAgent
 						){
 							Organ = OrganTypes.Stem;
 							wasMeristem = true;
+							float prevResources, prevProduction;
+							if (timestep - BirthTime > world.HoursPerTick)
+							{
+								prevResources = PreviousDayEnvResourcesInv;
+								prevProduction = PreviousDayProductionInv;
+							}
+							else
+							{
+								prevResources = formation.DailyResourceMax;
+								prevProduction = formation.DailyProductionMax;
+								//Debug.WriteLine($"PREV res {prevResources} prod {prevProduction}");
+							}
+
 							if (species.MonopodialFactor < 1) //Dichotomous
 							{
 								if (DominanceLevel < 255)
@@ -517,9 +526,9 @@ public partial struct AboveGroundAgent3 : IPlantAgent
 
 									var ou = TurnUpwards(Orientation);
 									var orientation1 = ou * Quaternion.CreateFromAxisAngle(Vector3.UnitX, 0.5f * MathF.PI) * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, -lateralPitch - 0.25f * MathF.PI);
-									var meristem1 = formation.Birth(new(plant, formationID, OrganTypes.Meristem, orientation1, 0.1f * Energy) { Water = 0.1f * Water, LateralAngle = lateralPitch, DominanceLevel = (byte)(DominanceLevel + 1) } );
+									var meristem1 = formation.Birth(new(plant, formationID, OrganTypes.Meristem, RandomOrientation(plant, species, orientation1), 0.1f * Energy, initialResources: prevResources, initialProduction: prevProduction) { Water = 0.1f * Water, LateralAngle = lateralPitch, DominanceLevel = (byte)(DominanceLevel + 1) } );
 									var orientation2 = ou * Quaternion.CreateFromAxisAngle(Vector3.UnitX, -0.5f * MathF.PI) * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, lateralPitch - 0.25f * MathF.PI);
-									var meristem2 = formation.Birth(new(plant, formationID, OrganTypes.Meristem, orientation2, 0.1f * Energy) { Water = 0.1f * Water, LateralAngle = lateralPitch, DominanceLevel = (byte)(DominanceLevel + 1) } );
+									var meristem2 = formation.Birth(new(plant, formationID, OrganTypes.Meristem, RandomOrientation(plant, species, orientation2), 0.1f * Energy, initialResources: prevResources, initialProduction: prevProduction) { Water = 0.1f * Water, LateralAngle = lateralPitch, DominanceLevel = (byte)(DominanceLevel + 1) } );
 
 									Energy *= 0.8f;
 									Water *= 0.8f;
@@ -532,13 +541,13 @@ public partial struct AboveGroundAgent3 : IPlantAgent
 							}
 							else
 							{
-								var la = LateralAngle + species.LateralRoll;
-								var meristem = formation.Birth(new(plant, formationID, OrganTypes.Meristem, Orientation, 0.1f * Energy) { Water = 0.1f * Water, LateralAngle = la, DominanceLevel = DominanceLevel } );
+								var lateralPitch = LateralAngle + species.LateralRoll;
+								var meristem = formation.Birth(new(plant, formationID, OrganTypes.Meristem, TurnUpwards(RandomOrientation(plant, species, Orientation)), 0.1f * Energy, initialResources: prevResources, initialProduction: prevProduction) { Water = 0.1f * Water, LateralAngle = lateralPitch, DominanceLevel = DominanceLevel } );
 								Energy *= 0.9f;
 								Water *= 0.9f;
 
 								if (species.LateralsPerNode > 0)
-									CreateLeaves(this, plant, la, meristem);
+									CreateLeaves(this, plant, lateralPitch, meristem);
 							}
 						}
 					}
@@ -547,9 +556,30 @@ public partial struct AboveGroundAgent3 : IPlantAgent
 				{
 					//if the stem grows too thick so that it already covers the whole bud or a portion of a petiole, they are removed. This way
 					if ((Organ == OrganTypes.Bud && (ParentRadiusAtBirth + Radius < formation.GetBaseRadius(Parent)))
-					 || (Organ == OrganTypes.Petiole && ParentRadiusAtBirth + Length * 0.3f < formation.GetBaseRadius(Parent))
+					 || (Organ == OrganTypes.Petiole && ParentRadiusAtBirth + species.PetioleCoverThreshold < formation.GetBaseRadius(Parent))
 					)
 						formation.Death(formationID);
+
+					if (Organ == OrganTypes.Petiole)
+					{
+						var production = 0f;
+						for(int c = 0; c < children.Count; ++c)
+							production += formation.GetDailyProductionInv(children[c]);
+						//Debug.WriteLine($"T{world.Timestep} Prod: {production}");
+
+						production /= plant.EnergyProductionMax;
+						if (production < 0.5)
+						{
+							production = 2f * production;
+							production *= production;
+							var dice = plant.RNG.NextUInt((uint)(production * ushort.MaxValue));
+							if (dice > 0 & dice <= world.HoursPerTick * 128)
+							{
+								Debug.WriteLine($"X with production {production} at {timestep}");
+								formation.Death(formationID);
+							}
+						}
+					}
 				}
 			}
 		}
@@ -582,7 +612,9 @@ public partial struct AboveGroundAgent3 : IPlantAgent
 		Auxins = wasMeristem || Organ == OrganTypes.Meristem ? species.AuxinsProduction : 0;
 	}
 
-    internal static void CreateLeaves(AboveGroundAgent3 parent, PlantFormation2 plant, float lateralAngle, int meristem)
+	internal static void CreateFirstLeaves(AboveGroundAgent3 parent, PlantFormation2 plant, float lateralAngle, int meristem) => CreateLeavesBase(parent, plant, lateralAngle, meristem, 1f, 1f);
+	internal void CreateLeaves(AboveGroundAgent3 parent, PlantFormation2 plant, float lateralAngle, int meristem) => CreateLeavesBase(parent, plant, lateralAngle, meristem, PreviousDayEnvResourcesInv, PreviousDayProductionInv);
+    static void CreateLeavesBase(AboveGroundAgent3 parent, PlantFormation2 plant, float lateralAngle, int meristem, float initialResources, float initialProduction)
     {
 		var species = plant.Parameters;
         var angleStep = 2f * MathF.PI / species.LateralsPerNode;
@@ -592,19 +624,22 @@ public partial struct AboveGroundAgent3 : IPlantAgent
 			var pitch = plant.RNG.NextFloatVar(species.LateralPitchVar);
             var orientation = parent.Orientation * Quaternion.CreateFromAxisAngle(Vector3.UnitX, l * angleStep + lateralAngle) * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, -plant.Parameters.LateralPitch);
             orientation = TurnUpwards(orientation) * Quaternion.CreateFromAxisAngle(Vector3.UnitX, roll) * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, pitch);
-            var petioleIdx = plant.AG.Birth(new(plant, meristem, OrganTypes.Petiole, orientation, parent.Energy * 0.1f ) { DominanceLevel = parent.DominanceLevel, ParentRadiusAtBirth = parent.Radius }); //leaf stem
+            var petioleIdx = plant.AG.Birth(new(plant, meristem, OrganTypes.Petiole, orientation, parent.Energy * 0.1f, initialResources: initialResources, initialProduction: initialProduction) { DominanceLevel = parent.DominanceLevel, ParentRadiusAtBirth = parent.Radius }); //leaf stem
             parent.Energy *= 0.9f;
 
 			var leafPitchVar = plant.RNG.NextFloatVar(species.LateralPitchVar);
             orientation *= Quaternion.CreateFromAxisAngle(Vector3.UnitZ, leafPitchVar - species.LeafPitch);
 
-            plant.AG.Birth(new(plant, petioleIdx, OrganTypes.Leaf, orientation, parent.Energy * 0.1f) { DominanceLevel = parent.DominanceLevel, ParentRadiusAtBirth = float.MaxValue }); //leaf
+            plant.AG.Birth(new(plant, petioleIdx, OrganTypes.Leaf, orientation, parent.Energy * 0.1f, initialResources: initialResources, initialProduction: initialProduction) { DominanceLevel = parent.DominanceLevel, ParentRadiusAtBirth = float.MaxValue }); //leaf
             parent.Energy *= 0.9f;
         }
     }
 
     private static Quaternion TurnUpwards(Quaternion orientation)
     {
+		//determines a rotation that maintains the main direction (x-axis of the matrix)
+		//while rotating the secondary direction (y-axis) as much upwards as possible
+		//this way the twigs and leaves maintain a natural orientation
         var x = Vector3.Transform(Vector3.UnitX, orientation);
         if (Math.Abs(x.Y) < 0.999f)
         {
@@ -622,6 +657,62 @@ public partial struct AboveGroundAgent3 : IPlantAgent
 
         return orientation;
     }
+
+    private static Quaternion AdjustUpBase(Quaternion orientation)
+    {
+		var y = Vector3.Transform(Vector3.UnitY, orientation);
+		Vector3 z;
+		if (Vector3.Dot(Vector3.UnitY, y) < 0.999f)
+		{
+			z = Vector3.Cross(Vector3.UnitY, y);
+			y = Vector3.Cross(z, Vector3.UnitY);
+		}
+		else
+		{
+			z = Vector3.Transform(Vector3.UnitZ, orientation);
+			y = Vector3.Cross(z, Vector3.UnitY);
+		}
+
+		return Quaternion.CreateFromRotationMatrix(new()
+		{
+			M11 = 0, M12 = 1, M13 = 0, M14 = 0,
+			M21 = y.X, M22 = y.Y, M23 = y.Z, M24 = 0,
+			M31 = z.X, M32 = z.Y, M33 = z.Z, M34 = 0,
+			M41 = 0, M42 = 0, M43 = 0, M44 = 1
+		});
+    }
+
+
+	private Quaternion RandomOrientation(PlantFormation2 plant, SpeciesSettings species, Quaternion orientation)
+	{
+		var range = 0.2f * MathF.PI * (species.TwigsBendingLevel * DominanceLevel - species.TwigsBendingApical);
+		var factor = species.TwigsBending * range;
+		var a = plant.RNG.NextFloatVar(factor);
+		orientation *= Quaternion.CreateFromAxisAngle(Vector3.UnitY, a);
+		var y = Vector3.Transform(Vector3.UnitX, orientation).Y;
+
+		if (y < 0)
+			orientation = Quaternion.Slerp(orientation, AdjustUpBase(orientation), plant.RNG.NextPositiveFloat(-y));
+		else //if (species.ShootsGravitaxis > 0)
+		  	orientation = Quaternion.Slerp(orientation, AdjustUpBase(orientation), plant.RNG.NextPositiveFloat(species.ShootsGravitaxis));
+
+		return orientation;
+	}
+
+	public bool NewDay(uint timestep, byte ticksPerDay)
+	{
+		var complete = timestep - BirthTime >= ticksPerDay;
+
+		if (complete || Organ != OrganTypes.Leaf) //the or avoids max value to wrongly stay until the next day for non-leaves
+		{
+			PreviousDayProductionInv = CurrentDayProductionInv;
+			PreviousDayEnvResourcesInv = CurrentDayEnvResourcesInv;
+		}
+
+		CurrentDayProductionInv = 0f;
+		CurrentDayEnvResourcesInv = 0f;
+		return complete;
+	}
 
     public void IncWater(float amount)
 	{
@@ -680,6 +771,18 @@ public partial struct AboveGroundAgent3 : IPlantAgent
 
 	public void IncAuxins(float amount) => Auxins += amount;
 	public void IncCytokinins(float amount) => Cytokinins += amount;
+
+	public void DailyMax(float resources, float production)
+	{
+		if (resources > PreviousDayEnvResourcesInv) PreviousDayEnvResourcesInv = resources;
+		if (production > PreviousDayProductionInv) PreviousDayProductionInv = production;
+	}
+
+	public void DailySet(float resources, float production)
+	{
+		PreviousDayEnvResourcesInv = resources;
+		PreviousDayProductionInv = production;
+	}
 	///////////////////////////
 	#region LOG
 	///////////////////////////

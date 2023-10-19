@@ -29,7 +29,7 @@ public class PostBox<T> where T : struct, IAgent
     }
 
     //There MUST NOT be a non-array Process method. Otherwise refs will not work
-    public void Process(uint timestep, byte stage, T[] agents)
+    public void Process(uint timestep, T[] agents)
     {
         var src = WriteTMP ? BufferTMP : Buffer;
         while (src.Count > 0)
@@ -40,11 +40,11 @@ public class PostBox<T> where T : struct, IAgent
             {
                 foreach(var msg in src)
                     if (msg.Type == Transaction.Increase)
-                        msg.Process(agents, timestep, stage);
+                        msg.Process(agents, timestep);
                 //only then handle decreases
                 foreach(var msg in src)
                     if (msg.Type != Transaction.Increase)
-                        msg.Process(agents, timestep, stage);
+                        msg.Process(agents, timestep);
                 src.Clear();
             }
             src = WriteTMP ? BufferTMP : Buffer;

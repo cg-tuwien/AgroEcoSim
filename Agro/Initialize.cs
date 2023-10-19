@@ -29,11 +29,11 @@ public static class Initialize
 			{
 				var minVegTemp = rnd.NextFloat(8f, 10f);
 				var pos = settings.Plants[i].Position
-					?? new Vector3(world.FieldSize.X * rnd.NextFloat(), -rnd.NextFloat(0.04f), world.FieldSize.Y * rnd.NextFloat());
+					?? new Vector3(world.FieldSize.X * rnd.NextFloat(), -rnd.NextPositiveFloat(0.04f), world.FieldSize.Y * rnd.NextFloat());
 				pos.Y -= soil.GetMetricGroundDepth(pos.X, pos.Z);
 
 				var seed = new SeedAgent(pos,
-										 rnd.NextFloat(0.02f),
+										 rnd.NextPositiveFloat(0.02f),
 										 new Vector2(minVegTemp, minVegTemp + rnd.NextFloat(8f, 14f)));
 				var species = string.IsNullOrEmpty(settings.Plants[i].SpeciesName) ? null : settings.Species?.FirstOrDefault(x => x.Name == settings.Plants[i].SpeciesName);
 				plantsFormation[i] = new PlantFormation2(world, species ?? SpeciesSettings.Avocado, soil, seed, rnd, world.HoursPerTick);
@@ -47,9 +47,9 @@ public static class Initialize
 			{
 				var minVegTemp = rnd.NextFloat(8f, 10f);
 				var seed = new SeedAgent(new Vector3(world.FieldSize.X * rnd.NextFloat(),
-														-rnd.NextFloat(0.04f),
+														-rnd.NextPositiveFloat(0.04f),
 														world.FieldSize.Y * rnd.NextFloat()), //Y because Z is depth
-											rnd.NextFloat(0.02f),
+											rnd.NextPositiveFloat(0.02f),
 											new Vector2(minVegTemp, minVegTemp + rnd.NextFloat(8f, 14f)));
 				var species = string.IsNullOrEmpty(settings.Plants[i].SpeciesName) ? null : settings.Species?.FirstOrDefault(x => x.Name == settings.Plants[i].SpeciesName);
 				plantsFormation[i] = new PlantFormation2(world, species ?? SpeciesSettings.Avocado, soil, seed, rnd, world.HoursPerTick);

@@ -53,7 +53,7 @@ hubConnection.on("result", (result: ISimResponse) => {
         const reader = new BinaryReader(binaryScene);
         const scene = reader.readAgroScene();
 
-        console.log(result.stepTimes);
+        //console.log(result.stepTimes);
         batch(() => {
             st.plants.value = result.plants;
             st.scene.value = scene;
@@ -65,7 +65,7 @@ hubConnection.on("result", (result: ISimResponse) => {
     }
     else
     {
-        console.log(result.stepTimes);
+        //console.log(result.stepTimes);
         batch(() => {
             st.plants.value = result.plants;
             st.computing.value = false;
@@ -82,6 +82,7 @@ hubConnection.on("preview", (result: ISimPreview) => {
     {
         st.previewRequestAfterSceneUpdate = true;
         const reader = new BinaryReader(binaryScene);
+        if (result.step == 132) debugger;
         const scene = reader.readAgroScene();
         batch(() => {
             st.scene.value = scene;
@@ -194,6 +195,9 @@ class State {
     transformControls: TransformControls | undefined;
     downloadRoots = signal(false);
     debugBoxes = signal(false);
+    showLeaves = signal(true);
+    showTerrain = signal(true);
+    showRoots = signal(true);
 
     grabbed = computed(() => this.seeds.value.filter((x: Seed) => x.state.value == "grab"));
 
@@ -211,6 +215,7 @@ class State {
     plants = signal<IPlantResponse[]>([]);
     scene = signal<Scene>([]);
     renderer = signal("");
+    samplesPerPixel = signal(2048);
     simHoursPerTick = 1;
 
     history : {t: number, s: Uint8Array}[] = [];
@@ -230,6 +235,7 @@ class State {
         Obstacles: this.obstacles.peek().map((o: Obstacle) => exportObstacle(o)),
         RequestGeometry: true,
         RenderMode: this.renderMode.value,
+        SamplesPerPixel: this.samplesPerPixel.value,
         ExactPreview: this.exactPreview.value,
         DownloadRoots: this.downloadRoots.value
     }};
@@ -370,6 +376,7 @@ class State {
             exactPreview: this.exactPreview.peek(),
             visualMapping: this.visualMapping.peek(),
             debugDisplayOrientations: this.debugBoxes.peek(),
+            showLeaves: this.showLeaves.peek(),
             seeds: this.seeds.value.map(s => s.save()),
             obstacles: this.obstacles.value.map(o => o.save()),
             species: this.species.value.map(s => s.save()),
@@ -421,6 +428,7 @@ class State {
                     self.exactPreview.value = data.exactPreview;
                     self.visualMapping.value = data.visualMapping;
                     self.debugBoxes.value = data.debugDisplayOrientations;
+                    self.showLeaves.value = data.showLeaves;
                     self.seeds.value = data.seeds.map(s => new Seed(s.species, s.px, s. py, s.pz));
                     self.obstacles.value = data.obstacles.map(o => new Obstacle(o.type, o.px, o.py, o.pz, o.ax, o.ay, o.l, o.h, o.t));
                     self.species.value = data.species.map(s => new Species().load(s));
@@ -470,7 +478,8 @@ class State {
     }
 
     private saveBinaryFile(data: Uint8Array, frame: string, ext: string) {
-        const blob = new Blob([data], { type: 'application/octet-stream' });
+        const binaryData = base64ToArrayBuffer(data);
+        const blob = new Blob([binaryData], { type: 'application/octet-stream' });
         const url = window.URL.createObjectURL(blob);
 
         const a = document.createElement('a');

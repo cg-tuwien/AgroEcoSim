@@ -11,7 +11,6 @@ public partial class SoilFormation : Formation3iTransformed<SoilAgent>
 	internal readonly AgroWorld World;
 	readonly int TrueSizeZ;
 
-	public override byte Stages => 1;
 	public SoilFormation(AgroWorld world, Vector3i size, Vector3 fieldSize, uint timestep) : base(size.X, size.Y, size.Z + 1)
 	{
 		World = world;
@@ -30,9 +29,9 @@ public partial class SoilFormation : Formation3iTransformed<SoilAgent>
 		SetScale(fieldSize);
 	}
 
-	// public override void DeliverPost(uint timestep, byte stage)
+	// public override void DeliverPost(uint timestep)
 	// {
-	// 	base.DeliverPost(timestep, stage);
+	// 	base.DeliverPost(timestep);
 	// 	Console.WriteLine(Agents.Where((x, i) => Coords(i).Z == 2 && Coords(i).X == 1).Select(x => x.Water).Sum());
 	// }
 

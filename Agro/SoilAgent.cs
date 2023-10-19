@@ -42,7 +42,7 @@ public partial struct SoilAgent : IAgent
 		Temperature = temperature;
 	}
 
-	public void Tick(IFormation _formation, int formationID, uint timestep, byte stage)
+	public void Tick(IFormation _formation, int formationID, uint timestep)
 	{
 		var formation = (SoilFormation)_formation;
 		var coords = formation.Coords(formationID);

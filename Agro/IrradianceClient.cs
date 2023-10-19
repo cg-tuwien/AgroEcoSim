@@ -104,8 +104,9 @@ public class IrradianceClient
 
 	byte[]? EnvMap = null; //just for debug output
 	ushort EnvMapX = 0;
+	string SamplesPerPixel;
 
-	public IrradianceClient(float latitude, float longitude, int _mode)
+	public IrradianceClient(float latitude, float longitude, int _mode, ushort spp = 512)
 	{
 		var mode = (Mode)_mode;
 		Client = new() { BaseAddress = new Uri($"http://localhost:{9001 + Math.Clamp(_mode - 1, 0, 8)}"), Timeout = TimeSpan.FromHours(1) };
@@ -113,6 +114,7 @@ public class IrradianceClient
 		Client.DefaultRequestHeaders.Add("Lo", longitude.ToString());
 		GlobalIllumination = mode != Mode.Constant;
 		RequestedMode = mode.ToString();
+		SamplesPerPixel = spp.ToString();
 	}
 
 	bool ProbeRenderer()
@@ -229,7 +231,8 @@ public class IrradianceClient
 					request.Headers.Add("TiE", world.GetTime(timestep + 1).ToString("o", CultureInfo.InvariantCulture));
 					//Debug.WriteLine(offsetCounter);
 					//request.Headers.Add("C", offsetCounter.ToString()); //Only use for dummy debug
-					request.Headers.Add("Ra", "2048");
+					//request.Headers.Add("Ra", "2048");
+					request.Headers.Add("Ra", SamplesPerPixel);
 					if (reqEnvMap)
 						request.Headers.Add("Env", "true");
 
@@ -794,9 +797,21 @@ public class IrradianceClient
 								writer.Write(scale.X); //length
 								writer.Write(scale.Z * 0.5f); //radius
 								writer.WriteM32(z, x, y, center);
+								var xl = Math.Abs(1f - x.LengthSquared());
+								var yl = Math.Abs(1f - y.LengthSquared());
+								var zl = Math.Abs(1f - z.LengthSquared());
+								if (xl > 1e-2 || yl > 1e-2 || zl > 1e-2)
+								{
+									Debug.WriteLine($"stem xyz {xl} {yl} {zl}");
+								}
 								writer.Write(Math.Clamp(ag.GetWater(i) / ag.GetWaterEfficientCapacity(world, i), 0, 1));
 								writer.Write(Math.Clamp(ag.GetEnergy(i) / ag.GetEnergyCapacity(i), 0, 1));
 								writer.Write(Math.Clamp(ag.GetWoodRatio(i), 0, 1));
+								if (extended)
+								{
+									writer.Write(ag.GetDailyResourcesInv(i));
+									writer.Write(ag.GetDailyProductionInv(i));
+								}
 							}
 							break;
 						case OrganTypes.Bud:

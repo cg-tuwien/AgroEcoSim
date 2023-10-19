@@ -10,8 +10,6 @@ namespace Agro;
 
 public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantAgent
 {
-	[System.Text.Json.Serialization.JsonIgnore]
-	public byte Stages => 1;
 	readonly Action<T[], int[]> Reindex;
 
 	public readonly PlantFormation2 Plant;
@@ -29,11 +27,16 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 
 	readonly TreeCacheData2 TreeCache = new();
 
-	public PlantSubFormation2(PlantFormation2 plant, Action<T[], int[]> reindex)
+	public PlantSubFormation2(PlantFormation2 plant, Action<T[], int[]> reindex, bool isAboveGround)
 	{
 		Plant = plant;
 		Reindex = reindex;
+		IsAboveGround = isAboveGround;
 	}
+
+	internal float DailyResourceMax { get; private set; }
+	internal float DailyProductionMax { get; private set; }
+	readonly bool IsAboveGround;
 
 	public bool CheckIndex(int index) => index < Agents.Length;
 
@@ -342,7 +345,7 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 			TreeCache.UpdateBases(this);
 	}
 
-	public void Tick(uint timestep, byte stage)
+	public void Tick(uint timestep)
 	{
 		var (src, dst) = SrcDst();
 		Array.Copy(src, dst, src.Length);
@@ -350,7 +353,7 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 		// StemsTMP.AddRange(Stems);
 
 		for(int i = 0; i < dst.Length; ++i)
-			dst[i].Tick(this, i, timestep, stage);
+			dst[i].Tick(this, i, timestep);
 
 		#if TICK_LOG
 		StatesHistory.Clear();
@@ -365,10 +368,10 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 
 
 	List<GatherDataBase> Gathering = new();
-	List<GatherEfficiency> Efficiencies = new();
 
-	public PlantGlobalStats Gather(AgroWorld world, bool aboveGround)
+	public PlantGlobalStats Gather()
 	{
+		var world = Plant.World;
 		var energy = 0.0;
 		var water = 0.0;
 		var energyDiff = 0.0;
@@ -379,25 +382,17 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 		var waterRequirement = 0.0;
 		var (dst, src) = SrcDst(); //since Tick already swapped them
 		var prevLength = Gathering.Count;
-		for(int i = 0; i < prevLength; ++i)
-			Efficiencies[i] = default;
 
 		if (prevLength > dst.Length)
-		{
 			Gathering.RemoveRange(dst.Length, Gathering.Count - dst.Length);
-			Efficiencies.RemoveRange(dst.Length, Efficiencies.Count - dst.Length);
-		}
 
 		for(int i = prevLength; i < dst.Length; ++i)
-		{
 			Gathering.Add(default);
-			Efficiencies.Add(default);
-		}
 
 		for(int i = 0; i < dst.Length; ++i)
 		{
-			var currentEnergy = Math.Max(0f, dst[i].Energy);
-			energy += currentEnergy;
+			//Debug.WriteLine($"{(IsAboveGround ? "⊤" : "⊥")}-{i} Energy {dst[i].Energy} Water {dst[i].Water} Res {dst[i].PreviousDayEnvResourcesInv} / {DailyResourceMax} Prod {dst[i].PreviousDayProductionInv} / {DailyProductionMax} Life {dst[i].LifeSupportPerTick(world)} wStore {dst[i].WaterStorageCapacity()} wStore {dst[i].EnergyStorageCapacity()}");
+			energy += Math.Max(0f, dst[i].Energy);
 			water += dst[i].Water;
 
 			var previousEnergy = src[i].Energy;
@@ -408,7 +403,7 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 			energyRequirement += lifeSupport;
 
 			float photosynthSupport;
-			if (aboveGround)
+			if (IsAboveGround)
 			{
 				photosynthSupport = dst[i].PhotosynthPerTick(world);
 				waterRequirement += photosynthSupport;
@@ -422,87 +417,17 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 			var waterStorageCapacity = dst[i].WaterStorageCapacity();
 			waterCapacity += waterStorageCapacity;
 
-			Gathering[i] = new(lifeSupport, photosynthSupport, energyStorageCapacity, waterStorageCapacity);
+			Gathering[i] = new(lifeSupport, photosynthSupport, energyStorageCapacity, waterStorageCapacity, dst[i].PreviousDayEnvResourcesInv / DailyResourceMax, dst[i].PreviousDayProductionInv / DailyProductionMax);
 		}
 
 		//this is faster than probing .Contains() for each i
 		foreach(var i in Deaths)
 		{
 			Gathering[i] = default;
-			Efficiencies[i] = default;
 			energyRequirement -= dst[i].LifeSupportPerTick(world);
 			waterRequirement -= dst[i].PhotosynthPerTick(world);
 			energyCapacity -= dst[i].EnergyStorageCapacity();
 			waterCapacity -= dst[i].WaterStorageCapacity();
-		}
-
-		var dailyResourceMax = 0f;
-		var dailyProductionMax = 0f;
-		for(int i = 0; i < dst.Length; ++i)
-		{
-			if (dailyResourceMax < dst[i].PreviousDayEnvResourcesInv) dailyResourceMax = dst[i].PreviousDayEnvResourcesInv;
-			if (dailyProductionMax < dst[i].PreviousDayProductionInv) dailyProductionMax = dst[i].PreviousDayProductionInv;
-		}
-
-		if (dailyProductionMax > 0f)
-		{
-			//assuming only leaves photosynthesize, efficiency of the parent will be the max of its children
-			var nodesToSolve = new byte[dst.Length];
-			// var sumToSolve = 0;
-			// for(int i = 0; i < dst.Length; ++i)
-			// {
-			// 	var o = irradianceOffsets[i];
-			// 	if (o >= 0)
-			// 		efficiency[i] = irradiances[o] / irradianceMax;
-			// 	else if (GetOrgan(i) == OrganTypes.Fruit)
-			// 		efficiency[i] = 1f;
-			// 	else
-			// 	{
-			// 		Debug.Assert(GetChildren(i).Count < 256);
-			// 		var children = (byte)GetChildren(i).Count;
-			// 		nodesToSolve[i] = children;
-			// 		sumToSolve += children;
-			// 	}
-			// }
-
-			var sumToSolve = 0;
-			for(int i = 0; i < dst.Length; ++i)
-			{
-				if (dst[i].Organ == OrganTypes.Leaf)
-					Efficiencies[i] = new(dst[i].PreviousDayEnvResourcesInv / dailyResourceMax, dst[i].PreviousDayProductionInv / dailyProductionMax);
-				else
-				{
-					Debug.Assert(GetChildren(i).Count < 256);
-					var children = (byte)GetChildren(i).Count;
-					nodesToSolve[i] = children;
-					sumToSolve += children;
-				}
-			}
-
-			//now bubble up the tree to the root(s) and propagate the maximum
-			while (sumToSolve > 0)
-				for(int i = 0; i < dst.Length && sumToSolve > 0; ++i)
-				{
-					if (nodesToSolve[i] == 0)
-					{
-						var parent = dst[i].Parent;
-						Efficiencies[parent] = Efficiencies[parent].Max(Efficiencies[i]);
-
-						--nodesToSolve[parent];
-						nodesToSolve[i] = byte.MaxValue;
-						--sumToSolve;
-					}
-				}
-
-			for(int i = 0; i < dst.Length; ++i)
-				if (GetOrgan(i) == OrganTypes.Bud || GetOrgan(i) == OrganTypes.Meristem)
-					Efficiencies[i] = GatherEfficiency.ONE;
-
-			// for(int i = 0; i < dst.Length; ++i)
-			// {
-			// 	efficiencyTotal += lightEfficiency[i];
-			// 	efficiencyTotal += energyEfficiency[i];
-			// }
 		}
 
 		energyDiff += energy; //optimal variant of sum(dst[i] - src[i])
@@ -518,7 +443,6 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 			EnergyRequirementPerTick = energyRequirement,
 			WaterRequirementPerTick = waterRequirement,
 			Gathering = Gathering,
-			Efficiencies = Efficiencies
 		};
 	}
 
@@ -669,18 +593,18 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 
 	// }
 
-	public void DeliverPost(uint timestep, byte stage)
+	public void DeliverPost(uint timestep)
 	{
 		// Roots.Clear();
 		// Roots.AddRange(RootsTMP);
 		var (src, dst) = SrcDst();
 		Array.Copy(src, dst, src.Length);
-		Post.Process(timestep, stage, dst);
+		Post.Process(timestep, dst);
 
 		ReadTMP = !ReadTMP;
 	}
 
-	public void ProcessTransactions(uint timestep, byte stage)
+	public void ProcessTransactions(uint timestep)
 	{
 		var (src, dst) = SrcDst();
 		Array.Copy(src, dst, src.Length);
@@ -896,12 +820,164 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 	//THERE ARE NO WRITE METHODS ALLOWED except for these via messages.
 	#endregion
 
+	List<byte> ChildrenToWaitFor = new();
+	List<int> ReadyNodes0 = new(), ReadyNodes1 = new();
+	List<int> NewDayIncomplete = new();
+	public void NewDay(uint timestep, byte ticksPerDay)
+	{
+		var src = Src();
+
+		DailyResourceMax = float.MinValue;
+		DailyProductionMax = float.MinValue;
+		NewDayIncomplete.Clear();
+
+		if (IsAboveGround)
+		{
+			ReadyNodes0.Clear();
+			ChildrenToWaitFor.Clear();
+
+			for(int i = 0; i < src.Length; ++i)
+			{
+				var complete = src[i].NewDay(timestep, ticksPerDay); //for all organs as non-leaves also need to be reset to zero
+				if (src[i].Organ == OrganTypes.Leaf)
+				{
+					if (complete)
+					{
+						if (DailyResourceMax < src[i].PreviousDayEnvResourcesInv) DailyResourceMax = src[i].PreviousDayEnvResourcesInv;
+						if (DailyProductionMax < src[i].PreviousDayProductionInv) DailyProductionMax = src[i].PreviousDayProductionInv;
+					}
+					else
+						NewDayIncomplete.Add(i);
+
+					ReadyNodes0.Add(i);
+					ChildrenToWaitFor.Add(0);
+				}
+				else
+				{
+					Debug.Assert(GetChildren(i).Count < 255);
+					var children = (byte)GetChildren(i).Count;
+					ChildrenToWaitFor.Add(children);
+					if (children == 0) //for those tips of twigs that have no leaves
+						ReadyNodes0.Add(i);
+				}
+			}
+
+			if (DailyResourceMax == float.MinValue) //means that all leaves are in incmplete list
+			{
+				DailyResourceMax = 1;
+				DailyProductionMax = 1;
+			}
+			//Debug.WriteLineIf(NewDayIncomplete.Count > 0, $"Setting maximum of {DailyResourceMax} : {DailyProductionMax} for {NewDayIncomplete.Count} leaves.");
+
+			foreach(var i in NewDayIncomplete)
+				src[i].DailySet(DailyResourceMax, DailyProductionMax);
+
+			Debug.Assert(DailyProductionMax > 0f);
+
+			//assuming only leaves photosynthesize, efficiency of the parent will be the max of its children
+
+			// var sumToSolve = 0;
+			// for(int i = 0; i < dst.Length; ++i)
+			// {
+			// 	var o = irradianceOffsets[i];
+			// 	if (o >= 0)
+			// 		efficiency[i] = irradiances[o] / irradianceMax;
+			// 	else if (GetOrgan(i) == OrganTypes.Fruit)
+			// 		efficiency[i] = 1f;
+			// 	else
+			// 	{
+			// 		Debug.Assert(GetChildren(i).Count < 256);
+			// 		var children = (byte)GetChildren(i).Count;
+			// 		nodesToSolve[i] = children;
+			// 		sumToSolve += children;
+			// 	}
+			// }
+
+			//now bubble up the tree to the root(s) and propagate the maximum
+			while (ReadyNodes0.Count > 0)
+			{
+				ReadyNodes1.Clear();
+				foreach(var i in ReadyNodes0)
+				{
+					var parent = src[i].Parent;
+					if (parent >= 0)
+					{
+						src[parent].DailyMax(src[i].PreviousDayEnvResourcesInv, src[i].PreviousDayProductionInv);
+
+						--ChildrenToWaitFor[parent];
+						if (ChildrenToWaitFor[parent] == 0)
+							ReadyNodes1.Add(parent);
+					}
+				}
+				(ReadyNodes1, ReadyNodes0) = (ReadyNodes0, ReadyNodes1);
+			}
+
+			for(int i = 0; i < src.Length; ++i)
+				if (src[i].Organ == OrganTypes.Bud)
+				{
+					var parent = src[i].Parent;
+					src[i].DailySet(src[parent].PreviousDayEnvResourcesInv, src[parent].PreviousDayProductionInv);
+				}
+		}
+		else
+		{
+			for(int i = 0; i < src.Length; ++i)
+			{
+				if (src[i].NewDay(timestep, ticksPerDay))
+				{
+					if (DailyResourceMax < src[i].PreviousDayEnvResourcesInv) DailyResourceMax = src[i].PreviousDayEnvResourcesInv;
+					if (DailyProductionMax < src[i].PreviousDayProductionInv) DailyProductionMax = src[i].PreviousDayProductionInv;
+				}
+				else
+					NewDayIncomplete.Add(i);
+			}
+
+			if (DailyResourceMax == float.MinValue) //means that all roots are in incmplete list
+			{
+				DailyResourceMax = 1;
+				DailyProductionMax = 1;
+			}
+
+			foreach(var i in NewDayIncomplete)
+				src[i].DailySet(DailyResourceMax, DailyProductionMax);
+		}
+
+		// switch (Efficiencies.Count.CompareTo(dst.Length))
+		// {
+		// 	case -1: Efficiencies.AddRange(new GatherEfficiency[dst.Length - Efficiencies.Count]); break;
+		// 	case 1: Efficiencies.RemoveRange(dst.Length, Efficiencies.Count - dst.Length); break;
+		// }
+
+		// for(int i = 0; i < dst.Length; ++i)
+		// 	Efficiencies[i] = new(dst[i].PreviousDayEnvResourcesInv / DailyResourceMax, dst[i].PreviousDayProductionInv / DailyProductionMax);
+	}
+
+	public void FirstDay()
+	{
+		var src = Src();
+
+		for(int i = 0; i < src.Length; ++i)
+		{
+			if (DailyResourceMax < src[i].PreviousDayEnvResourcesInv) DailyResourceMax = src[i].PreviousDayEnvResourcesInv;
+			if (DailyProductionMax < src[i].PreviousDayProductionInv) DailyProductionMax = src[i].PreviousDayProductionInv;
+		}
+
+		// switch (Efficiencies.Count.CompareTo(src.Length))
+		// {
+		// 	case -1: Efficiencies.AddRange(new GatherEfficiency[src.Length - Efficiencies.Count]); break;
+		// 	case 1: Efficiencies.RemoveRange(src.Length, Efficiencies.Count - src.Length); break;
+		// }
+
+		// for(int i = 0; i < src.Length; ++i)
+		// 	Efficiencies[i] = new(src[i].PreviousDayEnvResourcesInv / DailyResourceMax, src[i].PreviousDayProductionInv / DailyProductionMax);
+	}
+
 	///////////////////////////
 	#region LOG
 	///////////////////////////
 	#if HISTORY_LOG || TICK_LOG
 	readonly List<T[]> StatesHistory = new();
-	public string HistoryToJSON(int timestep = -1, byte stage = 0) => timestep >= 0 ? Utils.Export.Json(StatesHistory[timestep]) : Utils.Export.Json(StatesHistory);
+	public string HistoryToJSON(int timestep = -1) => timestep >= 0 ? Utils.Export.Json(StatesHistory[timestep]) : Utils.Export.Json(StatesHistory);
 
 	public ulong GetID(int index) => ReadTMP
 		? (AgentsTMP.Length > index ? AgentsTMP[index].ID : ulong.MaxValue)

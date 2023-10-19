@@ -67,11 +67,11 @@ export function SpeciesItem(props: {species: Species, index: number})
             <label for={`dominanceFactor-${props.index}`} title={dominanceFactorTooltip}>Dominance factor</label>
         </div>
         <div>
-            <input min={0} max={2} step={0.1} type="number" name={`auxinsProduction-${props.index}`} title={auxinsProductionTooltip} value={+props.species.auxinsProduction.value} onChange={e => props.species.auxinsProduction.value = parseFloat(e.currentTarget.value)}  />
+            <input min={0} step={1} type="number" name={`auxinsProduction-${props.index}`} title={auxinsProductionTooltip} value={+props.species.auxinsProduction.value.toFixed(4)} onChange={e => props.species.auxinsProduction.value = parseFloat(e.currentTarget.value)}  />
             <label for={`auxinsProduction-${props.index}`} title={auxinsProductionTooltip}>Auxins production</label>
         </div>
         <div>
-            <input min={0} max={2} step={0.1} type="number" name={`auxinsReach-${props.index}`} title={auxinsReachTooltip} value={+props.species.auxinsReach.value} onChange={e => props.species.auxinsReach.value = parseFloat(e.currentTarget.value)}  />
+            <input min={0} step={0.1} type="number" name={`auxinsReach-${props.index}`} title={auxinsReachTooltip} value={+props.species.auxinsReach.value.toFixed(4)} onChange={e => props.species.auxinsReach.value = parseFloat(e.currentTarget.value)}  />
             <label for={`auxinsReach-${props.index}`} title={auxinsReachTooltip}>Auxins reach</label>
         </div>
         <div>
@@ -90,13 +90,29 @@ export function SpeciesItem(props: {species: Species, index: number})
             <span>var:&nbsp;</span>
             <input min={0} step={0.1} type="number" name={`lateralPitchVar-${props.index}`} value={+props.species.lateralPitchDegVar.value.toFixed(4)} onChange={e => props.species.lateralPitchDegVar.value = parseFloat(e.currentTarget.value)}  />
         </div>
-        <hr/>
         <div>
-            <input min={0} step={0.0001} type="number" name={`leafLevel-${props.index}`} title={auxinsReachTooltip} value={+props.species.leafLevel.value} onChange={e => props.species.leafLevel.value = parseFloat(e.currentTarget.value)}  />
-            <label for={`leafLevel-${props.index}`} title={auxinsReachTooltip}>Max. leaf level</label>
+            <input min={0} max={1} step={0.01} type="number" name={`twigsBending-${props.index}`} value={+props.species.twigsBending.value.toFixed(4)} onChange={e => props.species.twigsBending.value = parseFloat(e.currentTarget.value)}  />
+            <label for={`twigsBending-${props.index}`}>Twigs bending rate</label>
         </div>
         <div>
-            <input min={0} step={0.0001} type="number" name={`leafLength-${props.index}`} value={+props.species.leafLength.value.toFixed(4)} onChange={e => props.species.leafLength.value = parseFloat(e.currentTarget.value)}  />
+            <input min={0} max={2} step={0.1} type="number" name={`bendingByLevel-${props.index}`} value={+props.species.bendingByLevel.value.toFixed(4)} onChange={e => props.species.bendingByLevel.value = parseFloat(e.currentTarget.value)}  />
+            <label for={`bendingByLevel-${props.index}`}>Bending factor by hierarchy level</label>
+        </div>
+        <div>
+            <input min={0} max={1} step={0.01} type="number" name={`apexBending-${props.index}`} value={+props.species.apexBending.value.toFixed(4)} onChange={e => props.species.apexBending.value = parseFloat(e.currentTarget.value)}  />
+            <label for={`apexBending-${props.index}`}>Apex bending rate</label>
+        </div>
+        <div>
+            <input min={0} max={1} step={0.01} type="number" name={`shootsGravitaxy-${props.index}`} value={+props.species.shootsGravitaxy.value.toFixed(4)} onChange={e => props.species.shootsGravitaxy.value = parseFloat(e.currentTarget.value)}  />
+            <label for={`shootsGravitaxy-${props.index}`}>Shoots gravitaxy</label>
+        </div>
+        <hr/>
+        {/*<div>
+            <input min={0} step={1} type="number" name={`leafLevel-${props.index}`} value={+props.species.leafLevel.value} onChange={e => props.species.leafLevel.value = parseInt(e.currentTarget.value)}  />
+            <label for={`leafLevel-${props.index}`}>Max. leaf level</label>
+        </div>*/}
+        <div>
+            <input min={0} step={0.001} type="number" name={`leafLength-${props.index}`} value={+props.species.leafLength.value.toFixed(4)} onChange={e => props.species.leafLength.value = parseFloat(e.currentTarget.value)}  />
             <label for={`leafLength-${props.index}`}>Leaf length</label>
             <span>var:&nbsp;</span>
             <input min={0} step={0.1} type="number" name={`leafLengthVar-${props.index}`} value={+props.species.leafLengthVar.value.toFixed(4)} onChange={e => props.species.leafLengthVar.value = parseFloat(e.currentTarget.value)}  />

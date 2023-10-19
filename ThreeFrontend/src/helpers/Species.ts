@@ -21,6 +21,10 @@ export class Species {
     lateralRollDegVar = signal(5);
     lateralPitchDeg = signal(45);
     lateralPitchDegVar = signal(5);
+    twigsBending = signal(0.5);
+    apexBending = signal(0.02);
+    bendingByLevel = signal(1);
+    shootsGravitaxy = signal(0.1);
 
     leafLevel = signal(2);
     leafLength = signal(0.12);
@@ -68,6 +72,11 @@ export class Species {
             lateralPitchDeg: this.lateralPitchDeg.peek(),
             lateralPitchDegVar: this.lateralPitchDegVar.peek(),
 
+            twigsBending: this.twigsBending.peek(),
+            apexBending: this.apexBending.peek(),
+            bendingByLevel: this.bendingByLevel.peek(),
+            shootsGravitaxy: this.shootsGravitaxy.peek(),
+
             leafLevel: this.leafLevel.peek(),
             leafLength: this.leafLength.peek(),
             leafLengthVar: this.leafLengthVar.peek(),
@@ -105,6 +114,11 @@ export class Species {
         this.lateralRollDegVar.value = s.lateralRollDegVar;
         this.lateralPitchDeg.value = s.lateralPitchDeg;
         this.lateralPitchDegVar.value = s.lateralPitchDegVar;
+
+        this.twigsBending.value = s.twigsBending;
+        this.apexBending.value = s.apexBending;
+        this.bendingByLevel.value = s.bendingByLevel;
+        this.shootsGravitaxy.value = s.shootsGravitaxy;
 
         this.leafLevel.value = s.leafLevel;
         this.leafLength.value = s.leafLength;
@@ -145,6 +159,11 @@ export class Species {
             BRv: this.lateralRollDegVar.peek() * DegToRad,
             BP: this.lateralPitchDeg.peek() * DegToRad,
             BPv: this.lateralPitchDegVar.peek() * DegToRad,
+
+            TB: this.twigsBending.peek(),
+            TBL: this.bendingByLevel.peek(),
+            TBA: 1.0 - this.apexBending.peek(),
+            SG: this.shootsGravitaxy.peek(),
 
             LV: this.leafLevel.peek(),
             LL: this.leafLength.peek(),

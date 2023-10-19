@@ -15,8 +15,6 @@ namespace Agro;
 public partial class PlantFormation2 : IPlantFormation
 {
 	internal readonly AgroWorld World;
-	[System.Text.Json.Serialization.JsonIgnore]
-	public byte Stages => 1;
 
 	public Vector3 Position { get; private set; }
 	bool ReadTMP = false;
@@ -38,6 +36,12 @@ public partial class PlantFormation2 : IPlantFormation
 
 	internal float WaterBalance = 0f;
 	internal float EnergyBalance = 0f;
+
+	internal float WaterProductionMax = 0f;
+	internal float EnergyProductionMax = 0f;
+
+	//bool NeedsGathering = false;
+
 
 	/// <summary>
 	/// Random numbers generator
@@ -64,12 +68,13 @@ public partial class PlantFormation2 : IPlantFormation
 #if GODOT
 		, i => UG_Godot.RemoveSprite(i), i => UG_Godot.AddSprites(i)
 #endif
-		);
+		, false);
 
 		AG = new(this, AboveGroundAgent3.Reindex
 #if GODOT
 		, i => AG_Godot.RemoveSprite(i), i => AG_Godot.AddSprites(i)
 #endif
+		, true
 );
 		SegmentOrientations = new();
 	}
@@ -114,6 +119,13 @@ public partial class PlantFormation2 : IPlantFormation
 	{
 		DeathSeed = true;
 		Seed = Array.Empty<SeedAgent>();
+
+		//initial setup of default efficiencies
+		//Do not call Census() as it would also start the gathering phase
+		UG.Census();
+		AG.Census();
+		UG.FirstDay();
+		AG.FirstDay();
 	}
 
 	public bool SeedAlive => Seed.Length == 1;
@@ -122,18 +134,175 @@ public partial class PlantFormation2 : IPlantFormation
 	{
 		UG.Census();
 		AG.Census();
+
+		if (Seed.Length == 0)
+		{
+			var timestep = World.Timestep;
+			//Debug.WriteLine($"GATHERING {timestep} for {timestep * World.HoursPerTick} h");
+			//NeedsGathering = false;
+
+			if (timestep % World.StatsBlockLength == 0) //A New Day Just Begun
+			{
+				UG.NewDay(World.Timestep, World.TicksPerDay);
+				AG.NewDay(World.Timestep, World.TicksPerDay);
+			}
+
+			var globalUG = UG.Gather();
+			var globalAG = AG.Gather();
+
+			var energy = globalAG.Energy + globalUG.Energy;
+			var water = globalAG.Water + globalUG.Energy;
+
+			var energyRequirement = globalAG.EnergyRequirementPerTick + globalUG.EnergyRequirementPerTick;
+			var waterRequirement = globalAG.WaterRequirementPerTick + globalUG.WaterRequirementPerTick;
+
+			var energyStorage = globalAG.EnergyCapacity + globalUG.EnergyCapacity;
+			var waterStorage = globalAG.WaterCapacity + globalUG.WaterCapacity;
+
+			var energyEmergencyThrehold = Math.Max(1, 168 / World.HoursPerTick) * energyRequirement / World.HoursPerTick;
+			var energAlertThreshold = Math.Max(energyEmergencyThrehold * 4, 0.01 * energyStorage);
+
+			#if GODOT
+			UG.LightEfficiency = globalUG.LightEfficiency;
+			UG.EnergyEfficiency = globalUG.EnergyEfficiency;
+
+			AG.LightEfficiency = globalAG.LightEfficiency;
+			AG.EnergyEfficiency = globalAG.EnergyEfficiency;
+			#endif
+
+			const double zero = 1e-12;
+
+			//Debug.WriteLine($"W: {water} / {waterRequirement}   {globalUG.WaterDiff} + {globalAG.WaterDiff}");
+			//Debug.WriteLine($"E: {energy} / {energyRequirement}   {globalUG.EnergyDiff} + {globalAG.EnergyDiff}");
+			if (energy < energyEmergencyThrehold)
+			{
+				//Debug.WriteLine("E DIST: req!!!");
+				// var energyState = energy / (energyRequirement >= zero ? energyRequirement : 1);
+				// var waterState = water / (waterRequirement >= zero ? waterRequirement : 1);
+				// if (waterState < energyState) //cut of a root
+				// {
+
+				// }
+				// else //cut off a leaf
+				{
+					var count = globalAG.Gathering.Count;
+					var ordering = new List<(float energyRequired, int index)>(count);
+					int i = 0;
+					for(; i < count; ++i)
+						ordering.Add((globalAG.Gathering[i].ResourcesEfficiency, i));
+					ordering.Sort((x, y) => x.energyRequired.CompareTo(y.energyRequired));
+					var target = energyEmergencyThrehold - energy;
+					i = 0;
+					var removed = new HashSet<int>();
+					while (target > 0 && i < ordering.Count)
+					{
+						var index = ordering[i++].index;
+						if (!removed.Contains(index))
+						{
+							target -= globalAG.Gathering[index].LifesupportEnergy;
+							removed.Add(index);
+							var deaths = AG.Death(index);
+							if (deaths != null)
+								foreach(var item in deaths)
+									if (!removed.Contains(item))
+									{
+										target -= globalAG.Gathering[item].LifesupportEnergy;
+										removed.Add(item);
+									}
+						}
+					}
+					Debug.Write($"Emergency removal of {removed.Count} plant agents.");
+				}
+
+				// var minEfficiency = Math.Min(globalUG.Efficiency.Min(), globalAG.Efficiency.Min());
+				// var weights = globalAG.Weights4EnergyDistributionByEmergency(positiveEfficiencyAG) + globalUG.Weights4EnergyDistributionByEmergency(positiveEfficiencyUG);
+				// var factor = (float)(energy / weights);
+				// globalAG.DistributeEnergyByEmergency(factor, positiveEfficiencyAG);
+				// globalUG.DistributeEnergyByEmergency(factor, positiveEfficiencyUG);
+
+				var weights = globalAG.Weights4EnergyDistributionByRequirement() + globalUG.Weights4EnergyDistributionByRequirement();
+				var factor = (float)(energy / (weights >= zero ? weights : 1));
+				globalAG.DistributeEnergyByRequirement(factor);
+				globalUG.DistributeEnergyByRequirement(factor);
+			}
+			else if (energy < energAlertThreshold || energyStorage < energyRequirement) //the plant is short on energy, it must be distributed
+			{
+				//Debug.WriteLine("E DIST: req");
+				var min = float.MaxValue;
+				var minList = new List<int>();
+				var count = globalAG.Gathering.Count;
+				for(int i = 0; i < count; ++i)
+					switch (globalAG.Gathering[i].ResourcesEfficiency.CompareTo(min))
+					{
+						case -1:
+							min = globalAG.Gathering[i].ResourcesEfficiency;
+							minList.Clear();
+							minList.Add(i);
+						break;
+						case 0: minList.Add(i); break;
+					}
+
+				foreach(var item in minList)
+					AG.Death(item);
+
+				var weights = globalAG.Weights4EnergyDistributionByRequirement() + globalUG.Weights4EnergyDistributionByRequirement();
+				var factor = (float)(energy / (weights >= zero ? weights : 1));
+				globalAG.DistributeEnergyByRequirement(factor);
+				globalUG.DistributeEnergyByRequirement(factor);
+			}
+			else //there is enough energy
+			{
+				//Debug.WriteLine("E DIST: storage");
+				var energyOverhead = energy - energyRequirement;
+				var weights = globalAG.Weights4EnergyDistributionByStorage() + globalUG.Weights4EnergyDistributionByStorage();
+
+				var factor = (float)(energyOverhead / (weights >= zero ? weights : 1));
+				globalAG.DistributeEnergyByStorage(factor);
+				globalUG.DistributeEnergyByStorage(factor);
+			}
+			#if DEBUG
+			var check = Math.Abs(energy - (globalAG.ReceivedEnergy.Sum() + globalUG.ReceivedEnergy.Sum()));
+			Debug.Assert(check <= energy * 1e-3);
+			#endif
+
+			if (water < waterRequirement || waterStorage < waterRequirement)
+			{
+				//Debug.WriteLine("W DIST: req");
+				var factor = (float)(water / (waterRequirement >= zero ? waterRequirement : 1));
+
+				globalAG.DistributeWaterByRequirement(factor);
+				globalUG.DistributeWaterByRequirement(factor);
+			}
+			else
+			{
+				//Debug.WriteLine("W DIST: storage");
+				var waterOverhead = water - waterRequirement;
+				var waterWeight = waterStorage -  waterRequirement;
+
+				var factor = (float)(waterOverhead / (waterWeight >= zero ? waterWeight : 1));
+				globalAG.DistributeWaterByStorage(factor);
+				globalUG.DistributeWaterByStorage(factor);
+			}
+
+			UG.Distribute(globalUG);
+			AG.Distribute(globalAG);
+
+			WaterBalance = waterRequirement > 1e-6 ? (float)(water / waterRequirement) : 1;
+			EnergyBalance = energyRequirement > 1e-6 ? (float)(energy / energyRequirement) : 1;
+
+			WaterProductionMax = UG.DailyProductionMax;
+			EnergyProductionMax = AG.DailyProductionMax;
+
+			//take care to avoid division by zero
+			if (WaterProductionMax < 1e-6f) WaterProductionMax = 1f;
+			if (EnergyProductionMax < 1e-6f) EnergyProductionMax = 1f;
+		}
 	}
 
-	bool NewStatsBlock = true;
-	internal bool IsNewDay() => NewStatsBlock;
-
-	public void Tick(uint timestep, byte stage)
+	public void Tick(uint timestep)
 	{
 		if (DeathSeed && !UG.Alive && !AG.Alive)
 			return;
-
-		//NewStatsBlock = AgroWorld.HoursPerTick >= 24 || timestep == 0 || ((timestep - 1) * AgroWorld.HoursPerTick) / 24 < (timestep * AgroWorld.HoursPerTick) / 24; //MI 2023-03-07 This was used for timesteps shorter than one hour
-		NewStatsBlock = timestep % World.StatsBlockLength == 0;
 
 		//Ready for List and Span combination
 
@@ -172,18 +341,19 @@ public partial class PlantFormation2 : IPlantFormation
 		if (Seed.Length > 0)
 		{
 			Array.Copy(srcSeed, dstSeed, srcSeed.Length);
-			dstSeed[0].Tick(this, 0, timestep, stage);
+			dstSeed[0].Tick(this, 0, timestep);
 		}
 		else
 		{
-			UG.Tick(timestep, stage);
-			AG.Tick(timestep, stage);
+			UG.Tick(timestep);
+			AG.Tick(timestep);
 // if (timestep >= 1664)
 // 	Debug.Write(timestep);
 			AG.Hormones(true);
 
 			//Physics
 			//AG.Gravity(world);
+			//NeedsGathering = true;
 		}
 		#if TICK_LOG
 		StatesHistory.Clear();
@@ -195,19 +365,18 @@ public partial class PlantFormation2 : IPlantFormation
 			StatesHistory.Add(null);
 		#endif
 		ReadTMP = !ReadTMP;
-
 		//Just testing
 		// var gltf = GlftHelper.Create(AG.ExportToGLTF());
 		// GlftHelper.Export(gltf, $"T{timestep}.gltf");
 	}
 
-	public void DeliverPost(uint timestep, byte stage)
+	public void DeliverPost(uint timestep)
 	{
 		if (Seed.Length > 0)
 		{
 			var (src, dst) = SrcDst_Seed();
 			Array.Copy(src, dst, src.Length);
-			PostboxSeed.Process(timestep, stage, dst);
+			PostboxSeed.Process(timestep, dst);
 		}
 		else if (PostboxSeed.AnyMessages)
 			PostboxSeed.Clear();
@@ -215,153 +384,9 @@ public partial class PlantFormation2 : IPlantFormation
 		ReadTMP = !ReadTMP;
 
 		if (UG.HasUndeliveredPost)
-			UG.DeliverPost(timestep, stage);
+			UG.DeliverPost(timestep);
 		if (AG.HasUndeliveredPost)
-			AG.DeliverPost(timestep, stage);
-
-		if (Seed.Length == 0)
-		{
-			var globalUG = UG.Gather(World, false);
-			var globalAG = AG.Gather(World, true);
-
-			var energy = globalAG.Energy + globalUG.Energy;
-			var water = globalAG.Water + globalUG.Energy;
-
-			var energyRequirement = globalAG.EnergyRequirementPerTick + globalUG.EnergyRequirementPerTick;
-			var waterRequirement = globalAG.WaterRequirementPerTick + globalUG.WaterRequirementPerTick;
-
-			var energyStorage = globalAG.EnergyCapacity + globalUG.EnergyCapacity;
-			var waterStorage = globalAG.WaterCapacity + globalUG.WaterCapacity;
-
-			var positiveEfficiencyAG = globalAG.UsefulnessTotal > 0.0;
-			var positiveEfficiencyUG = globalUG.UsefulnessTotal > 0.0;
-
-			var energyEmergencyThrehold = Math.Max(1, 168 / World.HoursPerTick) * energyRequirement / World.HoursPerTick;
-			var energAlertThreshold = Math.Max(energyEmergencyThrehold * 4, 0.01 * energyStorage);
-
-			#if GODOT
-			UG.LightEfficiency = globalUG.LightEfficiency;
-			UG.EnergyEfficiency = globalUG.EnergyEfficiency;
-
-			AG.LightEfficiency = globalAG.LightEfficiency;
-			AG.EnergyEfficiency = globalAG.EnergyEfficiency;
-			#endif
-
-			const double zero = 1e-12;
-
-			//Debug.WriteLine($"W: {water} / {waterRequirement}   {globalUG.WaterDiff} + {globalAG.WaterDiff}");
-			//Debug.WriteLine($"E: {energy} / {energyRequirement}   {globalUG.EnergyDiff} + {globalAG.EnergyDiff}");
-			if (energy < energyEmergencyThrehold)
-			{
-				// var energyState = energy / (energyRequirement >= zero ? energyRequirement : 1);
-				// var waterState = water / (waterRequirement >= zero ? waterRequirement : 1);
-				// if (waterState < energyState) //cut of a root
-				// {
-
-				// }
-				// else //cut off a leaf
-				{
-					var count = globalAG.Efficiencies.Count;
-					var ordering = new List<(float energyRequired, int index)>(count);
-					int i = 0;
-					for(; i < count; ++i)
-						ordering.Add((globalAG.Efficiencies[i].ResourceEfficiency, i));
-					ordering.Sort((x, y) => x.energyRequired.CompareTo(y.energyRequired));
-					var target = energyEmergencyThrehold - energy;
-					i = 0;
-					var removed = new HashSet<int>();
-					while (target > 0 && i < ordering.Count)
-					{
-						var index = ordering[i++].index;
-						if (!removed.Contains(index))
-						{
-							target -= globalAG.Gathering[index].LifesupportEnergy;
-							removed.Add(index);
-							var deaths = AG.Death(index);
-							if (deaths != null)
-								foreach(var item in deaths)
-									if (!removed.Contains(item))
-									{
-										target -= globalAG.Gathering[item].LifesupportEnergy;
-										removed.Add(item);
-									}
-						}
-					}
-					Debug.Write($"Emergency removal of {removed.Count} plant agents.");
-				}
-
-				// var minEfficiency = Math.Min(globalUG.Efficiency.Min(), globalAG.Efficiency.Min());
-				// var weights = globalAG.Weights4EnergyDistributionByEmergency(positiveEfficiencyAG) + globalUG.Weights4EnergyDistributionByEmergency(positiveEfficiencyUG);
-				// var factor = (float)(energy / weights);
-				// globalAG.DistributeEnergyByEmergency(factor, positiveEfficiencyAG);
-				// globalUG.DistributeEnergyByEmergency(factor, positiveEfficiencyUG);
-
-				var weights = globalAG.Weights4EnergyDistributionByRequirement(positiveEfficiencyAG) + globalUG.Weights4EnergyDistributionByRequirement(positiveEfficiencyUG);
-				var factor = (float)(energy / (weights >= zero ? weights : 1));
-				globalAG.DistributeEnergyByRequirement(factor, positiveEfficiencyAG);
-				globalUG.DistributeEnergyByRequirement(factor, positiveEfficiencyUG);
-			}
-			else if (energy < energAlertThreshold || energyStorage < energyRequirement) //the plant is short on energy, it must be distributed
-			{
-				var min = float.MaxValue;
-				var minList = new List<int>();
-				var count = globalAG.Efficiencies.Count;
-				for(int i = 0; i < count; ++i)
-					switch (globalAG.Efficiencies[i].ResourceEfficiency.CompareTo(min))
-					{
-						case -1:
-							min = globalAG.Efficiencies[i].ResourceEfficiency;
-							minList.Clear();
-							minList.Add(i);
-						break;
-						case 0: minList.Add(i); break;
-					}
-
-				foreach(var item in minList)
-					AG.Death(item);
-
-				var weights = globalAG.Weights4EnergyDistributionByRequirement(positiveEfficiencyAG) + globalUG.Weights4EnergyDistributionByRequirement(positiveEfficiencyUG);
-				var factor = (float)(energy / (weights >= zero ? weights : 1));
-				globalAG.DistributeEnergyByRequirement(factor, positiveEfficiencyAG);
-				globalUG.DistributeEnergyByRequirement(factor, positiveEfficiencyUG);
-			}
-			else //there is enough energy
-			{
-				var energyOverhead = energy - energyRequirement;
-				var weights = globalAG.Weights4EnergyDistributionByStorage(positiveEfficiencyAG) + globalUG.Weights4EnergyDistributionByStorage(positiveEfficiencyUG);
-
-				var factor = (float)(energyOverhead / (weights >= zero ? weights : 1));
-				globalAG.DistributeEnergyByStorage(factor, positiveEfficiencyAG);
-				globalUG.DistributeEnergyByStorage(factor, positiveEfficiencyUG);
-			}
-			#if DEBUG
-			var check = Math.Abs(energy - (globalAG.ReceivedEnergy.Sum() + globalUG.ReceivedEnergy.Sum()));
-			Debug.Assert(check <= energy * 1e-3);
-			#endif
-
-			if (water < waterRequirement || waterStorage < waterRequirement)
-			{
-				var factor = (float)(water / (waterRequirement >= zero ? waterRequirement : 1));
-
-				globalAG.DistributeWaterByRequirement(factor);
-				globalUG.DistributeWaterByRequirement(factor);
-			}
-			else
-			{
-				var waterOverhead = water - waterRequirement;
-				var waterWeight = waterStorage -  waterRequirement;
-
-				var factor = (float)(waterOverhead / (waterWeight >= zero ? waterWeight : 1));
-				globalAG.DistributeWaterByStorage(factor);
-				globalUG.DistributeWaterByStorage(factor);
-			}
-
-			UG.Distribute(globalUG);
-			AG.Distribute(globalAG);
-
-			WaterBalance = waterRequirement > 1e-6 ? (float)(water / waterRequirement) : 1;
-			EnergyBalance = energyRequirement > 1e-6 ? (float)(energy / energyRequirement) : 1;
-		}
+			AG.DeliverPost(timestep);
 
 		// if (!DeathSeed)
 		// 	Console.WriteLine("R: {0} E: {1}", Seed[0].Radius, Seed[0].StoredEnergy);
@@ -369,12 +394,12 @@ public partial class PlantFormation2 : IPlantFormation
 		// 	Console.WriteLine("R: {0}x{1} E: {2} W: {3}", UnderGround[0].Radius, UnderGround[0].Length, UnderGround[0].Energy, UnderGround[0].Water);
 	}
 
-	public void ProcessTransactions(uint timestep, byte stage)
+	public void ProcessTransactions(uint timestep)
 	{
 		if (UG.HasUnprocessedTransactions)
-			UG.ProcessTransactions(timestep, stage);
+			UG.ProcessTransactions(timestep);
 		if (AG.HasUnprocessedTransactions)
-			AG.ProcessTransactions(timestep, stage);
+			AG.ProcessTransactions(timestep);
 	}
 
 	public (uint, uint, uint) GeometryStats()
@@ -391,7 +416,7 @@ public partial class PlantFormation2 : IPlantFormation
 		return ((uint)AG.Count, triangles, sensors);
 	}
 
-	public bool HasUndeliveredPost => PostboxSeed.AnyMessages || UG.HasUndeliveredPost || AG.HasUndeliveredPost;
+	public bool HasUndeliveredPost => PostboxSeed.AnyMessages || UG.HasUndeliveredPost || AG.HasUndeliveredPost;// || NeedsGathering;
 
 	public bool HasUnprocessedTransactions => UG.HasUnprocessedTransactions || AG.HasUnprocessedTransactions;
 
@@ -402,7 +427,7 @@ public partial class PlantFormation2 : IPlantFormation
 	///////////////////////////
 	#if HISTORY_LOG || TICK_LOG
 	readonly List<SeedAgent?> StatesHistory = new();
-	public string HistoryToJSON(int timestep = -1, byte stage = 0) => timestep >= 0
+	public string HistoryToJSON(int timestep = -1) => timestep >= 0
 		? $"{{ \"Seeds\" : {Export.Json(StatesHistory[timestep])}, \"UnderGround\" : {UG.HistoryToJSON(timestep)}, \"AboveGround\" : {AG.HistoryToJSON(timestep)} }}"
 		: $"{{ \"Seeds\" : {Export.Json(StatesHistory)}, \"UnderGround\" : {UG.HistoryToJSON()}, \"AboveGround\" : {AG.HistoryToJSON()} }}";
 	public ulong GetID() => Seed.Length > 0 ? Seed[0].ID : ulong.MaxValue;

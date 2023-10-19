@@ -20,6 +20,7 @@ import { signal } from '@preact/signals';
 import { SpeciesList } from './hud/Species';
 import { ExactPreview } from './hud/ExactPreview';
 import { DownloadRoots } from './hud/DownloadRoots';
+import { SamplesPerPixel } from './hud/SamplesPerPixel';
 //import {Tab, initTE } from "tw-elements"; initTE({ Tab }); //tried but failed
 
 const tabs = signal("tab-home");
@@ -58,6 +59,7 @@ const App = () => {
 				<Randomize/>
 				<InitNumber/>
 				<Renderer/>
+				<SamplesPerPixel/>
 				<ExactPreview/>
 				<DownloadRoots/>
 			</div>

@@ -231,7 +231,7 @@ public partial class SoilFormationNew : IFormation, IGrid3D
 	[M(AI)] float WaterTravelDistPerTick() => World.HoursPerTick * 0.000012f; //1g of water can travel so far an hour
 	readonly float WaterRetainedPerCell;
 
-	public void Tick(uint timestep, byte stage)
+	public void Tick(uint timestep)
 	{
 		//float[] waterSrc, waterTarget, steamSrc, steamTarget, temperatureSrc, temperatureTarget;
 
@@ -425,14 +425,13 @@ public partial class SoilFormationNew : IFormation, IGrid3D
 
 	[M(AI)] void IFormation.Census() {}
 
-	[M(AI)] void IFormation.ProcessTransactions(uint timestep, byte stage) { }
+	[M(AI)] void IFormation.ProcessTransactions(uint timestep) { }
 
-	[M(AI)] void IFormation.DeliverPost(uint timestep, byte stage) {}
+	[M(AI)] void IFormation.DeliverPost(uint timestep) {}
 	bool IFormation.HasUndeliveredPost => false;
 	bool IFormation.HasUnprocessedTransactions => false;
-	public byte Stages => 1;
 	#if HISTORY_LOG || TICK_LOG
-	string IFormation.HistoryToJSON(int timestep = -1, byte stage = 0) => "";
+	string IFormation.HistoryToJSON(int timestep = -1) => "";
 	#endif
 	///<summary>
 	///Number of agents in this formation

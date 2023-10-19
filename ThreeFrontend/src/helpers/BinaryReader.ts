@@ -145,22 +145,26 @@ export default class BinaryReader {
                         const waterRatio = this.readFloat32();
                         const energyRatio = this.readFloat32();
                         const woodRatio = this.readFloat32();
+                        const dailyResource = this.readFloat32();
+                        const dailyProduction = this.readFloat32();
                         const auxins = this.readFloat32();
                         const cytokinins = this.readFloat32();
-                        entity.push({ type: Primitives.Cylinder, affineTransform: transform, length: length, radius: radius, stats: new Float32Array([waterRatio, energyRatio, auxins, cytokinins, woodRatio]) });
+                        entity.push({ type: Primitives.Cylinder, affineTransform: transform, length: length, radius: radius, stats: new Float32Array([waterRatio, energyRatio, auxins, cytokinins, woodRatio, dailyResource, dailyProduction, 0, 0]) });
+                        maxDailyProductionShoots = Math.max(dailyProduction, maxDailyProductionShoots);
+                        maxDailyResourceShoots = Math.max(dailyResource, maxDailyResourceShoots);
                     }
                     break;
-                    //buds disabled
-                    // case 3: { //bud
-                    //     const center = this.readFloat32Vector(3);
-                    //     const radius = this.readFloat32();
-                    //     const waterRatio = this.readFloat32();
-                    //     const energyRatio = this.readFloat32();
-                    //     const auxins = this.readFloat32();
-                    //     const cytokinins = this.readFloat32();
-                    //     entity.push({ type: Primitives.Sphere, center: center, radius: radius, stats: new Float32Array([waterRatio, energyRatio, auxins, cytokinins]) });
-                    // }
-                    // break;
+                    case 3: { //bud
+                        const center = this.readFloat32Vector(3);
+                        const radius = this.readFloat32();
+                        const waterRatio = this.readFloat32();
+                        const energyRatio = this.readFloat32();
+                        const auxins = this.readFloat32();
+                        const cytokinins = this.readFloat32();
+                        // buds disabled
+                        //entity.push({ type: Primitives.Sphere, center: center, radius: radius, stats: new Float32Array([waterRatio, energyRatio, auxins, cytokinins]) });
+                    }
+                    break;
                 }
             }
 
@@ -197,6 +201,7 @@ export default class BinaryReader {
                 switch (ent.type)
                 {
                     case Primitives.Rectangle:
+                    case Primitives.Cylinder:
                     {
                         ent.stats[7] = ent.stats[5] / maxDailyResourceShoots;
                         ent.stats[8] = ent.stats[6] / maxDailyProductionShoots;

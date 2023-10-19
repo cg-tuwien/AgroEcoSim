@@ -7,14 +7,13 @@ namespace AgentsSystem;
 public interface IFormation
 {
     void Census();
-    void Tick(uint timestep, byte stage);
-    void ProcessTransactions(uint timestep, byte stage);
-    void DeliverPost(uint timestep, byte stage);
+    void Tick(uint timestep);
+    void ProcessTransactions(uint timestep);
+    void DeliverPost(uint timestep);
     bool HasUndeliveredPost { get; }
     bool HasUnprocessedTransactions { get; }
-    byte Stages { get; }
     #if HISTORY_LOG || TICK_LOG
-    string HistoryToJSON(int timestep = -1, byte stage = 0);
+    string HistoryToJSON(int timestep = -1);
     #endif
     #if GODOT
     void GodotReady();

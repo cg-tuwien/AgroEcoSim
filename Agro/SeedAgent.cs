@@ -29,11 +29,11 @@ public struct SeedAgent : IAgent
 		public WaterInc(float amount) => Amount = amount;
 		public bool Valid => Amount > 0f;
 		public Transaction Type => Transaction.Increase;
-		public void Receive(ref SeedAgent dstAgent, uint timestep, byte stage)
+		public void Receive(ref SeedAgent dstAgent, uint timestep)
 		{
 			dstAgent.IncWater(Amount);
 			#if HISTORY_LOG || TICK_LOG
-			lock(MessagesHistory) MessagesHistory.Add(new(timestep, stage, ID, dstAgent.ID, Amount));
+			lock(MessagesHistory) MessagesHistory.Add(new(timestep, ID, dstAgent.ID, Amount));
 			#endif
 		}
 	}
@@ -80,7 +80,7 @@ public struct SeedAgent : IAgent
 		mVegetativeTemperature = vegetativeTemperature;
 	}
 
-	public void Tick(IFormation _formation, int formationID, uint timestep, byte stage)
+	public void Tick(IFormation _formation, int formationID, uint timestep)
 	{
 		var plant = (PlantFormation2)_formation;
 		var world = plant.World;
@@ -95,16 +95,17 @@ public struct SeedAgent : IAgent
 			if (Water >= GerminationThreshold) //GERMINATION
 			{
 				Debug.WriteLine($"GERMINATION at {timestep}");
-				var initialYawAngle = plant.RNG.NextFloat(-MathF.PI, MathF.PI);
+				//var initialYawAngle = plant.RNG.NextFloat(-MathF.PI, MathF.PI);
+				var initialYawAngle = 0;
 				var initialYaw = Quaternion.CreateFromAxisAngle(Vector3.UnitY, initialYawAngle);
-				plant.UG.Birth(new UnderGroundAgent2(-1, initialYaw * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, -0.5f * MathF.PI), Water * 0.4f));
+				plant.UG.Birth(new UnderGroundAgent2(timestep, -1, initialYaw * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, -0.5f * MathF.PI), Water * 0.4f, initialResources: 1f, initialProduction: 1f));
 
 				var baseStemOrientation = initialYaw * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, 0.5f * MathF.PI);
-				var meristem = new AboveGroundAgent3(plant, -1, OrganTypes.Meristem, baseStemOrientation, Water * 0.4f);
+				var meristem = new AboveGroundAgent3(plant, -1, OrganTypes.Meristem, baseStemOrientation, Water * 0.4f, initialResources: 1f, initialProduction: 1f);
 				var meristemIndex = plant.AG.Birth(meristem); //base stem
 
 				if (plant.Parameters.LateralsPerNode > 0)
-					AboveGroundAgent3.CreateLeaves(meristem, plant, 0, meristemIndex);
+					AboveGroundAgent3.CreateFirstLeaves(meristem, plant, 0, meristemIndex);
 
 				plant.SeedDeath();
 				Water = 0f;

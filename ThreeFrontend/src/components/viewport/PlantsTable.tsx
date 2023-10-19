@@ -36,10 +36,12 @@ export function PlantsTable()
                 <li>Cytokinins: {primitive.stats[3]}</li>
                 {primitive.type == Primitives.Cylinder || primitive.type == Primitives.Box ? <li>Wood ratio: {primitive.stats[4]}</li> : <></>}
                 {primitive.type == Primitives.Rectangle ? <li>Irradiance: {primitive.stats[4]}</li> : <></>}
-                {primitive.type == Primitives.Rectangle || primitive.type == Primitives.Box ? <li>Resources availability: {primitive.stats[5]}</li>: <></>}
-                {primitive.type == Primitives.Rectangle || primitive.type == Primitives.Box ? <li>Production efficiency: {primitive.stats[6]}</li> : <></>}
-                {primitive.type == Primitives.Rectangle || primitive.type == Primitives.Box ? <li>Relative Resources: {primitive.stats[7]}</li>: <></>}
-                {primitive.type == Primitives.Rectangle || primitive.type == Primitives.Box ? <li>Relative Production: {primitive.stats[8]}</li> : <></>}
+                {primitive.type == Primitives.Rectangle || primitive.type == Primitives.Box || primitive.type == Primitives.Cylinder
+                    ? <><li>Resources availability: {primitive.stats[5]}</li>
+                        <li>Production efficiency: {primitive.stats[6]}</li>
+                        <li>Relative Resources: {primitive.stats[7]}</li>
+                        <li>Relative Production: {primitive.stats[8]}</li></>
+                    : <></>}
             </ul>
         </>) : (<></>);
     }

@@ -11,9 +11,6 @@ public partial class SimulationWorld
 	internal readonly List<IFormation> Formations = new();
 	internal readonly List<Action<SimulationWorld, uint, IList<IFormation>, IList<IObstacle>>> Callbacks = new();
 	public uint Timestep { get; private set; } = 0U;
-	public byte Stage { get; private set; }
-
-	byte Stages = 1;
 
 	#if TICK_LOG
 	readonly List<MethodInfo> MessageLogClears = new();
@@ -46,7 +43,6 @@ public partial class SimulationWorld
 	public void Add(IFormation formation)
 	{
 		Formations.Add(formation);
-		Stages = Math.Max(Stages, formation.Stages);
 		#if GODOT
 		formation.GodotReady();
 		#endif
@@ -55,8 +51,6 @@ public partial class SimulationWorld
 	public void AddRange(IEnumerable<IFormation> formations)
 	{
 		Formations.AddRange(formations);
-		foreach(var item in formations)
-			Stages = Math.Max(Stages, item.Stages);
 		#if GODOT
 		foreach(var item in formations)
 			item.GodotReady();
@@ -81,19 +75,14 @@ public partial class SimulationWorld
 			RunSequential(simulationLength);
 	}
 
-	byte MaxStage() => Formations.Max(x => x.Stages);
-
 	public void RunSequential(uint simulationLength)
 	{
-		Stages = MaxStage();
 		for(int i = 0; i < simulationLength; ++i, ++Timestep)
 		{
-			for(Stage = 0; Stage < Stages; ++Stage)
-			{
-				TickSequential();
-				ProcessTransactionsSequential();
-				DeliverPostSequential();
-			}
+			TickSequential();
+			ProcessTransactionsSequential();
+			DeliverPostSequential();
+
 			CensusSequential();
 			ExecCallbacks();
 			#if HISTORY_LOG || HISTORY_TICK
@@ -112,15 +101,12 @@ public partial class SimulationWorld
 
 	public void RunParallel(uint simulationLength)
 	{
-		Stages = MaxStage();
 		for(int i = 0; i < simulationLength; ++i, ++Timestep)
 		{
-			for(Stage = 0; Stage < Stages; ++Stage)
-			{
-				TickParallel();
-				ProcessTransactionsParallel();
-				DeliverPostParallel();
-			}
+			TickParallel();
+			ProcessTransactionsParallel();
+			DeliverPostParallel();
+
 			CensusParallel();
 			ExecCallbacks();
 		}
@@ -142,10 +128,10 @@ public partial class SimulationWorld
 	{
 		//Debug.WriteLine($"TIMESTEP: {Timestep}");
 		for(int i = 0; i < Formations.Count; ++i)
-			Formations[i].Tick(Timestep, Stage);
+			Formations[i].Tick(Timestep);
 	}
 
-	void TickParallel() => Parallel.For(0, Formations.Count, i => Formations[i].Tick(Timestep, Stage));
+	void TickParallel() => Parallel.For(0, Formations.Count, i => Formations[i].Tick(Timestep));
 
 	public void ProcessTransactionsSequential()
 	{
@@ -156,7 +142,7 @@ public partial class SimulationWorld
 			for(int i = 0; i < Formations.Count; ++i)
 				if (Formations[i].HasUnprocessedTransactions)
 				{
-					Formations[i].ProcessTransactions(Timestep, Stage);
+					Formations[i].ProcessTransactions(Timestep);
 					anyDelivered = true;
 				}
 		}
@@ -175,7 +161,7 @@ public partial class SimulationWorld
 			Parallel.For(0, Formations.Count, i => {
 				if (Formations[i].HasUnprocessedTransactions)
 				{
-					Formations[i].ProcessTransactions(Timestep, Stage);
+					Formations[i].ProcessTransactions(Timestep);
 					anyDelivered = true;
 				}
 			});
@@ -195,7 +181,7 @@ public partial class SimulationWorld
 			for(int i = 0; i < Formations.Count; ++i)
 				if (Formations[i].HasUndeliveredPost)
 				{
-					Formations[i].DeliverPost(Timestep, Stage);
+					Formations[i].DeliverPost(Timestep);
 					anyDelivered = true;
 				}
 		}
@@ -214,7 +200,7 @@ public partial class SimulationWorld
 			Parallel.For(0, Formations.Count, i => {
 				if (Formations[i].HasUndeliveredPost)
 				{
-					Formations[i].DeliverPost(Timestep, Stage);
+					Formations[i].DeliverPost(Timestep);
 					anyDelivered = true;
 				}
 			});
