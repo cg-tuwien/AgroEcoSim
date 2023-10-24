@@ -788,6 +788,8 @@ public class IrradianceClient
 									writer.Write(GetIrradiance(ag, i));
 									writer.Write(ag.GetDailyResourcesInv(i));
 									writer.Write(ag.GetDailyProductionInv(i));
+									//writer.Write(ag.GetDailyEfficiency(i));
+									//writer.Write(0f);
 								}
 							}
 							break;
@@ -815,6 +817,7 @@ public class IrradianceClient
 								{
 									writer.Write(ag.GetDailyResourcesInv(i));
 									writer.Write(ag.GetDailyProductionInv(i));
+									//writer.Write(organ == OrganTypes.Stem ? ag.GetDailyEfficiency(i) : 0);
 								}
 							}
 							break;
@@ -831,9 +834,8 @@ public class IrradianceClient
 					}
 					if (extended)
 					{
-						var h = ag.GetHormones(i);
-						writer.Write(h.X);
-						writer.Write(h.Y);
+						writer.Write(ag.GetAuxins(i));
+						writer.Write(ag.GetDailyEfficiency(i));
 					}
 				}
 
@@ -961,8 +963,9 @@ public class IrradianceClient
 					}
 				}
 
+				var energyPerTick = world.HoursPerTick * 500f;
 				for(int i = 0; i < offsetCounter; ++i)
-					Irradiances.Add(world.HoursPerTick * 500f);
+					Irradiances.Add(energyPerTick);
 			}
 			//if (IsNight) Debug.WriteLine("DAY");
 			IsNight = false;

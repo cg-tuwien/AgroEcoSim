@@ -158,8 +158,8 @@ export enum PlayState {
 
 class State {
     // SETTINGS
-    hoursPerTick = signal(1);
-    totalHours = signal(720);
+    hoursPerTick = signal(4);
+    totalHours = signal(1440);
     fieldResolution = signal(0.5);
     fieldSizeX = signal(10);
     fieldSizeZ = signal(10);

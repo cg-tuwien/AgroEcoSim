@@ -1,3 +1,4 @@
+using System.Drawing;
 using System.Numerics;
 
 namespace Agro;
@@ -10,7 +11,8 @@ internal class TreeCacheData2
 	Vector3[] PointNodes;
 	readonly List<int> Roots = new();
 	readonly List<int> Leaves = new();
-	readonly List<int> Meristems = new();
+	//readonly List<int> Meristems = new();
+	public float Height { get; private set; }
 
 	ushort MaxDepth = 0;
 
@@ -84,16 +86,23 @@ internal class TreeCacheData2
 
 	internal void UpdateBases<T>(PlantSubFormation2<T> formation) where T : struct, IPlantAgent
 	{
+		Height = 0f;
 		var buffer = new Stack<int>();
 		foreach(var root in Roots)
 		{
 			PointNodes[root] = formation.Plant.Position;
 			var point = formation.Plant.Position + Vector3.Transform(Vector3.UnitX, formation.GetDirection(root)) * formation.GetLength(root);
-			foreach(var child in GetChildren(root))
+			var children = GetChildren(root);
+			if (children.Count > 0)
 			{
-				PointNodes[child] = point;
-				buffer.Push(child);
+				foreach(var child in children)
+				{
+					PointNodes[child] = point;
+					buffer.Push(child);
+				}
 			}
+			else
+				Height = Math.Max(Height, PointNodes[root].Y);
 		}
 
 		while (buffer.Count > 0)
@@ -109,6 +118,8 @@ internal class TreeCacheData2
 					buffer.Push(child);
 				}
 			}
+			else
+				Height = Math.Max(Height, PointNodes[next].Y);
 		}
 	}
 }

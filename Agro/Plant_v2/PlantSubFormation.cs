@@ -36,6 +36,8 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 
 	internal float DailyResourceMax { get; private set; }
 	internal float DailyProductionMax { get; private set; }
+	internal float DailyEfficiencyMax { get; private set; }
+	internal float Height => TreeCache.Height;
 	readonly bool IsAboveGround;
 
 	public bool CheckIndex(int index) => index < Agents.Length;
@@ -491,8 +493,15 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 			var dst = Src();
 			var path = new List<PathData>();
 			for(int i = 0; i < dst.Length; ++i)
-				if (dst[i].Organ == OrganTypes.Meristem || (Births.Count > 0 && dst[i].Organ == OrganTypes.Stem && dst[i].Auxins >= Plant.Parameters.AuxinsProduction))
+			{
+				var isMeristem = dst[i].Organ == OrganTypes.Meristem;
+				if (isMeristem || (Births.Count > 0 && dst[i].Organ == OrganTypes.Stem && dst[i].Auxins >= Plant.Parameters.AuxinsProduction))
 					DistributeAuxin(dst, i, path);
+
+				if (isMeristem)
+					foreach(var child in GetChildren(i))
+						dst[child].IncAuxins(Plant.Parameters.AuxinsProduction);
+			}
 		}
 	}
 
@@ -758,6 +767,10 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 
 	public Vector3 GetBaseCenter(int index) => TreeCache.GetBaseCenter(index);
 
+	public byte GetDominance(int index) => ReadTMP
+		? (AgentsTMP.Length > index ? AgentsTMP[index].DominanceLevel : (byte)0)
+		: (Agents.Length > index ? Agents[index].DominanceLevel : (byte)0);
+
 	/// <summary>
 	/// Production during the previous day, per m² i.e. invariant of size
 	/// </summary>
@@ -771,6 +784,10 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 	public float GetDailyResourcesInv(int index) => ReadTMP
 		? (AgentsTMP.Length > index ? AgentsTMP[index].PreviousDayEnvResourcesInv : 0f)
 		: (Agents.Length > index ? Agents[index].PreviousDayEnvResourcesInv : 0f);
+
+	public float GetDailyEfficiency(int index) => ReadTMP
+		? (AgentsTMP.Length > index ? AgentsTMP[index].PreviousDayEnvResources : 0f)
+		: (Agents.Length > index ? Agents[index].PreviousDayEnvResources : 0f);
 
 	public Vector3 GetScale(int index) => ReadTMP
 		? (AgentsTMP.Length > index ? AgentsTMP[index].Scale() : Vector3.Zero)
@@ -808,9 +825,9 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 		}
 	}
 
-	public Vector2 GetHormones(int index) => ReadTMP
-		? (index < AgentsTMP.Length ? new(AgentsTMP[index].Auxins, AgentsTMP[index].Cytokinins) : Vector2.Zero)
-		: (index < Agents.Length ? new(Agents[index].Auxins, Agents[index].Cytokinins) : Vector2.Zero);
+	public float GetAuxins(int index) => ReadTMP
+		? (index < AgentsTMP.Length ? AgentsTMP[index].Auxins : 0f)
+		: (index < Agents.Length ? Agents[index].Auxins : 0f);
 
 	#endregion
 
@@ -822,6 +839,8 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 
 	List<byte> ChildrenToWaitFor = new();
 	List<uint> LeavesCount = new();
+	List<float> Volumes = new();
+	List<float> Resources = new();
 	List<int> ReadyNodes0 = new(), ReadyNodes1 = new();
 	List<int> NewDayIncomplete = new();
 	public void NewDay(uint timestep, byte ticksPerDay)
@@ -830,6 +849,7 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 
 		DailyResourceMax = float.MinValue;
 		DailyProductionMax = float.MinValue;
+		DailyEfficiencyMax = float.MinValue;
 		NewDayIncomplete.Clear();
 
 		if (IsAboveGround)
@@ -837,6 +857,8 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 			ReadyNodes0.Clear();
 			ChildrenToWaitFor.Clear();
 			LeavesCount.Clear();
+			Volumes.Clear();
+			Resources.Clear();
 
 			for(int i = 0; i < src.Length; ++i)
 			{
@@ -855,6 +877,7 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 					ReadyNodes0.Add(i);
 					ChildrenToWaitFor.Add(0);
 					LeavesCount.Add(1);
+					Resources.Add(src[i].PreviousDayEnvResources);
 				}
 				else
 				{
@@ -862,20 +885,27 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 					var children = (byte)GetChildren(i).Count;
 					ChildrenToWaitFor.Add(children);
 					LeavesCount.Add(0);
+					Resources.Add(0);
 					if (children == 0) //for those tips of twigs that have no leaves
 						ReadyNodes0.Add(i);
 				}
+				Volumes.Add(src[i].Volume());
 			}
 
 			if (DailyResourceMax == float.MinValue) //means that all leaves are in incmplete list
 			{
 				DailyResourceMax = 1;
 				DailyProductionMax = 1;
+				DailyEfficiencyMax = 1;
 			}
 			//Debug.WriteLineIf(NewDayIncomplete.Count > 0, $"Setting maximum of {DailyResourceMax} : {DailyProductionMax} for {NewDayIncomplete.Count} leaves.");
 
 			foreach(var i in NewDayIncomplete)
-				src[i].DailySet(DailyResourceMax, DailyProductionMax);
+			{
+				var pdr = DailyProductionMax * src[i].Radius * src[i].Length;
+				src[i].DailySet(DailyResourceMax, DailyProductionMax, pdr);
+				Resources[i] = pdr;
+			}
 
 			Debug.Assert(DailyProductionMax > 0f);
 
@@ -894,7 +924,10 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 						{
 							src[parent].DailyAdd(src[i].PreviousDayEnvResourcesInv, src[i].PreviousDayProductionInv);
 							LeavesCount[parent] += LeavesCount[i];
+							Resources[parent] += Resources[i];
 						}
+
+						Volumes[parent] += Volumes[i];
 
 						--ChildrenToWaitFor[parent];
 						if (ChildrenToWaitFor[parent] == 0)
@@ -905,15 +938,28 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 			}
 
 			Debug.Assert(ChildrenToWaitFor.All(x => x == 0));
+			const float rcpScale = 1e-5f;
 
 			for(int i = 0; i < src.Length; ++i)
 				if (src[i].Organ == OrganTypes.Bud)
 				{
 					var parent = src[i].Parent;
-					src[i].DailySet(src[parent].PreviousDayEnvResourcesInv, src[parent].PreviousDayProductionInv);
+					src[i].DailySet(src[parent].PreviousDayEnvResourcesInv, src[parent].PreviousDayProductionInv, Resources[parent] * rcpScale / Volumes[parent]);
+					//src[i].DailySet(Resources[parent], Volumes[parent]);
 				}
-				else if (LeavesCount[i] > 1)
-					src[i].DailyDiv(LeavesCount[i]);
+				else
+				{
+					var efficiency = Resources[i] * rcpScale / Volumes[i];
+
+					if (efficiency > DailyEfficiencyMax)
+						DailyEfficiencyMax = efficiency;
+
+					if (LeavesCount[i] > 1)
+						//src[i].DailyDiv(LeavesCount[i]);
+						src[i].DailySet(src[i].PreviousDayEnvResourcesInv / LeavesCount[i], src[i].PreviousDayProductionInv / LeavesCount[i], efficiency);
+					else
+						src[i].DailySet(src[i].PreviousDayEnvResourcesInv, src[i].PreviousDayProductionInv, efficiency);
+				}
 		}
 		else
 		{
@@ -935,7 +981,7 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 			}
 
 			foreach(var i in NewDayIncomplete)
-				src[i].DailySet(DailyResourceMax, DailyProductionMax);
+				src[i].DailySet(DailyResourceMax, DailyProductionMax, 0f);
 		}
 
 		// switch (Efficiencies.Count.CompareTo(dst.Length))

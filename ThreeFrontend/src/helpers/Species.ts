@@ -8,13 +8,13 @@ export class Species {
     //trunkToWood = signal(1);
     height = signal(12);
 
-    nodeDist = signal(0.05);
+    nodeDist = signal(0.04);
     nodeDistVar = signal(0.01);
 
     //https://sites.google.com/view/plant-diversity/
     monopodialFactor = signal(1); //at 0 it is fully dipodial, between 0 and 1 it is anisotomous see https://sites.google.com/site/paleoplant/terminology/branching
     dominanceFactor = signal(0.7);
-    auxinsProduction = signal(100);
+    auxinsProduction = signal(40);
     auxinsReach = signal(1);
     lateralsPerNode = signal(2);
     lateralRollDeg = signal(0); //opposite = 0, alternate = 180, others are possible as well
@@ -24,7 +24,7 @@ export class Species {
     twigsBending = signal(0.5);
     apexBending = signal(0.02);
     bendingByLevel = signal(1);
-    shootsGravitaxy = signal(0.1);
+    shootsGravitaxy = signal(0.2);
 
     leafLevel = signal(2);
     leafLength = signal(0.12);

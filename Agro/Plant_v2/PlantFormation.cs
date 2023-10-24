@@ -440,9 +440,6 @@ public partial class PlantFormation2 : IPlantFormation
 	public List<Node> ExportToGLTF() => AG.ExportToGLTF();
 	#endregion
 
-	public static float TimeAccumulatedProbability(float hourlyProbability, int hours) => 1f - MathF.Pow(hourlyProbability, hours);
-	public static uint TimeAccumulatedProbabilityUInt(float hourlyProbability, int hours) => (uint)((1f - MathF.Pow(1f - hourlyProbability, hours)) * uint.MaxValue);
-
     internal int InsertSegments(byte segmentsCount, Quaternion orientation)
     {
         var result = SegmentOrientations.Count;

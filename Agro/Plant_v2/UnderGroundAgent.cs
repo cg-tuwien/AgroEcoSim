@@ -35,8 +35,10 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 	/// </summary>
 	public float Radius { get; private set; }
 
-	public Vector3 Scale() => new(Length, 2f * Radius, 2f * Radius);
-	public float Volume() => 4f * Length * Radius * Radius;
+	public readonly byte DominanceLevel => 0;
+
+	public readonly Vector3 Scale() => new(Length, 2f * Radius, 2f * Radius);
+	public readonly float Volume() => 4f * Length * Radius * Radius;
 
 	public float Energy { get; private set; }
 
@@ -64,16 +66,18 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 	/// Resources available during the previous day, averaged, in m³ of water
 	/// </summary>
 	public float PreviousDayEnvResourcesInv { get; private set; }
-	public float CurrentDayEnvResources { get; set; }
+	public float CurrentDayEnvResourcesInv { get; set; }
+
+	public readonly float PreviousDayEnvResources => PreviousDayProductionInv;
 
 	/// <summary>
 	/// Inverse woodyness ∈ [0, 1]. The more woody (towards 0) the less water the root can absorb.
 	/// </summary>
 	float mWaterAbsorbtionFactor;
 
-	public float WoodRatio() => 1f - mWaterAbsorbtionFactor;
+	public readonly float WoodRatio() => 1f - mWaterAbsorbtionFactor;
 
-	public OrganTypes Organ => OrganTypes.Root;
+	public readonly OrganTypes Organ => OrganTypes.Root;
 
 	/// <summary>
 	/// Index of the parent agent. -1 represents the root of the hierarchy.
@@ -109,12 +113,12 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 	/// <summary>
 	/// Water volume in m³ which can be absorbed from soil per hour
 	/// </summary>
-	public float WaterAbsorbtionPerHour() => Radius * Length * WaterAbsortionRatio;
+	public readonly float WaterAbsorbtionPerHour() => Radius * Length * WaterAbsortionRatio;
 
 	/// <summary>
 	/// Water volume in m³ which can be absorbed from soil per timestep
 	/// </summary>
-	public float WaterAbsorbtionPerTick(AgroWorld world) => WaterAbsorbtionPerHour() * world.HoursPerTick;
+	public readonly float WaterAbsorbtionPerTick(AgroWorld world) => WaterAbsorbtionPerHour() * world.HoursPerTick;
 
 	//Let's assume (I might be fully wrong) that the plan can push the water 0.5mm in 1s, then in 1h it can push it 0.001 * 30 * 60 = 1.8m
 	//also see - interestingly it states that while pholem is not photosensitive, xylem is
@@ -124,18 +128,18 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 	/// <summary>
 	/// Water volume in m³ which can be passed to the parent per hour
 	/// </summary>
-	public float WaterFlowToParentPerHour() => 4f * Radius * Radius * WaterTransportRatio * (2f - mWaterAbsorbtionFactor);
+	public readonly float WaterFlowToParentPerHour() => 4f * Radius * Radius * WaterTransportRatio * (2f - mWaterAbsorbtionFactor);
 
 	/// <summary>
 	/// Water volume in m³ which can be passed to the parent per timestep
 	/// </summary>
-	public float WaterFlowToParentPerTick(AgroWorld world) => WaterFlowToParentPerHour() * world.HoursPerTick;
+	public readonly float WaterFlowToParentPerTick(AgroWorld world) => WaterFlowToParentPerHour() * world.HoursPerTick;
 
 	public const float EnergyTransportRatio = 2f;
 
-	public float EnergyFlowToParentPerHour() => 4f * Radius * Radius * EnergyTransportRatio * (2f - mWaterAbsorbtionFactor);
+	public readonly float EnergyFlowToParentPerHour() => 4f * Radius * Radius * EnergyTransportRatio * (2f - mWaterAbsorbtionFactor);
 
-	public float EnergyFlowToParentPerTick(AgroWorld world) => EnergyFlowToParentPerHour() * world.HoursPerTick;
+	public readonly float EnergyFlowToParentPerTick(AgroWorld world) => EnergyFlowToParentPerHour() * world.HoursPerTick;
 
 	/// <summary>
 	/// Volume ratio ∈ [0, 1] of the agent that can used for storing water
@@ -145,17 +149,17 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 	/// <summary>
 	/// Water volume in m³ which can be stored in this agent
 	/// </summary>
-	public float WaterStorageCapacity() => 4f * Radius * Radius * Length * WaterCapacityRatio;
+	public readonly float WaterStorageCapacity() => 4f * Radius * Radius * Length * WaterCapacityRatio;
 
 	/// <summary>
 	/// Water volume in m³ which can flow through per hour, or can be stored in this agent
 	/// </summary>
-	public float WaterTotalCapacityPerHour() => 4f * Radius * Radius * (Length * WaterCapacityRatio + WaterTransportRatio);
+	public readonly float WaterTotalCapacityPerHour() => 4f * Radius * Radius * (Length * WaterCapacityRatio + WaterTransportRatio);
 
 	/// <summary>
 	/// Water volume in m³ which can flow through per tick, or can be stored in this agent
 	/// </summary>
-	public float WaterTotalCapacityPerTick(AgroWorld world) => WaterTotalCapacityPerHour() * world.HoursPerTick;
+	public readonly float WaterTotalCapacityPerTick(AgroWorld world) => WaterTotalCapacityPerHour() * world.HoursPerTick;
 
 	/// <summary>
 	/// Timespan for which 1 unit of energy can feed 1m³ of plant tissue
@@ -165,17 +169,17 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 	//without any energy gains if its storage is initially full
 	const float EnergyStorageCoef = 24 * 31 * 3; //3 months
 
-	float EnergyCapacityFunc(float radius, float length) => 4f * radius * radius * length * (1f - WaterCapacityRatio) * EnergyStorageCoef * MathF.Pow(2f - mWaterAbsorbtionFactor, 3);
+    readonly float EnergyCapacityFunc(float radius, float length) => 4f * radius * radius * length * (1f - WaterCapacityRatio) * EnergyStorageCoef * MathF.Pow(2f - mWaterAbsorbtionFactor, 3);
 
-	public float EnergyStorageCapacity() => EnergyCapacityFunc(Radius, Length);
+	public readonly float EnergyStorageCapacity() => EnergyCapacityFunc(Radius, Length);
 
-	float LifeSupportPerHour() => 0.01f * Length * Radius * Radius * 4f * mWaterAbsorbtionFactor;
+    public readonly float LifeSupportPerHour() => 0.01f * Length * Radius * Radius * 4f * mWaterAbsorbtionFactor;
 
-	public float LifeSupportPerTick(AgroWorld world) => LifeSupportPerHour() * world.HoursPerTick;
+	public readonly float LifeSupportPerTick(AgroWorld world) => LifeSupportPerHour() * world.HoursPerTick;
 
-	public float PhotosynthPerTick(AgroWorld world) => 0f;
+	public readonly float PhotosynthPerTick(AgroWorld world) => 0f;
 
-	public static Quaternion OrientationDown = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, -MathF.PI * 0.5f);
+	public readonly static Quaternion OrientationDown = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, -MathF.PI * 0.5f);
 
 	#endregion
 
@@ -197,7 +201,7 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 		PreviousDayProductionInv = initialProduction;
 		CurrentDayProductionInv = 0f;
 		PreviousDayEnvResourcesInv = initialResources;
-		CurrentDayEnvResources = 0f;
+		CurrentDayEnvResourcesInv = 0f;
 	}
 
 	/// <summary>
@@ -333,7 +337,7 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 						soil.RequestWater(source, Math.Min(waterCapacity - Water, amount), formation, formationID); //TODO change to tube surface!
 					}
 
-					CurrentDayEnvResources += soil.GetWater(source);
+					CurrentDayEnvResourcesInv += soil.GetWater(source);
 				}
 				else
 					formation.Death(formationID);
@@ -350,11 +354,11 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 		if (complete)
 		{
 			PreviousDayProductionInv = CurrentDayProductionInv;
-			PreviousDayEnvResourcesInv = CurrentDayEnvResources;
+			PreviousDayEnvResourcesInv = CurrentDayEnvResourcesInv;
 		}
 
 		CurrentDayProductionInv = 0f;
-		CurrentDayEnvResources = 0f;
+		CurrentDayEnvResourcesInv = 0f;
 
 		return complete;
 	}
@@ -403,7 +407,7 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 		}
 	}
 
-	public bool ChangeAmount(PlantFormation2 plant, int index, int substanceIndex, float amount, bool inc) => substanceIndex switch {
+	public readonly bool ChangeAmount(PlantFormation2 plant, int index, int substanceIndex, float amount, bool inc) => substanceIndex switch {
 		(byte)PlantSubstances.Water => plant.Send(index, inc ? new WaterInc(amount) : new WaterDec(amount)),
 		(byte)PlantSubstances.Energy => plant.Send(index, inc ? new EnergyInc(amount) : new EnergyDec(amount)),
 		_ => throw new IndexOutOfRangeException($"SubstanceIndex out of range: {substanceIndex}")
@@ -430,7 +434,7 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 		PreviousDayProductionInv += production;
 	}
 
-	public void DailySet(float resources, float production)
+	public void DailySet(float resources, float production, float efficiency)
 	{
 		PreviousDayEnvResourcesInv = resources;
 		PreviousDayProductionInv = production;
