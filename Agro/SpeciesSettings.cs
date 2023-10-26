@@ -103,6 +103,17 @@ public class SpeciesSettings
     [JsonPropertyName("SG")]
     public float ShootsGravitaxis { get; set; }
 
+    /// <summary>
+    /// Standard wood growth time (in hours)
+    /// </summary>
+    [JsonPropertyName("WGT")]
+    public float WoodGrowthTime { get; set; }
+    /// <summary>
+    /// Variance of the wood growth time (in hours)
+    /// </summary>
+    [JsonPropertyName("WGTv")]
+    public float WoodGrowthTimeVar { get; set; }
+
     ///<summary>
     /// Maximum branch level that supports leaves (here level denotes the max. subtree depth)
     ///</summary>

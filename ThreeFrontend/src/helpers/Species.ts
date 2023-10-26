@@ -26,6 +26,9 @@ export class Species {
     bendingByLevel = signal(1);
     shootsGravitaxy = signal(0.2);
 
+    woodGrowthTime = signal(100);
+    woodGrowthTimeVar = signal(10);
+
     leafLevel = signal(2);
     leafLength = signal(0.12);
     leafLengthVar = signal(0.02);
@@ -77,6 +80,9 @@ export class Species {
             bendingByLevel: this.bendingByLevel.peek(),
             shootsGravitaxy: this.shootsGravitaxy.peek(),
 
+            woodGrowthTime: this.woodGrowthTime.peek(),
+            woodGrowthTimeVar: this.woodGrowthTimeVar.peek(),
+
             leafLevel: this.leafLevel.peek(),
             leafLength: this.leafLength.peek(),
             leafLengthVar: this.leafLengthVar.peek(),
@@ -119,6 +125,9 @@ export class Species {
         this.apexBending.value = s.apexBending;
         this.bendingByLevel.value = s.bendingByLevel;
         this.shootsGravitaxy.value = s.shootsGravitaxy;
+
+        this.woodGrowthTime.value = s.woodGrowthTime;
+        this.woodGrowthTimeVar.value = s.woodGrowthTimeVar;
 
         this.leafLevel.value = s.leafLevel;
         this.leafLength.value = s.leafLength;
@@ -164,6 +173,9 @@ export class Species {
             TBL: this.bendingByLevel.peek(),
             TBA: 1.0 - this.apexBending.peek(),
             SG: this.shootsGravitaxy.peek(),
+
+            WGT: this.woodGrowthTime.peek() * 24,
+            WGTv: this.woodGrowthTimeVar.peek() * 24,
 
             LV: this.leafLevel.peek(),
             LL: this.leafLength.peek(),

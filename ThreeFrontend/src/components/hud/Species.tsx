@@ -106,6 +106,12 @@ export function SpeciesItem(props: {species: Species, index: number})
             <input min={0} max={1} step={0.01} type="number" name={`shootsGravitaxy-${props.index}`} value={+props.species.shootsGravitaxy.value.toFixed(4)} onChange={e => props.species.shootsGravitaxy.value = parseFloat(e.currentTarget.value)}  />
             <label for={`shootsGravitaxy-${props.index}`}>Shoots gravitaxy</label>
         </div>
+        <div>
+            <input min={1} step={1} type="number" name={`woodGrowthTime-${props.index}`} value={+props.species.woodGrowthTime.value.toFixed(4)} onChange={e => props.species.woodGrowthTime.value = parseFloat(e.currentTarget.value)}  />
+            <label for={`woodGrowthTime-${props.index}`}>Wood growth time (days)</label>
+            <span>var:&nbsp;</span>
+            <input min={0} step={1} type="number" name={`woodGrowthTimeVar-${props.index}`} value={+props.species.woodGrowthTimeVar.value.toFixed(4)} onChange={e => props.species.woodGrowthTimeVar.value = parseFloat(e.currentTarget.value)}  />
+        </div>
         <hr/>
         {/*<div>
             <input min={0} step={1} type="number" name={`leafLevel-${props.index}`} value={+props.species.leafLevel.value} onChange={e => props.species.leafLevel.value = parseInt(e.currentTarget.value)}  />

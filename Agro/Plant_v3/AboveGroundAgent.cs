@@ -102,11 +102,11 @@ public partial struct AboveGroundAgent3 : IPlantAgent
 	public float PreviousDayEnvResources { get; private set; }
 
 	/// <summary>
-	/// Inverse woodyness ∈ [0, 1]. The more woody (towards 0) the less photosynthesis can be achieved.
+	/// Woodyness ∈ [0, 1].
 	/// </summary>
-	float mPhotoFactor;
+	float WoodFactor;
 
-	public readonly float WoodRatio() => 1f - mPhotoFactor;
+	public float WoodRatio() => WoodFactor;
 
 	/// <summary>
 	/// Plant organ, e.g. stem, leaft, fruit
@@ -189,19 +189,19 @@ public partial struct AboveGroundAgent3 : IPlantAgent
 
 	static float EnergyCapacityFunc(float radius, float length, float woodRatio) => 4f * radius * radius * length * MathF.Pow(1f + woodRatio, 3) * EnergyStorageCoef;
 
-	public readonly float EnergyStorageCapacity() => EnergyCapacityFunc(Radius, Length, WoodRatio());
+	public readonly float EnergyStorageCapacity() => EnergyCapacityFunc(Radius, Length, WoodFactor);
 
 	public readonly static Quaternion OrientationUp = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, MathF.PI * 0.5f);
 
 	public const float GrowthRatePerHour = 1 + 1/12; //Let us assume this plant can double volume in 12 hours
 	public readonly float GrowthRatePerTick(AgroWorld world) => GrowthRatePerHour * world.HoursPerTick; //Let us assume this plant can double volume in 12 hours
 
-    public readonly float LifeSupportPerHour() => Length * Radius * (Organ == OrganTypes.Leaf ? LeafThickness : Radius * mPhotoFactor);
+    public readonly float LifeSupportPerHour() => Length * Radius * (Organ == OrganTypes.Leaf ? LeafThickness : Radius * WoodFactor);
 	public readonly float LifeSupportPerTick(AgroWorld world) => LifeSupportPerHour() * world.HoursPerTick;
 
 	public const float mPhotoEfficiency = 0.025f;
 	public const float ExpectedIrradiance = 500f; //in W/m² per hour see https://en.wikipedia.org/wiki/Solar_irradiance
-	public readonly float PhotosynthPerTick(AgroWorld world) => Length * Radius * (Organ == OrganTypes.Leaf ? 2f : TwoPiTenth) * mPhotoFactor * mPhotoEfficiency * ExpectedIrradiance * world.HoursPerTick;
+	public readonly float PhotosynthPerTick(AgroWorld world) => Length * Radius * (Organ == OrganTypes.Leaf ? 2f : TwoPiTenth) * mPhotoEfficiency * ExpectedIrradiance * world.HoursPerTick;
 
     readonly float EnoughEnergy(float? lifeSupportPerHour = null) => (lifeSupportPerHour ?? LifeSupportPerHour()) * 320;
 
@@ -216,7 +216,7 @@ public partial struct AboveGroundAgent3 : IPlantAgent
 		Organ = organ;
 
 		Energy = initialEnergy;
-		mPhotoFactor = 1f;
+		WoodFactor = 0f;
 
 		Water = 0f;
 
@@ -239,7 +239,7 @@ public partial struct AboveGroundAgent3 : IPlantAgent
 			{
 				LengthVar = plant.RNG.NextFloatVar(species.LeafLengthVar);
 				RadiusVar = plant.RNG.NextFloatVar(species.LeafRadiusVar);
-				GrowthTimeVar = plant.RNG.NextFloatVar(species.LeafGrowthTimeVar);
+				GrowthTimeVar = plant.World.HoursPerTick / (species.LeafGrowthTime + plant.RNG.NextFloatVar(species.LeafGrowthTimeVar));
 			}
 			break;
 
@@ -247,7 +247,7 @@ public partial struct AboveGroundAgent3 : IPlantAgent
 			{
 				LengthVar = plant.RNG.NextFloatVar(species.PetioleLengthVar);
 				RadiusVar = plant.RNG.NextFloatVar(species.PetioleRadiusVar);
-				GrowthTimeVar = plant.RNG.NextFloatVar(species.LeafGrowthTimeVar);
+				GrowthTimeVar = plant.World.HoursPerTick / (species.LeafGrowthTime + plant.RNG.NextFloatVar(species.LeafGrowthTimeVar));
 			}
 			break;
 
@@ -256,6 +256,14 @@ public partial struct AboveGroundAgent3 : IPlantAgent
 				LengthVar = species.NodeDistance + plant.RNG.NextFloatVar(species.NodeDistanceVar);
 				RadiusVar = 0f;
 				GrowthTimeVar = 0f;
+			}
+			break;
+
+			case OrganTypes.Stem:
+			{
+				LengthVar = 0f;
+				RadiusVar = 0f;
+				GrowthTimeVar = plant.World.HoursPerTick / (species.WoodGrowthTime + plant.RNG.NextFloatVar(species.WoodGrowthTimeVar));
 			}
 			break;
 
@@ -309,13 +317,13 @@ public partial struct AboveGroundAgent3 : IPlantAgent
 		if (Organ == OrganTypes.Leaf && Water > 0f)
 		{
 			var approxLight = world.Irradiance.GetIrradiance(formation, formationID); //in Watt per Hour per m²
-			if (approxLight > 0.01f && mPhotoFactor > 0f)
+			if (approxLight > 0.01f)
 			{
 				//var airTemp = world.GetTemperature(timestep);
 				//var surface = Length * Radius * (Organ == OrganTypes.Leaf ? 2f : TwoPi);
 				var surface = Length * Radius * 2f;
 				//var possibleAmountByLight = surface * approxLight * mPhotoFactor * (Organ != OrganTypes.Leaf ? 0.1f : 1f);
-				var possibleAmountByLight = surface * approxLight * mPhotoFactor;
+				var possibleAmountByLight = surface * approxLight;
 				var possibleAmountByWater = Water;
 				// var possibleAmountByCO2 = airTemp >= plant.VegetativeHighTemperature.Y
 				// 	? 0f
@@ -354,7 +362,7 @@ public partial struct AboveGroundAgent3 : IPlantAgent
 			case OrganTypes.Stem:
 				if (DominanceLevel > 1 && formation.GetDominance(Parent) < DominanceLevel)
 				{
-					var h = 4f * formation.GetBaseCenter(formationID).Y / formation.Height;
+					var h = 5f * formation.GetBaseCenter(formationID).Y / formation.Height;
 					var e = 4f * PreviousDayEnvResources / formation.DailyEfficiencyMax;
 					var q = 1f + h*h + 20f * Radius + e * e;
 					var p = 0.004f / (q * q);
@@ -453,7 +461,7 @@ public partial struct AboveGroundAgent3 : IPlantAgent
 						if (currentSize.X < sizeLimit.X && currentSize.Y < sizeLimit.Y)
 						{
 							//formation.GetDailyProduction(formationID) *
-							growth = Math.Min(1f, plant.WaterBalance) * sizeLimit * world.HoursPerTick / (species.LeafGrowthTime + GrowthTimeVar);
+							growth = Math.Min(1f, plant.WaterBalance) * sizeLimit * GrowthTimeVar;
 							var resultingSize = Vector2.Min(currentSize + growth, sizeLimit);
 							growth = resultingSize - currentSize;
 						}
@@ -464,7 +472,7 @@ public partial struct AboveGroundAgent3 : IPlantAgent
 						var sizeLimit = new Vector2(species.PetioleLength + LengthVar, species.PetioleRadius + RadiusVar);
 						if (currentSize.X < sizeLimit.X && currentSize.Y < sizeLimit.Y)
 						{
-							growth = Math.Min(1f, plant.WaterBalance) * sizeLimit * world.HoursPerTick / (species.LeafGrowthTime + GrowthTimeVar);
+							growth = Math.Min(1f, plant.WaterBalance) * sizeLimit * GrowthTimeVar;
 							var resultingSize = Vector2.Min(currentSize + growth, sizeLimit);
 							growth = resultingSize - currentSize;
 
@@ -478,7 +486,7 @@ public partial struct AboveGroundAgent3 : IPlantAgent
 					{
 						var energyReserve = Math.Clamp(Energy / EnergyStorageCapacity(), 0f, 1f);
 						var waterReserve = Math.Min(1f, plant.WaterBalance);
-						growth = new Vector2(0.5f + mPhotoFactor * 0.5f, 0.01f) * (1e-3f * dominanceFactor * energyReserve * waterReserve * world.HoursPerTick);
+						growth = new Vector2(1f, 0.01f) * (1e-3f * dominanceFactor * energyReserve * waterReserve * world.HoursPerTick);
 
 						var parentRadius = Parent >= 0 ? formation.GetBaseRadius(Parent) : float.MaxValue;
 						if (currentSize.Y + growth.Y > parentRadius)
@@ -497,20 +505,20 @@ public partial struct AboveGroundAgent3 : IPlantAgent
 					break;
 				};
 
-
 				Length += growth.X;
 				Radius += growth.Y;
 
 				//TDMI maybe do it even if no growth
 				if (Organ == OrganTypes.Stem || Organ == OrganTypes.Meristem)
 				{
-					// or world.HoursPerTick / 8760f; means it takes 1 year
-					mPhotoFactor -= 8f * growth.Y;
-					mPhotoFactor = Math.Clamp(mPhotoFactor, 0f, 1f);
+					if (Organ == OrganTypes.Stem && WoodFactor < 1f && (Parent < 0 || WoodFactor <= formation.GetWoodRatio(Parent)))
+						WoodFactor = Math.Min(WoodFactor + GrowthTimeVar, 1f);
+
 					//chaining (meristem continues in a new segment)
 					if (Organ == OrganTypes.Meristem && Length > LengthVar)
 					{
 						Organ = OrganTypes.Stem;
+						GrowthTimeVar = plant.World.HoursPerTick / (species.WoodGrowthTime + plant.RNG.NextFloatVar(species.WoodGrowthTimeVar));
 						wasMeristem = true;
 						float prevResources, prevProduction;
 						if (timestep - BirthTime > world.HoursPerTick)
