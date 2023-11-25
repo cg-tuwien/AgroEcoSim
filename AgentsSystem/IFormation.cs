@@ -8,10 +8,8 @@ public interface IFormation
 {
     void Census();
     void Tick(uint timestep);
-    void ProcessTransactions(uint timestep);
     void DeliverPost(uint timestep);
     bool HasUndeliveredPost { get; }
-    bool HasUnprocessedTransactions { get; }
     ///<summary>
     ///Number of agents in this formation
     ///</summary>

@@ -80,8 +80,6 @@ internal class TreeCacheData
 public abstract class FormationTree<T> : Formation<T> where T : struct, ITreeAgent
 {
 	readonly Action<T[], int[]> Reindex;
-
-	readonly TransactionsBox Transactions = new();
 	readonly List<T> Inserts = new();
 	readonly List<int> InsertAncestors = new();
 
@@ -352,8 +350,6 @@ public abstract class FormationTree<T> : Formation<T> where T : struct, ITreeAge
 	protected virtual void PrepareDeaths() { }
 	protected virtual void PostCensusPositive() { }
 	protected virtual void PostCensusNegative() { }
-
-	public override bool HasUnprocessedTransactions => Transactions.AnyTransactions;
 
 	///////////////////////////
 	#region READ METHODS

@@ -109,12 +109,6 @@ public partial class PlantFormation2 : IPlantFormation
 	public bool Send(int recipient, IMessage<UnderGroundAgent2> msg) => UG.SendProtected(recipient, msg);
 	public bool Send(int recipient, IMessage<AboveGroundAgent3> msg) => AG.SendProtected(recipient, msg);
 
-	public bool TransactionAG(int srcIndex, int dstIndex, PlantSubstances substance, float amount) => AG.SendProtected(srcIndex, dstIndex, substance, amount);
-	public bool TransactionUG(int srcIndex, int dstIndex, PlantSubstances substance, float amount) => UG.SendProtected(srcIndex, dstIndex, substance, amount);
-
-	public bool Transaction(bool ag, int srcIndex, int dstIndex, PlantSubstances substance, float amount) =>
-		ag ? AG.SendProtected(srcIndex, dstIndex, substance, amount) : UG.SendProtected(srcIndex, dstIndex, substance, amount);
-
 	public void SeedDeath()
 	{
 		DeathSeed = true;
@@ -389,14 +383,6 @@ public partial class PlantFormation2 : IPlantFormation
 		// 	Console.WriteLine("R: {0}x{1} E: {2} W: {3}", UnderGround[0].Radius, UnderGround[0].Length, UnderGround[0].Energy, UnderGround[0].Water);
 	}
 
-	public void ProcessTransactions(uint timestep)
-	{
-		if (UG.HasUnprocessedTransactions)
-			UG.ProcessTransactions(timestep);
-		if (AG.HasUnprocessedTransactions)
-			AG.ProcessTransactions(timestep);
-	}
-
 	public (uint, uint, uint) GeometryStats()
 	{
 		uint triangles = 0, sensors = 0;
@@ -484,9 +470,6 @@ public partial class PlantFormation2 : IPlantFormation
     }
 
 	public bool HasUndeliveredPost => PostboxSeed.AnyMessages || UG.HasUndeliveredPost || AG.HasUndeliveredPost;// || NeedsGathering;
-
-	public bool HasUnprocessedTransactions => UG.HasUnprocessedTransactions || AG.HasUnprocessedTransactions;
-
 	public int Count => SeedAlive ? 1 : UG.Count + AG.Count;
 
 	///////////////////////////

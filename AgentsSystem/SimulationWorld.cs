@@ -45,7 +45,6 @@ public partial class SimulationWorld
 		for(int i = 0; i < simulationLength; ++i, ++Timestep)
 		{
 			TickSequential();
-			ProcessTransactionsSequential();
 			DeliverPostSequential();
 
 			CensusSequential();
@@ -58,7 +57,6 @@ public partial class SimulationWorld
 		for(int i = 0; i < simulationLength; ++i, ++Timestep)
 		{
 			TickParallel();
-			ProcessTransactionsParallel();
 			DeliverPostParallel();
 
 			CensusParallel();
@@ -82,37 +80,6 @@ public partial class SimulationWorld
 	}
 
 	void TickParallel() => Parallel.For(0, Formations.Count, i => Formations[i].Tick(Timestep));
-
-	public void ProcessTransactionsSequential()
-	{
-		var anyDelivered = true;
-		while(anyDelivered)
-		{
-			anyDelivered = false;
-			for(int i = 0; i < Formations.Count; ++i)
-				if (Formations[i].HasUnprocessedTransactions)
-				{
-					Formations[i].ProcessTransactions(Timestep);
-					anyDelivered = true;
-				}
-		}
-	}
-
-	public void ProcessTransactionsParallel()
-	{
-		var anyDelivered = true;
-		while(anyDelivered)
-		{
-			anyDelivered = false;
-			Parallel.For(0, Formations.Count, i => {
-				if (Formations[i].HasUnprocessedTransactions)
-				{
-					Formations[i].ProcessTransactions(Timestep);
-					anyDelivered = true;
-				}
-			});
-		}
-	}
 
 	public void DeliverPostSequential()
 	{

@@ -425,11 +425,8 @@ public partial class SoilFormationNew : IFormation, IGrid3D
 
 	[M(AI)] void IFormation.Census() {}
 
-	[M(AI)] void IFormation.ProcessTransactions(uint timestep) { }
-
 	[M(AI)] void IFormation.DeliverPost(uint timestep) {}
 	bool IFormation.HasUndeliveredPost => false;
-	bool IFormation.HasUnprocessedTransactions => false;
 	///<summary>
 	///Number of agents in this formation
 	///</summary>
