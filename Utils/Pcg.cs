@@ -76,7 +76,6 @@ public class Pcg
 	const ulong Multiplier = 6364136223846793005ul;
 	[IgnoreDataMember]
 	const double ToDouble01 = 1.0 / uint.MaxValue;
-	const float ToFloat01 = 1f / uint.MaxValue;
 
 	// This attribute ensures that every thread will get its own instance of PCG.
 	// An alternative, since PCG supports streams, is to use a different stream per
@@ -253,12 +252,12 @@ public class Pcg
 
 	[M(AI)]public ulong NextULong() => (((ulong)NextUInt()) << 32) | NextUInt();
 
-	[M(AI)]public float NextFloat() => NextUInt() * ToFloat01;
+	[M(AI)]public float NextFloat() => (float)(NextUInt() * ToDouble01);
 
 	[M(AI)]public float NextPositiveFloat(float maxInclusive)
 	{
 		if (maxInclusive <= 0) return 0f;
-		return NextUInt() * ToFloat01 * maxInclusive;
+		return (float)(NextUInt() * ToDouble01 * maxInclusive);
 	}
 
 	[M(AI)]public float NextFloat(float minInclusive, float maxInclusive)
@@ -266,10 +265,10 @@ public class Pcg
 		if (maxInclusive < minInclusive)
 			throw new ArgumentException("Max must be larger than min");
 
-		return NextUInt() * ToFloat01 * (maxInclusive - minInclusive) + minInclusive;
+		return (float)(NextUInt() * ToDouble01 * (maxInclusive - minInclusive) + minInclusive);
 	}
 
-    [M(AI)]public float NextFloatVar(float amplitude) => 2f * amplitude * (NextUInt() * ToFloat01 - 0.5f);
+    [M(AI)]public float NextFloatVar(float amplitude) => 2f * amplitude * (float)(NextUInt() * ToDouble01 - 0.5);
 
     [M(AI)]public float[] NextFloats(int count)
 	{
@@ -472,8 +471,8 @@ public class Pcg
 		_increment = reader.ReadUInt64();
 	}
 
-	public static float AccumulatedProbability(float singleProbability, int tryouts) => 1f - MathF.Pow(1f - singleProbability, tryouts);
-	public static uint AccumulatedProbabilityUInt(float singleProbability, int tryouts) => (uint)((1f - MathF.Pow(1f - singleProbability, tryouts)) * uint.MaxValue);
+	[M(AI)]public static float AccumulatedProbability(float singleProbability, int tryouts) => 1f - MathF.Pow(1f - singleProbability, tryouts);
+	[M(AI)]public static uint AccumulatedProbabilityUInt(float singleProbability, int tryouts) => (uint)((1f - MathF.Pow(1f - singleProbability, tryouts)) * uint.MaxValue);
 
 	[M(AI)]public bool NextFloatAccum(float singleProbability, int tryouts) => NextFloat() < AccumulatedProbability(singleProbability, tryouts);
 	[M(AI)]public bool NextFloatVarAccum(float variance, float singleProbability, int tryouts) => NextFloatVar(variance) < AccumulatedProbability(singleProbability, tryouts);

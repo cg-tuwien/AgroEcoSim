@@ -8,6 +8,7 @@ using System.Diagnostics;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using M = System.Runtime.CompilerServices.MethodImplAttribute;
+using System.Collections;
 
 namespace Agro;
 
@@ -45,7 +46,6 @@ public partial class SoilFormationNew : IFormation, IGrid3D
 
 	readonly List<(PlantFormation2 Plant, float Amount)>[] WaterRequestsSeeds;
 	readonly List<(PlantSubFormation2<UnderGroundAgent2> Plant, int Part, float Amount)>[] WaterRequestsRoots;
-
 	public float Depth => Size.Z * CellSize.Z;
 
 	public SoilFormationNew(AgroWorld world, Vector3i size, Vector3 metricSize)
@@ -117,7 +117,7 @@ public partial class SoilFormationNew : IFormation, IGrid3D
 					MaxLevel = h;
 			}
 
-		//Fora agiven x,y the ordering in Water and other compressed 1D arrays goes as: [floor, floor + 1, ... , ground -1, ground] and then goes the next (x,y) pair.
+		//For a agiven x,y the ordering in Water and other compressed 1D arrays goes as: [floor, floor + 1, ... , ground -1, ground] and then goes the next (x,y) pair.
 
 		CoordsCache = new (ushort, ushort, ushort)[addr];
 		for(ushort x = 0; x < size.X; ++x)
@@ -240,7 +240,7 @@ public partial class SoilFormationNew : IFormation, IGrid3D
 		var evaporizationSoilFactorPerStep = MathF.Pow(1f - evaporizationFactorPerHour, World.HoursPerTick);
 		var evaporizationSurfaceFactorPerStep = MathF.Pow(1f - Math.Min(1f, evaporizationFactorPerHour * (surfaceTemp * surfaceTemp) / 10), World.HoursPerTick);
 
-		var sumBefore = Water.Sum();
+		//var sumBefore = Water.Sum();
 
 		//1. Receive RAIN
 		var rainPerCell = World.GetWater(timestep) * CellSurface; //shadowing not taken into account
@@ -284,7 +284,7 @@ public partial class SoilFormationNew : IFormation, IGrid3D
 				GravityDiffusion(srcIdx, distribute, GroundLevels[i], 0, 0);
 		}
 
-		var sumAfter = Water.Sum();
+		//var sumAfter = Water.Sum();
 		//Console.WriteLine($"Water in system {sumAfter} {(sumAfter < sumBefore ? "---------" : "")}");
 
 		// //for(int t = 0; t < Substeps; ++t)
@@ -466,7 +466,7 @@ public partial class SoilFormationNew : IFormation, IGrid3D
 			WaterRequestsSeeds[index].Add((plant, amount));
 	}
 
-	void ProcessRequests()
+	public void ProcessRequests()
 	{
 		for(int i = 0; i < WaterRequestsRoots.Length; ++i)
 		{
@@ -488,48 +488,51 @@ public partial class SoilFormationNew : IFormation, IGrid3D
 					sum += reqs[j].Amount;
 			}
 
-			if (sum <= Water[i])
+			if (sum > 0)
 			{
-				if (WaterRequestsSeeds[i].Count > 0)
+				if (sum <= Water[i])
 				{
-					var reqs = WaterRequestsSeeds[i];
-					var limit = reqs.Count;
-					for(int j = 0; j < limit; ++j)
-						reqs[j].Plant.Send(0, new SeedAgent.WaterInc(reqs[j].Amount));
-					reqs.Clear();
-				}
-
-				if (WaterRequestsRoots[i].Count > 0)
-				{
-					var reqs = WaterRequestsRoots[i];
-					var limit = reqs.Count;
-					for(int j = 0; j < limit; ++j)
+					if (WaterRequestsSeeds[i].Count > 0)
 					{
-						var (Plant, Part, Amount) = reqs[j];
-						Plant?.SendProtected(Part, new UnderGroundAgent2.WaterInc(Amount));
+						var reqs = WaterRequestsSeeds[i];
+						var limit = reqs.Count;
+						for(int j = 0; j < limit; ++j)
+							reqs[j].Plant.Send(0, new SeedAgent.WaterInc(reqs[j].Amount));
+						reqs.Clear();
 					}
-					reqs.Clear();
-				}
-			}
-			else
-			{
-				var factor = Water[i] / sum;
-				if (WaterRequestsSeeds[i].Count > 0)
-				{
-					var reqs = WaterRequestsSeeds[i];
-					var limit = reqs.Count;
-					for(int j = 0; j < limit; ++j)
-						reqs[j].Plant.Send(0, new SeedAgent.WaterInc((float)(reqs[j].Amount * factor)));
-					reqs.Clear();
-				}
 
-				if (WaterRequestsRoots[i].Count > 0)
+					if (WaterRequestsRoots[i].Count > 0)
+					{
+						var reqs = WaterRequestsRoots[i];
+						var limit = reqs.Count;
+						for(int j = 0; j < limit; ++j)
+						{
+							var (Plant, Part, Amount) = reqs[j];
+							Plant?.SendProtected(Part, new UnderGroundAgent2.WaterInc(Amount));
+						}
+						reqs.Clear();
+					}
+				}
+				else
 				{
-					var reqs = WaterRequestsRoots[i];
-					var limit = reqs.Count;
-					for(int j = 0; j < limit; ++j)
-						reqs[j].Plant.SendProtected(reqs[j].Part, new UnderGroundAgent2.WaterInc(reqs[j].Amount, (float)factor));
-					reqs.Clear();
+					var factor = Water[i] / sum;
+					if (WaterRequestsSeeds[i].Count > 0)
+					{
+						var reqs = WaterRequestsSeeds[i];
+						var limit = reqs.Count;
+						for(int j = 0; j < limit; ++j)
+							reqs[j].Plant.Send(0, new SeedAgent.WaterInc((float)(reqs[j].Amount * factor)));
+						reqs.Clear();
+					}
+
+					if (WaterRequestsRoots[i].Count > 0)
+					{
+						var reqs = WaterRequestsRoots[i];
+						var limit = reqs.Count;
+						for(int j = 0; j < limit; ++j)
+							reqs[j].Plant.SendProtected(reqs[j].Part, new UnderGroundAgent2.WaterInc(reqs[j].Amount, (float)factor));
+						reqs.Clear();
+					}
 				}
 			}
 		}

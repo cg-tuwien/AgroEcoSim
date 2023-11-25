@@ -86,6 +86,10 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 
 	#endregion
 
+	#region Variances
+	float LengthVar;
+	#endregion
+
 	///////////////////////////
 	#region Constants and computed data
 	///////////////////////////
@@ -108,7 +112,7 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 	/// <summary>
 	/// Water volume in m³ that can be absorbed per m² of root surface per hour
 	/// </summary>
-	public const float WaterAbsortionRatio = 0.05f;
+	public const float WaterAbsortionRatio = 500f;
 
 	/// <summary>
 	/// Water volume in m³ which can be absorbed from soil per hour
@@ -183,7 +187,7 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 
 	#endregion
 
-	public UnderGroundAgent2(uint timestep, int parent, Quaternion orientation, float initialEnergy, float initialWater = 0f, float initialWaterIntake = 1f, float radius = InitialRadius, float length = InitialLength, float initialResources = 0f, float initialProduction = 0f)
+	public UnderGroundAgent2(PlantFormation2 plant, uint timestep, int parent, Quaternion orientation, float initialEnergy, float initialWater = 0f, float initialWaterIntake = 1f, float radius = InitialRadius, float length = InitialLength, float initialResources = 0f, float initialProduction = 0f)
 	{
 		BirthTime = timestep;
 		Parent = parent;
@@ -202,6 +206,8 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 		CurrentDayProductionInv = 0f;
 		PreviousDayEnvResourcesInv = initialResources;
 		CurrentDayEnvResourcesInv = 0f;
+
+		LengthVar = PlantFormation2.RootSegmentLength * 0.6f + plant.RNG.NextFloatVar(PlantFormation2.RootSegmentLength * 0.4f);
 	}
 
 	/// <summary>
@@ -218,6 +224,22 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 	///</summary>
 	public void CensusUpdateParent(int newParent) => Parent = newParent;
 
+	const float BranchingFactor = 0.02f;
+	static float[] BranchingByChildren = new[]{
+		BranchingFactor * 1024f,
+		BranchingFactor * 6144f,
+		BranchingFactor * 524288f,
+		BranchingFactor * 100663296f,
+		BranchingFactor * 1879048192f,
+		//BranchingFactor * 34359738368f,
+		BranchingFactor * 618475290624f,
+		//BranchingFactor * 10995116277760f,
+		//BranchingFactor * 193514046488576f,
+		BranchingFactor * 3377699720527872f,
+		//BranchingFactor * 58546795155816448f,
+		//BranchingFactor * 1008806316530991104f,
+		//BranchingFactor * 17293822569102704640f,
+		float.MaxValue};
 	public void Tick(IFormation _formation, int formationID, uint timestep)
 	{
 		//Console.WriteLine($"{timestep} x {formationID}: w={Water} e={Energy} waf={WaterAbsorbtionFactor}");
@@ -227,76 +249,90 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 		var species = plant.Parameters;
 
 		//TODO perhaps it should somehow reflect temperature
-		var diameter = 2f * Radius;
-		var lr = Length * diameter; //area of the side face
-		var volume = lr * diameter; //also this is the volume
-		var lifeSupportPerHour = volume * mWaterAbsorbtionFactor;
+		var lifeSupportPerHour = LifeSupportPerHour();
 
 		//life support
 		Energy -= lifeSupportPerHour * world.HoursPerTick;
 
 		var children = formation.GetChildren(formationID);
-
+		//Debug.WriteLine($"{timestep} / {formationID}  W {Water} E {Energy} L {Length} R {Radius}");
 		//var waterFactor = Math.Clamp(Water / WaterStorageCapacity(), 0f, 1f);
 		///////////////////////////
 		#region Growth
 		///////////////////////////
-		if (Energy > lifeSupportPerHour * 36) //maybe make it a factor storedEnergy/lifeSupport so that it grows fast when it has full storage
+		if (Energy > lifeSupportPerHour * 240) //maybe make it a factor storedEnergy/lifeSupport so that it grows fast when it has full storage
 		{
 			var childrenCount = children.Count + 1;
 			//TODO MI 2023-03-07 Incorporate water capacity factor
-			var growthBase = world.HoursPerTick * PreviousDayProductionInv / formation.DailyProductionMax;
-			var widthGrowth = 2e-5f * growthBase / (MathF.Pow(childrenCount, GrowthDeclineByExpChildren / 2) * MathF.Pow(volume, 0.1f)); //just optimized the number of multiplications
-			var newRadius = Radius + widthGrowth;
-			if (Parent == -1 || formation.GetBaseRadius(Parent) >= newRadius)
+			if (formation.DailyProductionMax > 0)
 			{
-				var lengthGrowth = 3e-4f * growthBase / (MathF.Pow(childrenCount, GrowthDeclineByExpChildren + 1) * MathF.Pow(lr * Length, 0.1f));
+				var growthBase = PreviousDayProductionInv / formation.DailyProductionMax;
+				var radiusChildGrowth = childrenCount <= 1 ? 1 : MathF.Pow(childrenCount, GrowthDeclineByExpChildren / 2);
+				var (radiusGrowthBase, lengthGrowthBase) = (3e-6f * growthBase, 8e-5f * growthBase);
+				var newRadius = Radius;
+				var newLength = Length;
+				var newWaterAbsorbtion = mWaterAbsorbtionFactor;
+				bool grows = true;
+				var localSubtree = new List<UnderGroundAgent2>();
+				//for(int i = 0; i < world.HoursPerTick && grows; ++i)
+				{
+					var ld = newLength * newRadius * 4f;
+					var volume = ld * newLength;
+					grows = false;
+					if (volume * newWaterAbsorbtion < 288)
+					{
+						float maxRadius = Parent == -1 ? plant.AG.GetBaseRadius(0) * 1.25f : formation.GetBaseRadius(Parent);
+						var compute = newRadius <= maxRadius;
 
-				Length += lengthGrowth;
+						if (compute)
+						{
+							var d = 1f - 0.7f * formation.GetRelDepth(formationID);
+							var radiusGrowth = radiusGrowthBase * d * d / (radiusChildGrowth * MathF.Pow(ld * newRadius, 0.2f));
+							newRadius += radiusGrowth;
+							if (newRadius > maxRadius) newRadius = maxRadius;
+							newWaterAbsorbtion -= radiusGrowth * childrenCount;  //become wood faster with children
+							grows = true;
+							if (newWaterAbsorbtion < 0f) newWaterAbsorbtion = 0f;
+						}
+
+						if (childrenCount == 1)
+						{
+							newLength += lengthGrowthBase / MathF.Pow(ld * newLength, 0.1f);
+							grows = true;
+						}
+					}
+				}
+
 				Radius = newRadius;
-
-				mWaterAbsorbtionFactor -= widthGrowth * childrenCount;  //become wood faster with children
-				if (mWaterAbsorbtionFactor < 0f)
-					mWaterAbsorbtionFactor = 0f;
+				Length = newLength;
+				mWaterAbsorbtionFactor = newWaterAbsorbtion;
 			}
 
-			const float yFactor = 0.5f;
-			const float zFactor = 0.2f;
 			//Chaining
-			if (children.Count == 0 && Length > PlantFormation2.RootSegmentLength * 0.5f + plant.RNG.NextPositiveFloat(PlantFormation2.RootSegmentLength * 0.5f))
+			if (children.Count == 0 && Length >= LengthVar)
 			{
-				var ax = plant.RNG.NextFloat(-MathF.PI * yFactor, MathF.PI * yFactor);
-				var qx = Quaternion.CreateFromAxisAngle(Vector3.UnitX, ax);
-				var az = plant.RNG.NextFloat(-MathF.PI * zFactor, MathF.PI * zFactor);
-				var qz = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, az);
-				//var q = qz * qx * Orientation;
-				var orientation = Orientation * qx * qz;
-				var y = Vector3.Transform(Vector3.UnitX, orientation).Y;
-				if (y > 0)
-					orientation = Quaternion.Slerp(orientation, OrientationDown, plant.RNG.NextPositiveFloat(MathF.Pow(y, 1f/ world.HoursPerTick)));
-				else
-					orientation = Quaternion.Slerp(orientation, OrientationDown, plant.RNG.NextPositiveFloat(species.RootsGravitaxis));
-
 				var energy = EnergyCapacityFunc(InitialRadius, InitialLength);
-				formation.Birth(new(timestep, formationID, orientation, energy, initialResources: PreviousDayEnvResourcesInv, initialProduction: PreviousDayProductionInv));
+				formation.Birth(new(plant, timestep, formationID, RandomOrientation(plant, species, Orientation), energy, initialResources: PreviousDayEnvResourcesInv, initialProduction: PreviousDayProductionInv));
 				Energy -= 2f * energy; //twice because some energy is needed for the birth itself
 				//Console.WriteLine($"New root chained to {formationID} at time {timestep}");
 			}
 
 			//Branching
-			if (children.Count > 0)
+			if (children.Count != 0 && children.Count <= 8 && Radius > 1e-3f)
 			{
+				// const float yFactor = 0.5f;
+				// const float zFactor = 0.2f;
 				//Debug.WriteLine($"{plant.WaterBalance * species.RootsSparsity * MathF.Pow(childrenCount, childrenCount << 2) / (world.HoursPerTick * PreviousDayProductionInv)} = {plant.WaterBalance} * {species.RootsSparsity} * {MathF.Pow(childrenCount, childrenCount << 2)} / ({world.HoursPerTick * PreviousDayProductionInv})");
 				//Debug.WriteLine($"{PreviousDayEnvResourcesInv} {PreviousDayProductionInv}");
-				var pool = plant.WaterBalance * species.RootsSparsity * MathF.Pow(childrenCount, childrenCount << 2) / (world.HoursPerTick * PreviousDayProductionInv);
-				if (pool < uint.MaxValue && plant.RNG.NextUInt((uint)pool) == 1 && (PreviousDayProductionInv >= 1f || PreviousDayProductionInv > plant.RNG.NextFloat())) //TODO MI 2023-03-07 Revive waterfactor weighting
+				//Debug.WriteLine($"{PreviousDayProductionInv} / ({plant.WaterBalanceUG} * {species.RootsSparsity} * {BranchingByChildren[children.Count]}) = {PreviousDayProductionInv / (plant.WaterBalance * plant.WaterBalance * species.RootsSparsity * BranchingByChildren[children.Count])} -> {Utils.Pcg.AccumulatedProbability(PreviousDayProductionInv / (plant.WaterBalance * species.RootsSparsity * BranchingByChildren[childrenCount]), world.HoursPerTick)}");
+				if (plant.RNG.NextFloatAccum(PreviousDayProductionInv / (plant.WaterBalanceUG * species.RootsSparsity * BranchingByChildren[childrenCount]), world.HoursPerTick))
 				{
-					var qx = Quaternion.CreateFromAxisAngle(Vector3.UnitX, plant.RNG.NextFloat(-MathF.PI * yFactor, MathF.PI * yFactor));
-					var qz = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, plant.RNG.NextFloat(MathF.PI * zFactor, MathF.PI * zFactor * 2f));
-					//var q = qz * qx * Orientation;
-					var orientation = Orientation * qx * qz;
+					// var qx = Quaternion.CreateFromAxisAngle(Vector3.UnitX, plant.RNG.NextFloat(-MathF.PI * yFactor, MathF.PI * yFactor));
+					// var qz = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, plant.RNG.NextFloat(MathF.PI * zFactor, MathF.PI * zFactor * 2f));
+					// //var q = qz * qx * Orientation;
+					// var orientation = Orientation * qx * qz;
 					var energy = EnergyCapacityFunc(InitialRadius, InitialLength);
-					formation.Birth(new(timestep, formationID, orientation, energy, initialResources: PreviousDayEnvResourcesInv, initialProduction: PreviousDayProductionInv));
+					formation.Birth(new(plant, timestep, formationID, RandomOrientation(plant, species, Orientation), energy, initialResources: PreviousDayEnvResourcesInv, initialProduction: PreviousDayProductionInv));
 					Energy -= 2f * energy; //twice because some energy is needed for the birth itself
 					//Console.WriteLine($"New root branched to {formationID} at time {timestep}");
 				}
@@ -346,6 +382,24 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 		else
 			mWaterAbsorbtionFactor = 0f;
 		#endregion
+	}
+
+	private static Quaternion RandomOrientation(PlantFormation2 plant, SpeciesSettings species, Quaternion orientation)
+	{
+		//var range = 0.2f * MathF.PI * (species.TwigsBendingLevel * DominanceLevel - species.TwigsBendingApical);
+		//var factor = species.TwigsBending * range;
+		var a = plant.RNG.NextFloatVar(0.8f);
+		var b = plant.RNG.NextFloatVar(0.8f);
+		orientation *= Quaternion.CreateFromAxisAngle(Vector3.UnitY, a) * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, b);
+
+		var y = Vector3.Transform(Vector3.UnitX, orientation).Y;
+
+		if (y > 0)
+			orientation = Quaternion.Slerp(orientation, PlantFormation2.AdjustUpBase(orientation, up: false), plant.RNG.NextPositiveFloat(y));
+		else //if (species.RootsGravitaxis > 0)
+			orientation = Quaternion.Slerp(orientation, PlantFormation2.AdjustUpBase(orientation, up: false), plant.RNG.NextPositiveFloat(species.RootsGravitaxis));
+
+		return orientation;
 	}
 
 	public bool NewDay(uint timestep, byte ticksPerDay)

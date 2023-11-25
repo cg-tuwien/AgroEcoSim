@@ -95,10 +95,9 @@ public struct SeedAgent : IAgent
 			if (Water >= GerminationThreshold) //GERMINATION
 			{
 				Debug.WriteLine($"GERMINATION at {timestep}");
-				//var initialYawAngle = plant.RNG.NextFloat(-MathF.PI, MathF.PI);
-				var initialYawAngle = 0;
+				var initialYawAngle = plant.RNG.NextFloat(-MathF.PI, MathF.PI);
 				var initialYaw = Quaternion.CreateFromAxisAngle(Vector3.UnitY, initialYawAngle);
-				plant.UG.Birth(new UnderGroundAgent2(timestep, -1, initialYaw * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, -0.5f * MathF.PI), Water * 0.4f, initialResources: 1f, initialProduction: 1f));
+				plant.UG.Birth(new UnderGroundAgent2(plant, timestep, -1, initialYaw * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, -0.5f * MathF.PI), Water * 0.4f, initialResources: 1f, initialProduction: 1f));
 
 				var baseStemOrientation = initialYaw * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, 0.5f * MathF.PI);
 				var meristem = new AboveGroundAgent3(plant, -1, OrganTypes.Meristem, baseStemOrientation, Water * 0.4f, initialResources: 1f, initialProduction: 1f);
@@ -127,11 +126,9 @@ public struct SeedAgent : IAgent
 							if (soilTemperature < mVegetativeTemperature.Y)
 								amount *= (soilTemperature - mVegetativeTemperature.X) / (mVegetativeTemperature.Y - mVegetativeTemperature.X);
 
-							Radius = MathF.Pow(Radius * Radius * Radius + amount * PiV, Third); //use the rest for growth
 							waterRequest += amount;
 						}
 					}
-					//Water +=
 					soil.RequestWater(source, waterRequest, plant);
 				}
 			}

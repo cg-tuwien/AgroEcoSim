@@ -606,89 +606,95 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 	{
 		// Roots.Clear();
 		// Roots.AddRange(RootsTMP);
-		var (src, dst) = SrcDst();
-		Array.Copy(src, dst, src.Length);
-		Post.Process(timestep, dst);
+		if (Post.AnyMessages)
+		{
+			var (src, dst) = SrcDst();
+			Array.Copy(src, dst, src.Length);
+			Post.Process(timestep, dst);
 
-		ReadTMP = !ReadTMP;
+			ReadTMP = !ReadTMP;
+		}
 	}
 
 	public void ProcessTransactions(uint timestep)
 	{
-		var (src, dst) = SrcDst();
-		Array.Copy(src, dst, src.Length);
-		for(int substanceIndex = 0; substanceIndex < Transactions.Buffer.Count; ++substanceIndex)
-			if (Transactions.Buffer[substanceIndex].Count > 0)
-			{
-				var buffer = Transactions.Buffer[substanceIndex];
-
-				//accumulate all transactions on per-agent basis
-				//so positive sum means the agent will in sum receive some substance
-				//negative sum means it will donate some
-				var sumPerAgent = new float[src.Length];
-				for(int j = 0; j < buffer.Count; ++j)
+		if (Transactions.Buffer.Count > 0)
+		{
+			var (src, dst) = SrcDst();
+			Array.Copy(src, dst, src.Length);
+			for(int substanceIndex = 0; substanceIndex < Transactions.Buffer.Count; ++substanceIndex)
+				if (Transactions.Buffer[substanceIndex].Count > 0)
 				{
-					var amount = buffer[j].Amount;
-					sumPerAgent[buffer[j].SrcIndex] -= amount;
-					sumPerAgent[buffer[j].DstIndex] += amount;
-				}
+					var buffer = Transactions.Buffer[substanceIndex];
 
-				//decrease the requested amount if the capacity is not sufficient
-				var scale = new float[src.Length];
-				Array.Fill(scale, 1f);
-				var anyScale = false;
-				for(int d = 0; d < sumPerAgent.Length; ++d)
-				{
-					var dstCapacity = GetCapacity(Plant.World, d, substanceIndex);
-					if (sumPerAgent[d] > dstCapacity)
-					{
-						scale[d] = dstCapacity / sumPerAgent[d];
-						anyScale = true;
-					}
-				}
-
-				//apply the decrease and recompute the sums
-				var updated = new float[buffer.Count];
-				if (anyScale)
-				{
-					Array.Fill(sumPerAgent, 0f);
+					//accumulate all transactions on per-agent basis
+					//so positive sum means the agent will in sum receive some substance
+					//negative sum means it will donate some
+					var sumPerAgent = new float[src.Length];
 					for(int j = 0; j < buffer.Count; ++j)
 					{
-						var d = buffer[j].DstIndex;
-						var amount =  buffer[j].Amount * scale[d];
-						updated[j] = amount;
+						var amount = buffer[j].Amount;
 						sumPerAgent[buffer[j].SrcIndex] -= amount;
-						sumPerAgent[d] += amount;
+						sumPerAgent[buffer[j].DstIndex] += amount;
 					}
+
+					//decrease the requested amount if the capacity is not sufficient
+					var scale = new float[src.Length];
 					Array.Fill(scale, 1f);
-				}
-				for(int j = 0; j < buffer.Count; ++j)
-					updated[j] =  buffer[j].Amount;
-
-				//decrease the donated amount if the requests are higher as the available amount
-				for(int s = 0; s < sumPerAgent.Length; ++s)
-				{
-					var srcAmount = GetAmount(s, substanceIndex);
-					if (-sumPerAgent[s] > srcAmount)
-						scale[s] = srcAmount / -sumPerAgent[s];
-				}
-
-				//apply the decrease and fire respective messages
-				for(int j = 0; j < buffer.Count; ++j)
-				{
-					var s = buffer[j].SrcIndex;
-					var amount = updated[j] * scale[s];
-					if (amount > 0f)
+					var anyScale = false;
+					for(int d = 0; d < sumPerAgent.Length; ++d)
 					{
-						var d = buffer[j].DstIndex;
-						dst[s].ChangeAmount(Plant, s, substanceIndex, amount, increase: false);
-						dst[d].ChangeAmount(Plant, d, substanceIndex, amount, increase: true);
+						var dstCapacity = GetCapacity(Plant.World, d, substanceIndex);
+						if (sumPerAgent[d] > dstCapacity)
+						{
+							scale[d] = dstCapacity / sumPerAgent[d];
+							anyScale = true;
+						}
+					}
+
+					//apply the decrease and recompute the sums
+					var updated = new float[buffer.Count];
+					if (anyScale)
+					{
+						Array.Fill(sumPerAgent, 0f);
+						for(int j = 0; j < buffer.Count; ++j)
+						{
+							var d = buffer[j].DstIndex;
+							var amount =  buffer[j].Amount * scale[d];
+							updated[j] = amount;
+							sumPerAgent[buffer[j].SrcIndex] -= amount;
+							sumPerAgent[d] += amount;
+						}
+						Array.Fill(scale, 1f);
+					}
+					for(int j = 0; j < buffer.Count; ++j)
+						updated[j] =  buffer[j].Amount;
+
+					//decrease the donated amount if the requests are higher as the available amount
+					for(int s = 0; s < sumPerAgent.Length; ++s)
+					{
+						var srcAmount = GetAmount(s, substanceIndex);
+						if (-sumPerAgent[s] > srcAmount)
+							scale[s] = srcAmount / -sumPerAgent[s];
+					}
+
+					//apply the decrease and fire respective messages
+					for(int j = 0; j < buffer.Count; ++j)
+					{
+						var s = buffer[j].SrcIndex;
+						var amount = updated[j] * scale[s];
+						if (amount > 0f)
+						{
+							var d = buffer[j].DstIndex;
+							dst[s].ChangeAmount(Plant, s, substanceIndex, amount, increase: false);
+							dst[d].ChangeAmount(Plant, d, substanceIndex, amount, increase: true);
+						}
 					}
 				}
-			}
 
-		ReadTMP = !ReadTMP;
-		Transactions.Clear();
+			ReadTMP = !ReadTMP;
+			Transactions.Clear();
+		}
 	}
 
 	public bool HasUndeliveredPost => Post.AnyMessages;

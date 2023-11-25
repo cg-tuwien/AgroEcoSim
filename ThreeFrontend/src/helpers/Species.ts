@@ -34,7 +34,7 @@ export class Species {
     leafLengthVar = signal(0.02);
     leafRadius = signal(0.04);
     leafRadiusVar = signal(0.01);
-    leafGrowthTime = signal(720);
+    leafGrowthTime = signal(480);
     leafGrowthTimeVar = signal(120);
     leafPitchDeg = signal(20);
     leafPitchDegVar = signal(5);

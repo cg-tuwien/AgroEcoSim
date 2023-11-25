@@ -29,12 +29,23 @@ public partial class PlantFormation2 : IPlantFormation
 
 	public readonly List<Quaternion> SegmentOrientations;
 
-	internal const float RootSegmentLength = 0.1f;
+	internal const float RootSegmentLength = 0.05f;
 
 	internal readonly Vector2 VegetativeLowTemperature = new(10, 15);
 	internal readonly Vector2 VegetativeHighTemperature = new(35, 40);
 
+	/// <summary>
+	/// The ratio of available water to the required water. If > 1, there is more production than need.
+	/// </summary>
 	internal float WaterBalance = 0f;
+	/// <summary>
+	/// The ratio of available water to the required water, adapted for the needs of underground agents.
+	/// </summary>
+	internal float WaterBalanceUG = 0f;
+
+	/// <summary>
+	/// The ratio of available energy to the required energy. If > 1, there is more production than need.
+	/// </summary>
 	internal float EnergyBalance = 0f;
 
 	internal float WaterProductionMax = 0f;
@@ -135,7 +146,7 @@ public partial class PlantFormation2 : IPlantFormation
 		UG.Census();
 		AG.Census();
 
-		if (Seed.Length == 0)
+		if (Seed.Length == 0 && (UG.Alive || AG.Alive))
 		{
 			var timestep = World.Timestep;
 			//Debug.WriteLine($"GATHERING {timestep} for {timestep * World.HoursPerTick} h");
@@ -288,6 +299,7 @@ public partial class PlantFormation2 : IPlantFormation
 			AG.Distribute(globalAG);
 
 			WaterBalance = waterRequirement > 1e-6 ? (float)(water / waterRequirement) : 1;
+			WaterBalanceUG = WaterBalance * WaterBalance;
 			EnergyBalance = energyRequirement > 1e-6 ? (float)(energy / energyRequirement) : 1;
 
 			WaterProductionMax = UG.DailyProductionMax;
@@ -345,7 +357,17 @@ public partial class PlantFormation2 : IPlantFormation
 		}
 		else
 		{
-			UG.Tick(timestep);
+			for(int i = World.HoursPerTick - 1; i >= 0; --i)
+			{
+				UG.Tick(timestep);
+				if (i > 0) //attention the loop decrements so this will not run for the last item
+				{
+					Soil.ProcessRequests();
+					UG.DeliverPost(timestep);
+					UG.Census();
+				}
+			}
+
 			AG.Tick(timestep);
 // if (timestep >= 1664)
 // 	Debug.Write(timestep);
@@ -415,6 +437,78 @@ public partial class PlantFormation2 : IPlantFormation
 
 		return ((uint)AG.Count, triangles, sensors);
 	}
+
+	static Quaternion UpsideDown = Quaternion.CreateFromAxisAngle(Vector3.UnitX, MathF.PI);
+
+	internal static Quaternion AdjustUpBase(Quaternion orientation, bool up)
+    {
+		var y = Vector3.Transform(Vector3.UnitY, orientation);
+		Vector3 z;
+		if (Vector3.Dot(Vector3.UnitY, y) < 0.999f)
+		{
+			z = Vector3.Cross(Vector3.UnitY, y);
+			y = Vector3.Cross(z, Vector3.UnitY);
+		}
+		else
+		{
+			z = Vector3.Transform(Vector3.UnitZ, orientation);
+			y = Vector3.Cross(z, Vector3.UnitY);
+		}
+
+		// return Quaternion.CreateFromRotationMatrix(new()
+		// {
+		// 	M11 = 0, M12 = 1, M13 = 0, M14 = 0,
+		// 	M21 = y.X, M22 = y.Y, M23 = y.Z, M24 = 0,
+		// 	M31 = z.X, M32 = z.Y, M33 = z.Z, M34 = 0,
+		// 	M41 = 0, M42 = 0, M43 = 0, M44 = 1
+		// });
+
+		//slightly faster version given that the first row are constant values
+		var trace = y.Y + z.Z;
+		Quaternion result = new Quaternion();
+
+		if (trace > 0.0f)
+		{
+			var s = MathF.Sqrt(trace + 1.0f);
+			result.W = s * 0.5f;
+			s = 0.5f / s;
+			result.X = (y.Z - z.Y) * s;
+			result.Y = z.X * s;
+			result.Z = (1f - y.X) * s;
+		}
+		else
+		{
+			if (0f >= y.Y && 0f >= z.Z)
+			{
+				var s = MathF.Sqrt(1.0f - y.Y - z.Z);
+				var invS = 0.5f / s;
+				result.X = 0.5f * s;
+				result.Y = (1f + y.X) * invS;
+				result.Z = z.X * invS;
+				result.W = (y.Z - z.Y) * invS;
+			}
+			else if (y.Y > z.Z)
+			{
+				var s = MathF.Sqrt(1.0f + y.Y - z.Z);
+				var invS = 0.5f / s;
+				result.X = (y.X + 1f) * invS;
+				result.Y = 0.5f * s;
+				result.Z = (z.Y + y.Z) * invS;
+				result.W = z.X * invS;
+			}
+			else
+			{
+				var s = MathF.Sqrt(1.0f + z.Z - y.Y);
+				var invS = 0.5f / s;
+				result.X = z.X * invS;
+				result.Y = (z.Y + y.Z) * invS;
+				result.Z = 0.5f * s;
+				result.W = (1f - y.X) * invS;
+			}
+		}
+
+		return up ? result : UpsideDown * result;
+    }
 
 	public bool HasUndeliveredPost => PostboxSeed.AnyMessages || UG.HasUndeliveredPost || AG.HasUndeliveredPost;// || NeedsGathering;
 

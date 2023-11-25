@@ -346,9 +346,9 @@ public partial struct AboveGroundAgent3 : IPlantAgent
 		else if (Organ == OrganTypes.Meristem)
 			wasMeristem = true;
 
-		// just for DEBUG, replace by auxin determined branching in combination with age and strength based dying
 		switch(Organ)
 		{
+			//leafs fall down with increasing age
 			case OrganTypes.Petiole:
 			{
 				if (age > 36 && formation.GetOrgan(Parent) != OrganTypes.Meristem)
@@ -359,12 +359,13 @@ public partial struct AboveGroundAgent3 : IPlantAgent
 				}
 			}
 			break;
+			//height-based termination
 			case OrganTypes.Stem:
 				if (DominanceLevel > 1 && formation.GetDominance(Parent) < DominanceLevel)
 				{
 					var h = 5f * formation.GetBaseCenter(formationID).Y / formation.Height;
 					var e = 4f * PreviousDayEnvResources / formation.DailyEfficiencyMax;
-					var q = 1f + h*h + 20f * Radius + e * e;
+					var q = 1f + h*h + 20f * Radius + e * e + WoodFactor;
 					var p = 0.004f / (q * q);
 					Debug.WriteLine($"{formationID}: h {formation.GetBaseCenter(formationID).Y / formation.Height}  r {Radius}  e {PreviousDayEnvResources / formation.DailyEfficiencyMax}  =  {q}  % {p}");
 					if (plant.RNG.NextFloatAccum(p, world.HoursPerTick))
@@ -376,76 +377,64 @@ public partial struct AboveGroundAgent3 : IPlantAgent
 				break;
 		}
 
-		//Swap a leaf to a twig
-		if (Organ == OrganTypes.Petiole || Organ == OrganTypes.Bud)
-		{
-			var parentAuxins = formation.GetAuxins(Parent);
-			if (parentAuxins < species.AuxinsThreshold)
-			{
-				//check down towards the roots
-				var ascendantIndex = formation.GetParent(Parent);
-				var localMinimum = ascendantIndex < 0 || formation.GetAuxins(ascendantIndex) >= parentAuxins;
-
-				//check up towards the leaves
-				if (localMinimum)
-				{
-					foreach(var child in formation.GetChildren(Parent))
-						if (formation.GetOrgan(child) == OrganTypes.Stem && formation.GetAuxins(child) <= parentAuxins)
-						{
-							localMinimum = false;
-							break;
-						}
-				}
-
-				//if this is a local minimum (in case of equal values the top-most is considered the local minimum)
-				if (localMinimum)
-				{
-					var makeTwig = false;
-					if (Organ == OrganTypes.Petiole)
-					{
-						if(formation.GetOrgan(Parent) != OrganTypes.Meristem)
-						{
-							if (children != null)
-								foreach(var child in children)
-									formation.Death(child);
-							makeTwig = true;
-						}
-					}
-					else if (Organ == OrganTypes.Bud)
-						makeTwig = true;
-
-					if (makeTwig)
-					{
-						Organ = OrganTypes.Meristem;
-						LateralAngle = MathF.PI * 0.5f;
-						++DominanceLevel;
-						Orientation = TurnUpwards(Orientation);
-						LengthVar = species.NodeDistance + plant.RNG.NextFloatVar(species.NodeDistanceVar);
-
-						if (species.LateralsPerNode > 0)
-							CreateLeaves(this, plant, LateralAngle + species.LateralRoll, formationID);
-					}
-				}
-			}
-		}
-
 		//Growth
 		if (Energy > enoughEnergyState) //maybe make it a factor storedEnergy/lifeSupport so that it grows fast when it has full storage
 		{
-			if (Organ == OrganTypes.Bud) //Monopodial branching
+			//Monopodial branching, swaps a leaf to a twig
+			//TODO sympodial branching (one of the laterals becomes the main)
+			if (Organ == OrganTypes.Petiole || Organ == OrganTypes.Bud)
 			{
-				if (Energy > EnergyStorageCapacity() && plant.RNG.NextUInt((uint)730 / world.HoursPerTick) < 0)
+				var parentAuxins = formation.GetAuxins(Parent);
+				if (parentAuxins < species.AuxinsThreshold)
 				{
-					Organ = OrganTypes.Meristem;
-					LateralAngle = MathF.PI * 0.5f;
-					++DominanceLevel;
-					Orientation = TurnUpwards(Orientation);
+					//check down towards the roots
+					var ascendantIndex = formation.GetParent(Parent);
+					var localMinimum = ascendantIndex < 0 || formation.GetAuxins(ascendantIndex) >= parentAuxins;
 
-					if (species.LateralsPerNode > 0)
-						CreateLeaves(this, plant, LateralAngle + species.LateralRoll, formationID);
+					//check up towards the leaves
+					if (localMinimum)
+					{
+						foreach(var child in formation.GetChildren(Parent))
+							if (formation.GetOrgan(child) == OrganTypes.Stem && formation.GetAuxins(child) <= parentAuxins)
+							{
+								localMinimum = false;
+								break;
+							}
+					}
+
+					//if this is a local minimum (in case of equal values the top-most is considered the local minimum)
+					if (localMinimum)
+					{
+						var makeTwig = false;
+						if (Organ == OrganTypes.Petiole)
+						{
+							if(formation.GetOrgan(Parent) != OrganTypes.Meristem)
+							{
+								if (children != null)
+									foreach(var child in children)
+										formation.Death(child);
+								makeTwig = true;
+							}
+						}
+						else if (Organ == OrganTypes.Bud)
+							makeTwig = true;
+
+						if (makeTwig)
+						{
+							Organ = OrganTypes.Meristem;
+							LateralAngle = MathF.PI * 0.5f;
+							++DominanceLevel;
+							Orientation = TurnUpwards(Orientation);
+							LengthVar = species.NodeDistance + plant.RNG.NextFloatVar(species.NodeDistanceVar);
+
+							if (species.LateralsPerNode > 0)
+								CreateLeaves(this, plant, LateralAngle + species.LateralRoll, formationID);
+						}
+					}
 				}
 			}
-			else
+
+			if (Organ != OrganTypes.Bud)
 			{
 				var currentSize = new Vector2(Length, Radius);
 				var growth = Vector2.Zero;
@@ -511,8 +500,11 @@ public partial struct AboveGroundAgent3 : IPlantAgent
 				//TDMI maybe do it even if no growth
 				if (Organ == OrganTypes.Stem || Organ == OrganTypes.Meristem)
 				{
-					if (Organ == OrganTypes.Stem && WoodFactor < 1f && (Parent < 0 || WoodFactor <= formation.GetWoodRatio(Parent)))
-						WoodFactor = Math.Min(WoodFactor + GrowthTimeVar, 1f);
+					if (Organ == OrganTypes.Stem && WoodFactor < 1f)
+					{
+						var pw = Parent >= 0 ? formation.GetWoodRatio(Parent) : WoodFactor; //assure that no child has a higher factor than its parent
+						WoodFactor = Math.Min((WoodFactor <= pw ? WoodFactor : pw) + GrowthTimeVar, 1f);
+					}
 
 					//chaining (meristem continues in a new segment)
 					if (Organ == OrganTypes.Meristem && Length > LengthVar)
@@ -541,9 +533,9 @@ public partial struct AboveGroundAgent3 : IPlantAgent
 
 								var ou = TurnUpwards(Orientation);
 								var orientation1 = ou * Quaternion.CreateFromAxisAngle(Vector3.UnitX, 0.5f * MathF.PI) * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, -lateralPitch - 0.25f * MathF.PI);
-								var meristem1 = formation.Birth(new(plant, formationID, OrganTypes.Meristem, RandomOrientation(plant, species, orientation1), 0.1f * Energy, initialResources: prevResources, initialProduction: prevProduction) { Water = 0.1f * Water, LateralAngle = lateralPitch, DominanceLevel = (byte)(DominanceLevel + 1) } );
+								var meristem1 = formation.Birth(new(plant, formationID, OrganTypes.Meristem, RandomOrientation(plant, species, orientation1), 0.1f * Energy, initialResources: prevResources, initialProduction: prevProduction) { Water = 0.1f * Water, LateralAngle = lateralPitch, DominanceLevel = DominanceLevel } );
 								var orientation2 = ou * Quaternion.CreateFromAxisAngle(Vector3.UnitX, -0.5f * MathF.PI) * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, lateralPitch - 0.25f * MathF.PI);
-								var meristem2 = formation.Birth(new(plant, formationID, OrganTypes.Meristem, RandomOrientation(plant, species, orientation2), 0.1f * Energy, initialResources: prevResources, initialProduction: prevProduction) { Water = 0.1f * Water, LateralAngle = lateralPitch, DominanceLevel = (byte)(DominanceLevel + 1) } );
+								var meristem2 = formation.Birth(new(plant, formationID, OrganTypes.Meristem, RandomOrientation(plant, species, orientation2), 0.1f * Energy, initialResources: prevResources, initialProduction: prevProduction) { Water = 0.1f * Water, LateralAngle = lateralPitch, DominanceLevel = DominanceLevel } );
 
 								Energy *= 0.8f;
 								Water *= 0.8f;
@@ -574,7 +566,7 @@ public partial struct AboveGroundAgent3 : IPlantAgent
 					else */if (Organ == OrganTypes.Petiole && ParentRadiusAtBirth + species.PetioleCoverThreshold < formation.GetBaseRadius(Parent))
 						MakeBud(formation, children);
 
-
+					//termination of unproductive branches
 					if (Organ == OrganTypes.Petiole && age > 36 && formation.GetOrgan(Parent) != OrganTypes.Meristem)
 					{
 						var production = 0f;
@@ -586,7 +578,7 @@ public partial struct AboveGroundAgent3 : IPlantAgent
 						if (production < 0.5)
 						{
 							production = 1f - 2f * production;
-							production += production;
+							production *= production;
 							if (plant.RNG.NextFloatAccum(production, world.HoursPerTick))
 							{
 								Debug.WriteLine($"DEL LEAF {formationID} % {production} @ {timestep}");
@@ -673,31 +665,6 @@ public partial struct AboveGroundAgent3 : IPlantAgent
         return orientation;
     }
 
-    private static Quaternion AdjustUpBase(Quaternion orientation)
-    {
-		var y = Vector3.Transform(Vector3.UnitY, orientation);
-		Vector3 z;
-		if (Vector3.Dot(Vector3.UnitY, y) < 0.999f)
-		{
-			z = Vector3.Cross(Vector3.UnitY, y);
-			y = Vector3.Cross(z, Vector3.UnitY);
-		}
-		else
-		{
-			z = Vector3.Transform(Vector3.UnitZ, orientation);
-			y = Vector3.Cross(z, Vector3.UnitY);
-		}
-
-		return Quaternion.CreateFromRotationMatrix(new()
-		{
-			M11 = 0, M12 = 1, M13 = 0, M14 = 0,
-			M21 = y.X, M22 = y.Y, M23 = y.Z, M24 = 0,
-			M31 = z.X, M32 = z.Y, M33 = z.Z, M34 = 0,
-			M41 = 0, M42 = 0, M43 = 0, M44 = 1
-		});
-    }
-
-
 	private readonly Quaternion RandomOrientation(PlantFormation2 plant, SpeciesSettings species, Quaternion orientation)
 	{
 		var range = 0.2f * MathF.PI * (species.TwigsBendingLevel * DominanceLevel - species.TwigsBendingApical);
@@ -707,9 +674,9 @@ public partial struct AboveGroundAgent3 : IPlantAgent
 		var y = Vector3.Transform(Vector3.UnitX, orientation).Y;
 
 		if (y < 0)
-			orientation = Quaternion.Slerp(orientation, AdjustUpBase(orientation), plant.RNG.NextPositiveFloat(-y));
+			orientation = Quaternion.Slerp(orientation, PlantFormation2.AdjustUpBase(orientation, up: true), plant.RNG.NextPositiveFloat(-y));
 		else //if (species.ShootsGravitaxis > 0)
-		  	orientation = Quaternion.Slerp(orientation, AdjustUpBase(orientation), plant.RNG.NextPositiveFloat(species.ShootsGravitaxis));
+		  	orientation = Quaternion.Slerp(orientation, PlantFormation2.AdjustUpBase(orientation, up: true), plant.RNG.NextPositiveFloat(species.ShootsGravitaxis));
 
 		return orientation;
 	}

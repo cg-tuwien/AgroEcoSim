@@ -139,13 +139,12 @@ export default function ThreeSceneFn () {
             appstate.objPlants.clear();
         }
         //scene.add(new THREE.AxesHelper( 1 ))
-
         //const mesh = new THREE.Mesh(threeBoxPrimitive, new THREE.MeshBasicMaterial({color: new THREE.Color("#ff4411")}));
-        // //mesh.translateY(10);
-        // //const m = new THREE.Matrix4().scale(new THREE.Vector3(1, 1.4, 1));
-        // //const m = new THREE.Matrix4().setPosition(new THREE.Vector3(0.5, 0.5, 0));
-        // //mesh.applyMatrix4(m);
-        // scene.add(mesh);
+        //mesh.translateY(10);
+        //const m = new THREE.Matrix4().scale(new THREE.Vector3(20, 0.01, 0.01));
+        //const m = new THREE.Matrix4().setPosition(new THREE.Vector3(0.5, 0.5, 0));
+        //mesh.applyMatrix4(m);
+        //scene.add(mesh);
 
         buildTerrain();
         buildPlants();
@@ -308,7 +307,7 @@ export default function ThreeSceneFn () {
         //const terrainMesh = new THREE.Box3Helper( box, new THREE.Color("#cc9900") );
         const terrainMesh = new THREE.Mesh(terrainBoxPrimitive, new THREE.MeshLambertMaterial({ color: 0x593700, name: "terrainMesh" }));
         terrainMesh.scale.set(w, d, l);
-        terrainMesh.position.set(w * 0.5, -d, l * 0.5);
+        terrainMesh.position.set(0, -d, 0);
         terrainMesh.userData = { type: "terrain" };
         //terrainMesh.layers.set(TerrainLayer);
         appstate.objTerrain.add(terrainMesh);
@@ -521,7 +520,7 @@ export default function ThreeSceneFn () {
     return <div id="main3Dviewport" ref={divRef}></div>;
 }
 
-export const terrainBoxPrimitive = new THREE.BoxGeometry().scale(2, 2, 2).translate(0, 0, 0); //box
+export const terrainBoxPrimitive = new THREE.BoxGeometry().translate(0.5, 0.5, 0.5); //box
 export const threeBoxPrimitive = new THREE.BoxGeometry(); //box
 export const threeSpherePrimitive = new THREE.SphereGeometry(1, 8, 8); //sphere (type 4)
 export const threeCylinderPrimitive = new THREE.CylinderGeometry(1, 1, 1.0, 8); //cylinder (type 2)

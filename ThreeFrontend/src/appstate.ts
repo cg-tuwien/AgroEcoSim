@@ -381,7 +381,7 @@ class State {
             obstacles: this.obstacles.value.map(o => o.save()),
             species: this.species.value.map(s => s.save()),
 
-            plants: this.plants,
+            plants: this.plants.peek(),
             history: this.history,
             historySize: this.historySize.peek(),
             simHoursPerTick: this.simHoursPerTick,
@@ -496,7 +496,7 @@ class State {
 const st = new State();
 export default st;
 //now that the singleton is exported push in the default seed
-st.seeds.value = [ new Seed(st.species.peek()[0].name.peek(), 0.5, -0.01, 0.05) ];
+st.seeds.value = [ new Seed(st.species.peek()[0].name.peek(), st.fieldSizeX.peek() * 0.5, -0.01, st.fieldSizeZ.peek() * 0.5) ];
 
 effect(() => {
     if (st.previewRequest.value && hubConnection.state == SignalR.HubConnectionState.Connected) {
