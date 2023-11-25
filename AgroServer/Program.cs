@@ -1,4 +1,3 @@
-#if !GODOT
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -74,4 +73,3 @@ app.MapHub<SimulationHub>("/SimSocket");
 app.MapControllers();
 
 app.Run();
-#endif

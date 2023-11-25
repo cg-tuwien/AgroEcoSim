@@ -188,11 +188,7 @@ public class IrradianceClient
 				IrradiancePoints.Clear(); // only necessary for triangular mesh export
 
 				var meshFileName = $"t{timestep}.mesh";
-				#if GODOT
-				var meshFileFullPath = Path.Combine("agroeco-mts3", meshFileName);
-				#else
 				var meshFileFullPath = Path.Combine("..", "agroeco-mts3", meshFileName);
-				#endif
 				var ooc = offsetCounter;
 				using var binaryStream = new MemoryStream();
 				#if USE_TRIANGLES

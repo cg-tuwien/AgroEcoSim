@@ -95,14 +95,6 @@ public abstract class Formation<T> : IFormation where T : struct, IAgent
 		for(int i = 0; i < dst.Length; ++i)
 			dst[i].Tick(this, i, timestep);
 
-		#if TICK_LOG
-		StatesHistory.Clear();
-		#endif
-		#if HISTORY_LOG || TICK_LOG
-		var states = new T[dst.Length];
-		Array.Copy(dst, states, dst.Length);
-		StatesHistory.Add(states);
-		#endif
 		ReadTMP = !ReadTMP;
 	}
 
@@ -149,18 +141,4 @@ public abstract class Formation<T> : IFormation where T : struct, IAgent
 	public virtual bool HasUndeliveredPost => Postbox.AnyMessages;
 	public virtual bool HasUnprocessedTransactions => false;
 	public virtual int Count => Agents.Length;
-
-	#if HISTORY_LOG || TICK_LOG
-	readonly List<T[]> StatesHistory = new();
-	public string HistoryToJSON(int timestep = -1) => timestep >= 0 ? Export.Json(StatesHistory[timestep]) : Export.Json(StatesHistory);
-
-	public ulong GetID(int index) => ReadTMP
-		? (AgentsTMP.Length > index ? AgentsTMP[index].ID : ulong.MaxValue)
-		: (Agents.Length > index ? Agents[index].ID : ulong.MaxValue);
-	#endif
-
-	#if GODOT
-	public virtual void GodotReady() {}
-	public virtual void GodotProcess() {}
-	#endif
 }

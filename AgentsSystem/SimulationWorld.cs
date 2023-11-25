@@ -12,10 +12,6 @@ public partial class SimulationWorld
 	internal readonly List<Action<SimulationWorld, uint, IList<IFormation>, IList<IObstacle>>> Callbacks = new();
 	public uint Timestep { get; private set; } = 0U;
 
-	#if TICK_LOG
-	readonly List<MethodInfo> MessageLogClears = new();
-	#endif
-
 	public int Count => Formations.Count;
 
 	internal readonly List<IObstacle> Obstacles = new();
@@ -24,48 +20,17 @@ public partial class SimulationWorld
 	{
 		Formations = new List<IFormation>();
 		Timestep = 0;
-		#if TICK_LOG
-		foreach(var assembly in AppDomain.CurrentDomain.GetAssemblies().ToArray()) //ToArray is required for NET6
-			foreach(var type in assembly.GetTypes())
-				if (type.IsDefined(typeof(MessageAttribute), false))
-				{
-					var method = type.GetMethod("ClearHistory", BindingFlags.Public | BindingFlags.Static);
-					if (method != null)
-						MessageLogClears.Add(method);
-					else
-						throw new Exception($"{type.FullName} is marked with [Message] attribute but it does not proivde a public static ClearHistory method.");
-				}
-		#endif
 	}
 
 	public void ForEach(Action<IFormation> action) => Formations.ForEach(formation => action(formation));
 
-	public void Add(IFormation formation)
-	{
-		Formations.Add(formation);
-		#if GODOT
-		formation.GodotReady();
-		#endif
-	}
+    public void Add(IFormation formation) => Formations.Add(formation);
 
-	public void AddRange(IEnumerable<IFormation> formations)
-	{
-		Formations.AddRange(formations);
-		#if GODOT
-		foreach(var item in formations)
-			item.GodotReady();
-		#endif
-	}
+    public void AddRange(IEnumerable<IFormation> formations) => Formations.AddRange(formations);
 
-	public void Add(IObstacle obstacle)
-	{
-		Obstacles.Add(obstacle);
-		#if GODOT
-		obstacle.GodotReady();
-		#endif
-	}
+    public void Add(IObstacle obstacle) => Obstacles.Add(obstacle);
 
-	public void Run(uint simulationLength)
+    public void Run(uint simulationLength)
 	{
 		#if !DEBUG
 		if (Formations.Count > 1)
@@ -85,18 +50,7 @@ public partial class SimulationWorld
 
 			CensusSequential();
 			ExecCallbacks();
-			#if HISTORY_LOG || HISTORY_TICK
-			// if (i >= 477)
-			// {
-			// 	var exported = HistoryToJSON((int)i);
-			// 	File.WriteAllText($"export-{i}.json", exported.Replace("},", "},\n").Replace("],", "],\n"));
-			// }
-			#endif
 		}
-		#if GODOT
-		foreach(var item in Formations)
-			item.GodotProcess();
-		#endif
 	}
 
 	public void RunParallel(uint simulationLength)
@@ -110,10 +64,6 @@ public partial class SimulationWorld
 			CensusParallel();
 			ExecCallbacks();
 		}
-		#if GODOT
-		foreach(var item in Formations)
-			item.GodotProcess();
-		#endif
 	}
 
 	void CensusSequential()
@@ -150,10 +100,6 @@ public partial class SimulationWorld
 
 	public void ProcessTransactionsParallel()
 	{
-		#if TICK_LOG
-		foreach(var clear in MessageLogClears)
-			clear.Invoke(null, null);
-		#endif
 		var anyDelivered = true;
 		while(anyDelivered)
 		{
@@ -170,10 +116,6 @@ public partial class SimulationWorld
 
 	public void DeliverPostSequential()
 	{
-		#if TICK_LOG
-		foreach(var clear in MessageLogClears)
-			clear.Invoke(null, null);
-		#endif
 		var anyDelivered = true;
 		while(anyDelivered)
 		{
@@ -189,10 +131,6 @@ public partial class SimulationWorld
 
 	public void DeliverPostParallel()
 	{
-		#if TICK_LOG
-		foreach(var clear in MessageLogClears)
-			clear.Invoke(null, null);
-		#endif
 		var anyDelivered = true;
 		while(anyDelivered)
 		{
@@ -231,57 +169,6 @@ public partial class SimulationWorld
 
 		return sb.ToString();
 	}
-
-	#if HISTORY_LOG || TICK_LOG
-	public string HistoryToJSON(int timestep = -1)
-	{
-		var sb = new System.Text.StringBuilder();
-		//assuming all formations are present all the time (no additions or removals)
-		sb.Append("{ \"Formations\": [ ");
-		for(int i = 0; i < Formations.Count; ++i)
-		{
-			sb.Append(Formations[i].HistoryToJSON(timestep));
-			if (i < Formations.Count - 1)
-				sb.Append(", ");
-		}
-		sb.Append("], \"Message\": {");
-
-		var anyMessagesType = false;
-		foreach(var assembly in AppDomain.CurrentDomain.GetAssemblies().ToArray()) //ToArray is required for NET6
-			foreach(var type in assembly.GetTypes())
-				if (type.IsDefined(typeof(MessageAttribute), false))
-				{
-					anyMessagesType = true;
-					sb.Append($"\"{type.FullName}\": ");
-					var data = type.GetField("MessagesHistory", BindingFlags.Public | BindingFlags.Static).GetValue(null);
-#if HISTORY_LOG
-					if (timestep < 0)
-#endif
-						sb.Append(Utils.Export.Json(data));
-#if HISTORY_LOG
-					else
-					{
-						var timestepData = new List<object>();
-						var t = data.GetType();
-						var count = (int)t.GetProperty("Count").GetValue(data);
-						var get = t.GetMethod("get_Item");
-						for(int i = 0; i < count; ++i)
-						{
-							var item = get.Invoke(data, new object[]{i});
-							var typedItem = (IMsgLogData)item;
-							if (typedItem.TimeStep == timestep)
-								timestepData.Add(item);
-						}
-						sb.Append(Utils.Export.Json(timestepData));
-					}
-#endif
-					sb.Append(", ");
-				}
-
-		sb.Append($"{(anyMessagesType ? "\"_\": []" : "")} }} }}");
-		return sb.ToString();
-	}
-	#endif
 
 	public Func<byte, List<IFormation>, List<IObstacle>, byte[]> StreamExporterFunc = null;
 	public byte[]? ExportToStream(byte version) => StreamExporterFunc == null ? null : StreamExporterFunc(version, Formations, Obstacles);

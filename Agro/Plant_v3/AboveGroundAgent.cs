@@ -780,13 +780,4 @@ public partial struct AboveGroundAgent3 : IPlantAgent
 		PreviousDayEnvResourcesInv /= count;
 		PreviousDayProductionInv /= count;
 	}
-
-	///////////////////////////
-	#region LOG
-	///////////////////////////
-	#if HISTORY_LOG || TICK_LOG
-	public readonly ulong ID { get; } = Utils.UID.Next();
-	public Utils.QuatData OrienTaTion => new(Orientation);
-	#endif
-	#endregion
 }

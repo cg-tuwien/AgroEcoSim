@@ -81,9 +81,4 @@ public abstract class Formation3i<T> : Formation<T>, IGrid3D where T : struct, I
 		else
 			return false;
 	}
-
-#if HISTORY_LOG || TICK_LOG
-	public ulong GetID(Vector3i index) => GetID(Index(index));
-	public ulong GetID(int x, int y, int z) => GetID(Index(x, y, z));
-#endif
 }

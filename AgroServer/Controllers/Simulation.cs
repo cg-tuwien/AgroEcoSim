@@ -1,4 +1,3 @@
-#if !GODOT
 using Microsoft.AspNetCore.Mvc;
 using AgroServer.Models;
 using Agro;
@@ -34,10 +33,7 @@ public class SimulationController : ControllerBase
         world.Run((uint)world.TimestepsTotal());
         var stop = DateTime.UtcNow.Ticks;
         Debug.WriteLine($"Simulation time: {(stop - start) / TimeSpan.TicksPerMillisecond} ms");
-#if HISTORY_LOG || HISTORY_TICK
-            //var exported = world.HistoryToJSON();
-            //File.WriteAllText("export.json", exported.Replace("},", "},\n").Replace("],", "],\n"));
-#endif
+
         var response = new SimulationResponse() { Plants = new(world.Count) };
         world.ForEach(formation =>
         {
@@ -56,4 +52,3 @@ public class SimulationController : ControllerBase
         return response;
     }
 }
-#endif

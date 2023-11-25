@@ -9,7 +9,4 @@ public interface IPlantFormation : IFormation
 	SpeciesSettings Parameters { get; }
 	bool SeedAlive { get; }
 	bool Send(int recipient, IMessage<SeedAgent> msg);
-	#if HISTORY_LOG || TICK_LOG
-	ulong GetID();
-	#endif
 }

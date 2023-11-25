@@ -134,10 +134,6 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 		if (Births.Count > 0 || Inserts.Count > 0 || Deaths.Count > 0)
 		{
 			//Debug.WriteLine($"{typeof(T).Name} census event: B = {Births.Count}   I = {Inserts.Count}   D = {Deaths.Count}");
-
-			// #if GODOT
-			// MultiagentSystem.TriggerPause();
-			// #endif
 			var (src, dst) = SrcDst();
 			// #if DEBUG
 			// Console.WriteLine(DebugTreePrint(src));
@@ -229,11 +225,6 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 			{
 				var indexMap = new int[src.Length + Births.Count + Inserts.Count];
 				Array.Fill(indexMap, -1);
-				#if GODOT
-				for(var i = DeathsHelper.Count - 1; i >= 0; --i)
-					GodotRemoveSprite(DeathsHelper[i]);
-				#endif
-
 				// foreach(var index in Deaths)  //must run before copying to underGround
 				// 	if (Agents[index].Parent >= 0)
 				// 		Agents[Agents[index].Parent].RemoveChild(index);
@@ -336,9 +327,6 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 			TreeCache.FinishUpdate();
 			TreeCache.UpdateBases(this);
 
-			#if GODOT
-			GodotAddSprites(Agents.Length);
-			#endif
 			Births.Clear();
 			Inserts.Clear();
 			InsertAncestors.Clear();
@@ -357,14 +345,6 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 		for(int i = 0; i < dst.Length; ++i)
 			dst[i].Tick(this, i, timestep);
 
-		#if TICK_LOG
-		StatesHistory.Clear();
-		#endif
-		#if HISTORY_LOG || TICK_LOG
-		var state = new T[dst.Length];
-		Array.Copy(dst, state, dst.Length);
-		StatesHistory.Add(state);
-		#endif
 		ReadTMP = !ReadTMP;
 	}
 
@@ -1019,19 +999,6 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 		// for(int i = 0; i < src.Length; ++i)
 		// 	Efficiencies[i] = new(src[i].PreviousDayEnvResourcesInv / DailyResourceMax, src[i].PreviousDayProductionInv / DailyProductionMax);
 	}
-
-	///////////////////////////
-	#region LOG
-	///////////////////////////
-	#if HISTORY_LOG || TICK_LOG
-	readonly List<T[]> StatesHistory = new();
-	public string HistoryToJSON(int timestep = -1) => timestep >= 0 ? Utils.Export.Json(StatesHistory[timestep]) : Utils.Export.Json(StatesHistory);
-
-	public ulong GetID(int index) => ReadTMP
-		? (AgentsTMP.Length > index ? AgentsTMP[index].ID : ulong.MaxValue)
-		: (Agents.Length > index ? Agents[index].ID : ulong.MaxValue);
-	#endif
-	#endregion
 
 	///////////////////////////
 	#region glTF EXPORT

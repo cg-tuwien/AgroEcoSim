@@ -430,9 +430,6 @@ public partial class SoilFormationNew : IFormation, IGrid3D
 	[M(AI)] void IFormation.DeliverPost(uint timestep) {}
 	bool IFormation.HasUndeliveredPost => false;
 	bool IFormation.HasUnprocessedTransactions => false;
-	#if HISTORY_LOG || TICK_LOG
-	string IFormation.HistoryToJSON(int timestep = -1) => "";
-	#endif
 	///<summary>
 	///Number of agents in this formation
 	///</summary>

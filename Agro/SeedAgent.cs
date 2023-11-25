@@ -17,11 +17,6 @@ public struct SeedAgent : IAgent
 	[Message]
 	public readonly struct WaterInc : IMessage<SeedAgent>
 	{
-		#if HISTORY_LOG || TICK_LOG
-		public readonly static List<SimpleMsgLog> MessagesHistory = new();
-		public static void ClearHistory() => MessagesHistory.Clear();
-		public readonly ulong ID { get; } = Utils.UID.Next();
-		#endif
 		/// <summary>
 		/// Water volume in m³
 		/// </summary>
@@ -29,14 +24,8 @@ public struct SeedAgent : IAgent
 		public WaterInc(float amount) => Amount = amount;
 		public bool Valid => Amount > 0f;
 		public Transaction Type => Transaction.Increase;
-		public void Receive(ref SeedAgent dstAgent, uint timestep)
-		{
-			dstAgent.IncWater(Amount);
-			#if HISTORY_LOG || TICK_LOG
-			lock(MessagesHistory) MessagesHistory.Add(new(timestep, ID, dstAgent.ID, Amount));
-			#endif
-		}
-	}
+        public void Receive(ref SeedAgent dstAgent, uint timestep) => dstAgent.IncWater(Amount);
+    }
 
 	const float Pi4 = MathF.PI * 4f;
 	const float PiV = 3f * 0.001f * 0.1f / Pi4;
@@ -141,12 +130,4 @@ public struct SeedAgent : IAgent
 		Water += amount * 0.7f; //store most of the energy, 0.2f are losses
 		Radius = MathF.Pow(Radius * Radius * Radius + amount * PiV, Third); //use the rest for growth
 	}
-
-	///////////////////////////
-	#region LOG
-	///////////////////////////
-	#if HISTORY_LOG || TICK_LOG
-	public readonly ulong ID { get; } = Utils.UID.Next();
-	#endif
-	#endregion
 }

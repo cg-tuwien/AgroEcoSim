@@ -74,19 +74,8 @@ public partial class PlantFormation2 : IPlantFormation
 		Position = seed.Center;
 
 		RNG = parentRNG.NextRNG();
-
-		UG = new(this, UnderGroundAgent2.Reindex
-#if GODOT
-		, i => UG_Godot.RemoveSprite(i), i => UG_Godot.AddSprites(i)
-#endif
-		, false);
-
-		AG = new(this, AboveGroundAgent3.Reindex
-#if GODOT
-		, i => AG_Godot.RemoveSprite(i), i => AG_Godot.AddSprites(i)
-#endif
-		, true
-);
+		UG = new(this, UnderGroundAgent2.Reindex, false);
+		AG = new(this, AboveGroundAgent3.Reindex, true);
 		SegmentOrientations = new();
 	}
 
@@ -172,14 +161,6 @@ public partial class PlantFormation2 : IPlantFormation
 
 			var energyEmergencyThrehold = Math.Max(1, 168 / World.HoursPerTick) * energyRequirement / World.HoursPerTick;
 			var energAlertThreshold = Math.Max(energyEmergencyThrehold * 4, 0.01 * energyStorage);
-
-			#if GODOT
-			UG.LightEfficiency = globalUG.LightEfficiency;
-			UG.EnergyEfficiency = globalUG.EnergyEfficiency;
-
-			AG.LightEfficiency = globalAG.LightEfficiency;
-			AG.EnergyEfficiency = globalAG.EnergyEfficiency;
-			#endif
 
 			const double zero = 1e-12;
 
@@ -377,15 +358,7 @@ public partial class PlantFormation2 : IPlantFormation
 			//AG.Gravity(world);
 			//NeedsGathering = true;
 		}
-		#if TICK_LOG
-		StatesHistory.Clear();
-		#endif
-		#if HISTORY_LOG || TICK_LOG
-		if (dstSeed.Length > 0)
-			StatesHistory.Add(dstSeed[0]);
-		else
-			StatesHistory.Add(null);
-		#endif
+
 		ReadTMP = !ReadTMP;
 		//Just testing
 		// var gltf = GlftHelper.Create(AG.ExportToGLTF());
@@ -515,18 +488,6 @@ public partial class PlantFormation2 : IPlantFormation
 	public bool HasUnprocessedTransactions => UG.HasUnprocessedTransactions || AG.HasUnprocessedTransactions;
 
 	public int Count => SeedAlive ? 1 : UG.Count + AG.Count;
-
-	///////////////////////////
-	#region LOG
-	///////////////////////////
-	#if HISTORY_LOG || TICK_LOG
-	readonly List<SeedAgent?> StatesHistory = new();
-	public string HistoryToJSON(int timestep = -1) => timestep >= 0
-		? $"{{ \"Seeds\" : {Export.Json(StatesHistory[timestep])}, \"UnderGround\" : {UG.HistoryToJSON(timestep)}, \"AboveGround\" : {AG.HistoryToJSON(timestep)} }}"
-		: $"{{ \"Seeds\" : {Export.Json(StatesHistory)}, \"UnderGround\" : {UG.HistoryToJSON()}, \"AboveGround\" : {AG.HistoryToJSON()} }}";
-	public ulong GetID() => Seed.Length > 0 ? Seed[0].ID : ulong.MaxValue;
-	#endif
-	#endregion
 
 	///////////////////////////
 	#region glTF EXPORT

@@ -105,12 +105,4 @@ public partial struct SoilAgent : IAgent
 			return w;
 		}
 	}
-
-	///////////////////////////
-	#region LOG
-	///////////////////////////
-	#if HISTORY_LOG || TICK_LOG
-	public readonly ulong ID { get; } = Utils.UID.Next();
-	#endif
-	#endregion
 }

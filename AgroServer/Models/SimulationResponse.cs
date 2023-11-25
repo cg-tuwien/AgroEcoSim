@@ -1,4 +1,3 @@
-#if !GODOT
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
 using Utils.Json;
@@ -32,4 +31,3 @@ public class SimulationResponse
     public List<uint> StepTimes { get; set; }
     public uint TicksPerMillisecond { get; set; } = (uint)TimeSpan.TicksPerMillisecond;
 }
-#endif

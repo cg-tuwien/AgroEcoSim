@@ -5,6 +5,7 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using AgentsSystem;
+using System.Text.Json.Serialization;
 
 namespace Agro;
 
@@ -20,9 +21,7 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 	/// <summary>
 	/// Orientation with respect to the parent. If there is no parent, this is the initial orientation.
 	/// </summary>
-	#if !GODOT
-	[System.Text.Json.Serialization.JsonIgnore]
-	#endif
+	[JsonIgnore]
 	public Quaternion Orientation { get; private set; }
 
 	/// <summary>
@@ -484,13 +483,4 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 		PreviousDayEnvResourcesInv /= count;
 		PreviousDayProductionInv /= count;
 	}
-
-	///////////////////////////
-	#region LOG
-	///////////////////////////
-	#if HISTORY_LOG || TICK_LOG
-	public readonly ulong ID { get; } = Utils.UID.Next();
-	public Utils.QuatData OrienTaTion => new(Orientation);
-	#endif
-	#endregion
 }

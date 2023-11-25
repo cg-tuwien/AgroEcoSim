@@ -1,4 +1,3 @@
-#if !GODOT
 using System.Numerics;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -33,4 +32,3 @@ public class Vector3JsonConverter : JsonConverter<Vector3>
     public override void Write(Utf8JsonWriter writer, Vector3 v, JsonSerializerOptions options) =>
         writer.WriteStringValue(JsonSerializer.Serialize(new Vector3Data(v), options));
 }
-#endif

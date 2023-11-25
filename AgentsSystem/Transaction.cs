@@ -44,37 +44,3 @@ public readonly struct TransactionsBox
             item.Clear();
     }
 }
-
-	#if HISTORY_LOG || TICK_LOG
-    public interface ITransactionLogData
-    {
-        #if !TICK_LOG
-        uint TimeStep { get; }
-        #endif
-        ulong ID { get; }
-    }
-
-    [StructLayout(LayoutKind.Auto)]
-    public readonly struct TransactionLog : ITransactionLogData
-	{
-        #if !TICK_LOG
-		public readonly uint TimeStep { get; }
-        #endif
-		public readonly ulong ID { get; }
-        ulong SrcID { get; }
-        ulong DstID { get; }
-        byte Substance { get; }
-        float Amount { get; }
-        public TransactionLog(uint timestep, ulong id, ulong srcID, ulong dstID, byte substance, float amount)
-        {
-            #if !TICK_LOG
-            TimeStep = timestep;
-            #endif
-            ID = id;
-            SrcID = srcID;
-            DstID = dstID;
-            Substance = substance;
-            Amount = amount;
-        }
-	}
-	#endif

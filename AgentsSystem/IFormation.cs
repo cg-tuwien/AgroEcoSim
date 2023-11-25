@@ -12,13 +12,6 @@ public interface IFormation
     void DeliverPost(uint timestep);
     bool HasUndeliveredPost { get; }
     bool HasUnprocessedTransactions { get; }
-    #if HISTORY_LOG || TICK_LOG
-    string HistoryToJSON(int timestep = -1);
-    #endif
-    #if GODOT
-    void GodotReady();
-	void GodotProcess();
-    #endif
     ///<summary>
     ///Number of agents in this formation
     ///</summary>

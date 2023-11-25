@@ -11,8 +11,6 @@ using AgentsSystem;
 using System.Text;
 using System.Globalization;
 using System.Collections;
-//This is a necessary fix. Godot can't load this library properly. Possibly with Godot 4 it will get better.
-//#if !GODOT
 using Innovative.SolarCalculator;
 using GeoTimeZone;
 //#endif
@@ -81,7 +79,6 @@ public class AgroWorld : SimulationWorld
 
 	public readonly static DateTime InitialTime = new(2022, 1, 1, 0, 0, 0, DateTimeKind.Unspecified);
 
-	#if !GODOT
 	public AgroWorld(SimulationRequest? settings = null) : base()
 	{
 		var ianaTimeZone = TimeZoneLookup.GetTimeZone(Latitude, Longitude).Result;
@@ -123,7 +120,6 @@ public class AgroWorld : SimulationWorld
 
 		Init();
 	}
-	#endif
 
 	public void Init()
 	{
