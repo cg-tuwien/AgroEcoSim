@@ -269,42 +269,27 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 				var growthBase = PreviousDayProductionInv / formation.DailyProductionMax;
 				var radiusChildGrowth = childrenCount <= 1 ? 1 : MathF.Pow(childrenCount, GrowthDeclineByExpChildren / 2);
 				var (radiusGrowthBase, lengthGrowthBase) = (3e-6f * growthBase, 8e-5f * growthBase);
-				var newRadius = Radius;
-				var newLength = Length;
 				var newWaterAbsorbtion = mWaterAbsorbtionFactor;
-				bool grows = true;
-				var localSubtree = new List<UnderGroundAgent2>();
-				//for(int i = 0; i < world.HoursPerTick && grows; ++i)
+
+				var ld = Length * Radius * 4f;
+				var volume = ld * Length;
+				if (volume * newWaterAbsorbtion < 288)
 				{
-					var ld = newLength * newRadius * 4f;
-					var volume = ld * newLength;
-					grows = false;
-					if (volume * newWaterAbsorbtion < 288)
+					float maxRadius = Parent == -1 ? plant.AG.GetBaseRadius(0) * 1.25f : formation.GetBaseRadius(Parent);
+					if (Radius <= maxRadius)
 					{
-						float maxRadius = Parent == -1 ? plant.AG.GetBaseRadius(0) * 1.25f : formation.GetBaseRadius(Parent);
-						var compute = newRadius <= maxRadius;
-
-						if (compute)
-						{
-							var d = 1f - 0.7f * formation.GetRelDepth(formationID);
-							var radiusGrowth = radiusGrowthBase * d * d / (radiusChildGrowth * MathF.Pow(ld * newRadius, 0.2f));
-							newRadius += radiusGrowth;
-							if (newRadius > maxRadius) newRadius = maxRadius;
-							newWaterAbsorbtion -= radiusGrowth * childrenCount;  //become wood faster with children
-							grows = true;
-							if (newWaterAbsorbtion < 0f) newWaterAbsorbtion = 0f;
-						}
-
-						if (childrenCount == 1)
-						{
-							newLength += lengthGrowthBase / MathF.Pow(ld * newLength, 0.1f);
-							grows = true;
-						}
+						var d = 1f - 0.7f * formation.GetRelDepth(formationID);
+						var radiusGrowth = radiusGrowthBase * d * d / (radiusChildGrowth * MathF.Pow(ld * Radius, 0.2f));
+						Radius += radiusGrowth;
+						if (Radius > maxRadius) Radius = maxRadius;
+						newWaterAbsorbtion -= radiusGrowth * childrenCount;  //become wood faster with children
+						if (newWaterAbsorbtion < 0f) newWaterAbsorbtion = 0f;
 					}
+
+					if (childrenCount == 1)
+						Length += lengthGrowthBase / MathF.Pow(ld * Length, 0.1f);
 				}
 
-				Radius = newRadius;
-				Length = newLength;
 				mWaterAbsorbtionFactor = newWaterAbsorbtion;
 			}
 

@@ -1,12 +1,22 @@
 #!/bin/bash
+sudo chmod 777 -R $1
+
 dir=$1
 dir="${dir%/}"
 
-fps=12
-br=275
+#fps=12
+fps=6
+#br=275
+br=2048
 #[ -f $dir/g00000000.png ] && ffmpeg -r ${fps}/1 -i $dir/g%08d.png -c:v libx265 -crf 36 -vf "pad=ceil(iw/2)*2:ceil(ih/2)*2" -pix_fmt yuv420p $dir/g$dir.mp4
 [ -f $dir/g00000000.png ] && \
     ffmpeg -y -r ${fps}/1 -i $dir/g%08d.png -c:v libx265 -b:v ${br}k -x265-params pass=1 -vf "pad=ceil(iw/2)*2:ceil(ih/2)*2" -an -f null /dev/null && \
     ffmpeg -y -r ${fps}/1 -i $dir/g%08d.png -c:v libx265 -b:v ${br}k -x265-params pass=2 -vf "pad=ceil(iw/2)*2:ceil(ih/2)*2" -an $dir/g$dir.mp4
 
 [ -f $dir/r00000000.png ] && ffmpeg -r ${fps}/1 -i $dir/r%08d.png -c:v libx265 -vf "pad=ceil(iw/2)*2:ceil(ih/2)*2" -pix_fmt yuv420p $dir/r$dir.mp4
+
+[ -f $dir/e00000000.exr ] && for i in $dir/*.exr ; do convert "$i" "${i%.*}.png" ; done && ffmpeg -r ${fps}/1 -i $dir/e%08d.png -c:v libx265 -vf "pad=ceil(iw/2)*2:ceil(ih/2)*2" -pix_fmt yuv420p $dir/e$dir.mp4
+
+[ -f $dir/g00000000.png ] && [ -f $dir/r00000000.png ] && [ -f $dir/e00000000.png ] && \
+    #ffmpeg -r ${fps}/1 -i $dir/g%08d.png -i $dir/r%08d.png -filter_complex "[0]pad=ceil(iw/2)*2:ceil(ih/2)*2[A];[1]pad=ceil(iw/2)*2:ceil(ih/2)*2[B];[A][B]hstack=inputs=2" -c:v libx265 -pix_fmt yuv420p $dir/all_$dir.mp4
+    ffmpeg -r ${fps}/1 -i $dir/g$dir.mp4 -i $dir/r$dir.mp4 -i $dir/e$dir.mp4 -filter_complex "[0][1]hstack=inputs=2[H];[2]scale=w=2*iw:h=2*ih[2X];[2X]crop=iw:ih/2:0:0[V];[H][V]overlay=(main_w-overlay_w)/2:main_h-overlay_h[OUT]" -map "[OUT]" -c:v libx265 -pix_fmt yuv420p $dir/all_$dir.mp4
