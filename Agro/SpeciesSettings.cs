@@ -256,7 +256,7 @@ public class SpeciesSettings
             // AuxinsDegradationPerTick = AuxinsReach * hoursPerTick;
             // CytokininsDegradationPerTick = CytokininsReach * hoursPerTick;
             TwigsBendingApical = TwigsBendingApical * TwigsBendingLevel;
-            ShootsGravitaxis *= 0.2f;
+            ShootsGravitaxis *= 0.4f;
             Initialized = true;
 
             PetioleCoverThreshold = MathF.Cos(MathF.PI * 0.5f - LateralPitch) * PetioleLength * 0.25f;
