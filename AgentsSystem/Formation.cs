@@ -38,11 +38,11 @@ public abstract class Formation<T> : IFormation where T : struct, IAgent
 			}
 
 			var diff = Births.Count - Deaths.Count;
-			T[] underGround;
+			T[] result;
 			if (diff != 0)
-				underGround = new T[src.Length + diff];
+				result = new T[src.Length + diff];
 			else
-				underGround = src;
+				result = src;
 
 			int a = 0;
 			if (Deaths.Count > 0)
@@ -54,35 +54,35 @@ public abstract class Formation<T> : IFormation where T : struct, IAgent
 					{
 						if (++d == dc && i + 1 < src.Length)
 						{
-							Array.Copy(src, i + 1, underGround, a, src.Length - i - 1);
+							Array.Copy(src, i + 1, result, a, src.Length - i - 1);
 							break;
 						}
 					}
 					else
-						underGround[a++] = src[i];
+						result[a++] = src[i];
 				}
 				Deaths.Clear();
 			}
 			else
 			{
-				Array.Copy(src, underGround, src.Length);
+				Array.Copy(src, result, src.Length);
 				a = src.Length;
 			}
 
 			for(int i = 0; i < Births.Count; ++i, ++a)
-				underGround[a] = Births[i];
+				result[a] = Births[i];
 
 			Births.Clear();
 
 			if (ReadTMP)
 			{
-				Agents = new T[underGround.Length];
-				AgentsTMP = underGround;
+				Agents = new T[result.Length];
+				AgentsTMP = result;
 			}
 			else
 			{
-				Agents = underGround;
-				AgentsTMP = new T[underGround.Length];
+				Agents = result;
+				AgentsTMP = new T[result.Length];
 			}
 		}
 	}

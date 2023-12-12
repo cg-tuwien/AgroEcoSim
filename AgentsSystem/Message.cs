@@ -42,12 +42,10 @@ public readonly struct MessageWrapper<T> where T : struct, IAgent
         if (Recipients == null)
         {
             for(int i = 0; i < agents.Length; ++i)
-                //agents[i] = Message.Receive(agents[i]);
                 Message.Receive(ref agents[i], timestep);
         }
         else
             foreach(var recipient in Recipients)
-                //agents[recipient] = Message.Receive(agents[recipient]);
                 Message.Receive(ref agents[recipient], timestep);
     }
 }

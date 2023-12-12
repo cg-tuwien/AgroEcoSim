@@ -66,39 +66,14 @@ public partial struct UnderGroundAgent2 : IPlantAgent
         public void Receive(ref UnderGroundAgent2 dstAgent, uint timestep) => dstAgent.TryDecEnergy(Amount);
     }
 
-    // [StructLayout(LayoutKind.Auto)]
-    // [Message]
-    // public readonly struct Energy_PullFrom: IMessage<UnderGroundAgent>
-    // {
-    //     public readonly float Amount;
-    //     public readonly PlantSubFormation<UnderGroundAgent> DstFormation;
-    //     public readonly int DstIndex;
-    //     public Energy_PullFrom(PlantSubFormation<UnderGroundAgent> dstFormation, float amount, int dstIndex)
-    //     {
-    //         Amount = amount;
-    //         DstFormation = dstFormation;
-    //         DstIndex = dstIndex;
-    //     }
-    //     public bool Valid => Amount > 0f && DstFormation.CheckIndex(DstIndex);
-    //     public Transaction Type => Transaction.Decrease;
-
-    //     public void Receive(ref UnderGroundAgent srcAgent, uint timestep)
-    //     {
-    //         var freeCapacity = Math.Max(0f, DstFormation.GetEnergyCapacity(DstIndex) - DstFormation.GetEnergy(DstIndex));
-    //         var energy = srcAgent.TryDecEnergy(Math.Min(freeCapacity, Amount));
-    //         if (energy > 0f)
-    //             DstFormation.SendProtected(DstIndex, new EnergyInc(energy));
-    //     }
-    // }
-
     [StructLayout(LayoutKind.Auto)]
     [Message]
     public readonly struct Energy_PullFrom_AG: IMessage<AboveGroundAgent3>
     {
         public readonly float Amount;
-        public readonly PlantSubFormation2<UnderGroundAgent2> DstFormation;
+        public readonly PlantSubFormation<UnderGroundAgent2> DstFormation;
         public readonly int DstIndex;
-        public Energy_PullFrom_AG(PlantSubFormation2<UnderGroundAgent2> dstFormation, float amount, int dstIndex)
+        public Energy_PullFrom_AG(PlantSubFormation<UnderGroundAgent2> dstFormation, float amount, int dstIndex)
         {
             Amount = amount;
             DstFormation = dstFormation;
@@ -116,42 +91,14 @@ public partial struct UnderGroundAgent2 : IPlantAgent
         }
     }
 
-    // [StructLayout(LayoutKind.Auto)]
-    // [Message]
-    // public readonly struct Water_PullFrom : IMessage<UnderGroundAgent>
-    // {
-	    //     /// <summary>
-    //     /// Water volume in m³
-    //     /// </summary>
-    //     public readonly float Amount;
-    //     public readonly PlantSubFormation<UnderGroundAgent> DstFormation;
-    //     public readonly int DstIndex;
-    //     public Water_PullFrom(PlantSubFormation<UnderGroundAgent> dstFormation, float amount, int dstIndex)
-    //     {
-    //         Amount = amount;
-    //         DstFormation = dstFormation;
-    //         DstIndex = dstIndex;
-    //     }
-    //     public bool Valid => Amount > 0f && DstFormation.CheckIndex(DstIndex);
-    //     public Transaction Type => Transaction.Decrease;
-
-    //     public void Receive(ref UnderGroundAgent srcAgent, uint timestep)
-    //     {
-    //         var freeCapacity = Math.Max(0f, DstFormation.GetWaterTotalCapacity(DstIndex) - DstFormation.GetWater(DstIndex));
-    //         var water = srcAgent.TryDecWater(Math.Min(freeCapacity, Amount));
-    //         if (water > 0f)
-    //             DstFormation.SendProtected(DstIndex, new WaterInc(water));
-    //     }
-    // }
-
     [StructLayout(LayoutKind.Auto)]
     [Message]
     public readonly struct Water_AG_PullFrom_UG : IMessage<UnderGroundAgent2>
     {
         public readonly float Amount;
-        public readonly PlantSubFormation2<AboveGroundAgent3> DstFormation;
+        public readonly PlantSubFormation<AboveGroundAgent3> DstFormation;
         public readonly int DstIndex;
-        public Water_AG_PullFrom_UG(PlantSubFormation2<AboveGroundAgent3> dstFormation, float amount, int dstIndex)
+        public Water_AG_PullFrom_UG(PlantSubFormation<AboveGroundAgent3> dstFormation, float amount, int dstIndex)
         {
             Amount = amount;
             DstFormation = dstFormation;

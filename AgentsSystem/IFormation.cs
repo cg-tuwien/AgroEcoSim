@@ -1,13 +1,18 @@
 namespace AgentsSystem;
-//This must not be part of a namespace, otherwise Godot will throw
-//  non-sense errors about the interface not being implemented where it is implemented.
-//  Moreover it must have the following using declared:
-//using AgentsSystem;
 
 public interface IFormation
 {
+    ///<summary>
+    ///Handles births and deaths of agents
+    ///</summary>
     void Census();
+    ///<summary>
+    ///Each agent performs its simulation step
+    ///</summary>
     void Tick(uint timestep);
+    ///<summary>
+    ///Delivers messages to all its agents
+    ///</summary>
     void DeliverPost(uint timestep);
     bool HasUndeliveredPost { get; }
     ///<summary>

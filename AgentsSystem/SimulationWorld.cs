@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 using System.Diagnostics;
 
 namespace AgentsSystem;
-public partial class SimulationWorld
+public class SimulationWorld
 {
 	internal readonly List<IFormation> Formations = new();
 	internal readonly List<Action<SimulationWorld, uint, IList<IFormation>, IList<IObstacle>>> Callbacks = new();
@@ -15,12 +15,6 @@ public partial class SimulationWorld
 	public int Count => Formations.Count;
 
 	internal readonly List<IObstacle> Obstacles = new();
-
-	public SimulationWorld()
-	{
-		Formations = new List<IFormation>();
-		Timestep = 0;
-	}
 
 	public void ForEach(Action<IFormation> action) => Formations.ForEach(formation => action(formation));
 
@@ -125,13 +119,12 @@ public partial class SimulationWorld
 		var sb = new System.Text.StringBuilder();
 		//assuming all formations are present all the time (no additions or removals)
 		sb.Append("{ \"Formations\": [ ");
-		sb.Append(Utils.Export.Json(Formations[1]));
-		// for(int i = 0; i < Formations.Count; ++i)
-		// {
-		// 	sb.Append(Utils.Export.Json(Formations[i]));
-		// 	if (i < Formations.Count - 1)
-		// 		sb.Append(", ");
-		// }
+		for(int i = 0; i < Formations.Count; ++i)
+		{
+			sb.Append(Utils.Export.Json(Formations[i]));
+			if (i < Formations.Count - 1)
+				sb.Append(", ");
+		}
 		sb.Append("]}");
 
 		return sb.ToString();

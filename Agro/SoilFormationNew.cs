@@ -45,7 +45,7 @@ public partial class SoilFormationNew : IFormation, IGrid3D
 	readonly List<(int dst, float amount)>[] WaterTransactions;
 
 	readonly List<(PlantFormation2 Plant, float Amount)>[] WaterRequestsSeeds;
-	readonly List<(PlantSubFormation2<UnderGroundAgent2> Plant, int Part, float Amount)>[] WaterRequestsRoots;
+	readonly List<(PlantSubFormation<UnderGroundAgent2> Plant, int Part, float Amount)>[] WaterRequestsRoots;
 	public float Depth => Size.Z * CellSize.Z;
 
 	public SoilFormationNew(AgroWorld world, Vector3i size, Vector3 metricSize)
@@ -133,7 +133,7 @@ public partial class SoilFormationNew : IFormation, IGrid3D
 		Steam = new float[Water.Length];
 
 		WaterRequestsSeeds = new List<(PlantFormation2, float)>[Water.Length];
-		WaterRequestsRoots = new List<(PlantSubFormation2<UnderGroundAgent2>, int, float)>[Water.Length];
+		WaterRequestsRoots = new List<(PlantSubFormation<UnderGroundAgent2>, int, float)>[Water.Length];
 		for(int i = 0; i < Water.Length; ++i)
 		{
 			WaterRequestsSeeds[i] = new();
@@ -448,7 +448,7 @@ public partial class SoilFormationNew : IFormation, IGrid3D
 	// 	//WaterTransactions[index].Add((dst, amount));
 	// }
 
-	[M(AI)] public void RequestWater(int index, float amount, PlantSubFormation2<UnderGroundAgent2> plant, int part)
+	[M(AI)] public void RequestWater(int index, float amount, PlantSubFormation<UnderGroundAgent2> plant, int part)
 	{
 		if (Water[index] > 0)
 			WaterRequestsRoots[index].Add((plant, part, amount));

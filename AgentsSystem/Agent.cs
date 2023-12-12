@@ -17,13 +17,3 @@ public interface ITreeAgent : IAgent
 	///</summary>
 	void CensusUpdateParent(int newParent);
 }
-
-// public abstract class Agent : IAgent
-// {
-//     public readonly string ClassName;
-//     public readonly Dictionary<string, AttrValue> Attributes;
-
-//     public Agent(string className) => ClassName = className;
-
-//     public abstract IAgent Tick(World world, IAgent parent, int formationID, uint timestep);
-// }

@@ -1,108 +1,108 @@
-using System;
-using System.Numerics;
-using System.Runtime.InteropServices;
-using AgentsSystem;
-using Utils;
+// using System;
+// using System.Numerics;
+// using System.Runtime.InteropServices;
+// using AgentsSystem;
+// using Utils;
 
-namespace Agro;
+// namespace Agro;
 
-[StructLayout(LayoutKind.Auto)]
-public partial struct SoilAgent : IAgent
-{
-	public static float FieldCellSurface(AgroWorld world) => world.FieldResolution * world.FieldResolution;
+// [StructLayout(LayoutKind.Auto)]
+// public partial struct SoilAgent : IAgent
+// {
+// 	public static float FieldCellSurface(AgroWorld world) => world.FieldResolution * world.FieldResolution;
 
-	internal static float SoilDiffusionCoefPerTick(AgroWorld world) => 0.2f * world.HoursPerTick;
-	internal static float GravitationDiffusionCoefPerTick(AgroWorld world) => 1.5f * SoilDiffusionCoefPerTick(world);
+// 	internal static float SoilDiffusionCoefPerTick(AgroWorld world) => 0.2f * world.HoursPerTick;
+// 	internal static float GravitationDiffusionCoefPerTick(AgroWorld world) => 1.5f * SoilDiffusionCoefPerTick(world);
 
-	///<summary>
-	///Water ammount (g)
-	///</summary>
-	public float Water { get; private set; }
-	///<summary>
-	///Steam ammount (g)
-	///</summary>
-	public float Steam { get; private set; }
-	///<summary>
-	///Temperature (°C)
-	///</summary>
-	public float Temperature { get; private set; }
+// 	///<summary>
+// 	///Water ammount (g)
+// 	///</summary>
+// 	public float Water { get; private set; }
+// 	///<summary>
+// 	///Steam ammount (g)
+// 	///</summary>
+// 	public float Steam { get; private set; }
+// 	///<summary>
+// 	///Temperature (°C)
+// 	///</summary>
+// 	public float Temperature { get; private set; }
 
-	public const float WaterCapacityRatio = 1f;
-	public const float WaterSaturationRatio = 0.01f;
+// 	public const float WaterCapacityRatio = 1f;
+// 	public const float WaterSaturationRatio = 0.01f;
 
-	public float WaterMaxCapacity(AgroWorld world) => FieldCellSurface(world) * world.FieldResolution * WaterCapacityRatio;
-	public float WaterMinSaturation(AgroWorld world) => FieldCellSurface(world) * world.FieldResolution * WaterSaturationRatio;
+// 	public float WaterMaxCapacity(AgroWorld world) => FieldCellSurface(world) * world.FieldResolution * WaterCapacityRatio;
+// 	public float WaterMinSaturation(AgroWorld world) => FieldCellSurface(world) * world.FieldResolution * WaterSaturationRatio;
 
-	internal static readonly Vector3i[] LateralNeighborhood = new []{ new Vector3i(-1, 0, 0), new Vector3i(1, 0, 0), new Vector3i(0, -1, 0), new Vector3i(0, 1, 0) };
+// 	internal static readonly Vector3i[] LateralNeighborhood = new []{ new Vector3i(-1, 0, 0), new Vector3i(1, 0, 0), new Vector3i(0, -1, 0), new Vector3i(0, 1, 0) };
 
-	public SoilAgent(float water, float steam, float temperature)
-	{
-		Water = water;
-		Steam = steam;
-		Temperature = temperature;
-	}
+// 	public SoilAgent(float water, float steam, float temperature)
+// 	{
+// 		Water = water;
+// 		Steam = steam;
+// 		Temperature = temperature;
+// 	}
 
-	public void Tick(IFormation _formation, int formationID, uint timestep)
-	{
-		var formation = (SoilFormation)_formation;
-		var coords = formation.Coords(formationID);
-		var world = formation.World;
+// 	public void Tick(IFormation _formation, int formationID, uint timestep)
+// 	{
+// 		var formation = (SoilFormation)_formation;
+// 		var coords = formation.Coords(formationID);
+// 		var world = formation.World;
 
-		//CodeReview: I used this trick to better visualize the lateral flow.
-		//  Now only one corner cell gets water, so in order to spread it needs the lateral flow
-		if (coords.Z == 0 /*&& coords.X == 0 && coords.Y == 0*/) // cells at z = 0 are above the ground, infinitely tall so no capacity restrictions for them
-			Water += world.GetWater(timestep) * FieldCellSurface(world);
+// 		//CodeReview: I used this trick to better visualize the lateral flow.
+// 		//  Now only one corner cell gets water, so in order to spread it needs the lateral flow
+// 		if (coords.Z == 0 /*&& coords.X == 0 && coords.Y == 0*/) // cells at z = 0 are above the ground, infinitely tall so no capacity restrictions for them
+// 			Water += world.GetWater(timestep) * FieldCellSurface(world);
 
-		//if (Water > WaterMinSaturation)
-		{
-			var availableForDiffusion = Water * 0.5f;
-			var downDiffusion = availableForDiffusion * GravitationDiffusionCoefPerTick(world);
-			var sideDiffusion = coords.Z > 0 ? (availableForDiffusion - downDiffusion) * SoilDiffusionCoefPerTick(world) : availableForDiffusion - downDiffusion; //lateral flow above the ground is very strong
+// 		//if (Water > WaterMinSaturation)
+// 		{
+// 			var availableForDiffusion = Water * 0.5f;
+// 			var downDiffusion = availableForDiffusion * GravitationDiffusionCoefPerTick(world);
+// 			var sideDiffusion = coords.Z > 0 ? (availableForDiffusion - downDiffusion) * SoilDiffusionCoefPerTick(world) : availableForDiffusion - downDiffusion; //lateral flow above the ground is very strong
 
-			var lateralFlow = new float[LateralNeighborhood.Length];
-			var lateralSum = 0f;
-			bool anyLateral = false;
-			for(int i = 0; i < LateralNeighborhood.Length; ++i)
-				if (formation.TryGet(coords + LateralNeighborhood[i], out var neighbor))
-				{
-					if (neighbor.Water < Water)
-					{
-						var diff = (Water - neighbor.Water) * 0.5f;
-						lateralFlow[i] = diff;
-						lateralSum += diff;
-						anyLateral = true;
-					}
-				}
+// 			var lateralFlow = new float[LateralNeighborhood.Length];
+// 			var lateralSum = 0f;
+// 			bool anyLateral = false;
+// 			for(int i = 0; i < LateralNeighborhood.Length; ++i)
+// 				if (formation.TryGet(coords + LateralNeighborhood[i], out var neighbor))
+// 				{
+// 					if (neighbor.Water < Water)
+// 					{
+// 						var diff = (Water - neighbor.Water) * 0.5f;
+// 						lateralFlow[i] = diff;
+// 						lateralSum += diff;
+// 						anyLateral = true;
+// 					}
+// 				}
 
-			if (anyLateral)
-			{
-				lateralSum = sideDiffusion / lateralSum;
-				for(int i = 0; i < LateralNeighborhood.Length; ++i)
-					if (lateralFlow[i] > 0f)
-					{
-						lateralFlow[i] *= lateralSum;
-						formation.Send(formationID, new Water_PullFrom(formation, lateralFlow[i], coords + LateralNeighborhood[i]));
-					}
-			}
+// 			if (anyLateral)
+// 			{
+// 				lateralSum = sideDiffusion / lateralSum;
+// 				for(int i = 0; i < LateralNeighborhood.Length; ++i)
+// 					if (lateralFlow[i] > 0f)
+// 					{
+// 						lateralFlow[i] *= lateralSum;
+// 						formation.Send(formationID, new Water_PullFrom(formation, lateralFlow[i], coords + LateralNeighborhood[i]));
+// 					}
+// 			}
 
-			formation.Send(formationID, new Water_PullFrom(formation, downDiffusion, coords.X, coords.Y, coords.Z + 1));
-		}
-	}
-	void IncWater(float amount) => Water += amount;
-	void IncSteam(float amount) => Steam += amount;
+// 			formation.Send(formationID, new Water_PullFrom(formation, downDiffusion, coords.X, coords.Y, coords.Z + 1));
+// 		}
+// 	}
+// 	void IncWater(float amount) => Water += amount;
+// 	void IncSteam(float amount) => Steam += amount;
 
-	float TryDecWater(float amount)
-	{
-		if (Water > amount)
-		{
-			Water -= amount;
-			return amount;
-		}
-		else
-		{
-			var w = Water;
-			Water = 0f;
-			return w;
-		}
-	}
-}
+// 	float TryDecWater(float amount)
+// 	{
+// 		if (Water > amount)
+// 		{
+// 			Water -= amount;
+// 			return amount;
+// 		}
+// 		else
+// 		{
+// 			var w = Water;
+// 			Water = 0f;
+// 			return w;
+// 		}
+// 	}
+// }

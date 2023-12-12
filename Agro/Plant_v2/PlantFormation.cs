@@ -11,7 +11,6 @@ using Utils;
 
 namespace Agro;
 
-
 public partial class PlantFormation2 : IPlantFormation
 {
 	internal readonly AgroWorld World;
@@ -24,8 +23,8 @@ public partial class PlantFormation2 : IPlantFormation
 	protected readonly PostBox<SeedAgent> PostboxSeed = new();
 	bool DeathSeed = false;
 
-	public readonly PlantSubFormation2<UnderGroundAgent2> UG;
-	public readonly PlantSubFormation2<AboveGroundAgent3> AG;
+	public readonly PlantSubFormation<UnderGroundAgent2> UG;
+	public readonly PlantSubFormation<AboveGroundAgent3> AG;
 
 	public readonly List<Quaternion> SegmentOrientations;
 
@@ -50,9 +49,6 @@ public partial class PlantFormation2 : IPlantFormation
 
 	internal float WaterProductionMax = 0f;
 	internal float EnergyProductionMax = 0f;
-
-	//bool NeedsGathering = false;
-
 
 	/// <summary>
 	/// Random numbers generator
@@ -84,17 +80,6 @@ public partial class PlantFormation2 : IPlantFormation
 	/// </summary>
 	(SeedAgent[], SeedAgent[]) SrcDst_Seed() => ReadTMP ? (SeedTMP, Seed) : (Seed, SeedTMP);
 
-	// public bool Send(int dst, IMessage<SoilAgent> msg)
-	// {
-	//     if (dst < Roots.Length)
-	//     {
-	//         PostboxRoots.Add(new (msg, dst));
-	//         return true;
-	//     }
-	//     else
-	//         return false;
-	// }
-
 	public bool Send(int recipient, IMessage<SeedAgent> msg)
 	{
 		if (Seed.Length > 0 && Seed.Length > recipient)
@@ -115,7 +100,7 @@ public partial class PlantFormation2 : IPlantFormation
 		Seed = Array.Empty<SeedAgent>();
 
 		//initial setup of default efficiencies
-		//Do not call Census() as it would also start the gathering phase
+		//Do not call this.Census() as it would also start the gathering phase
 		UG.Census();
 		AG.Census();
 		UG.FirstDay();
@@ -132,8 +117,6 @@ public partial class PlantFormation2 : IPlantFormation
 		if (Seed.Length == 0 && (UG.Alive || AG.Alive))
 		{
 			var timestep = World.Timestep;
-			//Debug.WriteLine($"GATHERING {timestep} for {timestep * World.HoursPerTick} h");
-			//NeedsGathering = false;
 
 			if (timestep % World.StatsBlockLength == 0) //A New Day Just Begun
 			{
@@ -163,48 +146,33 @@ public partial class PlantFormation2 : IPlantFormation
 			if (energy < energyEmergencyThrehold)
 			{
 				//Debug.WriteLine("E DIST: req!!!");
-				// var energyState = energy / (energyRequirement >= zero ? energyRequirement : 1);
-				// var waterState = water / (waterRequirement >= zero ? waterRequirement : 1);
-				// if (waterState < energyState) //cut of a root
-				// {
-
-				// }
-				// else //cut off a leaf
+				var count = globalAG.Gathering.Count;
+				var ordering = new List<(float energyRequired, int index)>(count);
+				int i = 0;
+				for(; i < count; ++i)
+					ordering.Add((globalAG.Gathering[i].ResourcesEfficiency, i));
+				ordering.Sort((x, y) => x.energyRequired.CompareTo(y.energyRequired));
+				var target = energyEmergencyThrehold - energy;
+				i = 0;
+				var removed = new HashSet<int>();
+				while (target > 0 && i < ordering.Count)
 				{
-					var count = globalAG.Gathering.Count;
-					var ordering = new List<(float energyRequired, int index)>(count);
-					int i = 0;
-					for(; i < count; ++i)
-						ordering.Add((globalAG.Gathering[i].ResourcesEfficiency, i));
-					ordering.Sort((x, y) => x.energyRequired.CompareTo(y.energyRequired));
-					var target = energyEmergencyThrehold - energy;
-					i = 0;
-					var removed = new HashSet<int>();
-					while (target > 0 && i < ordering.Count)
+					var index = ordering[i++].index;
+					if (!removed.Contains(index))
 					{
-						var index = ordering[i++].index;
-						if (!removed.Contains(index))
-						{
-							target -= globalAG.Gathering[index].LifesupportEnergy;
-							removed.Add(index);
-							var deaths = AG.Death(index);
-							if (deaths != null)
-								foreach(var item in deaths)
-									if (!removed.Contains(item))
-									{
-										target -= globalAG.Gathering[item].LifesupportEnergy;
-										removed.Add(item);
-									}
-						}
+						target -= globalAG.Gathering[index].LifesupportEnergy;
+						removed.Add(index);
+						var deaths = AG.Death(index);
+						if (deaths != null)
+							foreach(var item in deaths)
+								if (!removed.Contains(item))
+								{
+									target -= globalAG.Gathering[item].LifesupportEnergy;
+									removed.Add(item);
+								}
 					}
-					Debug.Write($"Emergency removal of {removed.Count} plant agents.");
 				}
-
-				// var minEfficiency = Math.Min(globalUG.Efficiency.Min(), globalAG.Efficiency.Min());
-				// var weights = globalAG.Weights4EnergyDistributionByEmergency(positiveEfficiencyAG) + globalUG.Weights4EnergyDistributionByEmergency(positiveEfficiencyUG);
-				// var factor = (float)(energy / weights);
-				// globalAG.DistributeEnergyByEmergency(factor, positiveEfficiencyAG);
-				// globalUG.DistributeEnergyByEmergency(factor, positiveEfficiencyUG);
+				Debug.Write($"Emergency removal of {removed.Count} plant agents.");
 
 				var weights = globalAG.Weights4EnergyDistributionByRequirement() + globalUG.Weights4EnergyDistributionByRequirement();
 				var factor = (float)(energy / (weights >= zero ? weights : 1));
@@ -344,19 +312,13 @@ public partial class PlantFormation2 : IPlantFormation
 			}
 
 			AG.Tick(timestep);
-// if (timestep >= 1664)
-// 	Debug.Write(timestep);
 			AG.Hormones(true);
 
-			//Physics
+			//Physics (work in progress)
 			//AG.Gravity(world);
-			//NeedsGathering = true;
 		}
 
 		ReadTMP = !ReadTMP;
-		//Just testing
-		// var gltf = GlftHelper.Create(AG.ExportToGLTF());
-		// GlftHelper.Export(gltf, $"T{timestep}.gltf");
 	}
 
 	public void DeliverPost(uint timestep)
@@ -424,7 +386,7 @@ public partial class PlantFormation2 : IPlantFormation
 
 		//slightly faster version given that the first row are constant values
 		var trace = y.Y + z.Z;
-		Quaternion result = new Quaternion();
+		Quaternion result = new();
 
 		if (trace > 0.0f)
 		{

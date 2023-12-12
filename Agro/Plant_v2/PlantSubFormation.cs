@@ -8,7 +8,7 @@ using System.Runtime.InteropServices;
 
 namespace Agro;
 
-public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantAgent
+public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAgent
 {
 	readonly Action<T[], int[]> Reindex;
 
@@ -24,9 +24,9 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 	readonly HashSet<int> Deaths = new();
 	readonly List<int> DeathsHelper = new();
 
-	readonly TreeCacheData2 TreeCache = new();
+	readonly TreeCacheData TreeCache = new();
 
-	public PlantSubFormation2(PlantFormation2 plant, Action<T[], int[]> reindex, bool isAboveGround)
+	public PlantSubFormation(PlantFormation2 plant, Action<T[], int[]> reindex, bool isAboveGround)
 	{
 		Plant = plant;
 		Reindex = reindex;
@@ -61,8 +61,6 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 		Inserts.Add(agent);
 		InsertAncestors.Add(ancestor);
 	}
-
-	// public void Update(int index) => ParentUpdates = true;
 
 	public List<int>? Death(int index)
 	{
@@ -213,9 +211,6 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 			{
 				var indexMap = new int[src.Length + Births.Count + Inserts.Count];
 				Array.Fill(indexMap, -1);
-				// foreach(var index in Deaths)  //must run before copying to underGround
-				// 	if (Agents[index].Parent >= 0)
-				// 		Agents[Agents[index].Parent].RemoveChild(index);
 
 				int a = 0;
 				{
@@ -327,9 +322,6 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 	{
 		var (src, dst) = SrcDst();
 		Array.Copy(src, dst, src.Length);
-		// StemsTMP.Clear();
-		// StemsTMP.AddRange(Stems);
-
 		for(int i = 0; i < dst.Length; ++i)
 			dst[i].Tick(this, i, timestep);
 
@@ -416,6 +408,7 @@ public partial class PlantSubFormation2<T> : IFormation where T: struct, IPlantA
 		};
 	}
 
+	//work in progress
 	List<float> Weights = new();
 
 	internal void Gravity()

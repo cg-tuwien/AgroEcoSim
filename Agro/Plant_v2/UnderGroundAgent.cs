@@ -242,7 +242,7 @@ public partial struct UnderGroundAgent2 : IPlantAgent
 	public void Tick(IFormation _formation, int formationID, uint timestep)
 	{
 		//Console.WriteLine($"{timestep} x {formationID}: w={Water} e={Energy} waf={WaterAbsorbtionFactor}");
-		var formation = (PlantSubFormation2<UnderGroundAgent2>)_formation;
+		var formation = (PlantSubFormation<UnderGroundAgent2>)_formation;
 		var plant = formation.Plant;
 		var world = plant.World;
 		var species = plant.Parameters;

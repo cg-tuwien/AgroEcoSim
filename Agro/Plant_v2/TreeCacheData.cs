@@ -3,7 +3,7 @@ using System.Numerics;
 
 namespace Agro;
 
-internal class TreeCacheData2
+internal class TreeCacheData
 {
 	public int Count { get; private set; }
 	List<int>[] ChildrenNodes;
@@ -16,7 +16,7 @@ internal class TreeCacheData2
 
 	ushort MaxDepth = 0;
 
-	public TreeCacheData2()
+	public TreeCacheData()
 	{
 		Count = 0;
 		ChildrenNodes = new List<int>[]{ new(), new() };
@@ -84,7 +84,7 @@ internal class TreeCacheData2
 	internal float GetRelDepth(int index) => MaxDepth > 0 ? (DepthNodes[index] + 1) / (float)MaxDepth : 1f;
 	internal Vector3 GetBaseCenter(int index) => PointNodes[index];
 
-	internal void UpdateBases<T>(PlantSubFormation2<T> formation) where T : struct, IPlantAgent
+	internal void UpdateBases<T>(PlantSubFormation<T> formation) where T : struct, IPlantAgent
 	{
 		Height = 0f;
 		var buffer = new Stack<int>();

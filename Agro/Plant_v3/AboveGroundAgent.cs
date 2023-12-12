@@ -297,7 +297,7 @@ public partial struct AboveGroundAgent3 : IPlantAgent
 	public const float LeafThickness = 0.0001f;
 	public void Tick(IFormation _formation, int formationID, uint timestep)
 	{
-		var formation = (PlantSubFormation2<AboveGroundAgent3>)_formation;
+		var formation = (PlantSubFormation<AboveGroundAgent3>)_formation;
 		var plant = formation.Plant;
 		var species = plant.Parameters;
 		var world = plant.World;
@@ -609,7 +609,7 @@ public partial struct AboveGroundAgent3 : IPlantAgent
 		Auxins = wasMeristem || Organ == OrganTypes.Meristem ? species.AuxinsProduction : 0;
 	}
 
-    private void MakeBud(PlantSubFormation2<AboveGroundAgent3> formation, IList<int>? children)
+    private void MakeBud(PlantSubFormation<AboveGroundAgent3> formation, IList<int>? children)
     {
         Organ = OrganTypes.Bud;
         ParentRadiusAtBirth = formation.GetBaseRadius(Parent);

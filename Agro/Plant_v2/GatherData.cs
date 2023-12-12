@@ -26,25 +26,3 @@ public readonly struct GatherDataBase
         ProductionEfficiency = productionEfficiency;
     }
 }
-
-// public readonly struct GatherEfficiency
-// {
-//     public readonly float ResourceEfficiency;
-//     public readonly float ProductionEfficiency;
-
-//     public GatherEfficiency(float resource, float production)
-//     {
-//         ResourceEfficiency = resource;
-//         ProductionEfficiency = production;
-//     }
-
-//     public GatherEfficiency Max(GatherEfficiency other)
-//     {
-//         return new(
-//             ResourceEfficiency > other.ResourceEfficiency ? ResourceEfficiency : other.ResourceEfficiency,
-//             ProductionEfficiency > other.ProductionEfficiency ? ProductionEfficiency : other.ProductionEfficiency
-//         );
-//     }
-
-//     public static readonly GatherEfficiency ONE = new (1f, 1f);
-// }
