@@ -4,16 +4,15 @@ using System.Diagnostics;
 using System.Numerics;
 using AgentsSystem;
 using System.Runtime.InteropServices;
+using System.Runtime.CompilerServices;
+using M = System.Runtime.CompilerServices.MethodImplAttribute;
 
 namespace Agro;
 
-//TODO IMPORTANT All resource transport should be request-confirm messages, i.e. pull-policy.
-//  There should never be forced resource push since it may not be able to fit into the available storage.
-//TODO Create properties computing the respective storages for water and energy. Just for clarity.
-
 [StructLayout(LayoutKind.Auto)]
-public partial struct AboveGroundAgent3 : IPlantAgent
+public partial struct AboveGroundAgent : IPlantAgent
 {
+	const MethodImplOptions AI = MethodImplOptions.AggressiveInlining;
 	readonly uint BirthTime;
 	/// <summary>
 	/// Orientation with respect to the parent. If there is no parent, this is the initial orientation.
@@ -46,12 +45,12 @@ public partial struct AboveGroundAgent3 : IPlantAgent
 	/// </summary>
 	public byte DominanceLevel { get; private set; } = 1;
 
-	public readonly Vector3 Scale() => Organ switch {
+	[M(AI)]public readonly Vector3 Scale() => Organ switch {
 		OrganTypes.Leaf => new(Length, 0.0001f, 2f * Radius),
 		_ => new(Length, 2f * Radius, 2f * Radius)
 	};
 
-	public readonly float Volume() => Organ switch {
+	[M(AI)]public readonly float Volume() => Organ switch {
 		OrganTypes.Leaf => Length * 0.0002f * Radius,
 		_ => Length * 4f * Radius* Radius
 	};
@@ -106,7 +105,10 @@ public partial struct AboveGroundAgent3 : IPlantAgent
 	/// </summary>
 	float WoodFactor;
 
-	public float WoodRatio() => WoodFactor;
+	/// <summary>
+	/// Woodyness ∈ [0, 1].
+	/// </summary>
+	[M(AI)]public float WoodRatio() => WoodFactor;
 
 	/// <summary>
 	/// Plant organ, e.g. stem, leaft, fruit
@@ -143,16 +145,16 @@ public partial struct AboveGroundAgent3 : IPlantAgent
 	/// <summary>
 	/// Water volume in m³ which can be passed to the parent per hour
 	/// </summary>
-	public readonly float WaterFlowToParentPerHour() => 4f * Radius * Radius * WaterTransportRatio;
+	[M(AI)]public readonly float WaterFlowToParentPerHour() => 4f * Radius * Radius * WaterTransportRatio;
 
 	/// <summary>
 	/// Water volume in m³ which can be passed to the parent per timestep
 	/// </summary>
-	public readonly float WaterFlowToParentPerTick(AgroWorld world) => WaterFlowToParentPerHour() * world.HoursPerTick;
+	[M(AI)]public readonly float WaterFlowToParentPerTick(AgroWorld world) => WaterFlowToParentPerHour() * world.HoursPerTick;
 
-	public readonly float EnergyFlowToParentPerHour() => 4f * Radius * Radius * WaterTransportRatio;
+	[M(AI)]public readonly float EnergyFlowToParentPerHour() => 4f * Radius * Radius * WaterTransportRatio;
 
-	public readonly float EnergyFlowToParentPerTick(AgroWorld world) => EnergyFlowToParentPerHour() * world.HoursPerTick;
+	[M(AI)]public readonly float EnergyFlowToParentPerTick(AgroWorld world) => EnergyFlowToParentPerHour() * world.HoursPerTick;
 
 	/// <summary>
 	/// Volume ratio ∈ [0, 1] of the agent that can used for storing water
@@ -162,22 +164,22 @@ public partial struct AboveGroundAgent3 : IPlantAgent
 	/// <summary>
 	/// Water volume in m³ which can be stored in this agent
 	/// </summary>
-	public static float WaterStorageCapacityfunction(float radius, float length) => 4f * radius * radius * length * WaterCapacityRatio;
+	[M(AI)]public static float WaterStorageCapacityFunction(float radius, float length) => 4f * radius * radius * length * WaterCapacityRatio;
 
 	/// <summary>
 	/// Water volume in m³ which can be stored in this agent
 	/// </summary>
-	public readonly float WaterStorageCapacity() => WaterStorageCapacityfunction(Radius, Length);
+	[M(AI)]public readonly float WaterStorageCapacity() => WaterStorageCapacityFunction(Radius, Length);
 
 	/// <summary>
 	/// Water volume in m³ which can flow through per hour, or can be stored in this agent
 	/// </summary>
-	public readonly float WaterTotalCapacityPerHour() => 4f * Radius * Radius * (Length * WaterCapacityRatio + WaterTransportRatio);
+	[M(AI)]public readonly float WaterTotalCapacityPerHour() => 4f * Radius * Radius * (Length * WaterCapacityRatio + WaterTransportRatio);
 
 	/// <summary>
 	/// Water volume in m³ which can flow through per tick, or can be stored in this agent
 	/// </summary>
-	public readonly float WaterTotalCapacityPerTick(AgroWorld world) => WaterTotalCapacityPerHour() * world.HoursPerTick;
+	[M(AI)]public readonly float WaterTotalCapacityPerTick(AgroWorld world) => WaterTotalCapacityPerHour() * world.HoursPerTick;
 
 	/// <summary>
 	/// Timespan for which 1 unit of energy can feed 1m³ of plant tissue
@@ -187,25 +189,25 @@ public partial struct AboveGroundAgent3 : IPlantAgent
 	//without any energy gains if its storage is initially full
 	const float EnergyStorageCoef = 24 * 31 * 3; //3 months
 
-	static float EnergyCapacityFunc(float radius, float length, float woodRatio) => 4f * radius * radius * length * MathF.Pow(1f + woodRatio, 3) * EnergyStorageCoef;
+	[M(AI)]static float EnergyCapacityFunc(float radius, float length, float woodRatio) => 4f * radius * radius * length * MathF.Pow(1f + woodRatio, 3) * EnergyStorageCoef;
 
-	public readonly float EnergyStorageCapacity() => EnergyCapacityFunc(Radius, Length, WoodFactor);
+	[M(AI)]public readonly float EnergyStorageCapacity() => EnergyCapacityFunc(Radius, Length, WoodFactor);
 
 	public readonly static Quaternion OrientationUp = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, MathF.PI * 0.5f);
 
 	public const float GrowthRatePerHour = 1 + 1/12; //Let us assume this plant can double volume in 12 hours
-	public readonly float GrowthRatePerTick(AgroWorld world) => GrowthRatePerHour * world.HoursPerTick; //Let us assume this plant can double volume in 12 hours
+	[M(AI)]public readonly float GrowthRatePerTick(AgroWorld world) => GrowthRatePerHour * world.HoursPerTick; //Let us assume this plant can double volume in 12 hours
 
-    public readonly float LifeSupportPerHour() => Length * Radius * (Organ == OrganTypes.Leaf ? LeafThickness : Radius * WoodFactor);
-	public readonly float LifeSupportPerTick(AgroWorld world) => LifeSupportPerHour() * world.HoursPerTick;
+    [M(AI)]public readonly float LifeSupportPerHour() => Length * Radius * (Organ == OrganTypes.Leaf ? LeafThickness : Radius * WoodFactor);
+	[M(AI)]public readonly float LifeSupportPerTick(AgroWorld world) => LifeSupportPerHour() * world.HoursPerTick;
 
 	public const float mPhotoEfficiency = 0.025f;
 	public const float ExpectedIrradiance = 500f; //in W/m² per hour see https://en.wikipedia.org/wiki/Solar_irradiance
-	public readonly float PhotosynthPerTick(AgroWorld world) => Length * Radius * (Organ == OrganTypes.Leaf ? 2f : TwoPiTenth) * mPhotoEfficiency * ExpectedIrradiance * world.HoursPerTick;
+	[M(AI)]public readonly float PhotosynthPerTick(AgroWorld world) => Length * Radius * (Organ == OrganTypes.Leaf ? 2f : TwoPiTenth) * mPhotoEfficiency * ExpectedIrradiance * world.HoursPerTick;
 
-    readonly float EnoughEnergy(float? lifeSupportPerHour = null) => (lifeSupportPerHour ?? LifeSupportPerHour()) * 320;
+    [M(AI)]readonly float EnoughEnergy(float? lifeSupportPerHour = null) => (lifeSupportPerHour ?? LifeSupportPerHour()) * 320;
 
-	public AboveGroundAgent3(PlantFormation2 plant, int parent, OrganTypes organ, Quaternion orientation, float initialEnergy, float radius = InitialRadius, float length = InitialLength, float initialResources = 0f, float initialProduction = 0f)
+	public AboveGroundAgent(PlantFormation2 plant, int parent, OrganTypes organ, Quaternion orientation, float initialEnergy, float radius = InitialRadius, float length = InitialLength, float initialResources = 0f, float initialProduction = 0f)
 	{
 		BirthTime = plant.World.Timestep;
 		Parent = parent;
@@ -281,7 +283,7 @@ public partial struct AboveGroundAgent3 : IPlantAgent
 	/// <summary>
 	/// If the plant structure changes (agents added or removed), parent entries need to be reindexed according to the map
 	/// </summary>
-	public static void Reindex(AboveGroundAgent3[] src, int[] map)
+	[M(AI)]public static void Reindex(AboveGroundAgent[] src, int[] map)
 	{
 		for(int i = 0; i < src.Length; ++i)
 			src[i].Parent = src[i].Parent == -1 ? -1 : map[src[i].Parent];
@@ -290,14 +292,14 @@ public partial struct AboveGroundAgent3 : IPlantAgent
 	///<summary>
 	/// Use with caution, call only from census! Updates the Parent value after splitting an agent.
 	///</summary>
-	public void CensusUpdateParent(int newParent) => Parent = newParent;
+	[M(AI)]public void CensusUpdateParent(int newParent) => Parent = newParent;
 
 	const float TwoPi = MathF.PI * 2f;
 	const float TwoPiTenth = MathF.PI * 0.2f;
 	public const float LeafThickness = 0.0001f;
 	public void Tick(IFormation _formation, int formationID, uint timestep)
 	{
-		var formation = (PlantSubFormation<AboveGroundAgent3>)_formation;
+		var formation = (PlantSubFormation<AboveGroundAgent>)_formation;
 		var plant = formation.Plant;
 		var species = plant.Parameters;
 		var world = plant.World;
@@ -609,7 +611,7 @@ public partial struct AboveGroundAgent3 : IPlantAgent
 		Auxins = wasMeristem || Organ == OrganTypes.Meristem ? species.AuxinsProduction : 0;
 	}
 
-    private void MakeBud(PlantSubFormation<AboveGroundAgent3> formation, IList<int>? children)
+    [M(AI)]private void MakeBud(PlantSubFormation<AboveGroundAgent> formation, IList<int>? children)
     {
         Organ = OrganTypes.Bud;
         ParentRadiusAtBirth = formation.GetBaseRadius(Parent);
@@ -619,9 +621,9 @@ public partial struct AboveGroundAgent3 : IPlantAgent
                 formation.Death(child);
     }
 
-    internal static void CreateFirstLeaves(AboveGroundAgent3 parent, PlantFormation2 plant, float lateralAngle, int meristem) => CreateLeavesBase(parent, plant, lateralAngle, meristem, 1f, 1f);
-	internal readonly void CreateLeaves(AboveGroundAgent3 parent, PlantFormation2 plant, float lateralAngle, int meristem) => CreateLeavesBase(parent, plant, lateralAngle, meristem, PreviousDayEnvResourcesInv, PreviousDayProductionInv);
-    static void CreateLeavesBase(AboveGroundAgent3 parent, PlantFormation2 plant, float lateralAngle, int meristem, float initialResources, float initialProduction)
+    [M(AI)]internal static void CreateFirstLeaves(AboveGroundAgent parent, PlantFormation2 plant, float lateralAngle, int meristem) => CreateLeavesBase(parent, plant, lateralAngle, meristem, 1f, 1f);
+	[M(AI)]internal readonly void CreateLeaves(AboveGroundAgent parent, PlantFormation2 plant, float lateralAngle, int meristem) => CreateLeavesBase(parent, plant, lateralAngle, meristem, PreviousDayEnvResourcesInv, PreviousDayProductionInv);
+    static void CreateLeavesBase(AboveGroundAgent parent, PlantFormation2 plant, float lateralAngle, int meristem, float initialResources, float initialProduction)
     {
 		var species = plant.Parameters;
         var angleStep = 2f * MathF.PI / species.LateralsPerNode;
@@ -698,84 +700,35 @@ public partial struct AboveGroundAgent3 : IPlantAgent
 		return complete;
 	}
 
-    public void IncWater(float amount)
-	{
-		Debug.Assert(amount >= 0f);
-		Water += amount;
-	}
-	public void IncEnergy(float amount)
-	{
-		Debug.Assert(amount >= 0f);
-		Energy += amount;
-	}
-
-	internal float TryDecWater(float amount)
-	{
-		Debug.Assert(amount >= 0f);
-		if (Water > amount)
-		{
-			Water -= amount;
-			return amount;
-		}
-		else
-		{
-			var w = Water;
-			Water = 0f;
-			return w;
-		}
-	}
-
-	internal float TryDecEnergy(float amount)
-	{
-		Debug.Assert(amount >= 0f);
-		if (Energy > amount)
-		{
-			Energy -= amount;
-			return amount;
-		}
-		else
-		{
-			var e = Energy;
-			Energy = 0f;
-			return e;
-		}
-	}
-
-	public readonly bool ChangeAmount(PlantFormation2 plant, int index, int substanceIndex, float amount, bool increase) => substanceIndex switch {
-		(byte)PlantSubstances.Water => plant.Send(index, increase ? new WaterInc(amount) : new WaterDec(amount)),
-		(byte)PlantSubstances.Energy => plant.Send(index, increase ? new EnergyInc(amount) : new EnergyDec(amount)),
-		_ => throw new IndexOutOfRangeException($"SubstanceIndex out of range: {substanceIndex}")
-	};
-
-	public void Distribute(float water, float energy)
+	[M(AI)]public void Distribute(float water, float energy)
 	{
 		Energy = energy;
 		Water = water;
 	}
 
-	public void IncAuxins(float amount) => Auxins += amount;
+	[M(AI)]public void IncAuxins(float amount) => Auxins += amount;
 	//public void IncCytokinins(float amount) => Cytokinins += amount;
 
-	public void DailyMax(float resources, float production)
+	[M(AI)]public void DailyMax(float resources, float production)
 	{
 		if (resources > PreviousDayEnvResourcesInv) PreviousDayEnvResourcesInv = resources;
 		if (production > PreviousDayProductionInv) PreviousDayProductionInv = production;
 	}
 
-	public void DailyAdd(float resources, float production)
+	[M(AI)]public void DailyAdd(float resources, float production)
 	{
 		PreviousDayEnvResourcesInv += resources;
 		PreviousDayProductionInv += production;
 	}
 
-	public void DailySet(float resources, float production, float efficiency)
+	[M(AI)]public void DailySet(float resources, float production, float efficiency)
 	{
 		PreviousDayEnvResourcesInv = resources;
 		PreviousDayProductionInv = production;
 		PreviousDayEnvResources = efficiency;
 	}
 
-	public void DailyDiv(uint count)
+	[M(AI)]public void DailyDiv(uint count)
 	{
 		PreviousDayEnvResourcesInv /= count;
 		PreviousDayProductionInv /= count;

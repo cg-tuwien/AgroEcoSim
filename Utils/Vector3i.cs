@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Numerics;
 using System.Runtime.InteropServices;
+using System.Runtime.CompilerServices;
+using M = System.Runtime.CompilerServices.MethodImplAttribute;
 
 namespace Utils;
 
@@ -10,6 +12,7 @@ namespace Utils;
 [StructLayout(LayoutKind.Auto)]
 public readonly struct Vector3i : IEquatable<Vector3i>, IComparable<Vector3i>
 {
+    const MethodImplOptions AI = MethodImplOptions.AggressiveInlining;
     public readonly int X;
     public readonly int Y;
     public readonly int Z;
@@ -38,32 +41,32 @@ public readonly struct Vector3i : IEquatable<Vector3i>, IComparable<Vector3i>
     }
 
     #region Operators
-    public static bool operator ==(Vector3i a, Vector3i b) => a.Equals(b);
-    public static bool operator !=(Vector3i a, Vector3i b) => !a.Equals(b);
+    [M(AI)]public static bool operator ==(Vector3i a, Vector3i b) => a.Equals(b);
+    [M(AI)]public static bool operator !=(Vector3i a, Vector3i b) => !a.Equals(b);
 
-    public override bool Equals(object? obj) => (obj is Vector3i i) && Equals(i);
+    [M(AI)]public override bool Equals(object? obj) => (obj is Vector3i i) && Equals(i);
 
-    public bool Equals(Vector3i other) => X.Equals(other.X) && Y.Equals(other.Y) && Z.Equals(other.Z);
+    [M(AI)]public bool Equals(Vector3i other) => X.Equals(other.X) && Y.Equals(other.Y) && Z.Equals(other.Z);
 
     /// <summary>
     /// Hash using Fowlen-Noll-Vo https://en.wikipedia.org/wiki/Fowler–Noll–Vo_hash_function
     /// </summary>
-    public override int GetHashCode() => HashCode.Combine(X, Y, Z);
+    [M(AI)]public override int GetHashCode() => HashCode.Combine(X, Y, Z);
 
-    public static Vector3i operator +(Vector3i a, Vector3i b) => new(a.X + b.X, a.Y + b.Y, a.Z + b.Z);
-    public static Vector3i operator -(Vector3i a, Vector3i b) => new(a.X - b.X, a.Y - b.Y, a.Z - b.Z);
+    [M(AI)]public static Vector3i operator +(Vector3i a, Vector3i b) => new(a.X + b.X, a.Y + b.Y, a.Z + b.Z);
+    [M(AI)]public static Vector3i operator -(Vector3i a, Vector3i b) => new(a.X - b.X, a.Y - b.Y, a.Z - b.Z);
 
-    public static Vector3i operator *(Vector3i a, int i) => new(a.X * i, a.Y * i, a.Z * i);
-    public static Vector3i operator /(Vector3i a, int i) => new(a.X / i, a.Y / i, a.Z / i);
+    [M(AI)]public static Vector3i operator *(Vector3i a, int i) => new(a.X * i, a.Y * i, a.Z * i);
+    [M(AI)]public static Vector3i operator /(Vector3i a, int i) => new(a.X / i, a.Y / i, a.Z / i);
     #endregion Operators
 
-    public override string ToString() => $"[{X}; {Y}; {Z}]";
+    [M(AI)]public override string ToString() => $"[{X}; {Y}; {Z}]";
 
-    public string ToString(string format) => string.Format(format, X, Y, Z);
+    [M(AI)]public string ToString(string format) => string.Format(format, X, Y, Z);
 
-    public int ManhattanDistance(Vector3i other) => Math.Abs(X - other.X) + Math.Abs(Y - other.Y) + Math.Abs(Z - other.Z);
+    [M(AI)]public int ManhattanDistance(Vector3i other) => Math.Abs(X - other.X) + Math.Abs(Y - other.Y) + Math.Abs(Z - other.Z);
 
-    public int CompareTo(Vector3i other)
+    [M(AI)]public int CompareTo(Vector3i other)
     {
         var x = X.CompareTo(other.X);
         if (x != 0)
@@ -75,13 +78,13 @@ public readonly struct Vector3i : IEquatable<Vector3i>, IComparable<Vector3i>
         }
     }
 
-    internal Vector3i ShiftedLeft() => new(Y, Z, X);
+    [M(AI)]internal Vector3i ShiftedLeft() => new(Y, Z, X);
 
-    internal Vector3i ShiftedRight() => new(Z, X, Y);
+    [M(AI)]internal Vector3i ShiftedRight() => new(Z, X, Y);
 
-    public bool Contains(int value) => X == value || Y == value || Z == value;
+    [M(AI)]public bool Contains(int value) => X == value || Y == value || Z == value;
 
-    public void Deconstruct(out int x, out int y, out int z)
+    [M(AI)]public void Deconstruct(out int x, out int y, out int z)
     {
         x = X;
         y = Y;

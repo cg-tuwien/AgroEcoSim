@@ -86,14 +86,14 @@ public struct SeedAgent : IAgent
 				Debug.WriteLine($"GERMINATION at {timestep}");
 				var initialYawAngle = plant.RNG.NextFloat(-MathF.PI, MathF.PI);
 				var initialYaw = Quaternion.CreateFromAxisAngle(Vector3.UnitY, initialYawAngle);
-				plant.UG.Birth(new UnderGroundAgent2(plant, timestep, -1, initialYaw * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, -0.5f * MathF.PI), Water * 0.4f, initialResources: 1f, initialProduction: 1f));
+				plant.UG.Birth(new UnderGroundAgent(plant, timestep, -1, initialYaw * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, -0.5f * MathF.PI), Water * 0.4f, initialResources: 1f, initialProduction: 1f));
 
 				var baseStemOrientation = initialYaw * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, 0.5f * MathF.PI);
-				var meristem = new AboveGroundAgent3(plant, -1, OrganTypes.Meristem, baseStemOrientation, Water * 0.4f, initialResources: 1f, initialProduction: 1f);
+				var meristem = new AboveGroundAgent(plant, -1, OrganTypes.Meristem, baseStemOrientation, Water * 0.4f, initialResources: 1f, initialProduction: 1f);
 				var meristemIndex = plant.AG.Birth(meristem); //base stem
 
 				if (plant.Parameters.LateralsPerNode > 0)
-					AboveGroundAgent3.CreateFirstLeaves(meristem, plant, 0, meristemIndex);
+					AboveGroundAgent.CreateFirstLeaves(meristem, plant, 0, meristemIndex);
 
 				plant.SeedDeath();
 				Water = 0f;

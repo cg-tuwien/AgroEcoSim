@@ -17,14 +17,14 @@ public partial class PlantFormation2 : IPlantFormation
 
 	public Vector3 Position { get; private set; }
 	bool ReadTMP = false;
-	internal SoilFormationNew Soil;
+	internal SoilFormation Soil;
 	protected SeedAgent[] Seed = new SeedAgent[1]; //must be an array due to messaging compaatibility
 	protected readonly SeedAgent[] SeedTMP = new SeedAgent[1];
 	protected readonly PostBox<SeedAgent> PostboxSeed = new();
 	bool DeathSeed = false;
 
-	public readonly PlantSubFormation<UnderGroundAgent2> UG;
-	public readonly PlantSubFormation<AboveGroundAgent3> AG;
+	public readonly PlantSubFormation<UnderGroundAgent> UG;
+	public readonly PlantSubFormation<AboveGroundAgent> AG;
 
 	public readonly List<Quaternion> SegmentOrientations;
 
@@ -60,7 +60,7 @@ public partial class PlantFormation2 : IPlantFormation
 	/// </summary>
 	public SpeciesSettings Parameters { get; private set; }
 
-	public PlantFormation2(AgroWorld world, SpeciesSettings parameters, SoilFormationNew soil, SeedAgent seed, Pcg parentRNG, int hoursPerTick)
+	public PlantFormation2(AgroWorld world, SpeciesSettings parameters, SoilFormation soil, SeedAgent seed, Pcg parentRNG, int hoursPerTick)
 	{
 		World = world;
 		Parameters = parameters ?? SpeciesSettings.Avocado;
@@ -70,8 +70,8 @@ public partial class PlantFormation2 : IPlantFormation
 		Position = seed.Center;
 
 		RNG = parentRNG.NextRNG();
-		UG = new(this, UnderGroundAgent2.Reindex, false);
-		AG = new(this, AboveGroundAgent3.Reindex, true);
+		UG = new(this, UnderGroundAgent.Reindex, false);
+		AG = new(this, AboveGroundAgent.Reindex, true);
 		SegmentOrientations = new();
 	}
 
@@ -91,8 +91,8 @@ public partial class PlantFormation2 : IPlantFormation
 			return false;
 	}
 
-	public bool Send(int recipient, IMessage<UnderGroundAgent2> msg) => UG.SendProtected(recipient, msg);
-	public bool Send(int recipient, IMessage<AboveGroundAgent3> msg) => AG.SendProtected(recipient, msg);
+	public bool Send(int recipient, IMessage<UnderGroundAgent> msg) => UG.SendProtected(recipient, msg);
+	public bool Send(int recipient, IMessage<AboveGroundAgent> msg) => AG.SendProtected(recipient, msg);
 
 	public void SeedDeath()
 	{

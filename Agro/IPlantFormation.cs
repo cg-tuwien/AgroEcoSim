@@ -1,5 +1,3 @@
-using System;
-using System.Numerics;
 using AgentsSystem;
 
 namespace Agro;

@@ -19,8 +19,6 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 	T[] AgentsTMP = Array.Empty<T>();
 	readonly PostBox<T> Post = new();
 	readonly List<T> Births = new();
-	readonly List<T> Inserts = new();
-	readonly List<int> InsertAncestors = new();
 	readonly HashSet<int> Deaths = new();
 	readonly List<int> DeathsHelper = new();
 
@@ -41,7 +39,7 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 
 	public bool CheckIndex(int index) => index < Agents.Length;
 
-	public bool Alive => Agents.Length > 0 || Births.Count > 0 || Inserts.Count > 0;
+	public bool Alive => Agents.Length > 0 || Births.Count > 0;
 	public int Count => Agents.Length;
 
 	/// <summary>
@@ -54,12 +52,6 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 	{
 		Births.Add(agent);
 		return Agents.Length + Births.Count - 1;
-	}
-
-	public void Insert(int ancestor, T agent)
-	{
-		Inserts.Add(agent);
-		InsertAncestors.Add(ancestor);
 	}
 
 	public List<int>? Death(int index)
@@ -117,7 +109,7 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 
 		// if (RootsBirths.Count > 0)
 		//     Roots.AddRange(RootsBirths);
-		if (Births.Count > 0 || Inserts.Count > 0 || Deaths.Count > 0)
+		if (Births.Count > 0 || Deaths.Count > 0)
 		{
 			//Debug.WriteLine($"{typeof(T).Name} census event: B = {Births.Count}   I = {Inserts.Count}   D = {Deaths.Count}");
 			var (src, dst) = SrcDst();
@@ -131,11 +123,11 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 				DeathsHelper.Sort();
 			}
 
-			var diff = Births.Count + Inserts.Count - Deaths.Count;
+			var diff = Births.Count - Deaths.Count;
 			Debug.Assert(src.Length + diff >= 0);
 
 			//filter out addidions to death parts
-			BitArray? birthsHelper = null, insertsHelper = null;
+			BitArray? birthsHelper = null;
 			if (Deaths.Count > 0)
 			{
 				bool anyRemoved;
@@ -162,28 +154,6 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 					while (anyRemoved);
 				}
 
-				if (Inserts.Count > 0)
-				{
-					do
-					{
-						anyRemoved = false;
-						for(int i = Inserts.Count - 1; i >= 0; --i)
-						{
-							var index = src.Length + Births.Count + i;
-							if (!localRemoved.Contains(index))
-							{
-								var p = Inserts[i].Parent;
-								if (Deaths.Contains(p) || localRemoved.Contains(p))
-								{
-									localRemoved.Add(index);
-									anyRemoved = true;
-								}
-							}
-						}
-					}
-					while (anyRemoved);
-				}
-
 				if (localRemoved.Count > 0)
 				{
 					diff -= localRemoved.Count;
@@ -194,14 +164,6 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 							if (localRemoved.Contains(src.Length + i))
 								birthsHelper.Set(i, false);
 					}
-
-					if (Inserts.Count > 0)
-					{
-						insertsHelper = new BitArray(Inserts.Count, true);
-						for(int i = 0; i < Inserts.Count; ++i)
-							if (localRemoved.Contains(src.Length + Births.Count + i))
-								insertsHelper.Set(i, false);
-					}
 				}
 			}
 
@@ -209,7 +171,7 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 
 			if (Deaths.Count > 0)
 			{
-				var indexMap = new int[src.Length + Births.Count + Inserts.Count];
+				var indexMap = new int[src.Length + Births.Count];
 				Array.Fill(indexMap, -1);
 
 				int a = 0;
@@ -252,22 +214,8 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 						tmp[a++] = Births[i];
 					}
 
-				var insertsCount = Inserts.Count;
-				var insertsUpdateMap = Inserts.Count > 0 ? new int[Inserts.Count] : Array.Empty<int>();
-				for(int i = 0; i < insertsCount; ++i)
-					if (insertsHelper?.Get(i) ?? true)
-					{
-						indexMap[src.Length + i] = a;
-						insertsUpdateMap[i] = a;
-						tmp[a++] = Inserts[i];
-					}
-
 				if (indexMap != null)
 					Reindex(tmp, indexMap);
-
-				for(int i = 0; i < insertsCount; ++i)
-					if (insertsHelper?.Get(i) ?? true)
-						tmp[indexMap?[InsertAncestors[i]] ?? InsertAncestors[i]].CensusUpdateParent(insertsUpdateMap[i]);
 
 				Deaths.Clear();
 			}
@@ -279,13 +227,6 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 				var birthsCount = Births.Count;
 				Births.CopyTo(tmp, a);
 				a += Births.Count;
-
-				var insertsCount = Inserts.Count;
-				for(int i = 0; i < insertsCount; ++i, ++a)
-				{
-					tmp[a] = Inserts[i];
-					tmp[InsertAncestors[i]].CensusUpdateParent(a);
-				}
 			}
 
 			if (ReadTMP)
@@ -311,8 +252,6 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 			TreeCache.UpdateBases(this);
 
 			Births.Clear();
-			Inserts.Clear();
-			InsertAncestors.Clear();
 		}
 		else
 			TreeCache.UpdateBases(this);
@@ -675,18 +614,6 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 	public Vector3 GetScale(int index) => ReadTMP
 		? (AgentsTMP.Length > index ? AgentsTMP[index].Scale() : Vector3.Zero)
 		: (Agents.Length > index ? Agents[index].Scale() : Vector3.Zero);
-
-	float GetCapacity(AgroWorld world, int index, int substanceIndex) => substanceIndex switch {
-		(byte)PlantSubstances.Water => GetWaterTotalCapacity(world, index),
-		(byte)PlantSubstances.Energy => GetEnergyCapacity(index),
-		_ => throw new IndexOutOfRangeException($"SubstanceIndex out of range: {substanceIndex}")
-	};
-
-	float GetAmount(int index, int substanceIndex) => substanceIndex switch {
-		(byte)PlantSubstances.Water => GetWater(index),
-		(byte)PlantSubstances.Energy => GetEnergy(index),
-		_ => throw new IndexOutOfRangeException($"SubstanceIndex out of range: {substanceIndex}")
-	};
 
 	///<summary>
 	///Volume in m³

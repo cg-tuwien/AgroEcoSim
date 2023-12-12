@@ -13,7 +13,6 @@ using System.Globalization;
 using System.Collections;
 using Innovative.SolarCalculator;
 using GeoTimeZone;
-//#endif
 
 namespace Agro;
 
@@ -145,21 +144,21 @@ public class AgroWorld : SimulationWorld
 
 		var precipitationMM = new []{29, 28, 33, 30, 43, 46, 44, 37, 42, 26, 31, 31};
 
-		var maxTemperature_10_5Days = new []{0.7, 0.8, 0.1, 0, 0, 0, 0, 0, 0, 0, 0, 0.4};
-		var maxTemperature_5_0Days = new []{7.5, 4.7, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0.7, 5.2};
-		var maxTemperature0_5Days = new[]{11.6, 8.4, 4.5, 0.3, 0, 0, 0, 0, 0, 0.1, 5.2, 12.8};
-		var maxTemperature5_10Days = new[]{8.9, 8.7, 9.6, 2.9, 0.1, 0, 0, 0, 0, 2.8, 10.9, 10.5};
-		var maxTemperature10_15Days = new []{2.2, 4.9, 10.4, 9.7, 3, 0.5, 0, 0.2, 2.2, 10, 10, 1.9};
-		var maxTemperature15_20Days = new []{0, 0.7, 4.8, 10.9, 10.9, 6.8, 2.8, 2.5, 9.2, 9.9, 3, 0.2};
-		var maxTemperature20_25Days = new []{0, 0, 0.6, 5.5, 12, 11.8, 9.9, 9.3, 11.4, 7.2, 0.2, 0};
-		var maxTemperature25_30Days = new []{0, 0, 0, 0.7, 4.7, 8.3, 11.9, 12.4, 6.6, 0.9, 0, 0};
-		var maxTemperature30_35Days = new []{0, 0, 0, 0, 0.3, 2.5, 5.8, 5.8, 0.5, 0, 0, 0};
-		var maxTemperature35_40Days = new []{0, 0, 0, 0, 0, 0.1, 0.5, 0.9, 0, 0, 0, 0};
+		// var maxTemperature_10_5Days = new []{0.7, 0.8, 0.1, 0, 0, 0, 0, 0, 0, 0, 0, 0.4};
+		// var maxTemperature_5_0Days = new []{7.5, 4.7, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0.7, 5.2};
+		// var maxTemperature0_5Days = new[]{11.6, 8.4, 4.5, 0.3, 0, 0, 0, 0, 0, 0.1, 5.2, 12.8};
+		// var maxTemperature5_10Days = new[]{8.9, 8.7, 9.6, 2.9, 0.1, 0, 0, 0, 0, 2.8, 10.9, 10.5};
+		// var maxTemperature10_15Days = new []{2.2, 4.9, 10.4, 9.7, 3, 0.5, 0, 0.2, 2.2, 10, 10, 1.9};
+		// var maxTemperature15_20Days = new []{0, 0.7, 4.8, 10.9, 10.9, 6.8, 2.8, 2.5, 9.2, 9.9, 3, 0.2};
+		// var maxTemperature20_25Days = new []{0, 0, 0.6, 5.5, 12, 11.8, 9.9, 9.3, 11.4, 7.2, 0.2, 0};
+		// var maxTemperature25_30Days = new []{0, 0, 0, 0.7, 4.7, 8.3, 11.9, 12.4, 6.6, 0.9, 0, 0};
+		// var maxTemperature30_35Days = new []{0, 0, 0, 0, 0.3, 2.5, 5.8, 5.8, 0.5, 0, 0, 0};
+		// var maxTemperature35_40Days = new []{0, 0, 0, 0, 0, 0.1, 0.5, 0.9, 0, 0, 0, 0};
 
-		var avgHotDayTemperature = new float[]{10, 12, 19, 24, 28, 32, 34, 34, 29, 25, 17, 11};
-		var avgHighTemperature = new float[]{3, 5, 10, 16, 21, 24, 26, 26, 22, 16, 9, 4};
-		var avgLowTemperature = new float []{-2, -2, 1, 5, 9, 12, 14, 14, 11, 6, 2, -1};
-		var avgColdNightTemperature = new float[]{-10, -8, -5, -2, 2 ,5, 9, 8, 5, -2, -4, -8};
+		// var avgHotDayTemperature = new float[]{10, 12, 19, 24, 28, 32, 34, 34, 29, 25, 17, 11};
+		// var avgHighTemperature = new float[]{3, 5, 10, 16, 21, 24, 26, 26, 22, 16, 9, 4};
+		// var avgLowTemperature = new float []{-2, -2, 1, 5, 9, 12, 14, 14, 11, 6, 2, -1};
+		// var avgColdNightTemperature = new float[]{-10, -8, -5, -2, 2 ,5, 9, 8, 5, -2, -4, -8};
 
 		var tsTotal = TimestepsTotal();
 		Weather = new WeatherStats[tsTotal];
@@ -479,43 +478,4 @@ public class AgroWorld : SimulationWorld
 
 	public static float J2Cal(float joules) => joules / 4.186f;
 	public static float Cal2J(float calories) => calories * 4.186f;
-}
-
-public static class BinaryWriterExtensions
-{
-	public static void WriteU8(this BinaryWriter writer, int value) => writer.Write((byte)value);
-	public static void WriteU32(this BinaryWriter writer, int value) => writer.Write((uint)value);
-	public static void WriteU32(this BinaryWriter writer, uint value) => writer.Write(value);
-	public static void WriteV32(this BinaryWriter writer, Vector3 xyz)
-	{
-		writer.Write(xyz.X);
-		writer.Write(xyz.Y);
-		writer.Write(xyz.Z);
-	}
-	public static void WriteV32(this BinaryWriter writer, float x, float y, float z)
-	{
-		writer.Write(x);
-		writer.Write(y);
-		writer.Write(z);
-	}
-	public static void WriteV32(this BinaryWriter writer, Vector3 xyz, float w)
-	{
-		writer.Write(xyz.X);
-		writer.Write(xyz.Y);
-		writer.Write(xyz.Z);
-		writer.Write(w);
-	}
-	public static void WriteM32(this BinaryWriter writer, Vector3 ax, Vector3 ay, Vector3 az, float tx, float ty, float tz)
-	{
-		writer.Write(ax.X); writer.Write(ay.X); writer.Write(az.X); writer.Write(tx);
-		writer.Write(ax.Y); writer.Write(ay.Y); writer.Write(az.Y); writer.Write(ty);
-		writer.Write(ax.Z); writer.Write(ay.Z); writer.Write(az.Z); writer.Write(tz);
-	}
-
-	public static void WriteM32(this BinaryWriter writer, Vector3 ax, Vector3 ay, Vector3 az, Vector3 t)
-	{
-		writer.Write(ax.X); writer.Write(ay.X); writer.Write(az.X); writer.Write(t.X);
-		writer.Write(ax.Y); writer.Write(ay.Y); writer.Write(az.Y); writer.Write(t.Y);
-		writer.Write(ax.Z); writer.Write(ay.Z); writer.Write(az.Z); writer.Write(t.Z);
-	}
 }

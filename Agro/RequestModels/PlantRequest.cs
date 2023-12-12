@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Agro;
 
 ///<summary>
@@ -5,7 +7,7 @@ namespace Agro;
 ///</summary>
 public class PlantRequest
 {
-    [System.Text.Json.Serialization.JsonPropertyName("S")]
+    [JsonPropertyName("S")]
     public string? SpeciesName { get; set; }
 
     ///<summary>
@@ -14,7 +16,7 @@ public class PlantRequest
     ///<example>{"X":0, "Y":0, "Z":0}</example>
     //The converter was useful for System.Numerics.Vector3 but Swagger doesn't support including it among the examples.
     //[System.Text.Json.Serialization.JsonConverter(typeof(Utils.Json.Vector3JsonConverter))]
-    [System.Text.Json.Serialization.JsonPropertyName("P")]
+    [JsonPropertyName("P")]
     public Utils.Json.Vector3XYZ? Position { get; set; }
     //public System.Numerics.Vector3? Position { get; set; }
 }

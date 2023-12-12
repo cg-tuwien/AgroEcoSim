@@ -12,13 +12,9 @@ namespace AgroServer.Controllers;
 [Route("[controller]")]
 public class SimulationController : ControllerBase
 {
-    //private readonly ILogger<SimulationController> _logger;
     private readonly IConfiguration Configuration;
 
-    public SimulationController(IConfiguration configuration)
-    {
-        Configuration = configuration;
-    }
+    public SimulationController(IConfiguration configuration) => Configuration = configuration;
 
     [HttpGet]
     public ActionResult Get() => Ok();

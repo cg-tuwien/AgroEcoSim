@@ -1,4 +1,6 @@
 using System.Numerics;
+using System.Runtime.CompilerServices;
+using M = System.Runtime.CompilerServices.MethodImplAttribute;
 
 namespace Utils.Json;
 
@@ -34,7 +36,7 @@ public struct Vector3XYZ
     ///<example>0</example>
     public float Z { get; set; }
 
-    public static implicit operator Vector3(Vector3XYZ input) => new(input.X, input.Y, input.Z);
+   [M(MethodImplOptions.AggressiveInlining)] public static implicit operator Vector3(Vector3XYZ input) => new(input.X, input.Y, input.Z);
 }
 
 ///<summary>
@@ -52,5 +54,5 @@ public struct Vector3XDZ
     ///<example>1</example>
     public float Z { get; set; }
 
-    public static implicit operator Vector3(Vector3XDZ input) => new(input.X, input.Z, input.D);
+    [M(MethodImplOptions.AggressiveInlining)]public static implicit operator Vector3(Vector3XDZ input) => new(input.X, input.Z, input.D);
 }

@@ -10,7 +10,6 @@ namespace AgroServer.Hubs;
 
 public interface IEditorHub
 {
-    //Task Run(SimulationRequest request);
     Task Rejected();
     Task Progress(uint step, uint length);
     Task Result(SimulationResponse response);
@@ -33,8 +32,6 @@ public class SimulationHub : Hub<IEditorHub>
     }
 
     static Dictionary<string, SimRequests> ClientSimulations = new ();
-
-    //static TimeSpan Second = TimeSpan.FromSeconds(0.5);
 
     public async Task Abort()
     {
