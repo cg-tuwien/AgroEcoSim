@@ -1,39 +1,34 @@
 # Procedural Agro Simulator
 
-The plants simulator can be used as a standalone CLI application, a HTTP server, as well as a Godot project. The simulation currently includes a procedural weather generator, simple water diffusion in soil as well as the plant growth itself. A light simulator that provides irradiance values for the plants important for photosynthesis is a [separate component](https://github.com/cfreude/agroeco-mts3/).
+The plants simulator can be used as a standalone CLI application, or a HTTP server. There is the new web graphic interface (powered by Three.js) as well as a Godot branch (not maintained anymore). The simulation currently includes a procedural weather generator, simple water diffusion in soil and the plant growth itself. A light simulator that provides irradiance values for the plants important for photosynthesis is a [separate component](https://github.com/cfreude/agroeco-mts3/).
 
 ### Docker
-If you want to try out the Docker app, have a look in the [Releases](https://github.com/cg-tuwien/AgroGodot/releases) section.
+If you want to try out the Docker app, have a look in the [Releases](https://github.com/cg-tuwien/AgroGodot/releases) section or download the source and run `buildDocker.sh` (on Linux). Then call `docker compose up` in the directory to start the app. The web GUI will be then available at `localhost:8080`.
 
 ### Standalone CLI
 This headless mode (subfolder `Agro`) is mainly indended for development and testing when you need to run a single simulation. On start it pings the light simulation server and then calls it in each timestep. Constant light is used as a fallback option.
 
 ### HTTP Server
-The second headless mode (subfolder `AgroGodot`) is designed for running multiple simulations in a row. It reduces the overhead of starting new processes over again. The HTTP server runs inside of the Docker along with the light simulation server.
+The second headless mode (subfolder `AgroServer`) is designed for running multiple simulations in a row. It reduces the overhead of starting new processes over again. The HTTP server runs inside of the Docker along with the light simulation server.
 
-### Godot
-The graphics mode allows to analyze the simulation in 3D usint the open source [Godot Engine](https://godotengine.org/). It integrates the simulation as a Godot component. Unfortunately Godot has many limitations regarding the use of C#. The simulation may behave differently than in the CLI mode. **See the first line in `AgroGodot.csproj` to determine the target Godot version.
+### Web GUI Server
+A webserver (subfolder `ThreeFrontend`) based on [Node.js](https://nodejs.org) is the primary GUI. It uses [Three.js](https://threejs.org) on top of [preact](https://preactjs.com).
+
+### Godot (legacy)
+Godot used to be our first GUI. Since it was replaced by the web interface it is not maintained anymore and has been removed from the main branch. The legacy version can be found in the `godot4` branch. The graphics mode allows to analyze the simulation in 3D using the open source [Godot Engine](https://godotengine.org/). It integrates the simulation as a Godot component. Before launching set the first line in `AgroGodot.csproj` to determine the target Godot version.
 
 
 ## Setup
 0. Make sure to use `--recursive` flag for checkout
-1. Install [.NET 6](https://dotnet.microsoft.com/en-us/download/dotnet/6.0)
+1. Install [.NET 6 SDK](https://dotnet.microsoft.com/en-us/download/dotnet/6.0) or higher
 2. Install Python 3
 3. Install requirements of `agroeco-mts3` either with Conda or from `requirements.txt`
-4. Optionally install [VS Code](https://code.visualstudio.com/) (if you want to change the code)
-5. Optionally download and extract [Godot 3.x](https://godotengine.org/download) with mono support (if you want to see the simulation in 3D)
+4. Optionally install [VS Code](https://code.visualstudio.com/) or any other code editor of your choice (if you want to change the code)
 
 Make sure to set telemetry opt-outs for both `.NET` and `VS Code` if you desire to protect your usage data.
 
-Also make sure to select `dotnet CLI` for Godot builds under Editor > Mono > Builds > Build Tool.
-
 ## Usage
-Outside of VS Code, you need to start the rendering server first:
-* `cd whatever_path/AgroGodot/agroeco-mts3` then `python3 render-server.py --port 9001` and keep it running
-* In VS code there are combined launchers provided, but they often fail at exceptions and keep the port reserved until reboot.
-* There is an internal check for the presence of a rendering server that falls back to constant light if the server can't be reached.
-
-The simulation can be started in three modes:
+The simulation can be started in two modes:
 ### WebAPI server
 * `cd whatever_path/AgroGodot` and either
 * A) call `dotnet run -f net6.0 --project AgroServer/AgroServer.csproj` or
@@ -50,6 +45,12 @@ The WebAPI version targets net6.0. The server listens on port `7215`. To explore
 }
 ```
 
+The server can be access directly over its API or in combination with the web app. Starting the frontend on your local development machine requires to:
+* `cd ThreeFrontend`
+* `npm install` if running the first time
+* `npm run dev` and keep it running
+* you can then open the app in browser under `localhost:8080`
+
 ### Stand-alone CLI
 * `cd whatever_path/AgroGodot` and either
 * A) call `dotnet run -f net6.0 --project Agro/Agro.csproj` or
@@ -57,32 +58,69 @@ The WebAPI version targets net6.0. The server listens on port `7215`. To explore
 
 The Standalone version targets net6.0. Settings for the simulation can be passed using the `--import` flag pointing to a `json` file. See below in [Options](#options).
 
-### Godot
-* launch Godot (see `AgroGodot.csproj` for the respective version),
-* select and load the project
-* hit play or F5
+## Global Illumation Backend
+The simulation probes several ports to find if a global illumination solver is running. If none is found it will use the ambient mode that assumes constant light everywhere and any time.
 
-Note that the first build will fail due to async deletion of extra files. Further builds should run fine. In case of any strange errors (like access denied, lots of declaration or symbol missing errors and similar) delete the whole `.mono` subfolder.
-
-Godot only takes the hard-coded default simulation settings, it has so far no option for consuming `json` settings.
+### Mitsuba erndering backend
+Before starting the simulation, perform the following steps:
+* `cd whatever_path/AgroGodot/agroeco-mts3` then `python3 render-server.py --port 9001` and keep it running
+* Mistuba must be always associated with port `9001`
+* There is an internal check for the presence of a rendering server that falls back to constant light if the server can't be reached.
 
 ## Options
-Most settings and their default values can be found in the following two files: `Agro/Initialize.cs` and `Agro/AgroWorld.cs`. They are shared for all modes. The WebAPI and CLI allow for passing a `json` file that overrides the defaults. This example covers all currently available options, position and sizes are given in metric units:
+Most settings and their default values can be found in the following two files: `Agro/Initialize.cs` and `Agro/AgroWorld.cs`. They are shared for all modes. The WebAPI and CLI allow for passing a `json` file that overrides the defaults. The following example covers the basic available options. Position and sizes are given in metric units. Do not be worried about the short property names for now.
 ```json
 {
-    "HoursPerTick": 24,
-    "TotalHours": 744,
-    "FieldResolution": 0.5,
-    "FieldSize": { "X": 10, "D": 4, "Z": 10 },
-    "Seed": 42,
-
-    "Plants": [
-        { "P": {"X": 2.5, "Y": -0.05, "Z": 5}},
-        { "P": {"X": 5, "Y": -0.05, "Z": 5}},
-        { "P": {"X": 7.5, "Y": -0.05, "Z": 5}}
-    ]
+  "HoursPerTick": 4,
+  "TotalHours": 1440,
+  "FieldResolution": 0.5,
+  "FieldSize": {
+    "X": 10,
+    "D": 4,
+    "Z": 10
+  },
+  "Seed": 42,
+  "Species": [{
+      "N": "default",
+      "H": 12,
+      "ND": 0.04, "NDv": 0.01,
+      "BMF": 1,
+      "BDF": 0.7,
+      "AP": 40,
+      "AR": 1,
+      "BLN": 2,
+      "BR": 0, "BRv": 0.09,
+      "BP": 0.7, "BPv": 0.09,
+      "TB": 0.5,
+      "TBL": 1,
+      "TBA": 0.98,
+      "SG": 0.2,
+      "WGT": 2400, "WGTv": 240,
+      "LV": 2,
+      "LL": 0.12, "LLv": 0.02,
+      "LR": 0.04, "LRv": 0.01,
+      "LGT": 480, "LGTv": 120,
+      "LP": 0.35, "LPv": 0.087,
+      "PL": 0.05, "PLv": 0.01,
+      "PR": 0.0015, "PRv": 0.0005,
+      "RS": 50.0005,
+      "RG": 0.2
+  }],
+  "Plants": [
+    { "S": "default", "P": { "X": 5, "Y": -0.01, "Z": 5 } }
+  ],
+  "Obstacles": [
+	{ "T": "wall", "O": 0, "L": 5, "H": 3.2, "P": {"X": 2.5, "Y": 0, "Z": 0}},
+	{ "T": "umbrella", "R": 1.5, "H": 2.2, "D": 0.1, "P": {"X": 2.5, "Y": 0, "Z": 2.5}}
+  ],
+  "RequestGeometry": true,
+  "RenderMode": 1,
+  "SamplesPerPixel": 2048,
+  "ExactPreview": false,
+  "DownloadRoots": false
 }
 ```
+For a complete reference see the files in `Agro/RequestModels`. It also contains explanations for all the short names used. When running the `AgroServer` there is also the option to browse the API using Swashbuckle at `http://localhost:7215/swagger/index.html`.
 
 ## Structure
 The first set of projects contains the simulation core:
@@ -91,19 +129,9 @@ The first set of projects contains the simulation core:
 * **AgroServer** a slim WebAPI server.
 * **Utils** just a few useful utilities: `Pcg` a well controlable random numbers generator, `Vector3i` an integer vector struct, `NumericHelpers` extension methods for conversion of common .NET geometry types to Godot's own.
 
-The following folders are related to the Godot rendering:
-* **.mono** is the build folder for Godot. No need to touch it, but trashing it may help to solve strange Mono errors.
-* **addons** contains the `trackball` plugin for Godot (3rd party) and `multiagent_system` which a thin wrapper for the agents-based simulation framework.
-* **GodotBindings** defines how formations are rendered in Godot.
-
-`AgroGodot.csproj` is an umbrella project that takes all files from all subfolders and compiles them for Godot. It defines the `GODOT` switch which activates or deactivates certain blcks of code. This is an ugly, but necessary workaround to cope with Godot's limited .NET support.
-
-## v1 vs. v2
-Some classes are denoted by v1/v2 or just 1/2 or stored in folders called v1/v2. This marks whether they are transaction-based (v1) or global-diffusion based (v2), respectively. The *supervised global diffusion* is a custom concept to mitigate the transport limitations of large time steps. Instead of trying to compute at a very dense time rate, the formation gathers all resources in each frame and redistributes them across all its agents at once.
-
 # Renderer interface
 The renderer is called via `http`. The primary renderer is Mitsuba 3 in the [agroeco-mts3](https://github.com/cfreude/agroeco-mts3/). Attention, Mitsuba requires AVX instructions, so it won't run on older CPUs. To plug-in a different renderer, it has to follow these guidelines:
-* Listening at port `9001`
+* Listening at port `9000`
 * Respond with a status code `200` (OK) to a `GET` request, this is a check for whether the server is up
 * Respond to `POST` requests with scene data by returning accummulated irradiances in (W/m²)
 * The energy should be accumulated around the `570 nm` wavelength
