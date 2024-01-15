@@ -11,7 +11,6 @@ internal class TreeCacheData
 	Vector3[] PointNodes;
 	readonly List<int> Roots = new();
 	readonly List<int> Leaves = new();
-	//readonly List<int> Meristems = new();
 	public float Height { get; private set; }
 
 	ushort MaxDepth = 0;

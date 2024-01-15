@@ -1,8 +1,37 @@
 namespace Agro;
 
-//TODO IMPORTANT All resource transport should be request-confirm messages, i.e. pull-policy.
-//  There should never be forced resource push since it may not be able to fit into the available storage.
-//TODO Create properties computing the respective storages for water and energy. Just for clarity.
-//[Flags]  //flags are not needed anymore
-
-public enum OrganTypes : byte { Unspecified = 0, Seed = 1, Bud = 2, Root = 4, Stem = 8, Leaf = 16, Petiole = 32, Fruit = 64, Meristem = 128 };
+public enum OrganTypes : byte {
+    Unspecified = 0,
+    /// <summary>
+    /// The seed as a whole, the plant has no other organs at that time
+    /// </summary>
+    Seed,
+    /// <summary>
+    /// Dormant bud that will eventually develop into a new twig. Buds can only be attached to stems
+    /// </summary>
+    Bud,
+    /// <summary>
+    /// Root segment
+    /// </summary>
+    Root,
+    /// <summary>
+    /// Stem segment
+    /// </summary>
+    Stem,
+    /// <summary>
+    /// Leaf (excl. the connection to the stem)
+    /// </summary>
+    Leaf,
+    /// <summary>
+    /// Connection between the stem and the leaf
+    /// </summary>
+    Petiole,
+    /// <summary>
+    /// Fruit (not used yet)
+    /// </summary>
+    Fruit,
+    /// <summary>
+    /// Tip of the stem where cells grow forward elongating the twig
+    /// </summary>
+    Meristem
+};

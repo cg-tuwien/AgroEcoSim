@@ -20,7 +20,9 @@ public struct UnderGroundAgent : IPlantAgent
 	///////////////////////////
 	#region DATA
 	///////////////////////////
-
+	/// <summary>
+	/// Simulation step when the agent was created
+	/// </summary>
 	readonly uint BirthTime;
 
 	/// <summary>
@@ -30,20 +32,30 @@ public struct UnderGroundAgent : IPlantAgent
 	public Quaternion Orientation { get; private set; }
 
 	/// <summary>
-	/// Length of the agent in m.
+	/// Length of the agent in meters.
 	/// </summary>
 	public float Length { get; private set; }
 
 	/// <summary>
-	/// Radius of the bottom face in m.
+	/// Radius of the bottom face in meters.
 	/// </summary>
 	public float Radius { get; private set; }
 
 	public readonly byte DominanceLevel => 0;
 
+	/// <summary>
+	/// Non-uniform scale vector along the local axes
+	/// </summary>
 	[M(AI)]public readonly Vector3 Scale() => new(Length, 2f * Radius, 2f * Radius);
+
+	/// <summary>
+	/// Volume of the agent in m³.
+	/// </summary>
 	[M(AI)]public readonly float Volume() => 4f * Length * Radius * Radius;
 
+	/// <summary>
+	/// Agent energy (umbrella for mainly sugars created by photosynthesis, in custom units)
+	/// </summary>
 	public float Energy { get; private set; }
 
 	/// <summary>
@@ -64,12 +76,18 @@ public struct UnderGroundAgent : IPlantAgent
 	/// Allocation of water during the previous day, m³ of water per m² i.e. invariant of surface
 	/// </summary>
 	public float PreviousDayProductionInv {get; private set; }
+	/// <summary>
+	/// Allocation of water during ongoing day, m³ of water per m² i.e. invariant of surface
+	/// </summary>
 	public float CurrentDayProductionInv { get; set; }
 
 	/// <summary>
 	/// Resources available during the previous day, averaged, in m³ of water
 	/// </summary>
 	public float PreviousDayEnvResourcesInv { get; private set; }
+	/// <summary>
+	/// Resources available during the ongoing day, averaged, in m³ of water
+	/// </summary>
 	public float CurrentDayEnvResourcesInv { get; set; }
 
 	public readonly float PreviousDayEnvResources => PreviousDayProductionInv;
@@ -79,6 +97,9 @@ public struct UnderGroundAgent : IPlantAgent
 	/// </summary>
 	float mWaterAbsorbtionFactor;
 
+	/// <summary>
+	/// Woodyness ∈ [0, 1].
+	/// </summary>
 	[M(AI)]public readonly float WoodRatio() => 1f - mWaterAbsorbtionFactor;
 
 	public readonly OrganTypes Organ => OrganTypes.Root;
@@ -91,6 +112,9 @@ public struct UnderGroundAgent : IPlantAgent
 	#endregion
 
 	#region Variances
+	/// <summary>
+	/// Precomputed random variance of maximum length for this agent
+	/// </summary>
 	float LengthVar;
 	#endregion
 
@@ -253,7 +277,7 @@ public struct UnderGroundAgent : IPlantAgent
 		var world = plant.World;
 		var species = plant.Parameters;
 
-		//TODO perhaps it should somehow reflect temperature
+		//TODO perhaps it should reflect temperature
 		var lifeSupportPerHour = LifeSupportPerHour();
 
 		//life support
@@ -268,7 +292,7 @@ public struct UnderGroundAgent : IPlantAgent
 		if (Energy > lifeSupportPerHour * 240) //maybe make it a factor storedEnergy/lifeSupport so that it grows fast when it has full storage
 		{
 			var childrenCount = children.Count + 1;
-			//TODO MI 2023-03-07 Incorporate water capacity factor
+			//TDMI 2023-03-07 Incorporate water capacity factor
 			if (formation.DailyProductionMax > 0)
 			{
 				var growthBase = PreviousDayProductionInv / formation.DailyProductionMax;
@@ -317,10 +341,6 @@ public struct UnderGroundAgent : IPlantAgent
 				//Debug.WriteLine($"{PreviousDayProductionInv} / ({plant.WaterBalanceUG} * {species.RootsSparsity} * {BranchingByChildren[children.Count]}) = {PreviousDayProductionInv / (plant.WaterBalance * plant.WaterBalance * species.RootsSparsity * BranchingByChildren[children.Count])} -> {Utils.Pcg.AccumulatedProbability(PreviousDayProductionInv / (plant.WaterBalance * species.RootsSparsity * BranchingByChildren[childrenCount]), world.HoursPerTick)}");
 				if (plant.RNG.NextFloatAccum(PreviousDayProductionInv / (plant.WaterBalanceUG * species.RootsSparsity * BranchingByChildren[childrenCount]), world.HoursPerTick))
 				{
-					// var qx = Quaternion.CreateFromAxisAngle(Vector3.UnitX, plant.RNG.NextFloat(-MathF.PI * yFactor, MathF.PI * yFactor));
-					// var qz = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, plant.RNG.NextFloat(MathF.PI * zFactor, MathF.PI * zFactor * 2f));
-					// //var q = qz * qx * Orientation;
-					// var orientation = Orientation * qx * qz;
 					var energy = EnergyCapacityFunc(InitialRadius, InitialLength);
 					formation.Birth(new(plant, timestep, formationID, RandomOrientation(plant, species, Orientation), energy, initialResources: PreviousDayEnvResourcesInv, initialProduction: PreviousDayProductionInv));
 					Energy -= 2f * energy; //twice because some energy is needed for the birth itself
@@ -365,7 +385,7 @@ public struct UnderGroundAgent : IPlantAgent
 
 					CurrentDayEnvResourcesInv += soil.GetWater(source);
 				}
-				else
+				else //growing outside of the world
 					formation.Death(formationID);
 			}
 		}
@@ -384,11 +404,7 @@ public struct UnderGroundAgent : IPlantAgent
 
 		var y = Vector3.Transform(Vector3.UnitX, orientation).Y;
 
-		if (y > 0)
-			orientation = Quaternion.Slerp(orientation, PlantFormation2.AdjustUpBase(orientation, up: false), plant.RNG.NextPositiveFloat(y));
-		else //if (species.RootsGravitaxis > 0)
-			orientation = Quaternion.Slerp(orientation, PlantFormation2.AdjustUpBase(orientation, up: false), plant.RNG.NextPositiveFloat(species.RootsGravitaxis));
-
+		orientation = Quaternion.Slerp(orientation, PlantFormation2.AdjustUpBase(orientation, up: false), plant.RNG.NextPositiveFloat(y > 0 ? y : species.RootsGravitaxis));
 		return orientation;
 	}
 

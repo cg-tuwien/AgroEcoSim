@@ -13,6 +13,9 @@ namespace Agro;
 public partial struct AboveGroundAgent : IPlantAgent
 {
 	const MethodImplOptions AI = MethodImplOptions.AggressiveInlining;
+	/// <summary>
+	/// Simulation step when the agent was created
+	/// </summary>
 	readonly uint BirthTime;
 	/// <summary>
 	/// Orientation with respect to the parent. If there is no parent, this is the initial orientation.
@@ -24,19 +27,19 @@ public partial struct AboveGroundAgent : IPlantAgent
 	/// </summary>
 	public float ParentRadiusAtBirth { get; private set; } = 0f;
 
-	//subdivions of this node
+	//subdivions of this node (work in progress)
 	public int FirstSegmentIndex { get; private set; }
 
-	//number of segments
+	//number of segments (work in progress)
 	public byte SegmentsCount { get; private set; } = 3;
 
 	/// <summary>
-	/// Length of the agent in m.
+	/// Length of the agent in meters.
 	/// </summary>
 	public float Length { get; private set; }
 
 	/// <summary>
-	/// Radius of the bottom face in m.
+	/// Radius of the bottom face in meters.
 	/// </summary>
 	public float Radius { get; private set; }
 
@@ -45,16 +48,25 @@ public partial struct AboveGroundAgent : IPlantAgent
 	/// </summary>
 	public byte DominanceLevel { get; private set; } = 1;
 
+	/// <summary>
+	/// Non-uniform scale vector along the local axes
+	/// </summary>
 	[M(AI)]public readonly Vector3 Scale() => Organ switch {
 		OrganTypes.Leaf => new(Length, 0.0001f, 2f * Radius),
 		_ => new(Length, 2f * Radius, 2f * Radius)
 	};
 
+	/// <summary>
+	/// Volume of the agent in m³.
+	/// </summary>
 	[M(AI)]public readonly float Volume() => Organ switch {
 		OrganTypes.Leaf => Length * 0.0002f * Radius,
 		_ => Length * 4f * Radius* Radius
 	};
 
+	/// <summary>
+	/// Agent energy (umbrella for mainly sugars created by photosynthesis, in custom units)
+	/// </summary>
 	public float Energy { get; private set; }
 
 	/// <summary>
@@ -66,10 +78,15 @@ public partial struct AboveGroundAgent : IPlantAgent
 	// /// Hormones level (in custom units)
 	// /// </summary>
 	// public float AbscisicAcid { get; set; }
+
 	/// <summary>
 	/// Hormones level (in custom units)
 	/// </summary>
+	/// <remarks>
+	/// Auxins emerge in meristem and propagate away. Simplified in this simulation, they only keeps buds inactive in the vicinity of meristem.
+	/// </remarks>
 	public float Auxins { get; set; }
+
 	/// <summary>
 	/// Hormones level (in custom units)
 	/// </summary>
@@ -97,7 +114,14 @@ public partial struct AboveGroundAgent : IPlantAgent
 	///</summary>
 	float CurrentDayEnvResourcesInv { get; set; }
 
+	///<summary>
+	///Accumulated light exposure of this agent during this day so far, in absolute units
+	///</summary>
 	float CurrentDayEnvResources { get; set; }
+
+	///<summary>
+	///Accumulated light exposure of this agent during the previous day, in absolute units
+	///</summary>
 	public float PreviousDayEnvResources { get; private set; }
 
 	/// <summary>
@@ -108,7 +132,7 @@ public partial struct AboveGroundAgent : IPlantAgent
 	/// <summary>
 	/// Woodyness ∈ [0, 1].
 	/// </summary>
-	[M(AI)]public float WoodRatio() => WoodFactor;
+	[M(AI)]public readonly float WoodRatio() => WoodFactor;
 
 	/// <summary>
 	/// Plant organ, e.g. stem, leaft, fruit
@@ -120,6 +144,7 @@ public partial struct AboveGroundAgent : IPlantAgent
 	/// </summary>
 	public int Parent { get; private set; }
 
+	//TODO This is probably hte lateral pitch with respect to the parent, but since Roll is also assigned once this should be checked
 	public float LateralAngle { get; private set; } = 0f;
 
 	/// <summary>
@@ -137,6 +162,9 @@ public partial struct AboveGroundAgent : IPlantAgent
 	public const float WaterTransportRatio = 1.8f;
 
 	#region Variances
+	/// <summary>
+	/// Precomputed random variance of maximm length for this agent
+	/// </summary>
 	float LengthVar;
 	float RadiusVar;
 	float GrowthTimeVar;
@@ -152,7 +180,7 @@ public partial struct AboveGroundAgent : IPlantAgent
 	/// </summary>
 	[M(AI)]public readonly float WaterFlowToParentPerTick(AgroWorld world) => WaterFlowToParentPerHour() * world.HoursPerTick;
 
-	[M(AI)]public readonly float EnergyFlowToParentPerHour() => 4f * Radius * Radius * WaterTransportRatio;
+	[M(AI)]public readonly float EnergyFlowToParentPerHour() => 4f * Radius * Radius * EnergyTransportRatio;
 
 	[M(AI)]public readonly float EnergyFlowToParentPerTick(AgroWorld world) => EnergyFlowToParentPerHour() * world.HoursPerTick;
 
@@ -303,9 +331,9 @@ public partial struct AboveGroundAgent : IPlantAgent
 		var plant = formation.Plant;
 		var species = plant.Parameters;
 		var world = plant.World;
-		var age = timestep - BirthTime;
+		var ageHours = (timestep - BirthTime) * world.HoursPerTick; //age in hours
 
-		//TODO perhaps growth should somehow reflect temperature
+		//TODO growth should reflect temperature
 		var lifeSupportPerHour = LifeSupportPerHour();
 		var lifeSupportPerTick = LifeSupportPerTick(world);
 
@@ -315,6 +343,7 @@ public partial struct AboveGroundAgent : IPlantAgent
 
 		var enoughEnergyState = EnoughEnergy(lifeSupportPerHour);
 		var wasMeristem = false;
+
 		//Photosynthesis
 		if (Organ == OrganTypes.Leaf && Water > 0f)
 		{
@@ -345,22 +374,21 @@ public partial struct AboveGroundAgent : IPlantAgent
 				CurrentDayProductionInv += photosynthesizedEnergy / surface;
 			}
 		}
-		else if (Organ == OrganTypes.Meristem)
-			wasMeristem = true;
 
 		switch(Organ)
 		{
-			//leafs fall down with increasing age
+			//leafs fall off with increasing age
 			case OrganTypes.Petiole:
 			{
-				if (age > 36 && formation.GetOrgan(Parent) != OrganTypes.Meristem)
+				if (ageHours > 36 && formation.GetOrgan(Parent) != OrganTypes.Meristem)
 				{
-					var p = age / (24 * 356f * 4);
+					var p = ageHours / 4032; //6 months in hours
 					if (plant.RNG.NextFloatAccum(p * p, world.HoursPerTick))
 						MakeBud(formation, children);
 				}
 			}
 			break;
+
 			//height-based termination
 			case OrganTypes.Stem:
 				if (DominanceLevel > 1 && formation.GetDominance(Parent) < DominanceLevel)
@@ -369,7 +397,7 @@ public partial struct AboveGroundAgent : IPlantAgent
 					var e = 4f * PreviousDayEnvResources / formation.DailyEfficiencyMax;
 					var q = 1f + h*h + 20f * Radius + e * e + WoodFactor;
 					var p = 0.004f / (q * q);
-					Debug.WriteLine($"{formationID}: h {formation.GetBaseCenter(formationID).Y / formation.Height}  r {Radius}  e {PreviousDayEnvResources / formation.DailyEfficiencyMax}  =  {q}  % {p}");
+					//Debug.WriteLine($"{formationID}: h {formation.GetBaseCenter(formationID).Y / formation.Height}  r {Radius}  e {PreviousDayEnvResources / formation.DailyEfficiencyMax}  =  {q}  % {p}");
 					if (plant.RNG.NextFloatAccum(p, world.HoursPerTick))
 					{
 						Energy = 0f;
@@ -377,6 +405,9 @@ public partial struct AboveGroundAgent : IPlantAgent
 					}
 				}
 				break;
+
+			//a marker to later indicate transformation
+			case OrganTypes.Meristem: wasMeristem = true; break;
 		}
 
 		//Growth
@@ -408,17 +439,17 @@ public partial struct AboveGroundAgent : IPlantAgent
 					if (localMinimum)
 					{
 						var makeTwig = false;
-						if (Organ == OrganTypes.Petiole)
+						if (Organ == OrganTypes.Petiole) //activate the implicit bud at the petiole
 						{
-							if(formation.GetOrgan(Parent) != OrganTypes.Meristem)
+							if (formation.GetOrgan(Parent) != OrganTypes.Meristem)
 							{
-								if (children != null)
+								if (children != null) //drop all children (i.e. the leaf)
 									foreach(var child in children)
 										formation.Death(child);
 								makeTwig = true;
 							}
 						}
-						else if (Organ == OrganTypes.Bud)
+						else if (Organ == OrganTypes.Bud) //activate the explicit bud turning it into a new twig
 							makeTwig = true;
 
 						if (makeTwig)
@@ -436,10 +467,12 @@ public partial struct AboveGroundAgent : IPlantAgent
 				}
 			}
 
-			if (Organ != OrganTypes.Bud)
+			//Growth and branching
+			if (Organ != OrganTypes.Bud) //for simplicity dormant buds do not grow
 			{
 				var currentSize = new Vector2(Length, Radius);
 				var growth = Vector2.Zero;
+				//dominance factor decreases the growth of structures further away from the dominant branch (based on the tree structure)
 				var dominanceFactor = DominanceLevel < species.DominanceFactors.Length ? species.DominanceFactors[DominanceLevel] : species.DominanceFactors[species.DominanceFactors.Length - 1];
 				switch(Organ)
 				{
@@ -451,7 +484,6 @@ public partial struct AboveGroundAgent : IPlantAgent
 						var sizeLimit = new Vector2(species.LeafLength + LengthVar, species.LeafRadius + RadiusVar);
 						if (currentSize.X < sizeLimit.X && currentSize.Y < sizeLimit.Y)
 						{
-							//formation.GetDailyProduction(formationID) *
 							growth = Math.Min(1f, plant.WaterBalance) * sizeLimit * GrowthTimeVar;
 							var resultingSize = Vector2.Min(currentSize + growth, sizeLimit);
 							growth = resultingSize - currentSize;
@@ -467,6 +499,7 @@ public partial struct AboveGroundAgent : IPlantAgent
 							var resultingSize = Vector2.Min(currentSize + growth, sizeLimit);
 							growth = resultingSize - currentSize;
 
+							//assure not to outgrow the parent
 							var parentRadius = Parent >= 0 ? formation.GetBaseRadius(Parent) : float.MaxValue;
 							if (currentSize.Y + growth.Y > parentRadius)
 								growth.Y = parentRadius - currentSize.Y;
@@ -479,6 +512,7 @@ public partial struct AboveGroundAgent : IPlantAgent
 						var waterReserve = Math.Min(1f, plant.WaterBalance);
 						growth = new Vector2(1f, 0.01f) * (1e-3f * dominanceFactor * energyReserve * waterReserve * world.HoursPerTick);
 
+						//assure not to outgrow the parent
 						var parentRadius = Parent >= 0 ? formation.GetBaseRadius(Parent) : float.MaxValue;
 						if (currentSize.Y + growth.Y > parentRadius)
 							growth.Y = parentRadius - currentSize.Y;
@@ -489,6 +523,7 @@ public partial struct AboveGroundAgent : IPlantAgent
 						var energyReserve = Math.Clamp(Energy / EnergyStorageCapacity(), 0f, 1f);
 						growth = new Vector2(0, 2e-5f * dominanceFactor * energyReserve * Math.Min(plant.WaterBalance, energyReserve) * world.HoursPerTick);
 
+						//assure not to outgrow the parent
 						var parentRadius = Parent >= 0 ? formation.GetBaseRadius(Parent) : float.MaxValue;
 						if (currentSize.Y + growth.Y > parentRadius)
 							growth.Y = parentRadius - currentSize.Y;
@@ -508,11 +543,11 @@ public partial struct AboveGroundAgent : IPlantAgent
 						WoodFactor = Math.Min((WoodFactor <= pw ? WoodFactor : pw) + GrowthTimeVar, 1f);
 					}
 
-					//chaining (meristem continues in a new segment)
+					//chaining (meristem then continues in a new segment)
 					if (Organ == OrganTypes.Meristem && Length > LengthVar)
 					{
 						Organ = OrganTypes.Stem;
-						GrowthTimeVar = plant.World.HoursPerTick / (species.WoodGrowthTime + plant.RNG.NextFloatVar(species.WoodGrowthTimeVar));
+						GrowthTimeVar = world.HoursPerTick / (species.WoodGrowthTime + plant.RNG.NextFloatVar(species.WoodGrowthTimeVar));
 						wasMeristem = true;
 						float prevResources, prevProduction;
 						if (timestep - BirthTime > world.HoursPerTick)
@@ -562,14 +597,12 @@ public partial struct AboveGroundAgent : IPlantAgent
 				}
 				else
 				{
-					//if the stem grows too thick so that it already covers the whole bud or a portion of a petiole, they are removed. This way
-					/*if (Organ == OrganTypes.Bud && (ParentRadiusAtBirth + Radius < formation.GetBaseRadius(Parent)))
-						formation.Death(formationID);
-					else */if (Organ == OrganTypes.Petiole && ParentRadiusAtBirth + species.PetioleCoverThreshold < formation.GetBaseRadius(Parent))
+					//if the stem grows too thick so that it already covers a large portion of the petiole, it gets removed and a new bud emerges.
+					if (Organ == OrganTypes.Petiole && ParentRadiusAtBirth + species.PetioleCoverThreshold < formation.GetBaseRadius(Parent))
 						MakeBud(formation, children);
 
 					//termination of unproductive branches
-					if (Organ == OrganTypes.Petiole && age > 36 && formation.GetOrgan(Parent) != OrganTypes.Meristem)
+					if (Organ == OrganTypes.Petiole && ageHours > 48 && formation.GetOrgan(Parent) != OrganTypes.Meristem && children != null)
 					{
 						var production = 0f;
 						for(int c = 0; c < children.Count; ++c)
@@ -577,7 +610,7 @@ public partial struct AboveGroundAgent : IPlantAgent
 						//Debug.WriteLine($"T{world.Timestep} Prod: {production}");
 
 						production /= plant.EnergyProductionMax;
-						if (production < 0.5)
+						if (production < 0.5) //the lower half of production efficiency
 						{
 							production = 1f - 2f * production;
 							production *= production;
@@ -591,23 +624,24 @@ public partial struct AboveGroundAgent : IPlantAgent
 				}
 			}
 		}
-		else if (Energy <= 0f)
+		else if (Energy <= 0f) //remove organs that drained all their energy
 		{
 			switch (Organ)
 			{
-				case OrganTypes.Petiole: MakeBud(formation, children); break;
+				case OrganTypes.Petiole: MakeBud(formation, children); break; //keep an option for a new leaf
 				case OrganTypes.Leaf:
 				{
 					formation.Death(formationID);
-					formation.Death(Parent);
+					formation.Death(Parent); //remove the petiole as well
 				}
 				break;
-				default: formation.Death(formationID); break;
+				default: formation.Death(formationID); break; //remove the item
 			}
 
 			return;
 		}
 
+		//update auxins for meristem and stems that were meristem in the previous step
 		Auxins = wasMeristem || Organ == OrganTypes.Meristem ? species.AuxinsProduction : 0;
 	}
 
