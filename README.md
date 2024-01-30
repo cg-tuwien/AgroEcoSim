@@ -309,3 +309,11 @@ Since shearing is not supported, the bootom row is just `[0 0 0 1]`, hence full 
 
 ## Result irradiance data format
 The resulting irradiances per surface need to be sent back as a simple array of 32-bit floats preserving the order of the surfaces in the request.
+
+# Cite as
+@Misc{ilcik24,
+	author =   {Martin Il\v{c}\'{i}k and Christian Freude and Pierre Ecormier-Nocca and Michael Wimmer and Barath Raghavan},
+	title =    {AgroEcoSim},
+	howpublished = {\url{https://github.com/cg-tuwien/AgroEcoSim}},
+	year = {2022--2024}
+}
