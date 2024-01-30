@@ -289,7 +289,7 @@ public struct UnderGroundAgent : IPlantAgent
 		///////////////////////////
 		#region Growth
 		///////////////////////////
-		if (Energy > lifeSupportPerHour * 240) //maybe make it a factor storedEnergy/lifeSupport so that it grows fast when it has full storage
+		if (Energy > lifeSupportPerHour * 120) //maybe make it a factor storedEnergy/lifeSupport so that it grows fast when it has full storage
 		{
 			var childrenCount = children.Count + 1;
 			//TDMI 2023-03-07 Incorporate water capacity factor
@@ -297,7 +297,7 @@ public struct UnderGroundAgent : IPlantAgent
 			{
 				var growthBase = PreviousDayProductionInv / formation.DailyProductionMax;
 				var radiusChildGrowth = childrenCount <= 1 ? 1 : MathF.Pow(childrenCount, GrowthDeclineByExpChildren / 2);
-				var (radiusGrowthBase, lengthGrowthBase) = (3e-6f * growthBase, 8e-5f * growthBase);
+				var (radiusGrowthBase, lengthGrowthBase) = (3e-6f * growthBase, 2e-4f * growthBase);
 				var newWaterAbsorbtion = mWaterAbsorbtionFactor;
 
 				var ld = Length * Radius * 4f;
@@ -316,7 +316,7 @@ public struct UnderGroundAgent : IPlantAgent
 					}
 
 					if (childrenCount == 1)
-						Length += lengthGrowthBase / MathF.Pow(ld * Length, 0.1f);
+						Length += lengthGrowthBase / MathF.Pow(volume, 0.1f);
 				}
 
 				mWaterAbsorbtionFactor = newWaterAbsorbtion;

@@ -26,7 +26,7 @@ public partial class PlantFormation2 : IPlantFormation
 	public readonly PlantSubFormation<UnderGroundAgent> UG;
 	public readonly PlantSubFormation<AboveGroundAgent> AG;
 
-	public readonly List<Quaternion> SegmentOrientations;
+	//public readonly List<Quaternion> SegmentOrientations;
 
 	internal const float RootSegmentLength = 0.05f;
 
@@ -72,7 +72,7 @@ public partial class PlantFormation2 : IPlantFormation
 		RNG = parentRNG.NextRNG();
 		UG = new(this, UnderGroundAgent.Reindex, false);
 		AG = new(this, AboveGroundAgent.Reindex, true);
-		SegmentOrientations = new();
+		//SegmentOrientations = new();
 	}
 
 	/// <summary>
@@ -315,7 +315,7 @@ public partial class PlantFormation2 : IPlantFormation
 			AG.Hormones(true);
 
 			//Physics (work in progress)
-			//AG.Gravity(world);
+			AG.Gravity();
 		}
 
 		ReadTMP = !ReadTMP;
@@ -440,12 +440,12 @@ public partial class PlantFormation2 : IPlantFormation
 	public List<Node> ExportToGLTF() => AG.ExportToGLTF();
 	#endregion
 
-    internal int InsertSegments(byte segmentsCount, Quaternion orientation)
-    {
-        var result = SegmentOrientations.Count;
-		for(int i = 0; i < segmentsCount; ++i)
-			SegmentOrientations.Add(orientation);
+    // internal int InsertSegments(byte segmentsCount, Quaternion orientation)
+    // {
+    //     var result = SegmentOrientations.Count;
+	// 	for(int i = 0; i < segmentsCount; ++i)
+	// 		SegmentOrientations.Add(orientation);
 
-		return result;
-    }
+	// 	return result;
+    // }
 }

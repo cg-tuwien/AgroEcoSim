@@ -349,21 +349,35 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 
 	//work in progress
 	List<float> Weights = new();
+	List<int> WeightReoslveChildren = new();
 
 	internal void Gravity()
 	{
+		return;
 		var dst = Src(); //since Tick already swapped them
 		var leaves = GetLeaves();
 		Weights.Clear();
+		WeightReoslveChildren.Clear();
 		for(int i = 0; i < dst.Length; ++i)
 		{
 			var weight = GetWeight(i, Plant.Parameters);
 			Weights.Add(weight);
+			WeightReoslveChildren.Add(GetChildren(i).Count);
+			// var dir = Vector3.Transform(Vector3.UnitX, GetDirection(i));
+			// //var segmentsCount = GetSegmentsCount(i);
+			// // var firstSegment = GetFirstSegment(i);
+			// // var segmentWeight = w / segmentsCount;
+		}
+		var workingSetRead = new List<int>(leaves);
+		var workingSetWrite = new List<int>(leaves.Count);
+		while (workingSetRead.Count > 0)
+		{
+			for(int i = 0; i < workingSetRead.Count; ++i)
+				if (WeightReoslveChildren[i] == 0)
+				{
 
-			var dir = Vector3.Transform(Vector3.UnitX, GetDirection(i));
-			// var segmentsCount = GetSegmentsCount(i);
-			// var firstSegment = GetFirstSegment(i);
-			// var segmentWeight = w / segmentsCount;
+					--WeightReoslveChildren[dst[i].Parent];
+				}
 		}
 	}
 
@@ -529,7 +543,7 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 	public int GetAbsInvDepth(int index) => TreeCache.GetAbsInvDepth(index);
 	public float GetRelDepth(int index) => TreeCache.GetRelDepth(index);
 	public ICollection<int> GetRoots() => TreeCache.GetRoots();
-	public IEnumerable<int> GetLeaves() => TreeCache.GetLeaves();
+	public ICollection<int> GetLeaves() => TreeCache.GetLeaves();
 
 	internal float GetEnergyCapacity(int index) => ReadTMP
 		? (AgentsTMP.Length > index ? AgentsTMP[index].EnergyStorageCapacity() : 0f)
