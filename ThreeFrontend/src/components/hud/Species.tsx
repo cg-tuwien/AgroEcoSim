@@ -162,5 +162,17 @@ export function SpeciesItem(props: {species: Species, index: number})
             <input min={0} max={1} step={0.01} type="number" name={`rootsGravitaxis-${props.index}`} value={+props.species.rootsGravitaxis.value.toFixed(1)} onChange={e => props.species.rootsGravitaxis.value = parseFloat(e.currentTarget.value)}  />
             <label for={`rootsGravitaxis-${props.index}`}>Roots gravitaxis</label>
         </div>
+        <div>
+            <input min={0} step={1} type="number" name={`woodElasticModulus-${props.index}`} value={+props.species.woodElasticModulus.value.toFixed(1)} onChange={e => props.species.woodElasticModulus.value = parseFloat(e.currentTarget.value)} />
+            <label for={`woodElasticModulus-${props.index}`}>Wood elastic modulus</label>
+        </div>
+        <div>
+            <input min={0} step={1} type="number" name={`greenElasticModulus-${props.index}`} value={+props.species.greenElasticModulus.value.toFixed(1)} onChange={e => props.species.greenElasticModulus.value = parseFloat(e.currentTarget.value)} />
+            <label for={`greenElasticModulus-${props.index}`}>Green elastic modulus</label>
+        </div>
+        <div>
+            <input min={0} step={1} type="number" name={`depthEffect-${props.index}`} value={+props.species.depthEffect.value.toFixed(1)} onChange={e => props.species.depthEffect.value = parseFloat(e.currentTarget.value)} />
+            <label for={`depthEffect-${props.index}`}>Gravity depth effect</label>
+        </div>
     </li>;
 }

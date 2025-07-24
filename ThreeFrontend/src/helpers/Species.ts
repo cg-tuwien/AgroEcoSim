@@ -46,6 +46,10 @@ export class Species {
     // RootLengthGrowthPerH = 0.023148148f,
     // RootRadiusGrowthPerH = 0.00297619f,
 
+    woodElasticModulus = signal(1e10);
+    greenElasticModulus = signal(1e8);
+    depthEffect = signal(0.01);
+
     rootsDensity = signal(0.5);
     rootsGravitaxis = signal(0.2);
 
@@ -99,7 +103,11 @@ export class Species {
             petioleRadiusVar: this.petioleRadiusVar.peek(),
 
             rootsDensity: this.rootsDensity.peek(),
-            rootsGravitaxis: this.rootsGravitaxis.peek()
+            rootsGravitaxis: this.rootsGravitaxis.peek(),
+
+            woodElasticModulus: this.woodElasticModulus.peek(),
+            greenElasticModulus: this.greenElasticModulus.peek(),
+            depthEffect: this.depthEffect.peek()
         };
     }
 
@@ -146,6 +154,11 @@ export class Species {
 
         this.rootsDensity.value = s.rootsDensity;
         this.rootsGravitaxis.value = s.rootsGravitaxis;
+
+        this.woodElasticModulus.value = s.woodElasticModulus ?? 1e10;
+        this.greenElasticModulus.value = s.greenElasticModulus ?? 1e8;
+        this.depthEffect.value = s.depthEffect;
+
         return this;
     }
 
@@ -193,7 +206,10 @@ export class Species {
             PRv: this.petioleRadiusVar.peek(),
 
             RS: 100 - 99.999 * Math.min(1, Math.max(0, this.rootsDensity.peek())), //roots sparsity
-            RG: this.rootsGravitaxis.peek()
+            RG: this.rootsGravitaxis.peek(),
+            WEM: this.woodElasticModulus.peek(),
+            GEM: this.greenElasticModulus.peek(),
+            DF: this.depthEffect.peek()
         });
     }
 }
