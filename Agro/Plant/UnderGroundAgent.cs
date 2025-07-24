@@ -463,6 +463,11 @@ public struct UnderGroundAgent : IPlantAgent
 		PreviousDayProductionInv /= count;
 	}
 
+    public void SetOrientation(Quaternion quaternion)
+    {
+        return;
+    }
+
     [StructLayout(LayoutKind.Auto)]
     [Message]
     public readonly struct WaterInc : IMessage<UnderGroundAgent>
@@ -483,9 +488,5 @@ public struct UnderGroundAgent : IPlantAgent
         public Transaction Type => Transaction.Increase;
         [M(AI)]public void Receive(ref UnderGroundAgent dstAgent, uint timestep) => dstAgent.IncWater(Amount, Factor);
 
-        public void SetOrientation(Quaternion quaternion)
-        {
-            return;
-        }
     }
 }
