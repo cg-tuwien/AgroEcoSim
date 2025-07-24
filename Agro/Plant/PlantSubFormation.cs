@@ -411,7 +411,9 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
             float woodiness = agent.WoodRatio();
             float depthEffect = MathF.Exp(-GetAbsDepth(i) * turgorDepthFactor);
 
-            float E = (Plant.Parameters.GreenElasticModulus * depthEffect) * (1 - woodiness) + Plant.Parameters.WoodElasticModulus * woodiness;
+			float baseDebthstiffness = 1e9f;
+
+            float E = (MathF.Max(Plant.Parameters.GreenElasticModulus, baseDebthstiffness * depthEffect)) * (1 - woodiness) + Plant.Parameters.WoodElasticModulus * woodiness;
             
             Quaternion rotation = Quaternion.Identity;
             if (L > 0f && r > 0f && w > 0f)

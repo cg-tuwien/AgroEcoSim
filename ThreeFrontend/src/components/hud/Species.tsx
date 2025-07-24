@@ -171,7 +171,7 @@ export function SpeciesItem(props: {species: Species, index: number})
             <label for={`greenElasticModulus-${props.index}`}>Green elastic modulus</label>
         </div>
         <div>
-            <input min={0} step={1} type="number" name={`depthEffect-${props.index}`} value={+props.species.depthEffect.value.toFixed(1)} onChange={e => props.species.depthEffect.value = parseFloat(e.currentTarget.value)} />
+            <input min={0} max={2} step={0.001} type="number" name={`depthEffect-${props.index}`} value={+props.species.depthEffect.value.toFixed(4)} onChange={e => props.species.depthEffect.value = parseFloat(e.currentTarget.value)} />
             <label for={`depthEffect-${props.index}`}>Gravity depth effect</label>
         </div>
     </li>;
