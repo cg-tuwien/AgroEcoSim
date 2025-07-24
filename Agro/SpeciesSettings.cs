@@ -226,6 +226,12 @@ public class SpeciesSettings
     public float DensityDryWood = 700; //in kg/m³
 	public float DensityDryStem = 200; //in kg/m³
 
+    [JsonPropertyName("WEM")]
+    public float WoodElasticModulus { get; init; } = 1e10f; // in Pa
+
+    [JsonPropertyName("GEM")]
+    public float GreenElasticModulus { get; init; } = 1e8f; // in Pa
+
     public float PetioleCoverThreshold { get; private set; } = float.MaxValue;
 
     public static SpeciesSettings Avocado;

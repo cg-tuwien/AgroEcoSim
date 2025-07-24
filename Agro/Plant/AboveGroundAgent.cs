@@ -772,4 +772,9 @@ public partial struct AboveGroundAgent : IPlantAgent
 		PreviousDayEnvResourcesInv /= count;
 		PreviousDayProductionInv /= count;
 	}
+
+    [M(AI)]public void SetOrientation(Quaternion orientation)
+    {
+        Orientation = orientation;
+    }
 }

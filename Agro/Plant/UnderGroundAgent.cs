@@ -482,5 +482,10 @@ public struct UnderGroundAgent : IPlantAgent
         public bool Valid => Amount > 0f;
         public Transaction Type => Transaction.Increase;
         [M(AI)]public void Receive(ref UnderGroundAgent dstAgent, uint timestep) => dstAgent.IncWater(Amount, Factor);
+
+        public void SetOrientation(Quaternion quaternion)
+        {
+            return;
+        }
     }
 }

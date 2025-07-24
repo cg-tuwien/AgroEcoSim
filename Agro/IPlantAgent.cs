@@ -71,4 +71,5 @@ public interface IPlantAgent : ITreeAgent
 	void DailyAdd(float resources, float production);
 	void DailySet(float resources, float production, float efficiency);
 	void DailyDiv(uint count);
+    void SetOrientation(Quaternion quaternion);
 }

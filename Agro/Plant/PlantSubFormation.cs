@@ -353,33 +353,92 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 
 	internal void Gravity()
 	{
-		return;
-		var dst = Src(); //since Tick already swapped them
-		var leaves = GetLeaves();
-		Weights.Clear();
-		WeightReoslveChildren.Clear();
-		for(int i = 0; i < dst.Length; ++i)
-		{
-			var weight = GetWeight(i, Plant.Parameters);
-			Weights.Add(weight);
-			WeightReoslveChildren.Add(GetChildren(i).Count);
-			// var dir = Vector3.Transform(Vector3.UnitX, GetDirection(i));
-			// //var segmentsCount = GetSegmentsCount(i);
-			// // var firstSegment = GetFirstSegment(i);
-			// // var segmentWeight = w / segmentsCount;
-		}
-		var workingSetRead = new List<int>(leaves);
-		var workingSetWrite = new List<int>(leaves.Count);
-		while (workingSetRead.Count > 0)
-		{
-			for(int i = 0; i < workingSetRead.Count; ++i)
-				if (WeightReoslveChildren[i] == 0)
-				{
+        if (!IsAboveGround)
+            return;
 
-					--WeightReoslveChildren[dst[i].Parent];
-				}
-		}
-	}
+        var dst = Src(); //since Tick already swapped them
+        var count = dst.Length;
+        if (count == 0)
+            return;
+
+        if (Weights.Count < count)
+            Weights.AddRange(new float[count - Weights.Count]);
+        if (WeightReoslveChildren.Count < count)
+            WeightReoslveChildren.AddRange(new int[count - WeightReoslveChildren.Count]);
+
+        //initialize weights with self weight converted to Newtons
+        for (int i = 0; i < count; ++i)
+        {
+            var weight = GetWeight(i, Plant.Parameters) * 0.001f * 9.81f;
+            Weights[i] = weight;
+            WeightReoslveChildren[i] = GetChildren(i).Count;
+        }
+
+        //accumulate weights from leaves up
+        var workingSetRead = new List<int>(GetLeaves());
+        var workingSetWrite = new List<int>();
+        while (workingSetRead.Count > 0)
+        {
+            workingSetWrite.Clear();
+            foreach (var idx in workingSetRead)
+            {
+                var parent = GetParent(idx);
+                if (parent >= 0)
+                {
+                    Weights[parent] += Weights[idx];
+                    if (--WeightReoslveChildren[parent] == 0)
+                        workingSetWrite.Add(parent);
+                }
+            }
+            (workingSetRead, workingSetWrite) = (workingSetWrite, workingSetRead);
+        }
+
+
+
+        //process nodes from roots to leaves, propagating rotations
+        var queue = new Queue<int>(GetRoots());
+        while (queue.Count > 0)
+        {
+
+            var i = queue.Dequeue();
+            ref var agent = ref dst[i];
+
+            var L = agent.Length;
+            var r = agent.Radius;
+            var w = Weights[i];
+
+            float woodiness = agent.WoodRatio();
+            
+            float E = (Plant.Parameters.GreenElasticModulus) * (1 - woodiness) + Plant.Parameters.WoodElasticModulus * woodiness;
+            
+            Quaternion rotation = Quaternion.Identity;
+            if (L > 0f && r > 0f && w > 0f)
+            {
+                var M = w * L * 0.5f;
+                var I = MathF.PI * MathF.Pow(r, 4) / 4f; ;
+                var curvature = M / (E * I);
+                var deltaTheta = curvature * L;
+
+                var dir = Vector3.Transform(Vector3.UnitX, agent.Orientation);
+                var axis = Vector3.Cross(dir, Vector3.UnitY);
+                var len = axis.Length();
+                if (len > 1e-6f)
+                {
+                    axis /= len;
+                    rotation = Quaternion.CreateFromAxisAngle(axis, -deltaTheta);
+                    agent.SetOrientation(Quaternion.Normalize(rotation * agent.Orientation));
+                }
+            }
+
+            foreach (var child in GetChildren(i))
+            {
+                ref var c = ref dst[child];
+                if (rotation != Quaternion.Identity)
+                    c.SetOrientation(Quaternion.Normalize(rotation * c.Orientation));
+                queue.Enqueue(child);
+            }
+        }
+    }
 
 	[StructLayout(LayoutKind.Auto)]
 	readonly struct PathData
