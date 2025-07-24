@@ -399,6 +399,7 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
         var queue = new Queue<int>(GetRoots());
         while (queue.Count > 0)
         {
+            float turgorDepthFactor = Plant.Parameters.DepthFactor;
 
             var i = queue.Dequeue();
             ref var agent = ref dst[i];
@@ -408,8 +409,9 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
             var w = Weights[i];
 
             float woodiness = agent.WoodRatio();
-            
-            float E = (Plant.Parameters.GreenElasticModulus) * (1 - woodiness) + Plant.Parameters.WoodElasticModulus * woodiness;
+            float depthEffect = MathF.Exp(-GetAbsDepth(i) * turgorDepthFactor);
+
+            float E = (Plant.Parameters.GreenElasticModulus * depthEffect) * (1 - woodiness) + Plant.Parameters.WoodElasticModulus * woodiness;
             
             Quaternion rotation = Quaternion.Identity;
             if (L > 0f && r > 0f && w > 0f)

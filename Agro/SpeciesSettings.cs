@@ -232,6 +232,8 @@ public class SpeciesSettings
     [JsonPropertyName("GEM")]
     public float GreenElasticModulus { get; init; } = 1e8f; // in Pa
 
+    [JsonPropertyName("DF")]
+    public float DepthFactor { get; init; } = 0.01f; // in Pa
     public float PetioleCoverThreshold { get; private set; } = float.MaxValue;
 
     public static SpeciesSettings Avocado;
