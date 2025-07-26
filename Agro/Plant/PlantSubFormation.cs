@@ -375,22 +375,22 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
         }
 
         //accumulate weights from leaves up
-        var workingSetRead = new List<int>(GetLeaves());
-        var workingSetWrite = new List<int>();
-        while (workingSetRead.Count > 0)
+        var leavesToProcess = new List<int>(GetLeaves());
+        var internalNodesToProcess = new List<int>();
+        while (leavesToProcess.Count > 0)
         {
-            workingSetWrite.Clear();
-            foreach (var idx in workingSetRead)
+            internalNodesToProcess.Clear();
+            foreach (var idx in leavesToProcess)
             {
                 var parent = GetParent(idx);
                 if (parent >= 0)
                 {
                     Weights[parent] += Weights[idx];
                     if (--WeightReoslveChildren[parent] == 0)
-                        workingSetWrite.Add(parent);
+                        internalNodesToProcess.Add(parent);
                 }
             }
-            (workingSetRead, workingSetWrite) = (workingSetWrite, workingSetRead);
+            (leavesToProcess, internalNodesToProcess) = (internalNodesToProcess, leavesToProcess);
         }
 
 
@@ -398,32 +398,32 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
         //process nodes from roots to leaves, propagating rotations
 		float tickSpeed= Plant.World.HoursPerTick;
 
-        var queue = new Queue<int>(GetRoots());
-        while (queue.Count > 0)
+        var nodesToVisit = new Queue<int>(GetRoots());
+        while (nodesToVisit.Count > 0)
         {
-            float turgorDepthFactor = Plant.Parameters.DepthFactor;
+            float depthFactor = Plant.Parameters.DepthFactor;
 
-            var i = queue.Dequeue();
+            var i = nodesToVisit.Dequeue();
             ref var agent = ref dst[i];
 
-            var L = agent.Length;
-            var r = agent.Radius;
-            var w = Weights[i];
+            var length = agent.Length;
+            var radius = agent.Radius;
+            var totalWeight = Weights[i];
 
             float woodiness = agent.WoodRatio();
-            float depthEffect = MathF.Exp(-GetAbsDepth(i) * turgorDepthFactor);
+            float depthAttenuation = MathF.Exp(-GetAbsDepth(i) * depthFactor);
 
 			float baseDebthstiffness = 1e9f;
 
-            float E = (MathF.Max(Plant.Parameters.GreenElasticModulus, baseDebthstiffness * depthEffect)) * (1 - woodiness) + Plant.Parameters.WoodElasticModulus * woodiness;
+            float elasticity = (MathF.Max(Plant.Parameters.GreenElasticModulus, baseDebthstiffness * depthAttenuation)) * (1 - woodiness) + Plant.Parameters.WoodElasticModulus * woodiness;
             
             Quaternion rotation = Quaternion.Identity;
-            if (L > 0f && r > 0f && w > 0f)
+            if (length > 0f && radius > 0f && totalWeight > 0f)
             {
-                var M = w * L * 0.5f;
-                var I = MathF.PI * MathF.Pow(r, 4) / 4f; ;
-                var curvature = M / (E * I);
-                var deltaTheta = curvature * L * tickSpeed;
+                var bendingMoment = totalWeight * length * 0.5f;
+                var inertia = MathF.PI * MathF.Pow(radius, 4) / 4f; ;
+                var curvature = bendingMoment / (elasticity * inertia);
+                var deltaTheta = curvature * length * tickSpeed;
 
                 var dir = Vector3.Transform(Vector3.UnitX, agent.Orientation);
 
@@ -445,7 +445,7 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
                 ref var c = ref dst[child];
                 if (rotation != Quaternion.Identity)
                     c.SetOrientation(Quaternion.Normalize(rotation * c.Orientation));
-                queue.Enqueue(child);
+                nodesToVisit.Enqueue(child);
             }
         }
     }
