@@ -396,6 +396,8 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 
 
         //process nodes from roots to leaves, propagating rotations
+		float tickSpeed= Plant.World.HoursPerTick;
+
         var queue = new Queue<int>(GetRoots());
         while (queue.Count > 0)
         {
@@ -421,15 +423,19 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
                 var M = w * L * 0.5f;
                 var I = MathF.PI * MathF.Pow(r, 4) / 4f; ;
                 var curvature = M / (E * I);
-                var deltaTheta = curvature * L;
+                var deltaTheta = curvature * L * tickSpeed;
 
                 var dir = Vector3.Transform(Vector3.UnitX, agent.Orientation);
+
+                float angleToDown = MathF.Acos(Math.Clamp(Vector3.Dot(dir, Vector3.UnitY), -1f, 1f));
+                float maxAllowedBend = MathF.PI - angleToDown;
+                float safeDelta = Math.Clamp(deltaTheta,-maxAllowedBend, maxAllowedBend);
                 var axis = Vector3.Cross(dir, Vector3.UnitY);
                 var len = axis.Length();
                 if (len > 1e-6f)
                 {
                     axis /= len;
-                    rotation = Quaternion.CreateFromAxisAngle(axis, -deltaTheta);
+                    rotation = Quaternion.CreateFromAxisAngle(axis, -safeDelta);
                     agent.SetOrientation(Quaternion.Normalize(rotation * agent.Orientation));
                 }
             }
