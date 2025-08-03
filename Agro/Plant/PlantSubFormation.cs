@@ -609,7 +609,7 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 
 					}
                 }
-
+                TryResolveGroundByRotation(cellCollisions[i], groundHeight: 0f,  cellSize);
             }
 		}
 	}
@@ -760,6 +760,58 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 		return true;
     }
 
+	private void TryResolveGroundByRotation(int index, float groundHeight, float cellSize)
+	{
+		var dst = Src();
+		Vector3 tip = GetTipPosition(index);
+		if (tip.Y >= groundHeight)
+			return;
+
+		float depth = groundHeight - tip.Y;
+		ref var agent = ref dst[index];
+
+		Vector3 dir = Vector3.Transform(Vector3.UnitX, agent.Orientation);
+		Vector3 correctionAxis = Vector3.Cross(dir, Vector3.UnitY);
+
+		if (correctionAxis.LengthSquared() < 1e-6f)
+			return;
+
+		float angle = MathF.Asin(Math.Clamp(depth / agent.Length, -1f, 1f));
+
+		Quaternion correction = Quaternion.CreateFromAxisAngle(Vector3.Normalize(correctionAxis), angle);
+		Quaternion original = agent.Orientation;
+
+		agent.SetOrientation(Quaternion.Normalize(correction * agent.Orientation));
+		/*
+        // Check for collision
+        foreach (var other in grid(key))
+        {
+            if (!BranchIntersect(index, other))
+                continue;
+
+            // if it’s our ancestor, apply correction to ancestor instead
+            if (isDescendant(index, other))  // i is below j in tree
+            {
+                agent.SetOrientation(original); // Undo our rotation
+
+                ref var blocker = ref dst[other];
+                var dirAncestor = Vector3.Transform(Vector3.UnitX, blocker.Orientation);
+                var correctionAxisAncestor = Vector3.Cross(dirAncestor, Vector3.UnitY);
+                if (correctionAxisAncestor.LengthSquared() > 1e-6f)
+                {
+                    var rot = Quaternion.CreateFromAxisAngle(Vector3.Normalize(correctionAxisAncestor), angle);
+                    blocker.SetOrientation(Quaternion.Normalize(rot * blocker.Orientation));
+                    markChildCellsDirty(ref dirtyCells, other, cellSize);
+                }
+
+                return;
+            }
+
+		//todo
+            // if it's not an ancestor, resolve it as usual
+            // handled later in `collisionHandling`*/
+	}
+    
 
     [StructLayout(LayoutKind.Auto)]
 	readonly struct PathData
