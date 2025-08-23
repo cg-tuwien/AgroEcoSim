@@ -25,13 +25,13 @@ public class SimRequests
 
 public class SimulationHub : Hub<IEditorHub>
 {
-    IConfiguration Config;
+    readonly IConfiguration Config;
     public SimulationHub(IConfiguration configuration)
     {
         Config = configuration;
     }
 
-    static Dictionary<string, SimRequests> ClientSimulations = new ();
+    static readonly Dictionary<string, SimRequests> ClientSimulations = [];
 
     public async Task Abort()
     {

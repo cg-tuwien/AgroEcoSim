@@ -1,6 +1,5 @@
 import { Primitive, Primitives } from "./Primitives";
 
-
 export default class BinaryReader {
     source: Uint8Array;
     pos: 0;

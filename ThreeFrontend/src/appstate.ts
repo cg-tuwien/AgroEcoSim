@@ -82,7 +82,6 @@ hubConnection.on("preview", (result: ISimPreview) => {
     {
         st.previewRequestAfterSceneUpdate = true;
         const reader = new BinaryReader(binaryScene);
-        if (result.step == 132) debugger;
         const scene = reader.readAgroScene();
         batch(() => {
             st.scene.value = scene;
@@ -260,6 +259,7 @@ class State {
 
             if (hubConnection.state == SignalR.HubConnectionState.Connected)
             {
+                console.log(this.requestBody());
                 hubConnection.invoke("run", this.requestBody()).catch(e => {
                     console.error(e);
                     batch(() => {
