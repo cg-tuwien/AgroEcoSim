@@ -16,7 +16,7 @@ public static class Initialize
 		world.StreamExporterFunc = world.Irradiance.ExportToStream;
 		world.RendererName = "unknown";
 		//var soil = new SoilFormation(new Vector3i(AgroWorld.FieldSize / AgroWorld.FieldResolution), AgroWorld.FieldSize, 0);
-		var soil = new SoilFormationNew(world, new Vector3i(world.FieldSize / world.FieldResolution), world.FieldSize, Vector3.Zero);
+		var soil = new SoilFormationNew(world, new Vector3i(world.FieldSize / world.FieldResolution), world.FieldSize);
 		world.Add(soil);
 
 		PlantFormation2[] plantsFormation;
@@ -29,14 +29,14 @@ public static class Initialize
 			{
 				var minVegTemp = rnd.NextFloat(8f, 10f);
 				var pos = settings.Plants[i].Position
-					?? new Vector3(world.FieldSize.X * rnd.NextFloat(), -rnd.NextFloat(0.04f), world.FieldSize.Y * rnd.NextFloat());
+					?? new Vector3(world.FieldSize.X * rnd.NextFloat(), -rnd.NextPositiveFloat(0.04f), world.FieldSize.Y * rnd.NextFloat());
 				pos.Y -= soil.GetMetricGroundDepth(pos.X, pos.Z);
 
 				var seed = new SeedAgent(pos,
-										 rnd.NextFloat(0.02f),
+										 rnd.NextPositiveFloat(0.02f),
 										 new Vector2(minVegTemp, minVegTemp + rnd.NextFloat(8f, 14f)));
 				var species = string.IsNullOrEmpty(settings.Plants[i].SpeciesName) ? null : settings.Species?.FirstOrDefault(x => x.Name == settings.Plants[i].SpeciesName);
-				plantsFormation[i] = new PlantFormation2(species ?? SpeciesSettings.Avocado, soil, seed, rnd, world.HoursPerTick);
+				plantsFormation[i] = new PlantFormation2(world, species ?? SpeciesSettings.Avocado, soil, seed, rnd, world.HoursPerTick);
 			}
 		}
 		else
@@ -47,12 +47,12 @@ public static class Initialize
 			{
 				var minVegTemp = rnd.NextFloat(8f, 10f);
 				var seed = new SeedAgent(new Vector3(world.FieldSize.X * rnd.NextFloat(),
-														-rnd.NextFloat(0.04f),
+														-rnd.NextPositiveFloat(0.04f),
 														world.FieldSize.Y * rnd.NextFloat()), //Y because Z is depth
-											rnd.NextFloat(0.02f),
+											rnd.NextPositiveFloat(0.02f),
 											new Vector2(minVegTemp, minVegTemp + rnd.NextFloat(8f, 14f)));
 				var species = string.IsNullOrEmpty(settings.Plants[i].SpeciesName) ? null : settings.Species?.FirstOrDefault(x => x.Name == settings.Plants[i].SpeciesName);
-				plantsFormation[i] = new PlantFormation2(species ?? SpeciesSettings.Avocado, soil, seed, rnd, world.HoursPerTick);
+				plantsFormation[i] = new PlantFormation2(world, species ?? SpeciesSettings.Avocado, soil, seed, rnd, world.HoursPerTick);
 			}
 		}
 		world.AddRange(plantsFormation);

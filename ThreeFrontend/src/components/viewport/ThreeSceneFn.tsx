@@ -4,7 +4,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls"
 import WEBGL from "three/examples/jsm/capabilities/WebGL"
 import { Index } from "src/helpers/Scene";
-import { Primitive } from "src/helpers/Primitives";
+import { Primitive, Primitives } from "../../helpers/Primitives";
 import appstate, { PlayState } from "../../appstate";
 import { batch, useSignalEffect } from "@preact/signals";
 import { Obstacle } from "src/helpers/Obstacle";
@@ -12,7 +12,7 @@ import { Seed } from "src/helpers/Seed";
 import { backgroundColor } from "../../helpers/Selection";
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls';
 import { BaseRequestObject } from "src/helpers/BaseRequestObject";
-import { CreateBudMesh, CreateLeafMesh, CreateStemMesh, EncodePlantName, SetupMesh, UpdateBudMesh, UpdateLeafMesh, UpdateStemMesh, VisualizeBudMesh, VisualizeLeafMesh, VisualizeStemMesh, doubleGreyMaterial } from "../../helpers/Plant";
+import { CreateBudMesh, CreateLeafMesh, CreateRootMesh, CreateStemMesh, EncodePlantName, SetupMesh, UpdateBudMesh, UpdateLeafMesh, UpdateRootMesh, UpdateStemMesh, VisualizeBudMesh, VisualizeLeafMesh, VisualizeRootMesh, VisualizeStemMesh, doubleGreyMaterial } from "../../helpers/Plant";
 
 enum Clicks { None, Down, Up, Double };
 
@@ -33,7 +33,6 @@ interface ITerrainRef {
 interface IPlantRef {
     type: "plant";
     index: Index;
-    customMaterial: boolean;
 }
 
 interface IObstacleRef {
@@ -140,13 +139,12 @@ export default function ThreeSceneFn () {
             appstate.objPlants.clear();
         }
         //scene.add(new THREE.AxesHelper( 1 ))
-
         //const mesh = new THREE.Mesh(threeBoxPrimitive, new THREE.MeshBasicMaterial({color: new THREE.Color("#ff4411")}));
-        // //mesh.translateY(10);
-        // //const m = new THREE.Matrix4().scale(new THREE.Vector3(1, 1.4, 1));
-        // //const m = new THREE.Matrix4().setPosition(new THREE.Vector3(0.5, 0.5, 0));
-        // //mesh.applyMatrix4(m);
-        // scene.add(mesh);
+        //mesh.translateY(10);
+        //const m = new THREE.Matrix4().scale(new THREE.Vector3(20, 0.01, 0.01));
+        //const m = new THREE.Matrix4().setPosition(new THREE.Vector3(0.5, 0.5, 0));
+        //mesh.applyMatrix4(m);
+        //scene.add(mesh);
 
         buildTerrain();
         buildPlants();
@@ -243,13 +241,14 @@ export default function ThreeSceneFn () {
     const updateObject3D = (mesh: THREE.Mesh, primitive: Primitive, index: Index) => {
         switch(primitive.type)
         {
-            case 4: mesh.matrix.fromArray([primitive.radius, 0, 0, primitive.center[0], 0, primitive.radius, 0, primitive.center[1], 0, 0, primitive.radius, primitive.center[2], 0, 0, 0, 1]).transpose(); break;
+            //buds diabled case Primitives.Sphere: mesh.matrix.fromArray([primitive.radius, 0, 0, primitive.center[0], 0, primitive.radius, 0, primitive.center[1], 0, 0, primitive.radius, primitive.center[2], 0, 0, 0, 1]).transpose(); break;
+            case Primitives.Sphere: return; //sphere / bud
             default: mesh.matrix.fromArray([...primitive.affineTransform, 0, 0, 0, 1]).transpose(); break;
         }
 
         switch(primitive.type)
         {
-            case 1: mesh.geometry = threeCirclePrimitive;
+            case Primitives.Disk: mesh.geometry = threeCirclePrimitive;
                     if (mesh.material !== doubleGreyMaterial)
                     {
                         const tmp = mesh.material;
@@ -260,13 +259,13 @@ export default function ThreeSceneFn () {
                             tmp.dispose();
                     }
                     mesh = SetupMesh(primitive, index, mesh); break; //disk / no organ just obstacles in v3
-            case 2: UpdateStemMesh(mesh, primitive, index);
+            default: primitive.type == Primitives.Cylinder ? UpdateStemMesh(mesh, primitive, index) : UpdateRootMesh(mesh, primitive, index);
                     mesh.matrix
                         .scale(new THREE.Vector3(primitive.radius, primitive.length, primitive.radius))
                         .setPosition(new THREE.Vector3(primitive.affineTransform[3] + mesh.matrix.elements[4] * 0.5, primitive.affineTransform[7] + mesh.matrix.elements[5] * 0.5, primitive.affineTransform[11] + mesh.matrix.elements[6] * 0.5));
                     break; //cylinder / stem
-            case 4: mesh = UpdateBudMesh(mesh, primitive, index); break; //sphere / bud
-            case 8: mesh = UpdateLeafMesh(mesh, primitive, index); break; //plane / leaves
+            //buds disabled case Primitives.Sphere: mesh = UpdateBudMesh(mesh, primitive, index); break; //sphere / bud
+            case Primitives.Rectangle: mesh = UpdateLeafMesh(mesh, primitive, index); break; //plane / leaves
         }
     }
 
@@ -274,21 +273,22 @@ export default function ThreeSceneFn () {
         let matrix: THREE.Matrix4;
         switch(primitive.type)
         {
-            case 4: matrix = new THREE.Matrix4().fromArray([primitive.radius, 0, 0, primitive.center[0], 0, primitive.radius, 0, primitive.center[1], 0, 0, primitive.radius, primitive.center[2], 0, 0, 0, 1]).transpose(); break;
+            //buds disabled case Primitives.Sphere: matrix = new THREE.Matrix4().fromArray([primitive.radius, 0, 0, primitive.center[0], 0, primitive.radius, 0, primitive.center[1], 0, 0, primitive.radius, primitive.center[2], 0, 0, 0, 1]).transpose(); break;
+            case Primitives.Sphere: return; //sphere / bud
             default: matrix = new THREE.Matrix4().fromArray([...primitive.affineTransform, 0, 0, 0, 1]).transpose(); break;
         }
 
         let mesh: THREE.Mesh;
         switch(primitive.type)
         {
-            case 1: mesh = SetupMesh(primitive, index, new THREE.Mesh(threeCirclePrimitive, doubleGreyMaterial)); break; //disk / no organ just obstacles in v3
-            case 2: mesh = CreateStemMesh(primitive, index);
+            case Primitives.Disk: mesh = SetupMesh(primitive, index, new THREE.Mesh(threeCirclePrimitive, doubleGreyMaterial)); break; //disk / no organ just obstacles in v3
+            default: mesh = primitive.type == Primitives.Cylinder ? CreateStemMesh(primitive, index) : CreateRootMesh(primitive, index);
                     matrix = matrix
                         .scale(new THREE.Vector3(primitive.radius, primitive.length, primitive.radius))
                         .setPosition(new THREE.Vector3(primitive.affineTransform[3] + matrix.elements[4] * 0.5, primitive.affineTransform[7] + matrix.elements[5] * 0.5, primitive.affineTransform[11] + matrix.elements[6] * 0.5));
                     break; //cylinder / stem
-            case 4: mesh = CreateBudMesh(primitive, index); break; //sphere / bud
-            case 8: mesh = CreateLeafMesh(primitive, index); break; //plane / leaves
+            //buds disabled case Primitives.Sphere: mesh = CreateBudMesh(primitive, index); break; //sphere / bud
+            case Primitives.Rectangle: mesh = CreateLeafMesh(primitive, index); break; //plane / leaves
         }
 
         mesh.applyMatrix4(matrix);
@@ -305,9 +305,9 @@ export default function ThreeSceneFn () {
 
         //const box = new THREE.Box3().setFromCenterAndSize(new THREE.Vector3(w * 0.5, -d*0.5, l * 0.5), new THREE.Vector3(w, d, l) );
         //const terrainMesh = new THREE.Box3Helper( box, new THREE.Color("#cc9900") );
-        const terrainMesh = new THREE.Mesh(threeBoxPrimitive, new THREE.MeshLambertMaterial({ color: 0x593700 }));
+        const terrainMesh = new THREE.Mesh(terrainBoxPrimitive, new THREE.MeshLambertMaterial({ color: 0x593700, name: "terrainMesh" }));
         terrainMesh.scale.set(w, d, l);
-        terrainMesh.position.set(w * 0.5, -d*1, l * 0.5);
+        terrainMesh.position.set(0, -d, 0);
         terrainMesh.userData = { type: "terrain" };
         //terrainMesh.layers.set(TerrainLayer);
         appstate.objTerrain.add(terrainMesh);
@@ -332,12 +332,12 @@ export default function ThreeSceneFn () {
         if (counter < entities)
             for(let i = entities - 1; i >= counter; --i)
                 plants.splice(counter, entities - counter).map((x: THREE.Mesh) => {
-                    if (x.userData.type == "plant" && x.userData.customMaterial)
+                    if (x.userData.type == "plant")
                     {
                         const material = x.material;
                         if (Array.isArray(material))
-                            material.forEach(m => m.dispose());
-                        else
+                            material.forEach(m => {if (!m.name) m.dispose()});
+                        else if (!material.name)
                             material.dispose();
                     }
                 });
@@ -414,6 +414,11 @@ export default function ThreeSceneFn () {
     });
 
     useSignalEffect(() => {
+        appstate.objTerrain.visible = appstate.showTerrain.value;
+        renderOnce();
+    })
+
+    useSignalEffect(() => {
         buildPlants();
     })
 
@@ -478,14 +483,16 @@ export default function ThreeSceneFn () {
         appstate.objPlants.traverse((x: THREE.Mesh) => {
             const data = x.userData as IPlantRef;
             const material = x.material as THREE.MeshStandardMaterial;
-            if (data.customMaterial)
+            if (material)
             {
                 if (x.geometry == threePlanePrimitive) //leaf
                     VisualizeLeafMesh(material, data.index);
                 else if (x.geometry == threeCylinderPrimitive) //stem
                     VisualizeStemMesh(material, data.index);
-                else //bud
+                else if (x.geometry == threeSpherePrimitive) //bud
                     VisualizeBudMesh(material, data.index);
+                else
+                    VisualizeRootMesh(material, data.index);
             }
         })
         renderOnce();
@@ -513,7 +520,8 @@ export default function ThreeSceneFn () {
     return <div id="main3Dviewport" ref={divRef}></div>;
 }
 
-export const threeBoxPrimitive = new THREE.BoxGeometry().translate(0, 0.5, 0); //box
+export const terrainBoxPrimitive = new THREE.BoxGeometry().translate(0.5, 0.5, 0.5); //box
+export const threeBoxPrimitive = new THREE.BoxGeometry(); //box
 export const threeSpherePrimitive = new THREE.SphereGeometry(1, 8, 8); //sphere (type 4)
 export const threeCylinderPrimitive = new THREE.CylinderGeometry(1, 1, 1.0, 8); //cylinder (type 2)
 export const threePlanePrimitive = new THREE.PlaneGeometry(2, 2); //rect (type 8)

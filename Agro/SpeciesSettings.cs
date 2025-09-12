@@ -53,10 +53,11 @@ public class SpeciesSettings
     public float DominanceFactor { get => dominanceFactor; init {
         dominanceFactor = value;
         const int factors = 16;
-        DominanceFactors = new float[factors];
+        DominanceFactors = new float[factors + 1];
         DominanceFactors[0] = 1;
-        DominanceFactors[1] = dominanceFactor;
-        for(int i = 2; i < factors; ++i)
+        DominanceFactors[1] = 1;
+        DominanceFactors[2] = dominanceFactor;
+        for(int i = 3; i < factors; ++i)
             DominanceFactors[i] = MathF.Pow(dominanceFactor, i);
     } }
 
@@ -89,6 +90,35 @@ public class SpeciesSettings
     ///</summary>
     [JsonPropertyName("BPv")]
     public float LateralPitchVar { get; init; }
+
+
+    [JsonPropertyName("TB")]
+    public float TwigsBending { get; init; }
+    [JsonPropertyName("TBL")]
+    public float TwigsBendingLevel { get; init; }
+
+    [JsonPropertyName("TBA")]
+    public float TwigsBendingApical { get; set; }
+
+    [JsonPropertyName("SG")]
+    public float ShootsGravitaxis { get; set; }
+
+    /// <summary>
+    /// Standard wood growth time (in hours)
+    /// </summary>
+    [JsonPropertyName("WGT")]
+    public float WoodGrowthTime { get; set; }
+    /// <summary>
+    /// Variance of the wood growth time (in hours)
+    /// </summary>
+    [JsonPropertyName("WGTv")]
+    public float WoodGrowthTimeVar { get; set; }
+
+    ///<summary>
+    /// Maximum branch level that supports leaves (here level denotes the max. subtree depth)
+    ///</summary>
+    [JsonPropertyName("LV")]
+    public int LeafLevel { get; init; }
 
     ///<summary>
     /// Standard leaf length along its main axis (in meters)
@@ -163,22 +193,40 @@ public class SpeciesSettings
     [JsonPropertyName("PRv")]
     public float PetioleRadiusVar { get; init; }
 
+    ///<summary>
+    /// Density of the roots system (affects branching probabiilty). Valued 1 to 100 (with one being the most dense)
+    ///</summary>
+    [JsonPropertyName("RS")]
+    public float RootsSparsity { get; init; }
+
+    ///<summary>
+    /// Correction factor to point the roots growth downwards
+    ///</summary>
+    [JsonPropertyName("RG")]
+    public float RootsGravitaxis { get; init; }
+
     // public float RootRadiusGrowthPerH { get; init; }
     // public float RootLengthGrowthPerH { get; init; }
 
     //public int FirstFruitHour { get; init; }
 
-    public float AuxinsDegradation { get; init; }
 
-    public float CytokininsDegradation { get; init; }
+    [JsonPropertyName("AP")]
+    public float AuxinsProduction { get; init; }
 
-    public float AuxinsDegradationPerTick { get; private set; }
+    public float CytokininsProduction { get; init; }
 
-    public float CytokininsDegradationPerTick { get; private set; }
+    [JsonPropertyName("AR")]
+    public float AuxinsReach { get; init; }
 
+    public float CytokininsReach { get; init; }
+
+    public float AuxinsThreshold => 1f;
 
     public float DensityDryWood = 700; //in kg/m³
 	public float DensityDryStem = 200; //in kg/m³
+
+    public float PetioleCoverThreshold { get; private set; } = float.MaxValue;
 
     public static SpeciesSettings Avocado;
 
@@ -205,10 +253,18 @@ public class SpeciesSettings
     {
         if (!Initialized)
         {
-            AuxinsDegradationPerTick = AuxinsDegradation * hoursPerTick;
-            CytokininsDegradationPerTick = CytokininsDegradation * hoursPerTick;
-
+            // AuxinsDegradationPerTick = AuxinsReach * hoursPerTick;
+            // CytokininsDegradationPerTick = CytokininsReach * hoursPerTick;
+            TwigsBendingApical = TwigsBendingApical * TwigsBendingLevel;
+            ShootsGravitaxis *= 0.4f;
             Initialized = true;
+
+            PetioleCoverThreshold = MathF.Cos(MathF.PI * 0.5f - LateralPitch) * PetioleLength * 0.25f;
+
+            //BUG with petiole -> stem and not meristem
+            //Remove length factor at apex distribution for the current segment
+            //Bending suddenly does not work
+            //BUG water distribution
         }
     }
 }

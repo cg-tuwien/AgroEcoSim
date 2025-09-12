@@ -102,10 +102,11 @@ public class IrradianceClient
 
 	bool IsNight = true;
 
-	byte[] EnvMap = null; //just for debug output
+	byte[]? EnvMap = null; //just for debug output
 	ushort EnvMapX = 0;
+	string SamplesPerPixel;
 
-	public IrradianceClient(float latitude, float longitude, int _mode)
+	public IrradianceClient(float latitude, float longitude, int _mode, ushort spp = 512)
 	{
 		var mode = (Mode)_mode;
 		Client = new() { BaseAddress = new Uri($"http://localhost:{9001 + Math.Clamp(_mode - 1, 0, 8)}"), Timeout = TimeSpan.FromHours(1) };
@@ -113,6 +114,7 @@ public class IrradianceClient
 		Client.DefaultRequestHeaders.Add("Lo", longitude.ToString());
 		GlobalIllumination = mode != Mode.Constant;
 		RequestedMode = mode.ToString();
+		SamplesPerPixel = spp.ToString();
 	}
 
 	bool ProbeRenderer()
@@ -229,7 +231,8 @@ public class IrradianceClient
 					request.Headers.Add("TiE", world.GetTime(timestep + 1).ToString("o", CultureInfo.InvariantCulture));
 					//Debug.WriteLine(offsetCounter);
 					//request.Headers.Add("C", offsetCounter.ToString()); //Only use for dummy debug
-					request.Headers.Add("Ra", "2048");
+					//request.Headers.Add("Ra", "2048");
+					request.Headers.Add("Ra", SamplesPerPixel);
 					if (reqEnvMap)
 						request.Headers.Add("Env", "true");
 
@@ -267,7 +270,7 @@ public class IrradianceClient
 						for (var i = 0; i < length; ++i)
 							Irradiances.Add(reader.ReadSingle() / 3600f);
 					}
-					catch (Exception e)
+					catch (Exception)
                     {
 						IsOnline = false;
 						SW.Stop();
@@ -291,11 +294,11 @@ public class IrradianceClient
 		}
 	}
 
-	public byte[] DebugIrradiance(AgroWorld world, uint timestep, IList<IFormation> formations, IList<IObstacle> obstacles, float[] cameraMatrix) => DebugIrr(world, timestep, formations, obstacles, cameraMatrix);
+	public byte[]? DebugIrradiance(AgroWorld world, uint timestep, IList<IFormation> formations, IList<IObstacle> obstacles, float[] cameraMatrix) => DebugIrr(world, timestep, formations, obstacles, cameraMatrix);
 	public byte[] DebugEnvironment() => EnvMap;
 	public ushort DebugEnvironmentX() => EnvMapX;
 
-	byte[] DebugIrr(AgroWorld world, uint timestep, IList<IFormation> formations, IList<IObstacle> obstacles, float[] camera)
+	byte[]? DebugIrr(AgroWorld world, uint timestep, IList<IFormation> formations, IList<IObstacle> obstacles, float[] camera)
 	{
 		if (IsOnline)
 		{
@@ -324,7 +327,7 @@ public class IrradianceClient
 		return null;
 	}
 
-	private void ExportAsObj(IList<IFormation> formations, IList<IObstacle> obstacles, StreamWriter writer)
+	private void ExportAsObj(IList<IFormation> formations, IList<IObstacle>? obstacles, StreamWriter writer)
 	{
 		var obji = new System.Text.StringBuilder();
 		var points = new List<Vector3>();
@@ -414,16 +417,21 @@ public class IrradianceClient
 		writer.WriteLine(obji.ToString());
 	}
 
-	private int ExportAsTriangles(IList<IFormation> formations, IList<IObstacle> obstacles, int offsetCounter, Stream binaryStream)
+	private int ExportAsTriangles(IList<IFormation> formations, IList<IObstacle>? obstacles, int offsetCounter, Stream binaryStream)
 	{
 		IrradianceFormationOffsets.Clear();
 		using var writer = new BinaryWriter(binaryStream);
 		writer.WriteU8(1); //version 1 using triangular meshes
 
 		//Obstacles
-		writer.WriteU32(obstacles.Count);
-		foreach(var obstacle in obstacles)
-			obstacle.ExportTriangles(IrradiancePoints, writer);
+		if (obstacles == null)
+			writer.WriteU32(0);
+		else
+		{
+			writer.WriteU32(obstacles.Count);
+			foreach(var obstacle in obstacles)
+				obstacle.ExportTriangles(IrradiancePoints, writer);
+		}
 
 		//Formations
 		writer.WriteU32(formations.Count - SkipFormations.Count); //WRITE NUMBER OF PLANTS in this system
@@ -554,7 +562,7 @@ public class IrradianceClient
 		return offsetCounter;
 	}
 
-	private int ExportAsPrimitivesClustered(IList<IFormation> formations, IList<IObstacle> obstacles, int offsetCounter, Stream binaryStream)
+	private int ExportAsPrimitivesClustered(IList<IFormation> formations, IList<IObstacle>? obstacles, int offsetCounter, Stream binaryStream)
 	{
 		IrradianceFormationOffsets.Clear();
 		using var writer = new BinaryWriter(binaryStream);
@@ -632,7 +640,7 @@ public class IrradianceClient
 		return offsetCounter;
 	}
 
-	private int ExportAsPrimitivesInterleaved(IList<IFormation> formations, IList<IObstacle> obstacles, Stream binaryStream)
+	private int ExportAsPrimitivesInterleaved(IList<IFormation> formations, IList<IObstacle>? obstacles, Stream binaryStream)
 	{
 		int offsetCounter = 0;
 		IrradianceFormationOffsets.Clear();
@@ -723,10 +731,10 @@ public class IrradianceClient
 		ExportAsBeautyPrimitives(formations, file);
 	}
 
-	internal void ExportAsBeautyPrimitives(IList<IFormation> formations, Stream binaryStream, bool extended = false)
+	internal void ExportAsBeautyPrimitives(IList<IFormation> formations, Stream binaryStream, bool extended = false, bool roots = false)
 	{
 		using var writer = new BinaryWriter(binaryStream);
-		writer.WriteU8(extended ? 5 : 4); //version 4 is for the beauty pass; using primitives, each surface is individually marked as obstacle or sensor}
+		writer.WriteU8(extended ? (roots ? 6 : 5) : 4); //version 4 is for the beauty pass; using primitives, each surface is individually marked as obstacle or sensor}
 
 		//Formations
 		writer.WriteU32(formations.Count - SkipFormations.Count); //WRITE NUMBER OF PLANTS in this system
@@ -741,13 +749,14 @@ public class IrradianceClient
 				var plant = formations[pi] as PlantFormation2;
 				var ag = plant.AG;
 				var count = ag.Count;
+				var world = plant.World;
 
 				var sensorsCount = 0;
 				for (int i = 0; i < count; ++i)
 					if (ag.GetOrgan(i) == OrganTypes.Leaf)
 						++sensorsCount;
 
-				writer.WriteU32(count); //WRITE NUMBER OF SURFACES in this plant
+				writer.WriteU32(count); //WRITE NUMBER OF ABOVE-GROUND SURFACES in this plant
 
 				for (int i = 0; i < count; ++i)
 				{
@@ -772,13 +781,15 @@ public class IrradianceClient
 								var az = y * scale.Y * 0.5f;
 								var c = center + ax;
 								writer.WriteM32(ax, ay, az, c);
-								writer.Write(Math.Clamp(ag.GetWater(i) / ag.GetWaterStorageCapacity(i), 0, 1));
+								writer.Write(Math.Clamp(ag.GetWater(i) / ag.GetWaterEfficientCapacity(world, i), 0, 1));
 								writer.Write(Math.Clamp(ag.GetEnergy(i) / ag.GetEnergyCapacity(i), 0, 1));
 								if (extended)
 								{
 									writer.Write(GetIrradiance(ag, i));
 									writer.Write(ag.GetDailyResourcesInv(i));
 									writer.Write(ag.GetDailyProductionInv(i));
+									//writer.Write(ag.GetDailyEfficiency(i));
+									//writer.Write(0f);
 								}
 							}
 							break;
@@ -788,9 +799,26 @@ public class IrradianceClient
 								writer.Write(scale.X); //length
 								writer.Write(scale.Z * 0.5f); //radius
 								writer.WriteM32(z, x, y, center);
-								writer.Write(Math.Clamp(ag.GetWater(i) / ag.GetWaterStorageCapacity(i), 0, 1));
+								#if DEBUG
+								// 2023-10 Mitsuba sometimes complains about non-uniform scaling of cylinders as well as about shearing that should not be present.
+								// The following debugging did not catch anything suspicious so far.
+								// var xl = Math.Abs(1f - x.LengthSquared());
+								// var yl = Math.Abs(1f - y.LengthSquared());
+								// var zl = Math.Abs(1f - z.LengthSquared());
+								// if (xl > 1e-2 || yl > 1e-2 || zl > 1e-2)
+								// {
+								// 	Debug.WriteLine($"stem xyz {xl} {yl} {zl}");
+								// }
+								#endif
+								writer.Write(Math.Clamp(ag.GetWater(i) / ag.GetWaterEfficientCapacity(world, i), 0, 1));
 								writer.Write(Math.Clamp(ag.GetEnergy(i) / ag.GetEnergyCapacity(i), 0, 1));
 								writer.Write(Math.Clamp(ag.GetWoodRatio(i), 0, 1));
+								if (extended)
+								{
+									writer.Write(ag.GetDailyResourcesInv(i));
+									writer.Write(ag.GetDailyProductionInv(i));
+									//writer.Write(organ == OrganTypes.Stem ? ag.GetDailyEfficiency(i) : 0);
+								}
 							}
 							break;
 						case OrganTypes.Bud:
@@ -798,7 +826,7 @@ public class IrradianceClient
 								writer.WriteU8(3); //ORGAN 3 bud
 								writer.WriteV32(center);
 								writer.Write(scale.X); //radius
-								writer.Write(Math.Clamp(ag.GetWater(i) / ag.GetWaterStorageCapacity(i), 0, 1));
+								writer.Write(Math.Clamp(ag.GetWater(i) / ag.GetWaterEfficientCapacity(world, i), 0, 1));
 								writer.Write(Math.Clamp(ag.GetEnergy(i) / ag.GetEnergyCapacity(i), 0, 1));
 							}
 							break;
@@ -806,22 +834,63 @@ public class IrradianceClient
 					}
 					if (extended)
 					{
-						var h = ag.GetHormones(i);
-						writer.Write(h.X);
-						writer.Write(h.Y);
+						writer.Write(ag.GetAuxins(i));
+						writer.Write(ag.GetDailyEfficiency(i));
+					}
+				}
+
+				if (roots)
+				{
+					var ug = plant.UG;
+					count = ug.Count;
+					writer.WriteU32(count); //WRITE NUMBER OF UNDER-GROUND SURFACES in this plant
+					for (int i = 0; i < count; ++i)
+					{
+						var organ = ug.GetOrgan(i);
+						var center = ug.GetBaseCenter(i);
+						var scale = ug.GetScale(i);
+						var orientation = ug.GetDirection(i);
+
+						var x = Vector3.Transform(Vector3.UnitX, orientation);
+						var y = Vector3.Transform(Vector3.UnitY, orientation);
+						var z = Vector3.Transform(Vector3.UnitZ, orientation);
+
+						var parentIndex = ug.GetParent(i);
+						writer.Write(parentIndex);
+
+						switch (organ)
+						{
+							case OrganTypes.Root:
+								{
+									writer.WriteU8(1); //ORGAN 1 root
+									writer.Write(scale.X); //length
+									writer.Write(scale.Z * 0.5f); //radius
+									writer.WriteM32(z, x, y, center);
+									//writer.Write(Math.Clamp(ug.GetWater(i) / ug.GetWaterStorageCapacity(i), 0, 1));
+									writer.Write(ug.GetWater(i));
+									writer.Write(Math.Clamp(ug.GetEnergy(i) / ug.GetEnergyCapacity(i), 0, 1));
+									writer.Write(Math.Clamp(ug.GetWoodRatio(i), 0, 1));
+									if (extended)
+									{
+										writer.Write(ug.GetDailyResourcesInv(i));
+										writer.Write(ug.GetDailyProductionInv(i));
+									}
+								}
+								break;
+						}
 					}
 				}
 			}
 		}
 	}
 
-	public void ExportToFile(string fileName, byte version, IList<IFormation> formations, IList<IObstacle> obstacles = null)
+	public void ExportToFile(string fileName, byte version, IList<IFormation> formations, IList<IObstacle>? obstacles = null)
     {
         using var file = File.OpenWrite(fileName);
         ExportToStream(version, formations, obstacles, file);
     }
 
-    void ExportToStream(byte version, IList<IFormation> formations, IList<IObstacle> obstacles, Stream target)
+    void ExportToStream(byte version, IList<IFormation> formations, IList<IObstacle>? obstacles, Stream target)
     {
 		if (SkipFormations.Count == 0)
 		{
@@ -836,18 +905,19 @@ public class IrradianceClient
             case 2: ExportAsPrimitivesClustered(formations, obstacles, 0, target); break;
             case 3: ExportAsPrimitivesInterleaved(formations, obstacles, target); break;
             case 4: ExportAsBeautyPrimitives(formations, target); break;
-            case 5: ExportAsBeautyPrimitives(formations, target, true); break;
+            case 5: ExportAsBeautyPrimitives(formations, target, extended: true); break;
+			case 6: ExportAsBeautyPrimitives(formations, target, extended: true, roots: true); break;
         }
     }
 
-    public byte[] ExportToStream(byte version, IList<IFormation> formations, IList<IObstacle> obstacles = null)
+    public byte[] ExportToStream(byte version, IList<IFormation> formations, IList<IObstacle>? obstacles = null)
 	{
 		using var stream = new MemoryStream();
 		ExportToStream(version, formations, obstacles, stream);
 		return stream.ToArray();
 	}
 
-	public void ExportToObjFile(string fileName, IList<IFormation> formations, IList<IObstacle> obstacles)
+	public void ExportToObjFile(string fileName, IList<IFormation> formations, IList<IObstacle>? obstacles)
 	{
 		using var objStream = File.Open(fileName, FileMode.Create);
 		using var objWriter = new StreamWriter(objStream, System.Text.Encoding.UTF8);
@@ -893,8 +963,9 @@ public class IrradianceClient
 					}
 				}
 
+				var energyPerTick = world.HoursPerTick * 500f;
 				for(int i = 0; i < offsetCounter; ++i)
-					Irradiances.Add(world.HoursPerTick * 500f);
+					Irradiances.Add(energyPerTick);
 			}
 			//if (IsNight) Debug.WriteLine("DAY");
 			IsNight = false;
@@ -920,7 +991,7 @@ public class IrradianceClient
 	}
 
 	//TODO make this a ReadOnlySpan
-	public (int[], IList<float>) GetIrradiance(IFormation formation) =>
+	public (int[]?, IList<float>) GetIrradiance(IFormation formation) =>
         (!IsNight && formation.Count > 0 && IrradianceFormationOffsets.TryGetValue(formation, out var offset) ? offset : null, Irradiances);
 
 

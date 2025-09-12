@@ -19,8 +19,6 @@ public abstract class Formation<T> : IFormation where T : struct, IAgent
 	protected readonly HashSet<int> Deaths = new();
 	protected readonly List<int> DeathsHelper = new();
 
-	public abstract byte Stages { get; }
-
 	/// <summary>
 	/// An ordered tuple of the double data-buffer entries ready for swap.
 	/// </summary>
@@ -89,13 +87,13 @@ public abstract class Formation<T> : IFormation where T : struct, IAgent
 		}
 	}
 
-	public virtual void Tick(SimulationWorld world, uint timestep, byte stage)
+	public virtual void Tick(uint timestep)
 	{
 		var (src, dst) = SrcDst();
 
 		Array.Copy(src, dst, src.Length);
 		for(int i = 0; i < dst.Length; ++i)
-			dst[i].Tick(world, this, i, timestep, stage);
+			dst[i].Tick(this, i, timestep);
 
 		#if TICK_LOG
 		StatesHistory.Clear();
@@ -138,15 +136,15 @@ public abstract class Formation<T> : IFormation where T : struct, IAgent
 		Deaths.Add(index);
 	}
 
-	public virtual void DeliverPost(uint timestep, byte stage)
+	public virtual void DeliverPost(uint timestep)
 	{
 		var (src, dst) = SrcDst();
 		Array.Copy(src, dst, dst.Length);
-		Postbox.Process(timestep, stage, dst);
+		Postbox.Process(timestep, dst);
 		ReadTMP = !ReadTMP;
 	}
 
-	public virtual void ProcessTransactions(SimulationWorld world, uint timestep, byte stage) { }
+	public virtual void ProcessTransactions(uint timestep) { }
 
 	public virtual bool HasUndeliveredPost => Postbox.AnyMessages;
 	public virtual bool HasUnprocessedTransactions => false;
@@ -154,7 +152,7 @@ public abstract class Formation<T> : IFormation where T : struct, IAgent
 
 	#if HISTORY_LOG || TICK_LOG
 	readonly List<T[]> StatesHistory = new();
-	public string HistoryToJSON(int timestep = -1, byte stage = 0) => timestep >= 0 ? Export.Json(StatesHistory[timestep]) : Export.Json(StatesHistory);
+	public string HistoryToJSON(int timestep = -1) => timestep >= 0 ? Export.Json(StatesHistory[timestep]) : Export.Json(StatesHistory);
 
 	public ulong GetID(int index) => ReadTMP
 		? (AgentsTMP.Length > index ? AgentsTMP[index].ID : ulong.MaxValue)

@@ -18,6 +18,8 @@ public interface IPlantAgent : ITreeAgent
 	/// </summary>
 	Quaternion Orientation { get; }
 
+	byte DominanceLevel { get; }
+
 
 	float Energy { get; }
 
@@ -27,7 +29,7 @@ public interface IPlantAgent : ITreeAgent
 	float Water { get; }
 
 	float Auxins { get; }
-	float Cytokinins { get; }
+	//float Cytokinins { get; }
 
 	/// <summary>
 	/// Plant organ, e.g. stem, leaft, fruit
@@ -45,22 +47,32 @@ public interface IPlantAgent : ITreeAgent
 	/// </summary>
 	float PreviousDayEnvResourcesInv { get; }
 
+	public float PreviousDayEnvResources { get; }
+
 	float EnergyStorageCapacity();
 	float WaterStorageCapacity();
 	float WaterTotalCapacityPerTick(AgroWorld world);
 	float EnergyFlowToParentPerTick(AgroWorld world);
 
+	float LifeSupportPerHour();
 	float LifeSupportPerTick(AgroWorld world);
-	float PhotosynthPerTick();
+	float PhotosynthPerTick(AgroWorld world);
 
 	float WoodRatio();
 
 	Vector3 Scale();
 	float Volume();
 
+	bool NewDay(uint timestep, byte ticksPerDay);
+
 	static void Reindex(IPlantAgent[] data, int[] map) => throw new NotImplementedException();
 
 	bool ChangeAmount(PlantFormation2 plant, int index, int substanceIndex, float amount, bool increase);
 
 	void Distribute(float water, float energy);
+	void IncAuxins(float amount);
+	void DailyMax(float resources, float production);
+	void DailyAdd(float resources, float production);
+	void DailySet(float resources, float production, float efficiency);
+	void DailyDiv(uint count);
 }

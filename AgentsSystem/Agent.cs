@@ -2,7 +2,7 @@ namespace AgentsSystem;
 
 public interface IAgent
 {
-	void Tick(SimulationWorld world, IFormation formation, int formationID, uint timestep, byte stage);
+	void Tick(IFormation formation, int formationID, uint timestep);
 	#if HISTORY_LOG || TICK_LOG
 	/// <summary>
 	/// Unique ID of the agent

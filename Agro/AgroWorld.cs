@@ -47,6 +47,7 @@ public readonly struct WeatherStats
 public class AgroWorld : SimulationWorld
 {
 	public ushort HoursPerTick = 1;
+	public byte TicksPerDay = 24;
 	//public const int TotalHours = 24 * 365 * 10;
 	public int TotalHours = 24 * 31 * 12;
 
@@ -101,6 +102,8 @@ public class AgroWorld : SimulationWorld
 					HoursPerTick = (ushort)(24 * (HoursPerTick / 24));
 
 				StatsBlockLength = (byte)(23 / HoursPerTick + 1);
+
+				TicksPerDay = (byte)(HoursPerTick >= 24 ? 1 : 24 / HoursPerTick);
 			}
 
 			if (settings?.TotalHours.HasValue ?? false)
@@ -116,7 +119,7 @@ public class AgroWorld : SimulationWorld
 				InitRNG(settings.Seed.Value);
 		}
 
-		Irradiance = new IrradianceClient(Latitude, Longitude, settings?.RenderMode ?? 0);
+		Irradiance = new IrradianceClient(Latitude, Longitude, settings?.RenderMode ?? 0, settings?.SamplesPerPixel ?? 512);
 
 		Init();
 	}
@@ -242,7 +245,7 @@ public class AgroWorld : SimulationWorld
 
 	internal DateTime GetTime(uint timestep) => TimeZoneInfo.ConvertTimeToUtc(InitialTime, TimeZone) + TimeSpan.FromHours(timestep * HoursPerTick);
 	///<summary>
-	//Rainfall in the given timestep in gramm
+	///Rainfall in the given timestep in gramm
 	///</summary>
 	internal float GetWater(uint timestep) => Weather[timestep].Precipitation;
 	internal float GetTemperature(uint timestep) => 20;

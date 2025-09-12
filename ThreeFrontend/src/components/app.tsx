@@ -3,9 +3,9 @@ import { Start } from './hud/Start'
 import { HoursPerTick } from './hud/HoursPerTick';
 import { TotalHours } from './hud/TotalHours';
 import { FieldResolution } from './hud/FieldResolution';
-import { FieldCellsX } from './hud/FieldCellsX';
-import { FieldCellsZ } from './hud/FieldCellsZ';
-import { FieldCellsD } from './hud/FieldCellsD';
+import { FieldSizeX } from './hud/FieldCellsX';
+import { FieldSizeZ } from './hud/FieldCellsZ';
+import { FieldSizeD } from './hud/FieldCellsD';
 import { InitNumber } from './hud/InitNumber';
 import { PlantsTable } from './viewport/PlantsTable';
 import { Randomize } from './hud/Randomize';
@@ -19,6 +19,8 @@ import { VisualMapping } from './hud/VisualMapping';
 import { signal } from '@preact/signals';
 import { SpeciesList } from './hud/Species';
 import { ExactPreview } from './hud/ExactPreview';
+import { DownloadRoots } from './hud/DownloadRoots';
+import { SamplesPerPixel } from './hud/SamplesPerPixel';
 import { FieldModelUpload } from './hud/FieldModelUpload';
 import { FieldItemRegex } from './hud/FieldItemRegex';
 //import {Tab, initTE } from "tw-elements"; initTE({ Tab }); //tried but failed
@@ -53,15 +55,17 @@ const App = () => {
 				<HoursPerTick/>
 				<TotalHours/>
 				<FieldResolution/>
-				<FieldCellsX/>
-				<FieldCellsZ/>
-				<FieldCellsD/>
+				<FieldSizeX/>
+				<FieldSizeZ/>
+				<FieldSizeD/>
 				<FieldModelUpload/>
 				<FieldItemRegex/>
 				<Randomize/>
 				<InitNumber/>
 				<Renderer/>
+				<SamplesPerPixel/>
 				<ExactPreview/>
+				<DownloadRoots/>
 			</div>
 			<div role="tabpanel" id="tab-plants" aria-selected={tabs.value.endsWith("tab-plants")}>
 				<Seeds/>

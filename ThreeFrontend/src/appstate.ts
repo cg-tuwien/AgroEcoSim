@@ -53,7 +53,7 @@ hubConnection.on("result", (result: ISimResponse) => {
         const reader = new BinaryReader(binaryScene);
         const scene = reader.readAgroScene();
 
-        console.log(result.stepTimes);
+        //console.log(result.stepTimes);
         batch(() => {
             st.plants.value = result.plants;
             st.scene.value = scene;
@@ -65,7 +65,7 @@ hubConnection.on("result", (result: ISimResponse) => {
     }
     else
     {
-        console.log(result.stepTimes);
+        //console.log(result.stepTimes);
         batch(() => {
             st.plants.value = result.plants;
             st.computing.value = false;
@@ -82,6 +82,7 @@ hubConnection.on("preview", (result: ISimPreview) => {
     {
         st.previewRequestAfterSceneUpdate = true;
         const reader = new BinaryReader(binaryScene);
+        if (result.step == 132) debugger;
         const scene = reader.readAgroScene();
         batch(() => {
             st.scene.value = scene;
@@ -157,15 +158,15 @@ export enum PlayState {
 
 class State {
     // SETTINGS
-    hoursPerTick = signal(1);
-    totalHours = signal(720);
+    hoursPerTick = signal(4);
+    totalHours = signal(1440);
     fieldResolution = signal(0.5);
-    fieldCellsX = signal(10);
-    fieldCellsZ = signal(10);
-    fieldCellsD = signal(4);
-    fieldSizeX = computed(() => this.fieldCellsX.value * this.fieldResolution.value);
-    fieldSizeZ = computed(() => this.fieldCellsZ.value * this.fieldResolution.value);
-    fieldSizeD = computed(() => this.fieldCellsD.value * this.fieldResolution.value);
+    fieldSizeX = signal(10);
+    fieldSizeZ = signal(10);
+    fieldSizeD = signal(4);
+    fieldCellsX = computed(() => Math.ceil(this.fieldSizeX.value / this.fieldResolution.value));
+    fieldCellsZ = computed(() => Math.ceil(this.fieldSizeZ.value / this.fieldResolution.value));
+    fieldCellsD = computed(() => Math.ceil(this.fieldSizeD.value / this.fieldResolution.value));
     initNumber = signal(42);
     randomize = signal(false);
     renderMode = signal(1); //1 is Mitsuba
@@ -192,7 +193,11 @@ class State {
     plantPick = signal("");
 
     transformControls: TransformControls | undefined;
+    downloadRoots = signal(false);
     debugBoxes = signal(false);
+    showLeaves = signal(true);
+    showTerrain = signal(true);
+    showRoots = signal(true);
 
     grabbed = computed(() => this.seeds.value.filter((x: Seed) => x.state.value == "grab"));
 
@@ -210,6 +215,7 @@ class State {
     plants = signal<IPlantResponse[]>([]);
     scene = signal<Scene>([]);
     renderer = signal("");
+    samplesPerPixel = signal(2048);
     simHoursPerTick = 1;
 
     history : {t: number, s: Uint8Array}[] = [];
@@ -225,7 +231,7 @@ class State {
         HoursPerTick: Math.trunc(this.hoursPerTick.peek()),
         TotalHours: Math.trunc(this.totalHours.peek()),
         FieldResolution: this.fieldResolution.peek(),
-        FieldSize: { X: this.fieldCellsX.peek(), D: this.fieldCellsD.peek(), Z: this.fieldCellsZ.peek() },
+        FieldSize: { X: this.fieldSizeX.peek(), D: this.fieldSizeD.peek(), Z: this.fieldSizeZ.peek() },
         Seed: Math.trunc(this.randomize.peek() ? Math.random() * 4294967295 : this.initNumber.peek()),
         Species: this.species.peek().map(s => s.serialize()),
 
@@ -233,7 +239,9 @@ class State {
         Obstacles: this.obstacles.peek().map((o: Obstacle) => exportObstacle(o)),
         RequestGeometry: true,
         RenderMode: this.renderMode.value,
-        ExactPreview: this.exactPreview.value
+        SamplesPerPixel: this.samplesPerPixel.value,
+        ExactPreview: this.exactPreview.value,
+        DownloadRoots: this.downloadRoots.value
     }};
 
     run = async() => {
@@ -362,20 +370,22 @@ class State {
             hoursPerTick: this.hoursPerTick.peek(),
             totalHours: this.totalHours.peek(),
             fieldResolution: this.fieldResolution.peek(),
-            fieldCellsX: this.fieldCellsX.peek(),
-            fieldCellsZ: this.fieldCellsZ.peek(),
-            fieldCellsD: this.fieldCellsD.peek(),
+            fieldSizeX: this.fieldSizeX.peek(),
+            fieldSizeZ: this.fieldSizeZ.peek(),
+            fieldSizeD: this.fieldSizeD.peek(),
             initNumber: this.initNumber.peek(),
             randomize: this.randomize.peek(),
             constantLight: this.renderMode.peek(),
+            downloadRoots: this.downloadRoots.peek(),
             exactPreview: this.exactPreview.peek(),
             visualMapping: this.visualMapping.peek(),
             debugDisplayOrientations: this.debugBoxes.peek(),
+            showLeaves: this.showLeaves.peek(),
             seeds: this.seeds.value.map(s => s.save()),
             obstacles: this.obstacles.value.map(o => o.save()),
             species: this.species.value.map(s => s.save()),
 
-            plants: this.plants,
+            plants: this.plants.peek(),
             history: this.history,
             historySize: this.historySize.peek(),
             simHoursPerTick: this.simHoursPerTick,
@@ -412,15 +422,17 @@ class State {
                     self.hoursPerTick.value = data.hoursPerTick;
                     self.totalHours.value = data.totalHours;
                     self.fieldResolution.value = data.fieldResolution;
-                    self.fieldCellsX.value = data.fieldCellsX;
-                    self.fieldCellsZ.value = data.fieldCellsZ;
-                    self.fieldCellsD.value = data.fieldCellsD;
+                    self.fieldSizeX.value = data.fieldSizeX;
+                    self.fieldSizeZ.value = data.fieldSizeZ;
+                    self.fieldSizeD.value = data.fieldSizeD;
                     self.initNumber.value = data.initNumber;
                     self.randomize.value = data.randomize;
                     self.renderMode.value = data.constantLight;
+                    self.downloadRoots.value = data.downloadRoots;
                     self.exactPreview.value = data.exactPreview;
                     self.visualMapping.value = data.visualMapping;
                     self.debugBoxes.value = data.debugDisplayOrientations;
+                    self.showLeaves.value = data.showLeaves;
                     self.seeds.value = data.seeds.map(s => new Seed(s.species, s.px, s. py, s.pz));
                     self.obstacles.value = data.obstacles.map(o => new Obstacle(o.type, o.px, o.py, o.pz, o.ax, o.ay, o.l, o.h, o.t));
                     self.species.value = data.species.map(s => new Species().load(s));
@@ -450,6 +462,11 @@ class State {
         );
     }
 
+    prim = () => {
+        const i = Math.min(this.playPointer.peek(), st.history.length - 1);
+        this.saveBinaryFile(this.history[i].s, `_${st.history[i].t}`, 'prim');
+    }
+
     uploadFieldModel = async (f: File) => {
         const bytes = await f.arrayBuffer() as Uint8Array;
         this.fieldModelData = bytes;
@@ -474,12 +491,27 @@ class State {
         window.URL.revokeObjectURL(url);
         a.remove();
     }
+
+    private saveBinaryFile(data: Uint8Array, frame: string, ext: string) {
+        const binaryData = base64ToArrayBuffer(data);
+        const blob = new Blob([binaryData], { type: 'application/octet-stream' });
+        const url = window.URL.createObjectURL(blob);
+
+        const a = document.createElement('a');
+        a.style.setProperty('display', 'none');
+        document.body.appendChild(a);
+        a.href = url;
+        a.download = `AgroEco-${new Date().toISOString().split("T")[0]}_${new Date().getHours()}-${new Date().getMinutes()}-${new Date().getSeconds()}${frame}.${ext}`;
+        a.click();
+        window.URL.revokeObjectURL(url);
+        a.remove();
+    }
 };
 
 const st = new State();
 export default st;
 //now that the singleton is exported push in the default seed
-st.seeds.value = [ new Seed(st.species.peek()[0].name.peek(), 0.5, -0.01, 0.05) ];
+st.seeds.value = [ new Seed(st.species.peek()[0].name.peek(), st.fieldSizeX.peek() * 0.5, -0.01, st.fieldSizeZ.peek() * 0.5) ];
 
 effect(() => {
     if (st.previewRequest.value && hubConnection.state == SignalR.HubConnectionState.Connected) {

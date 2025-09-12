@@ -54,7 +54,8 @@ public readonly struct TransactionsBox
         ulong ID { get; }
     }
 
-    [StructLayout(LayoutKind.Auto)] public readonly struct TransactionLog : ITransactionLogData
+    [StructLayout(LayoutKind.Auto)]
+    public readonly struct TransactionLog : ITransactionLogData
 	{
         #if !TICK_LOG
 		public readonly uint TimeStep { get; }

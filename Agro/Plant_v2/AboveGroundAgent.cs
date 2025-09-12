@@ -199,7 +199,7 @@
 // 	const float TwoPiTenth = MathF.PI * 0.2f;
 // 	public const float LeafThickness = 0.0001f;
 
-// 	public void Tick(SimulationWorld _world, IFormation _formation, int formationID, uint timestep, byte stage)
+// 	public void Tick(SimulationWorld _world, IFormation _formation, int formationID, uint timestep)
 // 	{
 // 		var world = _world as AgroWorld;
 // 		var formation = (PlantSubFormation2<AboveGroundAgent2>)_formation;
@@ -640,7 +640,7 @@
 // 	const float TwoPiTenth = MathF.PI * 0.2f;
 // 	public const float LeafThickness = 0.0001f;
 
-// 	public void Tick(SimulationWorld _world, IFormation _formation, int formationID, uint timestep, byte stage)
+// 	public void Tick(SimulationWorld _world, IFormation _formation, int formationID, uint timestep)
 // 	{
 // 		var world = _world as AgroWorld;
 // 		var formation = (PlantSubFormation2<AboveGroundAgent2>)_formation;

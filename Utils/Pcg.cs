@@ -1,24 +1,53 @@
 using System;
 using System.Diagnostics;
 using System.Runtime.Serialization;
+using System.Runtime.CompilerServices;
+using M = System.Runtime.CompilerServices.MethodImplAttribute;
 
 namespace Utils;
 
 public static class PcgSeed
 {
+	const MethodImplOptions AI = MethodImplOptions.AggressiveInlining;
 	/// <summary>
 	/// Provides a time-dependent seed value, matching the default behavior of System.Random.
 	/// </summary>
-	public static ulong TimeBasedSeed() => (ulong)Environment.TickCount;
+	[M(AI)]public static ulong TimeBasedSeed() => (ulong)Environment.TickCount;
 
 	/// <summary>
 	/// Provides a seed based on time and unique GUIDs.
 	/// </summary>
-	public static ulong GuidBasedSeed()
+	[M(AI)]public static ulong GuidBasedSeed()
 	{
 		ulong upper = (ulong)(Environment.TickCount ^ Guid.NewGuid().GetHashCode()) << 32;
 		ulong lower = (ulong)(Environment.TickCount ^ Guid.NewGuid().GetHashCode());
 		return upper | lower;
+	}
+
+	[M(AI)]public static ulong StringBasedSeed(string input){
+		var lo = new HashCode();
+		var hi = new HashCode();
+
+		if (ulong.TryParse(input, out var result))
+			return result;
+		else
+		{
+			if (input.Length == 0) return 0;
+			else if (input.Length == 1) return (ulong)char.GetNumericValue(input[0]);
+			int i = 0;
+			int mid = input.Length / 2;
+			for(; i < mid; ++i)
+				lo.Add(input[i]);
+			for(; i < input.Length; ++i)
+				hi.Add(input[i]);
+			ulong l, h;
+			unchecked
+			{
+				l = (uint)lo.ToHashCode();
+				h = (uint)hi.ToHashCode();
+			}
+			return (h << 32) | l;
+		}
 	}
 }
 
@@ -34,6 +63,8 @@ public static class PcgSeed
 [DataContract]
 public class Pcg
 {
+	const MethodImplOptions AI = MethodImplOptions.AggressiveInlining;
+
 	[DataMember(Order = 0)]
 	ulong _state;
 	// This shifted to the left and or'ed with 1ul results in the default increment.
@@ -56,7 +87,7 @@ public class Pcg
 	/// </summary>
 	public static Pcg Default => _defaultInstance ??= new Pcg(PcgSeed.GuidBasedSeed());
 
-	public int Next() => unchecked((int)(NextUInt() >> 1));
+	[M(AI)]public int Next() => unchecked((int)(NextUInt() >> 1));
 
 	public int Next(int max, bool maxExclusive = true)
 	{
@@ -92,7 +123,7 @@ public class Pcg
 		}
 	}
 
-	public int[] NextInts(int count)
+	[M(AI)]public int[] NextInts(int count)
 	{
 		if (count <= 0)
 			return Array.Empty<int>();
@@ -106,7 +137,7 @@ public class Pcg
 		}
 	}
 
-	public int[] NextInts(int count, int max, bool maxExclusive = true)
+	[M(AI)]public int[] NextInts(int count, int max, bool maxExclusive = true)
 	{
 		if (count <= 0)
 			return Array.Empty<int>();
@@ -120,7 +151,7 @@ public class Pcg
 		}
 	}
 
-	public int[] NextInts(int count, int min, int max, bool maxExclusive = true)
+	[M(AI)]public int[] NextInts(int count, int min, int max, bool maxExclusive = true)
 	{
 		if (count <= 0)
 			return Array.Empty<int>();
@@ -148,13 +179,17 @@ public class Pcg
 	{
 		if (!maxExclusive) ++max;
 
-		uint threshold = (uint)(-max) % max; //What is this? I don't remember anymore :(
-
-		while (true)
+		if (max == 0) return 0;
+		else
 		{
-			uint result = NextUInt();
-			if (result >= threshold)
-				return result % max;
+			uint threshold = (uint)(-max) % max; //What is this? I don't remember anymore :(
+
+			while (true)
+			{
+				uint result = NextUInt();
+				if (result >= threshold)
+					return result % max;
+			}
 		}
 	}
 
@@ -165,17 +200,21 @@ public class Pcg
 			throw new ArgumentException();
 
 		uint diff = max - min + (maxExclusive ? 0U : 1U);
-		uint threshold = (uint)(-diff) % diff;
-
-		while (true)
+		if (diff == 0) return min;
+		else
 		{
-			uint result = NextUInt();
-			if (result >= threshold)
-				return (result % diff) + min;
+			uint threshold = (uint)(-diff) % diff;
+
+			while (true)
+			{
+				uint result = NextUInt();
+				if (result >= threshold)
+					return (result % diff) + min;
+			}
 		}
 	}
 
-	public uint[] NextUInts(int count)
+	[M(AI)]public uint[] NextUInts(int count)
 	{
 		if (count <= 0)
 			throw new ArgumentException("Zero count");
@@ -187,7 +226,7 @@ public class Pcg
 		return resultA;
 	}
 
-	public uint[] NextUInts(int count, uint max, bool maxExclusive = true)
+	[M(AI)]public uint[] NextUInts(int count, uint max, bool maxExclusive = true)
 	{
 		if (count <= 0)
 			throw new ArgumentException("Zero count");
@@ -199,7 +238,7 @@ public class Pcg
 		return resultA;
 	}
 
-	public uint[] NextUInts(int count, uint min, uint max, bool maxExclusive)
+	[M(AI)]public uint[] NextUInts(int count, uint min, uint max, bool maxExclusive)
 	{
 		if (count <= 0)
 			throw new ArgumentException("Zero count");
@@ -211,27 +250,27 @@ public class Pcg
 		return resultA;
 	}
 
-	public ulong NextULong() => (((ulong)NextUInt()) << 32) | NextUInt();
+	[M(AI)]public ulong NextULong() => (((ulong)NextUInt()) << 32) | NextUInt();
 
-	public float NextFloat() => (float)(NextUInt() * ToDouble01);
+	[M(AI)]public float NextFloat() => (float)(NextUInt() * ToDouble01);
 
-	public float NextFloat(float maxInclusive)
+	[M(AI)]public float NextPositiveFloat(float maxInclusive)
 	{
-		if (maxInclusive <= 0)
-			throw new ArgumentException("MaxInclusive must be larger than 0");
-
-		return (float)(NextUInt() * ToDouble01) * maxInclusive;
+		if (maxInclusive <= 0) return 0f;
+		return (float)(NextUInt() * ToDouble01 * maxInclusive);
 	}
 
-	public float NextFloat(float minInclusive, float maxInclusive)
+	[M(AI)]public float NextFloat(float minInclusive, float maxInclusive)
 	{
 		if (maxInclusive < minInclusive)
 			throw new ArgumentException("Max must be larger than min");
 
-		return (float)(NextUInt() * ToDouble01) * (maxInclusive - minInclusive) + minInclusive;
+		return (float)(NextUInt() * ToDouble01 * (maxInclusive - minInclusive) + minInclusive);
 	}
 
-	public float[] NextFloats(int count)
+    [M(AI)]public float NextFloatVar(float amplitude) => 2f * amplitude * (float)(NextUInt() * ToDouble01 - 0.5);
+
+    [M(AI)]public float[] NextFloats(int count)
 	{
 		if (count <= 0)
 			return Array.Empty<float>();
@@ -243,7 +282,7 @@ public class Pcg
 		return resultA;
 	}
 
-	public float[] NextFloats(int count, float maxInclusive)
+	[M(AI)]public float[] NextPositiveFloats(int count, float maxInclusive)
 	{
 		if (count <= 0)
 			return Array.Empty<float>();
@@ -251,12 +290,12 @@ public class Pcg
 		var resultA = new float[count];
 		for (int i = 0; i < count; i++)
 		{
-			resultA[i] = NextFloat(maxInclusive);
+			resultA[i] = NextPositiveFloat(maxInclusive);
 		}
 		return resultA;
 	}
 
-	public float[] NextFloats(int count, float minInclusive, float maxInclusive)
+	[M(AI)]public float[] NextFloats(int count, float minInclusive, float maxInclusive)
 	{
 		if (count <= 0)
 			return Array.Empty<float>();
@@ -269,17 +308,16 @@ public class Pcg
 		return resultA;
 	}
 
-	public double NextDouble() => NextUInt() * ToDouble01;
+	[M(AI)]public double NextDouble() => NextUInt() * ToDouble01;
 
-	public double NextDouble(double maxInclusive)
+	[M(AI)]public double NextPositiveDouble(double maxInclusive)
 	{
-		if (maxInclusive <= 0)
-			throw new ArgumentException("Max must be larger than 0");
+		if (maxInclusive <= 0) return 0.0;
 
 		return NextUInt() * ToDouble01 * maxInclusive;
 	}
 
-	public double NextDouble(double minInclusive, double maxInclusive)
+	[M(AI)]public double NextDouble(double minInclusive, double maxInclusive)
 	{
 		if (maxInclusive < minInclusive)
 			throw new ArgumentException("Max must be larger than min");
@@ -287,7 +325,7 @@ public class Pcg
 		return NextUInt() * ToDouble01 * (maxInclusive - minInclusive) + minInclusive;
 	}
 
-	public double[] NextDoubles(int count)
+	[M(AI)]public double[] NextDoubles(int count)
 	{
 		if (count <= 0)
 			return Array.Empty<double>();
@@ -299,19 +337,19 @@ public class Pcg
 		return resultA;
 	}
 
-	public double[] NextDoubles(int count, double maxInclusive)
+	[M(AI)]public double[] NextPositiveDoubles(int count, double maxInclusive)
 	{
 		if (count <= 0)
 			return Array.Empty<double>();
 
 		var resultA = new double[count];
 		for (int i = 0; i < count; i++)
-			resultA[i] = NextDouble(maxInclusive);
+			resultA[i] = NextPositiveDouble(maxInclusive);
 
 		return resultA;
 	}
 
-	public double[] NextDoubles(int count, double minInclusive, double maxInclusive)
+	[M(AI)]public double[] NextDoubles(int count, double minInclusive, double maxInclusive)
 	{
 		if (count <= 0)
 			return Array.Empty<double>();
@@ -344,9 +382,9 @@ public class Pcg
 		return resultA;
 	}
 
-	public byte NextByte() => unchecked((byte)(NextUInt() & 255));
+	[M(AI)]public byte NextByte() => unchecked((byte)(NextUInt() & 255));
 
-	public byte[] NextBytes(int count)
+	[M(AI)]public byte[] NextBytes(int count)
 	{
 		if (count <= 0)
 			return Array.Empty<byte>();
@@ -359,9 +397,9 @@ public class Pcg
 		return resultA;
 	}
 
-	public bool NextBool() => (NextUInt() & 1) == 1;
+	[M(AI)]public bool NextBool() => (NextUInt() & 1) == 1;
 
-	public bool[] NextBools(int count)
+	[M(AI)]public bool[] NextBools(int count)
 	{
 		if (count <= 0)
 			throw new ArgumentException("Zero count");
@@ -388,11 +426,11 @@ public class Pcg
 		return mean + variance * v / u;
 	}
 
-	public void SetStream(int sequence) => SetStream((ulong)sequence);
+	[M(AI)]public void SetStream(int sequence) => SetStream((ulong)sequence);
 
-	public void SetStream(ulong sequence) => _increment = (sequence << 1) | 1;
+	[M(AI)]public void SetStream(ulong sequence) => _increment = (sequence << 1) | 1;
 
-	public ulong CurrentStream() => _increment >> 1;
+	[M(AI)]public ulong CurrentStream() => _increment >> 1;
 
 	public Pcg() : this(PcgSeed.GuidBasedSeed()) { }
 
@@ -408,9 +446,9 @@ public class Pcg
 		_increment = original._increment;
 	}
 
-	public Pcg NextRNG() => new(_state, (NextULong() << 1) | 1);
+	[M(AI)]public Pcg NextRNG() => new(_state, (NextULong() << 1) | 1);
 
-	void Initialize(ulong seed, ulong initseq)
+	[M(AI)]void Initialize(ulong seed, ulong initseq)
 	{
 		_state = 0ul;
 		SetStream(initseq);
@@ -419,17 +457,23 @@ public class Pcg
 		NextUInt();
 	}
 
-	internal ulong GetSeed() => _state;
+	[M(AI)]internal ulong GetSeed() => _state;
 
-	internal void SaveBinary(System.IO.BinaryWriter writer)
+	[M(AI)]internal void SaveBinary(System.IO.BinaryWriter writer)
 	{
 		writer.Write(_state);
 		writer.Write(_increment);
 	}
 
-	internal Pcg(System.IO.BinaryReader reader)
+	[M(AI)]internal Pcg(System.IO.BinaryReader reader)
 	{
 		_state = reader.ReadUInt64();
 		_increment = reader.ReadUInt64();
 	}
+
+	[M(AI)]public static float AccumulatedProbability(float singleProbability, int tryouts) => 1f - MathF.Pow(1f - singleProbability, tryouts);
+	[M(AI)]public static uint AccumulatedProbabilityUInt(float singleProbability, int tryouts) => (uint)((1f - MathF.Pow(1f - singleProbability, tryouts)) * uint.MaxValue);
+
+	[M(AI)]public bool NextFloatAccum(float singleProbability, int tryouts) => NextFloat() < AccumulatedProbability(singleProbability, tryouts);
+	[M(AI)]public bool NextFloatVarAccum(float variance, float singleProbability, int tryouts) => NextFloatVar(variance) < AccumulatedProbability(singleProbability, tryouts);
 }

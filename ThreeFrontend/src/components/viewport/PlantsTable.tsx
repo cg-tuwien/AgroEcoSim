@@ -1,6 +1,7 @@
 import { Component, h, Fragment } from "preact";
 import appstate from "../../appstate";
 import { DecodePlantName } from "../../helpers/Plant";
+import { Primitive, Primitives } from "../../helpers/Primitives";
 
 export function PlantsTable()
 {
@@ -18,18 +19,29 @@ export function PlantsTable()
     else
     {
         const index = DecodePlantName(pickName);
-        const primitive = appstate.scene.value[index.entity][index.primitive];
+        let primitive : Primitive = undefined;
+        if (appstate.scene.value.length > index.entity)
+        {
+            const ent = appstate.scene.value[index.entity];
+            if (ent.length > index.primitive)
+                primitive = ent[index.primitive];
+        }
+
         return primitive ? (<>
             <p>Plant part: {appstate.plantPick.value}</p>
             <ul style={{listStyleType: "none"}}>
                 <li>Water ratio: {primitive.stats[0]}</li>
                 <li>Energy ratio: {primitive.stats[1]}</li>
-                {primitive.type == 2 ? <li>Wood ratio: {primitive.stats[2]}</li> : <></>}
-                {primitive.type == 8 ? <li>Irradiance: {primitive.stats[2]}</li> : <></>}
-                {primitive.type == 8 ? <li>Resources availability: {primitive.stats[3]}</li>: <></>}
-                {primitive.type == 8 ? <li>Production efficiency: {primitive.stats[4]}</li> : <></>}
-                {primitive.type == 8 ? <li>Relative Resources: {primitive.stats[5]}</li>: <></>}
-                {primitive.type == 8 ? <li>Relative Production: {primitive.stats[6]}</li> : <></>}
+                <li>Auxins: {primitive.stats[2]}</li>
+                <li>Cytokinins: {primitive.stats[3]}</li>
+                {primitive.type == Primitives.Cylinder || primitive.type == Primitives.Box ? <li>Wood ratio: {primitive.stats[4]}</li> : <></>}
+                {primitive.type == Primitives.Rectangle ? <li>Irradiance: {primitive.stats[4]}</li> : <></>}
+                {primitive.type == Primitives.Rectangle || primitive.type == Primitives.Box || primitive.type == Primitives.Cylinder
+                    ? <><li>Resources availability: {primitive.stats[5]}</li>
+                        <li>Production efficiency: {primitive.stats[6]}</li>
+                        <li>Relative Resources: {primitive.stats[7]}</li>
+                        <li>Relative Production: {primitive.stats[8]}</li></>
+                    : <></>}
             </ul>
         </>) : (<></>);
     }

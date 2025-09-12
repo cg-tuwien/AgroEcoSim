@@ -1,5 +1,5 @@
 {
-    "HoursPerTick": 24,
+    "HoursPerTick": 4,
     "TotalHours": 2000,
     "FieldResolution": 0.5,
     "FieldSize": { "X": 5, "D": 3, "Z": 5 },

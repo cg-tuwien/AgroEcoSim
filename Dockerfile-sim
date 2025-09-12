@@ -21,8 +21,10 @@ RUN dotnet publish \
     --no-self-contained \
     -p:PublishReadyToRun=true \
     -p:PublishReadyToRunShowWarnings=true \
+    -p:WarningLevel=0 \
     #-p:PublishTrimmed=true \
-    --output /app/
+    --output /app/ \
+    /clp:ErrorsOnly
 #--verbosity detailed
 
 FROM mcr.microsoft.com/dotnet/aspnet:6.0-alpine AS final

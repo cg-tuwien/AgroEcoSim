@@ -15,15 +15,15 @@ public partial struct SoilAgent : IAgent
 	internal static float GravitationDiffusionCoefPerTick(AgroWorld world) => 1.5f * SoilDiffusionCoefPerTick(world);
 
 	///<summary>
-	//Water ammount (g)
+	///Water ammount (g)
 	///</summary>
 	public float Water { get; private set; }
 	///<summary>
-	//Steam ammount (g)
+	///Steam ammount (g)
 	///</summary>
 	public float Steam { get; private set; }
 	///<summary>
-	//Temperature (°C)
+	///Temperature (°C)
 	///</summary>
 	public float Temperature { get; private set; }
 
@@ -42,11 +42,11 @@ public partial struct SoilAgent : IAgent
 		Temperature = temperature;
 	}
 
-	public void Tick(SimulationWorld _world, IFormation _formation, int formationID, uint timestep, byte stage)
+	public void Tick(IFormation _formation, int formationID, uint timestep)
 	{
-		var world = _world as AgroWorld;
 		var formation = (SoilFormation)_formation;
 		var coords = formation.Coords(formationID);
+		var world = formation.World;
 
 		//CodeReview: I used this trick to better visualize the lateral flow.
 		//  Now only one corner cell gets water, so in order to spread it needs the lateral flow

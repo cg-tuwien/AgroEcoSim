@@ -29,11 +29,11 @@ public struct SeedAgent : IAgent
 		public WaterInc(float amount) => Amount = amount;
 		public bool Valid => Amount > 0f;
 		public Transaction Type => Transaction.Increase;
-		public void Receive(ref SeedAgent dstAgent, uint timestep, byte stage)
+		public void Receive(ref SeedAgent dstAgent, uint timestep)
 		{
 			dstAgent.IncWater(Amount);
 			#if HISTORY_LOG || TICK_LOG
-			lock(MessagesHistory) MessagesHistory.Add(new(timestep, stage, ID, dstAgent.ID, Amount));
+			lock(MessagesHistory) MessagesHistory.Add(new(timestep, ID, dstAgent.ID, Amount));
 			#endif
 		}
 	}
@@ -80,10 +80,10 @@ public struct SeedAgent : IAgent
 		mVegetativeTemperature = vegetativeTemperature;
 	}
 
-	public void Tick(SimulationWorld _world, IFormation _formation, int formationID, uint timestep, byte stage)
+	public void Tick(IFormation _formation, int formationID, uint timestep)
 	{
-		var world = _world as AgroWorld;
 		var plant = (PlantFormation2)_formation;
+		var world = plant.World;
 		Water -= Radius * Radius * Radius * world.HoursPerTick; //life support
 		if (Water <= 0) //energy depleted
 		{
@@ -97,14 +97,14 @@ public struct SeedAgent : IAgent
 				Debug.WriteLine($"GERMINATION at {timestep}");
 				var initialYawAngle = plant.RNG.NextFloat(-MathF.PI, MathF.PI);
 				var initialYaw = Quaternion.CreateFromAxisAngle(Vector3.UnitY, initialYawAngle);
-				plant.UG.Birth(new UnderGroundAgent2(-1, initialYaw * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, -0.5f * MathF.PI), Water * 0.4f));
+				plant.UG.Birth(new UnderGroundAgent2(plant, timestep, -1, initialYaw * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, -0.5f * MathF.PI), Water * 0.4f, initialResources: 1f, initialProduction: 1f));
 
 				var baseStemOrientation = initialYaw * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, 0.5f * MathF.PI);
-				var meristem = new AboveGroundAgent3(plant, -1, OrganTypes.Meristem, baseStemOrientation, Water * 0.4f);
+				var meristem = new AboveGroundAgent3(plant, -1, OrganTypes.Meristem, baseStemOrientation, Water * 0.4f, initialResources: 1f, initialProduction: 1f);
 				var meristemIndex = plant.AG.Birth(meristem); //base stem
 
 				if (plant.Parameters.LateralsPerNode > 0)
-					AboveGroundAgent3.CreateLeaves(meristem, plant, 0, meristemIndex);
+					AboveGroundAgent3.CreateFirstLeaves(meristem, plant, 0, meristemIndex);
 
 				plant.SeedDeath();
 				Water = 0f;
@@ -113,10 +113,10 @@ public struct SeedAgent : IAgent
 			{
 				var soil = plant.Soil;
 				//find all soild cells that the shpere intersects
-				var sources = soil.IntersectPoint(Center);
-				if (sources.Count > 0) //TODO this is a rough approximation taking only the first intersected soil cell
+				var source = soil.IntersectPoint(Center);
+				if (source >= 0) //TODO this is a rough approximation taking only the first intersected soil cell
 				{
-					var soilTemperature = soil.GetTemperature(sources[0]);
+					var soilTemperature = soil.GetTemperature(source);
 					var waterRequest = 0f;
 					for(int i = 0; i < world.HoursPerTick; ++i)
 					{
@@ -126,11 +126,10 @@ public struct SeedAgent : IAgent
 							if (soilTemperature < mVegetativeTemperature.Y)
 								amount *= (soilTemperature - mVegetativeTemperature.X) / (mVegetativeTemperature.Y - mVegetativeTemperature.X);
 
-							Radius = MathF.Pow(Radius * Radius * Radius + amount * PiV, Third); //use the rest for growth
 							waterRequest += amount;
 						}
 					}
-					Water += soil.RequestWater(sources[0], waterRequest);
+					soil.RequestWater(source, waterRequest, plant);
 				}
 			}
 		}

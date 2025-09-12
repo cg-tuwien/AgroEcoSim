@@ -1,3 +1,4 @@
+using System.Drawing;
 using System.Numerics;
 
 namespace Agro;
@@ -9,6 +10,10 @@ internal class TreeCacheData2
 	ushort[] DepthNodes;
 	Vector3[] PointNodes;
 	readonly List<int> Roots = new();
+	readonly List<int> Leaves = new();
+	//readonly List<int> Meristems = new();
+	public float Height { get; private set; }
+
 	ushort MaxDepth = 0;
 
 	public TreeCacheData2()
@@ -22,6 +27,7 @@ internal class TreeCacheData2
 	public void Clear(int newSize)
 	{
 		Roots.Clear();
+		Leaves.Clear();
 		if (newSize > ChildrenNodes.Length)
 		{
 			var l = ChildrenNodes.Length;
@@ -64,10 +70,15 @@ internal class TreeCacheData2
 		}
 
 		++MaxDepth;
+
+		for(int i = 0; i < ChildrenNodes[i].Count; ++i)
+			if (ChildrenNodes[i].Count == 0)
+				Leaves.Add(i);
 	}
 
 	internal IList<int> GetChildren(int index) => ChildrenNodes[index];
 	internal ICollection<int> GetRoots() => Roots;
+	internal ICollection<int> GetLeaves() => Leaves;
 	internal ushort GetAbsDepth(int index) => DepthNodes[index];
 	internal ushort GetAbsInvDepth(int index) => (ushort)(MaxDepth - DepthNodes[index]);
 	internal float GetRelDepth(int index) => MaxDepth > 0 ? (DepthNodes[index] + 1) / (float)MaxDepth : 1f;
@@ -75,16 +86,23 @@ internal class TreeCacheData2
 
 	internal void UpdateBases<T>(PlantSubFormation2<T> formation) where T : struct, IPlantAgent
 	{
+		Height = 0f;
 		var buffer = new Stack<int>();
 		foreach(var root in Roots)
 		{
 			PointNodes[root] = formation.Plant.Position;
 			var point = formation.Plant.Position + Vector3.Transform(Vector3.UnitX, formation.GetDirection(root)) * formation.GetLength(root);
-			foreach(var child in GetChildren(root))
+			var children = GetChildren(root);
+			if (children.Count > 0)
 			{
-				PointNodes[child] = point;
-				buffer.Push(child);
+				foreach(var child in children)
+				{
+					PointNodes[child] = point;
+					buffer.Push(child);
+				}
 			}
+			else
+				Height = Math.Max(Height, PointNodes[root].Y);
 		}
 
 		while (buffer.Count > 0)
@@ -100,6 +118,8 @@ internal class TreeCacheData2
 					buffer.Push(child);
 				}
 			}
+			else
+				Height = Math.Max(Height, PointNodes[next].Y);
 		}
 	}
 }
