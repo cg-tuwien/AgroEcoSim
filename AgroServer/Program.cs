@@ -15,7 +15,7 @@ builder.Services.AddCors(o => o.AddPolicy(name: Origins, p =>
     p.WithOrigins("http://localhost:8080", "https://localhost:7215")
     //.SetIsOriginAllowedToAllowWildcardSubdomains()
     //.WithMethods("GET", "POST", "OPTIONS").AllowAnyHeader().AllowCredentials().Build()
-    .WithMethods("GET", "POST").AllowAnyHeader().AllowCredentials()
+    .WithMethods("GET", "POST", "OPTIONS").AllowAnyHeader().AllowCredentials().Build()
 ));
 #endif
 

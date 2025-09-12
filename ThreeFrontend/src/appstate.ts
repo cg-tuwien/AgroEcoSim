@@ -12,6 +12,8 @@ import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter';
 import { scene } from "./components/viewport/ThreeSceneFn";
 import { VisualMappingOptions } from "./helpers/Plant";
 import { Species } from "./helpers/Species";
+import { FieldItemRegex } from "./components/hud/FieldItemRegex";
+import { IObjImport, Parse } from "./helpers/ObjParser";
 
 interface RetryContext {
     readonly previousRetryCount: number; //The number of consecutive failed tries so far.
@@ -222,7 +224,7 @@ class State {
 
     fieldModelPath = signal("");
     fieldItemRegex = signal("");
-    fieldModelData?: Uint8Array = undefined;
+    fieldModelData?: IObjImport = undefined;
 
     //METHODS
     private requestBody = () => {
@@ -240,7 +242,11 @@ class State {
         RenderMode: this.renderMode.value,
         SamplesPerPixel: this.samplesPerPixel.value,
         ExactPreview: this.exactPreview.value,
-        DownloadRoots: this.downloadRoots.value
+        DownloadRoots: this.downloadRoots.value,
+
+        FieldItemRegex: this.fieldItemRegex.value,
+        FieldModelPath: this.fieldModelPath.value,
+        FieldModelData: this.fieldModelData
     }};
 
     run = async() => {
@@ -373,6 +379,9 @@ class State {
             fieldSizeX: this.fieldSizeX.peek(),
             fieldSizeZ: this.fieldSizeZ.peek(),
             fieldSizeD: this.fieldSizeD.peek(),
+            fieldModelData: this.fieldModelData,
+            fieldModelPath: this.fieldModelPath.peek(),
+            fieldItemRegex: this.fieldItemRegex.peek(),
             initNumber: this.initNumber.peek(),
             randomize: this.randomize.peek(),
             constantLight: this.renderMode.peek(),
@@ -425,6 +434,9 @@ class State {
                     self.fieldSizeX.value = data.fieldSizeX;
                     self.fieldSizeZ.value = data.fieldSizeZ;
                     self.fieldSizeD.value = data.fieldSizeD;
+                    self.fieldModelData = data.fieldModelData;
+                    self.fieldModelPath.value = data.fieldModelPath;
+                    self.fieldItemRegex.value = data.fieldItemRegex;
                     self.initNumber.value = data.initNumber;
                     self.randomize.value = data.randomize;
                     self.renderMode.value = data.constantLight;
@@ -468,8 +480,9 @@ class State {
     }
 
     uploadFieldModel = async (f: File) => {
-        const bytes = await f.arrayBuffer() as Uint8Array;
-        this.fieldModelData = bytes;
+        this.fieldModelData = await Parse(f);
+        // const bytes = new Uint8Array(await f.arrayBuffer());
+        // this.fieldModelData = bytes;
         this.fieldModelPath.value = f.name;
     }
 

@@ -1,5 +1,12 @@
 namespace Agro;
 
+public class ImportedObjData
+{
+    public string[] Vertices { get; set; }
+    public string[] Normals { get; set;  }
+    public Dictionary<string, string[]> Faces { get; set; }
+}
+
 public class SimulationRequest
 {
     ///<summary>
@@ -70,13 +77,13 @@ public class SimulationRequest
     /// <summary>
     /// File data of the scene model
     /// </summary>
-    public byte[]? SceneModelData { get; init; }
+    public ImportedObjData? FieldModelData { get; init; }
     /// <summary>
     /// File name of the scene model
     /// </summary>
-    public string? SceneModelName { get; init; }
+    public string? FieldModelPath { get; init; }
     /// <summary>
     /// Regex that matches the names of all pots in the scene where plants can be seeded
     /// </summary>
-    public string? ScenePotsRegex { get; init; }
+    public string? FieldItemRegex { get; init; }
 }
