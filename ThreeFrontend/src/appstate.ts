@@ -220,6 +220,10 @@ class State {
     history : {t: number, s: Uint8Array}[] = [];
     historySize = signal(0);
 
+    fieldModelPath = signal("");
+    fieldItemRegex = signal("");
+    fieldModelData?: Uint8Array = undefined;
+
     //METHODS
     private requestBody = () => {
         return {
@@ -391,8 +395,8 @@ class State {
     }
 
     load = async() => {
-        const input = document.createElement("input");;
-        input.style.setProperty("display", "none")
+        const input = document.createElement("input");
+        input.style.setProperty("display", "none");
         input.type = "file";
         input.accept = "text/json";
         document.body.appendChild(input);
@@ -461,6 +465,17 @@ class State {
     prim = () => {
         const i = Math.min(this.playPointer.peek(), st.history.length - 1);
         this.saveBinaryFile(this.history[i].s, `_${st.history[i].t}`, 'prim');
+    }
+
+    uploadFieldModel = async (f: File) => {
+        const bytes = await f.arrayBuffer() as Uint8Array;
+        this.fieldModelData = bytes;
+        this.fieldModelPath.value = f.name;
+    }
+
+    clearFieldModel = () => {
+        this.fieldModelData = undefined;
+        this.fieldModelPath.value = "";
     }
 
     private saveTextFile(data: string, ext: string) {

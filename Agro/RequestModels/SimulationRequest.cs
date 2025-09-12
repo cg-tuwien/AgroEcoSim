@@ -66,4 +66,17 @@ public class SimulationRequest
     /// If true, the backend will send the roots geometry along with the shoots. Attention, involves large data volumes. (default: false)
     /// </summary>
     public bool? DownloadRoots { get; init; }
+
+    /// <summary>
+    /// File data of the scene model
+    /// </summary>
+    public byte[]? SceneModelData { get; init; }
+    /// <summary>
+    /// File name of the scene model
+    /// </summary>
+    public string? SceneModelName { get; init; }
+    /// <summary>
+    /// Regex that matches the names of all pots in the scene where plants can be seeded
+    /// </summary>
+    public string? ScenePotsRegex { get; init; }
 }
