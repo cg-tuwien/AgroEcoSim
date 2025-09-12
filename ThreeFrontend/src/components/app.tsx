@@ -19,13 +19,15 @@ import { VisualMapping } from './hud/VisualMapping';
 import { signal } from '@preact/signals';
 import { SpeciesList } from './hud/Species';
 import { ExactPreview } from './hud/ExactPreview';
+import { FieldModelUpload } from './hud/FieldModelUpload';
+import { FieldItemRegex } from './hud/FieldItemRegex';
 //import {Tab, initTE } from "tw-elements"; initTE({ Tab }); //tried but failed
 
 const tabs = signal("tab-home");
 
 const App = () => {
 	return(
-	<Fragment>
+	<>
 		<main id="app">
 			<ThreeSceneFn />
 		</main>
@@ -54,6 +56,8 @@ const App = () => {
 				<FieldCellsX/>
 				<FieldCellsZ/>
 				<FieldCellsD/>
+				<FieldModelUpload/>
+				<FieldItemRegex/>
 				<Randomize/>
 				<InitNumber/>
 				<Renderer/>
@@ -71,7 +75,7 @@ const App = () => {
 				<PlantsTable/>
 			</div>
 		</nav>
-	</Fragment>
+	</>
 )};
 
 export default App;

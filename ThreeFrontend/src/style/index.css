@@ -94,4 +94,21 @@ li {
 .stepBtn {
 	text-size-adjust: 30%;
 }
+
+.dropdown-area {
+	opacity: 0.8;
+	border: 1px dashed darkkhaki;
+	line-height: 150%;
+}
+
+.dropdown-area:hover {
+	border: 1px dashed yellow;
+	line-height: 150%;
+}
+
+body .dropdown-area.active {
+	opacity: 1;
+	border: 1px solid yellow;
+	line-height: 150%;
+}
 /**/

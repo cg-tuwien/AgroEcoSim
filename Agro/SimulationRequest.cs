@@ -56,4 +56,17 @@ public class SimulationRequest
     ///If true, the the backend will send a preview after each simulation step. Otherwise the previews are sent layzily. (default: false)
     ///</summary>
     public bool? ExactPreview { get; init; }
+
+    /// <summary>
+    /// File data of the scene model
+    /// </summary>
+    public byte[]? SceneModelData { get; init; }
+    /// <summary>
+    /// File name of the scene model
+    /// </summary>
+    public string? SceneModelName { get; init; }
+    /// <summary>
+    /// Regex that matches the names of all pots in the scene where plants can be seeded
+    /// </summary>
+    public string? ScenePotsRegex { get; init; }
 }
