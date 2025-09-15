@@ -15,8 +15,11 @@ public static class Initialize
 
 		world.StreamExporterFunc = world.Irradiance.ExportToStream;
 		world.RendererName = "unknown";
-		//var soil = new SoilFormation(new Vector3i(AgroWorld.FieldSize / AgroWorld.FieldResolution), AgroWorld.FieldSize, 0);
-		var soil = new SoilFormation(world, new Vector3i(world.FieldSize / world.FieldResolution), world.FieldSize);
+		ISoilFormation soil;
+		if (settings.FieldModelData?.Faces?.Count > 0)
+			soil = new SoilFormationVoronoi(world, settings.FieldModelData, 0.001f, settings.FieldItemRegex);
+		else
+			soil = new SoilFormationRegularVoxels(world, new Vector3i(world.FieldSize / world.FieldResolution), world.FieldSize);
 		world.Add(soil);
 
 		PlantFormation2[] plantsFormation;

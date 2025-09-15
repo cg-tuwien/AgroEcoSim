@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using AgroServer.Hubs;
+using AgroServer.Services;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
@@ -20,7 +21,7 @@ builder.Services.AddCors(o => o.AddPolicy(name: Origins, p =>
 #endif
 
 // Add services to the container.
-
+builder.Services.AddSingleton<ISimulationUploadService>(new SimulationUploadService());
 builder.Services.AddControllers();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();

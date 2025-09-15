@@ -12,7 +12,20 @@ using System.Collections;
 
 namespace Agro;
 
-public partial class SoilFormation : IFormation, IGrid3D
+public interface ISoilFormation : IFormation
+{
+	float GetMetricGroundDepth(float x, float z);
+	void ProcessRequests();
+
+	int IntersectPoint(Vector3 center);
+	float GetTemperature(int index);
+	void RequestWater(int index, float amount, PlantFormation2 plant);
+	void RequestWater(int index, float amount, PlantSubFormation<UnderGroundAgent> plant, int part);
+
+	float GetWater(int index);
+}
+
+public class SoilFormationRegularVoxels : IGrid3D, ISoilFormation
 {
 	const MethodImplOptions AI = MethodImplOptions.AggressiveInlining;
 	readonly AgroWorld World;
@@ -48,25 +61,25 @@ public partial class SoilFormation : IFormation, IGrid3D
 	readonly List<(PlantSubFormation<UnderGroundAgent> Plant, int Part, float Amount)>[] WaterRequestsRoots;
 	public float Depth => Size.Z * CellSize.Z;
 
-	public SoilFormation(AgroWorld world, Vector3i size, Vector3 metricSize)
+	public SoilFormationRegularVoxels(AgroWorld world, Vector3i size, Vector3 metricSize)
 	{
 		World = world;
-		if (size.X >= ushort.MaxValue-1 || size.Y >= ushort.MaxValue-1 || size.Z >= ushort.MaxValue-1)
-			throw new Exception($"Grid resolution in any direction may not exceed {ushort.MaxValue-1}");
+		if (size.X >= ushort.MaxValue - 1 || size.Y >= ushort.MaxValue - 1 || size.Z >= ushort.MaxValue - 1)
+			throw new Exception($"Grid resolution in any direction may not exceed {ushort.MaxValue - 1}");
 		//Z is depth
 		Size = size;
 		SizeXY = size.X * size.Y;
 
-		CellSize = new (metricSize.X / size.X, metricSize.Y / size.Y, metricSize.Z / size.Z);
-		CellSize4Intersect = new (CellSize.X, CellSize.Y, -CellSize.Z);
+		CellSize = new(metricSize.X / size.X, metricSize.Y / size.Y, metricSize.Z / size.Z);
+		CellSize4Intersect = new(CellSize.X, CellSize.Y, -CellSize.Z);
 		CellSurface = CellSize.X * CellSize.Y;
 		CellVolume = CellSurface * CellSize.Z;
 		WaterCapacityPerCell = CellVolume * 0.45f;
 
 		//Just for fun a random heightfield
 		var heightfield = new float[size.X, size.Y];
-		for(int x = 0; x < size.X; ++x)
-			for(int y = 0; y < size.Y; ++y)
+		for (int x = 0; x < size.X; ++x)
+			for (int y = 0; y < size.Y; ++y)
 				heightfield[x, y] = metricSize.Z;
 
 		// var rnd = new Random(42);
@@ -93,8 +106,8 @@ public partial class SoilFormation : IFormation, IGrid3D
 		// }
 
 		var heights = new int[size.X, size.Y];
-		for(int x = 0; x < size.X; ++x)
-			for(int y = 0; y < size.Y; ++y)
+		for (int x = 0; x < size.X; ++x)
+			for (int y = 0; y < size.Y; ++y)
 			{
 				var h = Size.Z * (heightfield[x, y] / metricSize.Z);
 				heights[x, y] = Math.Clamp((int)Math.Ceiling(h), 1, Size.Z);
@@ -105,8 +118,8 @@ public partial class SoilFormation : IFormation, IGrid3D
 		GroundLevels = new ushort[GroundAddr.Length];
 		var addr = 0;
 		MaxLevel = 0;
-		for(int y = 0; y < size.Y; ++y) //y must be outer so that neighboring x items stay adjacent
-			for(int x = 0; x < size.X; ++x)
+		for (int y = 0; y < size.Y; ++y) //y must be outer so that neighboring x items stay adjacent
+			for (int x = 0; x < size.X; ++x)
 			{
 				var h = heights[x, y];
 				addr += h;
@@ -120,11 +133,11 @@ public partial class SoilFormation : IFormation, IGrid3D
 		//For a agiven x,y the ordering in Water and other compressed 1D arrays goes as: [floor, floor + 1, ... , ground -1, ground] and then goes the next (x,y) pair.
 
 		CoordsCache = new (ushort, ushort, ushort)[addr];
-		for(ushort x = 0; x < size.X; ++x)
-			for(ushort y = 0; y < size.Y; ++y)
+		for (ushort x = 0; x < size.X; ++x)
+			for (ushort y = 0; y < size.Y; ++y)
 			{
 				var height = GroundLevel(x, y);
-				for(ushort z = 0; z <= height; ++z)
+				for (ushort z = 0; z <= height; ++z)
 					CoordsCache[Index(x, y, z)] = (x, y, z);
 			}
 
@@ -134,7 +147,7 @@ public partial class SoilFormation : IFormation, IGrid3D
 
 		WaterRequestsSeeds = new List<(PlantFormation2, float)>[Water.Length];
 		WaterRequestsRoots = new List<(PlantSubFormation<UnderGroundAgent>, int, float)>[Water.Length];
-		for(int i = 0; i < Water.Length; ++i)
+		for (int i = 0; i < Water.Length; ++i)
 		{
 			WaterRequestsSeeds[i] = new();
 			WaterRequestsRoots[i] = new();
@@ -157,7 +170,7 @@ public partial class SoilFormation : IFormation, IGrid3D
 		WaterRetainedPerCell = CellSize.Z / WaterTravelDistPerTick();
 
 		WaterTransactions = new List<(int dst, float amount)>[Water.Length];
-		for(int i = 0; i < Water.Length; ++i)
+		for (int i = 0; i < Water.Length; ++i)
 			WaterTransactions[i] = new();
 	}
 
@@ -165,7 +178,7 @@ public partial class SoilFormation : IFormation, IGrid3D
 	[M(AI)] public int Index(int x, int y, int depth) => Ground(x, y) - depth;
 
 	[M(AI)] public Vector3i Coords(int index) => new(CoordsCache[index].Item1, CoordsCache[index].Item2, CoordsCache[index].Item3);
-	[M(AI)]bool IsGround(int index) => CoordsCache[index].Item3 == GroundLevel(CoordsCache[index].Item1, CoordsCache[index].Item2);
+	[M(AI)] bool IsGround(int index) => CoordsCache[index].Item3 == GroundLevel(CoordsCache[index].Item1, CoordsCache[index].Item2);
 
 	[M(AI)] public bool Contains(Vector3i coords) => coords.X >= 0 && coords.Y >= 0 && coords.Z >= 0 && coords.X < Size.X && coords.Y < Size.Y && coords.Z <= GroundLevel(coords);
 	[M(AI)] public bool Contains(int x, int y, int z) => x >= 0 && y >= 0 && z >= 0 && x < Size.X && y < Size.Y && z <= GroundLevel(x, y);
@@ -175,7 +188,8 @@ public partial class SoilFormation : IFormation, IGrid3D
 	[M(AI)] ushort GroundLevel(int x, int y) => GroundLevels[y * Size.X + x];
 	[M(AI)] ushort GroundLevel(Vector3i p) => GroundLevels[p.Y * Size.X + p.X];
 
-	[M(AI)] (int, int) GroundWithLevel(Vector3i p)
+	[M(AI)]
+	(int, int) GroundWithLevel(Vector3i p)
 	{
 		var addr = p.Y * Size.X + p.X;
 		return (GroundAddr[addr], addr == 0 ? GroundAddr[0] : GroundAddr[addr] - GroundAddr[addr - 1] - 1);
@@ -207,21 +221,23 @@ public partial class SoilFormation : IFormation, IGrid3D
 				// var r = groundAddr - 1 - iCenter.Z;
 				// Debug.WriteLine($"{center} -> [{iCenter}] -> ({groundAddr}, {groundLevel}) => {r}  +W {Water[r]}");
 				//return new List<int>(){ groundAddr - (iCenter.Z <= MaxLevel - groundLevel ? 1 + iCenter.Z : 0) };
-				return  iCenter.Z < 0 ? groundAddr : groundAddr - 1 - iCenter.Z; //TODO this is a temporary fix for flat heightfields
+				return iCenter.Z < 0 ? groundAddr : groundAddr - 1 - iCenter.Z; //TODO this is a temporary fix for flat heightfields
 			}
 		}
 
 		return -1;
 	}
 
-	[M(AI)] internal float GetMetricHeight(float x, float z)
+	[M(AI)]
+	internal float GetMetricHeight(float x, float z)
 	{
 		var center = new Vector3(x, z, 0) / CellSize;
 		var iCenter = new Vector3i(center);
 		return (GroundLevel(iCenter) + 1) * CellSize.Y;
 	}
 
-	[M(AI)] internal float GetMetricGroundDepth(float x, float z)
+	[M(AI)]
+	public float GetMetricGroundDepth(float x, float z)
 	{
 		var center = new Vector3(x, z, 0) / CellSize;
 		var iCenter = new Vector3i(center);
@@ -236,7 +252,7 @@ public partial class SoilFormation : IFormation, IGrid3D
 		//float[] waterSrc, waterTarget, steamSrc, steamTarget, temperatureSrc, temperatureTarget;
 
 		var surfaceTemp = Math.Max(0f, World.GetTemperature(timestep));
-		var evaporizationFactorPerHour = 0*1e-4f;
+		var evaporizationFactorPerHour = 0 * 1e-4f;
 		var evaporizationSoilFactorPerStep = MathF.Pow(1f - evaporizationFactorPerHour, World.HoursPerTick);
 		var evaporizationSurfaceFactorPerStep = MathF.Pow(1f - Math.Min(1f, evaporizationFactorPerHour * (surfaceTemp * surfaceTemp) / 10), World.HoursPerTick);
 
@@ -245,14 +261,14 @@ public partial class SoilFormation : IFormation, IGrid3D
 		//1. Receive RAIN
 		var rainPerCell = World.GetWater(timestep) * CellSurface; //shadowing not taken into account
 		if (rainPerCell > 0)
-			foreach(var ground in GroundAddr)
+			foreach (var ground in GroundAddr)
 				Water[ground] += rainPerCell;
 
 		//3. Soak the water from bottom to the top
-		for(int d = MaxLevel - 1; d > 0; --d)
+		for (int d = MaxLevel - 1; d > 0; --d)
 		{
-			for(int y = 0; y < Size.Y; ++y) //should be in this order to keep adjacency
-				for(int x = 0; x < Size.X; ++x)
+			for (int y = 0; y < Size.Y; ++y) //should be in this order to keep adjacency
+				for (int x = 0; x < Size.X; ++x)
 				{
 					var depth = GroundLevel(x, y);
 					if (d < depth)
@@ -276,7 +292,7 @@ public partial class SoilFormation : IFormation, IGrid3D
 		//1 m3 of water weights 1.000.000 g
 		//by the type of soil, saturation is 30-60% so 300.000 - 600.000 g/m³
 
-		for(int i = 0; i < GroundAddr.Length; ++i)
+		for (int i = 0; i < GroundAddr.Length; ++i)
 		{
 			var srcIdx = GroundAddr[i];
 			var distribute = Water[srcIdx] * evaporizationSurfaceFactorPerStep;
@@ -343,22 +359,24 @@ public partial class SoilFormation : IFormation, IGrid3D
 		}
 	}
 
-	[M(AI)] void IFormation.Census() {}
+	[M(AI)] void IFormation.Census() { }
 
-	[M(AI)] void IFormation.DeliverPost(uint timestep) {}
+	[M(AI)] void IFormation.DeliverPost(uint timestep) { }
 	bool IFormation.HasUndeliveredPost => false;
 	///<summary>
 	///Number of agents in this formation
 	///</summary>
 	public int Count => Water.Length;
 
-	[M(AI)] public void RequestWater(int index, float amount, PlantSubFormation<UnderGroundAgent> plant, int part)
+	[M(AI)]
+	public void RequestWater(int index, float amount, PlantSubFormation<UnderGroundAgent> plant, int part)
 	{
 		if (Water[index] > 0)
 			WaterRequestsRoots[index].Add((plant, part, amount));
 	}
 
-	[M(AI)] public void RequestWater(int index, float amount, PlantFormation2 plant)
+	[M(AI)]
+	public void RequestWater(int index, float amount, PlantFormation2 plant)
 	{
 		if (Water[index] > 0)
 			WaterRequestsSeeds[index].Add((plant, amount));
@@ -366,7 +384,7 @@ public partial class SoilFormation : IFormation, IGrid3D
 
 	public void ProcessRequests()
 	{
-		for(int i = 0; i < WaterRequestsRoots.Length; ++i)
+		for (int i = 0; i < WaterRequestsRoots.Length; ++i)
 		{
 			double sum = 0;
 
@@ -374,7 +392,7 @@ public partial class SoilFormation : IFormation, IGrid3D
 			{
 				var reqs = WaterRequestsSeeds[i];
 				var limit = reqs.Count;
-				for(int j = 0; j < limit; ++j)
+				for (int j = 0; j < limit; ++j)
 					sum += reqs[j].Amount;
 			}
 
@@ -382,7 +400,7 @@ public partial class SoilFormation : IFormation, IGrid3D
 			{
 				var reqs = WaterRequestsRoots[i];
 				var limit = reqs.Count;
-				for(int j = 0; j < limit; ++j)
+				for (int j = 0; j < limit; ++j)
 					sum += reqs[j].Amount;
 			}
 
@@ -394,7 +412,7 @@ public partial class SoilFormation : IFormation, IGrid3D
 					{
 						var reqs = WaterRequestsSeeds[i];
 						var limit = reqs.Count;
-						for(int j = 0; j < limit; ++j)
+						for (int j = 0; j < limit; ++j)
 							reqs[j].Plant.Send(0, new SeedAgent.WaterInc(reqs[j].Amount));
 						reqs.Clear();
 					}
@@ -403,7 +421,7 @@ public partial class SoilFormation : IFormation, IGrid3D
 					{
 						var reqs = WaterRequestsRoots[i];
 						var limit = reqs.Count;
-						for(int j = 0; j < limit; ++j)
+						for (int j = 0; j < limit; ++j)
 						{
 							var (Plant, Part, Amount) = reqs[j];
 							Plant?.SendProtected(Part, new UnderGroundAgent.WaterInc(Amount));
@@ -418,7 +436,7 @@ public partial class SoilFormation : IFormation, IGrid3D
 					{
 						var reqs = WaterRequestsSeeds[i];
 						var limit = reqs.Count;
-						for(int j = 0; j < limit; ++j)
+						for (int j = 0; j < limit; ++j)
 							reqs[j].Plant.Send(0, new SeedAgent.WaterInc((float)(reqs[j].Amount * factor)));
 						reqs.Clear();
 					}
@@ -427,7 +445,7 @@ public partial class SoilFormation : IFormation, IGrid3D
 					{
 						var reqs = WaterRequestsRoots[i];
 						var limit = reqs.Count;
-						for(int j = 0; j < limit; ++j)
+						for (int j = 0; j < limit; ++j)
 							reqs[j].Plant.SendProtected(reqs[j].Part, new UnderGroundAgent.WaterInc(reqs[j].Amount, (float)factor));
 						reqs.Clear();
 					}

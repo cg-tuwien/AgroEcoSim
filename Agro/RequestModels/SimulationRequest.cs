@@ -3,7 +3,7 @@ namespace Agro;
 public class ImportedObjData
 {
     public string[] Vertices { get; set; }
-    public string[] Normals { get; set;  }
+    //public string[] Normals { get; set; }
     public Dictionary<string, string[]> Faces { get; set; }
 }
 

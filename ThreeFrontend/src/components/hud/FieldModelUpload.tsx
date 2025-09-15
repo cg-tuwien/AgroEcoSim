@@ -13,6 +13,6 @@ export function FieldModelUpload() {
     }}>
         DRAG & DROP POTS MODEL (.obj)
     </div>
-    Selected: {appstate.fieldModelPath.value?.length > 0 ?? ""} {appstate.fieldModelPath.value?.length > 0 ? <button onClick={e => appstate.clearFieldModel()}>x</button> : <></>}
+    Selected: {appstate.fieldModelPath.value.length > 0 ? appstate.fieldModelPath.value : ""} {appstate.fieldModelPath.value?.length > 0 ? <button onClick={e => appstate.clearFieldModel()}>x</button> : <></>} {appstate.modelParsingProgress.value > 0 ? appstate.modelParsingProgress.value : ""}
     </>
 }

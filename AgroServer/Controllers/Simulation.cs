@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
+using AgroServer.Services;
 
 namespace AgroServer.Controllers;
 
@@ -13,14 +14,19 @@ namespace AgroServer.Controllers;
 public class SimulationController : ControllerBase
 {
     private readonly IConfiguration Configuration;
+    private readonly ISimulationUploadService UploadService;
 
-    public SimulationController(IConfiguration configuration) => Configuration = configuration;
+    public SimulationController(IConfiguration configuration, ISimulationUploadService uploadService)
+    {
+        Configuration = configuration;
+        UploadService = uploadService;
+    }
 
     [HttpGet]
     public ActionResult Get() => Ok();
 
     [HttpPost]
-    public async Task<ActionResult<SimulationResponse>> Post([FromBody]SimulationRequest request)
+    public async Task<ActionResult<SimulationResponse>> Post([FromBody] SimulationRequest request)
     {
         var world = Initialize.World(request);
         world.Irradiance.SetAddress(Configuration["RendererIPMitsuba"], Configuration["RendererPortMitsuba"], Configuration["RendererIPTamashii"], Configuration["RendererPortTamashii"], request?.RenderMode ?? 0);
@@ -35,16 +41,24 @@ public class SimulationController : ControllerBase
         {
             if (formation is PlantFormation2 plant)
                 //plantData.Add(@$"{{""P"":{JsonSerializer.Serialize(new Vector3Data(plant.Position))},""V"":{plant.AG.GetVolume()}}}");
-                response.Plants.Add(new(){ Volume = plant.AG.GetVolume()});
+                response.Plants.Add(new() { Volume = plant.AG.GetVolume() });
         });
 
         Debug.WriteLine($"RENDER TIME: {world.Irradiance.ElapsedMilliseconds} ms");
 
-        if(request?.RequestGeometry ?? false)
+        if (request?.RequestGeometry ?? false)
             response.Scene = world.ExportToStream(3);
 
         response.Renderer = world.RendererName;
 
         return response;
+    }
+
+    [HttpPost]
+    [Route("[action]")]
+    public async Task<string> Upload([FromBody] SimulationRequest request)
+    {
+        //TODO Validate the regex
+        return UploadService.Add(request);
     }
 }

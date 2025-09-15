@@ -225,6 +225,7 @@ class State {
     fieldModelPath = signal("");
     fieldItemRegex = signal("");
     fieldModelData?: IObjImport = undefined;
+    modelParsingProgress = signal(0);
 
     //METHODS
     private requestBody = () => {
@@ -269,14 +270,32 @@ class State {
 
             if (hubConnection.state == SignalR.HubConnectionState.Connected)
             {
-                console.log(this.requestBody());
-                hubConnection.invoke("run", this.requestBody()).catch(e => {
-                    console.error(e);
-                    batch(() => {
-                        this.computing.value = false;
-                        this.renderer.value = "error";
-                    });
+                //console.log(this.requestBody());
+                const prepared = await fetch(`${BackendURI.startsWith("localhost") ? "https:" : location.protocol}//${BackendURI}/simulation/upload`, {
+                    body: JSON.stringify(this.requestBody()),
+                    method: 'post',
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json'
+                    }
                 });
+
+                const preparedID = await prepared.json();
+                if (preparedID?.length > 0)
+                    hubConnection.invoke("start", preparedID).catch(e => {
+                        console.error(e);
+                        batch(() => {
+                            this.computing.value = false;
+                            this.renderer.value = "error";
+                        });
+                    });
+                // hubConnection.invoke("run", this.requestBody()).catch(e => {
+                //     console.error(e);
+                //     batch(() => {
+                //         this.computing.value = false;
+                //         this.renderer.value = "error";
+                //     });
+                // });
                 this.previewRequest.value = true;
             }
             else

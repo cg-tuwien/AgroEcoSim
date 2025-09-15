@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Threading.Tasks;
 using Agro;
 using AgroServer.Models;
+using AgroServer.Services;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Configuration;
 
@@ -26,16 +27,19 @@ public class SimRequests
 public class SimulationHub : Hub<IEditorHub>
 {
     readonly IConfiguration Config;
-    public SimulationHub(IConfiguration configuration)
+    readonly ISimulationUploadService UploadService;
+    public SimulationHub(IConfiguration configuration, ISimulationUploadService uploadService)
     {
         Config = configuration;
+        UploadService = uploadService;
     }
 
     static readonly Dictionary<string, SimRequests> ClientSimulations = [];
 
     public async Task Abort()
     {
-        await Task.Run(() => {
+        await Task.Run(() =>
+        {
             lock (ClientSimulations)
             {
                 if (ClientSimulations.TryGetValue(Context.ConnectionId, out var sim))
@@ -46,7 +50,8 @@ public class SimulationHub : Hub<IEditorHub>
 
     public async Task<bool> Preview()
     {
-        return await Task.Run(() => {
+        return await Task.Run(() =>
+        {
             lock (ClientSimulations)
             {
                 if (ClientSimulations.TryGetValue(Context.ConnectionId, out var sim))
@@ -56,7 +61,8 @@ public class SimulationHub : Hub<IEditorHub>
                 }
                 else
                     return false;
-            }});
+            }
+        });
     }
 
     public async Task Run(SimulationRequest request)
@@ -77,12 +83,13 @@ public class SimulationHub : Hub<IEditorHub>
         var exportVersion = (byte)(5 + (request.DownloadRoots ?? false ? 1 : 0));
 
         var world = Initialize.World(request);
-        await Task.Run(() => {
+        await Task.Run(() =>
+        {
             world.Irradiance.SetAddress(Config["RendererIPMitsuba"], Config["RendererPortMitsuba"], Config["RendererIPTamashii"], Config["RendererPortTamashii"], request?.RenderMode ?? 0);
             var start = DateTime.UtcNow.Ticks;
             var simulationLength = (uint)world.TimestepsTotal();
             long prevTime;
-            for(uint i = 0; i < simulationLength && !requests.Abort; )
+            for (uint i = 0; i < simulationLength && !requests.Abort;)
                 if (lazyPreviews || requests.Preview)
                 {
                     prevTime = DateTime.UtcNow.Ticks;
@@ -94,7 +101,7 @@ public class SimulationHub : Hub<IEditorHub>
                     if (requests.Preview)
                     {
                         requests.Preview = false;
-                        _ = Clients.Caller.Preview(new(){ Step = i, Renderer = world.RendererName, Scene = world.ExportToStream(exportVersion) });
+                        _ = Clients.Caller.Preview(new() { Step = i, Renderer = world.RendererName, Scene = world.ExportToStream(exportVersion) });
                     }
 
                     ++i;
@@ -109,10 +116,10 @@ public class SimulationHub : Hub<IEditorHub>
         world.ForEach(formation =>
         {
             if (formation is PlantFormation2 plant)
-                result.Plants.Add(new(){ Volume = plant.AG.GetVolume()});
+                result.Plants.Add(new() { Volume = plant.AG.GetVolume() });
         });
 
-        if(request?.RequestGeometry ?? false)
+        if (request?.RequestGeometry ?? false)
             result.Scene = world.ExportToStream(exportVersion);
 
         result.Renderer = world.RendererName;
@@ -121,6 +128,11 @@ public class SimulationHub : Hub<IEditorHub>
 
         await Clients.Caller.Result(result);
         lock (ClientSimulations) ClientSimulations.Remove(me);
+    }
 
+    public async Task Start(string id)
+    {
+        if (UploadService.TryFetch(id, out var request))
+            await Run(request);
     }
 }

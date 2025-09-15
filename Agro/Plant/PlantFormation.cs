@@ -17,7 +17,7 @@ public partial class PlantFormation2 : IPlantFormation
 
 	public Vector3 Position { get; private set; }
 	bool ReadTMP = false;
-	internal SoilFormation Soil;
+	internal ISoilFormation Soil;
 	protected SeedAgent[] Seed = new SeedAgent[1]; //must be an array due to messaging compaatibility
 	protected readonly SeedAgent[] SeedTMP = new SeedAgent[1];
 	protected readonly PostBox<SeedAgent> PostboxSeed = new();
@@ -60,7 +60,7 @@ public partial class PlantFormation2 : IPlantFormation
 	/// </summary>
 	public SpeciesSettings Parameters { get; private set; }
 
-	public PlantFormation2(AgroWorld world, SpeciesSettings parameters, SoilFormation soil, SeedAgent seed, Pcg parentRNG, int hoursPerTick)
+	public PlantFormation2(AgroWorld world, SpeciesSettings parameters, ISoilFormation soil, SeedAgent seed, Pcg parentRNG, int hoursPerTick)
 	{
 		World = world;
 		Parameters = parameters ?? SpeciesSettings.Avocado;
