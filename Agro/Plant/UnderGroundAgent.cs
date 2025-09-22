@@ -108,9 +108,6 @@ public struct UnderGroundAgent : IPlantAgent
 	/// Index of the parent agent. -1 represents the root of the hierarchy.
 	/// </summary>
 	public int Parent { get; private set; }
-
-	public readonly int SoilIndex;
-
 	#endregion
 
 	#region Variances
