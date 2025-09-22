@@ -8,13 +8,13 @@ using System.Diagnostics;
 namespace AgentsSystem;
 public class SimulationWorld
 {
-	internal readonly List<IFormation> Formations = new();
-	internal readonly List<Action<SimulationWorld, uint, IList<IFormation>, IList<IObstacle>>> Callbacks = new();
+	internal readonly List<IFormation> Formations = [];
+	internal readonly List<Action<SimulationWorld, uint, IList<IFormation>, IList<IObstacle>>> Callbacks = [];
 	public uint Timestep { get; private set; } = 0U;
 
 	public int Count => Formations.Count;
 
-	internal readonly List<IObstacle> Obstacles = new();
+	internal readonly List<IObstacle> Obstacles = [];
 
 	public void ForEach(Action<IFormation> action) => Formations.ForEach(formation => action(formation));
 

@@ -68,7 +68,7 @@ public class AgroWorld : SimulationWorld
 	WeatherStats[] Weather;
 	BitArray Daylight;
 
-	static readonly int[] DaysPerMonth = new[] { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
+	static readonly int[] DaysPerMonth = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
 
 	public int TimestepsTotal()
 	{
@@ -129,17 +129,17 @@ public class AgroWorld : SimulationWorld
 		//dry, 0-2mm, 2-5mm, 5-10mm, 10-20mm, 20-50mm, 50-100mm
 		var dailyPrecipitation = new[] {
 			new float[]{21.6f, 4.9f, 2.8f, 1.2f, 0.6f, 0f, 0f},
-			new float[]{19.1f, 5f, 2f, 1.4f, 0.5f, 0.1f, 0f},
-			new float[]{21.4f, 5.1f, 2.5f, 1.3f, 0.5f, 0.2f, 0f},
-			new float[]{21f, 4.9f, 2.4f, 1f, 0.6f, 0.1f, 0f},
-			new float[]{20.2f, 5.7f, 2.6f, 1.5f, 0.7f, 0.3f, 0f},
-			new float[]{19f, 5.5f, 2.9f, 1.4f, 0.8f, 0.4f, 0f},
-			new float[]{20.3f, 5.8f, 2.2f, 1.4f, 1.1f, 0.1f, 0.1f},
-			new float[]{22.3f, 4.7f, 2f, 1f, 0.7f, 0.3f, 0f},
-			new float[]{22.1f, 3.7f, 2f, 1f, 0.7f, 0.3f, 0.1f},
-			new float[]{24f, 3.5f, 1.8f, 1.1f, 0.5f, 0.1f, 0f},
-			new float[]{20.8f, 4.5f, 2.6f, 1.4f, 0.5f, 0.1f, 0f},
-			new float[]{20.9f, 5.5f, 2.6f, 1.3f, 0.5f, 0.1f, 0f}
+			[19.1f, 5f, 2f, 1.4f, 0.5f, 0.1f, 0f],
+			[21.4f, 5.1f, 2.5f, 1.3f, 0.5f, 0.2f, 0f],
+			[21f, 4.9f, 2.4f, 1f, 0.6f, 0.1f, 0f],
+			[20.2f, 5.7f, 2.6f, 1.5f, 0.7f, 0.3f, 0f],
+			[19f, 5.5f, 2.9f, 1.4f, 0.8f, 0.4f, 0f],
+			[20.3f, 5.8f, 2.2f, 1.4f, 1.1f, 0.1f, 0.1f],
+			[22.3f, 4.7f, 2f, 1f, 0.7f, 0.3f, 0f],
+			[22.1f, 3.7f, 2f, 1f, 0.7f, 0.3f, 0.1f],
+			[24f, 3.5f, 1.8f, 1.1f, 0.5f, 0.1f, 0f],
+			[20.8f, 4.5f, 2.6f, 1.4f, 0.5f, 0.1f, 0f],
+			[20.9f, 5.5f, 2.6f, 1.3f, 0.5f, 0.1f, 0f]
 		};
 
 		var precipitationMM = new []{29, 28, 33, 30, 43, 46, 44, 37, 42, 26, 31, 31};
@@ -248,14 +248,16 @@ public class AgroWorld : SimulationWorld
 	internal bool GetDaylight(uint timestep) => Daylight?.Get((int)timestep) ?? true;
 
 	internal Pcg RNG = new(42);
-	internal void InitRNG(ulong seed) => RNG = new(seed);
+    internal ISoilFormation Soil;
+
+    internal void InitRNG(ulong seed) => RNG = new(seed);
 
 	int[] DistributeSunAndClouds(int totalSun, int totalClouds)
 	{
 		if (totalSun <= 0f)
-			return new int[] { -totalClouds };
+			return [-totalClouds];
 		else if (totalClouds <= 0f)
-			return new int[] { totalSun };
+			return [totalSun];
 		else
 		{
 			var sunSegments = (int)RNG.NextUInt(1, (uint)Math.Min(totalSun, totalClouds), maxExclusive: false);
@@ -297,11 +299,11 @@ public class AgroWorld : SimulationWorld
 				return result;
 			}
 			else
-				return new int[] { totalSun };
+				return [totalSun];
 		}
 	}
-	static readonly float[] precipitationLowIntervals = new float[] {0, 0, 2, 5, 10, 20, 50};
-	static readonly float[] precipitationHighIntervals = new float[] {0, 2, 5, 10, 20, 50, 100};
+	static readonly float[] precipitationLowIntervals = [0, 0, 2, 5, 10, 20, 50];
+	static readonly float[] precipitationHighIntervals = [0, 2, 5, 10, 20, 50, 100];
 	WeatherStats[] PlanCloudsSingleMonth(int month, int daysPerMonth, float sunnyDays, float cloudDays, float dullDays, float precipitationMM, float[] maxPrecipitationStats_inDays)
 	{
 		var hoursInMonth = daysPerMonth * 24;

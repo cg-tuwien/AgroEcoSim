@@ -17,10 +17,11 @@ public static class Initialize
 		world.RendererName = "unknown";
 		ISoilFormation soil;
 		if (settings.FieldModelData?.Faces?.Count > 0)
-			soil = new SoilFormationVoronoi(world, settings.FieldModelData, 0.001f, settings.FieldItemRegex);
+			soil = new SoilFormationsList(world, settings.FieldModelData, 0.001f, settings.FieldItemRegex, world.FieldResolution);
 		else
 			soil = new SoilFormationRegularVoxels(world, new Vector3i(world.FieldSize / world.FieldResolution), world.FieldSize);
 		world.Add(soil);
+		world.Soil = soil;
 
 		PlantFormation2[] plantsFormation;
 		var rnd = world.RNG;
@@ -31,11 +32,12 @@ public static class Initialize
 			for (int i = 0; i < plantsCount; ++i)
 			{
 				var minVegTemp = rnd.NextFloat(8f, 10f);
-				var pos = settings.Plants[i].Position
-					?? new Vector3(world.FieldSize.X * rnd.NextFloat(), -rnd.NextPositiveFloat(0.04f), world.FieldSize.Y * rnd.NextFloat());
-				pos.Y -= soil.GetMetricGroundDepth(pos.X, pos.Z);
+				var soilIndex = (int)rnd.NextUInt((uint)world.Soil.FieldsCount);
 
-				var seed = new SeedAgent(pos,
+				var pos = settings.Plants[i].Position ?? world.Soil.GetRandomSeedPosition(rnd, soilIndex);
+				pos.Y -= soil.GetMetricGroundDepth(pos.X, pos.Z, soilIndex);
+
+				var seed = new SeedAgent(soilIndex, pos,
 										 rnd.NextPositiveFloat(0.02f),
 										 new Vector2(minVegTemp, minVegTemp + rnd.NextFloat(8f, 14f)));
 				var species = string.IsNullOrEmpty(settings.Plants[i].SpeciesName) ? null : settings.Species?.FirstOrDefault(x => x.Name == settings.Plants[i].SpeciesName);
@@ -49,9 +51,11 @@ public static class Initialize
 			for (int i = 0; i < plantsCount; ++i)
 			{
 				var minVegTemp = rnd.NextFloat(8f, 10f);
-				var seed = new SeedAgent(new Vector3(world.FieldSize.X * rnd.NextFloat(),
-														-rnd.NextPositiveFloat(0.04f),
-														world.FieldSize.Y * rnd.NextFloat()), //Y because Z is depth
+				var soilIndex = (int)rnd.NextUInt((uint)world.Soil.FieldsCount);
+				var pos = new Vector3(world.FieldSize.X * rnd.NextFloat(),
+									-rnd.NextPositiveFloat(0.04f),
+									world.FieldSize.Y * rnd.NextFloat()); //Y because Z is depth
+				var seed = new SeedAgent(soilIndex, pos,
 											rnd.NextPositiveFloat(0.02f),
 											new Vector2(minVegTemp, minVegTemp + rnd.NextFloat(8f, 14f)));
 				var species = string.IsNullOrEmpty(settings.Plants[i].SpeciesName) ? null : settings.Species?.FirstOrDefault(x => x.Name == settings.Plants[i].SpeciesName);

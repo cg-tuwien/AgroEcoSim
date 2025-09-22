@@ -58,9 +58,12 @@ public readonly struct Vector3i : IEquatable<Vector3i>, IComparable<Vector3i>
 
     [M(AI)]public static Vector3i operator *(Vector3i a, int i) => new(a.X * i, a.Y * i, a.Z * i);
     [M(AI)]public static Vector3i operator /(Vector3i a, int i) => new(a.X / i, a.Y / i, a.Z / i);
+
+    [M(AI)]public static Vector3 operator *(Vector3i a, Vector3 b) => new(a.X * b.X, a.Y * b.Y, a.Z * b.Z);
+    [M(AI)]public static Vector3 operator *(Vector3 a, Vector3i b) => new(a.X * b.X, a.Y * b.Y, a.Z * b.Z);
     #endregion Operators
 
-    [M(AI)]public override string ToString() => $"[{X}; {Y}; {Z}]";
+    [M(AI)] public override string ToString() => $"[{X}; {Y}; {Z}]";
 
     [M(AI)]public string ToString(string format) => string.Format(format, X, Y, Z);
 

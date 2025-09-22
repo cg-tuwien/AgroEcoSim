@@ -16,6 +16,7 @@ public partial class PlantFormation2 : IPlantFormation
 	internal readonly AgroWorld World;
 
 	public Vector3 Position { get; private set; }
+	public int SoilIndex { get; set; }
 	bool ReadTMP = false;
 	internal ISoilFormation Soil;
 	protected SeedAgent[] Seed = new SeedAgent[1]; //must be an array due to messaging compaatibility
@@ -67,6 +68,7 @@ public partial class PlantFormation2 : IPlantFormation
 		Parameters.Init(hoursPerTick);
 		Soil = soil;
 		Seed[0] = seed;
+		SoilIndex = seed.SoilIndex;
 		Position = seed.Center;
 
 		RNG = parentRNG.NextRNG();

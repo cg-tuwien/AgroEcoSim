@@ -86,7 +86,7 @@ internal readonly record struct Edge
 
 internal class Component
 {
-	readonly List<int> Faces = [];
+	internal readonly List<int> Faces = [];
 	readonly HashSet<Edge> OuterEdges = [];
 
 	public Component(int face, IList<int> vertices)
@@ -131,24 +131,14 @@ internal class Component
 	}
 }
 
-public class SoilFormationVoronoi : ISoilFormation
+
+public class SoilFormationsList : ISoilFormation
 {
 	const MethodImplOptions AI = MethodImplOptions.AggressiveInlining;
 	readonly AgroWorld World;
-	///<sumary>
-	/// Water amount per cell
-	///</sumary>
-	readonly float[] Water;
-	///<sumary>
-	/// Temperature per cell
-	///</sumary>
-	readonly float[] Temperature;
-	///<sumary>
-	/// Steam amount per cell
-	///</sumary>
-	readonly float[] Steam;
+	List<SoilFormationRegularVoxels> Items;
 
-	public SoilFormationVoronoi(AgroWorld world, ImportedObjData objData, float scale, string? soilItemRegex)
+	public SoilFormationsList(AgroWorld world, ImportedObjData objData, float scale, string? soilItemRegex, float fieldResolution)
 	{
 		World = world;
 
@@ -162,6 +152,7 @@ public class SoilFormationVoronoi : ISoilFormation
 			vertices[i] = new Vector3(float.Parse(vertex[0]), float.Parse(vertex[1]), float.Parse(vertex[2])) * scale;
 		}
 		var regex = soilItemRegex != null ? new Regex(soilItemRegex) : null;
+		var faces = new List<List<int>>();
 
 		foreach (var (group, faceLines) in objData.Faces)
 			if (regex?.IsMatch(group) ?? true) //for FAV use *Natur_Erde*
@@ -175,6 +166,7 @@ public class SoilFormationVoronoi : ISoilFormation
 					var face = faceLines[i].Split(' ');
 					verts.Clear();
 					verts.AddRange(face.Select(ParseFaceIndex));
+					faces.Add([.. verts]);
 
 					edges.Clear();
 					for (int v = 1; v < verts.Count; ++v)
@@ -202,47 +194,45 @@ public class SoilFormationVoronoi : ISoilFormation
 							components.RemoveAt(remove[c]);
 				}
 
-				Console.WriteLine(components.Count);
+				Items = new(components.Count);
+				foreach (var item in components)
+				{
+					var min = new Vector3(float.MaxValue, float.MaxValue, float.MaxValue);
+					var max = new Vector3(float.MinValue, float.MinValue, float.MinValue);
+					foreach (var fi in item.Faces)
+					{
+						var face = faces[fi];
+						for (int fv = 0; fv < face.Count; ++fv)
+						{
+							min = Vector3.Min(min, vertices[face[fv]]);
+							max = Vector3.Max(max, vertices[face[fv]]);
+						}
+					}
+
+					var metricSize = max - min;
+					var celularSize = new Vector3i(metricSize / fieldResolution);
+
+					Items.Add(new(world, celularSize, metricSize, min));
+				}
 			}
 	}
 
-	public bool HasUndeliveredPost => throw new NotImplementedException();
+	public bool HasUndeliveredPost => false;
 
-	public int Count => throw new NotImplementedException();
+	public int Count => Items.Sum(x => x.Count);
+	public int FieldsCount => Items.Count;
 
-	public void Census()
-	{
-		//TODO
-	}
+	public void Census() { }
 
-	public void DeliverPost(uint timestep)
-	{
-		//TODO
-	}
+	public void DeliverPost(uint timestep) { }
 
-	public float GetMetricGroundDepth(float x, float z)
-	{
-		//TODO
-		return 0f;
-	}
+	public float GetMetricGroundDepth(float x, float z, int soilIndex) => Items.Count < soilIndex && soilIndex >= 0 ? Items[soilIndex].GetMetricGroundDepth(x, z) : 0f;
 
-	public float GetTemperature(int index)
-	{
-		//TODO
-		return 20f;
-	}
+	public float GetTemperature(int index, int soilIndex) => 20f;
 
-	public float GetWater(int index)
-	{
-		//TODO
-		return 0f;
-	}
+	public float GetWater(int index, int soilIndex) => Items[soilIndex].GetWater(index);
 
-	public int IntersectPoint(Vector3 center)
-	{
-		//TODO
-		return 0;
-	}
+	public int IntersectPoint(Vector3 center, int soilIndex) => Items[soilIndex].IntersectPoint(center);
 
 	[M(AI)]
 	public int ParseFaceIndex(string input)
@@ -261,22 +251,20 @@ public class SoilFormationVoronoi : ISoilFormation
 
 	public void ProcessRequests()
 	{
-		//TODO
+		for (int i = 0; i < Items.Count; ++i)
+			Items[i].ProcessRequests();
 	}
 
-	public void RequestWater(int index, float amount, PlantFormation2 plant)
-	{
-		//TODO
-	}
+	public void RequestWater(int index, float amount, PlantFormation2 plant, int soilIndex) => Items[soilIndex].RequestWater(index, amount, plant);
 
-	public void RequestWater(int index, float amount, PlantSubFormation<UnderGroundAgent> plant, int part)
-	{
-		//TODO
-	}
+	public void RequestWater(int index, float amount, PlantSubFormation<UnderGroundAgent> plant, int part, int soilIndex) => Items[soilIndex].RequestWater(index, amount, plant, part);
 
 	public void Tick(uint timestep)
 	{
-		//TODO
+		for (int i = 0; i < Items.Count; ++i)
+			Items[i].Tick(timestep);
 	}
+
+	public Vector3 GetRandomSeedPosition(Pcg rnd, int soilIndex) => Items[soilIndex].GetRandomSeedPosition(rnd);
 }
 

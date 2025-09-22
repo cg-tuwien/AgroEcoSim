@@ -9,20 +9,25 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using M = System.Runtime.CompilerServices.MethodImplAttribute;
 using System.Collections;
+using Utils.Json;
 
 namespace Agro;
 
 public interface ISoilFormation : IFormation
 {
-	float GetMetricGroundDepth(float x, float z);
+	int FieldsCount { get; }
+
+	float GetMetricGroundDepth(float x, float z, int soilIndex);
 	void ProcessRequests();
 
-	int IntersectPoint(Vector3 center);
-	float GetTemperature(int index);
-	void RequestWater(int index, float amount, PlantFormation2 plant);
-	void RequestWater(int index, float amount, PlantSubFormation<UnderGroundAgent> plant, int part);
+	int IntersectPoint(Vector3 center, int soilIndex);
+	float GetTemperature(int index, int soilIndex);
+	void RequestWater(int index, float amount, PlantFormation2 plant, int soilIndex);
+	void RequestWater(int index, float amount, PlantSubFormation<UnderGroundAgent> plant, int part, int soilIndex);
 
-	float GetWater(int index);
+	float GetWater(int index, int soilIndex);
+
+	Vector3 GetRandomSeedPosition(Pcg rnd, int soilIndex);
 }
 
 public class SoilFormationRegularVoxels : IGrid3D, ISoilFormation
@@ -52,6 +57,7 @@ public class SoilFormationRegularVoxels : IGrid3D, ISoilFormation
 	readonly float CellVolume;
 	readonly Vector3 CellSize;
 	readonly Vector3 CellSize4Intersect;
+	readonly Vector3 Position;
 	readonly float WaterCapacityPerCell;
 	readonly int MaxLevel;
 	readonly (ushort, ushort, ushort)[] CoordsCache;
@@ -61,7 +67,7 @@ public class SoilFormationRegularVoxels : IGrid3D, ISoilFormation
 	readonly List<(PlantSubFormation<UnderGroundAgent> Plant, int Part, float Amount)>[] WaterRequestsRoots;
 	public float Depth => Size.Z * CellSize.Z;
 
-	public SoilFormationRegularVoxels(AgroWorld world, Vector3i size, Vector3 metricSize)
+	public SoilFormationRegularVoxels(AgroWorld world, Vector3i size, Vector3 metricSize, Vector3 position = default)
 	{
 		World = world;
 		if (size.X >= ushort.MaxValue - 1 || size.Y >= ushort.MaxValue - 1 || size.Z >= ushort.MaxValue - 1)
@@ -70,6 +76,7 @@ public class SoilFormationRegularVoxels : IGrid3D, ISoilFormation
 		Size = size;
 		SizeXY = size.X * size.Y;
 
+		Position = position;
 		CellSize = new(metricSize.X / size.X, metricSize.Y / size.Y, metricSize.Z / size.Z);
 		CellSize4Intersect = new(CellSize.X, CellSize.Y, -CellSize.Z);
 		CellSurface = CellSize.X * CellSize.Y;
@@ -174,6 +181,8 @@ public class SoilFormationRegularVoxels : IGrid3D, ISoilFormation
 			WaterTransactions[i] = new();
 	}
 
+	public int FieldsCount => 1;
+
 	[M(AI)] public int Index(Vector3i coords) => Ground(coords) - coords.Z;
 	[M(AI)] public int Index(int x, int y, int depth) => Ground(x, y) - depth;
 
@@ -195,19 +204,19 @@ public class SoilFormationRegularVoxels : IGrid3D, ISoilFormation
 		return (GroundAddr[addr], addr == 0 ? GroundAddr[0] : GroundAddr[addr] - GroundAddr[addr - 1] - 1);
 	}
 
-	[M(AI)] public float GetWater(int index) => index >= 0 && index < Water.Length ? Water[index] : 0f;
+	[M(AI)] public float GetWater(int index, int soilIndex = 0) => index >= 0 && index < Water.Length ? Water[index] : 0f;
 
-	[M(AI)] public float GetWater(Vector3i index) => GetWater(Index(index));
+	[M(AI)] public float GetWater(Vector3i index) => GetWater(Index(index), 0);
 
 	[M(AI)] public float GetWaterCapacity(int index) => GetWaterCapacity(Coords(index));
 
 	[M(AI)] public float GetWaterCapacity(Vector3i index) => index.Z == 0 ? float.MaxValue : WaterCapacityPerCell;
 
-	[M(AI)] public float GetTemperature(int index) => 20f;
+	[M(AI)] public float GetTemperature(int index, int soilIndex) => 20f;
 
 	[M(AI)] public int SoilIndex(Vector3i coords) => coords.X + coords.Y * Size.X + (coords.Z + 1) * SizeXY;
 
-	public int IntersectPoint(Vector3 center)
+	public int IntersectPoint(Vector3 center, int soilIndex = 0)
 	{
 		// Debug.WriteLine($"{center}");
 		center = new Vector3(center.X, center.Z, center.Y) / CellSize4Intersect;
@@ -229,7 +238,7 @@ public class SoilFormationRegularVoxels : IGrid3D, ISoilFormation
 	}
 
 	[M(AI)]
-	internal float GetMetricHeight(float x, float z)
+	internal float GetMetricHeight(float x, float z, int soilIndex = 0)
 	{
 		var center = new Vector3(x, z, 0) / CellSize;
 		var iCenter = new Vector3i(center);
@@ -237,7 +246,7 @@ public class SoilFormationRegularVoxels : IGrid3D, ISoilFormation
 	}
 
 	[M(AI)]
-	public float GetMetricGroundDepth(float x, float z)
+	public float GetMetricGroundDepth(float x, float z, int soilIndex = 0)
 	{
 		var center = new Vector3(x, z, 0) / CellSize;
 		var iCenter = new Vector3i(center);
@@ -369,14 +378,14 @@ public class SoilFormationRegularVoxels : IGrid3D, ISoilFormation
 	public int Count => Water.Length;
 
 	[M(AI)]
-	public void RequestWater(int index, float amount, PlantSubFormation<UnderGroundAgent> plant, int part)
+	public void RequestWater(int index, float amount, PlantSubFormation<UnderGroundAgent> plant, int part, int soilIndex = 0)
 	{
 		if (Water[index] > 0)
 			WaterRequestsRoots[index].Add((plant, part, amount));
 	}
 
 	[M(AI)]
-	public void RequestWater(int index, float amount, PlantFormation2 plant)
+	public void RequestWater(int index, float amount, PlantFormation2 plant, int soilIndex = 0)
 	{
 		if (Water[index] > 0)
 			WaterRequestsSeeds[index].Add((plant, amount));
@@ -452,6 +461,12 @@ public class SoilFormationRegularVoxels : IGrid3D, ISoilFormation
 				}
 			}
 		}
+	}
+
+	public Vector3 GetRandomSeedPosition(Pcg rnd, int soilIndex = 0)
+	{
+		var metricSize = Size * CellSize;
+		return new(metricSize.X * rnd.NextFloat(), -rnd.NextPositiveFloat(Math.Min(metricSize.Z, 0.04f)), metricSize.Y * rnd.NextFloat());
 	}
 }
 

@@ -55,9 +55,11 @@ public struct SeedAgent : IAgent
 	/// Ratio ∈ [0, 1] of the required energy to start growing roots and stems
 	/// </summary>
 	public float GerminationProgress => Water / GerminationThreshold;
+	public readonly int SoilIndex;
 
-	public SeedAgent(Vector3 center, float radius, Vector2 vegetativeTemperature, float energy = -1f)
+	public SeedAgent(int soilIndex, Vector3 center, float radius, Vector2 vegetativeTemperature, float energy = -1f)
 	{
+		SoilIndex = soilIndex;
 		Center = center;
 		Radius = radius;
 		if (energy < 0f)
@@ -65,7 +67,7 @@ public struct SeedAgent : IAgent
 		else
 			Water = energy;
 
-		GerminationThreshold = Water * 500f + 100f*radius;
+		GerminationThreshold = Water * 500f + 100f * radius;
 		mVegetativeTemperature = vegetativeTemperature;
 	}
 
@@ -102,10 +104,10 @@ public struct SeedAgent : IAgent
 			{
 				var soil = plant.Soil;
 				//find all soild cells that the shpere intersects
-				var source = soil.IntersectPoint(Center);
+				var source = soil.IntersectPoint(Center, SoilIndex);
 				if (source >= 0) //TODO this is a rough approximation taking only the first intersected soil cell
 				{
-					var soilTemperature = soil.GetTemperature(source);
+					var soilTemperature = soil.GetTemperature(source, SoilIndex);
 					var waterRequest = 0f;
 					for(int i = 0; i < world.HoursPerTick; ++i)
 					{
@@ -118,7 +120,7 @@ public struct SeedAgent : IAgent
 							waterRequest += amount;
 						}
 					}
-					soil.RequestWater(source, waterRequest, plant);
+					soil.RequestWater(source, waterRequest, plant, SoilIndex);
 				}
 			}
 		}
