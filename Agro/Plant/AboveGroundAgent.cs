@@ -454,14 +454,20 @@ public partial struct AboveGroundAgent : IPlantAgent
 
 						if (makeTwig)
 						{
-							Organ = OrganTypes.Meristem;
-							LateralAngle = MathF.PI * 0.5f;
-							++DominanceLevel;
-							Orientation = TurnUpwards(Orientation);
-							LengthVar = species.NodeDistance + plant.RNG.NextFloatVar(species.NodeDistanceVar);
+                            bool parentOnMain = formation.IsMainStem(Parent);
+                            float pInit = parentOnMain ? species.MainSplitFactor : species.SideBranchFactor;
 
-							if (species.LateralsPerNode > 0)
-								CreateLeaves(this, plant, LateralAngle + species.LateralRoll, agentID);
+							if (plant.RNG.NextFloat(0,1) < pInit)
+							{
+								Organ = OrganTypes.Meristem;
+								LateralAngle = MathF.PI * 0.5f;
+								++DominanceLevel;
+								Orientation = TurnUpwards(Orientation);
+								LengthVar = species.NodeDistance + plant.RNG.NextFloatVar(species.NodeDistanceVar);
+
+								if (species.LateralsPerNode > 0)
+									CreateLeaves(this, plant, LateralAngle + species.LateralRoll, agentID);
+							}
 						}
 					}
 				}
@@ -566,8 +572,11 @@ public partial struct AboveGroundAgent : IPlantAgent
 							prevProduction = formation.DailyProductionMax;
 							//Debug.WriteLine($"PREV res {prevResources} prod {prevProduction}");
 						}
+                        bool onMain = formation.IsMainStem(agentID);
+                        float splitProb = onMain ? species.MainSplitFactor : species.SideBranchFactor;
 
-						if (species.MonopodialFactor < 1) //Dichotomous
+                        bool doDichotomous = (species.MonopodialFactor < 1f) && (plant.RNG.NextFloat(0,1) < splitProb);
+                        if (doDichotomous) //Dichotomous
 						{
 							if (DominanceLevel < 255)
 							{

@@ -219,6 +219,11 @@ public class SpeciesSettings
     [JsonPropertyName("AR")]
     public float AuxinsReach { get; init; }
 
+    [JsonPropertyName("SBF")]
+    public float SideBranchFactor { get; init; } = 0.25f;
+
+    [JsonPropertyName("MBF")]
+    public float MainSplitFactor { get; init; } = 1f;
     public float CytokininsReach { get; init; }
 
     public float AuxinsThreshold => 1f;

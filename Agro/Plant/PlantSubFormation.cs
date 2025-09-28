@@ -628,11 +628,32 @@ public partial class PlantSubFormation<T> : IFormation where T: struct, IPlantAg
 	public Vector3 GetScale(int index) => ReadTMP
 		? (AgentsTMP.Length > index ? AgentsTMP[index].Scale() : Vector3.Zero)
 		: (Agents.Length > index ? Agents[index].Scale() : Vector3.Zero);
+    /// <summary>
+    /// Determines whether the stem at the given index belongs to the main stem
+    /// or to a side branch. A stem is considered part of the main stem if the
+    /// whole chain from this stem to the root has a dominance level of 1 or 0.
+    /// </summary>
+    public bool IsMainStem(int index)
+    {
+        var src = ReadTMP ? AgentsTMP : Agents;
+        if (index < 0 || index >= src.Length)
+            return false;
+        if (GetOrgan(index) != OrganTypes.Stem)
+            return false;
 
-	///<summary>
-	///Volume in m³
-	///</summary>
-	public float GetVolume() => (ReadTMP ? AgentsTMP : Agents).Aggregate(0f, (sum, current) => sum + current.Volume());
+        var current = index;
+        while (current >= 0)
+        {
+            if (GetOrgan(current) == OrganTypes.Stem && GetDominance(current) > 1)
+                return false;
+            current = GetParent(current);
+        }
+        return true;
+    }
+    ///<summary>
+    ///Volume in m³
+    ///</summary>
+    public float GetVolume() => (ReadTMP ? AgentsTMP : Agents).Aggregate(0f, (sum, current) => sum + current.Volume());
 
 	///<summary>
 	///Weight in g
