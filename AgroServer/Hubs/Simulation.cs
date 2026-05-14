@@ -97,7 +97,7 @@ public class SimulationHub : Hub<IEditorHub>
                 ClientSimulations.Add(me, requests);
         }
         var lazyPreviews = !(request.ExactPreview ?? false);
-        var exportVersion = (byte)(5 + (request.DownloadRoots ?? false ? 1 : 0));
+        var exportFlags = (request.DownloadRoots ?? false ? ExportFlags.Roots : ExportFlags.None) | ExportFlags.Analytics;
 
         ClientTerrains.TryGetValue(Context.ConnectionId, out var terrain);
         var world = Initialize.World(request, terrain);
@@ -120,7 +120,7 @@ public class SimulationHub : Hub<IEditorHub>
                     if (requests.Preview)
                     {
                         requests.Preview = false;
-                        _ = Clients.Caller.Preview(new() { Step = i, Renderer = world.RendererName, Scene = world.ExportToStream(exportVersion) });
+                        _ = Clients.Caller.Preview(new() { Step = i, Renderer = world.RendererName, Scene = world.ExportToStream((byte)exportFlags) });
                     }
 
                     ++i;
@@ -139,7 +139,7 @@ public class SimulationHub : Hub<IEditorHub>
         });
 
         if (request?.RequestGeometry ?? false)
-            result.Scene = world.ExportToStream(exportVersion);
+            result.Scene = world.ExportToStream((byte)exportFlags);
 
         result.Renderer = world.RendererName;
         //result.Debug = $"{IrradianceClient.Address}";

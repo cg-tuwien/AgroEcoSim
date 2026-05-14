@@ -1,6 +1,8 @@
 import { signal } from "@preact/signals"
 import appstate from "../appstate";
 import { radToDeg } from "three/src/math/MathUtils";
+import BinaryReader from "./BinaryReader";
+import * as THREE from 'three';
 
 const DegToRad = Math.PI / 180.0;
 const RadToDeg = 180.0 / Math.PI;
@@ -56,6 +58,12 @@ export class Species {
 
     includeInRndGen = signal(true);
 
+    leafMorphology: any;
+    leafPhenology: any;
+
+
+    leafGeometry: THREE.BufferGeometry | undefined = undefined;
+
     public static Default() {
         const result = new Species();
         result.name.value = "default";
@@ -101,6 +109,8 @@ export class Species {
             leafGrowthTimeVar: this.leafGrowthTimeVar.peek(),
             leafPitch: this.leafPitchDeg.peek() * DegToRad,
             leafPitchVar: this.leafPitchDegVar.peek() * DegToRad,
+            leafMorphology: this.leafMorphology,
+            leafPhenology: this.leafPhenology,
 
             petioleLength: this.petioleLength.peek(),
             petioleLengthVar: this.petioleLengthVar.peek(),
@@ -151,6 +161,8 @@ export class Species {
         this.leafGrowthTimeVar.value = s.leafGrowthTimeVar;
         this.leafPitchDeg.value = s.leafPitch * RadToDeg;
         this.leafPitchDegVar.value = s.leafPitchVar * RadToDeg;
+        this.leafMorphology = s.leafMorphology;
+        this.leafPhenology = s.leafPhenology;
 
         this.petioleLength.value = s.petioleLength;
         this.petioleLengthVar.value = s.petioleLengthVar;
@@ -203,6 +215,8 @@ export class Species {
             LeafGrowthTimeVar: this.leafGrowthTimeVar.peek(),
             LeafPitch: this.leafPitchDeg.peek() * DegToRad,
             LeafPitchVar: this.leafPitchDegVar.peek() * DegToRad,
+            LeafMorphology: this.leafMorphology,
+            LeafPhenology: this.leafPhenology,
 
             PetioleLength: this.petioleLength.peek(),
             PetioleLengthVar: this.petioleLengthVar.peek(),
@@ -214,5 +228,29 @@ export class Species {
 
             IncludeInRndGen: this.includeInRndGen.peek(),
         };
+    }
+
+    loadLeafGeometry(binaryInput: ArrayBuffer): any {
+        const reader = new BinaryReader(new Uint8Array(binaryInput));
+        const verticesCount = reader.readInt32();
+        const coordsCount = verticesCount * 3;
+        const vertices = new Float32Array(coordsCount);
+        for(let v = 0; v < coordsCount; ++v)
+            vertices[v] = reader.readFloat32();
+
+        const indicesCount = reader.readInt32();
+        const indices: number[] = [];
+        for(let f = 0; f < indicesCount; ++f)
+            indices.push(reader.readInt32());
+
+        debugger;
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+        geometry.setIndex(indices);
+        geometry.computeVertexNormals();
+        geometry.computeBoundingBox();
+        geometry.computeBoundingSphere();
+
+        this.leafGeometry = geometry;
     }
 }

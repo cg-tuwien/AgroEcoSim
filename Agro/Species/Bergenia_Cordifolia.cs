@@ -26,5 +26,8 @@ public static class Bergenia_Cordifolia
         RizomeMaxDepth = 3,
         RizomeLength = 0.04f,
         RizomeRadius = 0.0025f,
+
+        LeafPhenology = new(),
+        LeafMorphology = new(),
     };
 }

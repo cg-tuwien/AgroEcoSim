@@ -24,6 +24,7 @@ import { SamplesPerPixel } from './hud/SamplesPerPixel';
 import { FieldModelUpload } from './hud/FieldModelUpload';
 import { FieldItemRegex } from './hud/FieldItemRegex';
 import { TerrainsList } from './viewport/TerrainsList';
+import { SeedsDistributionUpload } from './hud/SeedsDistributionUpload';
 //import {Tab, initTE } from "tw-elements"; initTE({ Tab }); //tried but failed
 
 const tabs = signal("tab-home");
@@ -64,6 +65,7 @@ const App = () => {
 				<DownloadRoots/>
 			</div>
 			<div role="tabpanel" id="tab-plants" aria-selected={tabs.value.endsWith("tab-plants")}>
+				<SeedsDistributionUpload/>
 				<Seeds/>
 			</div>
 			<div role="tabpanel" id="tab-terrain" aria-selected={tabs.value.endsWith("tab-terrain")}>

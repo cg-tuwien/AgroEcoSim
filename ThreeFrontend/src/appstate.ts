@@ -1,7 +1,7 @@
 import { batch, computed, effect, signal } from "@preact/signals";
 import { BackendURI } from "./config";
 import BinaryReader from "./helpers/BinaryReader";
-import { Scene } from "./helpers/Scene";
+import { PlantModel } from "./helpers/Scene";
 import * as SignalR from "@microsoft/signalr";
 import { Seed } from "./helpers/Seed";
 import * as THREE from 'three';
@@ -135,7 +135,7 @@ interface ISimPreview
     step: number,
 }
 
-function base64ToArrayBuffer(base64) {
+function base64ToArrayBuffer(base64: any) {
     var binaryString = atob(base64);
     var bytes = new Uint8Array(binaryString.length);
     for (var i = 0; i < binaryString.length; i++) {
@@ -234,7 +234,7 @@ class State {
 
     //RESPONSE
     plants = signal<IPlantResponse[]>([]);
-    scene = signal<Scene>([]);
+    scene = signal<PlantModel[]>([]);
     renderer = signal("");
     samplesPerPixel = signal(2048);
     simHoursPerTick = 1;
@@ -247,6 +247,8 @@ class State {
     fieldItemRegexMaterial = signal(true);
     fieldModelData?: IObjImport = undefined;
     modelParsingProgress = signal(0);
+    seedsDistributionData = "";
+    seedsDistributionPath = signal("");
 
     //METHODS
     private requestBody = () => {
@@ -382,7 +384,7 @@ class State {
         const species = this.species.peek().filter(s => s.includeInRndGen.value);
         if (species.length == 0)
             console.error("No species selected for random seeding");
-        else
+        else if (count)
         {
             if (count >= 1)
             {
@@ -618,7 +620,7 @@ class State {
                 for(let i = obstacles.length - 1; i >= 0; --i)
                     self.removeObstacleAt(i);
 
-                const text = reader.result.toString();
+                const text = reader.result?.toString() ?? "";
                 const data = JSON.parse(text);
                 self.history = data.history;
                 self.simHoursPerTick = data.simHoursPerTick ?? 1;
@@ -723,6 +725,32 @@ class State {
         this.fieldModelPath.value = "";
     }
 
+    uploadSeedsDistribution = async (f: File) => {
+        this.seedsDistributionData = await f.text();
+        this.seedsDistributionPath.value = f.name;
+        if (hubConnection.state !== SignalR.HubConnectionState.Connected)
+            await start();
+
+        if (hubConnection.state == SignalR.HubConnectionState.Connected)
+        {
+            const bufferResponse = await fetch(`${location.protocol}//${BackendURI}/simulation/seeds`, {
+                body: this.seedsDistributionData,
+                method: 'post',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                }
+            });
+            const distributionId = await bufferResponse.text();
+            hubConnection.invoke("seeds", distributionId);
+        }
+    }
+
+    clearSeedsDistribution = () => {
+        this.seedsDistributionData = undefined;
+        this.seedsDistributionPath.value = "";
+    }
+
     private saveTextFile(data: string, ext: string) {
         const blob = new Blob([data], { type: 'text/plain' });
         const url = window.URL.createObjectURL(blob);
@@ -757,7 +785,11 @@ const st = new State();
 export default st;
 //now that the singleton is exported push in the default seed
 st.seeds.value = [ new Seed(st.species.peek()[0].name.peek(), st.fieldSizeX.peek() * 0.5, -0.01, st.fieldSizeZ.peek() * 0.5, 0, false) ];
-fetch(`${location.protocol}//${BackendURI}/Simulation/species`, { headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' }}).then(response => response.json()).then((list: Species[]) => st.species.value = list.map(x => new Species().load(x)));
+fetch(`${location.protocol}//${BackendURI}/Simulation/species`, { headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' }}).then(response => response.json()).then((list: Species[]) => {
+    const species = list.map(x => new Species().load(x));
+    Promise.all(species.map(s => fetch(`${location.protocol}//${BackendURI}/Simulation/mesh/leaf/${s.name}`).then(resp => resp.arrayBuffer()).then(b => s.loadLeafGeometry(b))));
+    st.species.value = species;
+});
 
 fetch(`${location.protocol}//${BackendURI}/Simulation/behaviors`, { headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' }}).then(response => response.json()).then((list: string[]) => st.behaviors.value = list);
 

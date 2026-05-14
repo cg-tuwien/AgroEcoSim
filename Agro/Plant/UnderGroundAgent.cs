@@ -20,7 +20,7 @@ public struct UnderGroundAgent : IPlantAgent
 	/// <summary>
 	/// Simulation step when the agent was created
 	/// </summary>
-	readonly uint BirthTime;
+	public uint BirthTime { get; private init; }
     public bool isRizome { get; private set; } = false;
 
     /// <summary>
@@ -116,6 +116,8 @@ public struct UnderGroundAgent : IPlantAgent
     public Quaternion targetOrientation { get; set; }
 
     public Vector3 BaseOffset => throw new NotImplementedException();
+
+    public float Stress => throw new NotImplementedException();
     #endregion
 
     #region Variances
@@ -506,4 +508,8 @@ public struct UnderGroundAgent : IPlantAgent
     {
         return;
     }
+
+    [M(AI)]public readonly float Adulcy(uint timestep) => 0;
+
+    [M(AI)]public readonly float Senescence(uint timestep) => 0f;
 }

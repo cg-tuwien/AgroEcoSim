@@ -274,7 +274,7 @@ export default function ThreeSceneFn () {
         }
     };
 
-    const updateObject3D = (mesh: THREE.Mesh, primitive: Primitive, index: Index) => {
+    const updateObject3D = (mesh: THREE.Mesh, primitive: Primitive, leafGeometry: THREE.BufferGeometry, index: Index) => {
         switch(primitive.type)
         {
             //buds diabled case Primitives.Sphere: mesh.matrix.fromArray([primitive.radius, 0, 0, primitive.center[0], 0, primitive.radius, 0, primitive.center[1], 0, 0, primitive.radius, primitive.center[2], 0, 0, 0, 1]).transpose(); break;
@@ -301,11 +301,11 @@ export default function ThreeSceneFn () {
                         .setPosition(new THREE.Vector3(primitive.affineTransform[3] + mesh.matrix.elements[4] * 0.5, primitive.affineTransform[7] + mesh.matrix.elements[5] * 0.5, primitive.affineTransform[11] + mesh.matrix.elements[6] * 0.5));
                     break; //cylinder / stem
             //buds disabled case Primitives.Sphere: mesh = UpdateBudMesh(mesh, primitive, index); break; //sphere / bud
-            case Primitives.Rectangle: mesh = UpdateLeafMesh(mesh, primitive, index); break; //plane / leaves
+            case Primitives.Rectangle: mesh = UpdateLeafMesh(mesh, primitive, leafGeometry, index); break; //plane / leaves
         }
     }
 
-    const buildObject3D = (primitive: Primitive, index: Index) => {
+    const buildObject3D = (primitive: Primitive, leafGeometry: THREE.BufferGeometry, index: Index) => {
         let matrix: THREE.Matrix4;
         switch(primitive.type)
         {
@@ -324,7 +324,7 @@ export default function ThreeSceneFn () {
                         .setPosition(new THREE.Vector3(primitive.affineTransform[3] + matrix.elements[4] * 0.5, primitive.affineTransform[7] + matrix.elements[5] * 0.5, primitive.affineTransform[11] + matrix.elements[6] * 0.5));
                     break; //cylinder / stem
             //buds disabled case Primitives.Sphere: mesh = CreateBudMesh(primitive, index); break; //sphere / bud
-            case Primitives.Rectangle: mesh = CreateLeafMesh(primitive, index); break; //plane / leaves
+            case Primitives.Rectangle: mesh = CreateLeafMesh(primitive, leafGeometry, index); break; //plane / leaves
         }
 
         mesh.applyMatrix4(matrix);
@@ -341,7 +341,7 @@ export default function ThreeSceneFn () {
             for(let i = 0; i < appstate.terrainList.length; ++i)
             {
                 const t = appstate.terrainList[i];
-                let terrainMesh: THREE.Mesh ;
+                let terrainMesh: THREE.Mesh = undefined;
                 if (t instanceof BoxTerrainItem)
                 {
                     terrainMesh = new THREE.Mesh(terrainBoxPrimitive, terrainDefaultMaterial);
@@ -354,6 +354,8 @@ export default function ThreeSceneFn () {
                     geometry.setAttribute('position', new THREE.BufferAttribute(t.points, 3))
                     geometry.setIndex(t.triangles);
                     geometry.computeVertexNormals();
+                    geometry.computeBoundingBox();
+                    geometry.computeBoundingSphere();
                     terrainMesh = new THREE.Mesh(geometry, terrainDefaultMaterial);
                     terrainMesh.position.set(t.posx(), t.posy(), t.posz());
                 }
@@ -387,12 +389,14 @@ export default function ThreeSceneFn () {
         let counter = 0;
         const plants = appstate.objPlants.children;
         const entities = plants.length;
+        const species = appstate.species.value;
 
         for(let i = 0; i < sceneData.length; ++i)
         {
             const entity = sceneData[i];
-            for(let j = 0; j < entity.length; ++j)
-                counter < entities ? updateObject3D(plants[counter++] as THREE.Mesh, entity[j], {entity: i, primitive: j}) : buildObject3D(entity[j], {entity: i, primitive: j});
+            const leafGeometry = species.find(x => x.name.value == entity.species)?.leafGeometry;
+            for(let j = 0; j < entity.primitives.length; ++j)
+                counter < entities ? updateObject3D(plants[counter++] as THREE.Mesh, entity.primitives[j], leafGeometry, {entity: i, primitive: j}) : buildObject3D(entity.primitives[j], leafGeometry, {entity: i, primitive: j});
         }
 
         //dispose the remaining ones

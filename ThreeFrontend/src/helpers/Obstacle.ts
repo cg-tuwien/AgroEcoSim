@@ -78,6 +78,8 @@ export class Obstacle extends BaseRequestObject
                 this.bufferGeometry.setAttribute('position', new THREE.Float32BufferAttribute(this.vertices, 3));
                 this.bufferGeometry.setIndex(this.faces);
                 this.bufferGeometry.computeVertexNormals();
+                this.bufferGeometry.computeBoundingBox();
+                this.bufferGeometry.computeBoundingSphere();
                 // this.bufferGeometry.setIndex(new THREE.BufferAttribute(this.faces, 1))
                 // this.bufferGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array([-20, 0, 20,  20, 0, 20,  -20, 0, -20]), 3));
                 // this.bufferGeometry.setIndex([0, 1, 2]);

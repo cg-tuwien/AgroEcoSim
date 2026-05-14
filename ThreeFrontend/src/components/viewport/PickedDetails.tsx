@@ -42,8 +42,8 @@ export function PickedDetails()
         if (appstate.scene.value.length > index.entity)
         {
             const ent = appstate.scene.value[index.entity];
-            if (ent.length > index.primitive)
-                primitive = ent[index.primitive];
+            if (ent.primitives.length > index.primitive)
+                primitive = ent.primitives[index.primitive];
 
             if (primitive.type != Primitives.Sphere)
                 affineTransform = primitive.affineTransform;

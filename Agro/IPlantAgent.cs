@@ -6,6 +6,7 @@ namespace Agro;
 
 public interface IPlantAgent : ITreeAgent
 {
+	uint BirthTime { get; }
 	float Length { get; }
 
 	/// <summary>
@@ -65,6 +66,9 @@ public interface IPlantAgent : ITreeAgent
 	float PhotosynthPerTick(AgroWorld world);
 
 	float WoodRatio();
+	float Adulcy(uint timestep);
+	float Stress { get; }
+	float Senescence(uint timestep);
 
 	Vector3 Scale();
 	float Volume();

@@ -3,13 +3,14 @@ using Agro;
 using System.Diagnostics;
 using AgroServer.Services;
 using System.Diagnostics.CodeAnalysis;
+using FacadeJsonImport;
 
 namespace AgroServer.Controllers;
 
 public class SimulationController// : ControllerBase
 {
     [RequiresUnreferencedCode("SimulationController")]
-    public static void Map(RouteGroupBuilder api, IConfiguration configuration, ISimulationUploadService uploadService, ITerrainBuffer terrainBuffer)
+    public static void Map(RouteGroupBuilder api, IConfiguration configuration, ISimulationUploadService uploadService, ITerrainBuffer terrainBuffer, ISeedsBuffer seedsBuffer)
     {
         api.MapGet("/", () => Results.Ok());
 
@@ -35,8 +36,8 @@ public class SimulationController// : ControllerBase
 
             if (request?.RequestGeometry ?? false)
             {
-                var exportVersion = (byte)(5 + (request.DownloadRoots ?? false ? 1 : 0));
-                response.Scene = world.ExportToStream(exportVersion);
+                var exportFlags = (request.DownloadRoots ?? false ? ExportFlags.Roots : ExportFlags.None) | ExportFlags.Analytics;
+                response.Scene = world.ExportToStream((byte)exportFlags);
             }
 
             response.Renderer = world.RendererName;
@@ -52,10 +53,35 @@ public class SimulationController// : ControllerBase
 
         api.MapPost("/terrain", (ImportedObjData data) => terrainBuffer.Add(data));
 
+        api.MapPost("/seeds", (CellModel[][] data) => seedsBuffer.Add(data));
+
         //Returns a listing of all predefined species
         api.MapGet("/species", () => SpeciesSettings.Predefined);
 
         //Returns a listing of all predefined behaviors
         api.MapGet("/behaviors", () => Enum.GetNames<Behavior>());
+
+        api.MapGet("/mesh/leaf/{species}", (string species) => {
+            var data = SpeciesSettings.Predefined.FirstOrDefault(x => x.Name == species);
+            if (data == null) return Results.NotFound();
+
+            var lod = RenderLeafLod.CoarseOutline;
+            if (!data.LeafMorphology.TryGetDefaultLeafMesh(lod, out var mesh))
+            {
+                var genericLeaf = new LeafInstance()
+                {
+                    Morphology = data.LeafMorphology,
+                    Physiology = new()
+                };
+                genericLeaf.InitializeLeafletsIfNeeded();
+
+                mesh = LeafMeshBuilder.Build(genericLeaf, lod);
+            }
+
+            using var binaryStream = new MemoryStream();
+            using var writer = new BinaryWriter(binaryStream);
+            mesh.WriteMesh(writer);
+            return Results.Bytes(binaryStream.ToArray());
+        });
     }
 }

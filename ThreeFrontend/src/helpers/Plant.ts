@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { backgroundColor, neutralColor } from "./Selection";
 import appstate from "../appstate";
 import { threeBoxPrimitive, threeCylinderPrimitive, threePlanePrimitive, threeSpherePrimitive } from "../components/viewport/ThreeSceneFn";
-import { Primitive, Primitives } from "./Primitives";
+import { Organs, Primitive, Primitives } from "./Primitives";
 import { Index } from "./Scene";
 
 export enum VisualMappingOptions { Natural = "natural", Water = "water", Auxins = "auxins", Cytokinins = "cytokinins", Energy = "energy", Irradiance = "irradiance", Resource = "resource", Production = "production" }
@@ -36,13 +36,14 @@ export function SetupMesh(primitive: Primitive, index: Index, mesh: THREE.Mesh) 
     return mesh;
 }
 
-export function CreateLeafMesh(primitive: Primitive, index: Index) {
+export function CreateLeafMesh(primitive: Primitive, leafGeometry: THREE.BufferGeometry, index: Index) {
+    debugger;
     const material = primitive.stats ? new THREE.MeshStandardMaterial({ ...LeafColor(primitive, index.primitive), side: THREE.DoubleSide }) : doubleGreyMaterial;
-    return SetupMesh(primitive, index, new THREE.Mesh(threePlanePrimitive, material));
+    return SetupMesh(primitive, index, new THREE.Mesh(leafGeometry ?? threePlanePrimitive, material));
 }
 
-export function UpdateLeafMesh(mesh: THREE.Mesh, primitive: Primitive, index: Index) {
-    mesh.geometry = threePlanePrimitive;
+export function UpdateLeafMesh(mesh: THREE.Mesh, primitive: Primitive, leafGeometry: THREE.BufferGeometry, index: Index) {
+    mesh.geometry = leafGeometry ?? threePlanePrimitive;
     const material = mesh.material as THREE.MeshStandardMaterial;
     if (material.name)
         mesh.material = new THREE.MeshStandardMaterial({ ...LeafColor(primitive, index.primitive), side: THREE.DoubleSide });
@@ -159,7 +160,7 @@ export function VisualizeBudMesh(material: THREE.MeshStandardMaterial, index: In
 
 function LeafColor(primitive: Primitive, index: number) : { color: THREE.Color, emissive: THREE.Color } {
     switch (appstate.visualMapping.peek()) {
-        case VisualMappingOptions.Natural: return { color: greenColors[index % greenColors.length], emissive: black } ;
+        case VisualMappingOptions.Natural: return { color: primitive.type == Primitives.Rectangle && primitive.color ? new THREE.Color(primitive.color) : greenColors[index % greenColors.length], emissive: black } ;
         case VisualMappingOptions.Water: return { emissive: WaterColor(primitive.stats[0]), color: black };
         case VisualMappingOptions.Energy: return { emissive: EnergyColor(primitive.stats[1]), color: black };
         case VisualMappingOptions.Auxins: return { emissive: AuxinsColor(primitive.stats[2]), color: black };
@@ -173,7 +174,7 @@ function LeafColor(primitive: Primitive, index: number) : { color: THREE.Color, 
 
 function StemColor(primitive: Primitive) : { color: THREE.Color, emissive: THREE.Color } {
     switch (appstate.visualMapping.peek()) {
-        case VisualMappingOptions.Natural: return { color: greenColor.clone().lerpHSL(woodColor, primitive.stats[4]), emissive: black };
+        case VisualMappingOptions.Natural: return { color: primitive.type == Primitives.Cylinder && primitive.organ == Organs.Petiole && primitive.color ? new THREE.Color(primitive.color) : greenColor.clone().lerpHSL(woodColor, primitive.stats[4]), emissive: black };
         case VisualMappingOptions.Water: return { emissive: WaterColor(primitive.stats[0]), color: black };
         case VisualMappingOptions.Energy: return { emissive: EnergyColor(primitive.stats[1]), color: black };
         case VisualMappingOptions.Auxins: return { emissive: AuxinsColor(primitive.stats[2]), color: black };
@@ -216,7 +217,7 @@ const greenColor = new THREE.Color("#009900");
 const greyColor = new THREE.Color("#898989");
 
 
-function shuffle(array) {
+function shuffle(array: any) {
     let currentIndex = array.length, randomIndex;
 
     // While there remain elements to shuffle.

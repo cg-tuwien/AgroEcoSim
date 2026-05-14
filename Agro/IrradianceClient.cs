@@ -86,6 +86,8 @@ foreach ENTITY
 
 public enum Mode : byte { Constant, Mitsuba, Tamashii }
 
+public enum ExportFlags : byte { None = 0, Roots = 1, Analytics = 2 };
+
 public class IrradianceClient
 {
 	readonly HttpClient Client;
@@ -735,7 +737,7 @@ public class IrradianceClient
 
 		//Formations
 		writer.WriteU32(formations.Count - SkipFormations.Count); //WRITE NUMBER OF PLANTS in this system
-
+		var seasonProgress = -1f;
 		var skipPointer = 0;
 		for (int pi = 0; pi < formations.Count; ++pi)
 		{
@@ -768,12 +770,12 @@ public class IrradianceClient
 
 					var parentIndex = ag.GetParent(i);
 					writer.Write(parentIndex);
+					writer.WriteU8((byte)organ);
 					switch (organ)
 					{
 						case OrganTypes.Leaf:
                         case OrganTypes.FlowerPadel:
                             {
-								writer.WriteU8(1); //ORGAN 1 leaf
 								var ax = x * scale.X * 0.5f;
 								var ay = -z * scale.Z * 0.5f;
 								var az = y * scale.Y * 0.5f;
@@ -788,6 +790,7 @@ public class IrradianceClient
 									writer.Write(ag.GetDailyProductionInv(i));
 									//writer.Write(ag.GetDailyEfficiency(i));
 									//writer.Write(0f);
+									plant.Parameters.LeafPhenology.WriteColor(writer, world.Season, ag.GetAdulcy(i, world.Timestep), ag.GetStress(i), ag.GetSenescence(i, world.Timestep));
 								}
 							}
 							break;
@@ -796,7 +799,6 @@ public class IrradianceClient
                         case OrganTypes.FlowerPetiol:
                         case OrganTypes.FlowerBud:
                             {
-								writer.WriteU8(2); //ORGAN 2 stem
 								writer.Write(scale.X); //length
 								writer.Write(scale.Z * 0.5f); //radius
 								writer.WriteM32(z, x, y, center);
@@ -819,12 +821,12 @@ public class IrradianceClient
 									writer.Write(ag.GetDailyResourcesInv(i));
 									writer.Write(ag.GetDailyProductionInv(i));
 									//writer.Write(organ == OrganTypes.Stem ? ag.GetDailyEfficiency(i) : 0);
+									plant.Parameters.LeafPhenology.WriteColor(writer, world.Season, ag.GetAdulcy(i, world.Timestep), ag.GetStress(i), ag.GetSenescence(i, world.Timestep));
 								}
 							}
 							break;
 						case OrganTypes.Bud:
                             {
-								writer.WriteU8(3); //ORGAN 3 bud
 								writer.WriteV32(center);
 								writer.Write(scale.X); //radius
 								writer.Write(Math.Clamp(ag.GetWater(i) / ag.GetWaterEfficientCapacity(world, i), 0, 1));
@@ -832,9 +834,9 @@ public class IrradianceClient
 							}
 							break;
 
- 
 
-                        
+
+
                         default: throw new NotImplementedException();
 					}
 					if (extended)
@@ -897,13 +899,189 @@ public class IrradianceClient
 		}
 	}
 
-	public void ExportToFile(string fileName, byte version, IList<IFormation> formations, IList<IObstacle>? obstacles = null)
+	internal void ExportV7(IList<IFormation> formations, Stream binaryStream, ExportFlags flags)
+	{
+		using var writer = new BinaryWriter(binaryStream);
+		writer.WriteU8(7);
+
+		var includeAnalytics = flags.HasFlag(ExportFlags.Analytics);
+		writer.Write((byte)flags);
+		//Formations
+		writer.WriteU32(formations.Count - SkipFormations.Count); //WRITE NUMBER OF PLANTS in this system
+		var seasonProgress = -1f;
+		var skipPointer = 0;
+		for (int pi = 0; pi < formations.Count; ++pi)
+		{
+			if (skipPointer < SkipFormations.Count && SkipFormations[skipPointer] == pi)
+				++skipPointer;
+			else
+			{
+				var plant = formations[pi] as PlantFormation2;
+				var ag = plant.AG;
+				var count = ag.Count;
+				var world = plant.World;
+
+				var sensorsCount = 0;
+				for (int i = 0; i < count; ++i)
+					if (ag.GetOrgan(i) == OrganTypes.Leaf)
+						++sensorsCount;
+
+				writer.Write(plant.Parameters.Name);
+				writer.WriteU32(count); //WRITE NUMBER OF ABOVE-GROUND SURFACES in this plant
+
+				for (int i = 0; i < count; ++i)
+				{
+					var organ = ag.GetOrgan(i);
+					var center = ag.GetBaseCenterWorld(i) + ag.GetBaseOffset(i);
+					var scale = ag.GetScale(i);
+					var orientation = ag.GetDirection(i);
+
+					var x = Vector3.Transform(Vector3.UnitX, orientation);
+					var y = Vector3.Transform(Vector3.UnitY, orientation);
+					var z = Vector3.Transform(Vector3.UnitZ, orientation);
+
+					var parentIndex = ag.GetParent(i);
+					writer.Write(parentIndex);
+					writer.WriteU8((byte)organ);
+					switch (organ)
+					{
+						case OrganTypes.Leaf:
+                        case OrganTypes.FlowerPadel:
+                            {
+								var ax = x * scale.X * 0.5f;
+								var ay = -z * scale.Z * 0.5f;
+								var az = y * scale.Y * 0.5f;
+								var c = center + ax;
+								writer.WriteM32(ax, ay, az, c);
+								if (includeAnalytics)
+								{
+									writer.Write(Math.Clamp(ag.GetWater(i) / ag.GetWaterEfficientCapacity(world, i), 0, 1));
+									writer.Write(Math.Clamp(ag.GetEnergy(i) / ag.GetEnergyCapacity(i), 0, 1));
+									writer.Write(GetIrradiance(ag, i));
+									writer.Write(ag.GetDailyResourcesInv(i));
+									writer.Write(ag.GetDailyProductionInv(i));
+								}
+								//writer.Write(ag.GetDailyEfficiency(i));
+								//writer.Write(0f);
+								plant.Parameters.LeafPhenology.WriteColor(writer, world.Season, ag.GetAdulcy(i, world.Timestep), ag.GetStress(i), ag.GetSenescence(i, world.Timestep));
+							}
+							break;
+						case OrganTypes.Stem: case OrganTypes.Petiole: case OrganTypes.Meristem: case OrganTypes.FlowerStem:
+                        case OrganTypes.FlowerMeristem:
+                        case OrganTypes.FlowerPetiol:
+                        case OrganTypes.FlowerBud:
+                            {
+								writer.Write(scale.X); //length
+								writer.Write(scale.Z * 0.5f); //radius
+								writer.WriteM32(z, x, y, center);
+								#if DEBUG
+								// 2023-10 Mitsuba sometimes complains about non-uniform scaling of cylinders as well as about shearing that should not be present.
+								// The following debugging did not catch anything suspicious so far.
+								// var xl = Math.Abs(1f - x.LengthSquared());
+								// var yl = Math.Abs(1f - y.LengthSquared());
+								// var zl = Math.Abs(1f - z.LengthSquared());
+								// if (xl > 1e-2 || yl > 1e-2 || zl > 1e-2)
+								// {
+								// 	Debug.WriteLine($"stem xyz {xl} {yl} {zl}");
+								// }
+								#endif
+								if (includeAnalytics)
+								{
+									writer.Write(Math.Clamp(ag.GetWater(i) / ag.GetWaterEfficientCapacity(world, i), 0, 1));
+									writer.Write(Math.Clamp(ag.GetEnergy(i) / ag.GetEnergyCapacity(i), 0, 1));
+									writer.Write(Math.Clamp(ag.GetWoodRatio(i), 0, 1));
+									writer.Write(ag.GetDailyResourcesInv(i));
+									writer.Write(ag.GetDailyProductionInv(i));
+								}
+								//writer.Write(organ == OrganTypes.Stem ? ag.GetDailyEfficiency(i) : 0);
+								plant.Parameters.LeafPhenology.WriteColor(writer, world.Season, ag.GetAdulcy(i, world.Timestep), ag.GetStress(i), ag.GetSenescence(i, world.Timestep));
+							}
+							break;
+						case OrganTypes.Bud:
+                            {
+								writer.WriteV32(center);
+								writer.Write(scale.X); //radius
+								if (includeAnalytics)
+								{
+									writer.Write(Math.Clamp(ag.GetWater(i) / ag.GetWaterEfficientCapacity(world, i), 0, 1));
+									writer.Write(Math.Clamp(ag.GetEnergy(i) / ag.GetEnergyCapacity(i), 0, 1));
+								}
+							}
+							break;
+
+
+
+
+                        default: throw new NotImplementedException();
+					}
+
+					if (includeAnalytics)
+					{
+						writer.Write(ag.GetAuxins(i));
+						writer.Write(ag.GetDailyEfficiency(i));
+					}
+				}
+
+				if (flags.HasFlag(ExportFlags.Roots))
+				{
+					writer.Write(plant.World.VirtualRoots);
+					if (plant.World.VirtualRoots)
+					{
+						writer.WriteV32(plant.UG.Size);
+					}
+					else
+					{
+						var ug = plant.UG as PlantSubFormation<UnderGroundAgent>;
+						count = ug.Count;
+						writer.WriteU32(count); //WRITE NUMBER OF UNDER-GROUND SURFACES in this plant
+						for (int i = 0; i < count; ++i)
+						{
+							var organ = ug.GetOrgan(i);
+							var center = ug.GetBaseCenterWorld(i);
+							var scale = ug.GetScale(i);
+							var orientation = ug.GetDirection(i);
+
+							var x = Vector3.Transform(Vector3.UnitX, orientation);
+							var y = Vector3.Transform(Vector3.UnitY, orientation);
+							var z = Vector3.Transform(Vector3.UnitZ, orientation);
+
+							var parentIndex = ug.GetParent(i);
+							writer.Write(parentIndex);
+
+							switch (organ)
+							{
+								case OrganTypes.Root:
+									{
+										writer.WriteU8(1); //ORGAN 1 root
+										writer.Write(scale.X); //length
+										writer.Write(scale.Z * 0.5f); //radius
+										writer.WriteM32(z, x, y, center);
+										if (includeAnalytics)
+										{
+											writer.Write(Math.Clamp(ug.GetWater(i) / ug.GetWaterStorageCapacity(i), 0, 1));
+											//writer.Write(ug.GetWater(i));
+											writer.Write(Math.Clamp(ug.GetEnergy(i) / ug.GetEnergyCapacity(i), 0, 1));
+											writer.Write(Math.Clamp(ug.GetWoodRatio(i), 0, 1));
+											writer.Write(ug.GetDailyResourcesInv(i));
+											writer.Write(ug.GetDailyProductionInv(i));
+										}
+									}
+									break;
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	public void ExportToFile(string fileName, ExportFlags version, IList<IFormation> formations, IList<IObstacle>? obstacles = null)
     {
         using var file = File.OpenWrite(fileName);
         ExportToStream(version, formations, obstacles, file);
     }
 
-    void ExportToStream(byte version, IList<IFormation> formations, IList<IObstacle>? obstacles, Stream target)
+    void ExportToStream(ExportFlags flags, IList<IFormation> formations, IList<IObstacle>? obstacles, Stream target)
     {
 		if (SkipFormations.Count == 0)
 		{
@@ -912,21 +1090,24 @@ public class IrradianceClient
 					SkipFormations.Add(i);
 		}
 
-        switch (version)
-        {
-            default: ExportAsTriangles(formations, obstacles, 0, target); break;
-            case 2: ExportAsPrimitivesClustered(formations, obstacles, 0, target); break;
-            case 3: ExportAsPrimitivesInterleaved(formations, obstacles, target); break;
-            case 4: ExportAsBeautyPrimitives(formations, target); break;
-            case 5: ExportAsBeautyPrimitives(formations, target, extended: true); break;
-			case 6: ExportAsBeautyPrimitives(formations, target, extended: true, roots: true); break;
-        }
+        // switch (version)
+        // {
+        //     default: ExportAsTriangles(formations, obstacles, 0, target); break;
+        //     case 2: ExportAsPrimitivesClustered(formations, obstacles, 0, target); break;
+        //     case 3: ExportAsPrimitivesInterleaved(formations, obstacles, target); break;
+        //     case 4: ExportAsBeautyPrimitives(formations, target); break;
+        // 	   case 5: ExportAsBeautyPrimitives(formations, target, extended: true); break;
+		// 	case 6: ExportAsBeautyPrimitives(formations, target, extended: true, roots: true); break;
+		// 	case 7:
+        // }
+		ExportV7(formations, target, flags);
+
     }
 
-    public byte[] ExportToStream(byte version, IList<IFormation> formations, IList<IObstacle>? obstacles = null)
+    public byte[] ExportToStream(byte flags, IList<IFormation> formations, IList<IObstacle>? obstacles = null)
 	{
 		using var stream = new MemoryStream();
-		ExportToStream(version, formations, obstacles, stream);
+		ExportToStream((ExportFlags)flags, formations, obstacles, stream);
 		return stream.ToArray();
 	}
 

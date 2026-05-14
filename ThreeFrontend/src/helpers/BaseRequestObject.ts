@@ -17,9 +17,9 @@ export class BaseRequestObject {
     pz: Signal<number>;
     fieldIndex: Signal<number>; //this will become dangerous as soon as terrain items can be deleted or added
     state: Signal<SelectionState>;
-    mesh: THREE.Mesh;
-    handleMesh: THREE.Object3D;
-    grabOffset: THREE.Vector3;
+    mesh: THREE.Mesh | undefined;
+    handleMesh: THREE.Object3D | undefined;
+    grabOffset: THREE.Vector3 | undefined;
     respondToMove = false;
     movable = true;
 

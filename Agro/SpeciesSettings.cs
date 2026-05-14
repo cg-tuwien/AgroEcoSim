@@ -149,6 +149,31 @@ public class SpeciesSettings
 
 
     ///<summary>
+    /// Standard senescence duration of a leaf (in hours)
+    ///</summary>
+    public float LeafSenescenceSeasonalDuration { get; init; } = 480f;
+
+    ///<summary>
+    /// Variance of the senescence duration of a leaf (in hours)
+    ///</summary>
+    public float LeafSenescenceSeasonalDurationVar { get; init; } = 120f;
+
+    ///<summary>
+    /// Standard senescence duration of a leaf (in hours)
+    ///</summary>
+    public float LeafSenescenceStressDuration { get; init; } = 140f;
+
+    ///<summary>
+    /// Variance of the senescence duration of a leaf (in hours)
+    ///</summary>
+    public float LeafSenescenceStressDurationVar { get; init; } = 60f;
+
+    /// <summary>
+    /// If positive, marks a typical senescence period (in seasonal progress ,i.e. think of roman months)
+    /// </summary>
+    public float SeasonalSenescence { get; init; } = 8.5f / 12;
+
+    ///<summary>
     /// Standard leaf pitch angle wrt. to its petiole (in radians)
     ///</summary>
     public float LeafPitch { get; init; } = 20f * DegToRad;
@@ -209,10 +234,7 @@ public class SpeciesSettings
 
 
     #region Leaf Appearance
-    /// <summary>
-    /// Hex string typical color
-    /// </summary>
-    public string LeafColor { get; init; } = "2d5a27";
+    public LeafPhenology LeafPhenology { get; set; } = new();
 
     /// <summary>
     /// Radius-Length ratios along the leaf. If null or empty, fallback to the the default quad.
@@ -223,7 +245,17 @@ public class SpeciesSettings
     /// Both x and y are normalized, only values from [0..1] are valid.
     /// Implicit values: [Petiole_radius, 0]
     /// </remarks>
-    public Vector2[] LeafShape { get; init; }
+    //public Vector2[] LeafShape { get; init; }
+
+    public LeafMorphology LeafMorphology { get; init; } = new()
+    {
+        Complexity = LeafComplexity.Simple,
+        Shape = new OvateLeafShape(),
+        Dimensions = LeafDimensions.Create(lengthM: 0.07f, widthM: 0.06f, thicknessM: 0.00035f, petioleM: 0.015f),
+        Margin = LeafMarginType.Entire,
+        Venation = LeafVenationType.Palmate,
+        LobeCount = 3,
+    };
     #endregion
 
     public static List<SpeciesSettings> Predefined = [];
