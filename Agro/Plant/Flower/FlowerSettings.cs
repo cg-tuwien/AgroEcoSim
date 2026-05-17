@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Numerics;
 using System.Text;
 using System.Threading.Tasks;
 using static Agro.AboveGroundAgent;
@@ -9,7 +10,7 @@ namespace Agro
 {
     public class FlowerSettings
     {
-        public float stemLength { get; set; } = 0.005f;
+        
         public readonly List<OrganTypes> flowerOrgans = new List<OrganTypes>() { OrganTypes.FlowerStem, OrganTypes.FlowerPadel, OrganTypes.FlowerPetiol, OrganTypes.FlowerMeristem, OrganTypes.FlowerBud
     };
 
@@ -18,18 +19,19 @@ namespace Agro
         }
 
         // structure
+        public float stemLength { get; set; } = 0.01f;
         public bool continous { get; set; }=false;
-        public bool internodeFlower { get; set; } = false;
-        public int flowerDebth { get; set; } =6;
+        public bool internodeFlower { get; set; } = true;
+        public int flowerDebth { get; set; } = 1;
 
-        public int LateralsPerNode { get; set; } = 1;
-        public int FlowersPerInternode { get; set; } = 0;
+        public int LateralsPerNode { get; set; } = 2;
+        public int FlowersPerInternode { get; set; } = 2;
         public float stemLengthVar { get; set; } = 0f;
-        public bool deterministic { get; set; } = false;
+        public bool deterministic { get; set; } = true;
         public int clusterSize { get; set; } = 1;
         public byte floralDepthFactor { get; set; } = 1;
-        public float pFlowerDebth { get; set; } = 1f;
-        public int flowerBaseDebth { get; set; } = 25;
+        public float pFlowerDebth { get; set; } = 3f;
+        public int flowerBaseDebth { get; set; } =10;
 
         public uint FlowerMaxAge { get;  set; }
         public uint BudBloomAge { get; set; }
@@ -39,22 +41,37 @@ namespace Agro
         public int LateralRoll { get;  set; }
 
         public bool internodeFlowerWithStem { get; set; } = true;
-        public float LeafLength { get; set; } = 0.03f;
-        public float LeafRadius { get; set; } = 0.015f;
-        public float PedalLength { get; set; } 
-        public float PedalRadius { get; set; }
-        public float BudLength { get; set; }
-        public float BudRadius { get; set; }
-        public float PetiolLength { get; set; }
-        public float PetiolRadius { get; set; }
-        public float LeafLengthVar { get; internal set; }
-        public float LeafRadiusVar { get; internal set; }
+        public float LeafLength { get; set; } = 0.01f;
+        public float LeafRadius { get; set; } = 0.005f;
+        public float PedalLength { get; set; } = 0.005f;
+        public float PedalRadius { get; set; } = 0.0025f;
+        public float BudLength { get; set; } = 0.0075f;
+        public float BudRadius { get; set; } = 0.005f;
+        public float PetiolLength { get; set; } = 0.02f;
+        public float PetiolRadius { get; set; } = 0.0025f;
+        public float LeafLengthVar { get;  set; }
+        public float LeafRadiusVar { get;  set; }
         public float LeavePetioleLength { get; set; } = 0.005f;
         public float LeavePetioleRadius { get; set; } = 0.001f;
-        public float fStemRadius { get; set; } = 0.002f;
+        public float fStemRadius { get; set; } = 0.0005f;
         public int BaseLaterals { get; set; } = 1;
         public int BaseLateralAngle { get; set; } = 90;
         public int BaseLateralRoll { get; set; }
+        public float pFlowerBaseDebth { get; set; } = 0;
+        public int petiolSegments { get; set; } = 1;
+        public float fStemRadiusVar { get; set; }
+        public float bStemRadius { get;  set; }
+        public float bStemLength { get;  set; }
+        public float bStemLengthVar { get;  set; }
+        public float bStemRadiusVar { get;  set; }
+        public float PetiolRadiusVar { get;  set; }
+        public float PetiolLengthVar { get;  set; }
+        public float PedalLengthVar { get;  set; }
+        public float growthTime { get;  set; }
+        public float pedalGrowthTimeVar { get;  set; }
+        public float pedalGrowthTime { get;  set; }
+        public Vector3 pedalColor { get;  set; }
+        public float clusterAngle { get; internal set; }
     }
 
     

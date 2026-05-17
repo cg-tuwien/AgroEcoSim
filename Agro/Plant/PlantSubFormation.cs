@@ -467,7 +467,12 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 			{
 				elasticity = 2e8f;
 			}
-			if (flowerOrgans.Contains(agent.Organ)) elasticity = Math.Max(8e4f * (1-woodiness),5e4f);
+			if (flowerOrgans.Contains(agent.Organ)) { elasticity = Math.Max(5e5f * (1 - woodiness), 5e4f);
+                if (agent.Organ.Equals(OrganTypes.FlowerPetiol))
+                {
+                    elasticity = Math.Max(5e2f * (1 - woodiness), 1e2f);
+                }
+            }
 			//Console.WriteLine($"e = {elasticity}, b*d = {baseDebthstiffness * depthAttenuation}, w = {woodiness}, we = {Weights[i]}");
 			Quaternion rotation = Quaternion.Identity;
 			Quaternion appliedDelta = Quaternion.Identity;

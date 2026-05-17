@@ -290,48 +290,66 @@ namespace Agro
 
                             
 
-                            if (agent.Organ == OrganTypes.Meristem && agent.Length > agent.LengthVar && plant.RNG.NextFloat(0, 1) < pchaning)
+                            if (agent.Organ == OrganTypes.Meristem && agent.Length > agent.LengthVar )
                             {
 
-                                agent.Organ = OrganTypes.Stem;
-                                agent.GrowthTimeVar = world.HoursPerTick / (species.WoodGrowthTime + plant.RNG.NextFloatVar(species.WoodGrowthTimeVar));
-                                wasMeristem = true;
-                                float prevResources, prevProduction;
-                                if (timestep - agent.BirthTime > world.HoursPerTick)
+                                
+                                if (plant.RNG.NextFloat(0, 1) < pflower)
                                 {
-                                    prevResources = agent.PreviousDayProductionInvariant;
-                                    prevProduction = agent.PreviousDayProductionInvariant;
-                                }
-                                else
-                                {
-                                    prevResources = formation.DailyResourceMax;
-                                    prevProduction = formation.DailyProductionMax;
-                                    //Debug.WriteLine($"PREV res {prevResources} prod {prevProduction}");
-                                }
+                                    agent.Organ = OrganTypes.Stem;
+                                    agent.GrowthTimeVar = world.HoursPerTick / (species.WoodGrowthTime + plant.RNG.NextFloatVar(species.WoodGrowthTimeVar));
+                                    wasMeristem = true;
+                                    float prevResources, prevProduction;
+                                    if (timestep - agent.BirthTime > world.HoursPerTick)
+                                    {
+                                        prevResources = agent.PreviousDayProductionInvariant;
+                                        prevProduction = agent.PreviousDayProductionInvariant;
+                                    }
+                                    else
+                                    {
+                                        prevResources = formation.DailyResourceMax;
+                                        prevProduction = formation.DailyProductionMax;
+                                        //Debug.WriteLine($"PREV res {prevResources} prod {prevProduction}");
+                                    }
 
-                                if(phase.Equals(SeasonalPhase.PreFlower))
-                                {
                                     commitToFlower(agent, formation, agentID, prevResources, prevProduction);
                                     doChaning(agent, formation, agentID, prevResources, prevProduction);
                                 }
-                                else
-                                    doChaning(agent,formation,agentID,prevResources,prevProduction);
-                                
-                                
-                                
-                                var parent = agent.Parent;
-                                while (!formation.GetIsRizome(parent))
+                                else if (plant.RNG.NextFloat(0, 1) < pchaning)
                                 {
-                                    foreach(var child in formation.GetChildren(parent))
+                                    agent.Organ = OrganTypes.Stem;
+                                    agent.GrowthTimeVar = world.HoursPerTick / (species.WoodGrowthTime + plant.RNG.NextFloatVar(species.WoodGrowthTimeVar));
+                                    wasMeristem = true;
+                                    float prevResources, prevProduction;
+                                    if (timestep - agent.BirthTime > world.HoursPerTick)
                                     {
-                                        if (formation.GetOrgan(child).Equals(OrganTypes.Petiole))
-                                        {
-                                            bendPetiol(formation, child);
-                                        }
+                                        prevResources = agent.PreviousDayProductionInvariant;
+                                        prevProduction = agent.PreviousDayProductionInvariant;
                                     }
-                                    parent = formation.GetParent(parent);
-                                }
+                                    else
+                                    {
+                                        prevResources = formation.DailyResourceMax;
+                                        prevProduction = formation.DailyProductionMax;
+                                        //Debug.WriteLine($"PREV res {prevResources} prod {prevProduction}");
+                                    }
 
+                                    doChaning(agent, formation, agentID, prevResources, prevProduction);
+
+
+
+                                    var parent = agent.Parent;
+                                    while (!formation.GetIsRizome(parent))
+                                    {
+                                        foreach (var child in formation.GetChildren(parent))
+                                        {
+                                            if (formation.GetOrgan(child).Equals(OrganTypes.Petiole))
+                                            {
+                                                bendPetiol(formation, child);
+                                            }
+                                        }
+                                        parent = formation.GetParent(parent);
+                                    }
+                                }
                             }
                             else
                             {
