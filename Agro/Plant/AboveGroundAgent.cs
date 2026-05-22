@@ -17,7 +17,7 @@ public partial struct AboveGroundAgent : IPlantAgent
 	/// <summary>
 	/// Simulation step when the agent was created
 	/// </summary>
-	public readonly uint BirthTime;
+	public uint BirthTime { get; private init; }
 	/// <summary>
 	/// Orientation with respect to the parent. If there is no parent, this is the initial orientation.
 	/// </summary>
@@ -138,6 +138,37 @@ public partial struct AboveGroundAgent : IPlantAgent
 	///</summary>
 	public float PreviousDayEnvResources { get; private set; }
 
+
+	/// <summary>
+	/// Timesteps count from birth until adulcy
+	/// </summary>
+	//float AdulcyAge;
+	[M(AI)]public readonly float Adulcy(uint timestep)
+	{
+		var result = (timestep - BirthTime) * GrowthTimeVar; //since gorwth time is 1 / adulcyAge we multiply instead of dividing
+		return result < 1f ? result : 1f;
+	}
+
+	public float Stress { get; private set; } = 0f;
+
+	/// <summary>
+	/// Timesteps needed for the organ to die. If the process has not been started yet, the value is zero
+	/// </summary>
+	ushort SenescenceDuration = 0;
+
+	/// <summary>
+	/// Timestep when the organ started to die. If the process has not been started yet, the value is zero
+	/// </summary>
+	uint SenescenceStart = 0;
+
+	[M(AI)]public readonly float Senescence(uint timestep)
+	{
+		if (SenescenceStart == 0 || SenescenceDuration == 0) return 0f;
+		float t = timestep - SenescenceStart;
+		var result = t / SenescenceDuration;
+		return result < 1f ? result : 1f;
+	}
+
 	/// <summary>
 	/// Woodyness ∈ [0, 1].
 	/// </summary>
@@ -180,7 +211,7 @@ public partial struct AboveGroundAgent : IPlantAgent
     public bool isRizome { get; set; } = false;
 
 	public bool trySpawn { get; set; } = true;
-    
+
 	public class rizomeInfos
 	{
         public bool test { get; set; } = true;
@@ -449,6 +480,29 @@ public partial struct AboveGroundAgent : IPlantAgent
 		var enoughEnergyState = EnoughEnergy(lifeSupportPerHour);
 		var wasMeristem = false;
 
+		//Senescence
+		if (SenescenceStart > 0)
+		{
+			if (SenescenceDuration == 0) //was added over a message
+				InitSenescence(timestep, plant, species, formation, children, world.HoursPerTick, false);
+			else if (Senescence(timestep) >= 1f)
+				switch (Organ)
+				{
+					case OrganTypes.Petiole: MakeBud(formation, children); break; //keep an option for a new leaf
+					case OrganTypes.Leaf:
+					{
+						formation.Death(agentID);
+						formation.Death(Parent); //remove the petiole as well
+					}
+					break;
+					default: formation.Death(agentID); break; //remove the item
+				}
+
+			return;
+		}
+		else if (world.Season > species.SeasonalSenescence && Organ == OrganTypes.Petiole)
+			InitSenescence(timestep, plant, species, formation, children, world.HoursPerTick, stressReason: false);
+
 		//Photosynthesis
 		if (Organ == OrganTypes.Leaf && Water_g > 0f)
 		{
@@ -489,7 +543,7 @@ public partial struct AboveGroundAgent : IPlantAgent
 				{
 					var p = ageHours / 4032; //6 months in hours
 					if (plant.RNG.NextFloatAccum(p * p, world.HoursPerTick))
-						MakeBud(formation, children);
+						InitSenescence(timestep, plant, species, formation, children, world.HoursPerTick, stressReason: false);
 				}
 			}
 			break;
@@ -504,10 +558,7 @@ public partial struct AboveGroundAgent : IPlantAgent
 					var p = 0.004f / (q * q);
 					//Debug.WriteLine($"{formationID}: h {formation.GetBaseCenter(formationID).Y / formation.Height}  r {Radius}  e {PreviousDayEnvResources / formation.DailyEfficiencyMax}  =  {q}  % {p}");
 					if (plant.RNG.NextFloatAccum(p, world.HoursPerTick))
-					{
-						Energy = 0f;
-						//Debug.WriteLine($"DEL STEM {agentID} % {p} @ {timestep}");
-					}
+						InitSenescence(timestep, plant, species, formation, children, world.HoursPerTick, stressReason: false);
 				}
 				break;
 
@@ -709,7 +760,7 @@ public partial struct AboveGroundAgent : IPlantAgent
 				{
 					//if the stem grows too thick so that it already covers a large portion of the petiole, it gets removed and a new bud emerges.
 					if (Organ == OrganTypes.Petiole && ParentRadiusAtBirth + species.PetioleCoverThreshold < formation.GetBaseRadius(Parent))
-						MakeBud(formation, children);
+						InitSenescence(timestep, plant, species, formation, children, world.HoursPerTick, stressReason: false);
 
 					//termination of unproductive branches
 					if (Organ == OrganTypes.Petiole && ageHours > 48 && formation.GetOrgan(Parent) != OrganTypes.Meristem && children != null)
@@ -727,7 +778,8 @@ public partial struct AboveGroundAgent : IPlantAgent
 							if (plant.RNG.NextFloatAccum(production, world.HoursPerTick))
 							{
 								Debug.WriteLine($"DEL LEAF {agentID} % {production} @ {timestep}");
-								formation.Death(agentID);
+								InitSenescence(timestep, plant, species, formation, children, world.HoursPerTick, stressReason: true);
+								//formation.Death(agentID);
 							}
 						}
 					}
@@ -735,25 +787,26 @@ public partial struct AboveGroundAgent : IPlantAgent
 			}
 		}
 		else if (Energy <= 0f) //remove organs that drained all their energy
-		{
-			switch (Organ)
-			{
-				case OrganTypes.Petiole: MakeBud(formation, children); break; //keep an option for a new leaf
-				case OrganTypes.Leaf:
-				{
-					formation.Death(agentID);
-					formation.Death(Parent); //remove the petiole as well
-				}
-				break;
-				default: formation.Death(agentID); break; //remove the item
-			}
+        {
+            InitSenescence(timestep, plant, species, formation, children, world.HoursPerTick, stressReason: true);
+        }
 
-			return;
-		}
-
-		//update auxins for meristem and stems that were meristem in the previous step
-		Auxins = wasMeristem || Organ == OrganTypes.Meristem ? species.AuxinsProduction : 0;
+        //update auxins for meristem and stems that were meristem in the previous step
+        Auxins = wasMeristem || Organ == OrganTypes.Meristem ? species.AuxinsProduction : 0;
 	}
+
+    [M(AI)]private void InitSenescence(uint timestep, PlantFormation2 plant, SpeciesSettings species, PlantSubFormation<AboveGroundAgent> formation, IList<int>? children, ushort hoursPerTick, bool stressReason)
+    {
+		if (SenescenceStart > 0 && SenescenceDuration == 0)
+			SenescenceDuration = (ushort)(SenescenceStart - timestep - 1);
+		else
+			SenescenceDuration = (ushort)((species.LeafSenescenceSeasonalDuration + plant.RNG.NextFloatVar(species.LeafSenescenceSeasonalDurationVar)) / hoursPerTick);
+
+		SenescenceStart = timestep;
+		if (children != null)
+			for(int i = 0; i < children.Count; ++i)
+				formation.SendProtected(children[i], new PropagateSenescence(SenescenceStart + SenescenceDuration));
+    }
 
     [M(AI)]private void MakeBud(PlantSubFormation<AboveGroundAgent> formation, IList<int>? children)
     {
@@ -919,6 +972,7 @@ public partial struct AboveGroundAgent : IPlantAgent
     {
         Orientation = orientation;
     }
+
     [StructLayout(LayoutKind.Auto)]
     [Message]
     public readonly struct OrientationSet : IMessage<AboveGroundAgent>
@@ -927,7 +981,7 @@ public partial struct AboveGroundAgent : IPlantAgent
         public OrientationSet(Quaternion orientation)
         {
             Orientation = orientation;
-           
+
         }
         bool IMessage<AboveGroundAgent>.Valid => true;
 
@@ -940,4 +994,21 @@ public partial struct AboveGroundAgent : IPlantAgent
     }
 
 
+    [StructLayout(LayoutKind.Auto)]
+    [Message]
+    public readonly struct PropagateSenescence : IMessage<AboveGroundAgent>
+    {
+        /// <summary>
+		/// Senescence mut be completed before this timestep
+		/// </summary>
+		public readonly uint BeforeTimestep;
+        public PropagateSenescence(uint beforeTimestep)
+        {
+            BeforeTimestep = beforeTimestep;
+        }
+
+        public bool Valid => true;
+        public Transaction Type => Transaction.Unknown;
+        [M(AI)]public void Receive(ref AboveGroundAgent dstAgent, uint timestep) => dstAgent.SenescenceStart = BeforeTimestep;
+    }
 }

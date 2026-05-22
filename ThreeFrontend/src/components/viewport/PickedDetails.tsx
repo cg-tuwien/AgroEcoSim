@@ -3,10 +3,11 @@ import appstate from "../../appstate";
 import { DecodePlantName } from "../../helpers/Plant";
 import { Primitive, Primitives } from "../../helpers/Primitives";
 import * as THREE from "three";
+import { Seed } from "src/helpers/Seed";
 
 const fixedPrecision = 4;
 
-export function PlantsTable()
+export function PickedDetails()
 {
     const seedPick = appstate.seedPick.value;
     if (seedPick >= 0 && seedPick <= appstate.seeds.value.length)
@@ -16,6 +17,7 @@ export function PlantsTable()
         seed.mesh.getWorldPosition(v);
         return <ul style={{listStyleType: "none"}}>
             <li>Index: {seedPick}</li>
+            <li>Species: {seed.species.value}</li>
             <li>Position: {v.x.toFixed(fixedPrecision)}, {v.y.toFixed(fixedPrecision)}, {v.z.toFixed(fixedPrecision)}</li>
         </ul>;
     }
@@ -36,18 +38,22 @@ export function PlantsTable()
         const index = DecodePlantName(pickName);
         let primitive : Primitive = undefined;
         let affineTransform : Float32Array = undefined;
+        let seed: Seed = undefined;
         if (appstate.scene.value.length > index.entity)
         {
             const ent = appstate.scene.value[index.entity];
-            if (ent.length > index.primitive)
-                primitive = ent[index.primitive];
+            if (ent.primitives.length > index.primitive)
+                primitive = ent.primitives[index.primitive];
 
             if (primitive.type != Primitives.Sphere)
                 affineTransform = primitive.affineTransform;
+
+            seed = appstate.seeds.peek()[index.entity];
         }
 
         return primitive ? (<>
             <p>Plant part: {appstate.plantPick.value}</p>
+            <p>Species: {seed.species.value}</p>
             <ul style={{listStyleType: "none"}}>
                 <li>Water ratio: {primitive.stats[0]}</li>
                 <li>Energy ratio: {primitive.stats[1]}</li>

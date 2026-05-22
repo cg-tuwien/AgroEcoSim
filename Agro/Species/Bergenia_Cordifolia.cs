@@ -2,12 +2,12 @@ using System.Numerics;
 
 namespace Agro.Species;
 
-public static class Bergonia_Cordifolia
+public static class Bergenia_Cordifolia
 {
     const float DegToRad = MathF.PI / 180f;
     public static SpeciesSettings Init() => new SpeciesSettings()
     {
-        Name = "Bergonia Cordifolia",
+        Name = "Bergenia Cordifolia",
         Behavior = Behavior.Herbaceous,
         LeafLength = 0.24f,
         LeafRadius = 0.09f,
@@ -113,5 +113,9 @@ public static class Bergonia_Cordifolia
             // Fast early-spring growth — scape elongates rapidly over ~2 weeks.
             growthTime = 72f,
         },
+
+
+        LeafPhenology = new(),
+        LeafMorphology = new(),
     };
 }

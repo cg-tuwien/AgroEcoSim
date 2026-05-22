@@ -44,5 +44,10 @@ export function VisualMapping() {
             <input type="checkbox" name="showObstacles" checked={appstate.showObstacles} onChange={e => appstate.showObstacles.value = e.currentTarget.checked }/>
             <label for='showObstacles'>Obstacles</label>
         </div>
+        <h4>UI Features:</h4>
+        <div>
+            <input type="checkbox" name="performPicking" checked={appstate.performPicking} onChange={e => appstate.performPicking.value = e.currentTarget.checked }/>
+            <label for="performPicking">Mouse picking</label>
+        </div>
     </>;
 }

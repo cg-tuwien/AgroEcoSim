@@ -15,12 +15,13 @@ export class BaseRequestObject {
     px: Signal<number>;
     py: Signal<number>;
     pz: Signal<number>;
-    fieldIndex: Signal<number>;
+    fieldIndex: Signal<number>; //this will become dangerous as soon as terrain items can be deleted or added
     state: Signal<SelectionState>;
-    mesh: THREE.Mesh;
-    handleMesh: THREE.Object3D;
-    grabOffset: THREE.Vector3;
+    mesh: THREE.Mesh | undefined;
+    handleMesh: THREE.Object3D | undefined;
+    grabOffset: THREE.Vector3 | undefined;
     respondToMove = false;
+    movable = true;
 
     materials: ReqObjMaterials;
 
@@ -44,9 +45,12 @@ export class BaseRequestObject {
         this.state.value = "none";
 
         //this.mesh.remove(this.handleMesh);
-        if (appstate.transformControls?.object == this.mesh)
-            appstate.transformControls.detach();
-        appstate.transformControls?.removeEventListener('change', this.transformMoveEvent);
+        if(this.movable)
+        {
+            if (appstate.transformControls?.object == this.mesh)
+                appstate.transformControls.detach();
+            appstate.transformControls?.removeEventListener('change', this.transformMoveEvent);
+        }
 
         appstate.needsRender.value = true;
     }
@@ -76,25 +80,29 @@ export class BaseRequestObject {
         // this.mesh.add(this.handleMesh);
         // if (appstate.transformControls?.object)
         //     appstate.transformControls.detach();
-        appstate.transformControls?.attach(this.mesh);
-        appstate.transformControls?.addEventListener('change', this.transformMoveEvent);
+        if (this.movable)
+        {
+            appstate.transformControls?.attach(this.mesh);
+            appstate.transformControls?.addEventListener('change', this.transformMoveEvent);
+        }
 
         appstate.needsRender.value = true;
     }
 
     transformMove() {
-        batch(() => {
-            this.px.value = this.mesh.position.x;
-            this.py.value = this.mesh.position.y;
-            this.pz.value = this.mesh.position.z;
-            appstate.needsRender.value = true;
-        });
+        if (this.movable)
+            batch(() => {
+                this.px.value = this.mesh.position.x;
+                this.py.value = this.mesh.position.y;
+                this.pz.value = this.mesh.position.z;
+                appstate.needsRender.value = true;
+            });
     }
 
     transformMoveEvent = this.transformMove.bind(this);
 
     grab(raycaster: THREE.Raycaster) {
-        if (this.respondToMove)
+        if (this.movable && this.respondToMove)
         {
             const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -this.py.value);
             const start = new THREE.Vector3();
@@ -107,7 +115,7 @@ export class BaseRequestObject {
     }
 
     move(raycaster: THREE.Raycaster) {
-        if (this.respondToMove)
+        if (this.movable && this.respondToMove)
         {
             const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -this.py.value);
             const p = new THREE.Vector3();
@@ -130,5 +138,10 @@ export class BaseRequestObject {
             this.state.value = s;
             appstate.needsRender.value = true;
         }
+    }
+
+    isSelected() {
+        const val = this.state.value;
+        return val == "select" || val == "selecthover";
     }
 }

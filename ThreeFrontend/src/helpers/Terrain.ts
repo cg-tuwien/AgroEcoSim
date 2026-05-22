@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { BaseRequestObject, ReqObjMaterials } from "./BaseRequestObject";
+import { neutralColor } from "./Selection";
 
 const color = new THREE.Color("#573600");
 const defaultMaterial = new THREE.MeshLambertMaterial({
@@ -8,8 +9,8 @@ const defaultMaterial = new THREE.MeshLambertMaterial({
     flatShading: true,
     name: "terrainDefault"
 });
-const hoverMaterial = new THREE.MeshLambertMaterial({ ...defaultMaterial, color: color.clone().lerpHSL(color, 0.1), name: "terrainHover "});
-const selectMaterial = new THREE.MeshLambertMaterial({ ...defaultMaterial, color: color.clone().lerpHSL(color, 0.2), name: "terrainSelect" });
+const hoverMaterial = new THREE.MeshLambertMaterial({ ...defaultMaterial, color: color.clone().lerpHSL(neutralColor, 0.1), name: "terrainHover "});
+const selectMaterial = new THREE.MeshLambertMaterial({ ...defaultMaterial, color: color.clone().lerpHSL(neutralColor, 0.2), name: "terrainSelect" });
 const grabMaterial = selectMaterial;
 const selectHoverMaterial = selectMaterial;
 
@@ -37,10 +38,11 @@ export abstract class ITerrainItem extends BaseRequestObject {
 export class BoxTerrainItem extends ITerrainItem {
     data: Float32Array;
 
-    constructor(id: string, data: Float32Array) {
-        super(data[0], data[1], data[2], terrainMaterials);
+    constructor(id: string, data: Float32Array, index: number) {
+        super(data[0], data[1], data[2], terrainMaterials, index);
         this.data = data;
         this.id = id;
+        this.movable = false;
     }
 
     posx = () => this.data[0];
@@ -60,9 +62,9 @@ export class BoxTerrainItem extends ITerrainItem {
         return {"id": this.id, "data": Array.from(this.data) }
     }
 
-    static load(input: any) {
+    static load(input: any, index: number) {
         const typedArray = new Float32Array(input.data);
-        return new BoxTerrainItem(input.id, typedArray);
+        return new BoxTerrainItem(input.id, typedArray, index);
     }
 }
 
@@ -75,9 +77,10 @@ export class MeshTerrainItem extends ITerrainItem {
     principalSize: number;
     secondarySize: number;
 
-    constructor(id: string, x: number, y: number, z: number, points: Float32Array, triangles: number[]) {
-        super(x, y, z, terrainMaterials);
+    constructor(id: string, x: number, y: number, z: number, points: Float32Array, triangles: number[], index: number) {
+        super(x, y, z, terrainMaterials, index);
         this.id = id;
+        this.movable = false;
         this.points = points;
         this.triangles = triangles;
 
@@ -154,9 +157,9 @@ export class MeshTerrainItem extends ITerrainItem {
         return {"id": this.id, px: this.posx(), py: this.posy(), pz: this.posz(), "points": Array.from(this.points), "triangles": this.triangles }
     }
 
-    static load(input: any) {
+    static load(input: any, index: number) {
         const points = new Float32Array(input.points);
-        return new MeshTerrainItem(input.id, input.px, input.py, input.pz, points, input.triangles);
+        return new MeshTerrainItem(input.id, input.px, input.py, input.pz, points, input.triangles, index);
     }
 
     sx() {

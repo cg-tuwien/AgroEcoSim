@@ -11,6 +11,7 @@ using M = System.Runtime.CompilerServices.MethodImplAttribute;
 using System.Collections;
 using System.Text.RegularExpressions;
 using System.Globalization;
+using Agro.DelunayTerrain;
 
 namespace Agro;
 
@@ -163,9 +164,9 @@ public class SoilFormationsList : ISoilFormation
 		var verts = new List<int>();
 		var edges = new List<Edge>();
 		var remove = new List<int>();
-		foreach (var (group, faceLines) in objData.Faces)
+		foreach (var (groupName, faceLines) in objData.Faces)
 		{
-			var nameToMatch = regexForMaterials && (objData.Materials?.TryGetValue(group, out var mat) ?? false) ? mat : group;
+			var nameToMatch = regexForMaterials && (objData.Materials?.TryGetValue(groupName, out var mat) ?? false) ? mat : groupName;
 			if (regex?.IsMatch(nameToMatch) ?? true) //for FAV use *Natur_Erde*
 			{
 				soilFaces.Clear();
@@ -228,11 +229,11 @@ public class SoilFormationsList : ISoilFormation
 							//Items.Add(new(world, celularSize, metricSize, min));
 							var cellCounts = new Vector3(metricSize.X, metricSize.Y, metricSize.Z) / fieldResolution;
 							var cellCountsInt = new Vector3i((int)Math.Round(cellCounts.X), (int)Math.Round(cellCounts.Y), (int)Math.Round(cellCounts.Z));
-							Items.Add(new SoilFormationRegularVoxels(world, group, cellCountsInt, metricSize, new(min.X, max.Y, min.Z))); //take max.Y since soil exapnds towards negative UP
+							Items.Add(new SoilFormationRegularVoxels(world, groupName, cellCountsInt, metricSize, new(min.X, max.Y, min.Z))); //take max.Y since soil exapnds towards negative UP
 						}
 					}
 					else //asVoronoi
-						Items.Add(new SoilFormationTetrahedral(world, group, vertices, item.Faces, soilFaces));
+						Items.Add(new SoilFormationTetrahedral(world, groupName, vertices, item.Faces, soilFaces));
 				}
 			}
 			else //otherwise consider it an obstacle
@@ -259,6 +260,118 @@ public class SoilFormationsList : ISoilFormation
 				World.Add(new MeshObstacle(vertices, obstacleFaces));
 		}
 	}
+
+	public SoilFormationsList(AgroWorld world, IList<IList<Vector3>> verticesInput, IList<IList<int>> facesInput, float fieldResolution, float scale = 1f)
+	{
+		World = world;
+		var asVoxels = false;
+
+		var totalVertices = 0;
+		for(int i = 0; i < verticesInput.Count; ++i)
+			totalVertices += verticesInput[i].Count;
+
+		var offset = 0;
+		var vertices = new Vector3[totalVertices];
+		for(int i = 0; i < verticesInput.Count; offset += verticesInput[i].Count, ++i)
+			verticesInput[i].CopyTo(vertices, offset);
+
+		if (scale != 1f)
+			for(int i = 0; i < vertices.Length; ++i)
+				vertices[i] *= scale;
+
+		var soilFaces = new List<List<int>>();
+		var obstacleFaces = new List<List<int>>();
+
+		Items = [];
+		var components = new List<Component>();
+		var verts = new List<int>();
+		var edges = new List<Edge>();
+		var remove = new List<int>();
+		offset = 0;
+		// foreach (var (group, faceLines) in objData.Faces)
+
+		for(int i = 0; i < facesInput.Count; offset += verticesInput[i].Count, ++i)
+		{
+			soilFaces.Clear();
+			components.Clear();
+			var faces = facesInput[i];
+			for (int f = 0; f < faces.Count; ++f)
+			{
+				verts.Clear();
+				foreach(var v in faces)
+					verts.Add(v + offset);
+				soilFaces.Add([.. verts]);
+
+				edges.Clear();
+				for (int v = 1; v < verts.Count; ++v)
+					edges.Add(new(verts[v - 1], verts[v]));
+				edges.Add(new(verts[^1], verts[0]));
+
+				remove.Clear();
+				var target = -1;
+				for (int c = 0; c < components.Count; ++c)
+					if (target < 0)
+					{
+						if (components[c].TryConnect(i, edges))
+							target = c;
+					}
+					else
+					{
+						if (components[target].TryConnect(i, edges, components[c]))
+							remove.Add(c);
+					}
+
+				if (target < 0)
+					components.Add(new(i, verts));
+				else if (remove.Count > 0)
+					for (int c = remove.Count - 1; c >= 0; --c)
+						components.RemoveAt(remove[c]);
+			}
+
+			foreach (var item in components)
+			{
+				if (asVoxels)
+				{
+					var min = new Vector3(float.MaxValue, float.MaxValue, float.MaxValue);
+					var max = new Vector3(float.MinValue, float.MinValue, float.MinValue);
+					foreach (var fi in item.Faces)
+					{
+						var face = soilFaces[fi];
+						for (int fv = 0; fv < face.Count; ++fv)
+						{
+							Debug.Assert(face[fv] < vertices.Length);
+							min = Vector3.Min(min, vertices[face[fv]]);
+							max = Vector3.Max(max, vertices[face[fv]]);
+						}
+					}
+
+					var metricSize = max - min;
+					if (metricSize.X > 0.01f && metricSize.Y > 0.01f && metricSize.Z > 0.01f)
+					{
+						//var celularSize = Vector3i.Max(new Vector3i(metricSize / fieldResolution), new Vector3i(1, 1, 1));
+						//Items.Add(new(world, celularSize, metricSize, min));
+						var cellCounts = new Vector3(metricSize.X, metricSize.Y, metricSize.Z) / fieldResolution;
+						var cellCountsInt = new Vector3i((int)Math.Round(cellCounts.X), (int)Math.Round(cellCounts.Y), (int)Math.Round(cellCounts.Z));
+						Items.Add(new SoilFormationRegularVoxels(world, $"soil_{i:D3}", cellCountsInt, metricSize, new(min.X, max.Y, min.Z))); //take max.Y since soil exapnds towards negative UP
+					}
+				}
+				else //asVoronoi
+					Items.Add(new SoilFormationTetrahedral(world, $"soil_{i:D3}", vertices, item.Faces, soilFaces));
+			}
+		}
+
+		if (obstacleFaces.Count > 0)
+		{
+			if (World == null)
+			{
+				Obstacles ??= [];
+				Obstacles.Add(new(vertices, obstacleFaces));
+			}
+			else
+				World.Add(new MeshObstacle(vertices, obstacleFaces));
+		}
+	}
+
 
 	public bool HasUndeliveredPost { get; private set; } = false;
 

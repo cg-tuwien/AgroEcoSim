@@ -83,7 +83,7 @@ public class AgroWorld : SimulationWorld
 		return ticks + (rem == 0 ? 0 : 1);
 	}
 
-	public DateTime InitialTime = new(2022, 1, 1, 0, 0, 0, DateTimeKind.Unspecified);
+	public DateTime InitialTime = new(2022, 6, 1, 0, 0, 0, DateTimeKind.Unspecified);
 
 	public readonly bool VirtualRoots = false;
 
@@ -247,6 +247,20 @@ public class AgroWorld : SimulationWorld
 						Daylight.Set(i, true);
 				}
 			}
+		}
+	}
+
+	/// <summary>
+	/// Starts on 1 March = 0..0.25 (mar-may) spring, 0.25..0.5 (jun-aug) summer, 0.5..0.75 (sep-nov) autumn, 0.75..1 (dec-feb) winter
+	/// </summary>
+	public float Season { get; private set; }
+	public override uint Timestep
+	{
+		get => base.Timestep;
+		protected set
+		{
+			base.Timestep = value;
+			Season = GetTime(base.Timestep).DayOfYear / 365f;
 		}
 	}
 

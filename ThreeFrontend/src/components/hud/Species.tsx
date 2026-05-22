@@ -60,7 +60,7 @@ export function SpeciesItem()
             <button style={{float: "right"}} onClick={() => appstate.removeSpeciesAt(index)} disabled={links.value > 0 || appstate.species.value.length <= 1}>🗙</button>
             <span style={{float: "right", marginRight: "0.5em"}}>🔗 {links.value}</span>
             <label for={`aka-${index}`} title={"Colloquial name"}>aka</label>
-            <input type="text" name={`aka-${index}`} value={species.aka.value} title={"Colloquial name"} class="speciesAkaInput" onChange={e => species.aka.value = e.currentTarget.value} />
+            <input type="text" name={`aka-${index}`} value={species.aka.value ?? ''} title={"Colloquial name"} class="speciesAkaInput" onChange={e => species.aka.value = e.currentTarget.value} />
         </div>
         <div>
             <select name={`behavior-${index}`} onChange={e => species.behaviorIndex.value = (e.target as HTMLSelectElement).selectedIndex}>
@@ -120,7 +120,7 @@ export function SpeciesItem()
             <label for={`bendingByLevel-${index}`}>Bending factor by hierarchy level</label>
         </div>
         <div>
-            <input min={0} max={1} step={0.01} type="number" name={`apexBending-${index}`} value={+species.apexBending.value.toFixed(4)} onChange={e => species.apexBending.value = parseFloat(e.currentTarget.value)}  />
+            <input min={0} max={1} step={0.01} type="number" name={`apexBending-${index}`} value={+species.twigsBendingApical.value.toFixed(4)} onChange={e => species.twigsBendingApical.value = parseFloat(e.currentTarget.value)}  />
             <label for={`apexBending-${index}`}>Apex bending rate</label>
         </div>
         <div>
@@ -182,6 +182,11 @@ export function SpeciesItem()
         <div>
             <input min={0} max={1} step={0.01} type="number" name={`rootsGravitaxis-${index}`} value={+species.rootsGravitaxis.value.toFixed(1)} onChange={e => species.rootsGravitaxis.value = parseFloat(e.currentTarget.value)}  />
             <label for={`rootsGravitaxis-${index}`}>Roots gravitaxis</label>
+        </div>
+        <hr/>
+        <div>
+            <input type="checkbox" name={`includeInRndGen-${index}`} checked={species.includeInRndGen} onChange={e => species.includeInRndGen.value = e.currentTarget.checked} />
+            <label for={`includeInRndGen-${index}`}>Include in random seeding</label>
         </div>
     </div>;
 }

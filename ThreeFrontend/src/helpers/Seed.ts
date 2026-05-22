@@ -3,7 +3,8 @@ import * as THREE from 'three';
 import { neutralColor } from "./Selection";
 import appstate from "../appstate";
 import { BaseRequestObject, ReqObjMaterials } from "./BaseRequestObject";
-import { BoxTerrainItem } from "./Terrain";
+import { BoxTerrainItem, MeshTerrainItem } from "./Terrain";
+import { Species } from "./Species";
 
 const seedColor = new THREE.Color("#008");
 const dodecahedron = new THREE.DodecahedronGeometry(0.03);
@@ -27,7 +28,10 @@ const seedMaterials : ReqObjMaterials = {
 export class Seed extends BaseRequestObject
 {
     species: Signal<string>;
-    constructor(spec: string, x: number, y: number, z: number, fieldIndex: number) {
+    constructor(spec: string, x: number, y: number, z: number, fieldIndex: number, isLoading: boolean) {
+        if (appstate.terrainList[fieldIndex] instanceof MeshTerrainItem && !isLoading)
+            y += appstate.terrainList[fieldIndex].sy();
+
         super(x, y, z, seedMaterials, fieldIndex);
         this.species = signal(spec);
 
@@ -44,7 +48,7 @@ export class Seed extends BaseRequestObject
             if (appstate.terrainList?.length > 0)
             {
                 const terrain = appstate.terrainList[this.fieldIndex.value];
-                offset.set(terrain.posx(), terrain instanceof BoxTerrainItem ? terrain.posy() : terrain.posy() + terrain.sy(), terrain.posz());
+                offset.set(terrain.posx(), terrain instanceof BoxTerrainItem ? terrain.posy() : terrain.posy(), terrain.posz());
             }
             this.mesh.position.set(this.px.value + offset.x, this.py.value + offset.y, this.pz.value + offset.z);
             appstate.needsRender.value = true;
@@ -61,7 +65,7 @@ export class Seed extends BaseRequestObject
         };
     }
 
-    static rndItem(minDist?: number, fieldIndex?: number) {
+    static rndItem(species: Species[], minDist?: number, fieldIndex?: number) {
         let fieldSize : THREE.Vector3;
         console.log(fieldIndex, minDist, appstate.terrainList?.length);
         if (appstate.terrainList?.length > 1)
@@ -73,7 +77,7 @@ export class Seed extends BaseRequestObject
         }
         else
             fieldSize = new THREE.Vector3(appstate.fieldSizeX.value, appstate.fieldSizeD.value, appstate.fieldSizeZ.value);
-        console.log(fieldIndex, minDist, appstate.terrainList?.length);
+        //console.log(fieldIndex, minDist, appstate.terrainList?.length);
 
         let pos = new THREE.Vector3(Math.random() * fieldSize.x, -Math.random() * Math.min(0.1, fieldSize.y), Math.random() * fieldSize.z);
         let [bestPos, bestIsolation] = [pos, 0];
@@ -81,7 +85,7 @@ export class Seed extends BaseRequestObject
         {
             let i = 0;
             let dist = Seed.checkDist(fieldSize, pos, fieldIndex);
-            while (dist < minDist && i < 10)
+            while (dist < minDist && i < 16)
             {
                 ++i;
                 if (dist > bestIsolation)
@@ -97,7 +101,7 @@ export class Seed extends BaseRequestObject
                 pos = bestPos;
         }
 
-        return new Seed(appstate.species.peek()[Math.floor(Math.random() * appstate.species.value.length)].name.peek(), pos.x, pos.y, pos.z, fieldIndex ?? 0);
+        return new Seed(species[Math.floor(Math.random() * species.length)].name.peek(), pos.x, pos.y, pos.z, fieldIndex ?? 0, false);
     }
 
     static checkDist(fieldSize: THREE.Vector3, pos: THREE.Vector3, fieldIndex: number) {

@@ -1,7 +1,8 @@
 import { ConsoleLogger } from "@microsoft/signalr/dist/esm/Utils";
 import { Obstacle } from "./Obstacle";
-import { Primitive, Primitives } from "./Primitives";
+import { Organs, Primitive, Primitives } from "./Primitives";
 import { BoxTerrainItem, ITerrainItem, MeshTerrainItem } from "./Terrain";
+import { PlantModel } from "./Scene";
 
 const decoder = new TextDecoder("utf-8");
 
@@ -85,6 +86,17 @@ export default class BinaryReader {
         return decoder.decode(slice);
     }
 
+    readHexRGB() {
+        const toHex2 = (n: number) => {
+            const s = n.toString(16);
+            return s.length === 1 ? "0" + s : s;
+        };
+        const r = this.source[this.pos++];
+        const g = this.source[this.pos++];
+        const b = this.source[this.pos++];
+        return `#${toHex2(r)}${toHex2(g)}${toHex2(b)}`;
+    }
+
     isEnd() {
         return this.pos == this.source.length;
     }
@@ -92,11 +104,12 @@ export default class BinaryReader {
     readAgroScene()
     {
         const version = this.readUInt8();
+        if (version < 7)
+            console.error("Deprecated scene format version:", version);
+        else
         switch (version)
         {
-            case 3: return this.readAgroSceneV3();
-            case 5: return this.readAgroSceneV5or6(false);
-            case 6: return this.readAgroSceneV5or6(true);
+            case 7: return this.readAgroSceneV7();
             default: console.error("Unsupported scene format version:", version);
         }
     }
@@ -113,12 +126,12 @@ export default class BinaryReader {
             {
                 switch(this.readUInt8())
                 {
-                    case 1: entity.push({ type: Primitives.Disk, affineTransform: this.readFloat32Vector(12), stats: undefined }); break; //disk
+                    case 1: entity.push({ type: Primitives.Disk, organ: undefined, affineTransform: this.readFloat32Vector(12), stats: undefined }); break; //disk
                     case 2: { //cylinder / stem
                         const length = this.readFloat32();
                         const radius = this.readFloat32();
                         const transform = this.readFloat32Vector(12);
-                        entity.push({ type: Primitives.Cylinder, affineTransform: transform, length: length, radius: radius, stats: undefined });
+                        entity.push({ type: Primitives.Cylinder, organ: undefined, affineTransform: transform, length: length, radius: radius, stats: undefined, color: undefined });
                     }
                     break;
                     //buds disabled
@@ -128,7 +141,7 @@ export default class BinaryReader {
                     //     entity.push({ type: Primitives.Sphere, center: center, radius: radius, stats: undefined });
                     // }
                     // break;
-                    case 8: entity.push({ type: Primitives.Rectangle, affineTransform: this.readFloat32Vector(12), stats: undefined }); break; //plane / leaf
+                    case 8: entity.push({ type: Primitives.Rectangle, organ: undefined, affineTransform: this.readFloat32Vector(12), stats: undefined, color: undefined }); break; //plane / leaf
                 }
                 const isSensor = this.readUInt8();
             }
@@ -139,7 +152,7 @@ export default class BinaryReader {
 
     readAgroSceneV5or6(roots: boolean)
     {
-        const result : Primitive[][] = [];
+        const primitives : Primitive[][] = [];
         const entitesCount = this.readUInt32();
         for(let i = 0; i < entitesCount; ++i)
         {
@@ -152,26 +165,25 @@ export default class BinaryReader {
             for(let j = 0; j < primitivesCount; ++j)
             {
                 const parentIndex = this.readInt32();
-                switch(this.readUInt8())
+                const organ = this.readUInt8();
+                switch(organ)
                 {
-                    case 1: { //leaf
+                    case 5: case 11: { //leaf //flower_petal
                         const transform = this.readFloat32Vector(12);
                         const waterRatio = this.readFloat32();
                         const energyRatio = this.readFloat32();
-
-                        const color = this.readFloat32Vector(3);
                         const lastIrradiance = this.readFloat32();
                         const dailyResource = this.readFloat32();
                         const dailyProduction = this.readFloat32();
-
+                        const color = this.readHexRGB();
                         const auxins = this.readFloat32();
-                        const cytokinins = this.readFloat32();
-                        entity.push({ type: Primitives.Rectangle, affineTransform: transform, stats: new Float32Array([waterRatio, energyRatio, auxins, cytokinins, lastIrradiance, dailyResource, dailyProduction, 0, 0]), color: new Float32Array([color[0], color[1], color[2]]) });
+                        const dailyEfficiency = this.readFloat32();
+                        entity.push({ type: Primitives.Rectangle, organ: organ, affineTransform: transform, stats: new Float32Array([waterRatio, energyRatio, auxins, 0, lastIrradiance, dailyResource, dailyProduction, 0, 0]), color: color });
                         maxDailyProductionShoots = Math.max(dailyProduction, maxDailyProductionShoots);
                         maxDailyResourceShoots = Math.max(dailyResource, maxDailyResourceShoots);
                     }
                     break;
-                    case 2: { //stem
+                    case 4: case 6: case 8: case 9: case 10: case 12: case 13: { //stem //petiole //meristem //flower_stem //flower_meristem //flower_petiole //flower_bud
                         const length = this.readFloat32();
                         const radius = this.readFloat32();
                         const transform = this.readFloat32Vector(12);
@@ -180,22 +192,23 @@ export default class BinaryReader {
                         const woodRatio = this.readFloat32();
                         const dailyResource = this.readFloat32();
                         const dailyProduction = this.readFloat32();
+                        const color = this.readHexRGB();
                         const auxins = this.readFloat32();
-                        const cytokinins = this.readFloat32();
-                        entity.push({ type: Primitives.Cylinder, affineTransform: transform, length: length, radius: radius, stats: new Float32Array([waterRatio, energyRatio, auxins, cytokinins, woodRatio, dailyResource, dailyProduction, 0, 0]) });
+                        const dailyEfficiency = this.readFloat32();
+                        entity.push({ type: Primitives.Cylinder, organ: organ, affineTransform: transform, length: length, radius: radius, stats: new Float32Array([waterRatio, energyRatio, auxins, 0, woodRatio, dailyResource, dailyProduction, 0, 0]), color: color });
                         maxDailyProductionShoots = Math.max(dailyProduction, maxDailyProductionShoots);
                         maxDailyResourceShoots = Math.max(dailyResource, maxDailyResourceShoots);
                     }
                     break;
-                    case 3: { //bud
+                    case 2: { //bud
                         const center = this.readFloat32Vector(3);
                         const radius = this.readFloat32();
                         const waterRatio = this.readFloat32();
                         const energyRatio = this.readFloat32();
                         const auxins = this.readFloat32();
-                        const cytokinins = this.readFloat32();
+                        const dailyEfficiency = this.readFloat32();
                         // buds disabled
-                        //entity.push({ type: Primitives.Sphere, center: center, radius: radius, stats: new Float32Array([waterRatio, energyRatio, auxins, cytokinins]) });
+                        //entity.push({ type: Primitives.Sphere, organ: organ, center: center, radius: radius, stats: new Float32Array([waterRatio, energyRatio, auxins, cytokinins]) });
                     }
                     break;
                 }
@@ -220,7 +233,7 @@ export default class BinaryReader {
                             const dailyProduction = this.readFloat32();
                             const auxins = 0;//this.readFloat32();
                             const cytokinins = 0;//this.readFloat32();
-                            entity.push({ type: Primitives.Box, affineTransform: transform, length: length, radius: radius, stats: new Float32Array([waterRatio, energyRatio, auxins, cytokinins, woodRatio, dailyResource, dailyProduction, 0, 0]) });
+                            entity.push({ type: Primitives.Box, organ: Organs.Root, affineTransform: transform, length: length, radius: radius, stats: new Float32Array([waterRatio, energyRatio, auxins, cytokinins, woodRatio, dailyResource, dailyProduction, 0, 0]) });
                             maxDailyProductionRoots = Math.max(dailyProduction, maxDailyProductionRoots);
                             maxDailyResourceRoots = Math.max(dailyResource, maxDailyResourceRoots);
                         }
@@ -249,7 +262,148 @@ export default class BinaryReader {
                 }
             }
 
-            result.push(entity);
+            primitives.push(entity);
+        }
+
+        return primitives;
+    }
+
+    readAgroSceneV7()
+    {
+        const result : PlantModel[] = [];
+        const flags = this.readInt8();
+        const doRoots = (flags & 1) > 0;
+        const doAnalytics = (flags & 2) >0;
+        const entitesCount = this.readUInt32();
+        for(let i = 0; i < entitesCount; ++i)
+        {
+            const entity : Primitive[] = [];
+            const species = this.readString();
+            const primitivesCount = this.readUInt32();
+            let maxDailyResourceShoots = 0;
+            let maxDailyProductionShoots = 0;
+            let maxDailyResourceRoots = 0;
+            let maxDailyProductionRoots = 0;
+            for(let j = 0; j < primitivesCount; ++j)
+            {
+                const parentIndex = this.readInt32();
+                const organ = this.readUInt8();
+                switch(organ)
+                {
+                    case 5: case 11: { //leaf //flower_petal
+                        const transform = this.readFloat32Vector(12);
+                        if (doAnalytics)
+                        {
+                            const waterRatio = this.readFloat32();
+                            const energyRatio = this.readFloat32();
+                            const lastIrradiance = this.readFloat32();
+                            const dailyResource = this.readFloat32();
+                            const dailyProduction = this.readFloat32();
+                            const color = this.readHexRGB();
+                            const auxins = this.readFloat32();
+                            const dailyEfficiency = this.readFloat32();
+                            entity.push({ type: Primitives.Rectangle, organ: organ, affineTransform: transform, stats: new Float32Array([waterRatio, energyRatio, auxins, 0, lastIrradiance, dailyResource, dailyProduction, 0, 0]), color: color });
+                            maxDailyProductionShoots = Math.max(dailyProduction, maxDailyProductionShoots);
+                            maxDailyResourceShoots = Math.max(dailyResource, maxDailyResourceShoots);
+                        }
+                        else
+                        {
+                            const color = this.readHexRGB();
+                            entity.push({ type: Primitives.Rectangle, organ: organ, affineTransform: transform, stats: new Float32Array([0, 0, 0, 0, 0, 0, 0, 0, 0]), color: color });
+                        }
+                    }
+                    break;
+                    case 4: case 6: case 8: case 9: case 10: case 12: case 13: { //stem //petiole //meristem //flower_stem //flower_meristem //flower_petiole //flower_bud
+                        const length = this.readFloat32();
+                        const radius = this.readFloat32();
+                        const transform = this.readFloat32Vector(12);
+                        if (doAnalytics)
+                        {
+                            const waterRatio = this.readFloat32();
+                            const energyRatio = this.readFloat32();
+                            const woodRatio = this.readFloat32();
+                            const dailyResource = this.readFloat32();
+                            const dailyProduction = this.readFloat32();
+                            const color = this.readHexRGB();
+                            const auxins = this.readFloat32();
+                            const dailyEfficiency = this.readFloat32();
+                            entity.push({ type: Primitives.Cylinder, organ: organ, affineTransform: transform, length: length, radius: radius, stats: new Float32Array([waterRatio, energyRatio, auxins, 0, woodRatio, dailyResource, dailyProduction, 0, 0]), color: color });
+                            maxDailyProductionShoots = Math.max(dailyProduction, maxDailyProductionShoots);
+                            maxDailyResourceShoots = Math.max(dailyResource, maxDailyResourceShoots);
+                        }
+                        else
+                        {
+                            const color = this.readHexRGB();
+                            entity.push({ type: Primitives.Cylinder, organ: organ, affineTransform: transform, length: length, radius: radius, stats: new Float32Array([0, 0, 0, 0, 0, 0, 0, 0, 0]), color: color });
+                        }
+                    }
+                    break;
+                    case 2: { //bud
+                        const center = this.readFloat32Vector(3);
+                        const radius = this.readFloat32();
+                        if (doAnalytics)
+                        {
+                            const waterRatio = this.readFloat32();
+                            const energyRatio = this.readFloat32();
+                            const auxins = this.readFloat32();
+                            const dailyEfficiency = this.readFloat32();
+                        }
+                        // buds disabled
+                        //entity.push({ type: Primitives.Sphere, organ: organ, center: center, radius: radius, stats: new Float32Array([waterRatio, energyRatio, auxins, cytokinins]) });
+                    }
+                    break;
+                }
+            }
+
+            if (doRoots)
+            {
+                const rootsCount =  this.readUInt32();
+                for(let j = 0; j < rootsCount; ++j)
+                {
+                    const parentIndex = this.readInt32();
+                    switch(this.readUInt8())
+                    {
+                        case 1: { //root
+                            const length = this.readFloat32();
+                            const radius = this.readFloat32();
+                            const transform = this.readFloat32Vector(12);
+                            const waterRatio = this.readFloat32();
+                            const energyRatio = this.readFloat32();
+                            const woodRatio = this.readFloat32();
+                            const dailyResource = this.readFloat32();
+                            const dailyProduction = this.readFloat32();
+                            const auxins = 0;//this.readFloat32();
+                            const cytokinins = 0;//this.readFloat32();
+                            entity.push({ type: Primitives.Box, organ: Organs.Root, affineTransform: transform, length: length, radius: radius, stats: new Float32Array([waterRatio, energyRatio, auxins, cytokinins, woodRatio, dailyResource, dailyProduction, 0, 0]) });
+                            maxDailyProductionRoots = Math.max(dailyProduction, maxDailyProductionRoots);
+                            maxDailyResourceRoots = Math.max(dailyResource, maxDailyResourceRoots);
+                        }
+                    }
+                }
+            }
+
+            for(let j = 0; j < entity.length; ++j)
+            {
+                const ent = entity[j];
+                switch (ent.type)
+                {
+                    case Primitives.Rectangle:
+                    case Primitives.Cylinder:
+                    {
+                        ent.stats[7] = ent.stats[5] / maxDailyResourceShoots;
+                        ent.stats[8] = ent.stats[6] / maxDailyProductionShoots;
+                    }
+                    break;
+                    case Primitives.Box:
+                    {
+                        ent.stats[7] = ent.stats[5] / maxDailyResourceRoots;
+                        ent.stats[8] = ent.stats[6] / maxDailyProductionRoots;
+                    }
+                    break;
+                }
+            }
+
+            result.push({ primitives: entity, species: species });
         }
 
         return result;
@@ -265,7 +419,7 @@ export default class BinaryReader {
             {
                 const data = this.readFloat32Vector(3 + 3 + 4);
                 const id = this.readString();
-                terrains.push(new BoxTerrainItem(id, data));
+                terrains.push(new BoxTerrainItem(id, data, i));
             }
             else if (type == 1)
             {
@@ -275,7 +429,7 @@ export default class BinaryReader {
                 const points = this.readFloat32Vector(pointsCount * 3);
                 const trianglesCount = this.readInt32();
                 const triangles = this.readInt32Array(trianglesCount * 3);
-                terrains.push(new MeshTerrainItem(id, position[0], position[1], position[2], points, triangles));
+                terrains.push(new MeshTerrainItem(id, position[0], position[1], position[2], points, triangles, i));
             }
         }
 

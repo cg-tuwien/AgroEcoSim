@@ -3,7 +3,7 @@ import appstate from "../../appstate";
 import { Obstacle, ObstacleType } from "src/helpers/Obstacle";
 import { BoxTerrainItem, ITerrainItem } from "src/helpers/Terrain";
 
-export class FieldsList extends Component
+export class TerrainsList extends Component
 {
     mapItem(x: Obstacle, i: number) {
         const common = <>
@@ -40,7 +40,7 @@ export class FieldsList extends Component
                 <div>{p.species.value}</div>
             </li>)}</ol>
             <button>Add</button>
-            <button>Clear</button>
+            <button onClick={() => appstate.clearSeeds(x.fieldIndex.peek())}>Clear</button>
         </>
     }
 
@@ -70,10 +70,20 @@ export class FieldsList extends Component
             //precompute to avoid n² complexity
             const counts = new Uint32Array(appstate.terrainList.length);
             appstate.seeds.value.map(seed => ++counts[seed.fieldIndex.value]);
+            let selected = -1;
+            for(let i = 0; i < appstate.terrainList?.length && selected == -1; ++i)
+                if (appstate.terrainList[i].isSelected())
+                    selected = i;
 
             return <div>
                 <div>{appstate.terrainList?.length} regions</div>
-                <ul class="scrollable-listing"> {appstate.terrainList.map((x, i) => <li>{x.state.value == "select" ? this.wrapDetail(x, i) : this.wrapOverview(x, i, counts[i])}</li>)} </ul>
+                <div>
+                    <input type="text" id="batchTerrainsClear"></input>
+                    <button onClick={() => appstate.batchTerrainsClear((document.getElementById("batchTerrainsClear") as HTMLInputElement).value)}>Batch clear</button>
+                </div>
+                {selected >= 0 ? <><hr/>{this.wrapDetail(appstate.terrainList[selected], selected)}</> : <></>}
+                <hr/>
+                <ul class="scrollable-listing"> {appstate.terrainList.map((x, i) => <li>{x.isSelected() ? this.wrapDetail(x, i) : this.wrapOverview(x, i, counts[i])}</li>)} </ul>
             </div>;
         }
         else

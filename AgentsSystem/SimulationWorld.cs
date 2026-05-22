@@ -3,7 +3,7 @@ public class SimulationWorld
 {
 	internal readonly List<IFormation> Formations = [];
 	internal readonly List<Action<SimulationWorld, uint, IList<IFormation>, IList<IObstacle>>> Callbacks = [];
-	public uint Timestep { get; private set; } = 0U;
+	public virtual uint Timestep { get; protected set; } = 0U;
 
 	public int Count => Formations.Count;
 
@@ -124,6 +124,6 @@ public class SimulationWorld
 	}
 
 	public Func<byte, List<IFormation>, List<IObstacle>, byte[]> StreamExporterFunc = null;
-	public byte[]? ExportToStream(byte version) => StreamExporterFunc == null ? null : StreamExporterFunc(version, Formations, Obstacles);
+	public byte[]? ExportToStream(byte flags) => StreamExporterFunc == null ? null : StreamExporterFunc(flags, Formations, Obstacles);
 	public string RendererName;
 }

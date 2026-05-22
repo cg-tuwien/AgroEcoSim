@@ -393,7 +393,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
         var dst = Src(); //since Tick already swapped them
         var count = dst.Length;
 
-        
+
 
         if (count == 0)
             return;
@@ -548,7 +548,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
                
             }
         }
-		TreeCache.UpdateBases(this); 
+		TreeCache.UpdateBases(this);
 		refitChildrens(0);
        // collisionHandling();
     }
@@ -693,7 +693,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
         {
             var rot = Quaternion.CreateFromAxisAngle(Vector3.Normalize(axis), angle);
             dst[index].SetOrientation(Quaternion.Normalize(rot * dst[index].Orientation));
-            
+
         }
     }
     
@@ -866,7 +866,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 	public void setAgentOrientation(int id, Quaternion orientation)
 	{
         var dst = Src();
-		dst[id].SetOrientation(orientation); 
+		dst[id].SetOrientation(orientation);
     }
 
     [StructLayout(LayoutKind.Auto)]
@@ -1172,6 +1172,21 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 		? (index < AgentsTMP.Length ? AgentsTMP[index].Auxins : 0f)
 		: (index < Agents.Length ? Agents[index].Auxins : 0f);
 
+    public uint GetAge(int index, uint timestep) => ReadTMP
+		? index < AgentsTMP.Length ? timestep - AgentsTMP[index].BirthTime : 0
+		: index < Agents.Length ? timestep - Agents[index].BirthTime : 0;
+
+	public float GetAdulcy(int index, uint timestep) => ReadTMP
+		? index < AgentsTMP.Length ? AgentsTMP[index].Adulcy(timestep) : 0f
+		: index < Agents.Length ? Agents[index].Adulcy(timestep) : 0f;
+
+	public float GetStress(int index) => ReadTMP
+		? index < AgentsTMP.Length ? AgentsTMP[index].Stress : 0f
+		: index < Agents.Length ? Agents[index].Stress : 0f;
+
+	public float GetSenescence(int index, uint timestep) => ReadTMP
+		? index < AgentsTMP.Length ? AgentsTMP[index].Senescence(timestep) : 0f
+		: index < Agents.Length ? Agents[index].Senescence(timestep) : 0f;
 	#endregion
 
 	///////////////////////////
@@ -1514,6 +1529,5 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 		}
 		return sb.ToString();
 	}
-
 #endif
 }
