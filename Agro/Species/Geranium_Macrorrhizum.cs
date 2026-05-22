@@ -40,6 +40,8 @@ public static class Geranium_Macrorrhizum
         RizomeLength = 0.045f,
         RizomeRadius = 0.0035f,
 
+        FlowerElasticModulus = 5e7f,
+
         LeafPhenology = new(),
         LeafMorphology = new() {
             LowResVertices =
@@ -1098,64 +1100,77 @@ public static class Geranium_Macrorrhizum
             ]
         },
         
-        pFloweringSeaonns = [0.055f, 0.004f, 0.002f, 0.0f],
+        pFloweringSeaonns = [0.005f, 0.055f, 0.002f, 0.0f],
         FlowerSettings = new FlowerSettings
         {
-                PedalLength = 0.016f,
-                PedalRadius = 0.007f,
-                PedalLengthVar = 0.002f,
-                pedalGrowthTime = 180f,      
-                pedalGrowthTimeVar = 36f,
-                pedalColor = new Vector3(210, 100, 160), 
+            PedalLength = 0.016f,
+            PedalRadius = 0.007f,
+            PedalLengthVar = 0.002f,
+            pedalGrowthTime = 180f,
+            pedalGrowthTimeVar = 36f,
+            FlowerPhenology = new LeafPhenology(
+        expectedAge: 25f * 24f,
+        colorModel: new ColorModel(
+            age: new ColorCurve()
+                .Add(0.00f, ColorUtils.OkLabFromSrgb8(220, 110, 170))
+                .Add(0.25f, ColorUtils.OkLabFromSrgb8(210, 100, 160))
+                .Add(0.70f, ColorUtils.OkLabFromSrgb8(200, 95, 150))
+                .Add(1.00f, ColorUtils.OkLabFromSrgb8(185, 88, 138)),
+            stress: new ColorCurve()
+                .Add(0.00f, new Vector3(0.00f, 1.00f, 0.00f))
+                .Add(1.00f, new Vector3(-0.05f, 0.78f, 0.01f)),
+            senescenceSeason: new ColorCurve()
+                .Add(0.00f, ColorUtils.OkLabFromSrgb8(175, 110, 130))
+                .Add(0.40f, ColorUtils.OkLabFromSrgb8(150, 95, 100))
+                .Add(0.75f, ColorUtils.OkLabFromSrgb8(120, 75, 70))
+                .Add(1.00f, ColorUtils.OkLabFromSrgb8(90, 60, 50))
+        )
+    ),
+            HasFlowerBaseLeaves = true,
+            PetalSenescenceDurationH = 168f,
+            BudLength = 0.010f,
+            BudRadius = 0.005f,
+            BudBloomAge = 216u,
+            FlowerMaxAge = 840u,
+            PetiolLength = 0.012f,
+            PetiolRadius = 0.0006f,
+            PetiolLengthVar = 0.006f,
+            PetiolRadiusVar = 0.0002f,
+            petiolSegments = 1,
 
-                BudLength = 0.010f,
-                BudRadius = 0.005f,
-                BudBloomAge = 216u,      
-                FlowerMaxAge = 840u,      
-
-                PetiolLength = 0.012f,
-                PetiolRadius = 0.0006f,
-                PetiolLengthVar = 0.006f,
-                PetiolRadiusVar = 0.0002f,
-                petiolSegments = 1,
-
-                stemLength = 0.115f,
-                stemLengthVar = 0.025f,
-                fStemRadius = 0.0012f,
-                fStemRadiusVar = 0.0002f,
-                bStemLength = 0.05f,
-                bStemRadius = 0.0010f,
-                bStemLengthVar = 0.015f,
-                bStemRadiusVar = 0.0002f,
-
-                flowerDebth = 2,
-                flowerBaseDebth = 3,
-                LateralsPerNode = 2,
-                FlowersPerInternode = 2,
-                clusterSize = 2,
-                clusterAngle = 0.20f,     
-                deterministic = true,
-                continous = false,
-                internodeFlower = true,
-                internodeFlowerWithStem = true,
-                floralDepthFactor = 1,
-                pFlowerDebth = 1.0f,
-
-                LateralAngle = 50,
-                LateralRoll = 15,
-                BaseLaterals = 2,        
-                BaseLateralAngle = 55,
-                BaseLateralRoll = 10,
-                pFlowerBaseDebth = 0.9f,
-
-                LeafLength = 0.030f,
-                LeafRadius = 0.015f,
-                LeafLengthVar = 0.005f,
-                LeafRadiusVar = 0.003f,
-                LeavePetioleLength = 0.003f,    
-                LeavePetioleRadius = 0.0005f,
-
-                growthTime = 150f,
-            },
+            bStemLength = 0.015f,
+            bStemLengthVar = 0.006f,
+            bStemRadius = 0.0012f,
+            bStemRadiusVar = 0.0002f,
+            stemLength = 0.015f,
+            stemLengthVar = 0.003f,
+            fStemRadius = 0.0008f,
+            fStemRadiusVar = 0.0001f,
+            flowerBaseDebth = 5,
+            flowerDebth = 2,
+            LateralsPerNode = 2,
+            FlowersPerInternode = 2,
+            clusterSize = 1,
+            clusterAngle = 0.20f,
+            deterministic = true,
+            continous = false,
+            internodeFlower = true,
+            internodeFlowerWithStem = true,
+            floralDepthFactor = 1,
+            pFlowerDebth = 1.0f,
+            LateralAngle = 50,
+            LateralRoll = 15,
+            BaseLaterals = 1,
+            BaseLateralAngle = 55,
+            BaseLateralRoll = 10,
+            pFlowerBaseDebth = 0.7f,
+            LeafLength = 0.015f,
+            LeafRadius = 0.008f,
+            LeafLengthVar = 0.003f,
+            LeafRadiusVar = 0.002f,
+            LeavePetioleLength = 0.003f,
+            LeavePetioleRadius = 0.0005f,
+            growthTime = 150f,
+        },
     };
 }

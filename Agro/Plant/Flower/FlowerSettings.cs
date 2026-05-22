@@ -70,8 +70,20 @@ namespace Agro
         public float growthTime { get;  set; }
         public float pedalGrowthTimeVar { get;  set; }
         public float pedalGrowthTime { get;  set; }
-        public Vector3 pedalColor { get;  set; }
+        public LeafPhenology FlowerPhenology { get; set; } = new LeafPhenology(
+    expectedAge: 30f * 24f,   // 30-day default lifespan
+    colorModel: new ColorModel(
+        ColorModel.DefaultLifecycle,   // placeholder; override per species
+        ColorModel.DefaultStress,
+        ColorModel.DefaultSeasonalSenescence
+    )
+);
         public float clusterAngle { get; internal set; }
+        public float PetalSenescenceDurationH { get; set; } = 168f;
+        public bool HasFlowerBaseLeaves { get; set; } = false;
+        public float pBaseFlowerHeight { get; set; } = 0;
+        public float FlowerLeafPetiolRadius { get; set; } = 0.0005f;
+        public float FlowerLeafPetiolLength { get; set; } = 0.001f;
     }
 
     

@@ -131,7 +131,9 @@ namespace Agro
                             var budOrientation = initialYaw * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, 0.5f * MathF.PI);
 
                             agent.Organ = OrganTypes.Meristem;
-                            agent.Orientation = budOrientation;
+                            var tiltAngle = plant.RNG.NextFloat(0f, 5f * MathF.PI / 180f);
+                            var tiltAxis = Vector3.Normalize(new Vector3(plant.RNG.NextFloatVar(1f), 0f, plant.RNG.NextFloatVar(1f)));
+                            agent.Orientation = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, 0.5f * MathF.PI);
                             agent.DominanceLevel = 1;
                             agent.Radius = AboveGroundAgent.InitialRadius;
                             agent.LengthVar = species.NodeDistance + plant.RNG.NextFloatVar(species.NodeDistanceVar);
@@ -381,16 +383,19 @@ namespace Agro
                         }
                     }
                 }
-                else if (agent.Energy <= 0f && !agent.isRizome) //remove organs that drained all their energy
+                else if (agent.Energy <= 0f && !agent.isRizome ) //remove organs that drained all their energy
                 {
 
                     switch (agent.Organ)
                     {
-                        case OrganTypes.Petiole: agent.MakeBud(formation, children); break; //keep an option for a new leaf
+                        case OrganTypes.Petiole: //agent.MakeBud(formation, children); break; //keep an option for a new leaf
                         case OrganTypes.Leaf:
                             {
-                                formation.Death(agentID);
-                                formation.Death(agent.Parent); //remove the petiole as well
+                                if (!agent.FlowerAgent.flowerBase)
+                                {
+                                    formation.Death(agentID);
+                                    formation.Death(agent.Parent); //remove the petiole as well
+                                }
                             }
                             break;
 
@@ -440,7 +445,9 @@ namespace Agro
                         var initialYaw = Quaternion.CreateFromAxisAngle(Vector3.UnitY, initialYawAngle);
 
                         var lateralPitch = agent.LateralAngle + formation.Plant.Parameters.LateralRoll;
-                        var budOrientation = initialYaw * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, 0.5f * MathF.PI);
+                        var tiltAngle = plant.RNG.NextFloat(0f, 5f * MathF.PI / 180f);
+                        var tiltAxis = Vector3.Normalize(new Vector3(plant.RNG.NextFloatVar(1f), 0f, plant.RNG.NextFloatVar(1f)));
+                        var budOrientation = Quaternion.CreateFromAxisAngle(tiltAxis, tiltAngle) * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, 0.5f * MathF.PI);
                         var bud = new AboveGroundAgent(plant, agentID, OrganTypes.Bud, budOrientation, 0, initialResources: 1f, initialProduction: 1f) { LateralAngle = lateralPitch, Radius = 0f, RadiusVar = 0f };
 
                         formation.Birth(bud);
@@ -482,7 +489,6 @@ namespace Agro
 
                                         if ((agent.Parent != colission && !formation.GetChildren(agent.Parent).Contains(colission)) && formation.GetIsRizome(colission))
                                         {
-                                            Console.WriteLine("inter");
                                             agent.Energy = 0;
                                             formation.Death(agentID);
                                             return;

@@ -75,9 +75,7 @@ namespace Agro
                                 agent.Length = agent.GetLengthVar();
                                 agent.Radius = agent.GetRadiusVar();
 
-                                
-                                Console.WriteLine($"pedal : {agent.Length}-- {agent.Radius}");
-                                
+                                                               
                                
                             }
                             float rim = formation.GetBaseRadius(agent.Parent) * 0.85f;
@@ -124,12 +122,14 @@ namespace Agro
             // shrinking when max age 
             public void receit(ref AboveGroundAgent agent, int agentID, PlantSubFormation<AboveGroundAgent> formation)
             {
+                System.Console.WriteLine("ddd");
                 var childrenInReceit = true;
                 if (!agent.Organ.Equals(OrganTypes.FlowerBud) && agent.flowerSupport)
                 {
+                    
                     foreach (var child in formation.GetChildren(agentID))
                     {
-                        if (formation.GetHasFlowerSupport(child) )
+                        if (formation.GetHasFlowerSupport(child))
                         {
                             childrenInReceit = false;
                             break;
@@ -140,39 +140,72 @@ namespace Agro
                 {
                     if (!agent.Organ.Equals(OrganTypes.FlowerBud) && !agent.Organ.Equals(OrganTypes.FlowerPadel))
                         agent.flowerSupport = false;
-                    else if (agent.Organ.Equals(OrganTypes.FlowerPadel) && !formation.GetHasFlowerSupport(agent.Parent)) 
+                    else if (agent.Organ.Equals(OrganTypes.FlowerPadel) && !formation.GetHasFlowerSupport(agent.Parent))
                         agent.flowerSupport = false;
                     else if (agent.Organ.Equals(OrganTypes.FlowerBud) && formation.Plant.RNG.NextFloat(0, 1) < 0.05f)
                         agent.flowerSupport = false;
-                } 
+                    
+                }
+                if (agent.flowerSupport)
+                {
+                    var suppport = false;
+                    foreach (var child in formation.GetChildren(agentID))
+                    {
+                        if (formation.GetOrgan(child).Equals(OrganTypes.Petiole))
+                            suppport = false;
+                        if (!formation.GetOrgan(child).Equals(OrganTypes.Petiole))
+                        {
+                            suppport = true;
+                            break;
+                        }
+                    }
+                    agent.flowerSupport = suppport;
+                    
+                }
                 if (!agent.flowerSupport)
                 {
-                    if (agent.WoodFactor < 1f)
-                    {
-                        //var pw = agent.Parent >= 0 ? formation.GetWoodRatio(agent.Parent) : agent.WoodFactor; //assure that no child has a higher factor than its parent
-                        agent.WoodFactor = Math.Min(agent.WoodFactor + 0.01f, 1f);
-
-                    }
-                    else agent.Energy = 0f;
-                    //Console.WriteLine($"{agent.WoodFactor}");
                     agent.CurrentDayEnvResources = formation.DailyResourceMax;
 
                     if (agent.Organ == OrganTypes.FlowerPadel)
                     {
-
-                        var col = new Vector3(23, 5, 0);
-                        agent.Color = Vector3.Lerp(agent.Color, col, 0.1f);
-
+                        // Start senescence once — colour fade is handled by FlowerPhenology.WriteColor
+                        if (agent.SenescenceStart == 0)
+                        {
+                            agent.SenescenceStart = formation.Plant.World.Timestep;
+                            // Convert hours → ticks correctly
+                            agent.SenescenceDuration = (ushort)(_settings.PetalSenescenceDurationH / formation.Plant.World.HoursPerTick);
+                        }
+                        // Die only once the senescence curve has completed
+                        if (agent.Senescence(formation.Plant.World.Timestep) >= 1f)
+                            agent.Energy = 0f;
                     }
-                            
-     
-
-                    
+                    else
+                    {
+                        // Non-petal organs: advance WoodFactor monotonically toward 1.
+                        // Use Math.Max to prevent WoodFactor from resetting when child
+                        // senescence returns 0 (e.g. child not yet senescing or already dead).
+                        if (agent.WoodFactor < 1f)
+                        {
+                            var children = formation.GetChildren(agentID);
+                            if (children.Count() > 0)
+                            {
+                                if (formation.GetOrgan(children.First()).Equals(OrganTypes.FlowerPadel))
+                                {
+                                    float childSenescence = formation.GetSenescence(children.First(), formation.Plant.World.Timestep);
+                                    agent.WoodFactor = Math.Max(agent.WoodFactor, childSenescence);
+                                } else
+                                    agent.WoodFactor = Math.Min(agent.WoodFactor + formation.Plant.World.HoursPerTick / _settings.PetalSenescenceDurationH, 1f);
+                                
+                            }
+                            else
+                                agent.WoodFactor = Math.Min(agent.WoodFactor + formation.Plant.World.HoursPerTick / _settings.PetalSenescenceDurationH, 1f);
+                        }
+                        else
+                            agent.Energy = 0f;
+                    }
                 }
                 if (agent.Energy <= 0)
-                 formation.Death(agentID);
-                
-
+                    formation.Death(agentID);
             }
 
             public void handleAgent(ref AboveGroundAgent agent, int agentID, PlantSubFormation<AboveGroundAgent> formation, uint timestep)
@@ -195,7 +228,7 @@ namespace Agro
 
             private void chaning(ref AboveGroundAgent agent, int agentID, PlantSubFormation<AboveGroundAgent> formation, uint timestep)
             {
-                if ((agent.Organ.Equals(OrganTypes.FlowerMeristem) || agent.Organ.Equals(OrganTypes.FlowerBaseBud)) && agent.Length > agent.GetLengthVar())
+                if ((agent.Organ.Equals(OrganTypes.FlowerMeristem) || agent.Organ.Equals(OrganTypes.FlowerBaseBud)) && agent.Length >= agent.GetLengthVar())
                 {
                     agent.Organ = OrganTypes.FlowerStem;
                     //Console.WriteLine($"ttt{agent.FlowerAgent.debth}< {_settings.flowerDebth}");
@@ -210,10 +243,10 @@ namespace Agro
                             var meristem = formation.Birth(mari);
                             agent.Energy *= 0.9f;
                             agent.Water_g *= 0.9f;
-                            // Console.WriteLine($"ttt{agent.FlowerAgent.debth}< {_settings.flowerBaseDebth}");
+                           // Console.WriteLine($"ttt{agent.FlowerAgent.debth}< {_settings.flowerBaseDebth}");
 
                             float depth01 = _settings.flowerBaseDebth > 0 ? Math.Clamp(agent.FlowerAgent.debth / (float)_settings.flowerBaseDebth, 0f, 1f) : 1f;
-                            float p = Math.Clamp(0.5f, 0f, 1f);
+                            float p = Math.Clamp(_settings.pBaseFlowerHeight, 0f, 1f);
                             float pLat = _settings.pFlowerBaseDebth;
                             if (p <= 0f) pLat = 0f;
                             else if (p >= 1f) pLat = 1f;
@@ -250,7 +283,7 @@ namespace Agro
                         {
                             createFlower(ref agent, agentID, formation, _settings.clusterSize, agent.Orientation, _settings.clusterAngle);
                         }
-                        else {
+                        else if (_settings.HasFlowerBaseLeaves) {
                             agent.CreateFlowerBaseLeaves(agent, formation.Plant, 25f, agentID);
                         }
 
@@ -262,6 +295,7 @@ namespace Agro
                     {
                         if (_settings.deterministic && _settings.internodeFlower)
                         {
+                            Console.WriteLine($"ff {agentID}");
                             if (_settings.internodeFlowerWithStem)
                             {
                                 var floweragent = new Flower() { BirthTime = agent.FlowerAgent.BirthTime, debth = debth + 1, FlowerStartTime = agent.FlowerAgent.FlowerStartTime };
@@ -280,12 +314,12 @@ namespace Agro
                                 createFlower(ref flowerStem1, meristem1, formation, _settings.clusterSize, agent.Orientation, _settings.clusterAngle); // straight
                             } else
                                 createFlower(ref agent, agentID, formation, _settings.clusterSize, agent.Orientation, _settings.clusterAngle); // straight
-
+                            Console.WriteLine($"det {agentID}");
 
                         }
                         else if (!_settings.deterministic)
                         {
-                            //Console.WriteLine($"up {agentID}");
+                            Console.WriteLine($"up {agentID}");
                             var lateralPitch = _settings.LateralAngle + _settings.LateralRoll;
 
                             var or = AboveGroundAgent.TurnUpwards(agent.Orientation);
@@ -297,7 +331,7 @@ namespace Agro
                         }
                         if (_settings.LateralsPerNode > 0)
                         {
-                            //Console.WriteLine($"lat{agentID}");
+                            Console.WriteLine($"lat{agentID}");
                             for (var lat = 1; lat <= _settings.LateralsPerNode; lat++)
                             {
                                 float t = (_settings.flowerDebth <= 0f) ? 1f : Math.Clamp(debth / _settings.flowerDebth, 0, 1);
@@ -337,10 +371,6 @@ namespace Agro
 
                     }
                 }
-                if (agent.Organ == OrganTypes.FlowerBud)
-                {
-
-                }
                 if (agent.Organ == OrganTypes.FlowerBud &&  agent.Length >= agent.GetLengthVar() && formation.GetChildren(agentID).Count() <= 0)
                 {
 
@@ -369,7 +399,7 @@ namespace Agro
                         Vector3 offset = Vector3.Transform(new Vector3(0f, MathF.Cos(a) * rim, MathF.Sin(a) * rim), or);
                         var flower = formation.Birth(new(formation.Plant, agentID, OrganTypes.FlowerPadel, o, agent.Energy * (0.1f / petalCount), initialResources: formation.DailyResourceMax, initialProduction: formation.DailyProductionMax) { DominanceLevel = agent.DominanceLevel, BaseOffset = offset });
 
-                        agent.Energy *= 0.99f;
+                        agent.Energy *= 0.9f;
                     }
                 }
             }

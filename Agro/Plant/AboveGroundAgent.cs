@@ -410,7 +410,6 @@ public partial struct AboveGroundAgent : IPlantAgent
 					LengthVar = species.FlowerSettings.PedalLength + plant.RNG.NextFloatVar(species.FlowerSettings.PedalLengthVar);
 					RadiusVar = species.FlowerSettings.PedalRadius;
                     GrowthTimeVar = plant.World.HoursPerTick / (species.FlowerSettings.pedalGrowthTime + plant.RNG.NextFloatVar(species.FlowerSettings.pedalGrowthTimeVar));
-                    Color = species.FlowerSettings.pedalColor;
                 } break;
             case OrganTypes.FlowerBud: {
                     LengthVar = species.FlowerSettings.BudLength;
@@ -863,13 +862,13 @@ public partial struct AboveGroundAgent : IPlantAgent
             var pitch = plant.RNG.NextFloatVar(species.LateralPitchVar);
             var orientation = parent.Orientation * Quaternion.CreateFromAxisAngle(Vector3.UnitX, l * angleStep + lateralAngle) * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, -plant.Parameters.LateralPitch);
             orientation = TurnUpwards(orientation) * Quaternion.CreateFromAxisAngle(Vector3.UnitX, roll) * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, pitch);
-            var petioleIdx = plant.AG.Birth(new(plant, meristem, OrganTypes.Petiole, orientation, parent.Energy * 0.1f, initialResources: initialResources, initialProduction: initialProduction) { DominanceLevel = parent.DominanceLevel, ParentRadiusAtBirth = parent.Radius,FlowerAgent=new Flower() { flowerBase = true } }); //leaf stem
+            var petioleIdx = plant.AG.Birth(new(plant, meristem, OrganTypes.Petiole, orientation, parent.Energy * 0.1f, initialResources: initialResources, initialProduction: initialProduction) { DominanceLevel = parent.DominanceLevel, ParentRadiusAtBirth = parent.Radius,FlowerAgent=new Flower() { flowerBase = true }, LengthVar = species.FlowerSettings.FlowerLeafPetiolLength, RadiusVar = species.FlowerSettings.FlowerLeafPetiolRadius }); //leaf stem
             parent.Energy *= 0.9f;
 
             var leafPitchVar = plant.RNG.NextFloatVar(species.LateralPitchVar);
             orientation *= Quaternion.CreateFromAxisAngle(Vector3.UnitZ, leafPitchVar - species.LeafPitch);
 
-            plant.AG.Birth(new(plant, petioleIdx, OrganTypes.Leaf, orientation, parent.Energy * 0.1f, initialResources: initialResources, initialProduction: initialProduction) { DominanceLevel = parent.DominanceLevel, ParentRadiusAtBirth = float.MaxValue, FlowerAgent = new Flower() { flowerBase = true }, LengthVar = 0.001f,RadiusVar = 0.0005f}); //leaf
+            plant.AG.Birth(new(plant, petioleIdx, OrganTypes.Leaf, orientation, parent.Energy * 0.1f, initialResources: initialResources, initialProduction: initialProduction) { DominanceLevel = parent.DominanceLevel, ParentRadiusAtBirth = float.MaxValue, FlowerAgent = new Flower() { flowerBase = true }, LengthVar = species.FlowerSettings.LeafLength,RadiusVar = species.FlowerSettings.LeafRadius }); //leaf
             parent.Energy *= 0.9f;
 
         }

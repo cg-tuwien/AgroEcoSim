@@ -387,7 +387,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 
 	internal void Gravity()
 	{
-        if (!IsAboveGround)
+		if (!IsAboveGround)
             return;
 
         var dst = Src(); //since Tick already swapped them
@@ -459,18 +459,18 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 			float woodiness = agent.WoodRatio();
 			float depthAttenuation = MathF.Exp(-GetAbsDepth(i) * depthFactor);
 
-			float baseDebthstiffness = 1e8f;
+			float baseDebthstiffness = Plant.Parameters.BaseElasticModulus;
 
-			float elasticity = (MathF.Max(1e15f, baseDebthstiffness * depthAttenuation)) * (1 - woodiness) + 1e15f * woodiness;
+			float elasticity = (MathF.Max(Plant.Parameters.GreenElasticModulus, baseDebthstiffness * depthAttenuation)) * (1 - woodiness) + Plant.Parameters.WoodElasticModulus * woodiness;
 
 			if (agent.Organ.Equals(OrganTypes.Petiole))
 			{
-				elasticity = 2e8f;
+				elasticity = Plant.Parameters.PetiolElasticModulus;
 			}
-			if (flowerOrgans.Contains(agent.Organ)) { elasticity = Math.Max(5e5f * (1 - woodiness), 5e4f);
+			if (flowerOrgans.Contains(agent.Organ)) { elasticity = Math.Max(Plant.Parameters.FlowerElasticModulus * (1 - woodiness), 5e4f);
                 if (agent.Organ.Equals(OrganTypes.FlowerPetiol))
                 {
-                    elasticity = Math.Max(5e2f * (1 - woodiness), 1e2f);
+                    elasticity = Math.Max(Plant.Parameters.FlowerPetiolElasticModulus * (1 - woodiness), 1e2f);
                 }
             }
 			//Console.WriteLine($"e = {elasticity}, b*d = {baseDebthstiffness * depthAttenuation}, w = {woodiness}, we = {Weights[i]}");

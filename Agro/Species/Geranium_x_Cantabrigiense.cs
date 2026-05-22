@@ -24,9 +24,9 @@ public static class Geranium_x_Cantabrigiense
         LeafLengthVar = 0.012f,
         LeafRadius = 0.035f,       
         LeafRadiusVar = 0.006f,
-        LeafPitch = 22f * DegToRad,
-        LeafPitchVar = 7f * DegToRad,
-        LeafColor = "4c7641",    
+        LeafPitchVar = 5f * (MathF.PI / 180f),
+        LeafPitch = 85 * (MathF.PI / 180f),
+
 
         LeafGrowthTime = 24f * 7f * 2f,
         LeafGrowthTimeVar = 24f * 3f,
@@ -38,13 +38,18 @@ public static class Geranium_x_Cantabrigiense
         PetioleRadiusVar = 0.0002f,
 
         pNewCrown = 0.50f,           
-        crownPitch = 0.16f,
-        growthFactor = 0.40f,
+        crownPitch = 0.7f,
+        growthFactor = 0.25f,
         MaxRadius = 0.003f,
+
+        LateralPitch = 15 * (MathF.PI / 180f),
+        LateralPitchVar = 10 * (MathF.PI / 180f),
+        LateralRoll = 40f * (MathF.PI / 180f),
+        LateralRollVar = 5f * (MathF.PI / 180f),
 
         LateralsPerNode = 2,
         NodeDistance = 0f,          
-        NodeDistanceVar = 0.0025f,
+        NodeDistanceVar = 0.000f,
         DominanceFactor = 0.7f,
 
         RizomeMaxDepth = 4,
@@ -55,14 +60,12 @@ public static class Geranium_x_Cantabrigiense
         FloweringStartAgeHours = 24f * 55f,
         FloweringEndAgeHours = 24f * 110f,
         pChaningSeaonns = [0.018f, 0.002f, 0.009f, 0.0f],
-        pFloweringSeaonns = [0.055f, 0.004f, 0.002f, 0.0f],  
+        pFloweringSeaonns = [0.002f, 0.055f, 0.002f, 0.0f],  
         WoodElasticModulus = 1.2e8f,
         GreenElasticModulus = 5e6f,         
         DepthFactor = 0.01f,
-        PetioleLength = 0.09f,
-        PetioleLengthVar = 0.03f,
-        PetioleRadius = 0.0017f,
-        PetioleRadiusVar = 0.0004f,
+        FlowerElasticModulus = 5e7f,
+
 
         FlowerSettings = new FlowerSettings
         {
@@ -71,42 +74,64 @@ public static class Geranium_x_Cantabrigiense
             PedalLengthVar = 0.002f,
             pedalGrowthTime = 50f,
             pedalGrowthTimeVar = 5f,
-            pedalColor = new Vector3(235, 180, 195), 
+
+            HasFlowerBaseLeaves = true,
+            FlowerPhenology = new LeafPhenology(
+        expectedAge: 21f * 24f,
+        colorModel: new ColorModel(
+            age: new ColorCurve()
+                .Add(0.00f, ColorUtils.OkLabFromSrgb8(240, 195, 210))
+                .Add(0.25f, ColorUtils.OkLabFromSrgb8(235, 180, 195))
+                .Add(0.70f, ColorUtils.OkLabFromSrgb8(225, 170, 185))
+                .Add(1.00f, ColorUtils.OkLabFromSrgb8(210, 160, 175)),
+            stress: new ColorCurve()
+                .Add(0.00f, new Vector3(0.00f, 1.00f, 0.00f))
+                .Add(1.00f, new Vector3(-0.04f, 0.80f, 0.01f)),
+            senescenceSeason: new ColorCurve()
+                .Add(0.00f, ColorUtils.OkLabFromSrgb8(200, 155, 165))
+                .Add(0.40f, ColorUtils.OkLabFromSrgb8(175, 130, 120))
+                .Add(0.75f, ColorUtils.OkLabFromSrgb8(140, 95, 80))
+                .Add(1.00f, ColorUtils.OkLabFromSrgb8(100, 70, 55))
+        )
+    ),
+
+            PetalSenescenceDurationH = 168f,
 
             BudLength = 0.005f,
-            BudRadius = 0.005f,
-            BudBloomAge = 240u,   
-            FlowerMaxAge = 720u,   
+            BudRadius = 0.003f,
+            BudBloomAge = 140u,
+            FlowerMaxAge = 720u,
 
-            PetiolLength = 0.015f,
+            PetiolLength = 0.005f,
             PetiolRadius = 0.0005f,
             PetiolLengthVar = 0.005f,
             PetiolRadiusVar = 0.0002f,
             petiolSegments = 1,
 
-            stemLength = 0.12f,
-            stemLengthVar = 0.03f,
-            fStemRadius = 0.001f,
-            fStemRadiusVar = 0.0002f,
-            bStemLength = 0.04f,
+            bStemLength = 0.01f,
+            bStemLengthVar = 0.010f,
             bStemRadius = 0.0008f,
-            bStemLengthVar = 0.01f,
             bStemRadiusVar = 0.0001f,
 
+            stemLength = 0.015f,
+            stemLengthVar = 0.003f,
+            fStemRadius = 0.0006f,
+            fStemRadiusVar = 0.0001f,
+
+            flowerBaseDebth = 5,
             flowerDebth = 1,
-            flowerBaseDebth = 2,
             LateralsPerNode = 2,
             FlowersPerInternode = 2,
-            clusterSize = 3,     
+            clusterSize = 2,
             clusterAngle = 0.15f,
             deterministic = true,
             continous = false,
             internodeFlower = true,
             internodeFlowerWithStem = true,
             floralDepthFactor = 1,
-            pFlowerDebth = 1.0f,
+            pFlowerDebth = 0f,
 
-            LateralAngle = 55,
+            LateralAngle = 15,
             LateralRoll = 10,
             BaseLaterals = 1,
             BaseLateralAngle = 60,
@@ -121,10 +146,9 @@ public static class Geranium_x_Cantabrigiense
             LeavePetioleRadius = 0.0004f,
 
             growthTime = 120f,
-
         },
 
-        
+
 
         LeafPhenology = new(),
         LeafMorphology = new() {

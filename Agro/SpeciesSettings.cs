@@ -294,8 +294,12 @@ public class SpeciesSettings
     public float PetiolMoveDownMax { get; set; } = 0.3f;
     public float PetiolMoveDown { get; set; } = 0f;
     public int petiolSegments { get; set; } = 1;
-    public float growthTimeVar { get; internal set; }
-    public float BudBloomAgeVar { get; internal set; }
+    public float growthTimeVar { get;  set; }
+    public float BudBloomAgeVar { get;  set; }
+    public float BaseElasticModulus { get; set; }=2e8f;
+    public float PetiolElasticModulus { get;  set; } = 2e8f;
+    public float FlowerElasticModulus { get;  set; } = 5e6f;
+    public float FlowerPetiolElasticModulus { get;  set; } = 4e5f;
 
     #endregion
 

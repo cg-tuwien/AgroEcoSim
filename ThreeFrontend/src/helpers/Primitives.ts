@@ -10,7 +10,6 @@ type StatsBase = {
     //water, energy for buds
     //water, energy, woodRatio, dailyResources, dailyProduction for roots
     stats: Float32Array | undefined
-    color?: Float32Array
 
 }
 
