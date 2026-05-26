@@ -516,9 +516,6 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 					appliedDelta = newOr * Quaternion.Inverse(agent.Orientation);
 
 					agent.SetOrientation(newOr);
-                    //agent.SetOrientation(Quaternion.Normalize(rotation * agent.Orientation));
-                    
-                    //PendingGravityRotations[i] = Quaternion.Normalize(rotation * PendingGravityRotations[i]);
                 }
 
                 var children = new Queue<int>();
@@ -544,13 +541,11 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 			foreach (var child in GetChildren(i))
 			{
                 nodesToVisit.Enqueue(child);
-
-               
             }
         }
 		TreeCache.UpdateBases(this);
 		refitChildrens(0);
-       // collisionHandling();
+        collisionHandling();
     }
     static bool IsNearlyIdentity(Quaternion q)
     {

@@ -495,7 +495,7 @@ namespace Agro
                                         }
                                     }
                                 }
-                                //if (plant.Soil.IntersectPoint(formation.GetBaseCenterWorld(agentID) + Vector3.Transform(Vector3.UnitX, formation.GetDirection(agentID)) * agent.Length + Vector3.Transform(Vector3.UnitX, rizomeAgent.Orientation) * plant.Parameters.RizomeLength, plant.SoilIndex) < 0) { return; }
+                                if (plant.Soil.IntersectPoint(formation.GetBaseCenterWorld(agentID) + Vector3.Transform(Vector3.UnitX, formation.GetDirection(agentID)) * agent.Length + Vector3.Transform(Vector3.UnitX, rizomeAgent.Orientation) * plant.Parameters.RizomeLength, plant.SoilIndex) < 0) { return; }
                                 if (!intersetc)
                                 {
                                     var parentRadius = (agent.Parent >= 0 && !formation.GetIsRizome(agent.Parent)) ? formation.GetBaseRadius(agent.Parent) : float.MaxValue;

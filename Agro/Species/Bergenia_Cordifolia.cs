@@ -113,6 +113,8 @@ public static class Bergenia_Cordifolia
             LeavePetioleRadius = 0.0002f,
 
             growthTime = 72f,
+
+
         },
 
         
