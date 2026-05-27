@@ -374,7 +374,7 @@ namespace Agro
                 if (agent.Organ == OrganTypes.FlowerBud &&  agent.Length >= agent.GetLengthVar() && formation.GetChildren(agentID).Count() <= 0)
                 {
 
-                    int petalCount = 4;
+                    int petalCount = _settings.pedalCount;
                     float angleStep = MathF.Tau / petalCount;
 
                     float basePetalPitch = 0.95f;      // how much petals tilt outward/down

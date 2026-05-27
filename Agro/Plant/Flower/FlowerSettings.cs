@@ -84,7 +84,7 @@ namespace Agro
         public float pBaseFlowerHeight { get; set; } = 0;
         public float FlowerLeafPetiolRadius { get; set; } = 0.0005f;
         public float FlowerLeafPetiolLength { get; set; } = 0.001f;
-        
+        public int pedalCount { get; set; } = 5;
     }
 
 
