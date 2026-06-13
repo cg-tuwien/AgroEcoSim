@@ -22,7 +22,8 @@ public struct UnderGroundAgent : IPlantAgent
 	/// </summary>
 	public uint BirthTime { get; private init; }
     public bool isRizome { get; private set; } = false;
-
+	public bool flowerSupport { get; private set; } = false;
+    public Vector3 Color { get; private set; }
     /// <summary>
     /// Orientation with respect to the parent. If there is no parent, this is the initial orientation.
     /// </summary>

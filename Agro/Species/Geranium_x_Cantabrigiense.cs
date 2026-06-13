@@ -1,49 +1,154 @@
+using System.Numerics;
+
 namespace Agro.Species;
 
+// Sources
+// - RHS, "Geranium × cantabrigiense 'Biokovo'" (to 20 cm tall, flowers 2.5 cm wide)
+// - Missouri Botanical Garden Plant Finder
+//   (hybrid of G. macrorrhizum × G. dalmaticum; 15-25 cm tall; 7-lobed leaves 9 cm wide;
+//    5-petaled white/pale-pink flowers ~2 cm with pink stamens)
+// - Gardenia.net "Biokovo" profile (15-30 cm tall; ~2.5 cm flowers, deep pink stamens)
 public static class Geranium_x_Cantabrigiense
 {
-    public static SpeciesSettings Init() =>new() {
-        Name = "Geranium × Cantabrigiense",
-        Behavior = Behavior.Geranium_x_Cantabrigiense,
+    const float DegToRad = MathF.PI / 180f;
+
+    public static SpeciesSettings Init() => new()
+    {
+        Name = "Geranium × cantabrigiense",
+        Aka = "Cambridge Cranesbill",
+        Behavior = Behavior.Herbaceous,
+
         Height = 0.25f,
 
-        LeafLength = 0.04f,
-        LeafLengthVar = 0.01f,
-        LeafRadius = 0.020f,
-        LeafRadiusVar = 0.005f,
-
-        LeafPitch = 85 * (MathF.PI / 180f),
+        LeafLength = 0.06f,
+        LeafLengthVar = 0.012f,
+        LeafRadius = 0.035f,       
+        LeafRadiusVar = 0.006f,
         LeafPitchVar = 5f * (MathF.PI / 180f),
+        LeafPitch = 85 * (MathF.PI / 180f),
 
-        PetioleLength = 0.09f,
-        PetioleLengthVar = 0.03f,
-        PetioleRadius = 0.0017f,
-        PetioleRadiusVar = 0.0004f,
 
-        LeafGrowthTime = 24f * 7f,
-        LeafGrowthTimeVar = 24f * 2f,
+        LeafGrowthTime = 24f * 7f * 2f,
+        LeafGrowthTimeVar = 24f * 3f,
+        MaxLeaveAge = 24f * 180f,   
 
-        NodeDistance = 0,
-        NodeDistanceVar = 0,
+        PetioleLength = 0.06f,
+        PetioleLengthVar = 0.012f,
+        PetioleRadius = 0.0015f,
+        PetioleRadiusVar = 0.0002f,
+
+        pNewCrown = 0.50f,           
+        crownPitch = 0.7f,
+        growthFactor = 0.25f,
+        MaxRadius = 0.003f,
+
+        LateralPitch = 15 * (MathF.PI / 180f),
+        LateralPitchVar = 10 * (MathF.PI / 180f),
+        LateralRoll = 40f * (MathF.PI / 180f),
+        LateralRollVar = 5f * (MathF.PI / 180f),
 
         LateralsPerNode = 2,
+        NodeDistance = 0f,          
+        NodeDistanceVar = 0.000f,
+        DominanceFactor = 0.7f,
 
-        LateralPitch = 20f * (MathF.PI / 180f),
-        LateralPitchVar = 10f * (MathF.PI / 180f),
+        RizomeMaxDepth = 4,
+        RizomeLength = 0.035f,
+        RizomeRadius = 0.0022f,
+        pExpandRizome = 0.0009f,          
+        SympodialStartAgeHours = 24f * 50f,
+        FloweringStartAgeHours = 24f * 55f,
+        FloweringEndAgeHours = 24f * 110f,
+        pChaningSeaonns = [0.018f, 0.002f, 0.009f, 0.0f],
+        pFloweringSeaonns = [0.002f, 0.055f, 0.002f, 0.0f],  
+        WoodElasticModulus = 1.2e8f,
+        GreenElasticModulus = 5e6f,         
+        DepthFactor = 0.01f,
+        FlowerElasticModulus = 5e7f,
 
-        LateralRoll = 40f * (MathF.PI / 180f),
-        LateralRollVar = 10f * (MathF.PI / 180f),
 
-        MaxLeaveAge = 140f,
-        pNewCrown = 0.45f,
-        crownPitch = 0.36f,
-        growthFactor = 0.20f,
+        FlowerSettings = new FlowerSettings
+        {
+            PedalLength = 0.011f,
+            PedalRadius = 0.005f,
+            PedalLengthVar = 0.002f,
+            pedalGrowthTime = 50f,
+            pedalGrowthTimeVar = 5f,
 
-        MaxRadius = 0.0030f,
-        pExpandRizome = 0.0008f,
-        RizomeMaxDepth = 3,
-        RizomeLength = 0.050f,
-        RizomeRadius = 0.0030f,
+            HasFlowerBaseLeaves = true,
+            FlowerPhenology = new LeafPhenology(
+        expectedAge: 21f * 24f,
+        colorModel: new ColorModel(
+            age: new ColorCurve()
+                .Add(0.00f, ColorUtils.OkLabFromSrgb8(240, 195, 210))
+                .Add(0.25f, ColorUtils.OkLabFromSrgb8(235, 180, 195))
+                .Add(0.70f, ColorUtils.OkLabFromSrgb8(225, 170, 185))
+                .Add(1.00f, ColorUtils.OkLabFromSrgb8(210, 160, 175)),
+            stress: new ColorCurve()
+                .Add(0.00f, new Vector3(0.00f, 1.00f, 0.00f))
+                .Add(1.00f, new Vector3(-0.04f, 0.80f, 0.01f)),
+            senescenceSeason: new ColorCurve()
+                .Add(0.00f, ColorUtils.OkLabFromSrgb8(200, 155, 165))
+                .Add(0.40f, ColorUtils.OkLabFromSrgb8(175, 130, 120))
+                .Add(0.75f, ColorUtils.OkLabFromSrgb8(140, 95, 80))
+                .Add(1.00f, ColorUtils.OkLabFromSrgb8(100, 70, 55))
+        )
+    ),
+
+            PetalSenescenceDurationH = 168f,
+
+            BudLength = 0.005f,
+            BudRadius = 0.003f,
+            BudBloomAge = 140u,
+            FlowerMaxAge = 720u,
+
+            PetiolLength = 0.005f,
+            PetiolRadius = 0.0005f,
+            PetiolLengthVar = 0.005f,
+            PetiolRadiusVar = 0.0002f,
+            petiolSegments = 1,
+
+            bStemLength = 0.01f,
+            bStemLengthVar = 0.010f,
+            bStemRadius = 0.0008f,
+            bStemRadiusVar = 0.0001f,
+
+            stemLength = 0.015f,
+            stemLengthVar = 0.003f,
+            fStemRadius = 0.0006f,
+            fStemRadiusVar = 0.0001f,
+
+            flowerBaseDebth = 5,
+            flowerDebth = 1,
+            LateralsPerNode = 2,
+            FlowersPerInternode = 2,
+            clusterSize = 2,
+            clusterAngle = 0.15f,
+            deterministic = true,
+            continous = false,
+            internodeFlower = true,
+            internodeFlowerWithStem = true,
+            floralDepthFactor = 1,
+            pFlowerDebth = 0f,
+
+            LateralAngle = 15,
+            LateralRoll = 10,
+            BaseLaterals = 1,
+            BaseLateralAngle = 60,
+            BaseLateralRoll = 5,
+            pFlowerBaseDebth = 0.8f,
+
+            LeafLength = 0.020f,
+            LeafRadius = 0.010f,
+            LeafLengthVar = 0.004f,
+            LeafRadiusVar = 0.002f,
+            LeavePetioleLength = 0.005f,
+            LeavePetioleRadius = 0.0004f,
+
+            growthTime = 120f,
+        },
+
+
 
         LeafPhenology = new(),
         LeafMorphology = new() {

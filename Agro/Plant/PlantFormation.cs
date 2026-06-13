@@ -68,8 +68,10 @@ public partial class PlantFormation2 : IPlantFormation
 	{
 		World = world;
 		Parameters = parameters ?? SpeciesSettings.Default;
-		Parameters.Init(hoursPerTick);
-		Soil = soil;
+        Console.WriteLine($"PlantFormation2 ctor: {Parameters.Name}, BudLength: {Parameters.FlowerSettings.BudLength}");
+        Parameters.Init(hoursPerTick);
+        Console.WriteLine($"PlantFormation2 after Init: {Parameters.Name}, BudLength: {Parameters.FlowerSettings.BudLength}");
+        Soil = soil;
 		Seed[0] = seed;
 		SoilIndex = seed.SoilIndex;
 		Position = seed.Center;

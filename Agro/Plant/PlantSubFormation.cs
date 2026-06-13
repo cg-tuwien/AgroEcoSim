@@ -1,9 +1,13 @@
-using System.Diagnostics;
-using System.Numerics;
 using AgentsSystem;
 using glTFLoader.Schema;
+using Microsoft.VisualBasic;
 using NumericHelpers;
+using System;
 using System.Collections;
+using System.Diagnostics;
+using System.Linq;
+using System.Numerics;
+using System.Reflection;
 using System.Runtime.InteropServices;
 
 namespace Agro;
@@ -38,9 +42,6 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 	readonly TreeCacheData TreeCache = new();
 
     public Bvh CollisionBvh { get; set; } = new();
-    readonly List<Quaternion> PendingGravityRotations = new();
-    bool HasPendingGravityRotations = false;
-
 
     public PlantSubFormation(PlantFormation2 plant, Action<T[], int[]> reindex, bool isAboveGround)
 	{
@@ -338,7 +339,18 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 			var waterStorageCapacity = dst[i].WaterStorageCapacity_g();
 			waterCapacity += waterStorageCapacity;
 
-			Gathering[i] = new(lifeSupport, photosynthSupport, energyStorageCapacity, waterStorageCapacity, DailyResourceMax > 0f ? dst[i].PreviousDayEnvResourcesInvariant / DailyResourceMax : 1f, DailyProductionMax > 0f ? dst[i].PreviousDayProductionInvariant / DailyProductionMax : 1f);
+            var resEff = DailyResourceMax > 0f ? dst[i].PreviousDayEnvResourcesInvariant / DailyResourceMax : 1f;
+            var prodEff = DailyProductionMax > 0f ? dst[i].PreviousDayProductionInvariant / DailyProductionMax : 1f;
+            var flowerOrgans = new List<OrganTypes>() { OrganTypes.FlowerStem, OrganTypes.FlowerPadel, OrganTypes.FlowerPetiol, OrganTypes.FlowerMeristem, OrganTypes.FlowerBud };
+
+            if (IsAboveGround)
+			{
+				if (dst[i].isRizome || (flowerOrgans.Contains(dst[i].Organ)))
+				{
+					resEff = 1f;
+				}
+			}
+            Gathering[i] = new(lifeSupport, photosynthSupport, energyStorageCapacity, waterStorageCapacity, resEff,prodEff);
 		}
 
 		//this is faster than probing .Contains() for each i
@@ -375,8 +387,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 
 	internal void Gravity()
 	{
-
-        if (!IsAboveGround)
+		if (!IsAboveGround)
             return;
 
         var dst = Src(); //since Tick already swapped them
@@ -418,97 +429,129 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
             (leavesToProcess, internalNodesToProcess) = (internalNodesToProcess, leavesToProcess);
         }
 
+        var flowerOrgans = new List<OrganTypes>() { OrganTypes.FlowerStem, OrganTypes.FlowerPadel, OrganTypes.FlowerPetiol, OrganTypes.FlowerMeristem, OrganTypes.FlowerBud };
 
 
         //process nodes from roots to leaves, propagating rotations
         float tickSpeed = Plant.World.HoursPerTick;
-
         var nodesToVisit = new Queue<int>(GetRoots());
-        while (nodesToVisit.Count > 0)
-        {
+		while (nodesToVisit.Count > 0)
+		{
 
 
-                float depthFactor = Plant.Parameters.DepthFactor;
+			float depthFactor = Plant.Parameters.DepthFactor;
 
-            var i = nodesToVisit.Dequeue();
-            ref var agent = ref dst[i];
-            if (GetIsRizome(i))
-            {
-                foreach (var child in GetChildren(i))
-                    nodesToVisit.Enqueue(child);
+			var i = nodesToVisit.Dequeue();
+			ref var agent = ref dst[i];
+			if (GetIsRizome(i) || GetOrgan(i).Equals(OrganTypes.FlowerPadel))
+			{
+				foreach (var child in GetChildren(i))
+					nodesToVisit.Enqueue(child);
 
-                continue;
+				continue;
+			}
+			var length = agent.Length;
+			var radius = agent.Radius;
+			var totalWeight = Weights[i];
+
+
+
+			float woodiness = agent.WoodRatio();
+			float depthAttenuation = MathF.Exp(-GetAbsDepth(i) * depthFactor);
+
+			float baseDebthstiffness = Plant.Parameters.BaseElasticModulus;
+
+			float elasticity = (MathF.Max(Plant.Parameters.GreenElasticModulus, baseDebthstiffness * depthAttenuation)) * (1 - woodiness) + Plant.Parameters.WoodElasticModulus * woodiness;
+
+			if (agent.Organ.Equals(OrganTypes.Petiole))
+			{
+				elasticity = Plant.Parameters.PetiolElasticModulus;
+			}
+			if (flowerOrgans.Contains(agent.Organ)) { elasticity = Math.Max(Plant.Parameters.FlowerElasticModulus * (1 - woodiness), 5e4f);
+                if (agent.Organ.Equals(OrganTypes.FlowerPetiol))
+                {
+                    elasticity = Math.Max(Plant.Parameters.FlowerPetiolElasticModulus * (1 - woodiness), 1e2f);
+                }
             }
-            var length = agent.Length;
-            var radius = agent.Radius;
-            var totalWeight = Weights[i];
-
-            if (length <= 1e-4) continue;
-
-            float woodiness = agent.WoodRatio();
-            float depthAttenuation = MathF.Exp(-GetAbsDepth(i) * depthFactor);
-
-            float baseDebthstiffness = 1e8f;
-
-            float elasticity = (MathF.Max(1e15f, baseDebthstiffness * depthAttenuation)) * (1 - woodiness) + 1e15f * woodiness;
-			if (agent.Organ.Equals(OrganTypes.Petiole)) elasticity = 1e15f;
 			//Console.WriteLine($"e = {elasticity}, b*d = {baseDebthstiffness * depthAttenuation}, w = {woodiness}, we = {Weights[i]}");
 			Quaternion rotation = Quaternion.Identity;
 			Quaternion appliedDelta = Quaternion.Identity;
-            if (length > 0f && radius > 0f && totalWeight > 0f)
-            {
-                var bendingMoment = totalWeight * length * 0.5f;
-                var inertia = MathF.PI * MathF.Pow(radius, 4) / 4f;
-                var curvature = bendingMoment / (elasticity * inertia);
-                var deltaTheta = curvature * length;
+
+			if (length > 1e-4f && radius > 0f && totalWeight > 0f)
+			{
+				//Console.WriteLine($"{length}");
+				var bendingMoment = totalWeight * length * 0.5f;
+				var inertia = MathF.PI * MathF.Pow(radius, 4) / 4f;
+				var curvature = bendingMoment / (elasticity * inertia);
+				var deltaTheta = curvature * length;
 
 
 
-                var dir = Vector3.Transform(Vector3.UnitX, agent.Orientation);
-                var restDir = Vector3.Transform(Vector3.UnitX, agent.restOrientation);
-                var baseDir = Vector3.Transform(Vector3.UnitX, agent.baseOrientation);
+				var dir = Vector3.Transform(Vector3.UnitX, agent.Orientation);
+				var restDir = Vector3.Transform(Vector3.UnitX, agent.restOrientation);
+				var baseDir = Vector3.Transform(Vector3.UnitX, agent.baseOrientation);
 
-                float angleToDown = MathF.Acos(Math.Clamp(Vector3.Dot(baseDir, Vector3.UnitY), -1f, 1f));
-                float rest = MathF.Acos(Math.Clamp(Vector3.Dot(baseDir, restDir), -1f, 1f));
-                var axis = Vector3.Cross(baseDir, Vector3.UnitY);
+				float angleToDown = MathF.Acos(Math.Clamp(Vector3.Dot(baseDir, Vector3.UnitY), -1f, 1f));
+				float rest = MathF.Acos(Math.Clamp(Vector3.Dot(baseDir, restDir), -1f, 1f));
+				var axis = Vector3.Cross(baseDir, Vector3.UnitY);
+                if (axis.LengthSquared() < 1e-8f)
+                    axis = Vector3.Cross(baseDir, Vector3.UnitZ);
+
+                if (axis.LengthSquared() < 1e-8f)
+                    axis = Vector3.Cross(baseDir, Vector3.UnitX);
                 float maxAllowedBend = MathF.PI - angleToDown;
+				rest = Math.Clamp(rest, 0f, maxAllowedBend);
+				float safeDelta = Math.Clamp(deltaTheta, rest, maxAllowedBend);
 
-                float safeDelta = Math.Clamp(deltaTheta, rest, maxAllowedBend);
-
-                var len = axis.Length();
-                if (len > 1e-6f)
-                {
-                    axis /= len;
-                    rotation = Quaternion.CreateFromAxisAngle(axis, -safeDelta);
+				var len = axis.Length();
+				if (len > 1e-4f)
+				{
+					axis /= len;
+					rotation = Quaternion.CreateFromAxisAngle(axis, -safeDelta);
 					agent.targetOrientation = Quaternion.Normalize(rotation * agent.baseOrientation);
+
                     agent.restOrientation = Quaternion.Slerp(agent.restOrientation, agent.targetOrientation, 0.002f);
-                    var newOr = Quaternion.Slerp(agent.Orientation, agent.targetOrientation, 0.005f);
+					var newOr = Quaternion.Slerp(agent.Orientation, agent.targetOrientation, 0.05f);
 
-                    appliedDelta = newOr * Quaternion.Inverse(agent.Orientation);
+					appliedDelta = newOr * Quaternion.Inverse(agent.Orientation);
 
-                    agent.SetOrientation(newOr);
-                    //agent.SetOrientation(Quaternion.Normalize(rotation * agent.Orientation));
+					agent.SetOrientation(newOr);
+                }
 
-                    //PendingGravityRotations[i] = Quaternion.Normalize(rotation * PendingGravityRotations[i]);
+                var children = new Queue<int>();
+				children.Enqueue(i);
+                while (children.Count > 0)
+                {
+                    var index = children.Dequeue();
+                    foreach (var child in GetChildren(index))
+                    {
+                        children.Enqueue(child);
+                        ref var c = ref dst[child];
+                       // if (!IsNearlyIdentity(appliedDelta))
+                        
+                            c.SetOrientation(Quaternion.Normalize(appliedDelta * c.Orientation));
+                            c.baseOrientation = Quaternion.Normalize(appliedDelta * c.baseOrientation);
+                            c.restOrientation = Quaternion.Normalize(appliedDelta * c.restOrientation);
+                        
+                    }
+
                 }
 
             }
-
-            foreach (var child in GetChildren(i))
-            {
-                ref var c = ref dst[child];
-				if (appliedDelta != Quaternion.Identity)
-				{
-					c.SetOrientation(Quaternion.Normalize(appliedDelta * c.Orientation));
-                    c.baseOrientation = Quaternion.Normalize(appliedDelta * c.baseOrientation);
-                    c.restOrientation = Quaternion.Normalize(appliedDelta * c.restOrientation);
-                }
+			foreach (var child in GetChildren(i))
+			{
                 nodesToVisit.Enqueue(child);
             }
         }
 		TreeCache.UpdateBases(this);
 		refitChildrens(0);
         collisionHandling();
+    }
+    static bool IsNearlyIdentity(Quaternion q)
+    {
+        // identity and -identity are the same rotation; use dot as a robust check
+        float d = MathF.Abs(Quaternion.Dot(Quaternion.Normalize(q), Quaternion.Identity));
+        return d > 0.999999f;
     }
     bool PairFilter(int a, int b)
     {
@@ -518,7 +561,11 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
                !GetIsRizome(a) &&
                !GetIsRizome(b) &&
                GetOrgan(a) != OrganTypes.Leaf &&
-               GetOrgan(b) != OrganTypes.Leaf;
+               GetOrgan(b) != OrganTypes.Leaf &&
+               GetOrgan(a) != OrganTypes.FlowerPadel &&
+               GetOrgan(b) != OrganTypes.FlowerPadel &&
+               GetOrgan(a) != OrganTypes.FlowerBud &&
+               GetOrgan(b) != OrganTypes.FlowerBud;
     }
     internal void collisionHandling()
     {
@@ -536,12 +583,12 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
             int index1 = overlap.first;
 			int index2 = overlap.second;
             //Console.WriteLine($"{index1} {index2}");
-            if (!BranchIntersect(index1, index2)|| dst[index1].Length <= 1e-4 || dst[index2].Length <= 1e-4)
+
+            if (!BranchIntersect(index1, index2)|| dst[index1].Length <= 1e-3 || dst[index2].Length <= 1e-3 || shareCrown(index1,index2))
 				continue;
 
             bool isParentChild = isDescendant(index1, index2) || isDescendant(index2, index1);
 			var closestPoints = ClosestPointBetweenBranches(index1, index2);
-
 
 
 			if (isParentChild)
@@ -586,14 +633,15 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 			refitChildrens(index1);
             getSubtreeCollisions(index1, ref possibleCollisions);
             getSubtreeCollisions(index2, ref possibleCollisions);
-            //TryResolveGroundByRotation(cellCollisions[i], groundHeight: 0f, cellSize);
+            
 
         }
     }
 	private void refitChildrens(int i)
 	{
-
-        var children = new Queue<int>(i);
+        
+        var children = new Queue<int>();
+		children.Enqueue(i);
         while (children.Count > 0)
         {
 			var index = children.Dequeue();
@@ -608,7 +656,8 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
     private void getSubtreeCollisions(int i,ref Queue<(int, int)> overlaps)
     {
 
-        var children = new Queue<int>(i);
+        var children = new Queue<int>();
+        children.Enqueue(i);
         while (children.Count > 0)
         {
             var index = children.Dequeue();
@@ -642,7 +691,21 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 
         }
     }
+    
+	private bool shareCrown(int index1, int index2)
+	{
 
+        int i = index1;
+        while (!GetIsRizome(i) && GetAbsDepth(i) > 0)
+        {
+            if (isDescendant(i,index2))
+                return true;
+            i = GetParent(i);
+        }
+        if (isDescendant(i, index2))
+            return true;
+        return false;
+    }
     private bool isDescendant(int index, int indexDescendant)
     {
         int i = indexDescendant;
@@ -770,7 +833,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
         return true;
     }
 
-    private void TryResolveGroundByRotation(int index, float groundHeight, float cellSize)
+    private void TryResolveGroundByRotation(int index, float groundHeight)
     {
         var dst = Src();
         Vector3 tip = GetTipPosition(index);
@@ -919,8 +982,11 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 	public void Distribute(PlantGlobalStats stats)
 	{
 		var dst = Src();
-		for(int i = 0; i < dst.Length; ++i)
-			dst[i].Distribute(stats.ReceivedWater[i], stats.ReceivedEnergy[i]);
+		for (int i = 0; i < dst.Length; ++i)
+		{
+           
+            dst[i].Distribute(stats.ReceivedWater[i], stats.ReceivedEnergy[i]);
+		}
 	}
 
 	// List<Vector2> HormonesData = new();
@@ -1030,10 +1096,15 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
     public bool GetIsRizome(int index) => ReadTMP
            ? (AgentsTMP.Length > index ? AgentsTMP[index].isRizome : false)
            : (Agents.Length > index ? Agents[index].isRizome : false);
-
+    public bool GetHasFlowerSupport(int index) => ReadTMP
+       ? (AgentsTMP.Length > index ? AgentsTMP[index].flowerSupport : false)
+       : (Agents.Length > index ? Agents[index].flowerSupport : false);
     public Vector3 GetBaseOffset(int index) => ReadTMP
     ? (AgentsTMP.Length > index ? AgentsTMP[index].BaseOffset : Vector3.Zero)
     : (Agents.Length > index ? Agents[index].BaseOffset : Vector3.Zero);
+	public Vector3 GetColor(int index) => ReadTMP
+	? (AgentsTMP.Length > index ? AgentsTMP[index].Color : Vector3.Zero)
+	: (Agents.Length > index ? Agents[index].Color : Vector3.Zero);
 
     public Vector3 GetBaseCenter(int index) => TreeCache.GetBaseCenter(index);
 	public Vector3 GetBaseCenterWorld(int index) => TreeCache.GetBaseCenter(index) + Plant.Soil.GetFieldOrigin(Plant.SoilIndex);
@@ -1137,6 +1208,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
         var leaves = new List<(int agentIndex, Bvh.BoundingBox bounds)>(dst.Length);
         for (int i = 0; i < dst.Length; ++i)
         {
+			
             leaves.Add((i, ComputeBounds(i)));
         }
 

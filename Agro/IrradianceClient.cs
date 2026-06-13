@@ -681,7 +681,6 @@ public class IrradianceClient
 					var center = ag.GetBaseCenterWorld(i);
 					var scale = ag.GetScale(i);
 					var orientation = ag.GetDirection(i);
-
 					var x = Vector3.Transform(Vector3.UnitX, orientation);
 					var y = Vector3.Transform(Vector3.UnitY, orientation);
 					var z = Vector3.Transform(Vector3.UnitZ, orientation);
@@ -783,6 +782,7 @@ public class IrradianceClient
 								writer.WriteM32(ax, ay, az, c);
 								writer.Write(Math.Clamp(ag.GetWater(i) / ag.GetWaterEfficientCapacity(world, i), 0, 1));
 								writer.Write(Math.Clamp(ag.GetEnergy(i) / ag.GetEnergyCapacity(i), 0, 1));
+								
 								if (extended)
 								{
 									writer.Write(GetIrradiance(ag, i));
@@ -963,7 +963,8 @@ public class IrradianceClient
 								}
 								//writer.Write(ag.GetDailyEfficiency(i));
 								//writer.Write(0f);
-								plant.Parameters.LeafPhenology.WriteColor(writer, world.Season, ag.GetAdulcy(i, world.Timestep), ag.GetStress(i), ag.GetSenescence(i, world.Timestep));
+								var phenology = organ.Equals(OrganTypes.Leaf)? plant.Parameters.LeafPhenology:plant.Parameters.FlowerSettings.FlowerPhenology;
+								phenology.WriteColor(writer, world.Season, ag.GetAdulcy(i, world.Timestep), ag.GetStress(i), ag.GetSenescence(i, world.Timestep));
 							}
 							break;
 						case OrganTypes.Stem: case OrganTypes.Petiole: case OrganTypes.Meristem: case OrganTypes.FlowerStem:

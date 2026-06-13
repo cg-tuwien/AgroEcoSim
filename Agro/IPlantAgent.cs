@@ -26,6 +26,7 @@ public interface IPlantAgent : ITreeAgent
 
 
     bool isRizome { get; }
+	bool flowerSupport { get; }
 	Vector3 BaseOffset { get; }
 
     float Energy { get; }
@@ -35,7 +36,9 @@ public interface IPlantAgent : ITreeAgent
 	/// </summary>
 	float Water_g { get; }
 
-	float Auxins { get; }
+    Vector3 Color { get; }
+
+    float Auxins { get; }
 	//float Cytokinins { get; }
 
 	/// <summary>

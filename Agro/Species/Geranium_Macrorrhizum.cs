@@ -6,15 +6,16 @@ public static class Geranium_Macrorrhizum
 {
     public static SpeciesSettings Init() => new() {
         Name = "Geranium Macrorrhizum",
-        Behavior = Behavior.Geranium_Macrorrhizum,
-        LeafLength = 0.06f,
-        LeafLengthVar = 0.01f,
-        LeafRadius = 0.03f,
+        Behavior = Behavior.Herbaceous,
+        LeafLength = 0.04f,
+        LeafLengthVar = 0.0f,
+        LeafRadius = 0.02f,
         LeafPitchVar = 5f * (MathF.PI / 180f),
         LeafPitch = 85 * (MathF.PI / 180f),
-        PetioleLength = 0.150f,
-        PetioleLengthVar = 0.05f,
-        PetioleRadius = 0.0018f,
+        PetioleLength = 0.060f,
+        PetioleLengthVar = 0.01f,
+        PetioleRadius = 0.003f,
+        PetioleRadiusVar = 0.0001f,
 
         LeafGrowthTime = 24 * 7,
         Height = 0.3f,
@@ -28,7 +29,7 @@ public static class Geranium_Macrorrhizum
         LateralRoll = 40f * (MathF.PI / 180f),
         LateralRollVar = 5f * (MathF.PI / 180f),
 
-        MaxLeaveAge = 160f,
+        MaxLeaveAge = 1.5f * 365f,
         pNewCrown = 0.70f,
         crownPitch = 0.38f,
         growthFactor = 0.25f,
@@ -38,6 +39,8 @@ public static class Geranium_Macrorrhizum
         RizomeMaxDepth = 3,
         RizomeLength = 0.045f,
         RizomeRadius = 0.0035f,
+
+        FlowerElasticModulus = 5e7f,
 
         LeafPhenology = new(),
         LeafMorphology = new() {
@@ -1095,6 +1098,79 @@ public static class Geranium_Macrorrhizum
                 396, 393, 391, 395, 394, 396, 397, 395, 386, 404, 403, 398,
                 400, 399, 404, 402, 401, 400, 369, 365, 379, 390, 388, 396,
             ]
+        },
+        
+        pFloweringSeaonns = [0.005f, 0.055f, 0.002f, 0.0f],
+        FlowerSettings = new FlowerSettings
+        {
+            PedalLength = 0.016f,
+            PedalRadius = 0.007f,
+            PedalLengthVar = 0.002f,
+            pedalGrowthTime = 180f,
+            pedalGrowthTimeVar = 36f,
+            FlowerPhenology = new LeafPhenology(
+        expectedAge: 25f * 24f,
+        colorModel: new ColorModel(
+            age: new ColorCurve()
+                .Add(0.00f, ColorUtils.OkLabFromSrgb8(220, 110, 170))
+                .Add(0.25f, ColorUtils.OkLabFromSrgb8(210, 100, 160))
+                .Add(0.70f, ColorUtils.OkLabFromSrgb8(200, 95, 150))
+                .Add(1.00f, ColorUtils.OkLabFromSrgb8(185, 88, 138)),
+            stress: new ColorCurve()
+                .Add(0.00f, new Vector3(0.00f, 1.00f, 0.00f))
+                .Add(1.00f, new Vector3(-0.05f, 0.78f, 0.01f)),
+            senescenceSeason: new ColorCurve()
+                .Add(0.00f, ColorUtils.OkLabFromSrgb8(175, 110, 130))
+                .Add(0.40f, ColorUtils.OkLabFromSrgb8(150, 95, 100))
+                .Add(0.75f, ColorUtils.OkLabFromSrgb8(120, 75, 70))
+                .Add(1.00f, ColorUtils.OkLabFromSrgb8(90, 60, 50))
+        )
+    ),
+            HasFlowerBaseLeaves = true,
+            PetalSenescenceDurationH = 168f,
+            BudLength = 0.010f,
+            BudRadius = 0.005f,
+            BudBloomAge = 216u,
+            FlowerMaxAge = 840u,
+            PetiolLength = 0.012f,
+            PetiolRadius = 0.0006f,
+            PetiolLengthVar = 0.006f,
+            PetiolRadiusVar = 0.0002f,
+            petiolSegments = 1,
+
+            bStemLength = 0.015f,
+            bStemLengthVar = 0.006f,
+            bStemRadius = 0.0012f,
+            bStemRadiusVar = 0.0002f,
+            stemLength = 0.015f,
+            stemLengthVar = 0.003f,
+            fStemRadius = 0.0008f,
+            fStemRadiusVar = 0.0001f,
+            flowerBaseDebth = 5,
+            flowerDebth = 2,
+            LateralsPerNode = 2,
+            FlowersPerInternode = 2,
+            clusterSize = 1,
+            clusterAngle = 0.20f,
+            deterministic = true,
+            continous = false,
+            internodeFlower = true,
+            internodeFlowerWithStem = true,
+            floralDepthFactor = 1,
+            pFlowerDebth = 1.0f,
+            LateralAngle = 50,
+            LateralRoll = 15,
+            BaseLaterals = 1,
+            BaseLateralAngle = 55,
+            BaseLateralRoll = 10,
+            pFlowerBaseDebth = 0.7f,
+            LeafLength = 0.015f,
+            LeafRadius = 0.008f,
+            LeafLengthVar = 0.003f,
+            LeafRadiusVar = 0.002f,
+            LeavePetioleLength = 0.003f,
+            LeavePetioleRadius = 0.0005f,
+            growthTime = 150f,
         },
     };
 }

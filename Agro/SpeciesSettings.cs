@@ -1,11 +1,10 @@
 using System.Numerics;
 using System.Text.Json.Serialization;
-using Agro.Plant.Flower;
 using Agro.Species;
 
 namespace Agro;
 
-public enum Behavior : byte { Default, Geranium_Sanguineum, Geranium_x_Cantabrigiense, Geranium_Macrorrhizum, Bergenia_Cordifolia }
+public enum Behavior : byte { Default, Herbaceous}
 
 public class SpeciesSettings
 {
@@ -275,22 +274,32 @@ public class SpeciesSettings
     public static SpeciesSettings Default => Predefined[0];
     //-- custom parmeter Geranium & Bergania
     #region GeraniumBergania
-    public float MaxLeaveAge { get; set; } = 100;
+    public float MaxLeaveAge { get; set; } = 2*365;
+
+    public Vector3 BaseLeafColor { get; set; }
+    public Vector3 OldLeafColor { get; set; }
     public float pNewCrown { get; set; } = 1f;
     public float crownPitch { get; set; } = 0.5f;
 
     public float growthFactor { get; set; } = 0.2f;
 
     public float MaxRadius { get; set; } = 0.0005f;
-    public float[] pChaningSeaonns { get; set; } = [ 0.0015f, 0.0005f, 0.001f, 0f];
-    public float[] pFloweringSeaonns { get; set; } = [ 0.0005f, 0.005f, 0.0003f, 0f ];
+    public float[] pChaningSeaonns { get; set; } = [ 0.045f, 0.0005f, 0.001f, 0f];
+    public float[] pFloweringSeaonns { get; set; } = [ 0f, 0.0001f, 0.001f, 0f ];
 
     public float pExpandRizome { get; set; } = 0.005f;
     public int RizomeMaxDepth { get; set; } = 15;
-    public float RizomeLength { get; set; } = 0.01f;
+    public float RizomeLength { get; set; } = 0.025f;
     public float RizomeRadius { get; set; } = 0.0025f;
     public float PetiolMoveDownMax { get; set; } = 0.3f;
     public float PetiolMoveDown { get; set; } = 0f;
+    public int petiolSegments { get; set; } = 1;
+    public float growthTimeVar { get;  set; }
+    public float BudBloomAgeVar { get;  set; }
+    public float BaseElasticModulus { get; set; }=2e8f;
+    public float PetiolElasticModulus { get;  set; } = 2e8f;
+    public float FlowerElasticModulus { get;  set; } = 5e6f;
+    public float FlowerPetiolElasticModulus { get;  set; } = 4e5f;
 
     #endregion
 
@@ -299,20 +308,7 @@ public class SpeciesSettings
     {
         Predefined.Add(new());
 
-        //Just gueesing
-        Predefined.Add(new() {
-            Name = "Persea americana",
-            Aka = "Avocado",
-            LeafLength = 0.2f,
-            LeafRadius = 0.04f,
-            PetioleLength = 0.05f,
-            PetioleRadius = 0.007f,
-            // RootLengthGrowthPerH = 0.023148148f,
-            // RootRadiusGrowthPerH = 0.00297619f,
-            LeafGrowthTime = 720,
-            Height = 12f,
-            //FirstFruitHour = 113952,
-        });
+       
 
         Predefined.Add(Geranium_Macrorrhizum.Init());
         Predefined.Add(Geranium_x_Cantabrigiense.Init());
@@ -329,6 +325,8 @@ public class SpeciesSettings
 
     public void Init(int hoursPerTick)
     {
+        Console.WriteLine($"SpeciesSettings.Init called on {Name}, BudLength: {FlowerSettings.BudLength}");
+
         if (!Initialized)
         {
             // AuxinsDegradationPerTick = AuxinsReach * hoursPerTick;
