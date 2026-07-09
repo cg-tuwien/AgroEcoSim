@@ -18,7 +18,7 @@ namespace Agro
     {
         public partial struct Herbaceous
         {
-            
+
             public static void Tick(ref AboveGroundAgent agent, PlantSubFormation<AboveGroundAgent> formation, int agentID, uint timestep)
             {
                 var plant = formation.Plant;
@@ -34,7 +34,7 @@ namespace Agro
                 var lifeSupportPerHour = agent.LifeSupportPerHour();
                 var lifeSupportPerTick = agent.LifeSupportPerTick(world);
 
-                
+
                     agent.Energy -= lifeSupportPerTick; //life support
 
                 var children = formation.GetChildren(agentID);
@@ -89,10 +89,10 @@ namespace Agro
                         break;
                     case OrganTypes.Leaf:
                         {
-                            
+
                                 var col = species.OldLeafColor;
                                 agent.Color = Vector3.Lerp(species.BaseLeafColor, col, ageHours/species.MaxLeaveAge);
-                            
+
                         }break;
                     //height-based termination
                     case OrganTypes.Stem:
@@ -114,7 +114,7 @@ namespace Agro
                     //a marker to later indicate transformation
                     case OrganTypes.Meristem: wasMeristem = true; break;
 
-                    
+
                 }
 
                 //new Branches in spring
@@ -141,7 +141,7 @@ namespace Agro
                             agent.Energy = 0.1f * formation.GetEnergy(agent.Parent);
                             if (species.LateralsPerNode > 0)
                                 agent.CreateLeaves(agent, plant, agent.LateralAngle + species.LateralRoll, agentID);
-                           
+
                         }
                         else agent.trySpawn = false;
                     }
@@ -150,7 +150,7 @@ namespace Agro
                         agent.trySpawn = true;
 
                     }
-                    
+
                 }
                 var flowerOrgans = new List<OrganTypes>() { OrganTypes.FlowerStem, OrganTypes.FlowerPadel, OrganTypes.FlowerPetiol, OrganTypes.FlowerMeristem, OrganTypes.FlowerBud };
                 if (flowerOrgans.Contains(agent.Organ))
@@ -259,7 +259,7 @@ namespace Agro
                             case OrganTypes.FlowerPetiol:
                             case OrganTypes.FlowerMeristem:
                             {} return;
-                         
+
                         }
                         ;
 
@@ -290,12 +290,12 @@ namespace Agro
                                     pchaning = species.pChaningSeaonns[3]; break;
                             }
 
-                            
+
 
                             if (agent.Organ == OrganTypes.Meristem && agent.Length > agent.LengthVar )
                             {
 
-                                
+
                                 if (plant.RNG.NextFloat(0, 1) < pflower)
                                 {
                                     agent.Organ = OrganTypes.Stem;
@@ -473,7 +473,7 @@ namespace Agro
                     {
                         case OrganTypes.Meristem:
                             {
-                               
+
                                 var energyReserve = Math.Clamp(agent.Energy / agent.EnergyStorageCapacity(), 0f, 1f);
                                 var waterReserve = Math.Min(1f, plant.WaterBalance);
                                 var growth = new Vector2(1e-3f, 2e-5f) * (dominanceFactor * energyReserve * waterReserve * world.HoursPerTick);
@@ -485,7 +485,7 @@ namespace Agro
                                 {
                                     foreach (var colission in test)
                                     {
-                                        
+
 
                                         if ((agent.Parent != colission && !formation.GetChildren(agent.Parent).Contains(colission)) && formation.GetIsRizome(colission))
                                         {
@@ -495,7 +495,7 @@ namespace Agro
                                         }
                                     }
                                 }
-                                if (plant.Soil.IntersectPoint(formation.GetBaseCenterWorld(agentID) + Vector3.Transform(Vector3.UnitX, formation.GetDirection(agentID)) * agent.Length + Vector3.Transform(Vector3.UnitX, rizomeAgent.Orientation) * plant.Parameters.RizomeLength, plant.SoilIndex) < 0) { return; }
+                                if (plant.Soil.IntersectPoint(formation.GetBaseCenterWorld(agentID) + Vector3.Transform(Vector3.UnitX, formation.GetDirection(agentID)) * agent.Length + Vector3.Transform(Vector3.UnitX, agent.Orientation) * plant.Parameters.RizomeLength, plant.SoilIndex) < 0) { return; }
                                 if (!intersetc)
                                 {
                                     var parentRadius = (agent.Parent >= 0 && !formation.GetIsRizome(agent.Parent)) ? formation.GetBaseRadius(agent.Parent) : float.MaxValue;
@@ -569,7 +569,7 @@ namespace Agro
                 //update auxins for meristem and stems that were meristem in the previous step
                 agent.Auxins = wasMeristem || agent.Organ == OrganTypes.Meristem ? species.AuxinsProduction : 0;
             }
-            
+
             private static void commitToFlower(AboveGroundAgent agent, PlantSubFormation<AboveGroundAgent> formation, int agentID, float prevResources, float prevProduction)
             {
                 var flowerOrgans = new List<OrganTypes>() { OrganTypes.FlowerStem, OrganTypes.FlowerPadel, OrganTypes.FlowerPetiol, OrganTypes.FlowerMeristem, OrganTypes.FlowerBud };
@@ -605,9 +605,9 @@ namespace Agro
                 var rizomeAgent = new AboveGroundAgent(plant, agentID, OrganTypes.Meristem, rizomOrientation, 0.25f * agent.Energy, initialResources: prevResources, initialProduction: prevProduction, rizome: true, length:0.0005f) { Water_g = 0.1f * agent.Water_g, WoodFactor = 1f };
                 rizomeAgent.rizomeInfo.rizomeDepth = agent.rizomeInfo.rizomeDepth + 1;
                 var lateralPitch = agent.LateralAngle + formation.Plant.Parameters.LateralRoll;
-             
+
                 var rizomeIndex = formation.Birth(rizomeAgent);
-               
+
             }
             static void doChaning(AboveGroundAgent agent, PlantSubFormation<AboveGroundAgent> formation, int agentID, float prevResources, float prevProduction) {
                 var lateralPitch = agent.LateralAngle + formation.Plant.Parameters.LateralRoll;

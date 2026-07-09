@@ -243,7 +243,6 @@ export class Species {
         for(let f = 0; f < indicesCount; ++f)
             indices.push(reader.readInt32());
 
-        debugger;
         const geometry = new THREE.BufferGeometry();
         geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
         geometry.setIndex(indices);

@@ -238,6 +238,183 @@ public class SoilFormationTetrahedral : ISoilFormation
 			ComputeDiffusionCoefs();
 	}
 
+    public SoilFormationTetrahedral(AgroWorld world, string name, Vector3[] vertices, IList<int[]> faces, List<SoilDelimeter> delimeters)
+	{
+		World = world;
+        ID = name;
+
+        //TODO The delimeters should subdivide the tray into sections => clipping the tetrahedral volume
+
+        var vertexSet = new HashSet<int>(faces.Count * 3);
+        foreach(var f in faces)
+            vertexSet.UnionWith(f);
+
+        var vertexArray = vertexSet.ToArray();
+        Array.Sort(vertexArray);
+        var vertexMap = new Dictionary<int, int>();
+
+        var regularCount = vertexArray.Length;
+        Points = new Vector3[regularCount];
+        Faces = new List<Hyperface>(faces.Count);
+
+        for(int i = 0; i < vertexArray.Length; ++i)
+        {
+            var v = vertexArray[i];
+            vertexMap[v] = i;
+            Points[i] = vertices[v];
+        }
+
+        Position = Points[0];
+        for(int i = 1; i < regularCount; ++i)
+            Position = Vector3.Min(Position, Points[i]);
+        //find the closest point
+        var minDist = Vector3.DistanceSquared(Position, Points[0]);
+        var closestToMin = 0;
+        for(int i = 1; i < regularCount; ++i)
+        {
+            var d = Vector3.DistanceSquared(Position, Points[i]);
+            if (d < minDist)
+            {
+                minDist = d;
+                closestToMin = i;
+            }
+        }
+        Position = Points[closestToMin];
+
+        var pointsInt = new Vector3int[regularCount + 8];
+        var pointsInclude = new BitArray(regularCount);
+        var mergedMapping = new HashSet<Vector3int>(regularCount);
+        for(int i = 0; i < regularCount; ++i)
+        {
+            Points[i] -= Position;
+            var pi = new Vector3int(Points[i]);
+            pointsInt[i] = pi;
+            pointsInclude.Set(i, mergedMapping.Add(pi));
+        }
+
+        List<int> badTetrahedrons = new(128);
+        HashSet<Hyperface> polyhedronSet = [];
+
+        var tetrahedralization = new TetrahedronsSoA(regularCount);
+
+        SuperTetrahedron(pointsInt);
+
+        var sizeHint = pointsInt.Length / 3;
+        if (tetrahedralization.Capacity < sizeHint)
+            tetrahedralization.Capacity = sizeHint;
+
+        tetrahedralization.CreateInitial(pointsInt);
+        var currentQueue = new Queue<int>();
+        for (int p = 0; p < regularCount; ++p) //find all the tetrahedrons that are no longer valid due to the insertion
+            if (pointsInclude.Get(p))
+                currentQueue.Enqueue(p);
+
+        var nextQueue = new Queue<int>();
+        while (currentQueue.Count > 0)
+        {
+            foreach(var p in currentQueue)
+            {
+                //1. Indentify indices of bad tetrahedrons (breaking the Delaunay criterion)
+                badTetrahedrons.Clear();
+                tetrahedralization.CheckBad(pointsInt[p], badTetrahedrons);
+
+                //2. Get the polyhedron spanning through all bad tetrahedrons
+                polyhedronSet.Clear();
+                polyhedronSet.EnsureCapacity(badTetrahedrons.Count << 2);
+                tetrahedralization.ToggleFaces(badTetrahedrons, polyhedronSet);
+
+                //Re-tetrahedralize the star-shaped polyhedral hole:
+                //3. Preparation of new tetrahedra
+                tetrahedralization.TryCreate(polyhedronSet, pointsInt, p, badTetrahedrons, nextQueue);
+            }
+
+            if (nextQueue.Count > 0 && nextQueue.Count < currentQueue.Count)
+            {
+                currentQueue.Clear();
+                (nextQueue, currentQueue) = (currentQueue, nextQueue);
+            }
+            else
+                currentQueue.Clear();
+        }
+
+        //done inserting points, now clean up
+        //remove vertices from the original super-tetrahedron and all incident tetrahedra
+        tetrahedralization.RemoveSupertetras();
+        Tetrahedralization = tetrahedralization.Indices;
+        Array.Resize(ref Tetrahedralization, tetrahedralization.Count);
+
+        CellVolumes = new float[Tetrahedralization.Length];
+        for(int t = 0; t < Tetrahedralization.Length; ++t)
+            CellVolumes[t] = Tetrahedralization[t].Volume(Points);
+
+        var raincatchers = new List<RainCatcher>(Tetrahedralization.Length);
+        Neighs = new List<NeighborData>[Tetrahedralization.Length];
+        for(int t = 0; t < Tetrahedralization.Length; ++t)
+        {
+            var neighFaces = FacesSharing.None;
+            Neighs[t] = [];
+            for(int s = t + 1; s < Tetrahedralization.Length; ++s)
+            {
+                var conn = Tetrahedralization[t].Shares(FacesSharing.None, Tetrahedralization[s]);
+                if (conn != FacesSharing.None)
+                {
+                    neighFaces |= conn;
+                    var (antigravityRatio, area) = Tetrahedralization[t].NeighInterface(Points, conn);
+                    if (antigravityRatio < 0f)
+                        Neighs[t].Add(new (s, -antigravityRatio * area));
+                }
+            }
+
+            var raincatch = 0f;
+            //for faces without neighbors check whether it is able to catch rain
+            foreach(var face in PossibleFaces)
+                if (!neighFaces.HasFlag(face))
+                {
+                    Faces.Add(Tetrahedralization[t].GetFace(face));
+                    var (upwardsRatio, area) = Tetrahedralization[t].NeighInterface(Points, face);
+                    if (upwardsRatio > 0f)
+                        raincatch += area * upwardsRatio;
+                }
+
+            if (raincatch > 0f)
+                raincatchers.Add(new(t, raincatch));
+        }
+
+        RainCatchers = [..raincatchers];
+
+        //replace the faces by the originals (workaround as long as numeric issues have not been fixes)
+        // Faces.Clear();
+        // foreach(var f in faces)
+        // {
+        //     var face = soilFaces[f];
+        //     Span<int> abc = [vertexMap[face[0]], vertexMap[face[1]], vertexMap[face[2]]];
+        //     MemoryExtensions.Sort(abc);
+        //     Faces.Add(new(abc[0], abc[1], abc[2]));
+        // }
+
+		Water_g = new float[Tetrahedralization.Length];
+		Temperature = new float[Water_g.Length];
+		Steam = new float[Water_g.Length];
+        WaterCapacityPerCell = new float[Water_g.Length];
+        MinimumWaterToDiffuse = new float[Water_g.Length];
+
+		RequestsPresent = new HashSet<int>(Water_g.Length);
+		WaterRequests = new List<(PlantFormation2, int, float)>[Water_g.Length];
+		for (int i = 0; i < Water_g.Length; ++i)
+			WaterRequests[i] = [];
+
+        for(int i = 0; i < Tetrahedralization.Length; ++i)
+        {
+            Water_g[i] = CellVolumes[i] * 100f * 1000; //some basic water (100 litres per m³ which is kind of normal soil saturation of loamy soils which retain the an average amount of water)
+		    WaterCapacityPerCell[i] = CellVolumes[i] * 200f * 1000;
+            Debug.Assert(WaterCapacityPerCell[i] >= 0f);
+            MinimumWaterToDiffuse[i] = WaterCapacityPerCell[i] * 0.001f;
+        }
+
+		if (World != null)
+			ComputeDiffusionCoefs();
+	}
+
     void SuperTetrahedron(Vector3int[] points)
     {
         //Rough approximation by a bounding box

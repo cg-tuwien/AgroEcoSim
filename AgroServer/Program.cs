@@ -32,6 +32,7 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 builder.WebHost.ConfigureKestrel(options =>
 {
     options.ListenLocalhost(7215); // HTTP only
+    options.Limits.MaxRequestBodySize = 256L * 1024 * 1024;
 });
 
 builder.WebHost.UseUrls("http://localhost:7215");

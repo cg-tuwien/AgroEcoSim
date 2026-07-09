@@ -1,0 +1,604 @@
+/*
+import { useEffect, useRef } from "preact/compat";
+import { h } from 'preact';
+import * as THREE from "three";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls"
+import WEBGL from "three/examples/jsm/capabilities/WebGL"
+import { Index } from "src/helpers/Scene";
+import { Primitive, Primitives } from "../../helpers/Primitives";
+import appstate, { PlayState } from "../../appstate";
+import { batch, useSignalEffect } from "@preact/signals";
+import { Obstacle } from "src/helpers/Obstacle";
+import { Seed } from "src/helpers/Seed";
+import { backgroundColor } from "../../helpers/Selection";
+import { TransformControls } from 'three/examples/jsm/controls/TransformControls';
+import { BaseRequestObject } from "src/helpers/BaseRequestObject";
+import { CreateBudMesh, CreateLeafMesh, CreateRootMesh, CreateStemMesh, EncodePlantName, SetupMesh, UpdateBudMesh, UpdateLeafMesh, UpdateRootMesh, UpdateStemMesh, VisualizeBudMesh, VisualizeLeafMesh, VisualizeRootMesh, VisualizeStemMesh, doubleGreyMaterial } from "../../helpers/Plant";
+import { BoxTerrainItem, ITerrainItem, MeshTerrainItem, terrainDefaultMaterial } from "../../helpers/Terrain";
+
+enum Clicks { None, Down, Up, Double };
+
+interface IInitData {
+    tanFOV: number;
+    windowHeight: number;
+}
+
+interface ISeedRef {
+    type: "seed";
+    seed: Seed;
+}
+
+interface ITerrainRef {
+    type: "terrain";
+}
+
+interface IPlantRef {
+    type: "plant";
+    index: Index;
+}
+
+interface IObstacleRef {
+    type: "obstacle";
+    obstacle: Obstacle;
+}
+
+interface ITerrainRef {
+    type: "terrain";
+    terrain: ITerrainItem;
+}
+
+type DataRef = ISeedRef | ITerrainRef | IPlantRef | IObstacleRef | ITerrainRef;
+
+// export const TerrainLayer = 0;
+// export const SeedsLayer = 1;
+// export const ObstaclesLayer = 2;
+// export const PlantsLayer = 3;
+
+
+// const materialHovered = new THREE.MeshBasicMaterial({
+//     color: 'orange',
+//     polygonOffset: true,
+//     polygonOffsetFactor: -1,
+//     wireframe: true,
+//     wireframeLinewidth: 2,
+//     transparent: true,
+//     opacity: 0.8,
+//     depthWrite: false,
+//     depthTest: true
+// });
+
+export async function supportsWebGPU() {
+    const adapter = await navigator.gpu?.requestAdapter();
+    const device = await adapter?.requestDevice();
+    return device !== undefined;
+}
+
+
+export const scene = new THREE.Scene();
+let renderer: THREE.WebGLRenderer;
+let perspectiveCamera: THREE.PerspectiveCamera;
+let cameraControls: OrbitControls;
+
+export default function ThreeSceneFn (props: { gpu: GPUDevice}) {
+    let initialized = false;
+
+    const renderOnce = () => {
+        if (scene && perspectiveCamera && renderer) {
+            renderer.render(scene, perspectiveCamera);
+            // if (hoveredScene)
+            //     this.renderer.render(hoveredScene, perspectiveCamera);
+        }
+    }
+
+    const initCameras = (updateListeners: boolean) => {
+        if (!perspectiveCamera)
+        {
+            perspectiveCamera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.025, 5000);
+            perspectiveCamera.position.set(0, 3, 5);
+        }
+        //perspectiveCamera.layers.enableAll();
+        if (renderer) {
+            if (!cameraControls) {
+                cameraControls = new OrbitControls(perspectiveCamera, renderer.domElement);
+                //this.controls.enableKeys = false;
+                //this.controls.keys = { LEFT: "", RIGHT: "", BOTTOM: "", UP: "" };
+                cameraControls.enableRotate = true;
+                cameraControls.screenSpacePanning = true;
+                cameraControls.update();
+
+                cameraControls.addEventListener("change", renderOnce);
+                if (updateListeners){
+                    renderer.domElement.addEventListener('wheel', renderOnce);
+                    renderer.domElement.addEventListener('mousemove', onMouseMove);
+                    renderer.domElement.addEventListener('dblclick', onDblClick);
+                    renderer.domElement.addEventListener('mousedown', onMouseDown);
+                    renderer.domElement.addEventListener('mouseup', onMouseUp);
+                }
+            }
+
+            if (!appstate.transformControls) {
+                appstate.transformControls = new TransformControls(perspectiveCamera, renderer.domElement);
+                appstate.transformControls.addEventListener('change', renderOnce);
+                appstate.transformControls.addEventListener('dragging-changed', (event) => cameraControls.enabled = ! event.value);
+            }
+        }
+        //initData = { tanFOV: Math.tan( ( ( Math.PI / 180 ) * perspectiveCamera.fov / 2 ) ), windowHeight: window.innerHeight };
+    }
+
+    const initScene = () => {
+        if (!initialized)
+        {
+            scene.clear();
+            scene.background = backgroundColor;
+            // hemiLight.color.setHSL( 0.6, 1, 0.6 );
+            // hemiLight.groundColor.setHSL( 0.2, 0.2, 0.2 );
+            hemiLight.position.set( 0, 10000, 0 );
+            scene.add( hemiLight );
+            initialized = true;
+
+            scene.add(appstate.objSeeds);
+            appstate.seeds.value.forEach((s: Seed) => appstate.objSeeds.add(s.mesh));
+
+            scene.add(appstate.objTerrain);
+            scene.add(appstate.objObstacles);
+            scene.add(appstate.objPlants);
+
+            scene.add(appstate.transformControls);
+        }
+        else
+        {
+            appstate.objSeeds.clear();
+            appstate.objTerrain.clear();
+            appstate.objObstacles.clear();
+            appstate.objPlants.clear();
+        }
+        //scene.add(new THREE.AxesHelper( 1 ))
+        //const mesh = new THREE.Mesh(threeBoxPrimitive, new THREE.MeshBasicMaterial({color: new THREE.Color("#ff4411")}));
+        //mesh.translateY(10);
+        //const m = new THREE.Matrix4().scale(new THREE.Vector3(20, 0.01, 0.01));
+        //const m = new THREE.Matrix4().setPosition(new THREE.Vector3(0.5, 0.5, 0));
+        //mesh.applyMatrix4(m);
+        //scene.add(mesh);
+
+        buildTerrain();
+        buildPlants();
+        renderOnce();
+    }
+
+    const onMouseMove = (event: MouseEvent) => {
+        interaction(event.clientX, event.clientY, Clicks.None);
+    };
+
+    const onMouseDown = (event: MouseEvent) => {
+        interaction(event.clientX, event.clientY, Clicks.Down);
+    };
+
+    const onMouseUp = (event: MouseEvent) => {
+        interaction(event.clientX, event.clientY, Clicks.Up);
+
+    };
+
+    const onDblClick = (event: MouseEvent) => {
+        interaction(event.clientX, event.clientY, Clicks.Double);
+    };
+
+    const interaction = (x: number, y: number, clicks: Clicks) => {
+        if (renderer?.domElement && perspectiveCamera) {
+            const dom = renderer?.domElement;
+
+            mouse.x = ((x -  dom.offsetLeft) / renderer?.domElement.clientWidth) * 2 - 1;
+            mouse.y = 1 - ((y - dom.offsetTop) / renderer?.domElement.clientHeight) * 2;
+            mouse.inside = true;
+            raycastScene(clicks);
+        }
+    };
+
+    const raycastScene = (clicks: Clicks) => {
+        if (mouse.inside && scene && perspectiveCamera && appstate.performPicking.value) {
+            const mousePoint = new THREE.Vector3(mouse.x, mouse.y, 1); //The mouse point in homogenous coordinates (1 at the end)
+            mousePoint.unproject(perspectiveCamera);
+            const raycaster = new THREE.Raycaster(perspectiveCamera.position, mousePoint.sub(perspectiveCamera.position).normalize());
+            //mousePoint now contains direction
+            //raycaster.layers.set(SeedsLayer); //only pickable objects
+            //raycaster.params.Line = { threshold: 0.04 }
+            appstate.grabbed.value?.forEach((x: Seed) => x.move(raycaster));
+
+            const intersections = raycaster.intersectObjects(appstate.showSeeds.peek() ? appstate.objSeeds.children : [], true);
+            if (appstate.showObstacles.peek())
+                intersections.push(...raycaster.intersectObjects(appstate.objObstacles.children, true));
+            const plantObjects = appstate.showLeaves.peek() ? appstate.objPlants.children.filter(x => x.visible) : appstate.objPlants.children;
+            intersections.push(...raycaster.intersectObjects(plantObjects, true));
+            if (appstate.showTerrain.peek())
+                intersections.push(...raycaster.intersectObjects(appstate.objTerrain.children));
+            intersections.sort((a,b) => a.distance < b.distance ? -1 : (a.distance > b.distance ? 1 : 0));
+
+            batch(() => {
+                let seedPick: Seed = undefined;
+                let obstaclePick: Obstacle = undefined;
+                let plantPick: string = "";
+                let terrainPick : ITerrainItem = undefined;
+                if (intersections.length > 0) {
+                    const closest = intersections[0];
+                    if (closest.object.userData)
+                    {
+                        const ref = closest.object.userData as DataRef;
+                        switch (ref.type)
+                        {
+                            case "seed":
+                                seedPick = ref.seed;
+                                pickingLogic(clicks, seedPick, raycaster);
+
+                            break;
+                            case "obstacle":
+                                obstaclePick = ref.obstacle;
+                                pickingLogic(clicks, obstaclePick, raycaster);
+                            break;
+                            case "plant":
+                                if (clicks == Clicks.None)
+                                    plantPick = EncodePlantName(ref.index);
+                            break;
+                            case "terrain":
+                                terrainPick = ref.terrain;
+                                if (terrainPick)
+                                    pickingLogic(clicks, terrainPick, raycaster);
+                            break;
+                        }
+                    }
+                }
+
+                appstate.clearSeedHovers(seedPick);
+                appstate.clearObstacleHovers(obstaclePick);
+                appstate.clearTerrainHovers(terrainPick);
+
+                if (clicks == Clicks.Double)
+                {
+                    appstate.clearSeedSelects(seedPick);
+                    appstate.clearObstacleSelects(obstaclePick);
+                    appstate.clearTerrainSelects(terrainPick);
+                }
+                if (clicks == Clicks.Up)
+                {
+                    appstate.clearSeedGrabs(seedPick);
+                    appstate.clearObstacleGrabs(obstaclePick);
+                }
+
+                appstate.plantPick.value = plantPick;
+
+                if (!plantPick && seedPick)
+                {
+                    const seedIndex = appstate.seeds.peek().indexOf(seedPick);
+                    appstate.seedPick.value = seedIndex;
+                }
+                else
+                    appstate.seedPick.value = -1;
+
+                if (terrainPick)
+                {
+                    appstate.terrainPick.value = appstate.terrainList.indexOf(terrainPick);
+                }
+                else
+                    appstate.terrainPick.value = -1;
+            });
+        }
+    };
+
+    const updateObject3D = (mesh: THREE.Mesh, primitive: Primitive, leafGeometry: THREE.BufferGeometry, index: Index) => {
+        switch(primitive.type)
+        {
+            //buds diabled case Primitives.Sphere: mesh.matrix.fromArray([primitive.radius, 0, 0, primitive.center[0], 0, primitive.radius, 0, primitive.center[1], 0, 0, primitive.radius, primitive.center[2], 0, 0, 0, 1]).transpose(); break;
+            case Primitives.Sphere: return; //sphere / bud
+            default: mesh.matrix.fromArray([...primitive.affineTransform, 0, 0, 0, 1]).transpose(); break;
+        }
+
+        switch(primitive.type)
+        {
+            case Primitives.Disk: mesh.geometry = threeCirclePrimitive;
+                    if (mesh.material !== doubleGreyMaterial)
+                    {
+                        const tmp = mesh.material;
+                        mesh.material = doubleGreyMaterial;
+                        if (Array.isArray(tmp))
+                            tmp.forEach(m => m.dispose());
+                        else
+                            tmp.dispose();
+                    }
+                    mesh = SetupMesh(primitive, index, mesh); break; //disk / no organ just obstacles in v3
+            default: primitive.type == Primitives.Cylinder ? UpdateStemMesh(mesh, primitive, index) : UpdateRootMesh(mesh, primitive, index);
+                    mesh.matrix
+                        .scale(new THREE.Vector3(primitive.radius, primitive.length, primitive.radius))
+                        .setPosition(new THREE.Vector3(primitive.affineTransform[3] + mesh.matrix.elements[4] * 0.5, primitive.affineTransform[7] + mesh.matrix.elements[5] * 0.5, primitive.affineTransform[11] + mesh.matrix.elements[6] * 0.5));
+                    break; //cylinder / stem
+            //buds disabled case Primitives.Sphere: mesh = UpdateBudMesh(mesh, primitive, index); break; //sphere / bud
+            case Primitives.Rectangle: mesh = UpdateLeafMesh(mesh, primitive, leafGeometry, index); break; //plane / leaves
+        }
+    }
+
+    const buildObject3D = (primitive: Primitive, leafGeometry: THREE.BufferGeometry, index: Index) => {
+        let matrix: THREE.Matrix4;
+        switch(primitive.type)
+        {
+            //buds disabled case Primitives.Sphere: matrix = new THREE.Matrix4().fromArray([primitive.radius, 0, 0, primitive.center[0], 0, primitive.radius, 0, primitive.center[1], 0, 0, primitive.radius, primitive.center[2], 0, 0, 0, 1]).transpose(); break;
+            case Primitives.Sphere: return; //sphere / bud
+            default: matrix = new THREE.Matrix4().fromArray([...primitive.affineTransform, 0, 0, 0, 1]).transpose(); break;
+        }
+
+        let mesh: THREE.Mesh;
+        switch(primitive.type)
+        {
+            case Primitives.Disk: mesh = SetupMesh(primitive, index, new THREE.Mesh(threeCirclePrimitive, doubleGreyMaterial)); break; //disk / no organ just obstacles in v3
+            default: mesh = primitive.type == Primitives.Cylinder ? CreateStemMesh(primitive, index) : CreateRootMesh(primitive, index);
+                    matrix = matrix
+                        .scale(new THREE.Vector3(primitive.radius, primitive.length, primitive.radius))
+                        .setPosition(new THREE.Vector3(primitive.affineTransform[3] + matrix.elements[4] * 0.5, primitive.affineTransform[7] + matrix.elements[5] * 0.5, primitive.affineTransform[11] + matrix.elements[6] * 0.5));
+                    break; //cylinder / stem
+            //buds disabled case Primitives.Sphere: mesh = CreateBudMesh(primitive, index); break; //sphere / bud
+            case Primitives.Rectangle: mesh = CreateLeafMesh(primitive, leafGeometry, index); break; //plane / leaves
+        }
+
+        mesh.applyMatrix4(matrix);
+        mesh.matrixAutoUpdate = false;
+
+        appstate.objPlants.add(mesh);
+    }
+
+    const buildTerrain = () => {
+        appstate.objTerrain.clear();
+        appstate.objTerrain.userData = {...appstate.objTerrain.userData, ts: appstate.terrainTimestamp.value};
+        if (appstate.terrainList?.length > 0)
+        {
+            for(let i = 0; i < appstate.terrainList.length; ++i)
+            {
+                const t = appstate.terrainList[i];
+                let terrainMesh: THREE.Mesh = undefined;
+                if (t instanceof BoxTerrainItem)
+                {
+                    terrainMesh = new THREE.Mesh(terrainBoxPrimitive, terrainDefaultMaterial);
+                    terrainMesh.scale.set(t.sx(), t.sy(), t.sz());
+                    terrainMesh.position.set(t.posx(), t.posy() - t.sy(), t.posz());
+                }
+                else if (t instanceof MeshTerrainItem)
+                {
+                    const geometry = new THREE.BufferGeometry();
+                    geometry.setAttribute('position', new THREE.BufferAttribute(t.points, 3))
+                    geometry.setIndex(t.triangles);
+                    geometry.computeVertexNormals();
+                    geometry.computeBoundingBox();
+                    geometry.computeBoundingSphere();
+                    terrainMesh = new THREE.Mesh(geometry, terrainDefaultMaterial);
+                    terrainMesh.position.set(t.posx(), t.posy(), t.posz());
+                }
+                terrainMesh.userData = { type: "terrain", index: i, terrain: t };
+                t.mesh = terrainMesh;
+                appstate.objTerrain.add(terrainMesh);
+            }
+        }
+        else
+        {
+            const w = appstate.fieldSizeX.value;
+            const d = appstate.fieldSizeD.value;
+            const l = appstate.fieldSizeZ.value;
+
+            //const box = new THREE.Box3().setFromCenterAndSize(new THREE.Vector3(w * 0.5, -d*0.5, l * 0.5), new THREE.Vector3(w, d, l) );
+            //const terrainMesh = new THREE.Box3Helper( box, new THREE.Color("#cc9900") );
+            const terrainMesh = new THREE.Mesh(terrainBoxPrimitive, terrainDefaultMaterial);
+            terrainMesh.scale.set(w, d, l);
+            terrainMesh.position.set(0, -d, 0);
+            terrainMesh.userData = { type: "terrain" };
+            //terrainMesh.layers.set(TerrainLayer);
+            appstate.objTerrain.add(terrainMesh);
+        }
+
+        renderOnce();
+    }
+
+    const buildPlants = () => {
+        const sceneData = appstate.scene.value;
+        const debugBoxes = appstate.debugBoxes.value;
+        let counter = 0;
+        const plants = appstate.objPlants.children;
+        const entities = plants.length;
+        const species = appstate.species.value;
+
+        for(let i = 0; i < sceneData.length; ++i)
+        {
+            const entity = sceneData[i];
+            const leafGeometry = species.find(x => x.name.value == entity.species)?.leafGeometry;
+            for(let j = 0; j < entity.primitives.length; ++j)
+                counter < entities ? updateObject3D(plants[counter++] as THREE.Mesh, entity.primitives[j], leafGeometry, {entity: i, primitive: j}) : buildObject3D(entity.primitives[j], leafGeometry, {entity: i, primitive: j});
+        }
+
+        //dispose the remaining ones
+        if (counter < entities)
+            for(let i = entities - 1; i >= counter; --i)
+                plants.splice(counter, entities - counter).map((x: THREE.Mesh) => {
+                    if (x.userData.type == "plant")
+                    {
+                        const material = x.material;
+                        if (Array.isArray(material))
+                            material.forEach(m => {if (!m.name) m.dispose()});
+                        else if (!material.name)
+                            material.dispose();
+                    }
+                });
+
+        renderOnce();
+
+        setTimeout(() => {
+            if (appstate.previewRequestAfterSceneUpdate)
+            {
+                appstate.previewRequestAfterSceneUpdate = false;
+                appstate.previewRequest.value = true;
+            }
+            appstate.playRequest.value = true;
+        }, appstate.playing.peek() == PlayState.ForwardWaiting ? 0 : 20);
+    }
+
+    //divContainer = createRef<HTMLDivElement>();
+    //parent: HTMLElement | null | undefined;
+    //let width: number;
+    //let height: number;
+    // let onHover: (id: number) => void;
+    // let onDblClick: (id: number) => void;
+    // let hasSelection: () => boolean;
+    const hemiLight = new THREE.HemisphereLight( 0xffffff, 0x707070, 3.175 );
+
+    //let transformControls: TransformControls | undefined;
+
+    let animationRequest: number;
+    let mouse = { inside: false, x: 0, y: 0};
+
+    window.addEventListener("resize", () => {
+        //if (this.width !== this.props.width || this.height !== this.props.height) {
+            if (renderer)
+                renderer.setSize(window.innerWidth, window.innerHeight);
+
+            if ((window.innerWidth > 0 && window.innerHeight > 0) || !perspectiveCamera) {
+                if (perspectiveCamera) {
+                    perspectiveCamera.aspect = window.innerWidth / window.innerHeight;
+                    //if (this.initData) perspectiveCamera.fov = ( 360 / Math.PI ) * Math.atan( this.initData.tanFOV * ( window.innerHeight / this.initData.windowHeight ) );
+                    perspectiveCamera.updateProjectionMatrix();
+                    cameraControls?.update();
+                }
+                else
+                    initCameras(false);
+                renderOnce();
+            }
+            else
+            {
+                perspectiveCamera = undefined;
+                cameraControls?.dispose();
+                cameraControls = undefined;
+            }
+
+        return () =>
+        {
+            animationRequest && cancelAnimationFrame(animationRequest);
+            animationRequest = undefined;
+            //scene has/needs no dispose anymore
+            scene.clear();
+            cameraControls?.dispose();
+            cameraControls = undefined;
+        }
+    });
+
+
+    useSignalEffect(() => {
+        const anyGrab = appstate.grabbed.value?.length > 0;
+        if (cameraControls) cameraControls.enabled = !anyGrab;
+    });
+
+    useSignalEffect(() => {
+        appstate.objTerrain.clear();
+        buildTerrain();
+    });
+
+    useSignalEffect(() => {
+        appstate.objTerrain.visible = appstate.showTerrain.value;
+        renderOnce();
+    })
+
+    useSignalEffect(() => {
+        buildPlants();
+    })
+
+    useSignalEffect(() => {
+        if (appstate.needsRender.value) {
+            appstate.needsRender.value = false;
+            renderOnce();
+        }
+    });
+
+    useSignalEffect(() => {
+        appstate.objObstacles.visible = appstate.showObstacles.value;
+        renderOnce();
+    });
+
+    useSignalEffect(() => {
+        appstate.objSeeds.visible = appstate.showSeeds.value;
+        renderOnce();
+    });
+
+    const divRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        //https://medium.com/@connect.hashblock/using-webgpu-in-react-for-client-side-ml-visualization-b72da5cf1517
+        let newRenderer = false;
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('webgpu');
+        const presentationFormat = navigator.gpu.getPreferredCanvasFormat();
+        context?.configure({
+            props.gpu, format: presentationFormat
+        });
+
+        initCameras(newRenderer);
+
+        if (renderer && divRef.current) {
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            divRef.current.appendChild(renderer.domElement);
+
+            //this.renderer.gammaFactor = 2.2;
+            //this.renderer.outputEncoding = THREE.GammaEncoding;
+            renderer.outputColorSpace = THREE.SRGBColorSpace;
+            renderer.useLegacyLights = true;
+
+            renderer.setPixelRatio( window.devicePixelRatio || 1 );
+            //this.renderer.setClearColor(new THREE.Color(0x1c1c1c));
+            //this.renderer.toneMapping = THREE.NoToneMapping;
+            renderer.toneMapping = THREE.LinearToneMapping;
+            //this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.autoClear = false;
+            initScene();
+        }
+
+        return () => divRef.current.removeChild(renderer.domElement);
+    });
+
+    useSignalEffect(() => {
+        appstate.visualMapping.valueOf(); //manual subscription necessary
+        appstate.objPlants.traverse((x: THREE.Mesh) => {
+            const data = x.userData as IPlantRef;
+            const material = x.material as THREE.MeshStandardMaterial;
+            if (material)
+            {
+                if (x.geometry == threePlanePrimitive) //leaf
+                    VisualizeLeafMesh(material, data.index);
+                else if (x.geometry == threeCylinderPrimitive) //stem
+                    VisualizeStemMesh(material, data.index);
+                else if (x.geometry == threeSpherePrimitive) //bud
+                    VisualizeBudMesh(material, data.index);
+                else
+                    VisualizeRootMesh(material, data.index);
+            }
+        })
+        renderOnce();
+    })
+
+    function pickingLogic(clicks: Clicks, targetObject: BaseRequestObject, raycaster: THREE.Raycaster) {
+        if (clicks == Clicks.Double) {
+            if (targetObject.state.value != "select")
+                targetObject.selecthover();
+        }
+        else if (clicks == Clicks.Down) {
+            if (targetObject.state.value == "selecthover")
+                targetObject.grab(raycaster);
+        }
+        else if (clicks == Clicks.Up) {
+            if (targetObject.state.value == "grab")
+                targetObject.ungrab("selecthover");
+        }
+        else switch (targetObject.state.value) {
+            case "none": targetObject.hover(); break;
+            case "select": targetObject.selecthover(); break;
+        }
+    }
+
+    return <div id="main3Dviewport" ref={divRef}></div>;
+}
+
+export const terrainBoxPrimitive = new THREE.BoxGeometry().translate(0.5, 0.5, 0.5); //box
+export const threeBoxPrimitive = new THREE.BoxGeometry(); //box
+export const threeSpherePrimitive = new THREE.SphereGeometry(1, 8, 8); //sphere (type 4)
+export const threeCylinderPrimitive = new THREE.CylinderGeometry(1, 1, 1.0, 8); //cylinder (type 2)
+export const threePlanePrimitive = new THREE.PlaneGeometry(2, 2); //rect (type 8)
+export const threeCirclePrimitive = new THREE.CircleGeometry(0.5, 12).rotateX(-Math.PI * 0.5); //disk
+/**/

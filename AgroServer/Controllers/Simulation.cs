@@ -16,7 +16,10 @@ public class SimulationController// : ControllerBase
 
         api.MapPost("/", (SimulationRequest request) =>
         {
-            var world = Initialize.World(request);
+            var world = !string.IsNullOrWhiteSpace(request.FieldModelKey) && terrainBuffer.TryGetV2(request.FieldModelKey, out var terrain)
+                ? Initialize.World(request, terrain)
+                : Initialize.World(request);
+
             world.Irradiance.SetAddress(configuration["RendererIPMitsuba"], configuration["RendererPortMitsuba"], configuration["RendererIPTamashii"], configuration["RendererPortTamashii"], request?.RenderMode ?? 0);
 
             var start = DateTime.UtcNow.Ticks;
@@ -51,9 +54,19 @@ public class SimulationController// : ControllerBase
             return uploadService.Add(request);
         });
 
-        api.MapPost("/terrain", (ImportedObjData data) => terrainBuffer.Add(data));
+        //api.MapPost("/terrain", (ImportedObjData data) => terrainBuffer.Add(data));
+        //api.MapPost("/terrain", (string data) => terrainBuffer.Add(data));
+        api.MapPost("/terrain", async (HttpContext context) =>
+        {
+            var maxBodySizeFeature = context.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpMaxRequestBodySizeFeature>();
+            if (!maxBodySizeFeature.IsReadOnly) maxBodySizeFeature.MaxRequestBodySize = 256L * 1024L * 1024L;
 
-        api.MapPost("/seeds", (CellModel[][] data) => seedsBuffer.Add(data));
+            using var reader = new StreamReader(context.Request.Body);
+            var data = await reader.ReadToEndAsync();
+            return Results.Text(terrainBuffer.Add(data));
+        });
+
+        api.MapPost("/seeds", (TrayModel[] data) => seedsBuffer.Add(data));
 
         //Returns a listing of all predefined species
         api.MapGet("/species", () => SpeciesSettings.Predefined);

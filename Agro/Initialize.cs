@@ -8,90 +8,120 @@ namespace Agro;
 
 public static class Initialize
 {
-	public static AgroWorld World(SimulationRequest? settings = null, ISoilFormation terrainOverride = null)
-	{
-		var world = new AgroWorld(settings);
-		world.AddCallback(world.Irradiance.Tick);
+	public static AgroWorld World(SimulationRequest? settings, ISoilFormation terrainOverride)
+    {
+        var world = new AgroWorld(settings);
+        FirstStageInit(world);
 
-		world.StreamExporterFunc = world.Irradiance.ExportToStream;
-		world.RendererName = "unknown";
-
-		ISoilFormation soil;
-		if (terrainOverride != null)
-		{
-			terrainOverride.SetWorld(world);
-			soil = terrainOverride;
-		}
+        ISoilFormation soil;
+        if (terrainOverride != null)
+        {
+            terrainOverride.SetWorld(world);
+            soil = terrainOverride;
+        }
 		else
-		{
-			if (settings?.FieldModelData?.Faces?.Count > 0)
-				soil = new SoilFormationsList(world, settings.FieldModelData, 1f, settings.FieldItemRegex, settings.FieldItemRegexMaterial ?? false, world.FieldResolution);
-			else
-			{
-				var cellCounts = new Vector3(world.FieldSize.X, world.FieldSize.Z, world.FieldSize.Y) / world.FieldResolution;
-				var cellCountsInt = new Vector3i((int)Math.Round(cellCounts.X), (int)Math.Round(cellCounts.Y), (int)Math.Round(cellCounts.Z));
-				soil = new SoilFormationRegularVoxels(world, "DEFAULT", cellCountsInt, new(world.FieldSize.X, world.FieldSize.Z, world.FieldSize.Y));
-			}
-		}
+            soil = DefaultSoil(world);
 
-		world.Add(soil);
-		world.Soil = soil;
+        return SecondStageInit(settings, world, soil);
+    }
 
-		PlantFormation2[] plantsFormation;
-		var rnd = world.RNG;
-		if (settings?.Plants != null)
-		{
-			var plantsCount = settings.Plants.Length;
-			plantsFormation = new PlantFormation2[plantsCount];
-			for (int i = 0; i < plantsCount; ++i)
-			{
-				var minVegTemp = rnd.NextFloat(8f, 10f);
-				var soilIndex = settings.Plants[i].SoilIndex;
+    public static AgroWorld World(SimulationRequest? settings, ImportedObjDataV2 terrainOverride)
+    {
+        var world = new AgroWorld(settings);
+        FirstStageInit(world);
 
-				var pos = settings.Plants[i].Position ?? world.Soil.GetRandomSeedPosition(rnd, soilIndex);
-				pos.Y -= soil.GetMetricGroundDepth(pos.X, pos.Z, soilIndex);
+        var soil = terrainOverride?.Faces?.Count > 0
+			? new SoilFormationsList(world, terrainOverride, 1f, settings.FieldItemRegex, settings.FieldItemRegexMaterial ?? false, world.FieldResolution, true)
+			: DefaultSoil(world);
 
-				var seed = new SeedAgent(soilIndex, pos,
-										 rnd.NextPositiveFloat(0.02f),
-										 new Vector2(minVegTemp, minVegTemp + rnd.NextFloat(8f, 14f)));
+        return SecondStageInit(settings, world, soil);
+    }
+
+
+	public static AgroWorld World(SimulationRequest? settings = null)
+    {
+        var world = new AgroWorld(settings);
+        FirstStageInit(world);
+        return SecondStageInit(settings, world, DefaultSoil(world));
+    }
+
+    private static ISoilFormation DefaultSoil(AgroWorld world)
+    {
+        ISoilFormation soil;
+        var cellCounts = new Vector3(world.FieldSize.X, world.FieldSize.Z, world.FieldSize.Y) / world.FieldResolution;
+        var cellCountsInt = new Vector3i((int)Math.Round(cellCounts.X), (int)Math.Round(cellCounts.Y), (int)Math.Round(cellCounts.Z));
+        soil = new SoilFormationRegularVoxels(world, "DEFAULT", cellCountsInt, new(world.FieldSize.X, world.FieldSize.Z, world.FieldSize.Y));
+        return soil;
+    }
+
+    private static AgroWorld SecondStageInit(SimulationRequest? settings, AgroWorld world, ISoilFormation soil)
+    {
+        world.Add(soil);
+        world.Soil = soil;
+
+        PlantFormation2[] plantsFormation;
+        var rnd = world.RNG;
+        if (settings?.Plants != null)
+        {
+            var plantsCount = settings.Plants.Length;
+            plantsFormation = new PlantFormation2[plantsCount];
+            for (int i = 0; i < plantsCount; ++i)
+            {
+                var minVegTemp = rnd.NextFloat(8f, 10f);
+                var soilIndex = settings.Plants[i].SoilIndex;
+
+                var pos = settings.Plants[i].Position ?? world.Soil.GetRandomSeedPosition(rnd, soilIndex);
+                pos.Y -= soil.GetMetricGroundDepth(pos.X, pos.Z, soilIndex);
+
+                var seed = new SeedAgent(soilIndex, pos,
+                                         rnd.NextPositiveFloat(0.02f),
+                                         new Vector2(minVegTemp, minVegTemp + rnd.NextFloat(8f, 14f)));
                 var species = string.IsNullOrEmpty(settings.Plants[i].SpeciesName) ? null : SpeciesSettings.Predefined?.FirstOrDefault(x => x.Name == settings.Plants[i].SpeciesName);
                 Console.WriteLine($"Species lookup: {species?.Name ?? "null"}, BudLength: {species?.FlowerSettings.BudLength ?? -1}");
                 plantsFormation[i] = new PlantFormation2(world, species ?? SpeciesSettings.Default, soil, seed, rnd, world.HoursPerTick);
-			}
-		}
-		else
-		{
-			const int plantsCount = 1;
-			plantsFormation = new PlantFormation2[plantsCount];
-			for (int i = 0; i < plantsCount; ++i)
-			{
-				var minVegTemp = rnd.NextFloat(8f, 10f);
-				var soilIndex = (int)rnd.NextUInt((uint)world.Soil.FieldsCount);
-				var pos = new Vector3(world.FieldSize.X * rnd.NextFloat(),
-									-rnd.NextPositiveFloat(0.04f),
-									world.FieldSize.Y * rnd.NextFloat()); //Y because Z is depth
-				var seed = new SeedAgent(soilIndex, pos,
-											rnd.NextPositiveFloat(0.02f),
-											new Vector2(minVegTemp, minVegTemp + rnd.NextFloat(8f, 14f)));
-				plantsFormation[i] = new PlantFormation2(world, SpeciesSettings.Default, soil, seed, rnd, world.HoursPerTick);
-			}
-		}
-		world.AddRange(plantsFormation);
+            }
+        }
+        else
+        {
+            const int plantsCount = 1;
+            plantsFormation = new PlantFormation2[plantsCount];
+            for (int i = 0; i < plantsCount; ++i)
+            {
+                var minVegTemp = rnd.NextFloat(8f, 10f);
+                var soilIndex = (int)rnd.NextUInt((uint)world.Soil.FieldsCount);
+                var pos = new Vector3(world.FieldSize.X * rnd.NextFloat(),
+                                    -rnd.NextPositiveFloat(0.04f),
+                                    world.FieldSize.Y * rnd.NextFloat()); //Y because Z is depth
+                var seed = new SeedAgent(soilIndex, pos,
+                                            rnd.NextPositiveFloat(0.02f),
+                                            new Vector2(minVegTemp, minVegTemp + rnd.NextFloat(8f, 14f)));
+                plantsFormation[i] = new PlantFormation2(world, SpeciesSettings.Default, soil, seed, rnd, world.HoursPerTick);
+            }
+        }
+        world.AddRange(plantsFormation);
 
-		if (settings?.Obstacles != null)
-			foreach(var obstacle in settings.Obstacles)
-				switch (obstacle.Type.ToLower())
-				{
-					case "wall":
-						world.Add(new Wall(obstacle.Length ?? (obstacle.Radius.HasValue ? obstacle.Radius.Value * 2f : 1f), obstacle.Height ?? 1f, obstacle.Thickness ?? 0.1f, obstacle.Position ?? Vector3.Zero, obstacle.Orientation ?? 0f));
-						break;
-					case "umbrella":
-						world.Add(new Umbrella(obstacle.Radius ?? (obstacle.Length.HasValue ? obstacle.Length.Value * 0.5f : 1f), obstacle.Height ?? 1f, obstacle.Thickness ?? 0.1f, obstacle.Position ?? Vector3.Zero));
-						break;
-					case "mesh": break; //should be already added in SetWorld
-					default: throw new ArgumentException($"There is no such obstacle type as {obstacle.Type}.");
-				}
+        if (settings?.Obstacles != null)
+            foreach (var obstacle in settings.Obstacles)
+                switch (obstacle.Type.ToLower())
+                {
+                    case "wall":
+                        world.Add(new Wall(obstacle.Length ?? (obstacle.Radius.HasValue ? obstacle.Radius.Value * 2f : 1f), obstacle.Height ?? 1f, obstacle.Thickness ?? 0.1f, obstacle.Position ?? Vector3.Zero, obstacle.Orientation ?? 0f));
+                        break;
+                    case "umbrella":
+                        world.Add(new Umbrella(obstacle.Radius ?? (obstacle.Length.HasValue ? obstacle.Length.Value * 0.5f : 1f), obstacle.Height ?? 1f, obstacle.Thickness ?? 0.1f, obstacle.Position ?? Vector3.Zero));
+                        break;
+                    case "mesh": break; //should be already added in SetWorld
+                    default: throw new ArgumentException($"There is no such obstacle type as {obstacle.Type}.");
+                }
 
-		return world;
-	}
+        return world;
+    }
+
+    private static void FirstStageInit(AgroWorld world)
+    {
+        world.AddCallback(world.Irradiance.Tick);
+
+        world.StreamExporterFunc = world.Irradiance.ExportToStream;
+        world.RendererName = "unknown";
+    }
 }

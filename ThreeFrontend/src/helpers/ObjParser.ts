@@ -8,7 +8,24 @@ export interface IObjImport
     materials: any;
 }
 
-export async function Parse(f: File) : Promise<IObjImport> {
+export async function Parse(f: File) : Promise<string> {
+    const decoder = new TextDecoder("utf-8");
+    const reader = f.stream().getReader();
+    let buffer = "";
+    let { value: chunk, done} = await reader.read();
+    var remaining = f.size;
+    while (!done) {
+        buffer += decoder.decode(chunk, { stream: true });
+        remaining -= chunk.byteLength;
+        appstate.modelParsingProgress.value = remaining;
+        ({ value: chunk, done } = await reader.read());
+    }
+    buffer += decoder.decode();
+    appstate.modelParsingProgress.value = 0;
+    return buffer;
+}
+
+export async function ParseOld(f: File) : Promise<IObjImport> {
     const scale = 0.001;
     const vertices: string[] = [];
     const verticesSet = new Map<string, number>();
@@ -74,6 +91,12 @@ export async function Parse(f: File) : Promise<IObjImport> {
                 currentObjectName = line.substring(2);
                 currentObjectFaces = []
                 faces.set(currentObjectName, currentObjectFaces);
+                //Naming conventions:
+                //P1_Y00_S01 = P is the higher order structure (facade region), Y is the vertical row, S is the soil (box volume) within the given tray
+                //P1_Y00_T01 = P is the higher order structure (facade region), Y is the vertical row, T is the tray geometry
+                //P1_Y00_T01_D01 is a delimeter within the given tray
+                //P1_Y00_T01_CAP_END is the end cap of the given tray
+                //P1_Y00_T01_CAP_START is the start cap of the given tray
             }
             else if (line.startsWith('usemtl ')) {
                 materials.set(currentObjectName, line.substring(7));
@@ -96,7 +119,7 @@ export async function Parse(f: File) : Promise<IObjImport> {
             }
         }
     }
-
+    debugger;
     const result = {
         vertices: vertices,
         //normals: normals,

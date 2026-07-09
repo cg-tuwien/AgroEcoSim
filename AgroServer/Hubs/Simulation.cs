@@ -71,9 +71,9 @@ public class SimulationHub : Hub<IEditorHub>
 
     public async Task Terrain(string terrainId, ushort hoursPerTick, string pattern, bool patternForMaterial, float resolution)
     {
-        if (TerrainBuffer.TryGet(terrainId, out var objData))
+        if (TerrainBuffer.TryGetV2(terrainId, out var objData))
         {
-            var terrain = new SoilFormationsList(null, objData, 1f, pattern, patternForMaterial, resolution);
+            var terrain = new SoilFormationsList(null, objData, 1f, pattern, patternForMaterial, resolution, true);
             lock (ClientTerrains)
             {
                 ClientTerrains[Context.ConnectionId] = terrain;

@@ -1,3 +1,5 @@
+using Utils;
+
 namespace Agro;
 
 public class ImportedObjData
@@ -6,6 +8,13 @@ public class ImportedObjData
     //public string[] Normals { get; set; }
     public Dictionary<string, string[]> Faces { get; set; }
     public Dictionary<string, string> Materials { get; set; }
+}
+
+public class ImportedObjDataV2
+{
+    public string[] Vertices { get; set; }
+    //public string[] Normals { get; set; }
+    public Dictionary<string, (List<Vector3i> Triangles, List<int[]> Polygons)> Faces { get; set; }
 }
 
 public class SimulationRequest
@@ -83,7 +92,7 @@ public class SimulationRequest
     /// <summary>
     /// File data of the scene model
     /// </summary>
-    public ImportedObjData? FieldModelData { get; init; }
+    public string? FieldModelKey { get; init; }
     /// <summary>
     /// File name of the scene model
     /// </summary>

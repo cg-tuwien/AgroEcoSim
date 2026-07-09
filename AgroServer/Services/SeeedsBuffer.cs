@@ -6,20 +6,15 @@ namespace AgroServer.Services;
 public readonly struct SeedsBufferItem
 {
     public readonly DateTime Modified = DateTime.UtcNow;
-    public readonly Row[] Data;
+    public readonly TrayModel[] Data;
 
-    public SeedsBufferItem(CellModel[][] distribution)
-    {
-        Data = new Row[distribution.Length];
-        for(int i = 0; i < distribution.Length; ++i)
-            Data[i] = new(distribution[i], i);
-    }
+    public SeedsBufferItem(TrayModel[] distribution) => Data = distribution;
 }
 
 public interface ISeedsBuffer
 {
-    string Add(CellModel[][] distribution);
-    bool TryGet(string key, out Row[] data);
+    string Add(TrayModel[] distribution);
+    bool TryGet(string key, out TrayModel[] data);
 }
 
 public class SeedsBuffer : ISeedsBuffer
@@ -27,7 +22,7 @@ public class SeedsBuffer : ISeedsBuffer
     readonly Dictionary<string, SeedsBufferItem> SeedsPerConnection = [];
     static readonly TimeSpan CacheTimeout = TimeSpan.FromMinutes(5);
 
-    public string Add(CellModel[][] distribution)
+    public string Add(TrayModel[] distribution)
     {
         lock (SeedsPerConnection)
         {
@@ -47,7 +42,7 @@ public class SeedsBuffer : ISeedsBuffer
         }
     }
 
-    public bool TryGet(string key, out Row[] data)
+    public bool TryGet(string key, out TrayModel[] data)
     {
         lock (SeedsPerConnection)
         {

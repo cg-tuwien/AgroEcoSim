@@ -95,7 +95,7 @@ hubConnection.on("preview", (result: ISimPreview) => {
     {
         batch(() => {
             st.renderer.value = result.renderer;
-            st.historySize.value += binaryScene .byteLength + 24;
+            st.historySize.value += binaryScene.byteLength + 24;
             st.previewRequest.value = true;
         });
     }
@@ -133,6 +133,29 @@ interface ISimPreview
     scene: Uint8Array,
     renderer: string,
     step: number,
+}
+
+interface ITrayModel
+{
+    panel: number;
+    tray: number;
+    section: number;
+    row: number;
+    trayId: string;
+    sectionId: string;
+    plants: IPlantModel[];
+}
+
+interface IPlantModel
+{
+    species?: string;
+    key?: string;
+    type?: string;
+    note?: string;
+    status?: number;
+    x: number;
+    y: number;
+    z: number;
 }
 
 function base64ToArrayBuffer(base64: any) {
@@ -245,7 +268,7 @@ class State {
     fieldModelPath = signal("");
     fieldItemRegex = signal("erde");
     fieldItemRegexMaterial = signal(true);
-    fieldModelData?: IObjImport = undefined;
+    fieldModelData?: string = undefined;
     modelParsingProgress = signal(0);
     seedsDistributionData = "";
     seedsDistributionPath = signal("");
@@ -295,6 +318,7 @@ class State {
             if (hubConnection.state == SignalR.HubConnectionState.Connected)
             {
                 console.log(this.requestBody());
+                debugger;
                 const prepared = await fetch(`${location.protocol}//${BackendURI}/simulation/upload`, {
                     body: JSON.stringify(this.requestBody()),
                     method: 'post',
@@ -438,7 +462,7 @@ class State {
                                 for(let z = 0; z < zCount; ++z)
                                 {
                                     const pos = new THREE.Vector2(principatDir.x * mx, principatDir.y * mx).addScaledVector(secondaryDir, z * zDist).add(start);
-                                    result.push(new Seed(species[Math.floor(Math.random() * species.length)].name.peek(), pos.x, -0.02, pos.y, i, false));
+                                    result.push(new Seed(species[Math.floor(Math.random() * species.length)].name.peek(), pos.x, Math.max(0, terrain.sy() - 0.02), pos.y, i, false));
                                 }
                             }
                         }
@@ -645,7 +669,7 @@ class State {
 
                     self.seedsPerField.value = data.seedsPerField;
                     self.seedsOptimalDistance.value = data.seedsOptimalDistance;
-                    self.seeds.value = data.seeds.map(s => new Seed(s.species, s.px, s. py, s.pz, s.fi, true));
+                    self.seeds.value = data.seeds.map(s => new Seed(s.species, s.px, s. py, s.pz, s.fi, false));
 
                     self.obstacles.value = data.obstacles.map(o => new Obstacle(o.type, o.px, o.py, o.pz, o.ax, o.ay, o.l, o.h, o.t, new Float32Array(o.vt), o.fc));
 
@@ -708,11 +732,11 @@ class State {
         if (hubConnection.state == SignalR.HubConnectionState.Connected)
         {
             const bufferResponse = await fetch(`${location.protocol}//${BackendURI}/simulation/terrain`, {
-                body: JSON.stringify(this.fieldModelData),
+                body: this.fieldModelData,
                 method: 'post',
                 headers: {
                     'Accept': 'application/json',
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'text/plain'
                 }
             });
             const terrainId = await bufferResponse.text();
@@ -726,24 +750,57 @@ class State {
     }
 
     uploadSeedsDistribution = async (f: File) => {
-        this.seedsDistributionData = await f.text();
-        this.seedsDistributionPath.value = f.name;
-        if (hubConnection.state !== SignalR.HubConnectionState.Connected)
-            await start();
+        const text = await f.text();
+        const data = JSON.parse(text) as ITrayModel[];
 
-        if (hubConnection.state == SignalR.HubConnectionState.Connected)
-        {
-            const bufferResponse = await fetch(`${location.protocol}//${BackendURI}/simulation/seeds`, {
-                body: this.seedsDistributionData,
-                method: 'post',
-                headers: {
-                    'Accept': 'application/json',
-                    'Content-Type': 'application/json'
+        this.clearSeeds();
+
+        const speciesMap = new Map<string, Species>();
+        const normalize = (s: string) => {
+            return s?.toLowerCase()
+                    .normalize('NFD') // Decomposes accented characters
+                    .replace(/[\u0300-\u036f]/g, '') // Removes diacritics
+                    .replace(/[^a-zA-Z0-9\s]/g, '') // Removes special characters
+                    .replace(/\s{1,}/g, ' ') //Remove multiple spaecs
+                    .trim();
+        };
+        this.species.value.forEach(x => {
+            speciesMap.set(normalize(x.name.value), x);
+            speciesMap.set(normalize(x.aka.value), x);
+        });
+
+        const result : Seed[] = [];
+        data.forEach(section => {
+            section.plants.forEach(seed => {
+                const species = speciesMap.get(normalize(seed.species ?? ""));
+                if (species)
+                {
+                    const sectionIndex = this.terrainList.findIndex(x => x.id == section.sectionId);
+                    if (sectionIndex >= 0)
+                        result.push(new Seed(species.name.peek(), seed.x, seed.z, seed.y, sectionIndex, true));
                 }
             });
-            const distributionId = await bufferResponse.text();
-            hubConnection.invoke("seeds", distributionId);
-        }
+        });
+        this.seeds.value = [ ...result]
+
+        // this.seedsDistributionData = await f.text();
+        // this.seedsDistributionPath.value = f.name;
+        // if (hubConnection.state !== SignalR.HubConnectionState.Connected)
+        //     await start();
+
+        // if (hubConnection.state == SignalR.HubConnectionState.Connected)
+        // {
+        //     const bufferResponse = await fetch(`${location.protocol}//${BackendURI}/simulation/seeds`, {
+        //         body: this.seedsDistributionData,
+        //         method: 'post',
+        //         headers: {
+        //             'Accept': 'application/json',
+        //             'Content-Type': 'application/json'
+        //         }
+        //     });
+        //     const distributionId = await bufferResponse.text();
+        //     hubConnection.invoke("seeds", distributionId);
+        // }
     }
 
     clearSeedsDistribution = () => {

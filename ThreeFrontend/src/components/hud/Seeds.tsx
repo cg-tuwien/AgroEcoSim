@@ -26,7 +26,7 @@ export class Seeds extends Component
             <button name="clear-seeds" onClick={() => appstate.clearSeeds()}>Clear seeds</button>
             <br/>
             <input type="number" min={1} step={1} name={"seeds-per-field"} value={+appstate.seedsPerField.value.toFixed(0)} onChange={e => appstate.seedsPerField.value = parseInt(e.currentTarget.value)}/>
-            <button name="seeds-count" onClick={() => appstate.pushRndSeed(appstate.seedsPerField.value)}>Many seeds</button>
+            <button name="seeds-count" onClick={() => appstate.pushRndSeed(appstate.seedsPerField.value)}>Many seeds</button>per tray
             <br/>
             <input type="number" min={0} step={0.01} name={"seeds-optimal-distance"} value={+appstate.seedsOptimalDistance.value.toFixed(3)} onChange={e => appstate.seedsOptimalDistance.value = parseFloat(e.currentTarget.value)}/>
             <button name="seeds-dist" onClick={() => appstate.pushSeedRaster(appstate.seedsOptimalDistance.value)}>Evenly distributed seeds</button>

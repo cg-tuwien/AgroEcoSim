@@ -28,9 +28,16 @@ const seedMaterials : ReqObjMaterials = {
 export class Seed extends BaseRequestObject
 {
     species: Signal<string>;
-    constructor(spec: string, x: number, y: number, z: number, fieldIndex: number, isLoading: boolean) {
-        if (appstate.terrainList[fieldIndex] instanceof MeshTerrainItem && !isLoading)
-            y += appstate.terrainList[fieldIndex].sy();
+    constructor(spec: string, x: number, y: number, z: number, fieldIndex: number, globalCoordinates: boolean) {
+        if (appstate.terrainList[fieldIndex] instanceof MeshTerrainItem && globalCoordinates)
+        {
+            y += appstate.terrainList[fieldIndex].sy() - 0.01;
+
+            //the most recent json import has plant position in global coordinates, so let's bring them to local tray coords
+            x -= appstate.terrainList[fieldIndex].posx();
+            y -= appstate.terrainList[fieldIndex].posy();
+            z -= appstate.terrainList[fieldIndex].posz();
+        }
 
         super(x, y, z, seedMaterials, fieldIndex);
         this.species = signal(spec);
@@ -66,8 +73,12 @@ export class Seed extends BaseRequestObject
     }
 
     static rndItem(species: Species[], minDist?: number, fieldIndex?: number) {
+        const maxDepth = 0.04;
+        const limtedRnd = (padding: number) => {
+            return padding + Math.random() * (1 - 2 * padding);
+        };
         let fieldSize : THREE.Vector3;
-        console.log(fieldIndex, minDist, appstate.terrainList?.length);
+        // console.log(fieldIndex, minDist, appstate.terrainList?.length);
         if (appstate.terrainList?.length > 1)
         {
             if (!fieldIndex || fieldIndex < 0 || fieldIndex >= appstate.terrainList?.length) //select a random index if none or a negative or a too large one was specified
@@ -79,7 +90,7 @@ export class Seed extends BaseRequestObject
             fieldSize = new THREE.Vector3(appstate.fieldSizeX.value, appstate.fieldSizeD.value, appstate.fieldSizeZ.value);
         //console.log(fieldIndex, minDist, appstate.terrainList?.length);
 
-        let pos = new THREE.Vector3(Math.random() * fieldSize.x, -Math.random() * Math.min(0.1, fieldSize.y), Math.random() * fieldSize.z);
+        let pos = new THREE.Vector3(limtedRnd(0.1) * fieldSize.x, -Math.random() * Math.min(maxDepth, fieldSize.y), limtedRnd(0.1) * fieldSize.z);
         let [bestPos, bestIsolation] = [pos, 0];
         if (minDist > 0)
         {
@@ -93,13 +104,16 @@ export class Seed extends BaseRequestObject
                     bestPos = pos;
                     bestIsolation = dist;
                 }
-                pos = new THREE.Vector3(Math.random() * fieldSize.x, -Math.random() * Math.min(0.1, fieldSize.y), Math.random() * fieldSize.z);
+                pos = new THREE.Vector3(limtedRnd(0.1) * fieldSize.x, -Math.random() * Math.min(maxDepth, fieldSize.y), limtedRnd(0.1) * fieldSize.z);
                 dist = Seed.checkDist(fieldSize, pos, fieldIndex);
             }
 
             if (dist < minDist)
                 pos = bestPos;
         }
+
+        if (appstate.terrainList?.length > 0)
+            pos.setY(pos.y + fieldSize.y);
 
         return new Seed(species[Math.floor(Math.random() * species.length)].name.peek(), pos.x, pos.y, pos.z, fieldIndex ?? 0, false);
     }
