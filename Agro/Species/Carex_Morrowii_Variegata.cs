@@ -26,21 +26,21 @@ public static class Carex_Morrowii_Variegata
 
         LeafLength = 0.25f,
         LeafLengthVar = 0.05f,
-        LeafRadius = 0.004f,       
+        LeafRadius = 0.004f,
         LeafRadiusVar = 0.001f,
         LeafPitchVar = 3f * (MathF.PI / 180f),
         LeafPitch = 80 * (MathF.PI / 180f),
 
         LeafGrowthTime = 24f * 14f * 2f,
         LeafGrowthTimeVar = 24f * 5f,
-        MaxLeaveAge = 24f * 400f,   
+        MaxLeaveAge = 24f * 400f,
 
         PetioleLength = 0.02f,
         PetioleLengthVar = 0.005f,
         PetioleRadius = 0.0015f,
         PetioleRadiusVar = 0.0002f,
 
-        pNewCrown = 0.65f,           
+        pNewCrown = 0.65f,
         crownPitch = 0.55f,
         growthFactor = 0.18f,
         MaxRadius = 0.003f,
@@ -51,21 +51,21 @@ public static class Carex_Morrowii_Variegata
         LateralRollVar = 5f * (MathF.PI / 180f),
 
         LateralsPerNode = 2,
-        NodeDistance = 0f,          
+        NodeDistance = 0f,
         NodeDistanceVar = 0.000f,
         DominanceFactor = 0.75f,
 
         RizomeMaxDepth = 3,
         RizomeLength = 0.035f,
         RizomeRadius = 0.0035f,
-        pExpandRizome = 0.0012f,          
+        pExpandRizome = 0.0012f,
         SympodialStartAgeHours = 24f * 45f,
         FloweringStartAgeHours = 24f * 60f,
         FloweringEndAgeHours = 24f * 150f,
         pChaningSeaonns = [0.010f, 0.002f, 0.004f, 0.0f],
-        pFloweringSeaonns = [0.002f, 0.035f, 0.002f, 0.0f],  
+        pFloweringSeaonns = [0.002f, 0.035f, 0.002f, 0.0f],
         WoodElasticModulus = 1.0e8f,
-        GreenElasticModulus = 4e6f,         
+        GreenElasticModulus = 4e6f,
         DepthFactor = 0.01f,
         FlowerElasticModulus = 4e7f,
 
@@ -158,10 +158,6 @@ public static class Carex_Morrowii_Variegata
                 CarexMorrowiiVariegataCenterPreset.SeasonalSenescence,
                 CarexMorrowiiVariegataCenterPreset.StressSenescence
             )
-            {
-                HealthySeasonCurve = CarexMorrowiiVariegataCenterPreset.HealthySeason,
-                HealthySeasonDirection = CarexMorrowiiVariegataCenterPreset.HealthySeasonDirection,
-            }
         ),
 
         // Placeholder for leaf shape - to be replaced with actual Carex linear leaf mesh later
