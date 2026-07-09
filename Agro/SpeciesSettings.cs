@@ -315,6 +315,7 @@ public class SpeciesSettings
         Predefined.Add(Bergenia_Cordifolia.Init());
         Predefined.Add(Heuchera_Micrantha.Init());
         Predefined.Add(Campanula_Poscharskyana.Init());
+        Predefined.Add(Carex_Morrowii_Variegata.Init());
 
         // Campanula;
         // Heuchera;
