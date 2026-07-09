@@ -25,12 +25,12 @@ public static class Carex_Morrowii_Variegata
         Height = 0.40f,
 
         // Carex has long, narrow, grass-like leaves that arch outward
-        LeafLength = 0.30f,
+        LeafLength = 0.24f,
         LeafLengthVar = 0.08f,
         LeafRadius = 0.003f,       // ~3mm half-width = 6mm wide leaf
         LeafRadiusVar = 0.0008f,
         LeafPitchVar = 8f * DegToRad,
-        LeafPitch = 15f * DegToRad,  // Small pitch - leaves grow mostly horizontal then arch down
+        LeafPitch = 12f * DegToRad,  // Small pitch - leaves grow mostly horizontal then arch down
 
         LeafGrowthTime = 24f * 18f * 2f,
         LeafGrowthTimeVar = 24f * 6f,
