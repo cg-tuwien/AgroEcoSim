@@ -87,5 +87,5 @@ namespace Agro
         public int pedalCount { get; set; } = 5;
     }
 
-
+    public enum FruitType { Berry, Accessory, Aggregate, Pome, Drupe }
 }

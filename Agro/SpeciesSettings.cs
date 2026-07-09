@@ -257,6 +257,14 @@ public class SpeciesSettings
     };
     #endregion
 
+    #region Fruit Settings
+    /// <summary>
+    /// Fruit production settings for species that produce edible fruits.
+    /// Null for ornamental-only species.
+    /// </summary>
+    public FruitSettings? FruitSettings { get; init; } = null;
+    #endregion
+
     public static List<SpeciesSettings> Predefined = [];
 
     [JsonPropertyName("WEM")]
@@ -316,6 +324,7 @@ public class SpeciesSettings
         Predefined.Add(Heuchera_Micrantha.Init());
         Predefined.Add(Campanula_Poscharskyana.Init());
         Predefined.Add(Carex_Morrowii_Variegata.Init());
+        Predefined.Add(Fragaria_Vesca_Ruegen.Init());
 
         // Campanula;
         // Heuchera;
