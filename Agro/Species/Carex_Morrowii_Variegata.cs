@@ -73,83 +73,88 @@ public static class Carex_Morrowii_Variegata
 
         FlowerSettings = new FlowerSettings
         {
-            PedalLength = 0.003f,
-            PedalRadius = 0.001f,
+            // Carex flowers grow on tall upright stems (culms) that rise above foliage
+            PedalLength = 0.002f,        // Very small - Carex flowers are inconspicuous
+            PedalRadius = 0.0008f,       // Tiny spikelet scales
             PedalLengthVar = 0.0005f,
-            pedalGrowthTime = 48f,
-            pedalGrowthTimeVar = 12f,
+            pedalGrowthTime = 72f,
+            pedalGrowthTimeVar = 18f,
+            pedalCount = 1,              // Single spikelet structure, not radial petals
 
             HasFlowerBaseLeaves = false,
             FlowerPhenology = new LeafPhenology(
-                expectedAge: 20f * 24f,
+                expectedAge: 30f * 24f,
                 colorModel: new ColorModel(
                     age: new ColorCurve()
-                        .Add(0.00f, ColorUtils.OkLabFromSrgb8(200, 195, 185))
-                        .Add(0.25f, ColorUtils.OkLabFromSrgb8(190, 185, 175))
-                        .Add(0.70f, ColorUtils.OkLabFromSrgb8(180, 175, 165))
-                        .Add(1.00f, ColorUtils.OkLabFromSrgb8(170, 165, 155)),
+                        .Add(0.00f, ColorUtils.OkLabFromSrgb8(140, 135, 110))  // young greenish-brown
+                        .Add(0.25f, ColorUtils.OkLabFromSrgb8(130, 125, 100))  // developing
+                        .Add(0.70f, ColorUtils.OkLabFromSrgb8(120, 115, 90))   // mature brown
+                        .Add(1.00f, ColorUtils.OkLabFromSrgb8(110, 105, 80)),  // senescing
                     stress: new ColorCurve()
                         .Add(0.00f, new Vector3(0.00f, 1.00f, 0.00f))
                         .Add(1.00f, new Vector3(-0.04f, 0.82f, 0.01f)),
                     senescenceSeason: new ColorCurve()
-                        .Add(0.00f, ColorUtils.OkLabFromSrgb8(185, 175, 150))
-                        .Add(0.40f, ColorUtils.OkLabFromSrgb8(165, 150, 120))
-                        .Add(0.75f, ColorUtils.OkLabFromSrgb8(140, 125, 95))
-                        .Add(1.00f, ColorUtils.OkLabFromSrgb8(110, 95, 70))
+                        .Add(0.00f, ColorUtils.OkLabFromSrgb8(135, 130, 105))
+                        .Add(0.40f, ColorUtils.OkLabFromSrgb8(125, 120, 95))
+                        .Add(0.75f, ColorUtils.OkLabFromSrgb8(115, 110, 85))
+                        .Add(1.00f, ColorUtils.OkLabFromSrgb8(100, 95, 70))
                 )
             ),
 
-            PetalSenescenceDurationH = 120f,
+            PetalSenescenceDurationH = 240f,
 
-            BudLength = 0.003f,
-            BudRadius = 0.0015f,
-            BudBloomAge = 96u,
-            FlowerMaxAge = 400u,
+            BudLength = 0.004f,
+            BudRadius = 0.002f,
+            BudBloomAge = 120u,
+            FlowerMaxAge = 600u,
 
-            PetiolLength = 0.004f,
-            PetiolRadius = 0.00025f,
-            PetiolLengthVar = 0.0015f,
-            PetiolRadiusVar = 0.00008f,
+            // Flower stem (culm) settings - tall and upright
+            PetiolLength = 0.003f,       // Minimal pedicel
+            PetiolRadius = 0.0003f,
+            PetiolLengthVar = 0.001f,
+            PetiolRadiusVar = 0.0001f,
             petiolSegments = 1,
 
-            bStemLength = 0.005f,
-            bStemLengthVar = 0.002f,
-            bStemRadius = 0.0003f,
-            bStemRadiusVar = 0.00008f,
+            // Base stem that elevates the flower - this is the main culm
+            bStemLength = 0.18f,         // ~18cm tall flowering stem (reaches leaf height)
+            bStemLengthVar = 0.04f,
+            bStemRadius = 0.0012f,       // Thin but sturdy
+            bStemRadiusVar = 0.0002f,
 
-            stemLength = 0.006f,
-            stemLengthVar = 0.0015f,
-            fStemRadius = 0.00025f,
-            fStemRadiusVar = 0.00008f,
+            stemLength = 0.004f,         // Minimal additional stem segments
+            stemLengthVar = 0.001f,
+            fStemRadius = 0.0004f,
+            fStemRadiusVar = 0.0001f,
 
-            flowerBaseDebth = 2,
+            flowerBaseDebth = 1,         // Single flowering stem from base
             flowerDebth = 1,
-            LateralsPerNode = 1,
+            LateralsPerNode = 0,         // No lateral branches on flower stem
             FlowersPerInternode = 1,
-            clusterSize = 2,
-            clusterAngle = 0.12f,
+            clusterSize = 1,             // Single terminal spikelet
+            clusterAngle = 0.05f,
             deterministic = true,
             continous = false,
-            internodeFlower = true,
+            internodeFlower = false,     // Terminal flower only
             internodeFlowerWithStem = false,
             floralDepthFactor = 1,
-            pFlowerDebth = 0.4f,
+            pFlowerDebth = 0.3f,
 
-            LateralAngle = 15,
-            LateralRoll = 8,
-            BaseLaterals = 1,
-            BaseLateralAngle = 50,
-            BaseLateralRoll = 6,
-            pFlowerBaseDebth = 0.4f,
+            LateralAngle = 5,            // Nearly vertical
+            LateralRoll = 3,
+            BaseLaterals = 0,            // No basal laterals on flower stem
+            BaseLateralAngle = 5,
+            BaseLateralRoll = 3,
+            pFlowerBaseDebth = 0.3f,
 
-            LeafLength = 0.006f,
-            LeafRadius = 0.003f,
-            LeafLengthVar = 0.0015f,
-            LeafRadiusVar = 0.0008f,
-            LeavePetioleLength = 0.0015f,
+            // Spikelet bracts (reduced leaves on flower stem)
+            LeafLength = 0.015f,
+            LeafRadius = 0.0015f,
+            LeafLengthVar = 0.004f,
+            LeafRadiusVar = 0.0004f,
+            LeavePetioleLength = 0.002f,
             LeavePetioleRadius = 0.00015f,
 
-            growthTime = 60f,
+            growthTime = 96f,
         },
 
         LeafPhenology = new LeafPhenology(
