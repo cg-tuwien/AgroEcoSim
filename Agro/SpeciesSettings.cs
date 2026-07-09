@@ -313,6 +313,7 @@ public class SpeciesSettings
         Predefined.Add(Geranium_Macrorrhizum.Init());
         Predefined.Add(Geranium_x_Cantabrigiense.Init());
         Predefined.Add(Bergenia_Cordifolia.Init());
+        Predefined.Add(Heuchera_Micrantha.Init());
 
         // Campanula;
         // Heuchera;
