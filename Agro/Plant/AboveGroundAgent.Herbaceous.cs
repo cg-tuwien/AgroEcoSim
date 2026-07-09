@@ -587,7 +587,10 @@ namespace Agro
                 {
                     //Console.WriteLine("commit");
                     var lateralPitch = agent.LateralAngle + formation.Plant.Parameters.LateralRoll;
-                    var meristem = formation.Birth(new(formation.Plant, agentID, OrganTypes.FlowerMeristem, TurnUpwards(agent.RandomOrientation(formation.Plant, formation.Plant.Parameters, agent.Orientation)), 0.1f * agent.Energy, initialResources: prevResources, initialProduction: prevProduction) { Water_g = 0.1f * agent.Water_g, LateralAngle = lateralPitch, DominanceLevel = agent.DominanceLevel, FlowerAgent = new Flower() { debth = 0, flowerBase = true } });
+                    // For flower stems, use TurnUpwards directly without RandomOrientation bending
+                    // This ensures flower culms grow straight up (important for Carex and similar species)
+                    var flowerOrientation = TurnUpwards(agent.Orientation);
+                    var meristem = formation.Birth(new(formation.Plant, agentID, OrganTypes.FlowerMeristem, flowerOrientation, 0.1f * agent.Energy, initialResources: prevResources, initialProduction: prevProduction) { Water_g = 0.1f * agent.Water_g, LateralAngle = lateralPitch, DominanceLevel = agent.DominanceLevel, FlowerAgent = new Flower() { debth = 0, flowerBase = true } });
                     agent.Energy *= 0.9f;
                     agent.Water_g *= 0.9f;
                 }
@@ -634,7 +637,7 @@ namespace Agro
                 cos = Math.Clamp(cos, -1f, 1f);      // numerische Sicherheit
                 float angleFromParent = MathF.Acos(cos);
 
-                // nur weiter „runterbiegen“, solange der Winkel noch kleiner als maxAngle ist
+                // nur weiter „runterbiegen", solange der Winkel noch kleiner als maxAngle ist
                 if (angleFromParent < maxAngle)
                 {
                     // Achse senkrecht zu Parent- und Child-Richtung
