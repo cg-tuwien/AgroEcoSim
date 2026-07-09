@@ -133,119 +133,128 @@ internal class Component
 	}
 }
 
+internal readonly record struct TrayAddr
+{
+	/// <summary>
+	/// Horizontal region of the facade
+	/// </summary>
+	readonly byte Region;
+	/// <summary>
+	/// Tray (horizontal) within the region
+	/// </summary>
+	readonly byte Tray;
+	/// <summary>
+	/// Section of the tray (horizontal, divided by delimeters)
+	/// </summary>
+	readonly byte Section;
+	/// <summary>
+	/// Vertical index
+	/// </summary>
+	readonly byte Row;
+	public TrayAddr(byte region, byte tray, byte section, byte row)
+	{
+		Region = region;
+		Tray = tray;
+		Section = section;
+		Row = row;
+	}
+}
 
-public class SoilFormationsList : ISoilFormation
+public partial class SoilFormationsList : ISoilFormation
 {
 	const MethodImplOptions AI = MethodImplOptions.AggressiveInlining;
 	readonly AgroWorld World;
 	readonly List<ISoilFormation> Items;
+	readonly Dictionary<TrayAddr, int> Addresses;
 	readonly List<MeshObstacle> Obstacles;
 
-	public SoilFormationsList(AgroWorld world, ImportedObjData objData, float scale, string? soilItemRegex, bool regexForMaterials, float fieldResolution)
+	public SoilFormationsList(AgroWorld world, ImportedObjDataV2 objData, float scale, string? soilItemRegex, bool regexForMaterials, float fieldResolution, bool blenderToGl)
 	{
 		World = world;
 		var asVoxels = false;
+		var delimeters = new List<SoilDelimeter>();
 
 		var vertices = new Vector3[objData.Vertices.Length];
 		for (int i = 0; i < objData.Vertices.Length; ++i)
 		{
-			var line = Regex.Replace(objData.Vertices[i], @"\s+", " ");
+			var line = VertexRegex().Replace(objData.Vertices[i], " ");
 			var vertex = line.Split(' ').Where(x => x?.Length > 0).ToList();
 			if (vertex.Count != 3)
 				throw new Exception($"Invalid count of vertex coordinates. Expected: 3. Provided: {vertex.Count}.");
-			vertices[i] = new Vector3(float.Parse(vertex[0], CultureInfo.InvariantCulture), float.Parse(vertex[1], CultureInfo.InvariantCulture), float.Parse(vertex[2], CultureInfo.InvariantCulture)) * scale;
+			vertices[i] = new Vector3(float.Parse(vertex[0], CultureInfo.InvariantCulture), float.Parse(vertex[blenderToGl ? 2 : 1], CultureInfo.InvariantCulture), float.Parse(vertex[blenderToGl ? 1 : 2], CultureInfo.InvariantCulture)) * scale;
 		}
 		var regex = soilItemRegex != null ? new Regex(soilItemRegex, RegexOptions.IgnoreCase) : null;
-		var soilFaces = new List<List<int>>();
 		var obstacleFaces = new List<List<int>>();
 
 		Items = [];
-		var components = new List<Component>();
-		var verts = new List<int>();
-		var edges = new List<Edge>();
-		var remove = new List<int>();
-		foreach (var (groupName, faceLines) in objData.Faces)
+		Addresses = [];
+		Span<byte> addr = stackalloc byte[4];
+		foreach (var (groupName, (_, polygons)) in objData.Faces)
 		{
-			var nameToMatch = regexForMaterials && (objData.Materials?.TryGetValue(groupName, out var mat) ?? false) ? mat : groupName;
-			if (regex?.IsMatch(nameToMatch) ?? true) //for FAV use *Natur_Erde*
+			//var nameToMatch = regexForMaterials && (objData.Materials?.TryGetValue(groupName, out var mat) ?? false) ? mat : groupName;
+			var nameParts = groupName.Split("_");
+			if (nameParts[^1][0] == 'S' && char.IsDigit(nameParts[^1][1]))
 			{
-				soilFaces.Clear();
-				components.Clear();
-				for (int i = 0; i < faceLines.Length; ++i)
+				if (asVoxels)
 				{
-					var face = faceLines[i].Split(' ');
-					verts.Clear();
-					verts.AddRange(face.Select(ParseFaceIndex));
-					Debug.Assert(verts.All(x => x < vertices.Length));
-					soilFaces.Add([.. verts]);
-
-					edges.Clear();
-					for (int v = 1; v < verts.Count; ++v)
-						edges.Add(new(verts[v - 1], verts[v]));
-					edges.Add(new(verts[^1], verts[0]));
-
-					remove.Clear();
-					var target = -1;
-					for (int c = 0; c < components.Count; ++c)
-						if (target < 0)
+					var min = new Vector3(float.MaxValue, float.MaxValue, float.MaxValue);
+					var max = new Vector3(float.MinValue, float.MinValue, float.MinValue);
+					foreach(var poly in polygons)
+						for(int i = 0; i < poly.Length; ++i)
 						{
-							if (components[c].TryConnect(i, edges))
-								target = c;
-						}
-						else
-						{
-							if (components[target].TryConnect(i, edges, components[c]))
-								remove.Add(c);
+							min = Vector3.Min(min, vertices[poly[i]]);
+							max = Vector3.Max(max, vertices[poly[i]]);
 						}
 
-					if (target < 0)
-						components.Add(new(i, verts));
-					else if (remove.Count > 0)
-						for (int c = remove.Count - 1; c >= 0; --c)
-							components.RemoveAt(remove[c]);
-				}
-
-				foreach (var item in components)
-				{
-					if (asVoxels)
+					var metricSize = max - min;
+					if (metricSize.X > 0.01f && metricSize.Y > 0.01f && metricSize.Z > 0.01f)
 					{
-						var min = new Vector3(float.MaxValue, float.MaxValue, float.MaxValue);
-						var max = new Vector3(float.MinValue, float.MinValue, float.MinValue);
-						foreach (var fi in item.Faces)
-						{
-							var face = soilFaces[fi];
-							for (int fv = 0; fv < face.Count; ++fv)
-							{
-								Debug.Assert(face[fv] < vertices.Length);
-								min = Vector3.Min(min, vertices[face[fv]]);
-								max = Vector3.Max(max, vertices[face[fv]]);
-							}
-						}
-
-						var metricSize = max - min;
-						if (metricSize.X > 0.01f && metricSize.Y > 0.01f && metricSize.Z > 0.01f)
-						{
-							//var celularSize = Vector3i.Max(new Vector3i(metricSize / fieldResolution), new Vector3i(1, 1, 1));
-							//Items.Add(new(world, celularSize, metricSize, min));
-							var cellCounts = new Vector3(metricSize.X, metricSize.Y, metricSize.Z) / fieldResolution;
-							var cellCountsInt = new Vector3i((int)Math.Round(cellCounts.X), (int)Math.Round(cellCounts.Y), (int)Math.Round(cellCounts.Z));
-							Items.Add(new SoilFormationRegularVoxels(world, groupName, cellCountsInt, metricSize, new(min.X, max.Y, min.Z))); //take max.Y since soil exapnds towards negative UP
-						}
+						//var celularSize = Vector3i.Max(new Vector3i(metricSize / fieldResolution), new Vector3i(1, 1, 1));
+						//Items.Add(new(world, celularSize, metricSize, min));
+						var cellCounts = new Vector3(metricSize.X, metricSize.Y, metricSize.Z) / fieldResolution;
+						var cellCountsInt = new Vector3i((int)Math.Round(cellCounts.X), (int)Math.Round(cellCounts.Y), (int)Math.Round(cellCounts.Z));
+						Items.Add(new SoilFormationRegularVoxels(world, groupName, cellCountsInt, metricSize, new(min.X, max.Y, min.Z))); //take max.Y since soil exapnds towards negative UP
 					}
-					else //asVoronoi
-						Items.Add(new SoilFormationTetrahedral(world, groupName, vertices, item.Faces, soilFaces));
 				}
+				else //asVoronoi
+				{
+					//check for delimeters
+					var trayName = groupName[..groupName.LastIndexOf('_')];
+					var trayX = nameParts[^1][1..];
+					var delimBaseName = $"{trayName}_T{trayX}_";
+					delimeters.Clear();
+
+					if (objData.Faces.TryGetValue($"{delimBaseName}D00", out var f))
+						AddDelimeter(delimeters, f, 0);
+					else if (objData.Faces.TryGetValue($"{delimBaseName}D0", out f))
+						AddDelimeter(delimeters, f, 0);
+
+					var checkNext = true;
+					for(int i = 1; checkNext && i < 100; ++i)
+					{
+						var name = $"{delimBaseName}D{i:D2}";
+						if (objData.Faces.TryGetValue(name, out f))
+                            AddDelimeter(delimeters, f, i);
+                        else if (i < 10 && objData.Faces.TryGetValue($"{delimBaseName}D{i:D1}", out f))
+							AddDelimeter(delimeters, f, i);
+					}
+
+					Items.Add(new SoilFormationTetrahedral(world, groupName, vertices, polygons, delimeters));
+				}
+
+				addr[0] = 0; addr[1] = 0; addr[2] = 0; addr[3] = 0;
+				for (int i = 0; i < nameParts.Length; ++i)
+				{
+					var a = byte.Parse(nameParts[i][1..]);
+					switch(nameParts[i][0]) { case 'P': addr[0] = a; break; case 'T': addr[1] = a; break; case 'S': addr[2] = a; break; case 'Y': addr[3] = a; break; }
+				}
+
+				Addresses.Add(new(addr[0], addr[1], addr[2], addr[3]), Addresses.Count);
 			}
 			else //otherwise consider it an obstacle
 			{
-				for (int i = 0; i < faceLines.Length; ++i)
-				{
-					var face = faceLines[i].Split(' ');
-					verts.Clear();
-					verts.AddRange(face.Select(ParseFaceIndex));
-					Debug.Assert(verts.All(x => x < vertices.Length));
-					obstacleFaces.Add([.. verts]);
-				}
+				foreach(var poly in polygons)
+					obstacleFaces.Add([.. poly]);
 			}
 		}
 
@@ -259,6 +268,19 @@ public class SoilFormationsList : ISoilFormation
 			else
 				World.Add(new MeshObstacle(vertices, obstacleFaces));
 		}
+    }
+
+	static void AddDelimeter(List<SoilDelimeter> delimeters, (List<Vector3i> Triangles, List<int[]> Polygons) f, int i)
+	{
+		var faces = f.Polygons;
+		if (faces.Count == 1)
+		{
+			int[] reversed = [.. faces[0]];
+			Array.Reverse(reversed);
+			delimeters.Add(new(i, faces[0], reversed));
+		}
+		else
+			delimeters.Add(new(i, faces[0], faces[1]));
 	}
 
 	public SoilFormationsList(AgroWorld world, IList<IList<Vector3>> verticesInput, IList<IList<int>> facesInput, float fieldResolution, float scale = 1f)
@@ -460,5 +482,7 @@ public class SoilFormationsList : ISoilFormation
 	}
 
 	public void Write(BinaryWriter writer, int i) => Items[i].Write(writer, 0);
+    [GeneratedRegex(@"\s+")]
+    private static partial Regex VertexRegex();
 }
 
