@@ -54,6 +54,20 @@ public static class Initialize
         return soil;
     }
 
+    static SpeciesSettings? GetSpecies(SimulationRequest? settings, int plantIndex)
+    {
+        var name = settings.Plants[plantIndex].SpeciesName;
+        if (string.IsNullOrEmpty(name))
+            return null;
+
+        var tmp_custom = settings.Species?.FirstOrDefault(x => string.Compare(x.Name, name, StringComparison.InvariantCultureIgnoreCase) == 0);
+        var tmp_predefined = SpeciesSettings.Predefined?.FirstOrDefault(x => string.Compare(x.Name, name, StringComparison.InvariantCultureIgnoreCase) == 0);
+
+        return
+            settings.Species?.FirstOrDefault(x => string.Compare(x.Name, name, StringComparison.InvariantCultureIgnoreCase) == 0)
+            ?? SpeciesSettings.Predefined?.FirstOrDefault(x => string.Compare(x.Name, name, StringComparison.InvariantCultureIgnoreCase) == 0);
+    }
+
     private static AgroWorld SecondStageInit(SimulationRequest? settings, AgroWorld world, ISoilFormation soil)
     {
         world.Add(soil);
@@ -76,7 +90,7 @@ public static class Initialize
                 var seed = new SeedAgent(soilIndex, pos,
                                          rnd.NextPositiveFloat(0.02f),
                                          new Vector2(minVegTemp, minVegTemp + rnd.NextFloat(8f, 14f)));
-                var species = string.IsNullOrEmpty(settings.Plants[i].SpeciesName) ? null : SpeciesSettings.Predefined?.FirstOrDefault(x => x.Name == settings.Plants[i].SpeciesName);
+                var species = GetSpecies(settings, i);
                 Console.WriteLine($"Species lookup: {species?.Name ?? "null"}, BudLength: {species?.FlowerSettings.BudLength ?? -1}");
                 plantsFormation[i] = new PlantFormation2(world, species ?? SpeciesSettings.Default, soil, seed, rnd, world.HoursPerTick);
             }

@@ -270,7 +270,7 @@ class State {
     fieldItemRegexMaterial = signal(true);
     fieldModelData?: string = undefined;
     modelParsingProgress = signal(0);
-    seedsDistributionData = "";
+    seedsDistributionData? = "";
     seedsDistributionPath = signal("");
 
     //METHODS
@@ -806,6 +806,10 @@ class State {
     clearSeedsDistribution = () => {
         this.seedsDistributionData = undefined;
         this.seedsDistributionPath.value = "";
+    }
+
+    speciesLinksCount(species: string) {
+        return this.seeds.value.reduce((a, c) => a + (c.species.value == species ? 1 : 0), 0)
     }
 
     private saveTextFile(data: string, ext: string) {

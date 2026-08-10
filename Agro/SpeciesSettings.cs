@@ -4,7 +4,7 @@ using Agro.Species;
 
 namespace Agro;
 
-public enum Behavior : byte { Default, Herbaceous}
+public enum Behavior : byte { Default, Herbaceous }
 
 public class SpeciesSettings
 {
@@ -61,10 +61,14 @@ public class SpeciesSettings
             DominanceFactors[i] = MathF.Pow(dominanceFactor, i);
     } }
 
-    /// <summary>Age (hours) when plant switches to deterministic sympodial growth.</summary>
+    /// <summary>
+    /// Age (hours) when plant switches to deterministic sympodial growth.
+    /// </summary>
     public float SympodialStartAgeHours = 24f * 45f;
 
-    /// <summary>Age (hours) when flowering ends; growth stops afterwards.</summary>
+    /// <summary>
+    /// Age (hours) when flowering ends; growth stops afterwards.
+    /// </summary>
     public float FloweringEndAgeHours { get; internal set; } = 24f * 90f;
     public float FloweringStartAgeHours { get; internal set; } = 24f * 45f;
     public float FlowerLengthVar { get; internal set; }
@@ -98,7 +102,7 @@ public class SpeciesSettings
 
 
     public float TwigsBending { get; init; } = 0.5f;
-    public float TwigsBendingLevel { get; init; } = 1;
+    public float TwigsBendingByLevel { get; init; } = 1;
     public float TwigsBendingApical { get; set; } = 0.02f;
     public float ShootsGravitaxis { get; set; } = 0.2f;
 
@@ -224,10 +228,16 @@ public class SpeciesSettings
 
     public float CytokininsReach { get; init; } = 1;
 
-    public float AuxinsThreshold => 1f;
+    public float AuxinsThreshold { get; init; } = 1f;
 
-    public float DensityDryWood = 700_000; //in g/m³
-	public float DensityDryStem = 200_000; //in g/m³
+    /// <summary>
+    /// Dry wood density in g/m³
+    /// </summary>
+    public float DensityDryWood { get; init; } = 700_000;
+    /// <summary>
+    /// Dry stem density in g/m³
+    /// </summary>
+	public float DensityDryStem { get; init; } = 200_000;
 
     public float PetioleCoverThreshold { get; private set; } = float.MaxValue;
 
@@ -265,8 +275,6 @@ public class SpeciesSettings
     public FruitSettings? FruitSettings { get; init; } = null;
     #endregion
 
-    public static List<SpeciesSettings> Predefined = [];
-
     [JsonPropertyName("WEM")]
     public float WoodElasticModulus { get; init; } = 1e6f; // in Pa
 
@@ -279,7 +287,7 @@ public class SpeciesSettings
     [JsonPropertyName("DF")]
     public float DepthFactor { get; init; } = 0.01f; // in Pa
 
-    public static SpeciesSettings Default => Predefined[0];
+
     //-- custom parmeter Geranium & Bergania
     #region GeraniumBergania
     public float MaxLeaveAge { get; set; } = 2*365;
@@ -310,13 +318,12 @@ public class SpeciesSettings
     public float FlowerPetiolElasticModulus { get;  set; } = 4e5f;
 
     #endregion
-
+    public static SpeciesSettings Default => Predefined[0];
+    public static List<SpeciesSettings> Predefined = [];
 
     static SpeciesSettings()
     {
         Predefined.Add(new());
-
-       
 
         Predefined.Add(Geranium_Macrorrhizum.Init());
         Predefined.Add(Geranium_x_Cantabrigiense.Init());
@@ -325,12 +332,6 @@ public class SpeciesSettings
         Predefined.Add(Campanula_Poscharskyana.Init());
         Predefined.Add(Carex_Morrowii_Variegata.Init());
         Predefined.Add(Fragaria_Vesca_Ruegen.Init());
-
-        // Campanula;
-        // Heuchera;
-        // Fragaria;
-        // Carex;
-
     }
 
     private bool Initialized = false;
@@ -343,7 +344,7 @@ public class SpeciesSettings
         {
             // AuxinsDegradationPerTick = AuxinsReach * hoursPerTick;
             // CytokininsDegradationPerTick = CytokininsReach * hoursPerTick;
-            TwigsBendingApical = TwigsBendingApical * TwigsBendingLevel;
+            TwigsBendingApical = TwigsBendingApical * TwigsBendingByLevel;
             ShootsGravitaxis *= 0.4f;
             Initialized = true;
 

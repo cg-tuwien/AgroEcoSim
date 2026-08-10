@@ -345,7 +345,7 @@ public partial struct AboveGroundAgent : IPlantAgent
 		//Cytokinins = 0f;
 
 		var species = plant.Parameters;
-        
+
         switch (Organ)
 		{
 			case OrganTypes.Leaf:
@@ -383,13 +383,13 @@ public partial struct AboveGroundAgent : IPlantAgent
 
 			case OrganTypes.Stem:
 				{
-					
+
 
 						LengthVar = 0f;
 						RadiusVar = 0f;
 						GrowthTimeVar = plant.World.HoursPerTick / (species.WoodGrowthTime + plant.RNG.NextFloatVar(species.WoodGrowthTimeVar));
 
-					
+
 				}
 			break;
             case OrganTypes.FlowerMeristem:
@@ -416,8 +416,8 @@ public partial struct AboveGroundAgent : IPlantAgent
                     RadiusVar = species.FlowerSettings.BudRadius;
                     GrowthTimeVar = plant.World.HoursPerTick / (species.FlowerSettings.BudBloomAge + plant.RNG.NextFloatVar(species.BudBloomAgeVar));
                 } break;
-            case OrganTypes.FlowerStem: { 
-				
+            case OrganTypes.FlowerStem: {
+
                 } break;
             default:
 			{
@@ -898,7 +898,7 @@ public partial struct AboveGroundAgent : IPlantAgent
 
 	public readonly Quaternion RandomOrientation(PlantFormation2 plant, SpeciesSettings species, Quaternion orientation)
 	{
-		var range = 0.2f * MathF.PI * (species.TwigsBendingLevel * DominanceLevel - species.TwigsBendingApical);
+		var range = 0.2f * MathF.PI * (species.TwigsBendingByLevel * DominanceLevel - species.TwigsBendingApical);
 		var factor = species.TwigsBending * range;
 		var a = plant.RNG.NextFloatVar(factor);
 		orientation *= Quaternion.CreateFromAxisAngle(Vector3.UnitY, a);

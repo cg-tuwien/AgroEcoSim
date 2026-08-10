@@ -18,4 +18,11 @@
     <ProjectReference Include="..\Utils\Utils.csproj" />
     <ProjectReference Include="..\FacadeJsonImport\FacadeJsonImport.csproj" />
   </ItemGroup>
+
+
+  <Target Name="GenerateSpeciesTypescript" AfterTargets="CoreCompile">
+    <Message Importance="high" Text="Generating Species.generated.ts from SpeciesSettings.cs" />
+
+    <Exec Command="dotnet run --project &quot;$(MSBuildProjectDirectory)/../SchemeGenerator/SchemeGenerator.csproj&quot; -- &quot;$(MSBuildProjectDirectory)/../Agro/SpeciesSettings.cs&quot; &quot;$(MSBuildProjectDirectory)/../ThreeFrontend/src/helpers/Species.gen.ts&quot;" />
+  </Target>
 </Project>

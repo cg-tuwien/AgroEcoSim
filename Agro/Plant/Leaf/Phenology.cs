@@ -565,7 +565,6 @@ public static class CarexMorrowiiVariegataCenterPreset
         .Add(0.80f, ColorUtils.OkLabFromSrgb8( 88, 140,  88)) // adult
         .Add(1.00f, ColorUtils.OkLabFromSrgb8( 85, 135,  85)); // full adult, stable
 
-
     public static ColorCurve Stress => ColorModel.DefaultStress;
 
     public static ColorCurve SeasonalSenescence => new ColorCurve()

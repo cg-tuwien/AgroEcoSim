@@ -26,21 +26,21 @@ public static class Fragaria_Vesca_Ruegen
 
         LeafLength = 0.06f,
         LeafLengthVar = 0.012f,
-        LeafRadius = 0.045f,       
+        LeafRadius = 0.045f,
         LeafRadiusVar = 0.008f,
         LeafPitchVar = 5f * (MathF.PI / 180f),
         LeafPitch = 85 * (MathF.PI / 180f),
 
         LeafGrowthTime = 24f * 10f * 2f,
         LeafGrowthTimeVar = 24f * 4f,
-        MaxLeaveAge = 24f * 180f,   
+        MaxLeaveAge = 24f * 180f,
 
         PetioleLength = 0.07f,
         PetioleLengthVar = 0.012f,
         PetioleRadius = 0.0018f,
         PetioleRadiusVar = 0.0003f,
 
-        pNewCrown = 0.55f,           
+        pNewCrown = 0.55f,
         crownPitch = 0.60f,
         growthFactor = 0.20f,
         MaxRadius = 0.003f,
@@ -51,21 +51,21 @@ public static class Fragaria_Vesca_Ruegen
         LateralRollVar = 5f * (MathF.PI / 180f),
 
         LateralsPerNode = 3,
-        NodeDistance = 0f,          
+        NodeDistance = 0f,
         NodeDistanceVar = 0.000f,
         DominanceFactor = 0.70f,
 
         RizomeMaxDepth = 2,
         RizomeLength = 0.025f,
         RizomeRadius = 0.0025f,
-        pExpandRizome = 0.0008f,          
+        pExpandRizome = 0.0008f,
         SympodialStartAgeHours = 24f * 35f,
         FloweringStartAgeHours = 24f * 40f,
         FloweringEndAgeHours = 24f * 200f,
         pChaningSeaonns = [0.010f, 0.003f, 0.006f, 0.0f],
-        pFloweringSeaonns = [0.005f, 0.060f, 0.008f, 0.0f],  
+        pFloweringSeaonns = [0.005f, 0.060f, 0.008f, 0.0f],
         WoodElasticModulus = 1.0e8f,
-        GreenElasticModulus = 4e6f,         
+        GreenElasticModulus = 4e6f,
         DepthFactor = 0.01f,
         FlowerElasticModulus = 4e7f,
 
@@ -159,10 +159,6 @@ public static class Fragaria_Vesca_Ruegen
                 FragariaRuegenPreset.SeasonalSenescence,
                 FragariaRuegenPreset.StressSenescence
             )
-            {
-                HealthySeasonCurve = FragariaRuegenPreset.HealthySeason,
-                HealthySeasonDirection = FragariaRuegenPreset.HealthySeasonDirection,
-            }
         ),
 
         // Placeholder for leaf shape - to be replaced with actual Fragaria trifoliate leaf mesh later
@@ -200,36 +196,3 @@ public static class Fragaria_Vesca_Ruegen
     };
 }
 
-/// <summary>
-/// Fruit settings for Fragaria vesca 'Rügen'
-/// Alpine strawberries produce small aggregate accessory fruits continuously
-/// through the growing season once established.
-/// </summary>
-public class FruitSettings
-{
-    public FruitType FruitType { get; init; } = FruitType.Accessory;
-    
-    public float InitialRadius { get; init; } = 0.002f;
-    public float MatureRadius { get; init; } = 0.006f;
-    public float InitialLength { get; init; } = 0.003f;
-    public float MatureLength { get; init; } = 0.008f;
-    
-    public float GrowthTimeHours { get; init; } = 24f * 21f;
-    public float RipeningTimeHours { get; init; } = 24f * 7f;
-    
-    public Vector3 UnripeColor { get; init; }
-    public Vector3 RipeningColor { get; init; }
-    public Vector3 MatureColor { get; init; }
-    public Vector3 OverripeColor { get; init; }
-    
-    public int SeedCount { get; init; } = 150;
-    public float SeedRadius { get; init; } = 0.0004f;
-    public Vector3 SeedColor { get; init; }
-    
-    public float FruitPerFlowerProbability { get; init; } = 0.85f;
-    public bool PollinationRequired { get; init; } = true;
-    public float PollinationWindowHours { get; init; } = 48f;
-    public float FruitRetentionDays { get; init; } = 14f;
-}
-
-public enum FruitType { Berry, Accessory, Aggregate, Pome, Drupe }
