@@ -6,6 +6,8 @@ public sealed record SpeciesMember(
     string CSharpType,
     string TsType,
     string? Initializer,
+    string? Group,
+    string? Label,
     string? Tooltip,
     bool IsAngleInRadians,
     bool ShouldGenerateSignal
@@ -21,6 +23,7 @@ public sealed record TsFormField(
     string? Min,
     string? Max,
     string Step,
+    string? Group,
     string? Tooltip,
     bool IsAngle,
     bool IsVariance,

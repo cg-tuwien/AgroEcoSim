@@ -86,10 +86,9 @@ export function SpeciesBehaviorField(props: {speciesIndex: number, signal: Signa
         </>;
 }
 
-const nameConflict = useSignal(false);
 export function SpeciesNameFields(props: {speciesIndex: number, nameSignal: Signal<string>, akaSignal: Signal<string>, linksCount: number}) {
+    const nameConflict = useSignal(appstate.species.value.some((s, i) => i !== props.speciesIndex && s.name.value == n));
     const n = props.nameSignal.value;
-    nameConflict.value = appstate.species.value.some((s, i) => i !== props.speciesIndex && s.name.value == n);
     return <>
         <div>
             <input type="text" name={`name-${props.speciesIndex}`} value={props.nameSignal.value} title={"Name of the species"} style={nameConflict.value ? conflictStyle : undefined} class="speciesNameInput" onChange={e => {

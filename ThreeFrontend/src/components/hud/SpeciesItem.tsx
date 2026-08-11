@@ -4,6 +4,7 @@ import { Species } from "src/helpers/Species";
 import { computed, signal, useSignal } from "@preact/signals";
 import { conflictStyle, selectedSpecies } from "./Species";
 import { SpeciesBehaviorField, SpeciesFloatField, SpeciesIntField, SpeciesNameFields } from "./SpeciesItemTemplate";
+import { GeneratedSpeciesFields } from "./Species.gen";
 
 const dominanceFactorTooltip = "Reduces the growth of lateral branches. Multiplies with each recursion level.";
 const auxinsProductionTooltip = "Each meristem node generates this amount of auxins (given in unspecified units).";
@@ -18,7 +19,9 @@ export function SpeciesItem()
     const species = inputList[index];
 
     return <div class="speciesDetails">
-        <SpeciesNameFields speciesIndex={index} nameSignal={species.name} akaSignal={species.aka} linksCount={appstate.seeds.value.reduce((a, c) => a + (c.species.value == species.name.value ? 1 : 0), 0)} />
+        <GeneratedSpeciesFields index={index} species={species}/>
+        {/* <hr /> */}
+        {/* <SpeciesNameFields speciesIndex={index} nameSignal={species.name} akaSignal={species.aka} linksCount={appstate.seeds.value.reduce((a, c) => a + (c.species.value == species.name.value ? 1 : 0), 0)} /> */}
         {/* <div>
             <input type="text" name={`name-${index}`} value={species.name.value} title={"Name of the species"} style={nameConflict.value ? conflictStyle : null} class="speciesNameInput" onChange={e => {
                 const name = e.currentTarget.value;
@@ -40,152 +43,152 @@ export function SpeciesItem()
             <label for={`aka-${index}`} title={"Colloquial name"}>aka</label>
             <input type="text" name={`aka-${index}`} value={species.aka.value ?? ''} title={"Colloquial name"} class="speciesAkaInput" onChange={e => species.aka.value = e.currentTarget.value} />
         </div> */}
-        <SpeciesBehaviorField speciesIndex={index} signal={species.behaviorIndex} options={appstate.behaviors} />
+        {/* <SpeciesBehaviorField speciesIndex={index} signal={species.behaviorIndex} options={appstate.behaviors} /> */}
         {/* <div>
             <select name={`behavior-${index}`} onChange={e => species.behaviorIndex.value = (e.target as HTMLSelectElement).selectedIndex}>
                 {appstate.behaviors.value.map((x, i) => <option selected={species.behaviorIndex.value == i}>{x}</option>)}
             </select>
             <label for={`behavior-${index}`}>Behavior</label>
         </div> */}
-        <SpeciesFloatField step={0.1} speciesIndex={index} signal={species.height} label="Plant height"/>
+        {/* <SpeciesFloatField step={0.1} speciesIndex={index} signal={species.height} label="Plant height"/> */}
         {/* <div>
             <input min={0} step={0.1} type="number" name={`height-${index}`} value={+species.height.value.toFixed(4)} onChange={e => species.height.value = parseFloat(e.currentTarget.value)}  />
             <label for={`height-${index}`}>Plant height</label>
         </div> */}
-        <SpeciesFloatField step={0.01} speciesIndex={index} signal={species.nodeDistance} label="Nodes distance" variance={{step: 0.01, signal: species.nodeDistanceVar }}/>
+        {/* <SpeciesFloatField step={0.01} speciesIndex={index} signal={species.nodeDistance} label="Nodes distance" variance={{step: 0.01, signal: species.nodeDistanceVar }}/> */}
         {/* <div>
             <input min={0} step={0.01} type="number" name={`nodeDist-${index}`} value={+species.nodeDistance.value.toFixed(4)} onChange={e => species.nodeDistance.value = parseFloat(e.currentTarget.value)}  />
             <label for={`nodeDist-${index}`}>Nodes distance</label>
             <span>var:&nbsp;</span>
             <input min={0} step={0.01} type="number" name={`nodeDistVar-${index}`} value={+species.nodeDistanceVar.value.toFixed(4)} onChange={e => species.nodeDistanceVar.value = parseFloat(e.currentTarget.value)}  />
         </div> */}
-        <hr/>
-        <SpeciesFloatField max={1} step={0.1} speciesIndex={index} signal={species.monopodialFactor} label="Monopodial factor" />
+        {/* <hr/> */}
+        {/* <SpeciesFloatField max={1} step={0.1} speciesIndex={index} signal={species.monopodialFactor} label="Monopodial factor" /> */}
         {/* <div>
             <input min={0} max={1} step={0.1} type="number" name={`monopodialFactor-${index}`} value={+species.monopodialFactor.value.toFixed(4)} onChange={e => species.monopodialFactor.value = parseFloat(e.currentTarget.value)}  />
             <label for={`monopodialFactor-${index}`}>Monopodial factor</label>
         </div> */}
-        <SpeciesFloatField max={2} step={0.1} speciesIndex={index} tooltip={dominanceFactorTooltip} signal={species.dominanceFactor} label="Dominance factor"/>
+        {/* <SpeciesFloatField max={2} step={0.1} speciesIndex={index} tooltip={dominanceFactorTooltip} signal={species.dominanceFactor} label="Dominance factor"/> */}
         {/* <div>
             <input min={0} max={2} step={0.1} type="number" name={`dominanceFactor-${index}`} title={dominanceFactorTooltip} value={+species.dominanceFactor.value.toFixed(4)} onChange={e => species.dominanceFactor.value = parseFloat(e.currentTarget.value)}  />
             <label for={`dominanceFactor-${index}`} title={dominanceFactorTooltip}>Dominance factor</label>
         </div> */}
-        <SpeciesFloatField step={1} speciesIndex={index} tooltip={auxinsProductionTooltip} signal={species.auxinsProduction} label="Auxins production"/>
+        {/* <SpeciesFloatField step={1} speciesIndex={index} tooltip={auxinsProductionTooltip} signal={species.auxinsProduction} label="Auxins production"/> */}
         {/* <div>
             <input min={0} step={1} type="number" name={`auxinsProduction-${index}`} title={auxinsProductionTooltip} value={+species.auxinsProduction.value.toFixed(4)} onChange={e => species.auxinsProduction.value = parseFloat(e.currentTarget.value)}  />
             <label for={`auxinsProduction-${index}`} title={auxinsProductionTooltip}>Auxins production</label>
         </div> */}
-        <SpeciesFloatField step={0.1} speciesIndex={index} tooltip={auxinsReachTooltip} signal={species.auxinsReach} label="Auxins reach" />
+        {/* <SpeciesFloatField step={0.1} speciesIndex={index} tooltip={auxinsReachTooltip} signal={species.auxinsReach} label="Auxins reach" /> */}
         {/* <div>
             <input min={0} step={0.1} type="number" name={`auxinsReach-${index}`} title={auxinsReachTooltip} value={+species.auxinsReach.value.toFixed(4)} onChange={e => species.auxinsReach.value = parseFloat(e.currentTarget.value)}  />
             <label for={`auxinsReach-${index}`} title={auxinsReachTooltip}>Auxins reach</label>
         </div> */}
-        <SpeciesIntField min={1} speciesIndex={index} signal={species.lateralsPerNode} label="Laterals per node" />
+        {/* <SpeciesIntField min={1} speciesIndex={index} signal={species.lateralsPerNode} label="Laterals per node" /> */}
         {/* <div>
             <input min={1} step={1} type="number" name={`lateralsPerNode-${index}`} value={+species.lateralsPerNode.value} onChange={e => species.lateralsPerNode.value = parseInt(e.currentTarget.value)}  />
             <label for={`lateralsPerNode-${index}`}>Laterals per node</label>
         </div> */}
-        <SpeciesFloatField max={360} step={0.1} speciesIndex={index} signal={species.lateralRollDeg} label="Lateral roll (deg) increment" variance={ {step: 0.1, signal: species.lateralRollDegVar }}/>
+        {/* <SpeciesFloatField max={360} step={0.1} speciesIndex={index} signal={species.lateralRollDeg} label="Lateral roll (deg) increment" variance={ {step: 0.1, signal: species.lateralRollDegVar }}/> */}
         {/* <div>
             <input min={0} max={360} step={0.1} type="number" name={`lateralRoll-${index}`} value={+species.lateralRollDeg.value.toFixed(4)} onChange={e => species.lateralRollDeg.value = parseFloat(e.currentTarget.value)}  />
             <label for={`lateralRoll-${index}`}>Lateral roll (deg) increment</label>
             <span>var:&nbsp;</span>
             <input min={0} step={0.1} type="number" name={`lateralRollVar-${index}`} value={+species.lateralRollDegVar.value.toFixed(4)} onChange={e => species.lateralRollDegVar.value = parseFloat(e.currentTarget.value)}  />
         </div> */}
-        <SpeciesFloatField max={180} step={0.1} speciesIndex={index} signal={species.lateralPitchDeg} label="Lateral pitch (deg)" variance={{ step: 0.1, signal: species.lateralPitchDegVar}}/>
+        {/* <SpeciesFloatField max={180} step={0.1} speciesIndex={index} signal={species.lateralPitchDeg} label="Lateral pitch (deg)" variance={{ step: 0.1, signal: species.lateralPitchDegVar}}/> */}
         {/* <div>
             <input min={0} max={180} step={0.1} type="number" name={`lateralPitch-${index}`} value={+species.lateralPitchDeg.value.toFixed(4)} onChange={e => species.lateralPitchDeg.value = parseFloat(e.currentTarget.value)}  />
             <label for={`lateralPitch-${index}`}>Lateral pitch (deg)</label>
             <span>var:&nbsp;</span>
             <input min={0} step={0.1} type="number" name={`lateralPitchVar-${index}`} value={+species.lateralPitchDegVar.value.toFixed(4)} onChange={e => species.lateralPitchDegVar.value = parseFloat(e.currentTarget.value)}  />
         </div> */}
-        <SpeciesFloatField max={1} step={0.01} speciesIndex={index} signal={species.twigsBending} label="Twigs bending rate"/>
+        {/* <SpeciesFloatField max={1} step={0.01} speciesIndex={index} signal={species.twigsBending} label="Twigs bending rate"/> */}
         {/* <div>
             <input min={0} max={1} step={0.01} type="number" name={`twigsBending-${index}`} value={+species.twigsBending.value.toFixed(4)} onChange={e => species.twigsBending.value = parseFloat(e.currentTarget.value)}  />
             <label for={`twigsBending-${index}`}>Twigs bending rate</label>
         </div> */}
-        <SpeciesFloatField max={2} step={0.1} speciesIndex={index} signal={species.twigsBendingByLevel} label="Bending factor by hierarchy level"/>
+        {/* <SpeciesFloatField max={2} step={0.1} speciesIndex={index} signal={species.twigsBendingByLevel} label="Bending factor by hierarchy level"/> */}
         {/* <div>
             <input min={0} max={2} step={0.1} type="number" name={`twigsBendingByLevel-${index}`} value={+species.twigsBendingByLevel.value.toFixed(4)} onChange={e => species.twigsBendingByLevel.value = parseFloat(e.currentTarget.value)}  />
             <label for={`twigsBendingByLevel-${index}`}>Bending factor by hierarchy level</label>
         </div> */}
-        <SpeciesFloatField max={1} step={0.01} speciesIndex={index} signal={species.twigsBendingApical} label="Apex bending rate"/>
+        {/* <SpeciesFloatField max={1} step={0.01} speciesIndex={index} signal={species.twigsBendingApical} label="Apex bending rate"/> */}
         {/* <div>
             <input min={0} max={1} step={0.01} type="number" name={`apexBending-${index}`} value={+species.twigsBendingApical.value.toFixed(4)} onChange={e => species.twigsBendingApical.value = parseFloat(e.currentTarget.value)}  />
             <label for={`apexBending-${index}`}>Apex bending rate</label>
         </div> */}
-        <SpeciesFloatField max={1} step={0.01} speciesIndex={index} signal={species.shootsGravitaxis} label="Shoots gravitaxis" />
+        {/* <SpeciesFloatField max={1} step={0.01} speciesIndex={index} signal={species.shootsGravitaxis} label="Shoots gravitaxis" /> */}
         {/* <div>
             <input min={0} max={1} step={0.01} type="number" name={`shootsGravitaxis-${index}`} value={+species.shootsGravitaxis.value.toFixed(4)} onChange={e => species.shootsGravitaxis.value = parseFloat(e.currentTarget.value)}  />
             <label for={`shootsGravitaxis-${index}`}>Shoots gravitaxis</label>
         </div> */}
-        <SpeciesFloatField min={1} step={1} speciesIndex={index} signal={species.woodGrowthTime} label="Wood growth time (days)" variance={{ step: 1, signal: species.woodGrowthTimeVar}}/>
+        {/* <SpeciesFloatField min={1} step={1} speciesIndex={index} signal={species.woodGrowthTime} label="Wood growth time (days)" variance={{ step: 1, signal: species.woodGrowthTimeVar}}/> */}
         {/* <div>
             <input min={1} step={1} type="number" name={`woodGrowthTime-${index}`} value={+species.woodGrowthTime.value.toFixed(4)} onChange={e => species.woodGrowthTime.value = parseFloat(e.currentTarget.value)}  />
             <label for={`woodGrowthTime-${index}`}>Wood growth time (days)</label>
             <span>var:&nbsp;</span>
             <input min={0} step={1} type="number" name={`woodGrowthTimeVar-${index}`} value={+species.woodGrowthTimeVar.value.toFixed(4)} onChange={e => species.woodGrowthTimeVar.value = parseFloat(e.currentTarget.value)}  />
         </div> */}
-        <hr/>
+        {/* <hr/> */}
         {/*<div>
             <input min={0} step={1} type="number" name={`leafLevel-${index}`} value={+species.leafLevel.value} onChange={e => species.leafLevel.value = parseInt(e.currentTarget.value)}  />
             <label for={`leafLevel-${index}`}>Max. leaf level</label>
         </div>*/}
-        <SpeciesFloatField step={0.001} speciesIndex={index} signal={species.leafLength} label="Leaf length" variance={{ step: 0.1, signal: species.leafLengthVar }} />
+        {/* <SpeciesFloatField step={0.001} speciesIndex={index} signal={species.leafLength} label="Leaf length" variance={{ step: 0.1, signal: species.leafLengthVar }} /> */}
         {/* <div>
             <input min={0} step={0.001} type="number" name={`leafLength-${index}`} value={+species.leafLength.value.toFixed(4)} onChange={e => species.leafLength.value = parseFloat(e.currentTarget.value)}  />
             <label for={`leafLength-${index}`}>Leaf length</label>
             <span>var:&nbsp;</span>
             <input min={0} step={0.1} type="number" name={`leafLengthVar-${index}`} value={+species.leafLengthVar.value.toFixed(4)} onChange={e => species.leafLengthVar.value = parseFloat(e.currentTarget.value)}  />
         </div> */}
-        <SpeciesFloatField step={0.001} speciesIndex={index} signal={species.leafRadius} label="Leaf radius" variance={{ step: 0.1, signal: species.leafRadiusVar }} />
+        {/* <SpeciesFloatField step={0.001} speciesIndex={index} signal={species.leafRadius} label="Leaf radius" variance={{ step: 0.1, signal: species.leafRadiusVar }} /> */}
         {/* <div>
             <input min={0} step={0.001} type="number" name={`leafRadius-${index}`} value={+species.leafRadius.value.toFixed(4)} onChange={e => species.leafRadius.value = parseFloat(e.currentTarget.value)}  />
             <label for={`leafRadius-${index}`}>Leaf radius</label>
             <span>var:&nbsp;</span>
             <input min={0} step={0.1} type="number" name={`leafRadiusVar-${index}`} value={+species.leafRadiusVar.value.toFixed(4)} onChange={e => species.leafRadiusVar.value = parseFloat(e.currentTarget.value)}  />
         </div> */}
-        <SpeciesFloatField min={1} step={1} speciesIndex={index} signal={species.leafGrowthTime} label="Leaf growth time" variance={{ step: 1, signal: species.leafGrowthTimeVar }} />
+        {/* <SpeciesFloatField min={1} step={1} speciesIndex={index} signal={species.leafGrowthTime} label="Leaf growth time" variance={{ step: 1, signal: species.leafGrowthTimeVar }} /> */}
         {/* <div>
             <input min={1} step={1} type="number" name={`leafGrowthTime-${index}`} value={+species.leafGrowthTime.value.toFixed(4)} onChange={e => species.leafGrowthTime.value = parseFloat(e.currentTarget.value)}  />
             <label for={`leafGrowthTime-${index}`}>Leaf growth time</label>
             <span>var:&nbsp;</span>
             <input min={0} step={1} type="number" name={`leafGrowthTimeVar-${index}`} value={+species.leafGrowthTimeVar.value.toFixed(4)} onChange={e => species.leafGrowthTimeVar.value = parseFloat(e.currentTarget.value)}  />
         </div> */}
-        <SpeciesFloatField step={0.1} speciesIndex={index} signal={species.leafPitchDeg} label="Leaf pitch (deg)" variance={{ step: 0.1, signal: species.leafPitchDegVar }} />
+        {/* <SpeciesFloatField step={0.1} speciesIndex={index} signal={species.leafPitchDeg} label="Leaf pitch (deg)" variance={{ step: 0.1, signal: species.leafPitchDegVar }} /> */}
         {/* <div>
             <input min={0} step={0.1} type="number" name={`leafPitch-${index}`} value={+species.leafPitchDeg.value.toFixed(4)} onChange={e => species.leafPitchDeg.value = parseFloat(e.currentTarget.value)}  />
             <label for={`leafPitch-${index}`}>Leaf pitch (deg)</label>
             <span>var:&nbsp;</span>
             <input min={0} step={0.1} type="number" name={`leafPitchVar-${index}`} value={+species.leafPitchDegVar.value.toFixed(4)} onChange={e => species.leafPitchDegVar.value = parseFloat(e.currentTarget.value)}  />
         </div> */}
-        <SpeciesFloatField step={0.01} speciesIndex={index} signal={species.petioleLength} label="Petiole length" variance={{ step: 0.01, signal: species.petioleLengthVar }} />
+        {/* <SpeciesFloatField step={0.01} speciesIndex={index} signal={species.petioleLength} label="Petiole length" variance={{ step: 0.01, signal: species.petioleLengthVar }} /> */}
         {/* <div>
             <input min={0} step={0.01} type="number" name={`petioleLength-${index}`} value={+species.petioleLength.value.toFixed(4)} onChange={e => species.petioleLength.value = parseFloat(e.currentTarget.value)}  />
             <label for={`petioleLength-${index}`}>Petiole length</label>
             <span>var:&nbsp;</span>
             <input min={0} step={0.01} type="number" name={`petioleLength-${index}`} value={+species.petioleLengthVar.value.toFixed(4)} onChange={e => species.petioleLengthVar.value = parseFloat(e.currentTarget.value)}  />
         </div> */}
-        <SpeciesFloatField step={0.001} speciesIndex={index} signal={species.petioleRadius} label="Petiole radius" variance={{ step: 0.001, signal: species.petioleRadiusVar }} />
+        {/* <SpeciesFloatField step={0.001} speciesIndex={index} signal={species.petioleRadius} label="Petiole radius" variance={{ step: 0.001, signal: species.petioleRadiusVar }} /> */}
         {/* <div>
             <input min={0} step={0.001} type="number" name={`petioleRadius-${index}`} value={+species.petioleRadius.value.toFixed(4)} onChange={e => species.petioleRadius.value = parseFloat(e.currentTarget.value)}  />
             <label for={`petioleRadius-${index}`}>Petiole radius</label>
             <span>var:&nbsp;</span>
             <input min={0} step={0.001} type="number" name={`petioleRadius-${index}`} value={+species.petioleRadiusVar.value.toFixed(4)} onChange={e => species.petioleRadiusVar.value = parseFloat(e.currentTarget.value)}  />
         </div> */}
-        <br/>
-        <SpeciesFloatField min={1} max={1} step={0.01} speciesIndex={index} signal={species.rootsDensity} label="Roots density" />
+        {/* <br/> */}
+        {/* <SpeciesFloatField min={1} max={1} step={0.01} speciesIndex={index} signal={species.rootsDensity} label="Roots density" /> */}
         {/* <div>
             <input min={1} max={1} step={0.01} type="number" name={`rootsDensity-${index}`} value={+species.rootsDensity.value.toFixed(1)} onChange={e => species.rootsDensity.value = parseFloat(e.currentTarget.value)}  />
             <label for={`rootsDensity-${index}`}>Roots density</label>
         </div> */}
-        <SpeciesFloatField max={1} step={0.01} speciesIndex={index} signal={species.rootsGravitaxis} label="Roots gravitaxis" />
+        {/* <SpeciesFloatField max={1} step={0.01} speciesIndex={index} signal={species.rootsGravitaxis} label="Roots gravitaxis" /> */}
         {/* <div>
             <input min={0} max={1} step={0.01} type="number" name={`rootsGravitaxis-${index}`} value={+species.rootsGravitaxis.value.toFixed(1)} onChange={e => species.rootsGravitaxis.value = parseFloat(e.currentTarget.value)}  />
             <label for={`rootsGravitaxis-${index}`}>Roots gravitaxis</label>
         </div> */}
 
-        <hr/>
+        {/* <hr/> */}
         <div>
             <input type="checkbox" name={`includeInRndGen-${index}`} checked={species.includeInRndGen.value} onChange={e => species.includeInRndGen.value = e.currentTarget.checked} />
             <label for={`includeInRndGen-${index}`}>Include in random seeding</label>

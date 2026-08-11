@@ -2,10 +2,11 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis;
 using Agro;
+using System.Text.RegularExpressions;
 
 namespace SchemeGenerator;
 
-public static class Reader
+public static partial class Reader
 {
     public static ClassDeclarationSyntax ReadSpeciesSettingsClass(string sourceCode)
     {
@@ -22,24 +23,137 @@ public static class Reader
     public static List<SpeciesMember> Extract(ClassDeclarationSyntax classNode)
     {
         var result = new List<SpeciesMember>();
+        string? currentGroup = null;
 
-        foreach (var property in classNode.Members.OfType<PropertyDeclarationSyntax>())
+        foreach (var classMember in classNode.Members)
         {
-            var member = TryReadProperty(property);
-            if (member is not null)
-                result.Add(member);
-        }
+            switch (classMember)
+            {
+                case PropertyDeclarationSyntax property:
+                {
+                    var declaredGroup = GetSpeciesUIGroup(property);
+                    if (!string.IsNullOrWhiteSpace(declaredGroup))
+                        currentGroup = declaredGroup;
 
-        foreach (var field in classNode.Members.OfType<FieldDeclarationSyntax>())
-        {
-            foreach (var member in TryReadField(field))
-                result.Add(member);
+                    var member = TryReadProperty(property, currentGroup);
+                    if (member is not null)
+                        result.Add(member);
+                }
+                break;
+
+                case FieldDeclarationSyntax field:
+                {
+                    var declaredGroup = GetSpeciesUIGroup(field);
+                    if (!string.IsNullOrWhiteSpace(declaredGroup))
+                        currentGroup = declaredGroup;
+
+                    foreach (var member in TryReadField(field, currentGroup))
+                        result.Add(member);
+                }
+                break;
+            }
         }
 
         return result;
     }
 
-    private static SpeciesMember? TryReadProperty(PropertyDeclarationSyntax property)
+    private static string? GetSpeciesUIGroup(MemberDeclarationSyntax syntax) => GetStringAttributeValue(syntax, nameof(SpeciesUIGroupAttribute), "SpeciesUIGroup");
+
+    private static string? GetSpeciesUILabel(MemberDeclarationSyntax syntax) => GetStringAttributeValue(syntax, nameof(SpeciesUILabelAttribute), "SpeciesUILabel");
+
+    private static string? GetSpeciesUITooltip(MemberDeclarationSyntax syntax) => GetStringAttributeValue(syntax, nameof(SpeciesUITooltipAttribute), "SpeciesUITooltip");
+
+    private static bool GetSpeciesUIIgnore(MemberDeclarationSyntax syntax) => GetPlainAttribute(syntax, nameof(SpeciesUIIgnoreAttribute), "SpeciesUIIgnore");
+
+    private static string? GetStringAttributeValue(MemberDeclarationSyntax syntax, params string[] acceptedNames)
+    {
+        var accepted = acceptedNames.Select(NormalizeAttributeName).ToHashSet(StringComparer.Ordinal);
+
+        foreach (var attributeList in syntax.AttributeLists)
+        {
+            foreach (var attribute in attributeList.Attributes)
+            {
+                var actualName = NormalizeAttributeName(attribute.Name.ToString());
+                if (!accepted.Contains(actualName))
+                    continue;
+
+                var argumentList = attribute.ArgumentList;
+                if (argumentList is null || argumentList.Arguments.Count == 0)
+                    return null;
+
+                // Prefer first positional argument:
+                var positional = argumentList.Arguments.FirstOrDefault(a => a.NameEquals is null && a.NameColon is null);
+
+                if (positional is not null)
+                    return ReadStringExpression(positional.Expression);
+
+                // Optional support for named argument style:
+                // [SpeciesUILabel(Value = "Plant height")]
+                foreach (var arg in argumentList.Arguments)
+                {
+                    var name = arg.NameEquals?.Name.Identifier.Text;
+                    if (name is "Value" or "Text" or "Label" or "Tooltip" or "Group")
+                        return ReadStringExpression(arg.Expression);
+                }
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private static bool GetPlainAttribute(MemberDeclarationSyntax syntax, params string[] acceptedNames)
+    {
+        var accepted = acceptedNames.Select(NormalizeAttributeName).ToHashSet(StringComparer.Ordinal);
+
+        foreach (var attributeList in syntax.AttributeLists)
+            foreach (var attribute in attributeList.Attributes)
+            {
+                var actualName = NormalizeAttributeName(attribute.Name.ToString());
+                return accepted.Contains(actualName);
+            }
+
+        return false;
+    }
+
+    private static string NormalizeAttributeName(string name)
+    {
+        var lastDot = name.LastIndexOf('.');
+        if (lastDot >= 0)
+        name = name[(lastDot + 1)..];
+
+        if (name.EndsWith("Attribute", StringComparison.Ordinal))
+            name = name[..^"Attribute".Length];
+        return name;
+    }
+
+    private static string? ReadStringExpression(ExpressionSyntax expression)
+    {
+        return expression switch
+        {
+            LiteralExpressionSyntax literal when literal.IsKind(SyntaxKind.StringLiteralExpression) => literal.Token.ValueText,
+            // Supports nameof(SomeGroup), returns "SomeGroup".
+            InvocationExpressionSyntax invocation when invocation.Expression.ToString() == "nameof" => ReadNameOfArgument(invocation),
+            // Fallback. Useful during development, but not ideal for complex expressions.
+            _ => expression.ToString().Trim('"')
+        };
+    }
+
+    private static string? ReadNameOfArgument(InvocationExpressionSyntax invocation)
+    {
+
+        var arg = invocation.ArgumentList.Arguments.FirstOrDefault();
+        if (arg is null)
+            return null;
+
+        return arg.Expression switch
+        {
+            IdentifierNameSyntax identifier => identifier.Identifier.Text,
+            MemberAccessExpressionSyntax memberAccess => memberAccess.Name.Identifier.Text,
+            _ => arg.Expression.ToString()
+        };
+    }
+
+    private static SpeciesMember? TryReadProperty(PropertyDeclarationSyntax property, string? currentGroup)
     {
         if (!IsPublicInstance(property.Modifiers))
             return null;
@@ -51,10 +165,10 @@ public static class Reader
         var type = property.Type.ToString();
         var initializer = property.Initializer?.Value.ToString();
 
-        return CreateMember(name, type, initializer, property);
+        return CreateMember(name, type, initializer, property, currentGroup);
     }
 
-    private static IEnumerable<SpeciesMember> TryReadField(FieldDeclarationSyntax field)
+    private static IEnumerable<SpeciesMember> TryReadField(FieldDeclarationSyntax field, string? currentGroup)
     {
         if (!IsPublicInstance(field.Modifiers))
             yield break;
@@ -66,7 +180,7 @@ public static class Reader
             var name = variable.Identifier.Text;
             var initializer = variable.Initializer?.Value.ToString();
 
-            var member = CreateMember(name, type, initializer, field);
+            var member = CreateMember(name, type, initializer, field, currentGroup);
             if (member is not null)
                 yield return member;
         }
@@ -77,11 +191,7 @@ public static class Reader
         return modifiers.Any(SyntaxKind.PublicKeyword) && !modifiers.Any(SyntaxKind.StaticKeyword);
     }
 
-    private static SpeciesMember? CreateMember(
-        string csharpName,
-        string csharpType,
-        string? initializer,
-        MemberDeclarationSyntax syntax)
+    private static SpeciesMember? CreateMember(string csharpName, string csharpType, string? initializer, MemberDeclarationSyntax syntax, string? currentGroup)
     {
         initializer ??= csharpType switch
         {
@@ -90,12 +200,20 @@ public static class Reader
             _ => "\"\""
         };
 
-        if (!ShouldGenerate(csharpName, csharpType))
+        if (!ShouldGenerate(csharpName, csharpType) || GetSpeciesUIIgnore(syntax))
             return null;
 
         var isAngle = IsAngleMember(csharpName, syntax);
         var tsName = ToTsName(csharpName, isAngle);
         var tsType = ToTsType(csharpType);
+
+        var xmlSummary = GetXmlSummary(syntax);
+        var explicitLabel = GetSpeciesUILabel(syntax);
+        var explicitTooltip = GetSpeciesUITooltip(syntax);
+
+        var usingXmlSummary = string.IsNullOrWhiteSpace(explicitLabel) && !string.IsNullOrWhiteSpace(xmlSummary);
+        var label = !string.IsNullOrWhiteSpace(explicitLabel) ? explicitLabel : usingXmlSummary ? xmlSummary : ToLabel(csharpName, isAngle);
+        var tooltip = !string.IsNullOrWhiteSpace(explicitTooltip) ? explicitTooltip : usingXmlSummary ? null : xmlSummary;
 
         return new SpeciesMember(
             CSharpName: csharpName,
@@ -103,7 +221,9 @@ public static class Reader
             CSharpType: csharpType,
             TsType: tsType,
             Initializer: initializer,
-            Tooltip: null,
+            Group: currentGroup,
+            Label: label,
+            Tooltip: tooltip,
             IsAngleInRadians: isAngle,
             ShouldGenerateSignal: true
         );
@@ -111,13 +231,7 @@ public static class Reader
 
     private static bool ShouldGenerate(string csharpName, string csharpType)
     {
-        if (csharpName is "DominanceFactors")
-            return false;
-
-        if (csharpType.EndsWith("[]"))
-            return false;
-
-        if (csharpType.Contains("List<"))
+        if (csharpName is "DominanceFactors" || csharpType.EndsWith("[]") || csharpType.Contains("List<"))
             return false;
 
         return csharpType switch
@@ -198,10 +312,11 @@ public static class Reader
 
         if (expr.StartsWith(nameof(Behavior)))
         {
-            var behaviors = Enum.GetValues(typeof(Behavior));
+            var enumName = expr[(nameof(Behavior).Length + 1)..];
+            var behaviors = Enum.GetValues<Behavior>();
             for(int i = 0; i < behaviors.Length; ++i)
-                if (expr == $"{nameof(Behavior)}.Default")
-                    return i.ToString();
+                if (behaviors[i].ToString() == enumName)
+                    return i.ToString(System.Globalization.CultureInfo.InvariantCulture);
         }
 
         if (member.IsAngleInRadians)
@@ -435,18 +550,19 @@ public static class Reader
             ? InferNumberConstraints(member)
             : (null, null, "");
 
-        var label = ToLabel(member.CSharpName, member.IsAngleInRadians);
+        //var label = ToLabel(member.CSharpName, member.IsAngleInRadians);
 
         return new TsFormField(
             CSharpName: member.CSharpName,
             CSharpType: member.CSharpType,
             TsName: member.TsName,
-            Label: label,
+            Label: member.Label,
             Kind: kind,
             TsType: member.TsType,
             Min: min,
             Max: max,
             Step: step,
+            Group: member.Group,
             Tooltip: member.Tooltip,
             IsAngle: member.IsAngleInRadians,
             IsVariance: member.CSharpName.EndsWith("Var"),
@@ -485,11 +601,12 @@ public static class Reader
         return sb.ToString();
     }
 
-    private static string GenerateGenericRow(TsFormField field)
+    private static string GenerateGenericRow(TsFormField field, TsFormField? variance = null)
     {
         var min = !string.IsNullOrWhiteSpace(field.Min) && field.Min != "0" ? $"min={{{field.Min}}}" : "";
         var max = !string.IsNullOrWhiteSpace(field.Max) ? $"max={{{field.Max}}}" : "";
-        var tooltip = !string.IsNullOrWhiteSpace(field.Tooltip) ? $"tooltip=\"{field.Tooltip}\"" : "";
+        var tooltip = !string.IsNullOrWhiteSpace(field.Tooltip) ? $"tooltip={{{TsStringLiteral(field.Tooltip)}}}" : "";
+        var v = variance != null ? $"variance={{{{ step: {variance.Step}, signal: species.{variance.TsName}}}}}" : "";
         var tag = field.CSharpType switch
         {
             "float" or "double" => "SpeciesFloatField",
@@ -499,7 +616,8 @@ public static class Reader
             _ => throw new Exception("Unknown field type.")
         };
 
-        return $"<{tag} {min} {max} step={{{field.Step}}} speciesIndex={{index}} {tooltip} signal={{species.{field.TsName}}} label=\"{field.Label}\"/>";
+        var result = $"<{tag} {min} {max} step={{{field.Step}}} speciesIndex={{index}} {tooltip} signal={{species.{field.TsName}}} label={{{TsStringLiteral(field.Label)}}} {v} />";
+        return ReduceWhitespaces().Replace(result, " ");
     }
 
     private static string GenerateBehaviorRow() => $"<SpeciesBehaviorField speciesIndex={{index}} signal={{species.behaviorIndex}} options={{appstate.behaviors}} />";
@@ -513,6 +631,9 @@ public static class Reader
 
         var akaFiled = fields.FirstOrDefault(x => x.CSharpName == nameof(SpeciesSettings.Aka));
 
+        string? lastRenderedGroup = null;
+        var hasRenderedAnyField = false;
+
         foreach (var field in fields)
         {
             if (emitted.Contains(field.CSharpName))
@@ -521,58 +642,45 @@ public static class Reader
             if (field.IsVariance)
                 continue;
 
-            // if (field.Kind == "behavior")
-            // {
-            //     foreach (var line in GenerateBehaviorRow(field))
-            //         yield return line;
+            if (ShouldEmitGroupSeparator(field, lastRenderedGroup, hasRenderedAnyField))
+                yield return "<hr/>";
 
-            //     emitted.Add(field.CSharpName);
-            //     continue;
-            // }
-
-            // if (field.Kind == "checkbox")
-            // {
-            //     foreach (var line in GenerateCheckboxRow(field))
-            //         yield return line;
-
-            //     emitted.Add(field.CSharpName);
-            //     continue;
-            // }
-
-            // if (field.Kind == "text")
-            // {
-            //     foreach (var line in GenerateTextRow(field))
-            //         yield return line;
-
-            //     emitted.Add(field.CSharpName);
-            //     continue;
-            // }
+            if (!string.IsNullOrWhiteSpace(field.Group))
+                lastRenderedGroup = field.Group;
 
             var varianceName = field.CSharpName + "Var";
 
-            // if (byCSharpName.TryGetValue(varianceName, out var variance))
-            // {
-            //     foreach (var line in GenerateNumberWithVarianceRow(field, variance))
-            //         yield return line;
-
-            //     emitted.Add(field.CSharpName);
-            //     emitted.Add(variance.CSharpName);
-            // }
-            // else
+            switch (field.CSharpName)
             {
-                switch (field.CSharpName)
+                case nameof(SpeciesSettings.Name): yield return GenerateNameRow(field, akaFiled); emitted.Add(akaFiled.CSharpName); hasRenderedAnyField = true; break;
+                case nameof(SpeciesSettings.Aka): yield return ""; break;
+                case nameof(SpeciesSettings.Behavior): yield return GenerateBehaviorRow(); hasRenderedAnyField = true; break;
+                default:
                 {
-                    case nameof(SpeciesSettings.Name): yield return GenerateNameRow(field, akaFiled); break;
-                    case nameof(SpeciesSettings.Aka): yield return ""; break;
-                    case nameof(SpeciesSettings.Behavior): yield return GenerateBehaviorRow(); break;
-                    default: yield return GenerateGenericRow(field); break;
+                    if(byCSharpName.TryGetValue(varianceName, out var variance))
+                    {
+                        yield return GenerateGenericRow(field, variance);
+                        emitted.Add(variance.CSharpName);
+                    }
+                    else
+                        yield return GenerateGenericRow(field);
                 }
-
-                emitted.Add(field.CSharpName);
+                hasRenderedAnyField = true;
+                break;
             }
+
+            emitted.Add(field.CSharpName);
 
             // if (ShouldInsertSeparatorAfter(field.CSharpName))
             //     yield return "        <hr />";
         }
     }
+
+    private static bool ShouldEmitGroupSeparator(TsFormField field, string? lastRenderedGroup, bool hasRenderedAnyField)
+        => hasRenderedAnyField && !string.IsNullOrWhiteSpace(field.Group) && !string.IsNullOrWhiteSpace(lastRenderedGroup) && !string.Equals(field.Group, lastRenderedGroup, StringComparison.Ordinal);
+
+    private static string TsStringLiteral(string value) => System.Text.Json.JsonSerializer.Serialize(value);
+
+    [GeneratedRegex(@"\s+")]
+    private static partial Regex ReduceWhitespaces();
 }

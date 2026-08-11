@@ -23,6 +23,6 @@
   <Target Name="GenerateSpeciesTypescript" AfterTargets="CoreCompile">
     <Message Importance="high" Text="Generating Species.generated.ts from SpeciesSettings.cs" />
 
-    <Exec Command="dotnet run --project &quot;$(MSBuildProjectDirectory)/../SchemeGenerator/SchemeGenerator.csproj&quot; -- &quot;$(MSBuildProjectDirectory)/../Agro/SpeciesSettings.cs&quot; &quot;$(MSBuildProjectDirectory)/../ThreeFrontend/src/helpers/Species.gen.ts&quot;" />
+    <Exec Command="dotnet run --project &quot;$(MSBuildProjectDirectory)/../SchemeGenerator/SchemeGenerator.csproj&quot; -- &quot;$(MSBuildProjectDirectory)/../Agro/SpeciesSettings.cs&quot; &quot;$(MSBuildProjectDirectory)/../ThreeFrontend/src/helpers/Species.gen.ts&quot; &quot;$(MSBuildProjectDirectory)/../ThreeFrontend/src/components/hud/Species.gen.tsx&quot;" />
   </Target>
 </Project>

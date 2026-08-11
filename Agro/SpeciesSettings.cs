@@ -12,11 +12,14 @@ public class SpeciesSettings
     ///<summary>
     /// Species name
     ///</summary>
+    [SpeciesUIGroup("Name")]
+    [SpeciesUITooltip("Official latin name")]
     public string Name { get; init; } = "Default";
 
     /// <summary>
     /// Colloquial name
     /// </summary>
+    [SpeciesUITooltip("Colloquial name")]
     public string Aka { get; init; }
 
     /// <summary>
@@ -25,13 +28,17 @@ public class SpeciesSettings
     public Behavior Behavior { get; init; } = Behavior.Default;
 
     ///<summary>
-    /// Standard height of the plant (in meters)
+    /// Mean height of the plant (in meters)
     ///</summary>
+    [SpeciesUILabel("Mean height")]
     public float Height { get; init; } = 10f;
 
     ///<summary>
     /// Standard length of a stem segment (in meters)
     ///</summary>
+    [SpeciesUIGroup("Name")]
+    [SpeciesUILabel("Node distance")]
+    [SpeciesUITooltip("Stem segments length (in meters)")]
     public float NodeDistance { get; init; } = 0.04f;
 
     ///<summary>
@@ -39,9 +46,11 @@ public class SpeciesSettings
     ///</summary>
     public float NodeDistanceVar { get; init; } = 0.01f;
 
+    [SpeciesUIGroup("Branching")]
     ///<summary>
     /// For monopodial branching select 1, for dichotomous select 0 and for anisotomous select sth. between
     ///</summary>
+    [SpeciesUILabel("Monopodial factor")]
     public float MonopodialFactor { get; init; } = 1;
 
     private float dominanceFactor;
@@ -50,6 +59,7 @@ public class SpeciesSettings
     ///<summary>
     /// Dominance factor reduces (or boosts) growth of lateral branches. Multiplies with each recursion level.
     ///</summary>
+    [SpeciesUILabel("Dominance factor")]
     public float DominanceFactor { get => dominanceFactor; init {
         dominanceFactor = value;
         const int factors = 16;
@@ -61,38 +71,17 @@ public class SpeciesSettings
             DominanceFactors[i] = MathF.Pow(dominanceFactor, i);
     } }
 
-    /// <summary>
-    /// Age (hours) when plant switches to deterministic sympodial growth.
-    /// </summary>
-    public float SympodialStartAgeHours = 24f * 45f;
-
-    /// <summary>
-    /// Age (hours) when flowering ends; growth stops afterwards.
-    /// </summary>
-    public float FloweringEndAgeHours { get; internal set; } = 24f * 90f;
-    public float FloweringStartAgeHours { get; internal set; } = 24f * 45f;
-    public float FlowerLengthVar { get; internal set; }
-    public float FlowerRadiusVar { get; internal set; }
-
-    public FlowerSettings FlowerSettings { get; set; } = new FlowerSettings();
     ///<summary>
     /// Number of lateral branches emerging from a node
     ///</summary>
+    [SpeciesUILabel("Branching amount")]
     public int LateralsPerNode { get; init; } = 2;
-
-    ///<summary>
-    /// Angular offset (along growth axis) to the previous node, in radians
-    ///</summary>
-    public float LateralRoll { get; init; } = 0f;
-
-    ///<summary>
-    /// Variance of the angular offset (along growth axis) to the previous node, in radians
-    ///</summary>
-    public float LateralRollVar { get; init; } = 5f * DegToRad;
 
     ///<summary>
     /// Angle of the lateral to its parent, in radians
     ///</summary>
+    [SpeciesUILabel("Lateral pitch")]
+    [SpeciesUITooltip("Angle of the growth direction to the growth direction of the parent (in deg)")]
     public float LateralPitch { get; init; } = 45f * DegToRad;
 
     ///<summary>
@@ -100,15 +89,35 @@ public class SpeciesSettings
     ///</summary>
     public float LateralPitchVar { get; init; } = 5f * DegToRad;
 
+    ///<summary>
+    /// Angular offset (along growth axis) to the previous node, in radians
+    ///</summary>
+    [SpeciesUILabel("Lateral roll")]
+    [SpeciesUITooltip("Orientation along the growth direction to the orientation of the parent (in deg)")]
+    public float LateralRoll { get; init; } = 0f;
 
+    ///<summary>
+    /// Variance of the angular offset (along growth axis) to the previous node, in radians
+    ///</summary>
+    public float LateralRollVar { get; init; } = 5f * DegToRad;
+
+    [SpeciesUILabel("Twigs bending rate")]
     public float TwigsBending { get; init; } = 0.5f;
+
+    [SpeciesUILabel("Twigs hierarchical bending")]
+    [SpeciesUITooltip("Twigs bending factor by hierarchy level (multiplicative)")]
     public float TwigsBendingByLevel { get; init; } = 1;
+
+    [SpeciesUILabel("Apex bending rate")]
     public float TwigsBendingApical { get; set; } = 0.02f;
+
+    [SpeciesUILabel("Shoots gravitaxis")]
     public float ShootsGravitaxis { get; set; } = 0.2f;
 
     /// <summary>
     /// Standard wood growth time (in hours)
     /// </summary>
+    [SpeciesUILabel("Wood maturing time (hours)")]
     public float WoodGrowthTime { get; set; } = 100f;
     /// <summary>
     /// Variance of the wood growth time (in hours)
@@ -123,6 +132,8 @@ public class SpeciesSettings
     ///<summary>
     /// Standard leaf length along its main axis (in meters)
     ///</summary>
+    [SpeciesUIGroup("Leafs")]
+    [SpeciesUILabel("Leaf length")]
     public float LeafLength { get; init; } = 0.12f;
 
     ///<summary>
@@ -133,6 +144,7 @@ public class SpeciesSettings
     ///<summary>
     /// Standard leaf radius, i.e. the span perpendicular to its main axis (in meters)
     ///</summary>
+    [SpeciesUILabel("Leaf radius")]
     public float LeafRadius { get; init; } = 0.04f;
 
     ///<summary>
@@ -141,44 +153,10 @@ public class SpeciesSettings
     public float LeafRadiusVar { get; init; } = 0.01f;
 
     ///<summary>
-    /// Standard growth time of a leaf (in hours)
-    ///</summary>
-    public float LeafGrowthTime { get; init; } = 480f;
-
-    ///<summary>
-    /// Variance of the growth time of a leaf (in hours)
-    ///</summary>
-    public float LeafGrowthTimeVar { get; init; } = 120f;
-
-
-    ///<summary>
-    /// Standard senescence duration of a leaf (in hours)
-    ///</summary>
-    public float LeafSenescenceSeasonalDuration { get; init; } = 480f;
-
-    ///<summary>
-    /// Variance of the senescence duration of a leaf (in hours)
-    ///</summary>
-    public float LeafSenescenceSeasonalDurationVar { get; init; } = 120f;
-
-    ///<summary>
-    /// Standard senescence duration of a leaf (in hours)
-    ///</summary>
-    public float LeafSenescenceStressDuration { get; init; } = 140f;
-
-    ///<summary>
-    /// Variance of the senescence duration of a leaf (in hours)
-    ///</summary>
-    public float LeafSenescenceStressDurationVar { get; init; } = 60f;
-
-    /// <summary>
-    /// If positive, marks a typical senescence period (in seasonal progress ,i.e. think of roman months)
-    /// </summary>
-    public float SeasonalSenescence { get; init; } = 8.5f / 12;
-
-    ///<summary>
     /// Standard leaf pitch angle wrt. to its petiole (in radians)
     ///</summary>
+    [SpeciesUILabel("Leaf pitch")]
+    [SpeciesUITooltip("Mean leaf angle to the petiole (in deg)")]
     public float LeafPitch { get; init; } = 20f * DegToRad;
 
     ///<summary>
@@ -189,6 +167,7 @@ public class SpeciesSettings
     ///<summary>
     /// Standard petiole length (in meters)
     ///</summary>
+    [SpeciesUILabel("Petiole length")]
     public float PetioleLength { get; init; } = 0.04f;
 
     ///<summary>
@@ -199,6 +178,7 @@ public class SpeciesSettings
     ///<summary>
     /// Standard petiole radius (in meters)
     ///</summary>
+    [SpeciesUILabel("Petiole radius")]
     public float PetioleRadius { get; init; } = 0.0025f;
 
     ///<summary>
@@ -206,20 +186,77 @@ public class SpeciesSettings
     ///</summary>
     public float PetioleRadiusVar { get; init; } = 0.0005f;
 
+    [SpeciesUIIgnore]
+    public float PetioleCoverThreshold { get; private set; } = float.MaxValue;
+
+    ///<summary>
+    /// Standard growth time of a leaf (in hours)
+    ///</summary>
+    [SpeciesUILabel("Leaf growth time")]
+    public float LeafGrowthTime { get; init; } = 480f;
+
+    ///<summary>
+    /// Variance of the growth time of a leaf (in hours)
+    ///</summary>
+    public float LeafGrowthTimeVar { get; init; } = 120f;
+
+    ///<summary>
+    /// Standard senescence duration of a leaf (in hours)
+    ///</summary>
+    [SpeciesUILabel("Leaf seasonal senescence")]
+    public float LeafSenescenceSeasonalDuration { get; init; } = 480f;
+
+    ///<summary>
+    /// Variance of the senescence duration of a leaf (in hours)
+    ///</summary>
+    public float LeafSenescenceSeasonalDurationVar { get; init; } = 120f;
+
+    ///<summary>
+    /// Standard senescence duration of a leaf (in hours)
+    ///</summary>
+    [SpeciesUILabel("Leaf stress senescence")]
+    public float LeafSenescenceStressDuration { get; init; } = 140f;
+
+    ///<summary>
+    /// Variance of the senescence duration of a leaf (in hours)
+    ///</summary>
+    public float LeafSenescenceStressDurationVar { get; init; } = 60f;
+
+    /// <summary>
+    /// If positive, marks a typical senescence period (in seasonal progress, i.e. think of roman months)
+    /// </summary>
+    //TODO should be simply conted from the astronomical spring
+    [SpeciesUILabel("Season duration (in months)")]
+    public float SeasonalSenescence { get; init; } = 7.8f / 12;
+
     ///<summary>
     /// Density of the roots system (affects branching probabiilty). Valued 0 to 1 (with one being the most dense)
     ///</summary>
+    [SpeciesUIGroup("Roots")]
+    [SpeciesUILabel("Roots density")]
     public float RootsDensity { get; init; } = 0.5f;
 
     ///<summary>
     /// Correction factor to point the roots growth downwards
     ///</summary>
+    [SpeciesUILabel("Roots gravitaxis")]
     public float RootsGravitaxis { get; init; } = 0.2f;
 
     // public float RootRadiusGrowthPerH { get; init; }
     // public float RootLengthGrowthPerH { get; init; }
 
     //public int FirstFruitHour { get; init; }
+
+    /// <summary>
+    /// Dry wood density in g/m³
+    /// </summary>
+    [SpeciesUILabel("Dry wood density")]
+    public float DensityDryWood { get; init; } = 700_000;
+    /// <summary>
+    /// Dry stem density in g/m³
+    /// </summary>
+	[SpeciesUILabel("Dry stem density")]
+    public float DensityDryStem { get; init; } = 200_000;
 
     public float AuxinsProduction { get; init; } = 40;
     public float CytokininsProduction { get; init; } = 40;
@@ -229,17 +266,6 @@ public class SpeciesSettings
     public float CytokininsReach { get; init; } = 1;
 
     public float AuxinsThreshold { get; init; } = 1f;
-
-    /// <summary>
-    /// Dry wood density in g/m³
-    /// </summary>
-    public float DensityDryWood { get; init; } = 700_000;
-    /// <summary>
-    /// Dry stem density in g/m³
-    /// </summary>
-	public float DensityDryStem { get; init; } = 200_000;
-
-    public float PetioleCoverThreshold { get; private set; } = float.MaxValue;
 
 
     #region Leaf Appearance
@@ -267,6 +293,22 @@ public class SpeciesSettings
     };
     #endregion
 
+    /// <summary>
+    /// Age (hours) when plant switches to deterministic sympodial growth.
+    /// </summary>
+    public float SympodialStartAgeHours = 24f * 45f;
+
+    /// <summary>
+    /// Age (hours) when flowering ends; growth stops afterwards.
+    /// </summary>
+    [SpeciesUIGroup("Flowers")]
+    public float FloweringEndAgeHours { get; internal set; } = 24f * 90f;
+    public float FloweringStartAgeHours { get; internal set; } = 24f * 45f;
+    public float FlowerLengthVar { get; internal set; }
+    public float FlowerRadiusVar { get; internal set; }
+
+    public FlowerSettings FlowerSettings { get; set; } = new FlowerSettings();
+
     #region Fruit Settings
     /// <summary>
     /// Fruit production settings for species that produce edible fruits.
@@ -281,9 +323,6 @@ public class SpeciesSettings
     [JsonPropertyName("GEM")]
     public float GreenElasticModulus { get; init; } = 1e8f; // in Pa
 
-    // public static SpeciesSettings Geranium_Macrorhizum;
-    // public static SpeciesSettings Geranium_Cantabrigiense;
-    // public static SpeciesSettings Bergenia_Cordifolia;
     [JsonPropertyName("DF")]
     public float DepthFactor { get; init; } = 0.01f; // in Pa
 
