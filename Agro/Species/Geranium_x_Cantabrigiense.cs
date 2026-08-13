@@ -22,7 +22,7 @@ public static class Geranium_x_Cantabrigiense
 
         LeafLength = 0.06f,
         LeafLengthVar = 0.012f,
-        LeafRadius = 0.035f,       
+        LeafRadius = 0.035f,
         LeafRadiusVar = 0.006f,
         LeafPitchVar = 5f * (MathF.PI / 180f),
         LeafPitch = 85 * (MathF.PI / 180f),
@@ -30,14 +30,14 @@ public static class Geranium_x_Cantabrigiense
 
         LeafGrowthTime = 24f * 7f * 2f,
         LeafGrowthTimeVar = 24f * 3f,
-        MaxLeaveAge = 24f * 180f,   
+        MaxLeaveAge = 24 * 180,
 
         PetioleLength = 0.06f,
         PetioleLengthVar = 0.012f,
         PetioleRadius = 0.0015f,
         PetioleRadiusVar = 0.0002f,
 
-        pNewCrown = 0.50f,           
+        pNewCrown = 0.50f,
         crownPitch = 0.7f,
         growthFactor = 0.25f,
         MaxRadius = 0.003f,
@@ -48,21 +48,21 @@ public static class Geranium_x_Cantabrigiense
         LateralRollVar = 5f * (MathF.PI / 180f),
 
         LateralsPerNode = 2,
-        NodeDistance = 0f,          
+        NodeDistance = 0f,
         NodeDistanceVar = 0.000f,
         DominanceFactor = 0.7f,
 
         RizomeMaxDepth = 4,
         RizomeLength = 0.035f,
         RizomeRadius = 0.0022f,
-        pExpandRizome = 0.0009f,          
+        pExpandRizome = 0.0009f,
         SympodialStartAgeHours = 24f * 50f,
         FloweringStartAgeHours = 24f * 55f,
         FloweringEndAgeHours = 24f * 110f,
         pChaningSeaonns = [0.018f, 0.002f, 0.009f, 0.0f],
-        pFloweringSeaonns = [0.002f, 0.055f, 0.002f, 0.0f],  
+        pFloweringSeaonns = [0.002f, 0.055f, 0.002f, 0.0f],
         WoodElasticModulus = 1.2e8f,
-        GreenElasticModulus = 5e6f,         
+        GreenElasticModulus = 5e6f,
         DepthFactor = 0.01f,
         FlowerElasticModulus = 5e7f,
 

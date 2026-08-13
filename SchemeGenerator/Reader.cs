@@ -87,8 +87,7 @@ public static partial class Reader
                 if (positional is not null)
                     return ReadStringExpression(positional.Expression);
 
-                // Optional support for named argument style:
-                // [SpeciesUILabel(Value = "Plant height")]
+                // Optional support for named argument style: [SpeciesUILabel(Value = "Plant height")]
                 foreach (var arg in argumentList.Arguments)
                 {
                     var name = arg.NameEquals?.Name.Identifier.Text;

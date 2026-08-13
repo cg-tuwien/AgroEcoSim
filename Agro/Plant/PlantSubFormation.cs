@@ -528,11 +528,11 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
                         children.Enqueue(child);
                         ref var c = ref dst[child];
                        // if (!IsNearlyIdentity(appliedDelta))
-                        
+
                             c.SetOrientation(Quaternion.Normalize(appliedDelta * c.Orientation));
                             c.baseOrientation = Quaternion.Normalize(appliedDelta * c.baseOrientation);
                             c.restOrientation = Quaternion.Normalize(appliedDelta * c.restOrientation);
-                        
+
                     }
 
                 }
@@ -633,13 +633,13 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 			refitChildrens(index1);
             getSubtreeCollisions(index1, ref possibleCollisions);
             getSubtreeCollisions(index2, ref possibleCollisions);
-            
+
 
         }
     }
 	private void refitChildrens(int i)
 	{
-        
+
         var children = new Queue<int>();
 		children.Enqueue(i);
         while (children.Count > 0)
@@ -691,7 +691,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 
         }
     }
-    
+
 	private bool shareCrown(int index1, int index2)
 	{
 
@@ -984,7 +984,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 		var dst = Src();
 		for (int i = 0; i < dst.Length; ++i)
 		{
-           
+
             dst[i].Distribute(stats.ReceivedWater[i], stats.ReceivedEnergy[i]);
 		}
 	}
@@ -1154,15 +1154,42 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 			return (woodRatio * species.DensityDryWood + ((1f - woodRatio) * species.DensityDryStem)) * src[index].Volume() + src[index].Water_g;
 		}
 	}
-    public SeasonalPhase GetPhase(SpeciesSettings species, uint timestep)
+
+	/// <summary>
+	/// Track the timesteps when flowering of this plant started. While flowering is ongoing the most recent start is tha last value in the list, uint.MaxValue otherwise.
+	/// </summary>
+	readonly List<uint> FloweringStarted = [uint.MaxValue];
+
+    public SeasonalPhase GetFloweringPhase(SpeciesSettings species, uint timestep)
     {
-        var ageHours = timestep * Plant.World.HoursPerTick;
-        var ageTemp = ageHours % (365f * 24f);
-        if (ageTemp < species.FloweringStartAgeHours) return SeasonalPhase.PreFlower;
-        if (ageTemp <= species.FloweringEndAgeHours) return SeasonalPhase.Flowering;
-        if (ageTemp > species.FloweringEndAgeHours && ageTemp < species.FloweringEndAgeHours + 24f * 100) return SeasonalPhase.PostFlower;
-        return SeasonalPhase.ResetPending;
+        var season = timestep * Plant.World.Season;
+		var age_h = Plant.GetAge();
+
+        if (age_h < species.FloweringStartAgeHours || season < species.FloweringStartSeason)
+		{
+			if (FloweringStarted[^1] < uint.MaxValue)
+				FloweringStarted.Add(uint.MaxValue);
+			return SeasonalPhase.PreFlower;
+		}
+        else if (age_h >= species.FloweringStartAgeHours && season >= species.FloweringStartSeason && season <= species.FloweringEndSeason && (FloweringStarted[^1] == uint.MaxValue || (Plant.World.Timestep - FloweringStarted[^1]) * Plant.World.HoursPerTick <= species.FloweringDurationAgeHours))
+		{
+			if (FloweringStarted[^1] == uint.MaxValue)
+				FloweringStarted[^1] = Plant.World.Timestep;
+			return SeasonalPhase.Flowering;
+		}
+        if (FloweringStarted[^1] < uint.MaxValue && ((Plant.World.Timestep - FloweringStarted[^1]) * Plant.World.HoursPerTick > species.FloweringDurationAgeHours || season > species.FloweringEndSeason))
+		{
+			FloweringStarted.Add(uint.MaxValue);
+			return SeasonalPhase.PostFlower;
+		}
+        else
+		{
+			if (FloweringStarted[^1] < uint.MaxValue)
+				FloweringStarted.Add(uint.MaxValue);
+			return SeasonalPhase.ResetPending;
+		}
     }
+
     public float GetAuxins(int index) => ReadTMP
 		? (index < AgentsTMP.Length ? AgentsTMP[index].Auxins : 0f)
 		: (index < Agents.Length ? Agents[index].Auxins : 0f);
@@ -1208,7 +1235,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
         var leaves = new List<(int agentIndex, Bvh.BoundingBox bounds)>(dst.Length);
         for (int i = 0; i < dst.Length; ++i)
         {
-			
+
             leaves.Add((i, ComputeBounds(i)));
         }
 

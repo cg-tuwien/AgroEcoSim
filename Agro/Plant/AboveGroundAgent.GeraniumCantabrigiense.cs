@@ -25,7 +25,7 @@ namespace Agro
                 var world = plant.World;
 
                 var ageHours = (timestep - agent.BirthTime) * world.HoursPerTick;
-                var phase = formation.GetPhase(species, timestep);
+                var phase = formation.GetFloweringPhase(species, timestep);
 
                 var lifeSupportPerHour = agent.LifeSupportPerHour();
                 var lifeSupportPerTick = agent.LifeSupportPerTick(world);
@@ -344,7 +344,7 @@ namespace Agro
                             formation.Death(agentID);
                             if (agent.Parent >= 0) formation.Death(agent.Parent);
                             break;
-                        
+
                         case OrganTypes.Stem:
                             if (formation.GetIsRizome(agent.Parent)) agent.MakeBud(formation, children);
                             else formation.Death(agentID);

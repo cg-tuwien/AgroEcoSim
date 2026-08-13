@@ -25,10 +25,10 @@ namespace Agro
                 var species = plant.Parameters;
                 var world = plant.World;
                 var ageHours = (timestep - agent.BirthTime) * world.HoursPerTick; //age in hours
-                bool sympodialPhase = ageHours >= species.SympodialStartAgeHours;
-                bool stopGrowth = ageHours >= species.FloweringEndAgeHours;
+                //bool sympodialPhase = ageHours >= species.SympodialStartAgeHours;
+                //bool stopGrowth = ageHours >= species.FloweringEndAgeHours;
 
-                var phase = formation.GetPhase(species, timestep);
+                var phase = formation.GetFloweringPhase(species, timestep);
 
                 //TODO growth should reflect temperature
                 var lifeSupportPerHour = agent.LifeSupportPerHour();

@@ -21,7 +21,7 @@ namespace Agro
 
             public static void TickGeraniumSanguineum(ref AboveGroundAgent agent, PlantSubFormation<AboveGroundAgent> formation, int agentID, uint timestep)
             {
-                
+
                 var plant = formation.Plant;
                 var species = plant.Parameters;
                 var world = plant.World;
@@ -29,7 +29,7 @@ namespace Agro
                 bool sympodialPhase = ageHours >= species.SympodialStartAgeHours;
                 bool stopGrowth = ageHours >= species.FloweringEndAgeHours;
 
-                var phase = formation.GetPhase(species,timestep);
+                var phase = formation.GetFloweringPhase(species,timestep);
 
                 //TODO growth should reflect temperature
                 var lifeSupportPerHour = agent.LifeSupportPerHour();
@@ -131,7 +131,7 @@ namespace Agro
                                 agent.CreateLeaves(agent, plant, agent.LateralAngle + species.LateralRoll, agentID);
                         } else agent.trySpawn = false;
                     }
-                    if (phase.Equals(SeasonalPhase.ResetPending)) { 
+                    if (phase.Equals(SeasonalPhase.ResetPending)) {
                         agent.trySpawn = true;
                     }
                 }
@@ -255,7 +255,7 @@ namespace Agro
                                     }
                                 }
                                 break;
-                           
+
                             case OrganTypes.FlowerStem:
                                 {
                                     /* var sizeLimit = new Vector2(species.PetioleLength + agent.LengthVar, species.PetioleRadius + agent.RadiusVar);
@@ -452,7 +452,7 @@ namespace Agro
                                 formation.Death(agent.Parent); //remove the petiole as well
                             }
                             break;
-                       
+
                         case OrganTypes.Stem:
                             {
                                 if (formation.GetIsRizome(agent.Parent))

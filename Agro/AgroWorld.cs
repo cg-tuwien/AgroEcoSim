@@ -260,7 +260,8 @@ public class AgroWorld : SimulationWorld
 		protected set
 		{
 			base.Timestep = value;
-			Season = GetTime(base.Timestep).DayOfYear / 365f;
+			var dayOfYear = GetTime(base.Timestep).DayOfYear - 1;
+			Season = (dayOfYear >= 59 ? dayOfYear - 59 : 306 + dayOfYear) / 365f;
 		}
 	}
 

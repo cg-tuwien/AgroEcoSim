@@ -135,7 +135,7 @@ public partial class PlantFormation2 : IPlantFormation
 			var agGathered = AG.Gather();
 
 			var energy = agGathered.Energy + ugGathered.Energy;
-			var water = agGathered.Water + ugGathered.Energy;
+			var water = agGathered.Water + ugGathered.Water;
 
 			var energyRequirement = agGathered.EnergyRequirementPerTick + ugGathered.EnergyRequirementPerTick;
 			var waterRequirement = agGathered.WaterRequirementPerTick + ugGathered.WaterRequirementPerTick;
@@ -467,14 +467,22 @@ public partial class PlantFormation2 : IPlantFormation
 	#region glTF EXPORT
 	///////////////////////////
 	public List<Node> ExportToGLTF() => AG.ExportToGLTF();
-	#endregion
+
+    internal uint GetAge()
+    {
+        if (AG != null && AG.Count > 0)
+			return AG.GetAge(0, World.Timestep);
+		else
+			return 0;
+    }
+    #endregion
 
     // internal int InsertSegments(byte segmentsCount, Quaternion orientation)
     // {
     //     var result = SegmentOrientations.Count;
-	// 	for(int i = 0; i < segmentsCount; ++i)
-	// 		SegmentOrientations.Add(orientation);
+    // 	for(int i = 0; i < segmentsCount; ++i)
+    // 		SegmentOrientations.Add(orientation);
 
-	// 	return result;
+    // 	return result;
     // }
 }

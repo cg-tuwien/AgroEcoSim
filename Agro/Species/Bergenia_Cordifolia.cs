@@ -11,7 +11,7 @@ public static class Bergenia_Cordifolia
         Behavior = Behavior.Herbaceous,
         LeafLength = 0.14f,
         LeafRadius = 0.06f,
-        PetioleLength = 0.01f, 
+        PetioleLength = 0.01f,
         PetioleRadius = 0.0025f,
         LeafGrowthTime = 24 * 7 * 12,
         Height = 0.04f,
@@ -20,7 +20,7 @@ public static class Bergenia_Cordifolia
         pChaningSeaonns = [0.008f, 0.002f, 0.00f, 0f],
         pFloweringSeaonns = [0f, 0.005f, 0.0005f, 0f],
 
-        MaxLeaveAge = 24f * 180f * 2f,
+        MaxLeaveAge = 24 * 360,
         pNewCrown = 0.5f,
         crownPitch = 0.4f,
         growthFactor = 0.2f,
@@ -117,7 +117,7 @@ public static class Bergenia_Cordifolia
 
         },
 
-        
+
         LeafPhenology = new LeafPhenology(
             expectedAge: 2f * 365f * 24f,
             colorModel: new ColorModel(

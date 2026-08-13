@@ -30,7 +30,7 @@ public class PlantGlobalStats
 	{
 		var weightsTotal = 0.0;
 		for(int i = 0; i < Gathering.Count; ++i)
-			weightsTotal = Gathering[i].LifesupportEnergy * Gathering[i].ProductionEfficiency;
+			weightsTotal += Gathering[i].LifesupportEnergy * Gathering[i].ProductionEfficiency;
 		return weightsTotal;
 	}
 

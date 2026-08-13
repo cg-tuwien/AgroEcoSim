@@ -299,13 +299,32 @@ public class SpeciesSettings
     public float SympodialStartAgeHours = 24f * 45f;
 
     /// <summary>
-    /// Age (hours) when flowering ends; growth stops afterwards.
+    /// Minimum plant age to start flowering (in hours)
     /// </summary>
     [SpeciesUIGroup("Flowers")]
-    public float FloweringEndAgeHours { get; internal set; } = 24f * 90f;
-    public float FloweringStartAgeHours { get; internal set; } = 24f * 45f;
-    public float FlowerLengthVar { get; internal set; }
-    public float FlowerRadiusVar { get; internal set; }
+    [SpeciesUILabel("Flowering minimum age")]
+    [SpeciesUITooltip(" Minimum plant age to start flowering (in hours)")]
+    public int FloweringStartAgeHours { get; internal set; } = 24 * 45;
+
+    /// <summary>
+    /// Typical flowering start within the season (in seasonal factor)
+    /// </summary>
+    [SpeciesUILabel("Seasonal flowering typical start")]
+    public float FloweringStartSeason { get; internal set; } = 2f / 12;
+
+    /// <summary>
+    /// Latest flowering start within the season (in seasonal factor)
+    /// </summary>
+    [SpeciesUILabel("Seasonal flowering latest start")]
+    public float FloweringEndSeason { get; internal set; } = 5f / 12;
+    /// <summary>
+    /// Flowering duration (in hours); growth stops afterwards.
+    /// </summary>
+    [SpeciesUILabel("Flowering duration")]
+    public float FloweringDurationAgeHours { get; internal set; } = 24f * 30f;
+    public float FloweringDurationAgeHoursVar { get; internal set; } = 0f; //TODO
+    // public float FlowerLengthVar { get; internal set; }
+    // public float FlowerRadiusVar { get; internal set; }
 
     public FlowerSettings FlowerSettings { get; set; } = new FlowerSettings();
 
@@ -329,7 +348,10 @@ public class SpeciesSettings
 
     //-- custom parmeter Geranium & Bergania
     #region GeraniumBergania
-    public float MaxLeaveAge { get; set; } = 2*365;
+    /// <summary>
+    /// Maximum leaf age (in hours)
+    /// </summary>
+    public int MaxLeaveAge { get; set; } = 24*2*365;
 
     public Vector3 BaseLeafColor { get; set; }
     public Vector3 OldLeafColor { get; set; }
@@ -351,7 +373,7 @@ public class SpeciesSettings
     public int petiolSegments { get; set; } = 1;
     public float growthTimeVar { get;  set; }
     public float BudBloomAgeVar { get;  set; }
-    public float BaseElasticModulus { get; set; }=2e8f;
+    public float BaseElasticModulus { get; set; } = 2e8f;
     public float PetiolElasticModulus { get;  set; } = 2e8f;
     public float FlowerElasticModulus { get;  set; } = 5e6f;
     public float FlowerPetiolElasticModulus { get;  set; } = 4e5f;
