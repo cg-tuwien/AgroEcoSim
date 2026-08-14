@@ -238,7 +238,12 @@ public partial class PlantFormation2 : IPlantFormation
 			{
 				//Debug.WriteLine("W DIST: storage");
 				var waterOverhead = water - waterRequirement;
-				var waterWeight = waterStorage -  waterRequirement;
+				// Received water consists of the photosynthetic requirement plus a
+				// capacity-weighted storage share.  The denominator must therefore be
+				// the complete storage weight.  Subtracting the requirement made the
+				// allocation non-conservative and diverged as capacity approached the
+				// per-tick requirement (the source of the astronomical Carex masses).
+				var waterWeight = waterStorage;
 
 				var factor = (float)(waterOverhead / (waterWeight >= zero ? waterWeight : 1));
 				agGathered.DistributeWaterByStorage(factor);
@@ -468,10 +473,10 @@ public partial class PlantFormation2 : IPlantFormation
 	///////////////////////////
 	public List<Node> ExportToGLTF() => AG.ExportToGLTF();
 
-    internal uint GetAge()
+    internal uint GetAge_h()
     {
         if (AG != null && AG.Count > 0)
-			return AG.GetAge(0, World.Timestep);
+			return AG.GetAge_ticks(0, World.Timestep) * World.HoursPerTick;
 		else
 			return 0;
     }

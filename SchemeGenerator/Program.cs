@@ -29,7 +29,12 @@ var members = Reader.Extract(classNode);
 var speciesInterface = Reader.GenerateInterface(members);
 var speciesForm = Reader.GenerateForm(members);
 
-File.WriteAllText(interfaceOutputPath, speciesInterface);
-File.WriteAllText(formOutputPath, speciesForm);
+var currentInterface = File.Exists(interfaceOutputPath) ? File.ReadAllText(interfaceOutputPath) : "";
+if (currentInterface != speciesInterface)
+    File.WriteAllText(interfaceOutputPath, speciesInterface);
+
+var currentForm = File.Exists(formOutputPath) ? File.ReadAllText(formOutputPath) : "";
+if (currentForm != speciesForm)
+    File.WriteAllText(formOutputPath, speciesForm);
 
 return 0;

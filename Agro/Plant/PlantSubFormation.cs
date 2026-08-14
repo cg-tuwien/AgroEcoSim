@@ -55,6 +55,15 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 	internal float DailyEfficiencyMax { get; private set; }
 	internal float Height => TreeCache.Height;
 	readonly bool IsAboveGround;
+	const float HeightEpsilon = 1e-6f;
+
+	internal float GetRelativeHeight(int index)
+	{
+		if (!IsAboveGround || Height <= HeightEpsilon)
+			return 0f;
+
+		return Math.Clamp((GetBaseCenter(index).Y - Plant.Position.Y) / Height, 0f, 1f);
+	}
 
 	public bool CheckIndex(int index) => index < Agents.Length;
 
@@ -432,8 +441,12 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
         var flowerOrgans = new List<OrganTypes>() { OrganTypes.FlowerStem, OrganTypes.FlowerPadel, OrganTypes.FlowerPetiol, OrganTypes.FlowerMeristem, OrganTypes.FlowerBud };
 
 
-        //process nodes from roots to leaves, propagating rotations
-        float tickSpeed = Plant.World.HoursPerTick;
+		// Process nodes from roots to leaves, propagating rotations.  The response
+		// is specified per hour so changing the simulation timestep does not alter
+		// how quickly an organ approaches its elastic equilibrium.
+		float tickSpeed = MathF.Max(0f, Plant.World.HoursPerTick);
+		const float responsePerHour = 0.05f;
+		float response = 1f - MathF.Pow(1f - responsePerHour, tickSpeed);
         var nodesToVisit = new Queue<int>(GetRoots());
 		while (nodesToVisit.Count > 0)
 		{
@@ -479,29 +492,25 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 
 			if (length > 1e-4f && radius > 0f && totalWeight > 0f)
 			{
-				//Console.WriteLine($"{length}");
-				var bendingMoment = totalWeight * length * 0.5f;
+				var baseDir = Vector3.Transform(Vector3.UnitX, agent.baseOrientation);
+				// Only the component perpendicular to the organ bends a cantilever.
+				// The previous implementation applied maximum bending even to a
+				// vertical stem, where gravity is an axial load.
+				var transverseLoadFactor = MathF.Sqrt(MathF.Max(0f, 1f - baseDir.Y * baseDir.Y));
+				var bendingMoment = totalWeight * transverseLoadFactor * length * 0.5f;
 				var inertia = MathF.PI * MathF.Pow(radius, 4) / 4f;
 				var curvature = bendingMoment / (elasticity * inertia);
 				var deltaTheta = curvature * length;
 
-
-
-				var dir = Vector3.Transform(Vector3.UnitX, agent.Orientation);
-				var restDir = Vector3.Transform(Vector3.UnitX, agent.restOrientation);
-				var baseDir = Vector3.Transform(Vector3.UnitX, agent.baseOrientation);
-
 				float angleToDown = MathF.Acos(Math.Clamp(Vector3.Dot(baseDir, Vector3.UnitY), -1f, 1f));
-				float rest = MathF.Acos(Math.Clamp(Vector3.Dot(baseDir, restDir), -1f, 1f));
 				var axis = Vector3.Cross(baseDir, Vector3.UnitY);
                 if (axis.LengthSquared() < 1e-8f)
                     axis = Vector3.Cross(baseDir, Vector3.UnitZ);
 
-                if (axis.LengthSquared() < 1e-8f)
-                    axis = Vector3.Cross(baseDir, Vector3.UnitX);
-                float maxAllowedBend = MathF.PI - angleToDown;
-				rest = Math.Clamp(rest, 0f, maxAllowedBend);
-				float safeDelta = Math.Clamp(deltaTheta, rest, maxAllowedBend);
+				if (axis.LengthSquared() < 1e-8f)
+					axis = Vector3.Cross(baseDir, Vector3.UnitX);
+				float maxAllowedBend = MathF.PI - angleToDown;
+				float safeDelta = Math.Clamp(deltaTheta, 0f, maxAllowedBend);
 
 				var len = axis.Length();
 				if (len > 1e-4f)
@@ -509,9 +518,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 					axis /= len;
 					rotation = Quaternion.CreateFromAxisAngle(axis, -safeDelta);
 					agent.targetOrientation = Quaternion.Normalize(rotation * agent.baseOrientation);
-
-                    agent.restOrientation = Quaternion.Slerp(agent.restOrientation, agent.targetOrientation, 0.002f);
-					var newOr = Quaternion.Slerp(agent.Orientation, agent.targetOrientation, 0.05f);
+					var newOr = Quaternion.Slerp(agent.Orientation, agent.targetOrientation, response);
 
 					appliedDelta = newOr * Quaternion.Inverse(agent.Orientation);
 
@@ -1158,34 +1165,41 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 	/// <summary>
 	/// Track the timesteps when flowering of this plant started. While flowering is ongoing the most recent start is tha last value in the list, uint.MaxValue otherwise.
 	/// </summary>
-	readonly List<uint> FloweringStarted = [uint.MaxValue];
+	readonly List<uint> FloweringStarted = [PreFloweringState];
+	const uint PreFloweringState = uint.MaxValue;
+	const uint PostFloweringState = uint.MaxValue - 1;
 
     public SeasonalPhase GetFloweringPhase(SpeciesSettings species, uint timestep)
     {
-        var season = timestep * Plant.World.Season;
-		var age_h = Plant.GetAge();
+		var season = Plant.World.Season;
+		var age_h = Plant.GetAge_h();
 
         if (age_h < species.FloweringStartAgeHours || season < species.FloweringStartSeason)
 		{
-			if (FloweringStarted[^1] < uint.MaxValue)
-				FloweringStarted.Add(uint.MaxValue);
+			switch (FloweringStarted[^1])
+			{
+				case PreFloweringState: break;
+				case PostFloweringState: FloweringStarted[^1] = uint.MaxValue; break;
+				default: FloweringStarted.Add(uint.MaxValue); break;
+			}
+
 			return SeasonalPhase.PreFlower;
 		}
-        else if (age_h >= species.FloweringStartAgeHours && season >= species.FloweringStartSeason && season <= species.FloweringEndSeason && (FloweringStarted[^1] == uint.MaxValue || (Plant.World.Timestep - FloweringStarted[^1]) * Plant.World.HoursPerTick <= species.FloweringDurationAgeHours))
+        else if (age_h >= species.FloweringStartAgeHours && season >= species.FloweringStartSeason && season <= species.FloweringEndSeason && (FloweringStarted[^1] == PreFloweringState || (FloweringStarted[^1] < PostFloweringState && (Plant.World.Timestep - FloweringStarted[^1]) * Plant.World.HoursPerTick <= species.FloweringDurationAgeHours)))
 		{
-			if (FloweringStarted[^1] == uint.MaxValue)
+			if (FloweringStarted[^1] == PreFloweringState)
 				FloweringStarted[^1] = Plant.World.Timestep;
 			return SeasonalPhase.Flowering;
 		}
         if (FloweringStarted[^1] < uint.MaxValue && ((Plant.World.Timestep - FloweringStarted[^1]) * Plant.World.HoursPerTick > species.FloweringDurationAgeHours || season > species.FloweringEndSeason))
 		{
-			FloweringStarted.Add(uint.MaxValue);
+			FloweringStarted.Add(PostFloweringState);
 			return SeasonalPhase.PostFlower;
 		}
         else
 		{
-			if (FloweringStarted[^1] < uint.MaxValue)
-				FloweringStarted.Add(uint.MaxValue);
+			if (FloweringStarted[^1] < PreFloweringState)
+				FloweringStarted.Add(PreFloweringState);
 			return SeasonalPhase.ResetPending;
 		}
     }
@@ -1194,7 +1208,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 		? (index < AgentsTMP.Length ? AgentsTMP[index].Auxins : 0f)
 		: (index < Agents.Length ? Agents[index].Auxins : 0f);
 
-    public uint GetAge(int index, uint timestep) => ReadTMP
+    public uint GetAge_ticks(int index, uint timestep) => ReadTMP
 		? index < AgentsTMP.Length ? timestep - AgentsTMP[index].BirthTime : 0
 		: index < Agents.Length ? timestep - Agents[index].BirthTime : 0;
 

@@ -119,7 +119,7 @@ export async function ParseOld(f: File) : Promise<IObjImport> {
             }
         }
     }
-    debugger;
+
     const result = {
         vertices: vertices,
         //normals: normals,

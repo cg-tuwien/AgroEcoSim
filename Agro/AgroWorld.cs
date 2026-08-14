@@ -83,7 +83,7 @@ public class AgroWorld : SimulationWorld
 		return ticks + (rem == 0 ? 0 : 1);
 	}
 
-	public DateTime InitialTime = new(2022, 6, 1, 0, 0, 0, DateTimeKind.Unspecified);
+	public DateTime InitialTime = new(2026, 2, 1, 0, 0, 0, DateTimeKind.Unspecified);
 
 	public readonly bool VirtualRoots = false;
 
@@ -176,53 +176,26 @@ public class AgroWorld : SimulationWorld
 		Weather = new WeatherStats[tsTotal];
 		var tsCounter = 0;
 
-		var overflow = 0;
 		var month = 0;
+		var timestepHours = 0;
+		var timestepPrecipitation = 0.0;
+		var timestepCoverage = 0.0;
 		while(tsCounter < tsTotal)
 		{
-			var hCounter = 0;
 			var monthly = PlanCloudsSingleMonth(month + 1, DaysPerMonth[month], sunnyDays[month], cloudyDays[month], dullDays[month], precipitationMM[month], dailyPrecipitation[month]);
-
-			if (overflow > 0)
+			for (var h = 0; h < monthly.Length && tsCounter < tsTotal; ++h)
 			{
-				var precipitation = 0.0;
-				var coverage = 0.0;
+				timestepPrecipitation += monthly[h].Precipitation;
+				timestepCoverage += monthly[h].SkyCoverage;
+				++timestepHours;
 
-				var remaining = HoursPerTick - overflow;
-				int h = 0;
-				for(; h < remaining && hCounter < monthly.Length; ++h)
-				{
-					precipitation += monthly[hCounter].Precipitation;
-					coverage += monthly[hCounter].SkyCoverage;
-					++hCounter;
-				}
+				if (timestepHours != HoursPerTick)
+					continue;
 
-				Weather[tsCounter++] = new WeatherStats((Weather[tsCounter].SkyCoverage + coverage) / HoursPerTick, Weather[tsCounter].Precipitation + precipitation);
-				overflow = 0;
-			}
-
-			while(hCounter < monthly.Length && tsCounter < tsTotal)
-			{
-				var precipitation = 0.0;
-				var coverage = 0.0;
-				int h = 0;
-				for(; h < HoursPerTick && hCounter < monthly.Length; ++h)
-				{
-					precipitation += monthly[hCounter].Precipitation;
-					coverage += monthly[hCounter].SkyCoverage;
-					++hCounter;
-				}
-
-				if (h == HoursPerTick || tsCounter + 1 == tsTotal)
-				{
-					Weather[tsCounter++] = new WeatherStats(coverage / HoursPerTick, precipitation);
-					overflow = 0;
-				}
-				else
-				{
-					Weather[tsCounter++] = new WeatherStats(coverage, precipitation);
-					overflow = HoursPerTick - h;
-				}
+				Weather[tsCounter++] = new WeatherStats(timestepCoverage / timestepHours, timestepPrecipitation);
+				timestepHours = 0;
+				timestepPrecipitation = 0.0;
+				timestepCoverage = 0.0;
 			}
 
 			month = month < 11 ? month + 1 : 0;

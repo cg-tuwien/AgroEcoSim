@@ -1,5 +1,4 @@
 using System.Numerics;
-using System.Text.Json.Serialization;
 using Agro.Species;
 
 namespace Agro;
@@ -28,7 +27,8 @@ public class SpeciesSettings
     public Behavior Behavior { get; init; } = Behavior.Default;
 
     ///<summary>
-    /// Mean height of the plant (in meters)
+    /// Mean height of the plant (in meters). This is a descriptive growth hint,
+    /// not a hard geometric constraint.
     ///</summary>
     [SpeciesUILabel("Mean height")]
     public float Height { get; init; } = 10f;
@@ -53,23 +53,34 @@ public class SpeciesSettings
     [SpeciesUILabel("Monopodial factor")]
     public float MonopodialFactor { get; init; } = 1;
 
-    private float dominanceFactor;
-    public float[] DominanceFactors = [0.7f];
-
     ///<summary>
     /// Dominance factor reduces (or boosts) growth of lateral branches. Multiplies with each recursion level.
     ///</summary>
     [SpeciesUILabel("Dominance factor")]
-    public float DominanceFactor { get => dominanceFactor; init {
-        dominanceFactor = value;
-        const int factors = 16;
-        DominanceFactors = new float[factors + 1];
+    public float DominanceFactor { get; init; } = 0.7f;
+
+    private float[] DominanceFactors = null;
+    const int DominanceFactorsCount = 16;
+    internal float GetDominanceFactor(int index)
+    {
+        if (index < 2)
+            return 1;
+
+        if (DominanceFactors == null)
+            InitDominanceFactors();
+
+        return index < DominanceFactorsCount ? DominanceFactors[index] : DominanceFactors[DominanceFactorsCount];
+    }
+
+    private void InitDominanceFactors()
+    {
+        DominanceFactors = new float[DominanceFactorsCount + 1];
         DominanceFactors[0] = 1;
         DominanceFactors[1] = 1;
-        DominanceFactors[2] = dominanceFactor;
-        for(int i = 3; i < factors; ++i)
-            DominanceFactors[i] = MathF.Pow(dominanceFactor, i);
-    } }
+        DominanceFactors[2] = DominanceFactor;
+        for (int i = 3; i < DominanceFactorsCount; ++i)
+            DominanceFactors[i] = MathF.Pow(DominanceFactor, i);
+    }
 
     ///<summary>
     /// Number of lateral branches emerging from a node
@@ -227,7 +238,7 @@ public class SpeciesSettings
     /// </summary>
     //TODO should be simply conted from the astronomical spring
     [SpeciesUILabel("Season duration (in months)")]
-    public float SeasonalSenescence { get; init; } = 7.8f / 12;
+    public float SeasonalSenescence { get; init; } = 7.8f / 11;
 
     ///<summary>
     /// Density of the roots system (affects branching probabiilty). Valued 0 to 1 (with one being the most dense)
@@ -269,7 +280,7 @@ public class SpeciesSettings
 
 
     #region Leaf Appearance
-    public LeafPhenology LeafPhenology { get; set; } = new();
+    public LeafPhenology LeafPhenology { get; internal set; } = new();
 
     /// <summary>
     /// Radius-Length ratios along the leaf. If null or empty, fallback to the the default quad.
@@ -282,7 +293,7 @@ public class SpeciesSettings
     /// </remarks>
     //public Vector2[] LeafShape { get; init; }
 
-    public LeafMorphology LeafMorphology { get; init; } = new()
+    public LeafMorphology LeafMorphology { get; internal set; } = new()
     {
         Complexity = LeafComplexity.Simple,
         Shape = new OvateLeafShape(),
@@ -294,29 +305,24 @@ public class SpeciesSettings
     #endregion
 
     /// <summary>
-    /// Age (hours) when plant switches to deterministic sympodial growth.
-    /// </summary>
-    public float SympodialStartAgeHours = 24f * 45f;
-
-    /// <summary>
     /// Minimum plant age to start flowering (in hours)
     /// </summary>
     [SpeciesUIGroup("Flowers")]
     [SpeciesUILabel("Flowering minimum age")]
     [SpeciesUITooltip(" Minimum plant age to start flowering (in hours)")]
-    public int FloweringStartAgeHours { get; internal set; } = 24 * 45;
+    public float FloweringStartAgeHours { get; internal set; } = 24f * 45f;
 
     /// <summary>
     /// Typical flowering start within the season (in seasonal factor)
     /// </summary>
     [SpeciesUILabel("Seasonal flowering typical start")]
-    public float FloweringStartSeason { get; internal set; } = 2f / 12;
+    public float FloweringStartSeason { get; internal set; } = 2f / 11;
 
     /// <summary>
     /// Latest flowering start within the season (in seasonal factor)
     /// </summary>
     [SpeciesUILabel("Seasonal flowering latest start")]
-    public float FloweringEndSeason { get; internal set; } = 5f / 12;
+    public float FloweringEndSeason { get; internal set; } = 5f / 11;
     /// <summary>
     /// Flowering duration (in hours); growth stops afterwards.
     /// </summary>
@@ -326,23 +332,20 @@ public class SpeciesSettings
     // public float FlowerLengthVar { get; internal set; }
     // public float FlowerRadiusVar { get; internal set; }
 
-    public FlowerSettings FlowerSettings { get; set; } = new FlowerSettings();
+    public FlowerSettings FlowerSettings { get; internal set; } = new FlowerSettings();
 
     #region Fruit Settings
     /// <summary>
     /// Fruit production settings for species that produce edible fruits.
     /// Null for ornamental-only species.
     /// </summary>
-    public FruitSettings? FruitSettings { get; init; } = null;
+    public FruitSettings? FruitSettings { get; internal set; } = null;
     #endregion
 
-    [JsonPropertyName("WEM")]
-    public float WoodElasticModulus { get; init; } = 1e6f; // in Pa
+    public float WoodElasticModulus { get; init; } = 1e8f; // in Pa
 
-    [JsonPropertyName("GEM")]
     public float GreenElasticModulus { get; init; } = 1e8f; // in Pa
 
-    [JsonPropertyName("DF")]
     public float DepthFactor { get; init; } = 0.01f; // in Pa
 
 
@@ -351,7 +354,7 @@ public class SpeciesSettings
     /// <summary>
     /// Maximum leaf age (in hours)
     /// </summary>
-    public int MaxLeaveAge { get; set; } = 24*2*365;
+    public float MaxLeaveAge { get; set; } = 24f * 2f * 365f;
 
     public Vector3 BaseLeafColor { get; set; }
     public Vector3 OldLeafColor { get; set; }
@@ -361,10 +364,33 @@ public class SpeciesSettings
     public float growthFactor { get; set; } = 0.2f;
 
     public float MaxRadius { get; set; } = 0.0005f;
-    public float[] pChaningSeaonns { get; set; } = [ 0.045f, 0.0005f, 0.001f, 0f];
-    public float[] pFloweringSeaonns { get; set; } = [ 0f, 0.0001f, 0.001f, 0f ];
+    public float ProbabilityPreSeasonFlowering = 0.0005f;
+    public float ProbabilitySeasonFlowering = 0.045f;
+    public float ProbabilityPostSeasonFlowering = 0.001f;
+    public float ProbabilityRestSeasonFlowering = 0f;
 
-    public float pExpandRizome { get; set; } = 0.005f;
+    public float ProbabilityPreSeasonChaining = 0.0f;
+    public float ProbabilitySeasonChaining = 0.0001f;
+    public float ProbabilityPostSeasonChaining = 0.001f;
+    public float ProbabilityRestSeasonChaining = 0f;
+
+    /// <summary>
+    /// Chance for an eligible rhizome segment to create an offshoot.  By
+    /// default this is a legacy per-tick value; see RizomeExpansionRatePerHour.
+    /// </summary>
+    public float RhizomeOffshootProbabilityPerHour { get; set; } = 0.005f;
+
+    /// <summary>
+    /// Maximum number of rhizome offshoots from a completed segment.
+    /// One represents a continuing creeping axis; higher values create laterals.
+    /// </summary>
+    public int RizomeLateralsPerSegment { get; set; } = 2;
+
+    /// <summary>
+    /// Number of initial rhizome axes that may leave the seed crown.
+    /// </summary>
+    public int RizomeInitialLaterals { get; set; } = 3;
+
     public int RizomeMaxDepth { get; set; } = 15;
     public float RizomeLength { get; set; } = 0.025f;
     public float RizomeRadius { get; set; } = 0.0025f;
@@ -376,7 +402,7 @@ public class SpeciesSettings
     public float BaseElasticModulus { get; set; } = 2e8f;
     public float PetiolElasticModulus { get;  set; } = 2e8f;
     public float FlowerElasticModulus { get;  set; } = 5e6f;
-    public float FlowerPetiolElasticModulus { get;  set; } = 4e5f;
+    public float FlowerPetiolElasticModulus { get;  set; } = 4e7f;
 
     #endregion
     public static SpeciesSettings Default => Predefined[0];

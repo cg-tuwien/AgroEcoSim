@@ -34,7 +34,7 @@ public static class Carex_Morrowii_Variegata
 
         LeafGrowthTime = 24f * 18f * 2f,
         LeafGrowthTimeVar = 24f * 6f,
-        MaxLeaveAge = 24f * 400f,
+        MaxLeaveAge = 24 * 400,
 
         PetioleLength = 0.015f,
         PetioleLengthVar = 0.004f,
@@ -60,12 +60,22 @@ public static class Carex_Morrowii_Variegata
         RizomeMaxDepth = 2,
         RizomeLength = 0.025f,
         RizomeRadius = 0.0015f,      // ~1.5mm - much thinner for a sedge
-        pExpandRizome = 0.0008f,
-        SympodialStartAgeHours = 24f * 50f,
+        RhizomeOffshootProbabilityPerHour = 0.0008f,
         FloweringStartAgeHours = 24f * 80f,
-        FloweringEndAgeHours = 24f * 180f,
-        pChaningSeaonns = [0.008f, 0.002f, 0.003f, 0.0f],
-        pFloweringSeaonns = [0.001f, 0.025f, 0.001f, 0.0f],
+        FloweringDurationAgeHours = 24 * 30,
+        FloweringStartSeason = 0f,
+        FloweringEndSeason = 1f / 11,
+
+        ProbabilityPreSeasonChaining = 0.008f,
+        ProbabilitySeasonChaining = 0.002f,
+        ProbabilityPostSeasonChaining = 0.003f,
+        ProbabilityRestSeasonChaining = 0f,
+
+        ProbabilityPreSeasonFlowering = 0.001f,
+        ProbabilitySeasonFlowering = 0.025f,
+        ProbabilityPostSeasonFlowering = 0.001f,
+        ProbabilityRestSeasonFlowering = 0f,
+
         WoodElasticModulus = 1.0e8f,
         GreenElasticModulus = 3e6f,
         DepthFactor = 0.01f,

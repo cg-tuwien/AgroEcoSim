@@ -5,7 +5,7 @@ namespace Agro.Species;
 /// <summary>
 /// Heuchera micrantha (Creeping Alumroot)
 /// Sources:
-/// - Missouri Botanical Garden Plant Finder (native to western North America; 
+/// - Missouri Botanical Garden Plant Finder (native to western North America;
 ///   basal rosettes of rounded/heart-shaped leaves 5-10 cm wide; flower scapes 30-60 cm;
 ///   small bell-shaped flowers white to pink)
 /// - RHS Plant Finder (semi-evergreen; mottled/variegated foliage common;
@@ -27,21 +27,21 @@ public static class Heuchera_Micrantha
 
         LeafLength = 0.07f,
         LeafLengthVar = 0.015f,
-        LeafRadius = 0.055f,       
+        LeafRadius = 0.055f,
         LeafRadiusVar = 0.010f,
         LeafPitchVar = 5f * (MathF.PI / 180f),
         LeafPitch = 85 * (MathF.PI / 180f),
 
         LeafGrowthTime = 24f * 10f * 2f,
         LeafGrowthTimeVar = 24f * 4f,
-        MaxLeaveAge = 24f * 200f,   
+        MaxLeaveAge = 24 * 200,
 
         PetioleLength = 0.08f,
         PetioleLengthVar = 0.015f,
         PetioleRadius = 0.002f,
         PetioleRadiusVar = 0.0003f,
 
-        pNewCrown = 0.55f,           
+        pNewCrown = 0.55f,
         crownPitch = 0.65f,
         growthFactor = 0.22f,
         MaxRadius = 0.0035f,
@@ -52,21 +52,29 @@ public static class Heuchera_Micrantha
         LateralRollVar = 5f * (MathF.PI / 180f),
 
         LateralsPerNode = 2,
-        NodeDistance = 0f,          
+        NodeDistance = 0f,
         NodeDistanceVar = 0.000f,
         DominanceFactor = 0.75f,
 
         RizomeMaxDepth = 3,
         RizomeLength = 0.03f,
         RizomeRadius = 0.003f,
-        pExpandRizome = 0.001f,          
-        SympodialStartAgeHours = 24f * 40f,
+        RhizomeOffshootProbabilityPerHour = 0.0001f,
         FloweringStartAgeHours = 24f * 50f,
-        FloweringEndAgeHours = 24f * 120f,
-        pChaningSeaonns = [0.012f, 0.003f, 0.005f, 0.0f],
-        pFloweringSeaonns = [0.003f, 0.045f, 0.003f, 0.0f],  
+        FloweringDurationAgeHours = 24 * 60,
+
+        ProbabilityPreSeasonChaining = 0.012f,
+        ProbabilitySeasonChaining = 0.003f,
+        ProbabilityPostSeasonChaining = 0.005f,
+        ProbabilityRestSeasonChaining = 0f,
+
+        ProbabilityPreSeasonFlowering = 0.003f,
+        ProbabilitySeasonFlowering = 0.045f,
+        ProbabilityPostSeasonFlowering = 0.003f,
+        ProbabilityRestSeasonFlowering = 0f,
+
         WoodElasticModulus = 1.0e8f,
-        GreenElasticModulus = 4e6f,         
+        GreenElasticModulus = 4e6f,
         DepthFactor = 0.01f,
         FlowerElasticModulus = 4e7f,
 
@@ -176,12 +184,12 @@ public static class Heuchera_Micrantha
 }
 
 /// <summary>
-/// Why these colors: Heuchera micrantha foliage is typically green with variable 
-/// mottling, silver markings, or purple veining. Leaves are semi-evergreen in mild 
-/// climates. The lifecycle stays mostly green with subtle seasonal variation, 
+/// Why these colors: Heuchera micrantha foliage is typically green with variable
+/// mottling, silver markings, or purple veining. Leaves are semi-evergreen in mild
+/// climates. The lifecycle stays mostly green with subtle seasonal variation,
 /// while senescence follows a green→olive→brown path.
 /// Sources:
-/// - Missouri Botanical Garden: "leaves are rounded to heart-shaped, often with 
+/// - Missouri Botanical Garden: "leaves are rounded to heart-shaped, often with
 ///   silver or purple markings"
 /// - RHS: "foliage varies from green to purple-bronze, often with silver marbling"
 /// </summary>

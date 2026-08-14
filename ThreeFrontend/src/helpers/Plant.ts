@@ -37,7 +37,6 @@ export function SetupMesh(primitive: Primitive, index: Index, mesh: THREE.Mesh) 
 }
 
 export function CreateLeafMesh(primitive: Primitive, leafGeometry: THREE.BufferGeometry, index: Index) {
-    debugger;
     const material = primitive.stats ? new THREE.MeshStandardMaterial({ ...LeafColor(primitive, index.primitive), side: THREE.DoubleSide }) : doubleGreyMaterial;
     return SetupMesh(primitive, index, new THREE.Mesh(leafGeometry ?? threePlanePrimitive, material));
 }

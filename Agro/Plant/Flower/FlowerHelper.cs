@@ -30,34 +30,35 @@ namespace Agro
                 {
                     case OrganTypes.FlowerStem:
                         {
-
-                            var energyReserve = Math.Clamp(agent.Energy / agent.EnergyStorageCapacity(), 0f, 1f);
-                            var growth =agent.GetRadiusVar()* agent.GrowthTimeVar * formation.Plant.World.HoursPerTick;
-                            //assure not to outgrow the parent
-                            var parentRadius = (agent.Parent >= 0 && !formation.GetIsRizome(agent.Parent) && !formation.GetOrgan(agent.Parent).Equals(OrganTypes.Stem)) ? formation.GetBaseRadius(agent.Parent) : float.MaxValue;
-                            if (currentSize.Y + growth > parentRadius)
-                                growth = parentRadius - currentSize.Y;
-
-                            if (agent.Radius < agent.GetRadiusVar())
-                                agent.Radius += growth;
-
-
+                            // Converted meristems have already reached these
+                            // targets; directly-created stems have not.  Grow both
+                            // axes independently so a radius restriction cannot
+                            // strand a stem at its short initial length.
+                            var parentRadius = (agent.Parent >= 0 && !formation.GetIsRizome(agent.Parent) && !formation.GetOrgan(agent.Parent).Equals(OrganTypes.Stem))
+                                ? formation.GetBaseRadius(agent.Parent)
+                                : float.MaxValue;
+                            var sizeLimit = new Vector2(
+                                MathF.Max(currentSize.X, agent.GetLengthVar()),
+                                MathF.Max(currentSize.Y, MathF.Min(agent.GetRadiusVar(), parentRadius)));
+                            var growth = sizeLimit * agent.GrowthTimeVar;
+                            var resultingSize = Vector2.Min(currentSize + growth, sizeLimit);
+                            growth = Vector2.Max(resultingSize - currentSize, Vector2.Zero);
+                            agent.Length += growth.X;
+                            agent.Radius += growth.Y;
 
                         }
                         break;
                     case OrganTypes.FlowerPetiol: {
-                            var sizeLimit = new Vector2(_settings.PetiolLength + agent.LengthVar, _settings.PetiolRadius + agent.RadiusVar);
+                            var sizeLimit = new Vector2(agent.GetLengthVar(), agent.GetRadiusVar());
 
                             var growth = Math.Min(1f, formation.Plant.WaterBalance) * sizeLimit * agent.GrowthTimeVar;
-                            //assure not to outgrow the parent
+                            var resultingSize = Vector2.Min(currentSize + growth, sizeLimit);
+                            growth = resultingSize - currentSize;
+
                             var parentRadius = formation.GetBaseRadius(agent.Parent);
-                            if (currentSize.Y + growth.Y > parentRadius)
-                                growth.Y = parentRadius - currentSize.Y;
-
-                            agent.Length += agent.Length <= agent.GetLengthVar() ? growth.X : 0f;
-
-                            if (agent.Radius <  agent.GetRadiusVar())
-                                agent.Radius += growth.Y;
+                            growth = LimitPetioleGrowthToSupport(currentSize, sizeLimit, growth, parentRadius);
+                            agent.Length += growth.X;
+                            agent.Radius += growth.Y;
 
                         } break;
                     case OrganTypes.FlowerPadel: {
@@ -65,17 +66,15 @@ namespace Agro
                             var sizeLimit =  new Vector2(agent.GetLengthVar(), agent.GetRadiusVar());
 
 
-                            if (currentSize.X < sizeLimit.X && currentSize.Y < sizeLimit.Y)
+                            if (currentSize.X < sizeLimit.X || currentSize.Y < sizeLimit.Y)
                             {
                                 //HoursPerTick are included in GrowthTimeVar
                                 var growth = Math.Min(1f, formation.Plant.WaterBalance) * sizeLimit * agent.GrowthTimeVar ;
 
                                 var resultingSize = Vector2.Min(currentSize + growth, sizeLimit);
                                 growth = resultingSize - currentSize;
-                                agent.Length = agent.GetLengthVar();
-                                agent.Radius = agent.GetRadiusVar();
-
-
+                                agent.Length += growth.X;
+                                agent.Radius += growth.Y;
 
                             }
                             float rim = formation.GetBaseRadius(agent.Parent) * 0.85f;
@@ -83,20 +82,12 @@ namespace Agro
                             //agent.BaseOffset = parentTip + Vector3.Normalize(agent.BaseOffset - parentTip) * rim;
                         } break;
                     case OrganTypes.FlowerBud: {
-                            var sizeLimit = Math.Min(1f, formation.Plant.WaterBalance) * new Vector2(agent.LengthVar, agent.RadiusVar);
-
-                            var growth = Math.Min(1f, formation.Plant.WaterBalance) * sizeLimit * agent.GrowthTimeVar * formation.Plant.World.HoursPerTick;
-                            //assure not to outgrow the parent
-                            var parentRadius = formation.GetBaseRadius(agent.Parent);
-                            if (currentSize.Y + growth.Y > parentRadius)
-                                growth.Y = parentRadius - currentSize.Y;
-
-                            agent.Length += agent.Length <= agent.GetLengthVar() ? growth.X : 0f;
-                            if (agent.Radius <= agent.GetRadiusVar())
-                            {
-                                agent.Radius += growth.Y;
-
-                            }
+                            var sizeLimit = new Vector2(agent.GetLengthVar(), agent.GetRadiusVar());
+                            var growth = Math.Min(1f, formation.Plant.WaterBalance) * sizeLimit * agent.GrowthTimeVar;
+                            var resultingSize = Vector2.Min(currentSize + growth, sizeLimit);
+                            growth = Vector2.Max(resultingSize - currentSize, Vector2.Zero);
+                            agent.Length += growth.X;
+                            agent.Radius += growth.Y;
 
 
                         } break;
@@ -104,16 +95,20 @@ namespace Agro
 
                     case OrganTypes.FlowerMeristem: {
 
-                            var growth = new Vector2(agent.GetLengthVar() , agent.GetRadiusVar()) * agent.GrowthTimeVar * formation.Plant.World.HoursPerTick;
-                            //assure not to outgrow the parent
-                            var parentRadius = (agent.Parent >= 0 && !formation.GetIsRizome(agent.Parent) && !formation.GetOrgan(agent.Parent).Equals(OrganTypes.Stem)) ? formation.GetBaseRadius(agent.Parent) : float.MaxValue;
-                            if (currentSize.Y + growth.Y > parentRadius)
-                                growth.Y = parentRadius - currentSize.Y;
-
-                            agent.Length += agent.Length <= agent.GetLengthVar() ? growth.X : 0f;
-
-                            if (agent.Radius < agent.GetRadiusVar())
-                                agent.Radius += growth.Y;
+                            // A flower meristem may keep the same diameter as its
+                            // supporting stem, but must still attain its configured
+                            // length. Scaling its length by the parent-radius ratio
+                            // made a slightly wider child stall forever, preventing
+                            // all downstream buds and petals from being created.
+                            var parentRadius = (agent.Parent >= 0 && !formation.GetIsRizome(agent.Parent) && !formation.GetOrgan(agent.Parent).Equals(OrganTypes.Stem))
+                                ? formation.GetBaseRadius(agent.Parent)
+                                : float.MaxValue;
+                            var sizeLimit = new Vector2(agent.GetLengthVar(), MathF.Min(agent.GetRadiusVar(), parentRadius));
+                            var growth = sizeLimit * agent.GrowthTimeVar;
+                            var resultingSize = Vector2.Min(currentSize + growth, sizeLimit);
+                            growth = resultingSize - currentSize;
+                            agent.Length += growth.X;
+                            agent.Radius += growth.Y;
                         } break;
 
                 }
@@ -122,7 +117,6 @@ namespace Agro
             // shrinking when max age
             public void receit(ref AboveGroundAgent agent, int agentID, PlantSubFormation<AboveGroundAgent> formation)
             {
-                Debug.WriteLine("ddd");
                 var childrenInReceit = true;
                 if (!agent.Organ.Equals(OrganTypes.FlowerBud) && agent.flowerSupport)
                 {
@@ -234,7 +228,10 @@ namespace Agro
                     //Console.WriteLine($"ttt{agent.FlowerAgent.debth}< {_settings.flowerDebth}");
                     if (agent.FlowerAgent.flowerBase)
                     {
-                        if (agent.FlowerAgent.debth < _settings.flowerBaseDebth)
+                        // The current meristem is already one basal segment.  A
+                        // configured depth of one therefore means one culm, not a
+                        // short starter plus an additional basal segment.
+                        if (agent.FlowerAgent.debth + 1 < _settings.flowerBaseDebth)
                         {
 
                             var or = AboveGroundAgent.TurnUpwards(agent.Orientation);
@@ -317,6 +314,32 @@ namespace Agro
                             Debug.WriteLine($"det {agentID}");
 
                         }
+                        else if (_settings.deterministic)
+                        {
+							var orientation = AboveGroundAgent.TurnUpwards(agent.Orientation);
+							if (debth + 1 >= _settings.flowerDebth)
+							{
+								createFlower(ref agent, agentID, formation, _settings.clusterSize, orientation, _settings.clusterAngle);
+							}
+							else
+							{
+								var flowerAgent = new Flower()
+								{
+									BirthTime = agent.FlowerAgent.BirthTime,
+									debth = debth + 1,
+									FlowerStartTime = agent.FlowerAgent.FlowerStartTime
+								};
+								formation.Birth(new AboveGroundAgent(formation.Plant, agentID, OrganTypes.FlowerMeristem, orientation, 0.1f * agent.Energy, initialResources: formation.DailyResourceMax, initialProduction: formation.DailyProductionMax, flowerAgent: flowerAgent)
+								{
+									Water_g = 0.1f * agent.Water_g,
+									LateralAngle = _settings.LateralAngle + _settings.LateralRoll,
+									DominanceLevel = agent.DominanceLevel,
+									FlowerAgent = flowerAgent
+								});
+								agent.Energy *= 0.9f;
+								agent.Water_g *= 0.9f;
+							}
+						}
                         else if (!_settings.deterministic)
                         {
                             Debug.WriteLine($"up {agentID}");

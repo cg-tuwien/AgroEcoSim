@@ -4,7 +4,8 @@ namespace Agro.Species;
 
 public static class Geranium_Macrorrhizum
 {
-    public static SpeciesSettings Init() => new() {
+    public static SpeciesSettings Init() => new()
+    {
         Name = "Geranium Macrorrhizum",
         Behavior = Behavior.Herbaceous,
         LeafLength = 0.04f,
@@ -12,16 +13,18 @@ public static class Geranium_Macrorrhizum
         LeafRadius = 0.02f,
         LeafPitchVar = 5f * (MathF.PI / 180f),
         LeafPitch = 85 * (MathF.PI / 180f),
-        PetioleLength = 0.060f,
+        PetioleLength = 0.075f,
         PetioleLengthVar = 0.01f,
-        PetioleRadius = 0.003f,
-        PetioleRadiusVar = 0.0001f,
+        PetioleRadius = 0.0015f,
+        PetioleRadiusVar = 0.00015f,
 
         LeafGrowthTime = 24 * 7,
         Height = 0.3f,
 
-        NodeDistance = 0f,
-        NodeDistanceVar = 0f,
+        // A short but non-zero internode prevents every leaf of a crown from
+        // emerging from exactly the same point while retaining a compact rosette.
+        NodeDistance = 0.012f,
+        NodeDistanceVar = 0.004f,
 
         LateralsPerNode = 2,
         LateralPitch = 15 * (MathF.PI / 180f),
@@ -29,21 +32,26 @@ public static class Geranium_Macrorrhizum
         LateralRoll = 40f * (MathF.PI / 180f),
         LateralRollVar = 5f * (MathF.PI / 180f),
 
-        MaxLeaveAge = 1.5f * 365f,
+        MaxLeaveAge = 24 * 547,
         pNewCrown = 0.70f,
         crownPitch = 0.38f,
         growthFactor = 0.25f,
 
-        MaxRadius = 0.0035f,
-        pExpandRizome = 0.0012f,
-        RizomeMaxDepth = 3,
-        RizomeLength = 0.045f,
-        RizomeRadius = 0.0035f,
+        MaxRadius = 0.0020f,
+        // Bigroot geranium makes a few persistent creeping axes, not a dense
+        // binary rhizome tree.  Rates are per hour (see pExpandRizome).
+        RhizomeOffshootProbabilityPerHour = 0.00015f,
+        RizomeLateralsPerSegment = 1,
+        RizomeInitialLaterals = 3,
+        RizomeMaxDepth = 8,
+        RizomeLength = 0.055f,
+        RizomeRadius = 0.0025f,
 
         FlowerElasticModulus = 5e7f,
 
         LeafPhenology = new(),
-        LeafMorphology = new() {
+        LeafMorphology = new()
+        {
             LowResVertices =
             [
                 new(0.089506f, -1.3288f, 0f),
@@ -1099,8 +1107,15 @@ public static class Geranium_Macrorrhizum
                 400, 399, 404, 402, 401, 400, 369, 365, 379, 390, 388, 396,
             ]
         },
-        
-        pFloweringSeaonns = [0.005f, 0.055f, 0.002f, 0.0f],
+
+        // In the herbaceous algorithm these events advance a vegetative crown
+        // as well as committing the first flower.  Hour-normalized rates keep
+        // the rosette from producing a new two-leaf node every few hours.
+        ProbabilityPreSeasonFlowering = 0.0002f,
+        ProbabilitySeasonFlowering = 0.002f,
+        ProbabilityPostSeasonFlowering = 0.0005f,
+        ProbabilityRestSeasonFlowering = 0f,
+
         FlowerSettings = new FlowerSettings
         {
             PedalLength = 0.016f,
@@ -1109,23 +1124,23 @@ public static class Geranium_Macrorrhizum
             pedalGrowthTime = 180f,
             pedalGrowthTimeVar = 36f,
             FlowerPhenology = new LeafPhenology(
-        expectedAge: 25f * 24f,
-        colorModel: new ColorModel(
-            age: new ColorCurve()
-                .Add(0.00f, ColorUtils.OkLabFromSrgb8(220, 110, 170))
-                .Add(0.25f, ColorUtils.OkLabFromSrgb8(210, 100, 160))
-                .Add(0.70f, ColorUtils.OkLabFromSrgb8(200, 95, 150))
-                .Add(1.00f, ColorUtils.OkLabFromSrgb8(185, 88, 138)),
-            stress: new ColorCurve()
-                .Add(0.00f, new Vector3(0.00f, 1.00f, 0.00f))
-                .Add(1.00f, new Vector3(-0.05f, 0.78f, 0.01f)),
-            senescenceSeason: new ColorCurve()
-                .Add(0.00f, ColorUtils.OkLabFromSrgb8(175, 110, 130))
-                .Add(0.40f, ColorUtils.OkLabFromSrgb8(150, 95, 100))
-                .Add(0.75f, ColorUtils.OkLabFromSrgb8(120, 75, 70))
-                .Add(1.00f, ColorUtils.OkLabFromSrgb8(90, 60, 50))
-        )
-    ),
+                expectedAge: 25f * 24f,
+                colorModel: new ColorModel(
+                    age: new ColorCurve()
+                        .Add(0.00f, ColorUtils.OkLabFromSrgb8(220, 110, 170))
+                        .Add(0.25f, ColorUtils.OkLabFromSrgb8(210, 100, 160))
+                        .Add(0.70f, ColorUtils.OkLabFromSrgb8(200, 95, 150))
+                        .Add(1.00f, ColorUtils.OkLabFromSrgb8(185, 88, 138)),
+                    stress: new ColorCurve()
+                        .Add(0.00f, new Vector3(0.00f, 1.00f, 0.00f))
+                        .Add(1.00f, new Vector3(-0.05f, 0.78f, 0.01f)),
+                    senescenceSeason: new ColorCurve()
+                        .Add(0.00f, ColorUtils.OkLabFromSrgb8(175, 110, 130))
+                        .Add(0.40f, ColorUtils.OkLabFromSrgb8(150, 95, 100))
+                        .Add(0.75f, ColorUtils.OkLabFromSrgb8(120, 75, 70))
+                        .Add(1.00f, ColorUtils.OkLabFromSrgb8(90, 60, 50))
+                )
+            ),
             HasFlowerBaseLeaves = true,
             PetalSenescenceDurationH = 168f,
             BudLength = 0.010f,

@@ -63,9 +63,20 @@ public static class Initialize
         var tmp_custom = settings.Species?.FirstOrDefault(x => string.Compare(x.Name, name, StringComparison.InvariantCultureIgnoreCase) == 0);
         var tmp_predefined = SpeciesSettings.Predefined?.FirstOrDefault(x => string.Compare(x.Name, name, StringComparison.InvariantCultureIgnoreCase) == 0);
 
-        return
+        var result =
             settings.Species?.FirstOrDefault(x => string.Compare(x.Name, name, StringComparison.InvariantCultureIgnoreCase) == 0)
             ?? SpeciesSettings.Predefined?.FirstOrDefault(x => string.Compare(x.Name, name, StringComparison.InvariantCultureIgnoreCase) == 0);
+
+        //hack fix so that more complex settings get referenced from the predefined species
+        if (tmp_predefined != null)
+        {
+            result.LeafMorphology = tmp_predefined.LeafMorphology;
+            result.LeafPhenology = tmp_predefined.LeafPhenology;
+            result.FlowerSettings = tmp_predefined.FlowerSettings;
+            result.FruitSettings = tmp_predefined.FruitSettings;
+        }
+
+        return result;
     }
 
     private static AgroWorld SecondStageInit(SimulationRequest? settings, AgroWorld world, ISoilFormation soil)

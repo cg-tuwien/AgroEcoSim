@@ -10,13 +10,8 @@ namespace Agro
 {
     public class FlowerSettings
     {
-
-        public readonly List<OrganTypes> flowerOrgans = new List<OrganTypes>() { OrganTypes.FlowerStem, OrganTypes.FlowerPadel, OrganTypes.FlowerPetiol, OrganTypes.FlowerMeristem, OrganTypes.FlowerBud
-    };
-
-        public FlowerSettings()
-        {
-        }
+        //public readonly List<OrganTypes> FlowerOrgans = [OrganTypes.FlowerStem, OrganTypes.FlowerPadel, OrganTypes.FlowerPetiol, OrganTypes.FlowerMeristem, OrganTypes.FlowerBud];
+        public FlowerSettings() { }
 
         // structure
         public float stemLength { get; set; } = 0.01f;
@@ -71,13 +66,13 @@ namespace Agro
         public float pedalGrowthTimeVar { get; set; }
         public float pedalGrowthTime { get; set; }
         public LeafPhenology FlowerPhenology { get; set; } = new LeafPhenology(
-    expectedAge: 30f * 24f,   // 30-day default lifespan
-    colorModel: new ColorModel(
-        ColorModel.DefaultLifecycle,   // placeholder; override per species
-        ColorModel.DefaultStress,
-        ColorModel.DefaultSeasonalSenescence
-    )
-);
+            expectedAge: 30f * 24f,   // 30-day default lifespan
+            colorModel: new ColorModel(
+                ColorModel.DefaultLifecycle,   // placeholder; override per species
+                ColorModel.DefaultStress,
+                ColorModel.DefaultSeasonalSenescence
+            )
+        );
         public float clusterAngle { get; internal set; }
         public float PetalSenescenceDurationH { get; set; } = 168f;
         public bool HasFlowerBaseLeaves { get; set; } = false;

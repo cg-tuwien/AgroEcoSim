@@ -318,7 +318,6 @@ class State {
             if (hubConnection.state == SignalR.HubConnectionState.Connected)
             {
                 console.log(this.requestBody());
-                debugger;
                 const prepared = await fetch(`${location.protocol}//${BackendURI}/simulation/upload`, {
                     body: JSON.stringify(this.requestBody()),
                     method: 'post',

@@ -79,5 +79,18 @@
             ],
             "problemMatcher": "$msCompile"
         },
+        {
+            "label": "build Generator",
+            "command": "dotnet",
+            "type": "process",
+            "args": [
+                "build",
+                "${workspaceFolder}/SchemeGenerator/SchemeGenerator.csproj",
+                "/property:GenerateFullPaths=true",
+                "/consoleloggerparameters:NoSummary"
+                ,"/p:DefineConstants=\"DEBUG\""
+            ],
+            "problemMatcher": "$msCompile",
+        },
     ]
 }

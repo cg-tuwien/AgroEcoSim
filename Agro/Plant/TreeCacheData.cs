@@ -70,7 +70,7 @@ internal class TreeCacheData
 
 		++MaxDepth;
 
-		for(int i = 0; i < ChildrenNodes[i].Count; ++i)
+		for(int i = 0; i < Count; ++i)
 			if (ChildrenNodes[i].Count == 0)
 				Leaves.Add(i);
 	}
@@ -85,7 +85,6 @@ internal class TreeCacheData
 
 	internal void UpdateBases<T>(PlantSubFormation<T> formation) where T : struct, IPlantAgent
 	{
-		Height = 0f;
 		var buffer = new Stack<int>();
 		foreach(var root in Roots)
 		{
@@ -100,8 +99,6 @@ internal class TreeCacheData
 					buffer.Push(child);
 				}
 			}
-			else
-				Height = Math.Max(Height, PointNodes[root].Y);
 		}
 
 		while (buffer.Count > 0)
@@ -117,9 +114,9 @@ internal class TreeCacheData
 					buffer.Push(child);
 				}
 			}
-			else
-				Height = Math.Max(Height, PointNodes[next].Y);
 		}
+
+		UpdateHeight(formation);
 	}
     internal void UpdateBases<T>(PlantSubFormation<T> formation, IEnumerable<int> indexes) where T : struct, IPlantAgent
     {
@@ -174,5 +171,17 @@ internal class TreeCacheData
             }
         }
 
+		UpdateHeight(formation);
     }
+
+	private void UpdateHeight<T>(PlantSubFormation<T> formation) where T : struct, IPlantAgent
+	{
+		Height = 0f;
+		var groundHeight = formation.Plant.Position.Y;
+		for (var i = 0; i < Count; ++i)
+		{
+			var tip = PointNodes[i] + Vector3.Transform(Vector3.UnitX, formation.GetDirection(i)) * formation.GetLength(i);
+			Height = MathF.Max(Height, MathF.Max(PointNodes[i].Y, tip.Y) - groundHeight);
+		}
+	}
 }

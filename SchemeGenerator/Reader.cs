@@ -233,11 +233,18 @@ public static partial class Reader
         if (csharpName is "DominanceFactors" || csharpType.EndsWith("[]") || csharpType.Contains("List<"))
             return false;
 
+        if (csharpType.EndsWith("[]") || csharpType[^1] == '>')
+            throw new Exception($"Arrays and generic types are not supported for species settings! The problematic entry is {csharpType} {csharpName}.");
+
         return csharpType switch
         {
             "float" => true,
             "double" => true,
             "int" => true,
+            "short" => true,
+            "sbyte" => true,
+            "uint" => true,
+            "ushort" => true,
             "byte" => true,
             "bool" => true,
             "string" => true,
@@ -284,7 +291,13 @@ public static partial class Reader
         {
             "float" => "number",
             "double" => "number",
+            "long" => "number",
             "int" => "number",
+            "short" => "number",
+            "sbyte" => "number",
+            "ulong" => "number",
+            "uint" => "number",
+            "ushort" => "number",
             "byte" => "number",
             "bool" => "boolean",
             "string" => "string",
@@ -359,6 +372,10 @@ public static partial class Reader
             return float.MaxValue.ToString();
         else if (expr == "float.MinValue")
             return float.MinValue.ToString();
+        else if (expr == "double.MaxValue")
+            return double.MaxValue.ToString();
+        else if (expr == "double.MinValue")
+            return double.MinValue.ToString();
 
         return expr
             .Replace("_", "")
@@ -460,10 +477,7 @@ public static partial class Reader
         return sb.ToString();
     }
 
-    private static bool ShouldGenerateFormField(SpeciesMember member)
-    {
-        return member.TsType is "number" or "boolean" or "string" || member.CSharpType == "Behavior";
-    }
+    private static bool ShouldGenerateFormField(SpeciesMember member) => member.TsType is "number" or "boolean" or "string" || member.CSharpType == "Behavior";
 
     private static string? GetXmlSummary(MemberDeclarationSyntax syntax)
     {
@@ -482,7 +496,7 @@ public static partial class Reader
 
     private static string ToLabel(string csharpName, bool isAngle)
     {
-        var text = System.Text.RegularExpressions.Regex.Replace(csharpName, "([a-z])([A-Z])", "$1 $2");
+        var text = InsertSpacesRegex().Replace(csharpName, "$1 $2");
 
         if (text.EndsWith("var", StringComparison.OrdinalIgnoreCase))
             text = text[..^3] + "Variance";
@@ -545,11 +559,7 @@ public static partial class Reader
             _ => "number"
         };
 
-        var (min, max, step) = kind == "number"
-            ? InferNumberConstraints(member)
-            : (null, null, "");
-
-        //var label = ToLabel(member.CSharpName, member.IsAngleInRadians);
+        var (min, max, step) = kind == "number" ? InferNumberConstraints(member) : (null, null, "");
 
         return new TsFormField(
             CSharpName: member.CSharpName,
@@ -609,7 +619,7 @@ public static partial class Reader
         var tag = field.CSharpType switch
         {
             "float" or "double" => "SpeciesFloatField",
-            "int" => "SpeciesIntField",
+            "long" or "int" or "short" or "sbyte" or "ulong" or "uint" or "ushort" or "byte" => "SpeciesIntField",
             "string" => "SpeciesStringField",
             "bool" => "SpeciesBoolField",
             _ => throw new Exception("Unknown field type.")
@@ -669,9 +679,6 @@ public static partial class Reader
             }
 
             emitted.Add(field.CSharpName);
-
-            // if (ShouldInsertSeparatorAfter(field.CSharpName))
-            //     yield return "        <hr />";
         }
     }
 
@@ -682,4 +689,6 @@ public static partial class Reader
 
     [GeneratedRegex(@"\s+")]
     private static partial Regex ReduceWhitespaces();
+    [GeneratedRegex("([a-z])([A-Z])")]
+    private static partial Regex InsertSpacesRegex();
 }

@@ -23,28 +23,28 @@ public static class Campanula_Poscharskyana
         Aka = "Serbian Bellflower",
         Behavior = Behavior.Herbaceous,
 
-        Height = 0.25f,
+        Height = 0.3f,
 
         LeafLength = 0.04f,
         LeafLengthVar = 0.008f,
-        LeafRadius = 0.035f,       
+        LeafRadius = 0.02f,
         LeafRadiusVar = 0.006f,
         LeafPitchVar = 5f * (MathF.PI / 180f),
         LeafPitch = 85 * (MathF.PI / 180f),
 
         LeafGrowthTime = 24f * 7f * 2f,
         LeafGrowthTimeVar = 24f * 3f,
-        MaxLeaveAge = 24f * 150f,   
+        MaxLeaveAge = 24 * 150,
 
-        PetioleLength = 0.05f,
+        PetioleLength = 0.02f,
         PetioleLengthVar = 0.010f,
         PetioleRadius = 0.0015f,
         PetioleRadiusVar = 0.0002f,
 
-        pNewCrown = 0.60f,           
+        pNewCrown = 0.850f,
         crownPitch = 0.55f,
-        growthFactor = 0.25f,
-        MaxRadius = 0.003f,
+        growthFactor = 0.8f,
+        MaxRadius = 0.004f,
 
         LateralPitch = 15 * (MathF.PI / 180f),
         LateralPitchVar = 10 * (MathF.PI / 180f),
@@ -52,21 +52,30 @@ public static class Campanula_Poscharskyana
         LateralRollVar = 5f * (MathF.PI / 180f),
 
         LateralsPerNode = 2,
-        NodeDistance = 0f,          
+        NodeDistance = 0.01f,
         NodeDistanceVar = 0.000f,
         DominanceFactor = 0.7f,
 
         RizomeMaxDepth = 3,
-        RizomeLength = 0.025f,
+        RizomeLength = 0.04f,
         RizomeRadius = 0.0025f,
-        pExpandRizome = 0.0008f,          
-        SympodialStartAgeHours = 24f * 35f,
+        RhizomeOffshootProbabilityPerHour = 0.00016f,
         FloweringStartAgeHours = 24f * 45f,
-        FloweringEndAgeHours = 24f * 100f,
-        pChaningSeaonns = [0.015f, 0.004f, 0.008f, 0.0f],
-        pFloweringSeaonns = [0.004f, 0.050f, 0.004f, 0.0f],  
+        FloweringDurationAgeHours = 24f * 55f,
+
+        ProbabilityPreSeasonChaining = 0.015f,
+        ProbabilitySeasonChaining = 0.004f,
+        ProbabilityPostSeasonChaining = 0.008f,
+        ProbabilityRestSeasonChaining = 0f,
+
+        ProbabilityPreSeasonFlowering = 0.004f,
+        ProbabilitySeasonFlowering = 0.05f,
+        ProbabilityPostSeasonFlowering = 0.004f,
+        ProbabilityRestSeasonFlowering = 0f,
+
+
         WoodElasticModulus = 1.0e8f,
-        GreenElasticModulus = 4e6f,         
+        GreenElasticModulus = 4e6f,
         DepthFactor = 0.01f,
         FlowerElasticModulus = 4e7f,
 

@@ -58,7 +58,9 @@ public partial struct AboveGroundAgent : IPlantAgent
 	/// Non-uniform scale vector along the local axes
 	/// </summary>
 	[M(AI)]public readonly Vector3 Scale() => Organ switch {
-		OrganTypes.Leaf => new(Length, 0.0001f, 2f * Radius),
+		// Petals are laminae, like leaves.  Their radius describes half of the
+		// visible width, not half of a solid stem diameter.
+		OrganTypes.Leaf or OrganTypes.FlowerPadel => new(Length, LeafThickness, 2f * Radius),
 		_ => new(Length, 2f * Radius, 2f * Radius)
 	};
 
@@ -66,9 +68,49 @@ public partial struct AboveGroundAgent : IPlantAgent
 	/// Volume of the agent in m³.
 	/// </summary>
 	[M(AI)]public readonly float Volume() => Organ switch {
-		OrganTypes.Leaf => Length * 0.0002f * Radius,
+		// Keep the physical model aligned with the flat-petal rendering.  Treating
+		// a petal as a square solid (4 * length * radius²) makes a 14 mm-wide
+		// Geranium petal more than a centimetre thick and loads its stem by grams.
+		OrganTypes.Leaf or OrganTypes.FlowerPadel => Length * (2f * LeafThickness) * Radius,
 		_ => Length * 4f * Radius* Radius
 	};
+
+	static Vector2 LimitPetioleGrowthToSupport(Vector2 currentSize, Vector2 sizeLimit, Vector2 growth, float parentRadius)
+	{
+		if (currentSize.Y + growth.Y > parentRadius)
+			growth.Y = parentRadius - currentSize.Y;
+		growth.Y = MathF.Max(0f, growth.Y);
+
+		// Do not let longitudinal growth run ahead while radial growth is
+		// temporarily limited by a young parent.  Otherwise a petiole can reach
+		// full length with a tiny radius and immediately buckle under its leaf.
+		if (sizeLimit.Y > 1e-8f)
+		{
+			var supportedLength = sizeLimit.X * Math.Clamp((currentSize.Y + growth.Y) / sizeLimit.Y, 0f, 1f);
+			growth.X = MathF.Min(growth.X, MathF.Max(0f, supportedLength - currentSize.X));
+		}
+
+		return growth;
+	}
+
+	static Vector2 LimitLeafGrowthToPetioleSupport(
+		PlantSubFormation<AboveGroundAgent> formation,
+		int parent,
+		Vector2 currentSize,
+		Vector2 sizeLimit,
+		Vector2 growth,
+		Vector2 petioleSizeLimit)
+	{
+		if (parent < 0 || (formation.GetOrgan(parent) != OrganTypes.Petiole && formation.GetOrgan(parent) != OrganTypes.FlowerPetiol))
+			return growth;
+
+		var lengthSupport = petioleSizeLimit.X > 1e-8f ? formation.GetLength(parent) / petioleSizeLimit.X : 1f;
+		var radiusSupport = petioleSizeLimit.Y > 1e-8f ? formation.GetBaseRadius(parent) / petioleSizeLimit.Y : 1f;
+		var support = Math.Clamp(MathF.Min(lengthSupport, radiusSupport), 0f, 1f);
+		var supportedSize = sizeLimit * support;
+		var resultingSize = Vector2.Min(currentSize + growth, supportedSize);
+		return Vector2.Max(resultingSize - currentSize, Vector2.Zero);
+	}
 
 
 	public Vector3 BaseOffset { get; set; } = new Vector3(0, 0, 0);
@@ -273,7 +315,7 @@ public partial struct AboveGroundAgent : IPlantAgent
 	/// <summary>
 	/// Water amount in gramms which can be stored in this agent
 	/// </summary>
-	[M(AI)]public readonly float WaterStorageCapacity_g() => WaterStorageCapacityFunction_g(Radius, Length);
+	[M(AI)]public readonly float WaterStorageCapacity_g() => Volume() * WaterCapacityRatio * UnderGroundAgent.CubicMetersToGrammsOfWater;
 
 	/// <summary>
 	/// Water amount in gramms which can flow through per hour, or can be stored in this agent
@@ -417,7 +459,18 @@ public partial struct AboveGroundAgent : IPlantAgent
                     GrowthTimeVar = plant.World.HoursPerTick / (species.FlowerSettings.BudBloomAge + plant.RNG.NextFloatVar(species.BudBloomAgeVar));
                 } break;
             case OrganTypes.FlowerStem: {
-
+                    // The deterministic internode path can create a FlowerStem
+                    // directly.  A converted FlowerMeristem already carries its
+                    // targets, but a direct stem does not, which otherwise leaves
+                    // it at its tiny construction radius beneath a bud or petals.
+                    LengthVar = FlowerAgent.flowerBase
+                        ? species.FlowerSettings.bStemLength + plant.RNG.NextFloatVar(species.FlowerSettings.bStemLengthVar)
+                        : species.FlowerSettings.stemLength + plant.RNG.NextFloatVar(species.FlowerSettings.stemLengthVar);
+                    RadiusVar = FlowerAgent.flowerBase
+                        ? species.FlowerSettings.bStemRadius + plant.RNG.NextFloatVar(species.FlowerSettings.bStemRadiusVar)
+                        : species.FlowerSettings.fStemRadius + plant.RNG.NextFloatVar(species.FlowerSettings.fStemRadiusVar);
+                    GrowthTimeVar = plant.World.HoursPerTick /
+                        (species.FlowerSettings.growthTime + plant.RNG.NextFloatVar(species.growthTimeVar));
                 } break;
             default:
 			{
@@ -551,7 +604,7 @@ public partial struct AboveGroundAgent : IPlantAgent
 			case OrganTypes.Stem:
 				if (DominanceLevel > 1 && formation.GetDominance(Parent) < DominanceLevel)
 				{
-					var h = 5f * formation.GetBaseCenter(agentID).Y / formation.Height;
+					var h = 5f * formation.GetRelativeHeight(agentID);
 					var e = 4f * PreviousDayEnvResources / formation.DailyEfficiencyMax;
 					var q = 1f + h*h + 20f * Radius + e * e + WoodFactor;
 					var p = 0.004f / (q * q);
@@ -627,7 +680,7 @@ public partial struct AboveGroundAgent : IPlantAgent
 			{
 				var currentSize = new Vector2(Length, Radius);
 				//dominance factor decreases the growth of structures further away from the dominant branch (based on the tree structure)
-				var dominanceFactor = DominanceLevel < species.DominanceFactors.Length ? species.DominanceFactors[DominanceLevel] : species.DominanceFactors[species.DominanceFactors.Length - 1];
+				var dominanceFactor = species.GetDominanceFactor(DominanceLevel);
 				switch(Organ)
 				{
 					case OrganTypes.Leaf:
@@ -636,10 +689,11 @@ public partial struct AboveGroundAgent : IPlantAgent
 						//TDMI thickness of the parent and parent-parent decides the max. leaf size,
 						//  also the energy consumption of the siblings beyond the node should have effect
 						var sizeLimit = new Vector2(species.LeafLength + LengthVar, species.LeafRadius + RadiusVar);
-						if (currentSize.X < sizeLimit.X && currentSize.Y < sizeLimit.Y)
+						if (currentSize.X < sizeLimit.X || currentSize.Y < sizeLimit.Y)
 						{
 							//HoursPerTick are included in GrowthTimeVar
 							var growth = formation.DailyProductionMax > 1e-6f ? Math.Min(1f, plant.WaterBalance) * sizeLimit * GrowthTimeVar * (PreviousDayProductionInvariant / formation.DailyProductionMax) : Vector2.Zero;
+							growth = LimitLeafGrowthToPetioleSupport(formation, Parent, currentSize, sizeLimit, growth, new(species.PetioleLength, species.PetioleRadius));
 							var resultingSize = Vector2.Min(currentSize + growth, sizeLimit);
 							growth = resultingSize - currentSize;
 							Length += growth.X;
@@ -650,17 +704,17 @@ public partial struct AboveGroundAgent : IPlantAgent
 					case OrganTypes.Petiole:
 					{
 						var sizeLimit = new Vector2(species.PetioleLength + LengthVar, species.PetioleRadius + RadiusVar);
-						if (currentSize.X < sizeLimit.X && currentSize.Y < sizeLimit.Y)
+						if (currentSize.X < sizeLimit.X || currentSize.Y < sizeLimit.Y)
 						{
 							//HoursPerTick are included in GrowthTimeVar
 							var growth = formation.DailyProductionMax > 1e-6f ? Math.Min(1f, plant.WaterBalance) * sizeLimit * GrowthTimeVar * (PreviousDayProductionInvariant / formation.DailyProductionMax) : Vector2.Zero;
 							var resultingSize = Vector2.Min(currentSize + growth, sizeLimit);
 							growth = resultingSize - currentSize;
 
-							//assure not to outgrow the parent
+							// Assure the petiole does not outgrow its parent or become
+							// disproportionately long while the parent is still thin.
 							var parentRadius = Parent >= 0 ? formation.GetBaseRadius(Parent) : float.MaxValue;
-							if (currentSize.Y + growth.Y > parentRadius)
-								growth.Y = parentRadius - currentSize.Y;
+							growth = LimitPetioleGrowthToSupport(currentSize, sizeLimit, growth, parentRadius);
 							Length += growth.X;
 							Radius += growth.Y;
 						}
