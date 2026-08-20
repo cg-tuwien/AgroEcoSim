@@ -25,7 +25,7 @@ public interface IPlantAgent : ITreeAgent
     byte DominanceLevel { get; }
 
 
-    bool isRizome { get; }
+    bool IsRizome { get; }
 	bool flowerSupport { get; }
 	Vector3 BaseOffset { get; }
 

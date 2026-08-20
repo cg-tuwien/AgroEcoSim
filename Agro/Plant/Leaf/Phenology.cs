@@ -412,45 +412,52 @@ public readonly struct ColorCurve
 }
 
 public readonly record struct ColorKey(float T, Vector3 Lab);
-
 /// <summary>
-/// Why these colors: Bergenia is evergreen and winter foliage is often described as
-/// purple / reddish-bronze / plum rather than classic yellow-orange autumn senescence.
-/// So the lifecycle stays mostly green, while the senescence path goes through plum → muted purple-brown → brown.
-/// https://www.rhs.org.uk/plants/2209/bergenia-cordifolia/details
-/// https://www.gardendesign.com/perennials/bergenia.html
+/// Why these colors: Bergenia cordifolia is an evergreen perennial with large,
+/// leathery, rounded leaves. Healthy warm-season foliage is medium to dark glossy
+/// green. Cold weather commonly causes healthy leaves to develop red, bronze,
+/// purplish-bronze or burgundy pigmentation, so that winter shift belongs in the
+/// healthy seasonal curve rather than in senescence.
+///
+/// True senescence is modeled separately as bronze / reddish-brown -> brown.
+///
+/// Sources:
+/// - RHS: Bergenia are evergreen with large leathery leaves, often tinged red in winter.
+/// - Missouri Botanical Garden: B. cordifolia foliage turns purplish-bronze in winter.
+/// - Cambridge University Botanic Garden: large leaves become brownish-red in winter.
 /// </summary>
 public static class BergeniaCordifoliaPreset
 {
     public static ColorCurve Lifecycle => new ColorCurve()
-        .Add(0.00f, ColorUtils.OkLabFromSrgb8(160, 210, 140)) // fresh light green
-        .Add(0.20f, ColorUtils.OkLabFromSrgb8( 95, 160, 100)) // expanding
-        .Add(0.50f, ColorUtils.OkLabFromSrgb8( 82, 145,  88)) // near adult
-        .Add(0.80f, ColorUtils.OkLabFromSrgb8( 75, 135,  82)) // adult
-        .Add(1.00f, ColorUtils.OkLabFromSrgb8( 70, 125,  75)); // full adult, stable
+        .Add(0.00f, ColorUtils.OkLabFromSrgb8(145, 195, 125)) // fresh: lighter glossy green
+        .Add(0.20f, ColorUtils.OkLabFromSrgb8( 92, 154,  89)) // expanding
+        .Add(0.50f, ColorUtils.OkLabFromSrgb8( 67, 128,  72)) // mature: deep clean green
+        .Add(0.80f, ColorUtils.OkLabFromSrgb8( 60, 118,  66)) // adult
+        .Add(1.00f, ColorUtils.OkLabFromSrgb8( 56, 111,  62)); // full adult
 
     public static ColorCurve BergeniaHealthySeason => new ColorCurve()
         .Add(0.00f, new Vector3( 0.000f, 1.00f, 0.000f)) // early spring
-        .Add(0.25f, new Vector3( 0.000f, 1.00f, 0.000f)) // spring/summer unchanged
-        .Add(0.60f, new Vector3( 0.000f, 1.00f, 0.000f)) // still neutral
-        .Add(0.75f, new Vector3(-0.010f, 1.03f, 0.010f)) // early autumn: hint of plum
-        .Add(0.88f, new Vector3(-0.025f, 1.08f, 0.022f)) // late autumn: clear purple/plum
-        .Add(1.00f, new Vector3(-0.035f, 1.10f, 0.028f)); // winter: deep plum, slightly darker
+        .Add(0.25f, new Vector3( 0.000f, 1.00f, 0.000f)) // spring / summer
+        .Add(0.60f, new Vector3( 0.000f, 1.00f, 0.000f)) // still green
+        .Add(0.75f, new Vector3(-0.008f, 1.04f, 0.008f)) // early autumn: red-bronze begins
+        .Add(0.88f, new Vector3(-0.020f, 1.10f, 0.018f)) // late autumn: bronze / plum
+        .Add(1.00f, new Vector3(-0.030f, 1.14f, 0.024f)); // winter: burgundy-plum
 
-    public static readonly Vector2 HealthySeasonDirection = Vector2.Normalize(new Vector2(0.72f, -0.69f));
+    public static readonly Vector2 HealthySeasonDirection =
+        Vector2.Normalize(new Vector2(0.72f, -0.69f));
 
     public static ColorCurve Stress => ColorModel.CoolAnthocyanicStress;
 
     public static ColorCurve SeasonalSenescence => new ColorCurve()
-        .Add(0.00f, ColorUtils.OkLabFromSrgb8( 95,  55, 105)) // plum-purple
-        .Add(0.35f, ColorUtils.OkLabFromSrgb8( 80,  45,  90)) // deeper winter plum
-        .Add(0.70f, ColorUtils.OkLabFromSrgb8( 85,  60,  70)) // muted purple-brown
-        .Add(1.00f, ColorUtils.OkLabFromSrgb8( 95,  70,  40)); // brown
+        .Add(0.00f, ColorUtils.OkLabFromSrgb8(125, 104, 60)) // dull bronze-olive
+        .Add(0.35f, ColorUtils.OkLabFromSrgb8(126,  82, 54)) // reddish bronze
+        .Add(0.70f, ColorUtils.OkLabFromSrgb8(105,  67, 49)) // warm brown
+        .Add(1.00f, ColorUtils.OkLabFromSrgb8( 78,  52, 36)); // dead dark brown
 
     public static ColorCurve StressSenescence => new ColorCurve()
-        .Add(0.00f, ColorUtils.OkLabFromSrgb8( 80,  55,  85)) // dull plum
-        .Add(0.50f, ColorUtils.OkLabFromSrgb8( 85,  65,  60)) // plum-brown
-        .Add(1.00f, ColorUtils.OkLabFromSrgb8( 90,  70,  45)); // brown
+        .Add(0.00f, ColorUtils.OkLabFromSrgb8(95, 86, 57)) // dull stressed bronze
+        .Add(0.50f, ColorUtils.OkLabFromSrgb8(91, 63, 49)) // reddish-brown
+        .Add(1.00f, ColorUtils.OkLabFromSrgb8(68, 45, 34)); // dark brown
 }
 
 /// <summary>
@@ -642,34 +649,40 @@ public static class CampanulaPoscharskyanaPreset
 }
 
 /// <summary>
-/// Why these colors: alpine / woodland strawberries are described as bright/dark green, semi-evergreen / winter-green,
-/// and the horticultural descriptions emphasize green foliage rather than dramatic autumn leaf colors,
-/// so a green→straw→brown terminal path is a reasonable default.
-/// https://www.missouribotanicalgarden.org/PlantFinder/PlantFinderDetails.aspx?kempercode=k290
-/// https://www.rhs.org.uk/plants/42325/fragaria-vesca-semperflorens-%28f%29/details
-/// https://www.lorberg.com/en-gb/article/593/fragaria-vesca-var-semperflorens-ruegen
+/// Why these colors: Fragaria vesca 'Rügen' has trifoliate, toothed foliage.
+/// Species references describe Fragaria vesca leaves as glossy/bright green,
+/// while horticultural descriptions of 'Rügen' specifically describe its
+/// winter-green foliage as dark green.
+///
+/// Healthy leaves are therefore modeled as a clean, fairly saturated
+/// medium-to-dark green. Terminal senescence follows a muted
+/// yellow-green → straw/bronze → brown path.
+///
+/// Sources:
+/// - Kew: bright green, trifoliolate leaves with toothed margins.
+/// - Missouri Botanical Garden: trifoliate, coarsely toothed green leaves.
+/// - Lorberg: 'Rügen' has winter-green, dark-green, toothed foliage.
+/// - RHS: Fragaria leaves are composed of three leaflets.
 /// </summary>
 public static class FragariaRuegenPreset
 {
     public static ColorCurve Lifecycle => new ColorCurve()
-        .Add(0.00f, ColorUtils.OkLabFromSrgb8(170, 220, 150)) // young bright green
-        .Add(0.20f, ColorUtils.OkLabFromSrgb8(105, 170, 100)) // expanding
-        .Add(0.50f, ColorUtils.OkLabFromSrgb8( 90, 160,  85)) // mature green
-        .Add(0.80f, ColorUtils.OkLabFromSrgb8( 85, 150,  82)) // adult
-        .Add(1.00f, ColorUtils.OkLabFromSrgb8( 80, 145,  78)); // full adult, stable
-
+        .Add(0.00f, ColorUtils.OkLabFromSrgb8(147, 205, 122)) // fresh: light, clean green
+        .Add(0.20f, ColorUtils.OkLabFromSrgb8(104, 172,  82)) // expanding: vivid green
+        .Add(0.50f, ColorUtils.OkLabFromSrgb8( 76, 145,  66)) // mature: medium/deep green
+        .Add(0.80f, ColorUtils.OkLabFromSrgb8( 69, 136,  61)) // adult
+        .Add(1.00f, ColorUtils.OkLabFromSrgb8( 65, 130,  58)); // full adult: stable dark green
 
     public static ColorCurve Stress => ColorModel.DefaultStress;
 
     public static ColorCurve SeasonalSenescence => new ColorCurve()
-        .Add(0.00f, ColorUtils.OkLabFromSrgb8(180, 185,  95)) // yellow-green
-        .Add(0.40f, ColorUtils.OkLabFromSrgb8(170, 150,  80)) // warm straw
-        .Add(0.75f, ColorUtils.OkLabFromSrgb8(140, 110,  60)) // straw-brown
-        .Add(1.00f, ColorUtils.OkLabFromSrgb8( 95,  72,  42)); // brown
+        .Add(0.00f, ColorUtils.OkLabFromSrgb8(172, 176,  90)) // muted yellow-green
+        .Add(0.40f, ColorUtils.OkLabFromSrgb8(162, 140,  74)) // warm straw / bronze
+        .Add(0.75f, ColorUtils.OkLabFromSrgb8(133, 103,  58)) // straw-brown
+        .Add(1.00f, ColorUtils.OkLabFromSrgb8( 92,  69,  41)); // dry brown
 
     public static ColorCurve StressSenescence => new ColorCurve()
-        .Add(0.00f, ColorUtils.OkLabFromSrgb8(122, 124,  74)) // dull olive
-        .Add(0.50f, ColorUtils.OkLabFromSrgb8(110,  88,  48)) // tan-brown
-        .Add(1.00f, ColorUtils.OkLabFromSrgb8( 82,  58,  36)); // dark brown
+        .Add(0.00f, ColorUtils.OkLabFromSrgb8(116, 119,  68)) // dull olive
+        .Add(0.50f, ColorUtils.OkLabFromSrgb8(105,  84,  47)) // tan-brown
+        .Add(1.00f, ColorUtils.OkLabFromSrgb8( 79,  56,  35)); // dark brown
 }
-

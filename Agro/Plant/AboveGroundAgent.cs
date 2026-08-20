@@ -101,7 +101,7 @@ public partial struct AboveGroundAgent : IPlantAgent
 		Vector2 growth,
 		Vector2 petioleSizeLimit)
 	{
-		if (parent < 0 || (formation.GetOrgan(parent) != OrganTypes.Petiole && formation.GetOrgan(parent) != OrganTypes.FlowerPetiol))
+		if (parent < 0 || (formation.GetOrgan(parent) != OrganTypes.Petiole && formation.GetOrgan(parent) != OrganTypes.FlowerPedicel))
 			return growth;
 
 		var lengthSupport = petioleSizeLimit.X > 1e-8f ? formation.GetLength(parent) / petioleSizeLimit.X : 1f;
@@ -250,20 +250,22 @@ public partial struct AboveGroundAgent : IPlantAgent
 	//So far same as for undergrounds
 	public const float WaterTransportRatio = 1.8f;
 
-    public bool isRizome { get; set; } = false;
+    public bool IsRizome { get; set; } = false;
 
-	public bool trySpawn { get; set; } = true;
-
-	public class rizomeInfos
+	public class RizomeInfos
 	{
-        public bool test { get; set; } = true;
-        public bool test2 { get; set; } = true;
-        public bool test4 { get; set; } = true;
+        // Bit n records that this completed segment has already produced its
+        // nth permitted offshoot.  A mask lets species request an arbitrary
+        // number of evenly distributed initial axes instead of the former
+        // hard-coded maximum of three.
+        public uint OffshootsCreated { get; set; }
+        public int Depth { get; set; } = 0;
+		public bool LateralCreated { get; set; }
         public bool test3 { get; set; } = false;
-        public int rizomeDepth { get; set; } = 0;
+
     }
 
-	public rizomeInfos rizomeInfo { get; set; } = new rizomeInfos();
+	public RizomeInfos RizomeInfo { get; set; } = new RizomeInfos();
 
 	public Flower FlowerAgent { get; set; } = new Flower();
 	//gravity
@@ -274,6 +276,9 @@ public partial struct AboveGroundAgent : IPlantAgent
 
     public int CrownIndex { get; set; } = 0;
 
+    /// <summary>Whether a dormant crown bud may attempt activation this season.</summary>
+    public bool CrownActivationAttemptAvailable { get; set; } = true;
+
 	public bool flowerSupport { get; set; } = true;
 
     #region Variances
@@ -281,6 +286,9 @@ public partial struct AboveGroundAgent : IPlantAgent
     /// Precomputed random variance of maximm length for this agent
     /// </summary>
     float LengthVar;
+    /// <summary>
+    /// Precomputed random variance of maximm radius for this agent
+    /// </summary>
 	float RadiusVar;
 	float GrowthTimeVar;
 	#endregion
@@ -364,7 +372,7 @@ public partial struct AboveGroundAgent : IPlantAgent
 		baseOrientation = orientation;
 		restOrientation = orientation;
 		targetOrientation = orientation;
-		isRizome = rizome;
+		IsRizome = rizome;
 		Organ = organ;
 
 		Energy = initialEnergy;
@@ -395,7 +403,7 @@ public partial struct AboveGroundAgent : IPlantAgent
 				LengthVar = plant.RNG.NextFloatVar(species.LeafLengthVar);
 				RadiusVar = plant.RNG.NextFloatVar(species.LeafRadiusVar);
 				GrowthTimeVar = plant.World.HoursPerTick / (species.LeafGrowthTime + plant.RNG.NextFloatVar(species.LeafGrowthTimeVar));
-					Color = species.BaseLeafColor;
+					Color = species.YoungLeafColor;
 			}
 			break;
 
@@ -409,10 +417,10 @@ public partial struct AboveGroundAgent : IPlantAgent
 
 			case OrganTypes.Meristem:
 				{
-					if (isRizome)
+					if (IsRizome)
 					{
-						LengthVar = plant.Parameters.RizomeLength;
-						RadiusVar = plant.Parameters.RizomeRadius;
+						LengthVar = plant.Parameters.RhizomeSegmentLength;
+						RadiusVar = plant.Parameters.RhizomeSegmentRadius;
 					}
 					else
 					{
@@ -436,41 +444,41 @@ public partial struct AboveGroundAgent : IPlantAgent
 			break;
             case OrganTypes.FlowerMeristem:
                 {
-                    LengthVar = FlowerAgent.flowerBase? species.FlowerSettings.bStemLength + plant.RNG.NextFloatVar(species.FlowerSettings.bStemLengthVar) :  species.FlowerSettings.stemLength + plant.RNG.NextFloatVar(species.FlowerSettings.stemLengthVar);
-					RadiusVar = FlowerAgent.flowerBase ? species.FlowerSettings.bStemRadius + plant.RNG.NextFloatVar(species.FlowerSettings.bStemRadiusVar) : species.FlowerSettings.fStemRadius + plant.RNG.NextFloatVar(species.FlowerSettings.fStemRadiusVar);
-					GrowthTimeVar = plant.World.HoursPerTick / (species.FlowerSettings.growthTime + plant.RNG.NextFloatVar(species.growthTimeVar));
+                    LengthVar = FlowerAgent.flowerBase? species.FlowerSettings.FlowerBaseSegmentLength + plant.RNG.NextFloatVar(species.FlowerSettings.FlowerBaseSegmentLengthVariance) :  species.FlowerSettings.FlowerBranchSegmentLength + plant.RNG.NextFloatVar(species.FlowerSettings.FlowerBranchSegmentLengthVariance);
+					RadiusVar = FlowerAgent.flowerBase ? species.FlowerSettings.FlowerBaseSegmentRadius + plant.RNG.NextFloatVar(species.FlowerSettings.FlowerBaseSegmentRadiusVariance) : species.FlowerSettings.FlowerBranchSegmentRadius + plant.RNG.NextFloatVar(species.FlowerSettings.FlowerBranchSegmentRadiusVariance);
+					GrowthTimeVar = plant.World.HoursPerTick / (species.FlowerSettings.FlowerStemSegmentGrowthDurationHours + plant.RNG.NextFloatVar(species.FlowerStemSegmentGrowthDurationVarianceHours));
                 }
                 break;
-            case OrganTypes.FlowerPetiol: {
-					LengthVar = species.FlowerSettings.PetiolLength + plant.RNG.NextFloatVar(species.FlowerSettings.PetiolLengthVar);
-					RadiusVar = species.FlowerSettings.PetiolRadius + plant.RNG.NextFloatVar(species.FlowerSettings.PetiolRadiusVar);
-                    GrowthTimeVar = plant.World.HoursPerTick / (species.FlowerSettings.pedalGrowthTime + plant.RNG.NextFloatVar(species.FlowerSettings.pedalGrowthTimeVar));
+            case OrganTypes.FlowerPedicel: {
+					LengthVar = species.FlowerSettings.FlowerPedicelLength + plant.RNG.NextFloatVar(species.FlowerSettings.FlowerPedicelLengthVariance);
+					RadiusVar = species.FlowerSettings.FlowerPedicelRadius + plant.RNG.NextFloatVar(species.FlowerSettings.FlowerPedicelRadiusVariance);
+                    GrowthTimeVar = plant.World.HoursPerTick / (species.FlowerSettings.PetalAndPedicelGrowthDurationHours + plant.RNG.NextFloatVar(species.FlowerSettings.PetalAndPedicelGrowthDurationVarianceHours));
 
                 }
                 break;
             case OrganTypes.FlowerPadel: {
-					LengthVar = species.FlowerSettings.PedalLength + plant.RNG.NextFloatVar(species.FlowerSettings.PedalLengthVar);
-					RadiusVar = species.FlowerSettings.PedalRadius;
-                    GrowthTimeVar = plant.World.HoursPerTick / (species.FlowerSettings.pedalGrowthTime + plant.RNG.NextFloatVar(species.FlowerSettings.pedalGrowthTimeVar));
+					LengthVar = species.FlowerSettings.PetalLength + plant.RNG.NextFloatVar(species.FlowerSettings.PetalLengthVariance);
+					RadiusVar = species.FlowerSettings.PetalRadius;
+                    GrowthTimeVar = plant.World.HoursPerTick / (species.FlowerSettings.PetalAndPedicelGrowthDurationHours + plant.RNG.NextFloatVar(species.FlowerSettings.PetalAndPedicelGrowthDurationVarianceHours));
                 } break;
             case OrganTypes.FlowerBud: {
                     LengthVar = species.FlowerSettings.BudLength;
                     RadiusVar = species.FlowerSettings.BudRadius;
-                    GrowthTimeVar = plant.World.HoursPerTick / (species.FlowerSettings.BudBloomAge + plant.RNG.NextFloatVar(species.BudBloomAgeVar));
+                    GrowthTimeVar = plant.World.HoursPerTick / (species.FlowerSettings.BudBloomDurationHours + plant.RNG.NextFloatVar(species.BudBloomDurationVarianceHours));
                 } break;
             case OrganTypes.FlowerStem: {
-                    // The deterministic internode path can create a FlowerStem
+                    // The UseDeterministicBranching internode path can create a FlowerStem
                     // directly.  A converted FlowerMeristem already carries its
                     // targets, but a direct stem does not, which otherwise leaves
                     // it at its tiny construction radius beneath a bud or petals.
                     LengthVar = FlowerAgent.flowerBase
-                        ? species.FlowerSettings.bStemLength + plant.RNG.NextFloatVar(species.FlowerSettings.bStemLengthVar)
-                        : species.FlowerSettings.stemLength + plant.RNG.NextFloatVar(species.FlowerSettings.stemLengthVar);
+                        ? species.FlowerSettings.FlowerBaseSegmentLength + plant.RNG.NextFloatVar(species.FlowerSettings.FlowerBaseSegmentLengthVariance)
+                        : species.FlowerSettings.FlowerBranchSegmentLength + plant.RNG.NextFloatVar(species.FlowerSettings.FlowerBranchSegmentLengthVariance);
                     RadiusVar = FlowerAgent.flowerBase
-                        ? species.FlowerSettings.bStemRadius + plant.RNG.NextFloatVar(species.FlowerSettings.bStemRadiusVar)
-                        : species.FlowerSettings.fStemRadius + plant.RNG.NextFloatVar(species.FlowerSettings.fStemRadiusVar);
+                        ? species.FlowerSettings.FlowerBaseSegmentRadius + plant.RNG.NextFloatVar(species.FlowerSettings.FlowerBaseSegmentRadiusVariance)
+                        : species.FlowerSettings.FlowerBranchSegmentRadius + plant.RNG.NextFloatVar(species.FlowerSettings.FlowerBranchSegmentRadiusVariance);
                     GrowthTimeVar = plant.World.HoursPerTick /
-                        (species.FlowerSettings.growthTime + plant.RNG.NextFloatVar(species.growthTimeVar));
+                        (species.FlowerSettings.FlowerStemSegmentGrowthDurationHours + plant.RNG.NextFloatVar(species.FlowerStemSegmentGrowthDurationVarianceHours));
                 } break;
             default:
 			{
@@ -890,19 +898,32 @@ public partial struct AboveGroundAgent : IPlantAgent
             var orientation = parent.Orientation * Quaternion.CreateFromAxisAngle(Vector3.UnitX, l * angleStep + lateralAngle) * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, -plant.Parameters.LateralPitch);
             orientation = TurnUpwards(orientation) * Quaternion.CreateFromAxisAngle(Vector3.UnitX, roll) * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, pitch);
             var petioleIdx1 = plant.AG.Birth(new(plant, meristem, OrganTypes.Petiole, orientation, parent.Energy * 0.1f, initialResources: initialResources, initialProduction: initialProduction) { DominanceLevel = parent.DominanceLevel, ParentRadiusAtBirth = parent.Radius });
-            for (var s = 2; s <= species.petiolSegments; s++)
+            for (var s = 2; s <= species.PetioleSegmentCount; s++)
 			{
                 petioleIdx1 = plant.AG.Birth(new(plant, petioleIdx1, OrganTypes.Petiole, orientation, parent.Energy * 0.1f, initialResources: initialResources, initialProduction: initialProduction) { DominanceLevel = parent.DominanceLevel, ParentRadiusAtBirth = parent.Radius });
             }
 			parent.Energy *= 0.9f;
 
-            var leafPitchVar = plant.RNG.NextFloatVar(species.LateralPitchVar);
-            orientation *= Quaternion.CreateFromAxisAngle(Vector3.UnitZ, leafPitchVar - species.LeafPitch);
-
-            plant.AG.Birth(new(plant, petioleIdx1, OrganTypes.Leaf, orientation, parent.Energy * 0.1f, initialResources: initialResources, initialProduction: initialProduction) { DominanceLevel = parent.DominanceLevel, ParentRadiusAtBirth = float.MaxValue }); //leaf
-            parent.Energy *= 0.9f;
+            CreateLeaf(orientation, parent, plant, petioleIdx1, initialResources, initialProduction);
+			parent.Energy *= 0.9f;
 
         }
+    }
+
+    /// <summary>
+    /// Add a blade to an already-created petiole.  This is shared by normal
+    /// leaf construction and perennial leaf renewal at an existing node.
+    /// </summary>
+    internal static void CreateLeaf(Quaternion petioleOrientation, AboveGroundAgent energySource, PlantFormation2 plant, int petioleID, float initialResources, float initialProduction)
+    {
+        var species = plant.Parameters;
+        var leafPitchVar = plant.RNG.NextFloatVar(species.LateralPitchVar);
+        var orientation = petioleOrientation * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, leafPitchVar - species.LeafPitch);
+        plant.AG.Birth(new(plant, petioleID, OrganTypes.Leaf, orientation, energySource.Energy * 0.1f, initialResources: initialResources, initialProduction: initialProduction)
+        {
+            DominanceLevel = energySource.DominanceLevel,
+            ParentRadiusAtBirth = float.MaxValue
+        });
     }
     [M(AI)] internal static void CreateFirstFlowerBaseLeaves(AboveGroundAgent parent, PlantFormation2 plant, float lateralAngle, int meristem) => CreateFlowerBaseLeavesBase(parent, plant, lateralAngle, meristem, 1f, 1f);
     [M(AI)] internal readonly void CreateFlowerBaseLeaves(AboveGroundAgent parent, PlantFormation2 plant, float lateralAngle, int meristem) => CreateFlowerBaseLeavesBase(parent, plant, lateralAngle, meristem, PreviousDayEnvResourcesInvariant, PreviousDayProductionInvariant);
@@ -916,13 +937,13 @@ public partial struct AboveGroundAgent : IPlantAgent
             var pitch = plant.RNG.NextFloatVar(species.LateralPitchVar);
             var orientation = parent.Orientation * Quaternion.CreateFromAxisAngle(Vector3.UnitX, l * angleStep + lateralAngle) * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, -plant.Parameters.LateralPitch);
             orientation = TurnUpwards(orientation) * Quaternion.CreateFromAxisAngle(Vector3.UnitX, roll) * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, pitch);
-            var petioleIdx = plant.AG.Birth(new(plant, meristem, OrganTypes.Petiole, orientation, parent.Energy * 0.1f, initialResources: initialResources, initialProduction: initialProduction) { DominanceLevel = parent.DominanceLevel, ParentRadiusAtBirth = parent.Radius,FlowerAgent=new Flower() { flowerBase = true }, LengthVar = species.FlowerSettings.FlowerLeafPetiolLength, RadiusVar = species.FlowerSettings.FlowerLeafPetiolRadius }); //leaf stem
+            var petioleIdx = plant.AG.Birth(new(plant, meristem, OrganTypes.Petiole, orientation, parent.Energy * 0.1f, initialResources: initialResources, initialProduction: initialProduction) { DominanceLevel = parent.DominanceLevel, ParentRadiusAtBirth = parent.Radius,FlowerAgent=new Flower() { flowerBase = true }, LengthVar = species.FlowerSettings.FlowerBaseLeafPetioleLength, RadiusVar = species.FlowerSettings.FlowerBaseLeafPetioleRadius }); //leaf stem
             parent.Energy *= 0.9f;
 
             var leafPitchVar = plant.RNG.NextFloatVar(species.LateralPitchVar);
             orientation *= Quaternion.CreateFromAxisAngle(Vector3.UnitZ, leafPitchVar - species.LeafPitch);
 
-            plant.AG.Birth(new(plant, petioleIdx, OrganTypes.Leaf, orientation, parent.Energy * 0.1f, initialResources: initialResources, initialProduction: initialProduction) { DominanceLevel = parent.DominanceLevel, ParentRadiusAtBirth = float.MaxValue, FlowerAgent = new Flower() { flowerBase = true }, LengthVar = species.FlowerSettings.LeafLength,RadiusVar = species.FlowerSettings.LeafRadius }); //leaf
+            plant.AG.Birth(new(plant, petioleIdx, OrganTypes.Leaf, orientation, parent.Energy * 0.1f, initialResources: initialResources, initialProduction: initialProduction) { DominanceLevel = parent.DominanceLevel, ParentRadiusAtBirth = float.MaxValue, FlowerAgent = new Flower() { flowerBase = true }, LengthVar = species.FlowerSettings.FlowerBaseLeafLength,RadiusVar = species.FlowerSettings.FlowerBaseLeafRadius }); //leaf
             parent.Energy *= 0.9f;
 
         }

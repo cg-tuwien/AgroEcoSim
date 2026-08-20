@@ -3,17 +3,17 @@ using System.Text.Json.Serialization;
 
 namespace Agro;
 
-public enum LeafComplexity { Simple, Compound }
+public enum LeafComplexity : byte { Simple, Compound }
 
-public enum CompoundLeafType { Pinnate, Bipinnate, Palmate, Trifoliate }
+public enum CompoundLeafType : byte { Pinnate, Bipinnate, Palmate, Trifoliate }
 
-public enum LeafMarginType { Entire, Serrate, Dentate, Crenate, Lobed, Undulate, Spiny }
+public enum LeafMarginType : byte { Entire, Serrate, Dentate, Crenate, Lobed, Undulate, Spiny }
 
-public enum LeafVenationType { Pinnate, Palmate, Parallel, Dichotomous, Reticulate }
+public enum LeafVenationType : byte { Pinnate, Palmate, Parallel, Dichotomous, Reticulate }
 
-public enum LeafApexType { Acute, Acuminate, Obtuse, Rounded, Emarginate, Mucronate }
+public enum LeafApexType : byte { Acute, Acuminate, Obtuse, Rounded, Emarginate, Mucronate }
 
-public enum LeafBaseType { Cuneate, Rounded, Cordate, Truncate, Oblique }
+public enum LeafBaseType : byte { Cuneate, Rounded, Cordate, Truncate, Oblique }
 
 public readonly record struct LeafDimensions(
     float LengthM,

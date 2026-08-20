@@ -5,41 +5,40 @@ public enum OrganTypes : byte {
     /// <summary>
     /// The seed as a whole, the plant has no other organs at that time
     /// </summary>
-    Seed,
+    Seed, //1
     /// <summary>
     /// Dormant bud that will eventually develop into a new twig. Buds can only be attached to stems
     /// </summary>
-    Bud,
+    Bud, //2
     /// <summary>
     /// Root segment
     /// </summary>
-    Root,
+    Root, //3
     /// <summary>
     /// Stem segment
     /// </summary>
-    Stem,
+    Stem, //4
     /// <summary>
     /// Leaf (excl. the connection to the stem)
     /// </summary>
-    Leaf,
+    Leaf, //5
     /// <summary>
     /// Connection between the stem and the leaf
     /// </summary>
-    Petiole,
+    Petiole, //6
     /// <summary>
     /// Fruit (not used yet)
     /// </summary>
-    Fruit,
+    Fruit, //7
     /// <summary>
     /// Tip of the stem where cells grow forward elongating the twig
     /// </summary>
-    Meristem,
-    FlowerBud,   // Knospe
-    FlowerStem,  // kleiner Blütenstiel
-    FlowerPadel,       // eigentliche Blüte
-    FlowerPetiol,
-    FlowerMeristem,
-    FlowerBaseBud,
-    RizomeMeristem
-
+    Meristem, //8
+    RizomeMeristem, //9
+    FlowerBud, //10 Knospe
+    FlowerStem, //11 kleiner Blï¿½tenstiel
+    FlowerPadel, //12 eigentliche Blï¿½te
+    FlowerPedicel, //13
+    FlowerMeristem, //14
+    FlowerBaseBud, //15
 };

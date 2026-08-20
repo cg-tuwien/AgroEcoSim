@@ -5,7 +5,7 @@ using System.Numerics;
 namespace Agro;
 
 
-public enum RenderLeafLod
+public enum RenderLeafLod : byte
 {
     BillboardQuad = 1,
     CoarseOutline = 2,

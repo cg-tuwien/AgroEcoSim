@@ -268,6 +268,11 @@ public class Pcg
 		return (float)(NextUInt() * ToDouble01 * (maxInclusive - minInclusive) + minInclusive);
 	}
 
+	/// <summary>
+	/// Returns a random float in the range [-amplitude, +amplitude]
+	/// </summary>
+	/// <param name="amplitude"></param>
+	/// <returns></returns>
     [M(AI)]public float NextFloatVar(float amplitude) => 2f * amplitude * (float)(NextUInt() * ToDouble01 - 0.5);
 
     [M(AI)]public float[] NextFloats(int count)

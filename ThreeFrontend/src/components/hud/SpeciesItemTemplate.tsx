@@ -64,14 +64,15 @@ function formatNumber(value: number, precision: number) {
     return Number.isFinite(value) ? +value.toFixed(precision) : 0;
 }
 
-function readFloat(value: string) {
-    const n = parseFloat(value);
-    return Number.isFinite(n) ? n : 0;
-}
-
-function readInt(value: string) {
-    const n = parseInt(value, 10);
-    return Number.isFinite(n) ? n : 0;
+export function SpeciesBoolField(props: {speciesIndex: number, tooltip?: string, signal: Signal<boolean>, label: string})
+{
+    const name = props.label.replaceAll(' ', '_').toLocaleLowerCase().replace(/[^a-z0-9_]/gi, '');
+        return <>
+            <div>
+                <input type="checkbox" name={`${name}-${props.speciesIndex}`} title={props.tooltip} checked={props.signal.value} onChange={e => props.signal.value = e.currentTarget.checked} />
+                <label for={`${name}-${props.speciesIndex}`} title={props.tooltip}>{props.label}</label>
+            </div>
+        </>
 }
 
 export function SpeciesBehaviorField(props: {speciesIndex: number, signal: Signal<number>, options: Signal<string[]>}) {
@@ -112,4 +113,22 @@ export function SpeciesNameFields(props: {speciesIndex: number, nameSignal: Sign
             <input type="text" name={`aka-${props.speciesIndex}`} value={props.akaSignal.value ?? ''} title={"Colloquial name"} class="speciesAkaInput" onChange={e => props.akaSignal.value = e.currentTarget.value} />
         </div>
     </>;
+}
+
+export function SpeciesFlagsField(props: {speciesIndex: number, tooltip?: string, signal: Signal<number>, label: string, flags: string[]}) {
+    const name = `behavior-${props.speciesIndex}`;
+    return <>
+            <div>
+                {props.flags.map((x, i) => {
+                    const value = 1 << i;
+                    const id = `${name}-${i}`;
+
+                    return <div>
+                        <input type="checkbox" id={id} name={name} checked={(props.signal.value && value) !== 0} onChange={e => {if (e.currentTarget.checked) props.signal.value |= value; else props.signal.value &= ~value; }}/>
+                        <label for={id}>{x}</label>
+                    </div>;
+                })}
+                <label for={name}>Behavior</label>
+            </div>
+        </>;
 }

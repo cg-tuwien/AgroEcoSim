@@ -782,7 +782,7 @@ public class IrradianceClient
 								writer.WriteM32(ax, ay, az, c);
 								writer.Write(Math.Clamp(ag.GetWater(i) / ag.GetWaterEfficientCapacity(world, i), 0, 1));
 								writer.Write(Math.Clamp(ag.GetEnergy(i) / ag.GetEnergyCapacity(i), 0, 1));
-								
+
 								if (extended)
 								{
 									writer.Write(GetIrradiance(ag, i));
@@ -796,7 +796,7 @@ public class IrradianceClient
 							break;
 						case OrganTypes.Stem: case OrganTypes.Petiole: case OrganTypes.Meristem: case OrganTypes.FlowerStem:
                         case OrganTypes.FlowerMeristem:
-                        case OrganTypes.FlowerPetiol:
+                        case OrganTypes.FlowerPedicel:
                         case OrganTypes.FlowerBud:
                             {
 								writer.Write(scale.X); //length
@@ -969,7 +969,7 @@ public class IrradianceClient
 							break;
 						case OrganTypes.Stem: case OrganTypes.Petiole: case OrganTypes.Meristem: case OrganTypes.FlowerStem:
                         case OrganTypes.FlowerMeristem:
-                        case OrganTypes.FlowerPetiol:
+                        case OrganTypes.FlowerPedicel:
                         case OrganTypes.FlowerBud:
                             {
 								writer.Write(scale.X); //length

@@ -84,6 +84,13 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 
 	public List<int>? Death(int index)
 	{
+		// Rhizomes are the persistent framework of the clonal Geraniums.  They
+		// may lose their aerial descendants during a resource shortage, but
+		// deleting one branch here recursively deletes every later crown and
+		// produces an implausible bare, collapsed plant.
+		if (IsAboveGround && Plant.Parameters.RetainDormantRhizomes && GetIsRizome(index))
+			return null;
+
 		List<int> result = null;
 		if (Deaths.Add(index))
 		{
@@ -350,11 +357,11 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 
             var resEff = DailyResourceMax > 0f ? dst[i].PreviousDayEnvResourcesInvariant / DailyResourceMax : 1f;
             var prodEff = DailyProductionMax > 0f ? dst[i].PreviousDayProductionInvariant / DailyProductionMax : 1f;
-            var flowerOrgans = new List<OrganTypes>() { OrganTypes.FlowerStem, OrganTypes.FlowerPadel, OrganTypes.FlowerPetiol, OrganTypes.FlowerMeristem, OrganTypes.FlowerBud };
+            var flowerOrgans = new List<OrganTypes>() { OrganTypes.FlowerStem, OrganTypes.FlowerPadel, OrganTypes.FlowerPedicel, OrganTypes.FlowerMeristem, OrganTypes.FlowerBud };
 
             if (IsAboveGround)
 			{
-				if (dst[i].isRizome || (flowerOrgans.Contains(dst[i].Organ)))
+				if (dst[i].IsRizome || (flowerOrgans.Contains(dst[i].Organ)))
 				{
 					resEff = 1f;
 				}
@@ -438,7 +445,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
             (leavesToProcess, internalNodesToProcess) = (internalNodesToProcess, leavesToProcess);
         }
 
-        var flowerOrgans = new List<OrganTypes>() { OrganTypes.FlowerStem, OrganTypes.FlowerPadel, OrganTypes.FlowerPetiol, OrganTypes.FlowerMeristem, OrganTypes.FlowerBud };
+        var flowerOrgans = new List<OrganTypes>() { OrganTypes.FlowerStem, OrganTypes.FlowerPadel, OrganTypes.FlowerPedicel, OrganTypes.FlowerMeristem, OrganTypes.FlowerBud };
 
 
 		// Process nodes from roots to leaves, propagating rotations.  The response
@@ -451,8 +458,6 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 		while (nodesToVisit.Count > 0)
 		{
 
-
-			float depthFactor = Plant.Parameters.DepthFactor;
 
 			var i = nodesToVisit.Dequeue();
 			ref var agent = ref dst[i];
@@ -470,23 +475,23 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 
 
 			float woodiness = agent.WoodRatio();
-			float depthAttenuation = MathF.Exp(-GetAbsDepth(i) * depthFactor);
-
-			float baseDebthstiffness = Plant.Parameters.BaseElasticModulus;
-
-			float elasticity = (MathF.Max(Plant.Parameters.GreenElasticModulus, baseDebthstiffness * depthAttenuation)) * (1 - woodiness) + Plant.Parameters.WoodElasticModulus * woodiness;
+			var basalAttenuation = MathF.Exp(-GetAbsDepth(i) *
+				Plant.Parameters.BasalStiffnessAttenuationPerSegment);
+			var greenElasticity = MathF.Max(Plant.Parameters.GreenElasticModulus,
+				Plant.Parameters.BasalGreenElasticModulus * basalAttenuation);
+			float elasticity = greenElasticity * (1 - woodiness) +
+				Plant.Parameters.WoodElasticModulus * woodiness;
 
 			if (agent.Organ.Equals(OrganTypes.Petiole))
 			{
-				elasticity = Plant.Parameters.PetiolElasticModulus;
+				elasticity = Plant.Parameters.PetioleElasticModulus;
 			}
-			if (flowerOrgans.Contains(agent.Organ)) { elasticity = Math.Max(Plant.Parameters.FlowerElasticModulus * (1 - woodiness), 5e4f);
-                if (agent.Organ.Equals(OrganTypes.FlowerPetiol))
+			if (flowerOrgans.Contains(agent.Organ)) { elasticity = Math.Max(Plant.Parameters.FlowerOrganElasticModulus * (1 - woodiness), 5e4f);
+                if (agent.Organ.Equals(OrganTypes.FlowerPedicel))
                 {
-                    elasticity = Math.Max(Plant.Parameters.FlowerPetiolElasticModulus * (1 - woodiness), 1e2f);
+                    elasticity = Math.Max(Plant.Parameters.FlowerPedicelElasticModulus * (1 - woodiness), 1e2f);
                 }
             }
-			//Console.WriteLine($"e = {elasticity}, b*d = {baseDebthstiffness * depthAttenuation}, w = {woodiness}, we = {Weights[i]}");
 			Quaternion rotation = Quaternion.Identity;
 			Quaternion appliedDelta = Quaternion.Identity;
 
@@ -586,6 +591,11 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
         while ( possibleCollisions.Count > 0)
 		{
             var overlap = possibleCollisions.Dequeue();
+			var orderedOverlap = overlap.first < overlap.second
+				? overlap
+				: (overlap.second, overlap.first);
+			if (!seenCollisions.Add(orderedOverlap))
+				continue;
 
             int index1 = overlap.first;
 			int index2 = overlap.second;
@@ -596,6 +606,11 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 
             bool isParentChild = isDescendant(index1, index2) || isDescendant(index2, index1);
 			var closestPoints = ClosestPointBetweenBranches(index1, index2);
+			var separation = closestPoints.Point2 - closestPoints.point1;
+			if (!float.IsFinite(separation.X) || !float.IsFinite(separation.Y) || !float.IsFinite(separation.Z) ||
+				separation.LengthSquared() <= 1e-12f)
+				continue;
+			var separationDirection = Vector3.Normalize(separation);
 
 
 			if (isParentChild)
@@ -606,14 +621,14 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 
 				if (isDescendant(index1, index2))
 				{
-					Point1 = closestPoints.point1 + Vector3.Normalize(closestPoints.Point2 - closestPoints.point1) * dst[index1].Radius;
-					Point2 = closestPoints.Point2 + Vector3.Normalize(closestPoints.point1 - closestPoints.Point2) * dst[index2].Radius;
+					Point1 = closestPoints.point1 + separationDirection * dst[index1].Radius;
+					Point2 = closestPoints.Point2 - separationDirection * dst[index2].Radius;
 					index = index2;
 				}
 				else
 				{
-					Point1 = closestPoints.point1 + Vector3.Normalize(closestPoints.point1 - closestPoints.Point2) * dst[index2].Radius;
-					Point2 = closestPoints.Point2 + Vector3.Normalize(closestPoints.Point2 - closestPoints.point1) * dst[index1].Radius;
+					Point1 = closestPoints.point1 - separationDirection * dst[index2].Radius;
+					Point2 = closestPoints.Point2 + separationDirection * dst[index1].Radius;
 					index = index1;
 				}
 				RotateCellTowardPoints(index, Point1, Point2);
@@ -625,13 +640,16 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
             }
 
 
-            Vector3 adjustedPoint1 = closestPoints.point1 + Vector3.Normalize(closestPoints.Point2 - closestPoints.point1) * dst[index1].Radius;
-			Vector3 adjustedPoint2 = closestPoints.Point2 + Vector3.Normalize(closestPoints.point1 - closestPoints.Point2) * dst[index2].Radius;
+			Vector3 adjustedPoint1 = closestPoints.point1 + separationDirection * dst[index1].Radius;
+			Vector3 adjustedPoint2 = closestPoints.Point2 - separationDirection * dst[index2].Radius;
 
 			if (Vector3.Distance(closestPoints.point1, GetBaseCenter(index1)) < (dst[index1].Length * 0.25f)) index1 = GetParent(index1);
 			if (Vector3.Distance(closestPoints.Point2, GetBaseCenter(index2)) < (dst[index2].Length * 0.25f)) index2 = GetParent(index2);
 
-			Vector3 weightedMidPoint = ((adjustedPoint1 * Weights[index1] + adjustedPoint2 * Weights[index2]) / (Weights[index1] + Weights[index2]));
+			var totalWeight = Weights[index1] + Weights[index2];
+			if (!float.IsFinite(totalWeight) || totalWeight <= 1e-9f)
+				continue;
+			Vector3 weightedMidPoint = (adjustedPoint1 * Weights[index1] + adjustedPoint2 * Weights[index2]) / totalWeight;
 
 			RotateCellTowardPoints(index1, adjustedPoint1, weightedMidPoint, false);
 			RotateCellTowardPoints(index2, adjustedPoint2, weightedMidPoint, false);
@@ -1101,8 +1119,8 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 		: (Agents.Length > index ? Agents[index].WoodRatio() : 0f);
 
     public bool GetIsRizome(int index) => ReadTMP
-           ? (AgentsTMP.Length > index ? AgentsTMP[index].isRizome : false)
-           : (Agents.Length > index ? Agents[index].isRizome : false);
+           ? (AgentsTMP.Length > index ? AgentsTMP[index].IsRizome : false)
+           : (Agents.Length > index ? Agents[index].IsRizome : false);
     public bool GetHasFlowerSupport(int index) => ReadTMP
        ? (AgentsTMP.Length > index ? AgentsTMP[index].flowerSupport : false)
        : (Agents.Length > index ? Agents[index].flowerSupport : false);
@@ -1174,7 +1192,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 		var season = Plant.World.Season;
 		var age_h = Plant.GetAge_h();
 
-        if (age_h < species.FloweringStartAgeHours || season < species.FloweringStartSeason)
+        if (age_h < species.FloweringStartAgeHours || season < species.FloweringSeasonStart)
 		{
 			switch (FloweringStarted[^1])
 			{
@@ -1185,13 +1203,13 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 
 			return SeasonalPhase.PreFlower;
 		}
-        else if (age_h >= species.FloweringStartAgeHours && season >= species.FloweringStartSeason && season <= species.FloweringEndSeason && (FloweringStarted[^1] == PreFloweringState || (FloweringStarted[^1] < PostFloweringState && (Plant.World.Timestep - FloweringStarted[^1]) * Plant.World.HoursPerTick <= species.FloweringDurationAgeHours)))
+        else if (age_h >= species.FloweringStartAgeHours && season >= species.FloweringSeasonStart && season <= species.FloweringSeasonEnd && (FloweringStarted[^1] == PreFloweringState || (FloweringStarted[^1] < PostFloweringState && (Plant.World.Timestep - FloweringStarted[^1]) * Plant.World.HoursPerTick <= species.FloweringPhaseDurationHours)))
 		{
 			if (FloweringStarted[^1] == PreFloweringState)
 				FloweringStarted[^1] = Plant.World.Timestep;
 			return SeasonalPhase.Flowering;
 		}
-        if (FloweringStarted[^1] < uint.MaxValue && ((Plant.World.Timestep - FloweringStarted[^1]) * Plant.World.HoursPerTick > species.FloweringDurationAgeHours || season > species.FloweringEndSeason))
+        if (FloweringStarted[^1] < uint.MaxValue && ((Plant.World.Timestep - FloweringStarted[^1]) * Plant.World.HoursPerTick > species.FloweringPhaseDurationHours || season > species.FloweringSeasonEnd))
 		{
 			FloweringStarted.Add(PostFloweringState);
 			return SeasonalPhase.PostFlower;

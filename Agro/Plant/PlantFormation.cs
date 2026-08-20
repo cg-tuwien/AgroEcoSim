@@ -11,7 +11,9 @@ using Utils;
 
 namespace Agro;
 
-public enum SeasonalPhase { PreFlower, Flowering, PostFlower, ResetPending };
+[Flags]
+public enum SeasonalPhase : byte { PreFlower = 1, Flowering = 2, PostFlower = 4, ResetPending = 8};
+
 public partial class PlantFormation2 : IPlantFormation
 {
 	internal readonly AgroWorld World;
@@ -165,6 +167,8 @@ public partial class PlantFormation2 : IPlantFormation
 				while (target > 0 && i < ordering.Count)
 				{
 					var index = ordering[i++].index;
+					if (Parameters.RetainDormantRhizomes && AG.GetIsRizome(index))
+						continue;
 					if (!removed.Contains(index))
 					{
 						target -= agGathered[index].LifesupportEnergy;
@@ -193,6 +197,11 @@ public partial class PlantFormation2 : IPlantFormation
 				var minList = new List<int>();
 				var count = agGathered.Count;
 				for(int i = 0; i < count; ++i)
+				{
+					// A clonal perennial may shed leaves and aerial shoots under
+					// stress, but pruning a rhizome deletes every descendant crown.
+					if (Parameters.RetainDormantRhizomes && AG.GetIsRizome(i))
+						continue;
 					switch (agGathered[i].ResourcesEfficiency.CompareTo(min))
 					{
 						case -1:
@@ -202,6 +211,7 @@ public partial class PlantFormation2 : IPlantFormation
 						break;
 						case 0: minList.Add(i); break;
 					}
+				}
 
 				foreach(var item in minList)
 					AG.Death(item);

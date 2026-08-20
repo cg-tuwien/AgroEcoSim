@@ -22,6 +22,23 @@ namespace Agro
             {
                 _settings = flowerSettings;
             }
+
+            private const float DegreesToRadians = MathF.PI / 180f;
+
+            private static Quaternion CreateLateralOrientation(
+                Quaternion parentOrientation,
+                int lateralIndex,
+                int lateralCount,
+                float inclinationDegrees,
+                float azimuthOffsetDegrees)
+            {
+                var azimuth = azimuthOffsetDegrees * DegreesToRadians +
+                    MathF.Tau * lateralIndex / lateralCount;
+                var inclination = inclinationDegrees * DegreesToRadians;
+                return parentOrientation *
+                    Quaternion.CreateFromAxisAngle(Vector3.UnitX, azimuth) *
+                    Quaternion.CreateFromAxisAngle(Vector3.UnitZ, -inclination);
+            }
             public void grow(ref AboveGroundAgent agent, int agentID, PlantSubFormation<AboveGroundAgent> formation)
             {
                 var currentSize = new Vector2(agent.Length, agent.Radius);
@@ -48,7 +65,7 @@ namespace Agro
 
                         }
                         break;
-                    case OrganTypes.FlowerPetiol: {
+                    case OrganTypes.FlowerPedicel: {
                             var sizeLimit = new Vector2(agent.GetLengthVar(), agent.GetRadiusVar());
 
                             var growth = Math.Min(1f, formation.Plant.WaterBalance) * sizeLimit * agent.GrowthTimeVar;
@@ -167,7 +184,7 @@ namespace Agro
                         {
                             agent.SenescenceStart = formation.Plant.World.Timestep;
                             // Convert hours → ticks correctly
-                            agent.SenescenceDuration = (ushort)(_settings.PetalSenescenceDurationH / formation.Plant.World.HoursPerTick);
+                            agent.SenescenceDuration = (ushort)(_settings.PetalSenescenceDurationHours / formation.Plant.World.HoursPerTick);
                         }
                         // Die only once the senescence curve has completed
                         if (agent.Senescence(formation.Plant.World.Timestep) >= 1f)
@@ -188,11 +205,11 @@ namespace Agro
                                     float childSenescence = formation.GetSenescence(children.First(), formation.Plant.World.Timestep);
                                     agent.WoodFactor = Math.Max(agent.WoodFactor, childSenescence);
                                 } else
-                                    agent.WoodFactor = Math.Min(agent.WoodFactor + formation.Plant.World.HoursPerTick / _settings.PetalSenescenceDurationH, 1f);
+                                    agent.WoodFactor = Math.Min(agent.WoodFactor + formation.Plant.World.HoursPerTick / _settings.PetalSenescenceDurationHours, 1f);
 
                             }
                             else
-                                agent.WoodFactor = Math.Min(agent.WoodFactor + formation.Plant.World.HoursPerTick / _settings.PetalSenescenceDurationH, 1f);
+                                agent.WoodFactor = Math.Min(agent.WoodFactor + formation.Plant.World.HoursPerTick / _settings.PetalSenescenceDurationHours, 1f);
                         }
                         else
                             agent.Energy = 0f;
@@ -206,7 +223,7 @@ namespace Agro
             {
 
                 //Console.WriteLine($"{timestep} {agent.BirthTime} {formation.Plant.World.HoursPerTick} {(timestep - agent.BirthTime) * formation.Plant.World.HoursPerTick} {30 * 24}");
-                if ((timestep - agent.BirthTime) * formation.Plant.World.HoursPerTick < formation.Plant.Parameters.FlowerSettings.FlowerMaxAge)
+                if ((timestep - agent.BirthTime) * formation.Plant.World.HoursPerTick < formation.Plant.Parameters.FlowerSettings.FlowerMaximumAgeHours)
                 {
 
                     grow(ref agent, agentID, formation);
@@ -219,68 +236,90 @@ namespace Agro
 
             }
 
+            private void CreateFlowerBaseLaterals(ref AboveGroundAgent agent, int agentID, PlantSubFormation<AboveGroundAgent> formation)
+            {
+                if (_settings.FlowerBaseLateralCount == 0 ||
+                    _settings.FlowerBaseLateralProbability == 0f ||
+                    _settings.FlowerBaseLateralActiveTopFraction == 0f)
+                {
+                    return;
+                }
+
+                var depth01 = _settings.FlowerBaseSegmentCount == 1
+                    ? 1f
+                    : agent.FlowerAgent.debth / (float)(_settings.FlowerBaseSegmentCount - 1);
+                var activeTopFraction = _settings.FlowerBaseLateralActiveTopFraction;
+                var activeStart = 1f - activeTopFraction;
+                var activeFraction = Math.Clamp((depth01 - activeStart) / activeTopFraction, 0f, 1f);
+                var lateralProbability = _settings.FlowerBaseLateralProbability *
+                    activeFraction * activeFraction * (3f - 2f * activeFraction);
+                if (formation.Plant.RNG.NextFloat() >= lateralProbability)
+                    return;
+
+                var lateralPitch = _settings.FlowerBaseLateralInclinationDegrees * DegreesToRadians;
+                for (var lateral = 0; lateral < _settings.FlowerBaseLateralCount; lateral++)
+                {
+                    var orientation = CreateLateralOrientation(
+                        agent.Orientation,
+                        lateral,
+                        _settings.FlowerBaseLateralCount,
+                        _settings.FlowerBaseLateralInclinationDegrees,
+                        _settings.FlowerBaseLateralAzimuthOffsetDegrees);
+                    var flowerAgent = new Flower
+                    {
+                        BirthTime = agent.FlowerAgent.BirthTime,
+                        debth = 0,
+                        FlowerStartTime = agent.FlowerAgent.FlowerStartTime,
+                        flowerBase = false
+                    };
+                    formation.Birth(new AboveGroundAgent(
+                        formation.Plant,
+                        agentID,
+                        OrganTypes.FlowerMeristem,
+                        agent.RandomOrientation(formation.Plant, formation.Plant.Parameters, orientation),
+                        0.1f * agent.Energy,
+                        initialResources: formation.DailyResourceMax,
+                        initialProduction: formation.DailyProductionMax,
+                        flowerAgent: flowerAgent)
+                    {
+                        Water_g = 0.1f * agent.Water_g,
+                        LateralAngle = lateralPitch,
+                        DominanceLevel = agent.DominanceLevel,
+                        FlowerAgent = flowerAgent
+                    });
+                    agent.Energy *= 0.9f;
+                    agent.Water_g *= 0.9f;
+                }
+            }
 
             private void chaning(ref AboveGroundAgent agent, int agentID, PlantSubFormation<AboveGroundAgent> formation, uint timestep)
             {
                 if ((agent.Organ.Equals(OrganTypes.FlowerMeristem) || agent.Organ.Equals(OrganTypes.FlowerBaseBud)) && agent.Length >= agent.GetLengthVar())
                 {
                     agent.Organ = OrganTypes.FlowerStem;
-                    //Console.WriteLine($"ttt{agent.FlowerAgent.debth}< {_settings.flowerDebth}");
                     if (agent.FlowerAgent.flowerBase)
                     {
+                        CreateFlowerBaseLaterals(ref agent, agentID, formation);
+
                         // The current meristem is already one basal segment.  A
                         // configured depth of one therefore means one culm, not a
                         // short starter plus an additional basal segment.
-                        if (agent.FlowerAgent.debth + 1 < _settings.flowerBaseDebth)
+                        if (agent.FlowerAgent.debth + 1 < _settings.FlowerBaseSegmentCount)
                         {
 
-                            var or = AboveGroundAgent.TurnUpwards(agent.Orientation);
+                            var or = PlantFormation2.AdjustUpBase(agent.Orientation, up: true);
                             var floweragent = new Flower() { BirthTime = agent.FlowerAgent.BirthTime, debth = agent.FlowerAgent.debth + 1, FlowerStartTime = agent.FlowerAgent.FlowerStartTime, flowerBase = true };
-                            var mari = new AboveGroundAgent(formation.Plant, agentID, OrganTypes.FlowerMeristem, or, 0.1f * agent.Energy, initialResources: formation.DailyResourceMax, initialProduction: formation.DailyProductionMax, flowerAgent: floweragent) { Water_g = 0.1f * agent.Water_g, LateralAngle = _settings.LateralAngle, DominanceLevel = agent.DominanceLevel, FlowerAgent = floweragent };
+                            var mari = new AboveGroundAgent(formation.Plant, agentID, OrganTypes.FlowerMeristem, or, 0.1f * agent.Energy, initialResources: formation.DailyResourceMax, initialProduction: formation.DailyProductionMax, flowerAgent: floweragent) { Water_g = 0.1f * agent.Water_g, LateralAngle = _settings.FlowerLateralInclinationDegrees * DegreesToRadians, DominanceLevel = agent.DominanceLevel, FlowerAgent = floweragent };
                             var meristem = formation.Birth(mari);
                             agent.Energy *= 0.9f;
                             agent.Water_g *= 0.9f;
-                           // Console.WriteLine($"ttt{agent.FlowerAgent.debth}< {_settings.flowerBaseDebth}");
-
-                            float depth01 = _settings.flowerBaseDebth > 0 ? Math.Clamp(agent.FlowerAgent.debth / (float)_settings.flowerBaseDebth, 0f, 1f) : 1f;
-                            float p = Math.Clamp(_settings.pBaseFlowerHeight, 0f, 1f);
-                            float pLat = _settings.pFlowerBaseDebth;
-                            if (p <= 0f) pLat = 0f;
-                            else if (p >= 1f) pLat = 1f;
-                            else
-                            {
-                                float activeDepthStart = 1f - p;
-                                float u = Math.Clamp((depth01 - activeDepthStart) / p, 0f, 1f);
-                                pLat = u * u * (3f - 2f * u);
-                            }
-
-                            if (_settings.BaseLaterals > 0 && formation.Plant.RNG.NextFloat(0, 1) < pLat)
-                            {
-                                for (var lat = 0; lat < _settings.BaseLaterals; lat++)
-                                {
-
-                                    var lateralPitch = _settings.BaseLateralAngle + _settings.BaseLateralRoll;
-
-                                    var latOr = AboveGroundAgent.TurnUpwards(agent.Orientation);
-                                    var roll = formation.Plant.RNG.NextFloatVar(180f * MathF.PI);
-                                    var orientation1 = latOr * Quaternion.CreateFromAxisAngle(Vector3.UnitX, roll) * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, -0.20f * MathF.PI);
-
-                                    var flowerLatAgent = new Flower() { BirthTime = agent.FlowerAgent.BirthTime, debth = 0, FlowerStartTime = agent.FlowerAgent.FlowerStartTime, flowerBase = false };
-                                    var latmari = new AboveGroundAgent(formation.Plant, agentID, OrganTypes.FlowerMeristem, agent.RandomOrientation(formation.Plant, formation.Plant.Parameters, orientation1), 0.1f * agent.Energy, initialResources: formation.DailyResourceMax, initialProduction: formation.DailyProductionMax, flowerAgent: flowerLatAgent) { Water_g = 0.1f * agent.Water_g, LateralAngle = lateralPitch, DominanceLevel = agent.DominanceLevel, FlowerAgent = flowerLatAgent };
-                                    var latmeristem = formation.Birth(latmari);
-                                    agent.Energy *= 0.9f;
-                                    agent.Water_g *= 0.9f;
-
-                                }
-                            }
-
                             return;
                         }
-                        else if (_settings.flowerDebth <= 0)
+                        else if (_settings.FlowerBranchMaximumDepth <= 0)
                         {
-                            createFlower(ref agent, agentID, formation, _settings.clusterSize, agent.Orientation, _settings.clusterAngle);
+                            createFlower(ref agent, agentID, formation, _settings.FlowersPerCluster, agent.Orientation, _settings.FlowerClusterMaximumSpreadDegrees);
                         }
-                        else if (_settings.HasFlowerBaseLeaves) {
+                        else if (_settings.CreateLeavesOnFlowerBase) {
                             agent.CreateFlowerBaseLeaves(agent, formation.Plant, 25f, agentID);
                         }
 
@@ -288,18 +327,22 @@ namespace Agro
 
                     }
                     var debth = agent.FlowerAgent.flowerBase ? 0 : agent.FlowerAgent.debth;
-                    if (debth < _settings.flowerDebth)
+                    if (debth < _settings.FlowerBranchMaximumDepth)
                     {
-                        if (_settings.deterministic && _settings.internodeFlower)
+                        if (_settings.UseDeterministicBranching && _settings.CreateFlowersAtInternodes)
                         {
                             Debug.WriteLine($"ff {agentID}");
-                            if (_settings.internodeFlowerWithStem)
+                            if (_settings.InternodeFlowersHaveStems)
                             {
                                 var floweragent = new Flower() { BirthTime = agent.FlowerAgent.BirthTime, debth = debth + 1, FlowerStartTime = agent.FlowerAgent.FlowerStartTime };
 
-                                var lateralPitch = _settings.LateralAngle + _settings.LateralRoll;
-                                var or = AboveGroundAgent.TurnUpwards(agent.Orientation);
-                                // Quaternion.CreateFromAxisAngle(Vector3.UnitZ, _settings.LateralAngle * MathF.PI) * Quaternion.CreateFromAxisAngle(Vector3.UnitX, (MathF.Tau / _settings.LateralsPerNode) * lat);
+                                var lateralPitch = _settings.FlowerLateralInclinationDegrees * DegreesToRadians;
+                                var or = CreateLateralOrientation(
+                                    agent.Orientation,
+                                    0,
+                                    1,
+                                    _settings.FlowerLateralInclinationDegrees,
+                                    _settings.FlowerLateralAzimuthOffsetDegrees);
 
                                 var flowerStem = new AboveGroundAgent(formation.Plant, agentID, OrganTypes.FlowerStem, agent.RandomOrientation(formation.Plant, formation.Plant.Parameters, or), 0.1f * agent.Energy, initialResources: formation.DailyResourceMax, initialProduction: formation.DailyProductionMax, flowerAgent: floweragent) { Water_g = 0.1f * agent.Water_g, LateralAngle = lateralPitch, DominanceLevel = agent.DominanceLevel, FlowerAgent = floweragent , Length = 0.005f/2f, Radius= 0.00025f };
                                 var meristem = formation.Birth(flowerStem);
@@ -308,18 +351,18 @@ namespace Agro
 
                                 agent.Energy *= 0.9f;
                                 agent.Water_g *= 0.9f;
-                                createFlower(ref flowerStem1, meristem1, formation, _settings.clusterSize, agent.Orientation, _settings.clusterAngle); // straight
+                                createFlower(ref flowerStem1, meristem1, formation, _settings.FlowersPerCluster, agent.Orientation, _settings.FlowerClusterMaximumSpreadDegrees); // straight
                             } else
-                                createFlower(ref agent, agentID, formation, _settings.clusterSize, agent.Orientation, _settings.clusterAngle); // straight
+                                createFlower(ref agent, agentID, formation, _settings.FlowersPerCluster, agent.Orientation, _settings.FlowerClusterMaximumSpreadDegrees); // straight
                             Debug.WriteLine($"det {agentID}");
 
                         }
-                        else if (_settings.deterministic)
+                        else if (_settings.UseDeterministicBranching)
                         {
 							var orientation = AboveGroundAgent.TurnUpwards(agent.Orientation);
-							if (debth + 1 >= _settings.flowerDebth)
+							if (debth + 1 >= _settings.FlowerBranchMaximumDepth)
 							{
-								createFlower(ref agent, agentID, formation, _settings.clusterSize, orientation, _settings.clusterAngle);
+								createFlower(ref agent, agentID, formation, _settings.FlowersPerCluster, orientation, _settings.FlowerClusterMaximumSpreadDegrees);
 							}
 							else
 							{
@@ -332,7 +375,7 @@ namespace Agro
 								formation.Birth(new AboveGroundAgent(formation.Plant, agentID, OrganTypes.FlowerMeristem, orientation, 0.1f * agent.Energy, initialResources: formation.DailyResourceMax, initialProduction: formation.DailyProductionMax, flowerAgent: flowerAgent)
 								{
 									Water_g = 0.1f * agent.Water_g,
-									LateralAngle = _settings.LateralAngle + _settings.LateralRoll,
+									LateralAngle = _settings.FlowerLateralInclinationDegrees * DegreesToRadians,
 									DominanceLevel = agent.DominanceLevel,
 									FlowerAgent = flowerAgent
 								});
@@ -340,10 +383,10 @@ namespace Agro
 								agent.Water_g *= 0.9f;
 							}
 						}
-                        else if (!_settings.deterministic)
+                        else if (!_settings.UseDeterministicBranching)
                         {
                             Debug.WriteLine($"up {agentID}");
-                            var lateralPitch = _settings.LateralAngle + _settings.LateralRoll;
+                            var lateralPitch = _settings.FlowerLateralInclinationDegrees * DegreesToRadians;
 
                             var or = AboveGroundAgent.TurnUpwards(agent.Orientation);
                             var floweragent = new Flower() { BirthTime = agent.FlowerAgent.BirthTime, debth = debth + 1, FlowerStartTime = agent.FlowerAgent.FlowerStartTime };
@@ -352,34 +395,27 @@ namespace Agro
                             agent.Energy *= 0.9f;
                             agent.Water_g *= 0.9f;
                         }
-                        if (_settings.LateralsPerNode > 0)
+                        if (_settings.FlowerBranchLateralsPerNode > 0)
                         {
                             Debug.WriteLine($"lat {agentID}");
-                            for (var lat = 1; lat <= _settings.LateralsPerNode; lat++)
+                            for (var lat = 0; lat < _settings.FlowerBranchLateralsPerNode; lat++)
                             {
-                                float t = (_settings.flowerDebth <= 0f) ? 1f : Math.Clamp(debth / _settings.flowerDebth, 0, 1);
-                                float depthMultiplier = (1f - _settings.floralDepthFactor) + (_settings.floralDepthFactor * t); ;
-                                var or = AboveGroundAgent.TurnUpwards(agent.Orientation);
-                                var roll = 180 * MathF.PI;
-                                var orientation1 = or * Quaternion.CreateFromAxisAngle(Vector3.UnitX, (MathF.Tau / _settings.LateralsPerNode) * lat * roll) * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, -0.350f * MathF.PI);
-
-                                var lateralPitch = 0.3f * MathF.PI;
-                                float p = _settings.pFlowerDebth * (agent.FlowerAgent.debth / _settings.flowerDebth);
-                                if (_settings.pFlowerDebth == 1) p = 1;
-                                if (_settings.pFlowerDebth == 0) p = 0;
-                                if (formation.Plant.RNG.NextFloat(0, 1) < p)
+                                var orientation1 = CreateLateralOrientation(
+                                    agent.Orientation,
+                                    lat,
+                                    _settings.FlowerBranchLateralsPerNode,
+                                    _settings.FlowerLateralInclinationDegrees,
+                                    _settings.FlowerLateralAzimuthOffsetDegrees);
+                                var lateralPitch = _settings.FlowerLateralInclinationDegrees * DegreesToRadians;
+                                var terminalProbability = _settings.TerminalFlowerProbabilityAtMaximumBranchDepth *
+                                    Math.Clamp((debth + 1f) / _settings.FlowerBranchMaximumDepth, 0f, 1f);
+                                if (formation.Plant.RNG.NextFloat() < terminalProbability)
                                 {
-                                    createFlower(ref agent, agentID, formation, _settings.clusterSize, orientation1, _settings.clusterAngle);
+                                    createFlower(ref agent, agentID, formation, _settings.FlowersPerCluster, orientation1, _settings.FlowerClusterMaximumSpreadDegrees);
                                     continue;
                                 }
 
                                 var floweragent = new Flower() { BirthTime = agent.FlowerAgent.BirthTime, debth = debth + 1, FlowerStartTime = agent.FlowerAgent.FlowerStartTime };
-
-
-
-                                // Quaternion.CreateFromAxisAngle(Vector3.UnitZ, _settings.LateralAngle * MathF.PI) * Quaternion.CreateFromAxisAngle(Vector3.UnitX, (MathF.Tau / _settings.LateralsPerNode) * lat);
-
-
                                 var meristem = formation.Birth(new(formation.Plant, agentID, OrganTypes.FlowerMeristem, agent.RandomOrientation(formation.Plant, formation.Plant.Parameters, orientation1), 0.1f * agent.Energy, initialResources: formation.DailyResourceMax, initialProduction: formation.DailyProductionMax, flowerAgent: floweragent) { Water_g = 0.1f * agent.Water_g, LateralAngle = lateralPitch, DominanceLevel = agent.DominanceLevel, FlowerAgent = floweragent });
                                 agent.Energy *= 0.9f;
                                 agent.Water_g *= 0.9f;
@@ -390,14 +426,14 @@ namespace Agro
                     else
                     {
 
-                        createFlower(ref agent, agentID, formation, _settings.clusterSize, AboveGroundAgent.TurnUpwards(agent.Orientation), _settings.clusterAngle);
+                        createFlower(ref agent, agentID, formation, _settings.FlowersPerCluster, AboveGroundAgent.TurnUpwards(agent.Orientation), _settings.FlowerClusterMaximumSpreadDegrees);
 
                     }
                 }
                 if (agent.Organ == OrganTypes.FlowerBud &&  agent.Length >= agent.GetLengthVar() && formation.GetChildren(agentID).Count() <= 0)
                 {
 
-                    int petalCount = _settings.pedalCount;
+                    int petalCount = _settings.PetalCount;
                     float angleStep = MathF.Tau / petalCount;
 
                     float basePetalPitch = 0.95f;      // how much petals tilt outward/down
@@ -427,20 +463,21 @@ namespace Agro
                 }
             }
 
-            private void createFlower(ref AboveGroundAgent agent, int agentID, PlantSubFormation<AboveGroundAgent> formation, int clustersize, Quaternion baseOr, float clusterAngle)
+            private void createFlower(ref AboveGroundAgent agent, int agentID, PlantSubFormation<AboveGroundAgent> formation, int clustersize, Quaternion baseOr, float clusterMaximumSpreadDegrees)
             {
-                var lateralPitch = _settings.LateralAngle + _settings.LateralRoll;
+                var lateralPitch = _settings.FlowerLateralInclinationDegrees * DegreesToRadians;
+                var clusterMaximumSpreadRadians = clusterMaximumSpreadDegrees * DegreesToRadians;
                 var rng = formation.Plant.RNG;
                 for (var c = 1; c <= clustersize; c++)
                 {
-                    var or = baseOr * Quaternion.CreateFromAxisAngle(Vector3.UnitX, rng.NextPositiveFloat(MathF.Tau)) * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, -rng.NextPositiveFloat(clusterAngle) * MathF.PI);
+                    var or = baseOr * Quaternion.CreateFromAxisAngle(Vector3.UnitX, rng.NextPositiveFloat(MathF.Tau)) * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, -rng.NextPositiveFloat(clusterMaximumSpreadRadians));
                     var floweragent = new Flower() { BirthTime = agent.FlowerAgent.BirthTime, debth = agent.FlowerAgent.debth + 1, FlowerStartTime = agent.FlowerAgent.FlowerStartTime };
-                    var meristem = formation.Birth(new(formation.Plant, agentID, OrganTypes.FlowerPetiol, or, 0.1f * agent.Energy, initialResources: formation.DailyResourceMax, initialProduction: formation.DailyProductionMax, flowerAgent: floweragent) { Water_g = 0.1f * agent.Water_g, LateralAngle = lateralPitch, DominanceLevel = agent.DominanceLevel, FlowerAgent = floweragent});
+                    var meristem = formation.Birth(new(formation.Plant, agentID, OrganTypes.FlowerPedicel, or, 0.1f * agent.Energy, initialResources: formation.DailyResourceMax, initialProduction: formation.DailyProductionMax, flowerAgent: floweragent) { Water_g = 0.1f * agent.Water_g, LateralAngle = lateralPitch, DominanceLevel = agent.DominanceLevel, FlowerAgent = floweragent});
 
-                    for (var s = 2; s <= formation.Plant.Parameters.FlowerSettings.petiolSegments; s++)
+                    for (var s = 2; s <= formation.Plant.Parameters.FlowerSettings.FlowerPedicelSegmentCount; s++)
                     {
                         floweragent = new Flower() { BirthTime = agent.FlowerAgent.BirthTime, debth = agent.FlowerAgent.debth + 1, FlowerStartTime = agent.FlowerAgent.FlowerStartTime };
-                        meristem = formation.Birth(new(formation.Plant, meristem, OrganTypes.FlowerPetiol, or, 0.1f * agent.Energy, initialResources: formation.DailyResourceMax, initialProduction: formation.DailyProductionMax, flowerAgent: floweragent) { Water_g = 0.1f * agent.Water_g, LateralAngle = lateralPitch, DominanceLevel = agent.DominanceLevel, FlowerAgent = floweragent});
+                        meristem = formation.Birth(new(formation.Plant, meristem, OrganTypes.FlowerPedicel, or, 0.1f * agent.Energy, initialResources: formation.DailyResourceMax, initialProduction: formation.DailyProductionMax, flowerAgent: floweragent) { Water_g = 0.1f * agent.Water_g, LateralAngle = lateralPitch, DominanceLevel = agent.DominanceLevel, FlowerAgent = floweragent});
 
                     }
 

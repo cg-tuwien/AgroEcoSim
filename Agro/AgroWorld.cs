@@ -175,6 +175,11 @@ public class AgroWorld : SimulationWorld
 		var tsTotal = TimestepsTotal();
 		Weather = new WeatherStats[tsTotal];
 		var tsCounter = 0;
+		// Weather planning must not advance the plant/soil random stream.  Its
+		// draw count changes with the requested horizon, which otherwise makes a
+		// fixed seed grow a different plant merely because it is simulated for
+		// longer.
+		var weatherRng = RNG.NextRNG();
 
 		var month = 0;
 		var timestepHours = 0;
@@ -182,7 +187,7 @@ public class AgroWorld : SimulationWorld
 		var timestepCoverage = 0.0;
 		while(tsCounter < tsTotal)
 		{
-			var monthly = PlanCloudsSingleMonth(month + 1, DaysPerMonth[month], sunnyDays[month], cloudyDays[month], dullDays[month], precipitationMM[month], dailyPrecipitation[month]);
+			var monthly = PlanCloudsSingleMonth(weatherRng, month + 1, DaysPerMonth[month], sunnyDays[month], cloudyDays[month], dullDays[month], precipitationMM[month], dailyPrecipitation[month]);
 			for (var h = 0; h < monthly.Length && tsCounter < tsTotal; ++h)
 			{
 				timestepPrecipitation += monthly[h].Precipitation;
@@ -255,7 +260,7 @@ public class AgroWorld : SimulationWorld
 
     internal void InitRNG(ulong seed) => RNG = new(seed);
 
-	int[] DistributeSunAndClouds(int totalSun, int totalClouds)
+	int[] DistributeSunAndClouds(Pcg rng, int totalSun, int totalClouds)
 	{
 		if (totalSun <= 0f)
 			return [-totalClouds];
@@ -263,9 +268,9 @@ public class AgroWorld : SimulationWorld
 			return [totalSun];
 		else
 		{
-			var sunSegments = (int)RNG.NextUInt(1, (uint)Math.Min(totalSun, totalClouds), maxExclusive: false);
-			var cloudsAtStart = sunSegments == 1 || RNG.NextUInt(10) >= 2 ? 1 : 0;
-			var cloudsAtEnd = sunSegments > 1 && totalClouds > sunSegments && RNG.NextUInt(10) >= 2 ? 1 : 0;
+			var sunSegments = (int)rng.NextUInt(1, (uint)Math.Min(totalSun, totalClouds), maxExclusive: false);
+			var cloudsAtStart = sunSegments == 1 || rng.NextUInt(10) >= 2 ? 1 : 0;
+			var cloudsAtEnd = sunSegments > 1 && totalClouds > sunSegments && rng.NextUInt(10) >= 2 ? 1 : 0;
 
 			var cloudSegments = sunSegments + cloudsAtStart + cloudsAtEnd - 1;
 			//Debug.WriteLine($"totalSun: {totalSun}, totalClouds: {totalClouds}, sunSegments: {sunSegments}, cloudSegments: {cloudSegments}, cloudsStart: {cloudsAtStart}, cloudsEnd:, {cloudsAtEnd}");
@@ -274,12 +279,12 @@ public class AgroWorld : SimulationWorld
 			{
 				var cloudIntervals = new int[cloudSegments];
 				Array.Fill(cloudIntervals, -1);
-				var cloudIndices = RNG.NextInts(totalClouds - cloudSegments, 0, cloudSegments);
+				var cloudIndices = rng.NextInts(totalClouds - cloudSegments, 0, cloudSegments);
 				for (int i = 0; i < cloudIndices.Length; ++i)
 					--cloudIntervals[cloudIndices[i]];
 				var sunIntervals = new int[sunSegments];
 				Array.Fill(sunIntervals, 1);
-				var sunIndices = RNG.NextInts(totalSun - sunSegments, 0, sunSegments);
+				var sunIndices = rng.NextInts(totalSun - sunSegments, 0, sunSegments);
 				for(int i = 0; i < sunIndices.Length; ++i)
 					++sunIntervals[sunIndices[i]];
 				var result = new int[sunSegments + cloudSegments];
@@ -307,11 +312,11 @@ public class AgroWorld : SimulationWorld
 	}
 	static readonly float[] precipitationLowIntervals = [0, 0, 2, 5, 10, 20, 50];
 	static readonly float[] precipitationHighIntervals = [0, 2, 5, 10, 20, 50, 100];
-	WeatherStats[] PlanCloudsSingleMonth(int month, int daysPerMonth, float sunnyDays, float cloudDays, float dullDays, float precipitationMM, float[] maxPrecipitationStats_inDays)
+	WeatherStats[] PlanCloudsSingleMonth(Pcg rng, int month, int daysPerMonth, float sunnyDays, float cloudDays, float dullDays, float precipitationMM, float[] maxPrecipitationStats_inDays)
 	{
 		var hoursInMonth = daysPerMonth * 24;
-		var sunHoursTarget = Math.Max(0, (int)Math.Round(RNG.NextNormal(sunnyDays * 24, 0.15 * sunnyDays * 24)));
-		var dullHoursTarget = Math.Max(0, (int)Math.Round(RNG.NextNormal(dullDays * 24, 0.15 * dullDays * 24)));
+		var sunHoursTarget = Math.Max(0, (int)Math.Round(rng.NextNormal(sunnyDays * 24, 0.15 * sunnyDays * 24)));
+		var dullHoursTarget = Math.Max(0, (int)Math.Round(rng.NextNormal(dullDays * 24, 0.15 * dullDays * 24)));
 		var cloudHoursTarget = Math.Max(0, hoursInMonth - sunHoursTarget - dullHoursTarget);
 		var dullHours = 0;
 		var dullIntervals = new List<int>();
@@ -319,10 +324,10 @@ public class AgroWorld : SimulationWorld
 		var highDull = Math.Min(24*10, hoursInMonth - sunHoursTarget - cloudHoursTarget); //10 days
 		while (dullHours < dullHoursTarget)
 		{
-			var interval = Math.Min(RNG.Next(lowDull, highDull, maxExclusive: false), RNG.Next(lowDull, highDull, maxExclusive: false));
+			var interval = Math.Min(rng.Next(lowDull, highDull, maxExclusive: false), rng.Next(lowDull, highDull, maxExclusive: false));
 			var limit = 21 - Math.Abs(7 - month);
 			for(int i = 0; i <  limit; ++i)
-				interval = Math.Min(interval, RNG.Next(lowDull, highDull, maxExclusive: false));
+				interval = Math.Min(interval, rng.Next(lowDull, highDull, maxExclusive: false));
 			if (dullHours + interval > dullHoursTarget)
 				interval = dullHoursTarget - dullHours;
 			Debug.Assert(interval >= 0);
@@ -330,11 +335,11 @@ public class AgroWorld : SimulationWorld
 			dullHours += interval;
 		}
 
-		var startDull = RNG.Next(100) >= 50;
-		var endDull = RNG.Next(100) >= 50;
+		var startDull = rng.Next(100) >= 50;
+		var endDull = rng.Next(100) >= 50;
 
 		var sun_cloud_intervalsLength = dullIntervals.Count + (startDull ? 0 : 1) + (endDull ? 0 : 1) - 1;
-		var sunIntervalsRaw = RNG.NextDoublesScaled(sun_cloud_intervalsLength, hoursInMonth - dullHours - cloudHoursTarget);
+		var sunIntervalsRaw = rng.NextDoublesScaled(sun_cloud_intervalsLength, hoursInMonth - dullHours - cloudHoursTarget);
 		var sunIntervals = new int[sun_cloud_intervalsLength];
 		var sunHours = 0;
 		for (int i = 0; i < sun_cloud_intervalsLength; ++i)
@@ -344,7 +349,7 @@ public class AgroWorld : SimulationWorld
 			sunHours += tmp;
 		}
 
-		var cloudIntervalsRaw = RNG.NextDoublesScaled(sun_cloud_intervalsLength, hoursInMonth - dullHours - sunHoursTarget);
+		var cloudIntervalsRaw = rng.NextDoublesScaled(sun_cloud_intervalsLength, hoursInMonth - dullHours - sunHoursTarget);
 		var cloudIntervals = new int[sun_cloud_intervalsLength];
 		var cloudHours = 0;
 		for (int i = 0; i < sun_cloud_intervalsLength; ++i)
@@ -370,7 +375,7 @@ public class AgroWorld : SimulationWorld
 		{
 			if (sunTurn)
 			{
-				var ei = RNG.Next(elegibleSunIndexes.Count);
+				var ei = rng.Next(elegibleSunIndexes.Count);
 				var sidx = elegibleSunIndexes[ei];
 				--sunIntervals[sidx];
 				if (sunIntervals[sidx] <= 1)
@@ -378,7 +383,7 @@ public class AgroWorld : SimulationWorld
 			}
 			else
 			{
-				var ei = RNG.Next(elegibleCloudIndexes.Count);
+				var ei = rng.Next(elegibleCloudIndexes.Count);
 				var ci = elegibleCloudIndexes[ei];
 				--cloudIntervals[ci];
 				if (cloudIntervals[ci] <= 1)
@@ -391,17 +396,17 @@ public class AgroWorld : SimulationWorld
 		for(int i = 0; i < tmpLimit; ++i)
 		{
 			if (sunTurn)
-				++sunIntervals[RNG.Next(sunIntervals.Length)];
+				++sunIntervals[rng.Next(sunIntervals.Length)];
 			else
-				++cloudIntervals[RNG.Next(cloudIntervals.Length)];
+				++cloudIntervals[rng.Next(cloudIntervals.Length)];
 			sunTurn = !sunTurn;
 		}
 
 		var sun_cloud_intervals = new List<int[]>();
 		for(int i = 0; i < sunIntervals.Length; ++i)
-			sun_cloud_intervals.Add(DistributeSunAndClouds(sunIntervals[i], cloudIntervals[i]));
+			sun_cloud_intervals.Add(DistributeSunAndClouds(rng, sunIntervals[i], cloudIntervals[i]));
 
-		var targetPrecipitation_inMM = (float)Math.Max(0, RNG.NextNormal(precipitationMM, 0.25 * precipitationMM));
+		var targetPrecipitation_inMM = (float)Math.Max(0, rng.NextNormal(precipitationMM, 0.25 * precipitationMM));
 		//normalize maxPrecipitationStats
 		var maxPrecipitationSum_inDays = maxPrecipitationStats_inDays.Sum();
 		var precipitationStrengthPrefixSum = new float[maxPrecipitationStats_inDays.Length];
@@ -409,14 +414,14 @@ public class AgroWorld : SimulationWorld
 		for(int i = 1; i < maxPrecipitationStats_inDays.Length; ++i)
 			precipitationStrengthPrefixSum[i] = precipitationStrengthPrefixSum[i - 1] + maxPrecipitationStats_inDays[i] / maxPrecipitationSum_inDays;
 
-		var randomVector = RNG.NextFloats(dullIntervals.Count);
+		var randomVector = rng.NextFloats(dullIntervals.Count);
 		var rainInDulls = new float[randomVector.Length]; //currently in mm
 		var rainInDullsSum_inMM = 0.0f;
 		for(int i = 0; i < randomVector.Length; ++i)
 		{
 			var bin = Array.BinarySearch(precipitationStrengthPrefixSum, 0, precipitationStrengthPrefixSum.Length, randomVector[i]);
 			bin = bin >= 0 ? bin : ~bin;
-			var r = RNG.NextFloat(precipitationLowIntervals[bin], precipitationHighIntervals[bin]) * dullIntervals[i];
+			var r = rng.NextFloat(precipitationLowIntervals[bin], precipitationHighIntervals[bin]) * dullIntervals[i];
 			rainInDulls[i] = r;
 			rainInDullsSum_inMM += r;
 		}
@@ -440,17 +445,17 @@ public class AgroWorld : SimulationWorld
 		{
 			if (dullTurn)
 			{
-				var cloudDistribution = RNG.NextFloats(dullIntervals[di], 0.5f, 1.0f);
+				var cloudDistribution = rng.NextFloats(dullIntervals[di], 0.5f, 1.0f);
 				var rainDistribution = new float[cloudDistribution.Length];
 				if (rainInDulls[di] > 0)
 				{
 					Array.Copy(cloudDistribution, rainDistribution, cloudDistribution.Length);
-					var rainPeriodCharacter = RNG.NextFloat(0.5f, 0.9f);
+					var rainPeriodCharacter = rng.NextFloat(0.5f, 0.9f);
 					for(int j = 0; j < rainDistribution.Length; ++j)
-						if (rainDistribution[j] < RNG.NextFloat(0.5f, rainPeriodCharacter))
+						if (rainDistribution[j] < rng.NextFloat(0.5f, rainPeriodCharacter))
 							rainDistribution[j] = 0;
 					//assure at least 1 positive element
-					var secureIndex = RNG.Next(rainDistribution.Length);
+					var secureIndex = rng.Next(rainDistribution.Length);
 					rainDistribution[secureIndex] = cloudDistribution[secureIndex];
 					var rdSum = rainDistribution.Sum();
 					if (rdSum > 0)
@@ -469,7 +474,7 @@ public class AgroWorld : SimulationWorld
 					var sca = Math.Abs(s);
 					var (low,high) = s > 0 ? (0f, 0.25f) : (0.25f, 0.5f);
 					for (int j = 0; j < sca; ++j)
-						resultHourly[hi++] = new WeatherStats(RNG.NextFloat(low, high), 0f);
+						resultHourly[hi++] = new WeatherStats(rng.NextFloat(low, high), 0f);
 				}
 				++si;
 			}

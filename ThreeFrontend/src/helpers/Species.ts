@@ -240,7 +240,7 @@ export class Species extends SpeciesBase {
         const coordsCount = verticesCount * 3;
         const vertices = new Float32Array(coordsCount);
         for(let v = 0; v < coordsCount; ++v)
-            vertices[v] = reader.readFloat32();
+            vertices[v] = reader.readFloat32() * (v % 3 == 2 ? 1000 : 1);
 
         const indicesCount = reader.readInt32();
         const indices: number[] = [];

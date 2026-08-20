@@ -305,34 +305,140 @@ public class SpeciesSettings
     #endregion
 
     /// <summary>
-    /// Minimum plant age to start flowering (in hours)
+    /// Minimum plant age at which the flowering phase can begin, in hours.
     /// </summary>
-    [SpeciesUIGroup("Flowers")]
-    [SpeciesUILabel("Flowering minimum age")]
-    [SpeciesUITooltip(" Minimum plant age to start flowering (in hours)")]
-    public float FloweringStartAgeHours { get; internal set; } = 24f * 45f;
+    /// <value>Must be finite and greater than or equal to zero.</value>
+    [SpeciesUIGroup("Flowering")]
+    [SpeciesUILabel("Minimum flowering age")]
+    public float FloweringStartAgeHours { get; init; } = 24f * 45f;
 
     /// <summary>
-    /// Typical flowering start within the season (in seasonal factor)
+    /// Start of the flowering window in the March-to-February simulation year.
     /// </summary>
-    [SpeciesUILabel("Seasonal flowering typical start")]
-    public float FloweringStartSeason { get; internal set; } = 2f / 11;
+    /// <value>
+    /// A normalized value from 0 to 1, where 0 is March 1. It must not be
+    /// greater than FloweringSeasonEnd; windows that cross March are unsupported.
+    /// </value>
+    [SpeciesUILabel("Flowering season start")]
+    public float FloweringSeasonStart { get; init; } = 2f / 11f;
 
     /// <summary>
-    /// Latest flowering start within the season (in seasonal factor)
+    /// End of the flowering window in the March-to-February simulation year.
     /// </summary>
-    [SpeciesUILabel("Seasonal flowering latest start")]
-    public float FloweringEndSeason { get; internal set; } = 5f / 11;
-    /// <summary>
-    /// Flowering duration (in hours); growth stops afterwards.
-    /// </summary>
-    [SpeciesUILabel("Flowering duration")]
-    public float FloweringDurationAgeHours { get; internal set; } = 24f * 30f;
-    public float FloweringDurationAgeHoursVar { get; internal set; } = 0f; //TODO
-    // public float FlowerLengthVar { get; internal set; }
-    // public float FlowerRadiusVar { get; internal set; }
+    /// <value>
+    /// A normalized value from 0 to 1, where 0 is March 1. Use a value greater
+    /// than FloweringSeasonStart for a reliable non-empty window; an equal
+    /// boundary can be skipped by a discrete timestep.
+    /// </value>
+    [SpeciesUILabel("Flowering season end")]
+    public float FloweringSeasonEnd { get; init; } = 5f / 11f;
 
-    public FlowerSettings FlowerSettings { get; internal set; } = new FlowerSettings();
+    /// <summary>
+    /// Maximum time spent in the flowering phase after that phase starts.
+    /// </summary>
+    /// <value>Hours; must be finite and greater than zero.</value>
+    [SpeciesUILabel("Flowering phase duration")]
+    public float FloweringPhaseDurationHours { get; init; } = 24f * 30f;
+
+    /// <summary>
+    /// Hourly probability that a completed crown meristem commits to a flower
+    /// before the configured flowering window.
+    /// </summary>
+    /// <value>From 0 to 1. Zero disables pre-flowering commitment.</value>
+    [SpeciesUILabel("Pre-flowering commitment probability per hour")]
+    public float PreFloweringCommitmentProbabilityPerHour { get; init; } = 0.0005f;
+
+    /// <summary>
+    /// Hourly probability that a completed crown meristem commits to a flower
+    /// during the configured flowering window.
+    /// </summary>
+    /// <value>From 0 to 1. A positive value is required for seasonal flowering.</value>
+    [SpeciesUILabel("Flowering commitment probability per hour")]
+    public float FloweringCommitmentProbabilityPerHour { get; init; } = 0.045f;
+
+    /// <summary>
+    /// Hourly probability that a completed crown meristem commits to a flower
+    /// after the configured flowering window.
+    /// </summary>
+    /// <value>From 0 to 1. Zero disables post-flowering commitment.</value>
+    [SpeciesUILabel("Post-flowering commitment probability per hour")]
+    public float PostFloweringCommitmentProbabilityPerHour { get; init; } = 0.001f;
+
+    /// <summary>
+    /// Hourly probability that a completed crown meristem commits to a flower
+    /// while the seasonal state is dormant or waiting to reset.
+    /// </summary>
+    /// <value>From 0 to 1. Keep at zero for seasonally dormant species.</value>
+    [SpeciesUILabel("Dormant flowering probability per hour")]
+    public float DormantFloweringCommitmentProbabilityPerHour { get; init; } = 0f;
+
+    /// <summary>
+    /// Hourly probability that a completed crown meristem continues as another
+    /// vegetative crown segment before the flowering window.
+    /// </summary>
+    /// <value>From 0 to 1. Zero prevents pre-flowering crown continuation.</value>
+    [SpeciesUILabel("Pre-flowering crown continuation per hour")]
+    public float PreFloweringCrownContinuationProbabilityPerHour { get; init; } = 0f;
+
+    /// <summary>
+    /// Hourly probability that a completed crown meristem continues as another
+    /// vegetative crown segment during the flowering window.
+    /// </summary>
+    /// <value>From 0 to 1. The flower-commitment event is evaluated first.</value>
+    [SpeciesUILabel("Flowering crown continuation per hour")]
+    public float FloweringCrownContinuationProbabilityPerHour { get; init; } = 0.0001f;
+
+    /// <summary>
+    /// Hourly probability that a completed crown meristem continues as another
+    /// vegetative crown segment after the flowering window.
+    /// </summary>
+    /// <value>From 0 to 1. Zero prevents post-flowering crown continuation.</value>
+    [SpeciesUILabel("Post-flowering crown continuation per hour")]
+    public float PostFloweringCrownContinuationProbabilityPerHour { get; init; } = 0.001f;
+
+    /// <summary>
+    /// Hourly probability that a completed crown meristem continues as another
+    /// vegetative crown segment during dormancy.
+    /// </summary>
+    /// <value>From 0 to 1. Keep at zero to stop shoot growth during dormancy.</value>
+    [SpeciesUILabel("Dormant crown continuation per hour")]
+    public float DormantCrownContinuationProbabilityPerHour { get; init; } = 0f;
+
+    /// <summary>
+    /// Whether flower commitment immediately creates a new vegetative crown
+    /// meristem alongside the inflorescence.
+    /// </summary>
+    /// <value>
+    /// Use false for determinate rosette shoots; use true for an indeterminate
+    /// crown that continues vegetative growth after initiating a flower.
+    /// </value>
+    [SpeciesUILabel("Continue crown after flower commitment")]
+    public bool ContinueCrownAfterFlowerCommitment { get; init; } = true;
+
+    /// <summary>
+    /// Variation in the time required to grow an inflorescence stem segment.
+    /// </summary>
+    /// <value>
+    /// Hours; must be non-negative and smaller than FlowerSettings.FlowerStemSegmentGrowthDurationHours
+    /// when positive, so a sampled growth time cannot reach zero.
+    /// </value>
+    [SpeciesUILabel("Flower stem segment growth duration variance")]
+    public float FlowerStemSegmentGrowthDurationVarianceHours { get; init; }
+
+    /// <summary>
+    /// Variation in the time from a closed flower bud to bloom.
+    /// </summary>
+    /// <value>
+    /// Hours; must be non-negative and smaller than FlowerSettings.BudBloomDurationHours
+    /// when positive, so a sampled bloom time cannot reach zero.
+    /// </value>
+    [SpeciesUILabel("Flower bud bloom duration variance")]
+    public float BudBloomDurationVarianceHours { get; init; }
+
+    /// <summary>
+    /// Detailed dimensions, topology, timing, and appearance of flowers.
+    /// </summary>
+    public FlowerSettings FlowerSettings { get; internal set; } = new();
 
     #region Fruit Settings
     /// <summary>
@@ -342,69 +448,243 @@ public class SpeciesSettings
     public FruitSettings? FruitSettings { get; internal set; } = null;
     #endregion
 
-    public float WoodElasticModulus { get; init; } = 1e8f; // in Pa
-
-    public float GreenElasticModulus { get; init; } = 1e8f; // in Pa
-
-    public float DepthFactor { get; init; } = 0.01f; // in Pa
-
-
-    //-- custom parmeter Geranium & Bergania
-    #region GeraniumBergania
     /// <summary>
-    /// Maximum leaf age (in hours)
+    /// Young's modulus of fully lignified shoot tissue used by gravity bending.
     /// </summary>
-    public float MaxLeaveAge { get; set; } = 24f * 2f * 365f;
-
-    public Vector3 BaseLeafColor { get; set; }
-    public Vector3 OldLeafColor { get; set; }
-    public float pNewCrown { get; set; } = 1f;
-    public float crownPitch { get; set; } = 0.5f;
-
-    public float growthFactor { get; set; } = 0.2f;
-
-    public float MaxRadius { get; set; } = 0.0005f;
-    public float ProbabilityPreSeasonFlowering = 0.0005f;
-    public float ProbabilitySeasonFlowering = 0.045f;
-    public float ProbabilityPostSeasonFlowering = 0.001f;
-    public float ProbabilityRestSeasonFlowering = 0f;
-
-    public float ProbabilityPreSeasonChaining = 0.0f;
-    public float ProbabilitySeasonChaining = 0.0001f;
-    public float ProbabilityPostSeasonChaining = 0.001f;
-    public float ProbabilityRestSeasonChaining = 0f;
+    /// <value>Pascals; must be finite and greater than zero.</value>
+    [SpeciesUIGroup("Mechanics")]
+    [SpeciesUILabel("Wood elastic modulus")]
+    public float WoodElasticModulus { get; init; } = 1e8f;
 
     /// <summary>
-    /// Chance for an eligible rhizome segment to create an offshoot.  By
-    /// default this is a legacy per-tick value; see RizomeExpansionRatePerHour.
+    /// Minimum Young's modulus of non-lignified shoot tissue used by gravity bending.
     /// </summary>
-    public float RhizomeOffshootProbabilityPerHour { get; set; } = 0.005f;
+    /// <value>Pascals; must be finite and greater than zero.</value>
+    [SpeciesUILabel("Green tissue elastic modulus")]
+    public float GreenElasticModulus { get; init; } = 1e8f;
 
     /// <summary>
-    /// Maximum number of rhizome offshoots from a completed segment.
-    /// One represents a continuing creeping axis; higher values create laterals.
+    /// Young's modulus assigned to non-lignified tissue at the basal end of the
+    /// shoot graph before depth attenuation is applied.
     /// </summary>
-    public int RizomeLateralsPerSegment { get; set; } = 2;
+    /// <value>
+    /// Pascals; must be finite and greater than zero. At topological depth
+    /// <c>d</c>, non-woody stiffness is
+    /// <c>max(GreenElasticModulus, BasalGreenElasticModulus * exp(-d * BasalStiffnessAttenuationPerSegment))</c>.
+    /// Set this no higher than <see cref="GreenElasticModulus"/> to disable the
+    /// extra basal-stiffness effect.
+    /// </value>
+    [SpeciesUILabel("Basal green tissue elastic modulus")]
+    public float BasalGreenElasticModulus { get; init; } = 2e8f;
 
     /// <summary>
-    /// Number of initial rhizome axes that may leave the seed crown.
+    /// Exponential attenuation of the additional basal green-tissue stiffness
+    /// for each parent-child segment away from the shoot-graph root.
     /// </summary>
-    public int RizomeInitialLaterals { get; set; } = 3;
+    /// <value>
+    /// A finite, non-negative dimensionless coefficient per graph segment. Zero
+    /// preserves the basal modulus throughout the shoot. This is topological
+    /// depth, not height above soil or rhizome burial depth.
+    /// </value>
+    [SpeciesUILabel("Basal stiffness attenuation per segment")]
+    public float BasalStiffnessAttenuationPerSegment { get; init; } = 0.01f;
 
-    public int RizomeMaxDepth { get; set; } = 15;
-    public float RizomeLength { get; set; } = 0.025f;
-    public float RizomeRadius { get; set; } = 0.0025f;
-    public float PetiolMoveDownMax { get; set; } = 0.3f;
-    public float PetiolMoveDown { get; set; } = 0f;
-    public int petiolSegments { get; set; } = 1;
-    public float growthTimeVar { get;  set; }
-    public float BudBloomAgeVar { get;  set; }
-    public float BaseElasticModulus { get; set; } = 2e8f;
-    public float PetiolElasticModulus { get;  set; } = 2e8f;
-    public float FlowerElasticModulus { get;  set; } = 5e6f;
-    public float FlowerPetiolElasticModulus { get;  set; } = 4e7f;
+    /// <summary>
+    /// Young's modulus used for vegetative leaf petioles.
+    /// </summary>
+    /// <value>Pascals; must be finite and greater than zero.</value>
+    [SpeciesUILabel("Petiole elastic modulus")]
+    public float PetioleElasticModulus { get; init; } = 2e8f;
 
-    #endregion
+    /// <summary>
+    /// Young's modulus used for flower organs other than individual pedicels.
+    /// </summary>
+    /// <value>Pascals; must be finite and greater than zero.</value>
+    [SpeciesUILabel("Flower organ elastic modulus")]
+    public float FlowerOrganElasticModulus { get; init; } = 5e6f;
+
+    /// <summary>
+    /// Young's modulus used for the pedicel supporting an individual flower.
+    /// </summary>
+    /// <value>Pascals; must be finite and greater than zero.</value>
+    [SpeciesUILabel("Flower pedicel elastic modulus")]
+    public float FlowerPedicelElasticModulus { get; init; } = 4e7f;
+
+    /// <summary>
+    /// Age at which a herbaceous leaf and its petiole become eligible for renewal.
+    /// </summary>
+    /// <value>Hours; must be finite and greater than zero.</value>
+    [SpeciesUIGroup("Herbaceous shoots")]
+    [SpeciesUILabel("Maximum leaf age")]
+    public float LeafMaximumAgeHours { get; init; } = 24f * 2f * 365f;
+
+    /// <summary>
+    /// RGB color of a newly created herbaceous leaf in the legacy color path.
+    /// </summary>
+    /// <value>Each component must be finite and between 0 and 1.</value>
+    public Vector3 YoungLeafColor { get; init; } = new(0.18f, 0.42f, 0.12f);
+
+    /// <summary>
+    /// RGB color approached as a herbaceous leaf reaches its maximum age.
+    /// </summary>
+    /// <value>Each component must be finite and between 0 and 1.</value>
+    public Vector3 SenescentLeafColor { get; init; } = new(0.45f, 0.30f, 0.08f);
+
+    public SeasonalPhase CrownBudActivationPeriod { get; init; } = SeasonalPhase.PreFlower;
+
+    /// <summary>
+    /// Probability that a dormant rhizome bud activates into an aerial crown
+    /// during its single pre-flowering attempt in a seasonal cycle.
+    /// </summary>
+    /// <value>
+    /// From 0 to 1. Zero keeps crown buds dormant; one activates every eligible
+    /// bud. A failed attempt is rearmed only after the seasonal reset phase.
+    /// </value>
+    [SpeciesUILabel("Crown bud activation probability per season")]
+    public float CrownBudActivationProbabilityPerSeason { get; init; } = 1f;
+
+    /// <summary>
+    /// Vertical clearance between the soil surface and the first compact crown node.
+    /// </summary>
+    /// <value>Meters; must be finite and greater than or equal to zero.</value>
+    [SpeciesUILabel("First crown node height above soil")]
+    public float CrownNodeHeightAboveSoil { get; init; }
+
+    /// <summary>
+    /// Pitch of a new aerial crown relative to its horizontal rhizome axis.
+    /// </summary>
+    /// <value>
+    /// Radians from 0 to pi. Zero follows the rhizome; pi/2 creates an upright crown.
+    /// </value>
+    [SpeciesUILabel("Crown pitch")]
+    public float CrownPitch { get; init; } = 0.5f * MathF.PI;
+
+    /// <summary>
+    /// Dimensionless multiplier for herbaceous shoot elongation and radial growth.
+    /// </summary>
+    /// <value>
+    /// Must be finite and non-negative. Zero stops axial shoot growth but does not
+    /// stop separately timed leaf, petiole, flower, or rhizome-tip elongation.
+    /// </value>
+    [SpeciesUILabel("Herbaceous growth rate scale")]
+    public float HerbaceousGrowthRateScale { get; init; } = 0.2f;
+
+    /// <summary>
+    /// Dimensionless multiplier for herbaceous rhizome elongation and radial growth.
+    /// </summary>
+    /// <value>
+    /// Must be finite and non-negative. Zero stops axial shoot growth but does not
+    /// stop separately timed leaf, petiole, flower, or rhizome-tip elongation.
+    /// </value>
+    [SpeciesUILabel("Rhizome growth rate scale")]
+    public float RhizomeGrowthRateScale { get; init; } = 1f;
+
+    /// <summary>
+    /// Maximum radius of non-rhizome herbaceous shoot segments.
+    /// </summary>
+    /// <value>
+    /// Meters; must be finite and at least the simulator's initial shoot radius.
+    /// </value>
+    [SpeciesUILabel("Maximum shoot radius")]
+    public float ShootMaximumRadius { get; init; } = 0.0005f;
+
+    /// <summary>
+    /// Maximum reorientation of existing petioles when a crown adds another segment.
+    /// </summary>
+    /// <value>Radians from 0 to pi and not less than PetioleReorientationStepAngle.</value>
+    [SpeciesUILabel("Maximum petiole reorientation")]
+    public float PetioleReorientationMaximumAngle { get; init; } = 0.3f * MathF.PI;
+
+    /// <summary>
+    /// Petiole angle added when a crown continues with another segment.
+    /// </summary>
+    /// <value>
+    /// Radians from 0 to PetioleReorientationMaximumAngle. Zero disables this
+    /// architectural reorientation; elastic gravity bending remains active.
+    /// </value>
+    [SpeciesUILabel("Petiole reorientation step")]
+    public float PetioleReorientationStepAngle { get; init; }
+
+    /// <summary>
+    /// Number of serial segments used to model a vegetative leaf petiole.
+    /// </summary>
+    /// <value>An integer of at least one. One creates a single straight petiole.</value>
+    [SpeciesUILabel("Petiole segment count")]
+    public int PetioleSegmentCount { get; init; } = 1;
+
+    /// <summary>
+    /// Hourly probability that a completed rhizome segment creates each configured
+    /// continuation offshoot.
+    /// </summary>
+    /// <value>
+    /// From 0 to 1. Zero stops extension after the initial axes; values are
+    /// accumulated over HoursPerTick for timestep-stable event timing.
+    /// </value>
+    [SpeciesUIGroup("Rhizomes")]
+    [SpeciesUILabel("Rhizome offshoot probability per hour")]
+    public float RhizomeOffshootProbabilityPerHour { get; init; } = 0.005f;
+
+    /// <summary>
+    /// Hourly probability that a completed non-initial rhizome segment creates one
+    /// additional side branch.
+    /// </summary>
+    /// <value>From 0 to 1. Zero keeps the configured continuation axes unbranched.</value>
+    [SpeciesUILabel("Secondary rhizome lateral probability per hour")]
+    public float RhizomeSecondaryLateralProbabilityPerHour { get; init; }
+
+    /// <summary>
+    /// Number of continuation offshoots available to each completed rhizome segment.
+    /// </summary>
+    /// <value>From 0 to 32. One continues a single axis; values above one branch.</value>
+    [SpeciesUILabel("Rhizome offshoots per segment")]
+    public int RhizomeOffshootsPerSegment { get; init; } = 2;
+
+    /// <summary>
+    /// Number of rhizome axes established together at the seed crown.
+    /// </summary>
+    /// <value>From 0 to 32. Values above one distribute axes radially.</value>
+    [SpeciesUILabel("Initial rhizome axes")]
+    public int InitialRhizomeAxes { get; init; } = 3;
+
+    /// <summary>
+    /// Maximum graph depth of rhizome segments measured from the seed segment.
+    /// </summary>
+    /// <value>
+    /// A non-negative segment count. This is topological depth, not burial depth;
+    /// zero prevents creation of new rhizome segments.
+    /// </value>
+    [SpeciesUILabel("Maximum rhizome segment depth")]
+    public int RhizomeMaximumSegmentDepth { get; init; } = 15;
+
+    /// <summary>
+    /// Target length of each rhizome segment.
+    /// </summary>
+    /// <value>
+    /// Meters; must be finite and greater than zero. A completed segment can
+    /// exceed this target by at most one discrete growth increment.
+    /// </value>
+    [SpeciesUILabel("Rhizome segment length")]
+    public float RhizomeSegmentLength { get; init; } = 0.025f;
+
+    /// <summary>
+    /// Target radius of each rhizome segment.
+    /// </summary>
+    /// <value>
+    /// Meters; must be finite and at least the simulator's initial shoot radius.
+    /// </value>
+    [SpeciesUILabel("Rhizome segment radius")]
+    public float RhizomeSegmentRadius { get; init; } = 0.0025f;
+
+    /// <summary>
+    /// Retains a perennial rhizome in the plant graph when its modeled local energy
+    /// reserve is temporarily depleted.
+    /// </summary>
+    /// <value>
+    /// Enable for dormant clonal perennials that can be replenished by connected
+    /// organs; disable when reserve depletion should kill that rhizome segment.
+    /// </value>
+    [SpeciesUILabel("Retain dormant rhizomes")]
+    public bool RetainDormantRhizomes { get; init; }
     public static SpeciesSettings Default => Predefined[0];
     public static List<SpeciesSettings> Predefined = [];
 
@@ -415,7 +695,7 @@ public class SpeciesSettings
         Predefined.Add(Geranium_Macrorrhizum.Init());
         Predefined.Add(Geranium_x_Cantabrigiense.Init());
         Predefined.Add(Bergenia_Cordifolia.Init());
-        Predefined.Add(Heuchera_Micrantha.Init());
+        Predefined.Add(Heuchera_Micrantha_Palace_Purple.Init());
         Predefined.Add(Campanula_Poscharskyana.Init());
         Predefined.Add(Carex_Morrowii_Variegata.Init());
         Predefined.Add(Fragaria_Vesca_Ruegen.Init());
@@ -429,6 +709,8 @@ public class SpeciesSettings
 
         if (!Initialized)
         {
+            Validate();
+
             // AuxinsDegradationPerTick = AuxinsReach * hoursPerTick;
             // CytokininsDegradationPerTick = CytokininsReach * hoursPerTick;
             TwigsBendingApical = TwigsBendingApical * TwigsBendingByLevel;
@@ -442,5 +724,99 @@ public class SpeciesSettings
             //Bending suddenly does not work
             //BUG water distribution
         }
+    }
+
+    private void Validate()
+    {
+        static void RequireFiniteNonNegative(float value, string name)
+        {
+            if (!float.IsFinite(value) || value < 0f)
+                throw new ArgumentOutOfRangeException(name, value, "Value must be finite and non-negative.");
+        }
+
+        static void RequireFinitePositive(float value, string name)
+        {
+            if (!float.IsFinite(value) || value <= 0f)
+                throw new ArgumentOutOfRangeException(name, value, "Value must be finite and greater than zero.");
+        }
+
+        static void RequireProbability(float value, string name)
+        {
+            if (!float.IsFinite(value) || value < 0f || value > 1f)
+                throw new ArgumentOutOfRangeException(name, value, "Probability must be between zero and one.");
+        }
+
+        static void RequireColor(Vector3 value, string name)
+        {
+            if (!float.IsFinite(value.X) || !float.IsFinite(value.Y) || !float.IsFinite(value.Z) ||
+                value.X < 0f || value.X > 1f || value.Y < 0f || value.Y > 1f || value.Z < 0f || value.Z > 1f)
+            {
+                throw new ArgumentOutOfRangeException(name, value, "RGB components must be finite and between zero and one.");
+            }
+        }
+
+        RequireFiniteNonNegative(FloweringStartAgeHours, nameof(FloweringStartAgeHours));
+        RequireProbability(FloweringSeasonStart, nameof(FloweringSeasonStart));
+        RequireProbability(FloweringSeasonEnd, nameof(FloweringSeasonEnd));
+        if (FloweringSeasonStart > FloweringSeasonEnd)
+            throw new ArgumentException("The flowering window cannot cross the March boundary.", nameof(FloweringSeasonStart));
+        RequireFinitePositive(FloweringPhaseDurationHours, nameof(FloweringPhaseDurationHours));
+
+        RequireProbability(PreFloweringCommitmentProbabilityPerHour, nameof(PreFloweringCommitmentProbabilityPerHour));
+        RequireProbability(FloweringCommitmentProbabilityPerHour, nameof(FloweringCommitmentProbabilityPerHour));
+        RequireProbability(PostFloweringCommitmentProbabilityPerHour, nameof(PostFloweringCommitmentProbabilityPerHour));
+        RequireProbability(DormantFloweringCommitmentProbabilityPerHour, nameof(DormantFloweringCommitmentProbabilityPerHour));
+        RequireProbability(PreFloweringCrownContinuationProbabilityPerHour, nameof(PreFloweringCrownContinuationProbabilityPerHour));
+        RequireProbability(FloweringCrownContinuationProbabilityPerHour, nameof(FloweringCrownContinuationProbabilityPerHour));
+        RequireProbability(PostFloweringCrownContinuationProbabilityPerHour, nameof(PostFloweringCrownContinuationProbabilityPerHour));
+        RequireProbability(DormantCrownContinuationProbabilityPerHour, nameof(DormantCrownContinuationProbabilityPerHour));
+
+        FlowerSettings.Validate();
+        RequireFiniteNonNegative(FlowerStemSegmentGrowthDurationVarianceHours, nameof(FlowerStemSegmentGrowthDurationVarianceHours));
+        if (FlowerStemSegmentGrowthDurationVarianceHours >= FlowerSettings.FlowerStemSegmentGrowthDurationHours)
+            throw new ArgumentOutOfRangeException(nameof(FlowerStemSegmentGrowthDurationVarianceHours), FlowerStemSegmentGrowthDurationVarianceHours, "Variance must be smaller than the mean flower stem growth duration.");
+        RequireFiniteNonNegative(BudBloomDurationVarianceHours, nameof(BudBloomDurationVarianceHours));
+        if (BudBloomDurationVarianceHours >= FlowerSettings.BudBloomDurationHours)
+            throw new ArgumentOutOfRangeException(nameof(BudBloomDurationVarianceHours), BudBloomDurationVarianceHours, "Variance must be smaller than the mean flower bud bloom duration.");
+
+        RequireFinitePositive(WoodElasticModulus, nameof(WoodElasticModulus));
+        RequireFinitePositive(GreenElasticModulus, nameof(GreenElasticModulus));
+        RequireFinitePositive(BasalGreenElasticModulus, nameof(BasalGreenElasticModulus));
+        RequireFiniteNonNegative(BasalStiffnessAttenuationPerSegment, nameof(BasalStiffnessAttenuationPerSegment));
+        RequireFinitePositive(PetioleElasticModulus, nameof(PetioleElasticModulus));
+        RequireFinitePositive(FlowerOrganElasticModulus, nameof(FlowerOrganElasticModulus));
+        RequireFinitePositive(FlowerPedicelElasticModulus, nameof(FlowerPedicelElasticModulus));
+
+        RequireFinitePositive(LeafMaximumAgeHours, nameof(LeafMaximumAgeHours));
+        RequireColor(YoungLeafColor, nameof(YoungLeafColor));
+        RequireColor(SenescentLeafColor, nameof(SenescentLeafColor));
+        RequireProbability(CrownBudActivationProbabilityPerSeason, nameof(CrownBudActivationProbabilityPerSeason));
+        RequireFiniteNonNegative(CrownNodeHeightAboveSoil, nameof(CrownNodeHeightAboveSoil));
+        if (!float.IsFinite(CrownPitch) || CrownPitch < 0f || CrownPitch > MathF.PI)
+            throw new ArgumentOutOfRangeException(nameof(CrownPitch), CrownPitch, "Crown pitch must be between zero and pi radians.");
+        RequireFiniteNonNegative(HerbaceousGrowthRateScale, nameof(HerbaceousGrowthRateScale));
+        RequireFinitePositive(ShootMaximumRadius, nameof(ShootMaximumRadius));
+        if (ShootMaximumRadius < AboveGroundAgent.InitialRadius)
+            throw new ArgumentOutOfRangeException(nameof(ShootMaximumRadius), ShootMaximumRadius, "Maximum radius cannot be smaller than the initial shoot radius.");
+
+        if (!float.IsFinite(PetioleReorientationMaximumAngle) || PetioleReorientationMaximumAngle < 0f || PetioleReorientationMaximumAngle > MathF.PI)
+            throw new ArgumentOutOfRangeException(nameof(PetioleReorientationMaximumAngle), PetioleReorientationMaximumAngle, "Maximum angle must be between zero and pi radians.");
+        if (!float.IsFinite(PetioleReorientationStepAngle) || PetioleReorientationStepAngle < 0f || PetioleReorientationStepAngle > PetioleReorientationMaximumAngle)
+            throw new ArgumentOutOfRangeException(nameof(PetioleReorientationStepAngle), PetioleReorientationStepAngle, "Step angle must be between zero and the maximum angle.");
+        if (PetioleSegmentCount < 1)
+            throw new ArgumentOutOfRangeException(nameof(PetioleSegmentCount), PetioleSegmentCount, "At least one petiole segment is required.");
+
+        RequireProbability(RhizomeOffshootProbabilityPerHour, nameof(RhizomeOffshootProbabilityPerHour));
+        RequireProbability(RhizomeSecondaryLateralProbabilityPerHour, nameof(RhizomeSecondaryLateralProbabilityPerHour));
+        if (RhizomeOffshootsPerSegment is < 0 or > 32)
+            throw new ArgumentOutOfRangeException(nameof(RhizomeOffshootsPerSegment), RhizomeOffshootsPerSegment, "The supported range is zero to 32.");
+        if (InitialRhizomeAxes is < 0 or > 32)
+            throw new ArgumentOutOfRangeException(nameof(InitialRhizomeAxes), InitialRhizomeAxes, "The supported range is zero to 32.");
+        if (RhizomeMaximumSegmentDepth < 0)
+            throw new ArgumentOutOfRangeException(nameof(RhizomeMaximumSegmentDepth), RhizomeMaximumSegmentDepth, "Depth must be non-negative.");
+        RequireFinitePositive(RhizomeSegmentLength, nameof(RhizomeSegmentLength));
+        RequireFinitePositive(RhizomeSegmentRadius, nameof(RhizomeSegmentRadius));
+        if (RhizomeSegmentRadius < AboveGroundAgent.InitialRadius)
+            throw new ArgumentOutOfRangeException(nameof(RhizomeSegmentRadius), RhizomeSegmentRadius, "Target radius cannot be smaller than the initial shoot radius.");
     }
 }

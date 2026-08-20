@@ -301,7 +301,10 @@ export default function ThreeSceneFn () {
                         .setPosition(new THREE.Vector3(primitive.affineTransform[3] + mesh.matrix.elements[4] * 0.5, primitive.affineTransform[7] + mesh.matrix.elements[5] * 0.5, primitive.affineTransform[11] + mesh.matrix.elements[6] * 0.5));
                     break; //cylinder / stem
             //buds disabled case Primitives.Sphere: mesh = UpdateBudMesh(mesh, primitive, index); break; //sphere / bud
-            case Primitives.Rectangle: mesh = UpdateLeafMesh(mesh, primitive, leafGeometry, index); break; //plane / leaves
+            case Primitives.Rectangle:
+                if (leafGeometry) primitive.affineTransform[10] = 1;
+                mesh = UpdateLeafMesh(mesh, primitive, leafGeometry, index);
+                break; //plane / leaves
         }
     }
 

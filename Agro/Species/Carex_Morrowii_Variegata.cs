@@ -34,17 +34,17 @@ public static class Carex_Morrowii_Variegata
 
         LeafGrowthTime = 24f * 18f * 2f,
         LeafGrowthTimeVar = 24f * 6f,
-        MaxLeaveAge = 24 * 400,
+        LeafMaximumAgeHours = 24 * 400,
 
         PetioleLength = 0.015f,
         PetioleLengthVar = 0.004f,
         PetioleRadius = 0.0012f,
         PetioleRadiusVar = 0.0002f,
 
-        pNewCrown = 0.70f,
-        crownPitch = 0.50f,
-        growthFactor = 0.15f,
-        MaxRadius = 0.0025f,
+        CrownBudActivationProbabilityPerSeason = 0.70f,
+        CrownPitch = 90f * DegToRad,
+        HerbaceousGrowthRateScale = 0.15f,
+        ShootMaximumRadius = 0.0025f,
 
         LateralPitch = 10f * DegToRad,
         LateralPitchVar = 8f * DegToRad,
@@ -57,41 +57,40 @@ public static class Carex_Morrowii_Variegata
         DominanceFactor = 0.80f,
 
         // Carex has short, creeping rhizomes (not thick)
-        RizomeMaxDepth = 2,
-        RizomeLength = 0.025f,
-        RizomeRadius = 0.0015f,      // ~1.5mm - much thinner for a sedge
+        RhizomeMaximumSegmentDepth = 2,
+        RhizomeSegmentLength = 0.025f,
+        RhizomeSegmentRadius = 0.0015f,      // ~1.5mm - much thinner for a sedge
         RhizomeOffshootProbabilityPerHour = 0.0008f,
         FloweringStartAgeHours = 24f * 80f,
-        FloweringDurationAgeHours = 24 * 30,
-        FloweringStartSeason = 0f,
-        FloweringEndSeason = 1f / 11,
+        FloweringPhaseDurationHours = 24 * 30,
+        FloweringSeasonStart = 0f,
+        FloweringSeasonEnd = 1f / 11f,
 
-        ProbabilityPreSeasonChaining = 0.008f,
-        ProbabilitySeasonChaining = 0.002f,
-        ProbabilityPostSeasonChaining = 0.003f,
-        ProbabilityRestSeasonChaining = 0f,
+        PreFloweringCrownContinuationProbabilityPerHour = 0.008f,
+        FloweringCrownContinuationProbabilityPerHour = 0.002f,
+        PostFloweringCrownContinuationProbabilityPerHour = 0.003f,
+        DormantCrownContinuationProbabilityPerHour = 0f,
 
-        ProbabilityPreSeasonFlowering = 0.001f,
-        ProbabilitySeasonFlowering = 0.025f,
-        ProbabilityPostSeasonFlowering = 0.001f,
-        ProbabilityRestSeasonFlowering = 0f,
+        PreFloweringCommitmentProbabilityPerHour = 0.001f,
+        FloweringCommitmentProbabilityPerHour = 0.025f,
+        PostFloweringCommitmentProbabilityPerHour = 0.001f,
+        DormantFloweringCommitmentProbabilityPerHour = 0f,
 
         WoodElasticModulus = 1.0e8f,
         GreenElasticModulus = 3e6f,
-        DepthFactor = 0.01f,
-        FlowerElasticModulus = 3e7f,
+        FlowerOrganElasticModulus = 3e7f,
 
         FlowerSettings = new FlowerSettings
         {
             // Carex flowers grow on tall upright stems (culms) that rise above foliage
-            PedalLength = 0.002f,        // Very small - Carex flowers are inconspicuous
-            PedalRadius = 0.0008f,       // Tiny spikelet scales
-            PedalLengthVar = 0.0005f,
-            pedalGrowthTime = 72f,
-            pedalGrowthTimeVar = 18f,
-            pedalCount = 1,              // Single spikelet structure, not radial petals
+            PetalLength = 0.002f,        // Very small - Carex flowers are inconspicuous
+            PetalRadius = 0.0008f,       // Tiny spikelet scales
+            PetalLengthVariance = 0.0005f,
+            PetalAndPedicelGrowthDurationHours = 72f,
+            PetalAndPedicelGrowthDurationVarianceHours = 18f,
+            PetalCount = 1,              // Single spikelet structure, not radial petals
 
-            HasFlowerBaseLeaves = false,
+            CreateLeavesOnFlowerBase = false,
             FlowerPhenology = new LeafPhenology(
                 expectedAge: 30f * 24f,
                 colorModel: new ColorModel(
@@ -111,60 +110,55 @@ public static class Carex_Morrowii_Variegata
                 )
             ),
 
-            PetalSenescenceDurationH = 240f,
+            PetalSenescenceDurationHours = 240f,
 
             BudLength = 0.004f,
             BudRadius = 0.002f,
-            BudBloomAge = 120u,
-            FlowerMaxAge = 600u,
+            BudBloomDurationHours = 120u,
+            FlowerMaximumAgeHours = 600u,
 
             // Flower stem (culm) settings - tall and upright
-            PetiolLength = 0.003f,       // Minimal pedicel
-            PetiolRadius = 0.0003f,
-            PetiolLengthVar = 0.001f,
-            PetiolRadiusVar = 0.0001f,
-            petiolSegments = 1,
+            FlowerPedicelLength = 0.003f,       // Minimal pedicel
+            FlowerPedicelRadius = 0.0003f,
+            FlowerPedicelLengthVariance = 0.001f,
+            FlowerPedicelRadiusVariance = 0.0001f,
+            FlowerPedicelSegmentCount = 1,
 
             // Base stem that elevates the flower - this is the main culm
-            bStemLength = 0.18f,         // ~18cm tall flowering stem (reaches leaf height)
-            bStemLengthVar = 0.04f,
-            bStemRadius = 0.0012f,       // Thin but sturdy
-            bStemRadiusVar = 0.0002f,
+            FlowerBaseSegmentLength = 0.18f,         // ~18cm tall flowering stem (reaches leaf height)
+            FlowerBaseSegmentLengthVariance = 0.04f,
+            FlowerBaseSegmentRadius = 0.0012f,       // Thin but sturdy
+            FlowerBaseSegmentRadiusVariance = 0.0002f,
 
-            stemLength = 0.004f,         // Minimal additional stem segments
-            stemLengthVar = 0.001f,
-            fStemRadius = 0.0004f,
-            fStemRadiusVar = 0.0001f,
+            FlowerBranchSegmentLength = 0.004f,         // Minimal additional stem segments
+            FlowerBranchSegmentLengthVariance = 0.001f,
+            FlowerBranchSegmentRadius = 0.0004f,
+            FlowerBranchSegmentRadiusVariance = 0.0001f,
 
-            flowerBaseDebth = 1,         // Single flowering stem from base
-            flowerDebth = 1,
-            LateralsPerNode = 0,         // No lateral branches on flower stem
-            FlowersPerInternode = 1,
-            clusterSize = 1,             // Single terminal spikelet
-            clusterAngle = 0.05f,
-            deterministic = true,
-            continous = false,
-            internodeFlower = false,     // Terminal flower only
-            internodeFlowerWithStem = false,
-            floralDepthFactor = 1,
-            pFlowerDebth = 0.3f,
+            FlowerBaseSegmentCount = 1,         // Single flowering stem from base
+            FlowerBranchMaximumDepth = 1,
+            FlowerBranchLateralsPerNode = 0,         // No lateral branches on flower stem
+            FlowersPerCluster = 1,             // Single terminal spikelet
+            FlowerClusterMaximumSpreadDegrees = 9f,
+            UseDeterministicBranching = true,
+            CreateFlowersAtInternodes = false,     // Terminal flower only
+            InternodeFlowersHaveStems = false,
+            TerminalFlowerProbabilityAtMaximumBranchDepth = 0.3f,
 
-            LateralAngle = 5,            // Nearly vertical
-            LateralRoll = 3,
-            BaseLaterals = 0,            // No basal laterals on flower stem
-            BaseLateralAngle = 5,
-            BaseLateralRoll = 3,
-            pFlowerBaseDebth = 0.3f,
+            FlowerLateralInclinationDegrees = 5,            // Nearly vertical
+            FlowerLateralAzimuthOffsetDegrees = 3,
+            FlowerBaseLateralCount = 0,            // No basal laterals on flower stem
+            FlowerBaseLateralInclinationDegrees = 5,
+            FlowerBaseLateralAzimuthOffsetDegrees = 3,
+            FlowerBaseLateralProbability = 0.3f,
 
             // Spikelet bracts (reduced leaves on flower stem)
-            LeafLength = 0.015f,
-            LeafRadius = 0.0015f,
-            LeafLengthVar = 0.004f,
-            LeafRadiusVar = 0.0004f,
-            LeavePetioleLength = 0.002f,
-            LeavePetioleRadius = 0.00015f,
+            FlowerBaseLeafLength = 0.015f,
+            FlowerBaseLeafRadius = 0.0015f,
+            FlowerBaseLeafPetioleLength = 0.002f,
+            FlowerBaseLeafPetioleRadius = 0.00015f,
 
-            growthTime = 96f,
+            FlowerStemSegmentGrowthDurationHours = 96f,
         },
 
         LeafPhenology = new LeafPhenology(

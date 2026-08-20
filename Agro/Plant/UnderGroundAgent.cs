@@ -21,7 +21,7 @@ public struct UnderGroundAgent : IPlantAgent
 	/// Simulation step when the agent was created
 	/// </summary>
 	public uint BirthTime { get; private init; }
-    public bool isRizome { get; private set; } = false;
+    public bool IsRizome { get; private set; } = false;
 	public bool flowerSupport { get; private set; } = false;
     public Vector3 Color { get; private set; }
     /// <summary>

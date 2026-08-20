@@ -13,11 +13,10 @@ public static partial class Reader
         var tree = CSharpSyntaxTree.ParseText(sourceCode);
         var root = tree.GetCompilationUnitRoot();
 
-        return root
-                .DescendantNodes()
-                .OfType<ClassDeclarationSyntax>()
-                .FirstOrDefault(c => c.Identifier.Text == nameof(SpeciesSettings))
-                ?? throw new InvalidOperationException("Could not find class SpeciesSettings.");
+        return root.DescendantNodes()
+                   .OfType<ClassDeclarationSyntax>()
+                   .FirstOrDefault(c => c.Identifier.Text == nameof(SpeciesSettings))
+            ?? throw new InvalidOperationException("Could not find class SpeciesSettings.");
     }
 
     public static List<SpeciesMember> Extract(ClassDeclarationSyntax classNode)
@@ -194,7 +193,7 @@ public static partial class Reader
     {
         initializer ??= csharpType switch
         {
-            "float" or "double" or "int" or "byte" or "behavior" => "0",
+            "float" or "double" or "int" or "byte" or "behavior" or nameof(SeasonalPhase) => "0",
             "bool" => "false",
             _ => "\"\""
         };
@@ -249,6 +248,7 @@ public static partial class Reader
             "bool" => true,
             "string" => true,
             "Behavior" => true,
+            nameof(SeasonalPhase) => true,
             _ => false
         };
     }
@@ -259,6 +259,9 @@ public static partial class Reader
 
         if (camel == "behavior")
             camel += "Index";
+
+        if (camel.Equals(nameof(SeasonalPhase), StringComparison.InvariantCultureIgnoreCase))
+            camel += "Flags";
 
         if (!isAngle)
             return camel;
@@ -277,6 +280,9 @@ public static partial class Reader
         if (name.Contains("Roll", StringComparison.OrdinalIgnoreCase))
             return true;
 
+        if (name.Contains("Angle", StringComparison.OrdinalIgnoreCase))
+            return true;
+
         var trivia = syntax.GetLeadingTrivia().ToFullString();
 
         if (trivia.Contains("in radians", StringComparison.OrdinalIgnoreCase))
@@ -289,19 +295,10 @@ public static partial class Reader
     {
         return csharpType switch
         {
-            "float" => "number",
-            "double" => "number",
-            "long" => "number",
-            "int" => "number",
-            "short" => "number",
-            "sbyte" => "number",
-            "ulong" => "number",
-            "uint" => "number",
-            "ushort" => "number",
-            "byte" => "number",
+            "float" or "double" or "long" or "int" or "short" or "sbyte" or "ulong" or "uint" or "ushort" or "byte" => "number",
             "bool" => "boolean",
             "string" => "string",
-            "Behavior" => "number",
+            "Behavior" or nameof(SeasonalPhase)  => "number",
             _ => "any"
         };
     }
@@ -328,6 +325,15 @@ public static partial class Reader
             var behaviors = Enum.GetValues<Behavior>();
             for(int i = 0; i < behaviors.Length; ++i)
                 if (behaviors[i].ToString() == enumName)
+                    return i.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        if (expr.StartsWith(nameof(SeasonalPhase)))
+        {
+            var enumName = expr[(nameof(SeasonalPhase).Length + 1)..];
+            var flags = Enum.GetValues<SeasonalPhase>();
+            for(int i = 0; i < flags.Length; ++i)
+                if (flags[i].ToString() == enumName)
                     return i.ToString(System.Globalization.CultureInfo.InvariantCulture);
         }
 
@@ -510,6 +516,18 @@ public static partial class Reader
     {
         var name = member.CSharpName;
 
+        if (name.Contains("Probability", StringComparison.Ordinal))
+            return ("0", "1", "0.0001");
+
+        if (name is nameof(SpeciesSettings.FloweringSeasonStart) or nameof(SpeciesSettings.FloweringSeasonEnd))
+            return ("0", "1", "0.01");
+
+        if (name is nameof(SpeciesSettings.RhizomeOffshootsPerSegment) or nameof(SpeciesSettings.InitialRhizomeAxes))
+            return ("0", "32", "1");
+
+        if (name == nameof(SpeciesSettings.PetioleSegmentCount))
+            return ("1", null, "1");
+
         if (member.CSharpType is "int" or "byte")
             return ("0", null, "1");
 
@@ -522,10 +540,13 @@ public static partial class Reader
         if (name.Contains("Roll"))
             return ("0", "360", "0.1");
 
+        if (name.Contains("Angle"))
+            return ("0", "180", "0.1");
+
         if (name.Contains("Factor"))
             return ("0", "2", "0.1");
 
-        if (name.Contains("Density"))
+        if (name == nameof(SpeciesSettings.RootsDensity))
             return ("0", "1", "0.01");
 
         if (name.Contains("Gravitaxis"))
@@ -556,6 +577,7 @@ public static partial class Reader
             "bool" => "checkbox",
             "string" => "text",
             "Behavior" => "behavior",
+            nameof(SeasonalPhase) => "flags",
             _ => "number"
         };
 
@@ -593,7 +615,7 @@ public static partial class Reader
         sb.AppendLine("import { h, Fragment } from \"preact\";");
         sb.AppendLine("import appstate from \"../../appstate\";");
         sb.AppendLine("import { Signal } from \"@preact/signals\";");
-        sb.AppendLine("import { SpeciesFloatField, SpeciesIntField, SpeciesNameFields, SpeciesBehaviorField } from \"./SpeciesItemTemplate\";");
+        sb.AppendLine("import { SpeciesFloatField, SpeciesIntField, SpeciesBoolField, SpeciesNameFields, SpeciesBehaviorField, SpeciesFlagsField } from \"./SpeciesItemTemplate\";");
         sb.AppendLine("import { Species } from \"src/helpers/Species\";");
         sb.AppendLine();
         sb.AppendLine("export function GeneratedSpeciesFields(props: { species: Species; index: number }) {");
@@ -610,22 +632,48 @@ public static partial class Reader
         return sb.ToString();
     }
 
+    const string FloatFieldTag = "SpeciesFloatField";
+    const string IntFieldTag = "SpeciesIntField";
+    const string BoolFieldTag = "SpeciesBoolField";
+    const string StringFieldTag = "SpeciesStringField";
+    const string StringFlagsTag = "SpeciesFlagsField";
+
     private static string GenerateGenericRow(TsFormField field, TsFormField? variance = null)
     {
-        var min = !string.IsNullOrWhiteSpace(field.Min) && field.Min != "0" ? $"min={{{field.Min}}}" : "";
-        var max = !string.IsNullOrWhiteSpace(field.Max) ? $"max={{{field.Max}}}" : "";
         var tooltip = !string.IsNullOrWhiteSpace(field.Tooltip) ? $"tooltip={{{TsStringLiteral(field.Tooltip)}}}" : "";
-        var v = variance != null ? $"variance={{{{ step: {variance.Step}, signal: species.{variance.TsName}}}}}" : "";
         var tag = field.CSharpType switch
         {
-            "float" or "double" => "SpeciesFloatField",
-            "long" or "int" or "short" or "sbyte" or "ulong" or "uint" or "ushort" or "byte" => "SpeciesIntField",
-            "string" => "SpeciesStringField",
-            "bool" => "SpeciesBoolField",
+            "float" or "double" => FloatFieldTag,
+            "long" or "int" or "short" or "sbyte" or "ulong" or "uint" or "ushort" or "byte" => IntFieldTag,
+            "string" => StringFieldTag,
+            "bool" => BoolFieldTag,
+            nameof(SeasonalPhase) => StringFlagsTag,
             _ => throw new Exception("Unknown field type.")
         };
 
-        var result = $"<{tag} {min} {max} step={{{field.Step}}} speciesIndex={{index}} {tooltip} signal={{species.{field.TsName}}} label={{{TsStringLiteral(field.Label)}}} {v} />";
+        string result = "";
+
+        switch (tag)
+        {
+            case FloatFieldTag: case IntFieldTag:
+                var min = !string.IsNullOrWhiteSpace(field.Min) && field.Min != "0" ? $"min={{{field.Min}}}" : "";
+                var max = !string.IsNullOrWhiteSpace(field.Max) ? $"max={{{field.Max}}}" : "";
+                var v = variance != null ? $"variance={{{{ step: {variance.Step}, signal: species.{variance.TsName}}}}}" : "";
+                result = $"<{tag} {min} {max} step={{{field.Step}}} speciesIndex={{index}} {tooltip} signal={{species.{field.TsName}}} label={{{TsStringLiteral(field.Label)}}} {v} />";
+                break;
+            case BoolFieldTag:
+                result = $"<{tag} speciesIndex={{index}} {tooltip} signal={{species.{field.TsName}}} label={{{TsStringLiteral(field.Label)}}} />";
+                break;
+            case StringFlagsTag:
+                var enumType = AppDomain.CurrentDomain
+                    .GetAssemblies()
+                    .SelectMany(a => a.GetTypes())
+                    .FirstOrDefault(t => t.IsEnum && t.Name == field.CSharpType);
+                var names = Enum.GetNames(enumType);
+                result = $"<{tag} speciesIndex={{index}} {tooltip} signal={{species.{field.TsName}}} label={{{TsStringLiteral(field.Label)}}} flags={{[{string.Join(",", names.Select(x => $"'{x}'"))}]}}/>";
+                break;
+        }
+
         return ReduceWhitespaces().Replace(result, " ");
     }
 
