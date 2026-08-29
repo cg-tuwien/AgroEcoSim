@@ -238,9 +238,11 @@ export class Species extends SpeciesBase {
         const reader = new BinaryReader(new Uint8Array(binaryInput));
         const verticesCount = reader.readInt32();
         const coordsCount = verticesCount * 3;
+        //Taken as authored: x and y are normalized to the organ's half length and half width,
+        //z is already relief in metres, and ExportV7 scales all three axes accordingly.
         const vertices = new Float32Array(coordsCount);
         for(let v = 0; v < coordsCount; ++v)
-            vertices[v] = reader.readFloat32() * (v % 3 == 2 ? 1000 : 1);
+            vertices[v] = reader.readFloat32();
 
         const indicesCount = reader.readInt32();
         const indices: number[] = [];

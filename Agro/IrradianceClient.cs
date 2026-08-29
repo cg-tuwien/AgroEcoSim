@@ -950,7 +950,10 @@ public class IrradianceClient
                             {
 								var ax = x * scale.X * 0.5f;
 								var ay = -z * scale.Z * 0.5f;
-								var az = y * scale.Y * 0.5f;
+								//The lamina mesh authors its relief in metres, unlike its X and Y which are
+								//normalized to the half length and half width, so this column is the plain
+								//unit blade normal. It is not a thickness.
+								var az = y;
 								var c = center + ax;
 								writer.WriteM32(ax, ay, az, c);
 								if (includeAnalytics)

@@ -539,7 +539,8 @@ public static class LeafMeshBuilder
 
             // x across width, z along length
             var zNorm = p.Y / Math.Max(1e-6f, 0.5f);
-            var y = dims.Curvature01 * 0.08f * (1f - zNorm * zNorm);
+            //Relief is in metres, as in the authored per-species meshes.
+            var y = dims.Curvature01 * 0.004f * (1f - zNorm * zNorm);
 
             mesh.Positions.Add(new Vector3(p.X, p.Y, y));
             // mesh.Normals.Add(Vector3.UnitY);
@@ -584,7 +585,8 @@ public static class LeafMeshBuilder
             float width = halfSize.X * (0.75f + 0.25f * MathF.Pow(MathF.Abs(z), 0.8f));
             float length = halfSize.Y;
 
-            Vector3 pos = new(x * width, 0.005f * (1f - z * z), z * length + length);
+            //The second component is relief, in metres, as in the authored per-species meshes.
+            Vector3 pos = new(x * width, 0.00025f * (1f - z * z), z * length + length);
 
             mesh.Positions.Add(pos);
             // mesh.Normals.Add(Vector3.UnitY);
