@@ -448,7 +448,7 @@ public partial struct AboveGroundAgent : IPlantAgent
 				{
 					if (IsRizome)
 					{
-						LengthVar = plant.Parameters.RhizomeSegmentLength;
+						LengthVar = plant.Parameters.RhizomeSegmentLength + plant.RNG.NextFloatVar(species.RhizomeSegmentLengthVar);
 						RadiusVar = plant.Parameters.RhizomeSegmentRadius;
 					}
 					else
@@ -457,8 +457,7 @@ public partial struct AboveGroundAgent : IPlantAgent
 						//target the "Length <= LengthVar" growth gate is false from birth,
 						//so the meristem never elongates and every leaf of the crown
 						//attaches at the same point instead of stacking.
-						LengthVar = MathF.Max(species.MinimumInternodeLength,
-							species.NodeDistance + plant.RNG.NextFloatVar(species.NodeDistanceVar));
+						LengthVar = MathF.Max(species.MinimumInternodeLength, species.NodeDistance + plant.RNG.NextFloatVar(species.NodeDistanceVar));
 						RadiusVar = 0f;
 						GrowthTimeVar = 0f;
 					}

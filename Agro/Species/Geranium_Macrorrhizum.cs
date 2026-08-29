@@ -57,15 +57,16 @@ public static class Geranium_Macrorrhizum
         // side shoots, filling a pot or bed as a carpet without rebuilding a
         // dense clump at the seed.  Its runners can occupy a metre-scale mat over
         // several seasons, while the event rate and resource cost remain gradual.
-        RhizomeBudActivationPeriod = SeasonalPhase.PreFlower | SeasonalPhase.Flowering,
+        RhizomeBudActivationPeriod = SeasonalPhase.PreFlower | SeasonalPhase.Flowering | SeasonalPhase.PostFlower,
         RhizomeBasalBudActivationProbabilityPerHour = 0.01f,
         // Sympodial branching once a season is what closes the mat; as an hourly
         // hazard it had to be so small that laterals never actually appeared.
         RhizomeAxillaryBudActivationProbabilityPerSeason = 0.6f,
         RhizomeAxillaryBudsPerSegment = 1,
         InitialBasalRhizomeBuds = 6,
-        RhizomeMaximumSegmentDepth = 40,
-        RhizomeSegmentLength = 0.04f,
+        RhizomeMaximumSegmentDepth = 42,
+        RhizomeSegmentLength = 0.07f,
+        RhizomeSegmentLengthVar = 0.03f,
         RhizomeSegmentRadius = 0.005f,
         RhizomeBudRadius = 0.0015f,
         RetainDormantRhizomes = true,

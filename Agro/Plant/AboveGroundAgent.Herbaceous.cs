@@ -401,7 +401,7 @@ namespace Agro
                         prevProduction = formation.DailyProductionMax;
                     }
 
-                    if (agent.Organ == OrganTypes.Meristem && agent.Length >= plant.Parameters.RhizomeSegmentLength)
+                    if (agent.Organ == OrganTypes.Meristem && agent.Length >= agent.LengthVar)
                     {
                         agent.Organ = OrganTypes.Stem;
                         agent.GrowthTimeVar = world.HoursPerTick / (species.WoodGrowthTime + plant.RNG.NextFloatVar(species.WoodGrowthTimeVar));
@@ -500,14 +500,14 @@ namespace Agro
 
                                 agent.RhizomeDevelopment.BlockedAttempts = 0;
 
-                                if (plant.Soil.IntersectPoint(formation.GetBaseCenterWorld(agentID) + Vector3.Transform(Vector3.UnitX, formation.GetDirection(agentID)) * agent.Length + Vector3.Transform(Vector3.UnitX, agent.Orientation) * plant.Parameters.RhizomeSegmentLength, plant.SoilIndex) < 0)
+                                if (plant.Soil.IntersectPoint(formation.GetBaseCenterWorld(agentID) + Vector3.Transform(Vector3.UnitX, formation.GetDirection(agentID)) * agent.Length + Vector3.Transform(Vector3.UnitX, agent.Orientation) * agent.LengthVar, plant.SoilIndex) < 0)
                                     return;
 
                                 {
                                     var parentRadius = (agent.Parent >= 0 && !formation.GetIsRizome(agent.Parent)) ? formation.GetBaseRadius(agent.Parent) : float.MaxValue;
                                     if (currentSize.Y + growth.Y > parentRadius)
                                         growth.Y = parentRadius - currentSize.Y;
-                                    agent.Length += agent.Length <= plant.Parameters.RhizomeSegmentLength ? growth.X : 0f;
+                                    agent.Length += agent.Length <= agent.LengthVar ? growth.X : 0f;
                                     if (agent.Radius < species.RhizomeSegmentRadius)
                                         agent.Radius = Math.Min(agent.Radius + growth.Y, species.RhizomeSegmentRadius);
                                 }
@@ -724,7 +724,7 @@ namespace Agro
                 agent.Organ = OrganTypes.Meristem;
                 agent.Length = Math.Max(agent.Length, InitialLength);
                 agent.Radius = Math.Max(agent.Radius, species.RhizomeBudRadius);
-                agent.LengthVar = species.RhizomeSegmentLength;
+                agent.LengthVar = species.RhizomeSegmentLength + plant.RNG.NextFloatVar(species.RhizomeSegmentLengthVar);
                 agent.RadiusVar = species.RhizomeSegmentRadius;
                 agent.WoodFactor = 1f;
             }
