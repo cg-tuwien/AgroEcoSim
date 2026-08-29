@@ -52,15 +52,26 @@ public static class Carex_Morrowii_Variegata
         LateralRollVar = 8f * DegToRad,
 
         LateralsPerNode = 2,
-        NodeDistance = 0f,
-        NodeDistanceVar = 0.000f,
+        // Tiller internodes are very short but non-zero. They must still exceed the
+        // shoot radius: a segment wider than it is long has an ill-conditioned axis,
+        // and the bending solver can then flip it over.
+        NodeDistance = 0.003f,
+        NodeDistanceVar = 0.0008f,
         DominanceFactor = 0.80f,
 
         // Carex has short, creeping rhizomes (not thick)
-        RhizomeMaximumSegmentDepth = 2,
-        RhizomeSegmentLength = 0.025f,
+        // Caespitose sedge: tillers break inside the leaf sheath a few mm from the
+        // parent shoot, so the tussock stays dense instead of spacing itself out.
+        // With such short segments the depth cap is what bounds the tiller count
+        // rather than the reach, so it has to stay low: each level roughly doubles
+        // the number of shoots and four levels give a plausible young clump.
+        RhizomeMaximumSegmentDepth = 4,
+        RhizomeSegmentLength = 0.005f,
         RhizomeSegmentRadius = 0.0015f,      // ~1.5mm - much thinner for a sedge
-        RhizomeOffshootProbabilityPerHour = 0.0008f,
+        RhizomeGrowthRateScale = 0.05f,
+        RhizomeBasalBudActivationProbabilityPerHour = 1f,
+        RhizomeAxillaryBudActivationProbabilityPerSeason = 0.45f,
+        RhizomeAxillaryBudsPerSegment = 1,
         FloweringStartAgeHours = 24f * 80f,
         FloweringPhaseDurationHours = 24 * 30,
         FloweringSeasonStart = 0f,
@@ -78,7 +89,9 @@ public static class Carex_Morrowii_Variegata
 
         WoodElasticModulus = 1.0e8f,
         GreenElasticModulus = 3e6f,
-        FlowerOrganElasticModulus = 3e7f,
+        // Effective culm stiffness includes the reinforcing leaf sheath that
+        // the simplified solid-axis geometry does not model explicitly.
+        FlowerOrganElasticModulus = 8e8f,
 
         FlowerSettings = new FlowerSettings
         {

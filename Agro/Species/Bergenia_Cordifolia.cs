@@ -11,12 +11,17 @@ public static class Bergenia_Cordifolia
         Behavior = Behavior.Herbaceous,
         LeafLength = 0.14f,
         LeafRadius = 0.06f,
-        PetioleLength = 0.01f,
+        // Stout petioles roughly as long as the 14 cm blade: 5-20 cm in the field.
+        PetioleLength = 0.10f,
+        PetioleLengthVar = 0.03f,
         PetioleRadius = 0.0025f,
         LeafGrowthTime = 24 * 7 * 12,
         Height = 0.60f,
-        NodeDistance = 0,
-        NodeDistanceVar = 0,
+        // The rosette sits on a thick rhizome; internodes are short but not absent,
+        // otherwise every leaf of a crown attaches at exactly the same point.
+        NodeDistance = 0.004f,
+        NodeDistanceVar = 0.001f,
+        CrownNodeHeightAboveSoil = 0.01f,
 
         PreFloweringCrownContinuationProbabilityPerHour = 0.008f,
         FloweringCrownContinuationProbabilityPerHour = 0.002f,
@@ -33,7 +38,11 @@ public static class Bergenia_Cordifolia
         CrownPitch = 72f * DegToRad,
         HerbaceousGrowthRateScale = 0.2f,
         ShootMaximumRadius = 0.005f,
-        RhizomeOffshootProbabilityPerHour = 0.0001f,
+        RhizomeGrowthRateScale = 0.05f,
+        RhizomeBasalBudActivationProbabilityPerHour = 1f,
+        // Branches occasionally, widening the clump by only a few cm a year.
+        RhizomeAxillaryBudActivationProbabilityPerSeason = 0.25f,
+        RhizomeAxillaryBudsPerSegment = 1,
         RhizomeMaximumSegmentDepth = 4,
         RhizomeSegmentLength = 0.03f,
         RhizomeSegmentRadius = 0.005f,

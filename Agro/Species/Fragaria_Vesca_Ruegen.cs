@@ -35,7 +35,7 @@ public static class Fragaria_Vesca_Ruegen
         LeafGrowthTimeVar = 24f * 4f,
         LeafMaximumAgeHours = 24 * 180,
 
-        PetioleLength = 0.07f,
+        PetioleLength = 0.10f,
         PetioleLengthVar = 0.012f,
         PetioleRadius = 0.0018f,
         PetioleRadiusVar = 0.0003f,
@@ -51,18 +51,27 @@ public static class Fragaria_Vesca_Ruegen
         LateralRollVar = 5f * (MathF.PI / 180f),
 
         LateralsPerNode = 4,
-        NodeDistance = 0.04f,
-        NodeDistanceVar = 0.01f,
+        // A strawberry crown is a compressed stem with 1-3 mm internodes. The former
+        // 4 cm spacing rendered the crown as a leggy crown-on-a-stick.
+        NodeDistance = 0.002f,
+        NodeDistanceVar = 0.0007f,
+        CrownNodeHeightAboveSoil = 0.005f,
         DominanceFactor = 0.70f,
 
         // 'Rügen' is a runnerless alpine strawberry. Keep its compact basal
         // crown, but do not let the generic rhizome model spread it laterally.
-        InitialRhizomeAxes = 0,
-        RhizomeOffshootsPerSegment = 0,
+        // 'Ruegen' is a deliberately runnerless alpine cultivar: it makes no stolons
+        // and increases only by crown division. Leaving rhizome propagation disabled
+        // is correct here and must not be "fixed" to match the other species.
+        InitialBasalRhizomeBuds = 0,
+        RhizomeAxillaryBudsPerSegment = 0,
         RhizomeMaximumSegmentDepth = 0,
         RhizomeSegmentLength = 0.01f,
         RhizomeSegmentRadius = 0.0025f,
-        RhizomeOffshootProbabilityPerHour = 0f,
+        RhizomeBasalBudActivationProbabilityPerHour = 0f,
+        RhizomeAxillaryBudActivationProbabilityPerHour = 0f,
+        // Everbearing: several cymes are carried by one crown through the season.
+        MaximumFlowersPerCrown = 3,
         FloweringStartAgeHours = 24f * 40f,
         FloweringPhaseDurationHours = 24f * 200,
 

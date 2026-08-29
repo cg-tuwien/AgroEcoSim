@@ -10,6 +10,21 @@ using M = System.Runtime.CompilerServices.MethodImplAttribute;
 
 namespace Agro;
 
+/// <summary>
+/// Position at which a rhizome bud originated on its supporting shoot.
+/// </summary>
+public enum RhizomeBudPosition : byte
+{
+	/// <summary>The agent is not a dormant rhizome bud.</summary>
+	None,
+
+	/// <summary>A primary rhizome bud formed at the seedling's basal crown.</summary>
+	Basal,
+
+	/// <summary>A lateral bud in the axil of a reduced rhizome leaf.</summary>
+	Axillary
+}
+
 [StructLayout(LayoutKind.Auto)]
 public partial struct AboveGroundAgent : IPlantAgent
 {
@@ -252,20 +267,31 @@ public partial struct AboveGroundAgent : IPlantAgent
 
     public bool IsRizome { get; set; } = false;
 
-	public class RizomeInfos
+	/// <summary>Developmental state used only by rhizome segments and buds.</summary>
+	public struct RhizomeDevelopmentState
 	{
-        // Bit n records that this completed segment has already produced its
-        // nth permitted offshoot.  A mask lets species request an arbitrary
-        // number of evenly distributed initial axes instead of the former
-        // hard-coded maximum of three.
-        public uint OffshootsCreated { get; set; }
-        public int Depth { get; set; } = 0;
-		public bool LateralCreated { get; set; }
-        public bool test3 { get; set; } = false;
+		/// <summary>Graph depth of this segment or bud below the seedling's basal rhizome.</summary>
+		public int SegmentDepth;
 
-    }
+		/// <summary>
+		/// Position of the bud from which this axis originates. The value remains
+		/// available after activation so morphology probes can distinguish axes.
+		/// </summary>
+		public RhizomeBudPosition OriginatingBudPosition;
 
-	public RizomeInfos RizomeInfo { get; set; } = new RizomeInfos();
+		/// <summary>Whether the seedling's basal rhizome has formed its configured primary buds.</summary>
+		public bool BasalBudsFormed;
+
+		/// <summary>
+		/// Consecutive ticks on which this apex found an established rhizome in its
+		/// path. A creeping apex is deflected around an obstruction rather than
+		/// aborting on first contact; it only stops once it stays blocked.
+		/// </summary>
+		public byte BlockedAttempts;
+	}
+
+	/// <summary>Rhizome-specific developmental state for this agent.</summary>
+	public RhizomeDevelopmentState RhizomeDevelopment;
 
 	public Flower FlowerAgent { get; set; } = new Flower();
 	//gravity
@@ -276,8 +302,10 @@ public partial struct AboveGroundAgent : IPlantAgent
 
     public int CrownIndex { get; set; } = 0;
 
-    /// <summary>Whether a dormant crown bud may attempt activation this season.</summary>
-    public bool CrownActivationAttemptAvailable { get; set; } = true;
+	/// <summary>
+	/// March-to-February seasonal cycle in which this crown bud last attempted activation.
+	/// </summary>
+	public int LastCrownActivationCycle { get; set; } = int.MinValue;
 
 	public bool flowerSupport { get; set; } = true;
 
@@ -388,6 +416,7 @@ public partial struct AboveGroundAgent : IPlantAgent
 		CurrentDayEnvResources = 0f;
 
 		FlowerAgent = flowerAgent;
+		RhizomeDevelopment = default;
 
 		//FirstSegmentIndex = plant.InsertSegments(SegmentsCount, orientation);
 
@@ -424,7 +453,12 @@ public partial struct AboveGroundAgent : IPlantAgent
 					}
 					else
 					{
-						LengthVar = species.NodeDistance + plant.RNG.NextFloatVar(species.NodeDistanceVar);
+						//A rosette has compressed but non-zero internodes. With a zero
+						//target the "Length <= LengthVar" growth gate is false from birth,
+						//so the meristem never elongates and every leaf of the crown
+						//attaches at the same point instead of stacking.
+						LengthVar = MathF.Max(species.MinimumInternodeLength,
+							species.NodeDistance + plant.RNG.NextFloatVar(species.NodeDistanceVar));
 						RadiusVar = 0f;
 						GrowthTimeVar = 0f;
 					}
@@ -887,44 +921,70 @@ public partial struct AboveGroundAgent : IPlantAgent
     }
     [M(AI)]internal static void CreateFirstLeaves(AboveGroundAgent parent, PlantFormation2 plant, float lateralAngle, int meristem) => CreateLeavesBase(parent, plant, lateralAngle, meristem, 1f, 1f);
 	[M(AI)]internal readonly void CreateLeaves(AboveGroundAgent parent, PlantFormation2 plant, float lateralAngle, int meristem) => CreateLeavesBase(parent, plant, lateralAngle, meristem, PreviousDayEnvResourcesInvariant, PreviousDayProductionInvariant);
-    static void CreateLeavesBase(AboveGroundAgent parent, PlantFormation2 plant, float lateralAngle, int meristem, float initialResources, float initialProduction)
-    {
+	[M(AI)] internal static void CreateLeavesFromReserve(AboveGroundAgent parent, PlantFormation2 plant, float lateralAngle, int meristem,
+		float initialResources, float initialProduction, float energyPerOrgan, float waterPerOrgan) =>
+		CreateLeavesBase(parent, plant, lateralAngle, meristem, initialResources, initialProduction, energyPerOrgan, waterPerOrgan);
+
+	static void CreateLeavesBase(AboveGroundAgent parent, PlantFormation2 plant, float lateralAngle, int meristem,
+		float initialResources, float initialProduction, float? transferredEnergyPerOrgan = null, float transferredWaterPerOrgan = 0f)
+	{
 		var species = plant.Parameters;
-        var angleStep = 2f * MathF.PI / species.LateralsPerNode;
-        for (int l = 0; l < species.LateralsPerNode; ++l)
-        {
+		if (species.LateralsPerNode <= 0)
+			return;
+
+		var angleStep = 2f * MathF.PI / species.LateralsPerNode;
+		for (var lateralIndex = 0; lateralIndex < species.LateralsPerNode; ++lateralIndex)
+		{
 			var roll = plant.RNG.NextFloatVar(species.LateralRollVar);
 			var pitch = plant.RNG.NextFloatVar(species.LateralPitchVar);
-            var orientation = parent.Orientation * Quaternion.CreateFromAxisAngle(Vector3.UnitX, l * angleStep + lateralAngle) * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, -plant.Parameters.LateralPitch);
-            orientation = TurnUpwards(orientation) * Quaternion.CreateFromAxisAngle(Vector3.UnitX, roll) * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, pitch);
-            var petioleIdx1 = plant.AG.Birth(new(plant, meristem, OrganTypes.Petiole, orientation, parent.Energy * 0.1f, initialResources: initialResources, initialProduction: initialProduction) { DominanceLevel = parent.DominanceLevel, ParentRadiusAtBirth = parent.Radius });
-            for (var s = 2; s <= species.PetioleSegmentCount; s++)
+			var orientation = parent.Orientation * Quaternion.CreateFromAxisAngle(Vector3.UnitX, lateralIndex * angleStep + lateralAngle) * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, -species.LateralPitch);
+			orientation = TurnUpwards(orientation) * Quaternion.CreateFromAxisAngle(Vector3.UnitX, roll) * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, pitch);
+			var petioleEnergy = transferredEnergyPerOrgan ?? parent.Energy * 0.1f;
+			var petioleID = plant.AG.Birth(new(plant, meristem, OrganTypes.Petiole, orientation, petioleEnergy, initialResources: initialResources, initialProduction: initialProduction)
 			{
-                petioleIdx1 = plant.AG.Birth(new(plant, petioleIdx1, OrganTypes.Petiole, orientation, parent.Energy * 0.1f, initialResources: initialResources, initialProduction: initialProduction) { DominanceLevel = parent.DominanceLevel, ParentRadiusAtBirth = parent.Radius });
-            }
-			parent.Energy *= 0.9f;
+				Water_g = transferredWaterPerOrgan,
+				DominanceLevel = parent.DominanceLevel,
+				ParentRadiusAtBirth = parent.Radius
+			});
+			for (var segment = 2; segment <= species.PetioleSegmentCount; ++segment)
+			{
+				petioleID = plant.AG.Birth(new(plant, petioleID, OrganTypes.Petiole, orientation, petioleEnergy, initialResources: initialResources, initialProduction: initialProduction)
+				{
+					Water_g = transferredWaterPerOrgan,
+					DominanceLevel = parent.DominanceLevel,
+					ParentRadiusAtBirth = parent.Radius
+				});
+			}
+			if (!transferredEnergyPerOrgan.HasValue)
+				parent.Energy *= 0.9f;
 
-            CreateLeaf(orientation, parent, plant, petioleIdx1, initialResources, initialProduction);
-			parent.Energy *= 0.9f;
-
-        }
-    }
+			CreateLeafBase(orientation, parent, plant, petioleID, initialResources, initialProduction,
+				transferredEnergyPerOrgan ?? parent.Energy * 0.1f, transferredWaterPerOrgan);
+			if (!transferredEnergyPerOrgan.HasValue)
+				parent.Energy *= 0.9f;
+		}
+	}
 
     /// <summary>
     /// Add a blade to an already-created petiole.  This is shared by normal
     /// leaf construction and perennial leaf renewal at an existing node.
     /// </summary>
-    internal static void CreateLeaf(Quaternion petioleOrientation, AboveGroundAgent energySource, PlantFormation2 plant, int petioleID, float initialResources, float initialProduction)
-    {
-        var species = plant.Parameters;
-        var leafPitchVar = plant.RNG.NextFloatVar(species.LateralPitchVar);
-        var orientation = petioleOrientation * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, leafPitchVar - species.LeafPitch);
-        plant.AG.Birth(new(plant, petioleID, OrganTypes.Leaf, orientation, energySource.Energy * 0.1f, initialResources: initialResources, initialProduction: initialProduction)
-        {
-            DominanceLevel = energySource.DominanceLevel,
-            ParentRadiusAtBirth = float.MaxValue
-        });
-    }
+	internal static void CreateLeaf(Quaternion petioleOrientation, AboveGroundAgent energySource, PlantFormation2 plant, int petioleID, float initialResources, float initialProduction)
+		=> CreateLeafBase(petioleOrientation, energySource, plant, petioleID, initialResources, initialProduction, energySource.Energy * 0.1f, 0f);
+
+	static void CreateLeafBase(Quaternion petioleOrientation, AboveGroundAgent energySource, PlantFormation2 plant, int petioleID,
+		float initialResources, float initialProduction, float initialEnergy, float initialWater)
+	{
+		var species = plant.Parameters;
+		var leafPitchVariance = plant.RNG.NextFloatVar(species.LateralPitchVar);
+		var orientation = petioleOrientation * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, leafPitchVariance - species.LeafPitch);
+		plant.AG.Birth(new(plant, petioleID, OrganTypes.Leaf, orientation, initialEnergy, initialResources: initialResources, initialProduction: initialProduction)
+		{
+				Water_g = initialWater,
+			DominanceLevel = energySource.DominanceLevel,
+			ParentRadiusAtBirth = float.MaxValue
+		});
+	}
     [M(AI)] internal static void CreateFirstFlowerBaseLeaves(AboveGroundAgent parent, PlantFormation2 plant, float lateralAngle, int meristem) => CreateFlowerBaseLeavesBase(parent, plant, lateralAngle, meristem, 1f, 1f);
     [M(AI)] internal readonly void CreateFlowerBaseLeaves(AboveGroundAgent parent, PlantFormation2 plant, float lateralAngle, int meristem) => CreateFlowerBaseLeavesBase(parent, plant, lateralAngle, meristem, PreviousDayEnvResourcesInvariant, PreviousDayProductionInvariant);
     static void CreateFlowerBaseLeavesBase(AboveGroundAgent parent, PlantFormation2 plant, float lateralAngle, int meristem, float initialResources, float initialProduction)
@@ -1042,10 +1102,23 @@ public partial struct AboveGroundAgent : IPlantAgent
     {
         BaseOffset = offset;
     }
-    [M(AI)] public void SetOrientation(Quaternion orientation)
-    {
-        Orientation = orientation;
-    }
+	[M(AI)] public void SetOrientation(Quaternion orientation)
+	{
+		Orientation = orientation;
+	}
+
+	/// <summary>
+	/// Sets both the current orientation and the material rest state used by gravity.
+	/// Use this for a developmental reorientation such as bud break, not elastic motion.
+	/// </summary>
+	[M(AI)] internal void SetStructuralOrientation(Quaternion orientation)
+	{
+		orientation = Quaternion.Normalize(orientation);
+		Orientation = orientation;
+		baseOrientation = orientation;
+		restOrientation = orientation;
+		targetOrientation = orientation;
+	}
 
     [StructLayout(LayoutKind.Auto)]
     [Message]

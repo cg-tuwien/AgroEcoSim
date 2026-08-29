@@ -87,23 +87,36 @@ public struct SeedAgent : IAgent
 			if (Water_g >= GerminationThreshold) //GERMINATION
 			{
 				//Debug.WriteLine($"GERMINATION at {timestep}");
+				const float rootReserveFraction = 0.3f;
+				const float rhizomeReserveFraction = 0.3f;
+				const float aerialReserveFraction = 1f - rootReserveFraction - rhizomeReserveFraction;
+				var seedReserve = Water_g;
 				var initialYawAngle = plant.RNG.NextFloat(-MathF.PI, MathF.PI);
 				var initialYaw = Quaternion.CreateFromAxisAngle(Vector3.UnitY, initialYawAngle);
-				plant.UGBirth(new UnderGroundAgent(plant, timestep, -1, initialYaw * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, -0.5f * MathF.PI), Water_g * 0.4f, initialResources: 1f, initialProduction: 1f));
+				plant.UGBirth(new UnderGroundAgent(plant, timestep, -1,
+					initialYaw * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, -0.5f * MathF.PI),
+					seedReserve * rootReserveFraction, initialResources: 1f, initialProduction: 1f));
 
 				var baseStemOrientation = initialYaw * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, 0.5f * MathF.PI);
-                var rizomOrientation = initialYaw * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, 0.25f * MathF.PI);
-                var rizome = new AboveGroundAgent(plant, -1, OrganTypes.Stem, rizomOrientation, Water_g * 0.4f, initialResources: 1f, initialProduction: 1f, length: 0.001f, radius: 0.0025f)
-                {
-                    IsRizome = true
-                };
-                rizome.RizomeInfo.test3 = true;
-                var rizomeIndex = plant.AG.Birth(rizome);
-                var meristem = new AboveGroundAgent(plant, rizomeIndex, OrganTypes.Meristem, baseStemOrientation, Water_g * 0.4f, initialResources: 1f, initialProduction: 1f);
+				var rhizomeOrientation = initialYaw;
+				var initialRhizomeRadius = Math.Min(0.0025f, plant.Parameters.RhizomeSegmentRadius);
+				var rhizome = new AboveGroundAgent(plant, -1, OrganTypes.Stem, rhizomeOrientation,
+					seedReserve * rhizomeReserveFraction,
+					radius: initialRhizomeRadius, length: 0.001f, initialResources: 1f, initialProduction: 1f)
+				{
+					IsRizome = true
+				};
+				var rhizomeIndex = plant.AG.Birth(rhizome);
+				var aerialOrganCount = 1 + plant.Parameters.LateralsPerNode *
+					(plant.Parameters.PetioleSegmentCount + 1);
+				var aerialReservePerOrgan = seedReserve * aerialReserveFraction / aerialOrganCount;
+				var meristem = new AboveGroundAgent(plant, rhizomeIndex, OrganTypes.Meristem,
+					baseStemOrientation, aerialReservePerOrgan, initialResources: 1f, initialProduction: 1f);
 				var meristemIndex = plant.AG.Birth(meristem); //base stem
 
 				if (plant.Parameters.LateralsPerNode > 0)
-					AboveGroundAgent.CreateFirstLeaves(meristem, plant, 0, meristemIndex);
+					AboveGroundAgent.CreateLeavesFromReserve(meristem, plant, 0f, meristemIndex,
+						1f, 1f, aerialReservePerOrgan, 0f);
 
 				plant.SeedDeath();
 				Water_g = 0f;

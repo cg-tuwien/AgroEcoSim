@@ -36,13 +36,17 @@ public static class Campanula_Poscharskyana
         LeafGrowthTimeVar = 24f * 3f,
         LeafMaximumAgeHours = 24 * 150,
 
-        PetioleLength = 0.02f,
+        PetioleLength = 0.03f,
         PetioleLengthVar = 0.010f,
         PetioleRadius = 0.0015f,
         PetioleRadiusVar = 0.0002f,
 
         CrownBudActivationProbabilityPerSeason = 0.850f,
-        CrownPitch = 99f * DegToRad,
+        // Serbian bellflower spreads by decumbent, trailing leafy stems that root at
+        // their nodes, not by a subsurface rhizome. A near-vertical crown pitch made
+        // the shoots stand up instead; a shallow rise lets them sprawl and then
+        // decumb further under their own weight.
+        CrownPitch = 30f * DegToRad,
         HerbaceousGrowthRateScale = 0.8f,
         ShootMaximumRadius = 0.004f,
 
@@ -52,14 +56,21 @@ public static class Campanula_Poscharskyana
         LateralRollVar = 5f * (MathF.PI / 180f),
 
         LateralsPerNode = 2,
-        NodeDistance = 0.01f,
-        NodeDistanceVar = 0.000f,
+        // Internodes of a trailing stem, 2-3 cm.
+        NodeDistance = 0.025f,
+        NodeDistanceVar = 0.005f,
         DominanceFactor = 0.7f,
 
-        RhizomeMaximumSegmentDepth = 3,
+        // Only a short basal rhizome; the spread itself happens above ground.
+        RhizomeMaximumSegmentDepth = 1,
         RhizomeSegmentLength = 0.04f,
         RhizomeSegmentRadius = 0.0025f,
-        RhizomeOffshootProbabilityPerHour = 0.00016f,
+        RhizomeGrowthRateScale = 0.05f,
+        RhizomeBasalBudActivationProbabilityPerHour = 1f,
+        RhizomeAxillaryBudActivationProbabilityPerSeason = 0.4f,
+        RhizomeAxillaryBudsPerSegment = 1,
+        // Flowers are borne all along the trailing stems, not one per shoot.
+        MaximumFlowersPerCrown = 6,
         FloweringStartAgeHours = 24f * 45f,
         FloweringPhaseDurationHours = 24f * 55f,
 

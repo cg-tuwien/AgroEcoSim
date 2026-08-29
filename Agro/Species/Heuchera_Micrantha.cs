@@ -36,13 +36,17 @@ public static class Heuchera_Micrantha_Palace_Purple
         LeafGrowthTimeVar = 24f * 4f,
         LeafMaximumAgeHours = 24 * 200,
 
-        PetioleLength = 0.08f,
-        PetioleLengthVar = 0.015f,
-        PetioleRadius = 0.002f,
+        // Long-petioled basal rosette: 10-20 cm.
+        PetioleLength = 0.14f,
+        PetioleLengthVar = 0.03f,
+        // Firm petioles, 4-5 mm across, stiff enough to hold the blade out at length.
+        PetioleRadius = 0.0025f,
         PetioleRadiusVar = 0.0003f,
 
         CrownBudActivationProbabilityPerSeason = 0.55f,
-        CrownPitch = 117f * DegToRad,
+        // An upright basal rosette on a caudex. Past 90 degrees the crown leans back
+        // over its own base, which tipped the longer petioles below the horizontal.
+        CrownPitch = 90f * DegToRad,
         HerbaceousGrowthRateScale = 0.22f,
         ShootMaximumRadius = 0.0035f,
 
@@ -52,14 +56,22 @@ public static class Heuchera_Micrantha_Palace_Purple
         LateralRollVar = 5f * (MathF.PI / 180f),
 
         LateralsPerNode = 2,
-        NodeDistance = 0f,
-        NodeDistanceVar = 0.000f,
+        // Heuchera builds a caudex rather than a creeping rhizome: a short thickened
+        // vertical stem that stacks a few mm of internode per node and lifts the
+        // crown ~1-2 cm a year, which is why old plants go leggy.
+        NodeDistance = 0.003f,
+        NodeDistanceVar = 0.001f,
+        CrownNodeHeightAboveSoil = 0.01f,
         DominanceFactor = 0.75f,
 
-        RhizomeMaximumSegmentDepth = 3,
-        RhizomeSegmentLength = 0.03f,
+        // Not a runner: offsets crowd against the mother crown to form a clump.
+        RhizomeMaximumSegmentDepth = 1,
+        RhizomeSegmentLength = 0.012f,
         RhizomeSegmentRadius = 0.003f,
-        RhizomeOffshootProbabilityPerHour = 0.0001f,
+        RhizomeGrowthRateScale = 0.05f,
+        RhizomeBasalBudActivationProbabilityPerHour = 1f,
+        RhizomeAxillaryBudActivationProbabilityPerSeason = 0.35f,
+        RhizomeAxillaryBudsPerSegment = 1,
         FloweringStartAgeHours = 24f * 50f,
         FloweringPhaseDurationHours = 24 * 60,
 

@@ -8,17 +8,21 @@ public static class Geranium_Macrorrhizum
     {
         Name = "Geranium Macrorrhizum",
         Behavior = Behavior.Herbaceous,
-        LeafLength = 0.04f,
-        LeafLengthVar = 0.0f,
-        LeafRadius = 0.02f,
+        // Botanical descriptions place the rounded blade near 7 cm across.
+        LeafLength = 0.07f,
+        LeafLengthVar = 0.008f,
+        LeafRadius = 0.035f,
+        LeafRadiusVar = 0.004f,
         LeafPitchVar = 5f * (MathF.PI / 180f),
         // A broad basal rosette: petioles rise diagonally and the blades return
         // to near-horizontal rather than collecting in a terminal crown.
         LeafPitch = 45 * (MathF.PI / 180f),
-        PetioleLength = 0.075f,
-        PetioleLengthVar = 0.01f,
-        PetioleRadius = 0.0015f,
-        PetioleRadiusVar = 0.00015f,
+        // Petioles carry the blade well clear of the mat: 10-30 cm in the wild,
+        // commonly 15-25 cm on an established plant, against a 7 cm blade.
+        PetioleLength = 0.18f,
+        PetioleLengthVar = 0.04f,
+        PetioleRadius = 0.0018f,
+        PetioleRadiusVar = 0.0002f,
 
         LeafGrowthTime = 24 * 7,
         Height = 0.3f,
@@ -36,25 +40,34 @@ public static class Geranium_Macrorrhizum
 
         LeafMaximumAgeHours = 24 * 2 * 365,
         CrownBudActivationPeriod = SeasonalPhase.PreFlower | SeasonalPhase.Flowering,
-        CrownBudActivationProbabilityPerSeason = 0.95f,
+        // A dense ground cover carries a rosette on most rhizome nodes.
+        CrownBudActivationProbabilityPerSeason = 0.75f,
+        CrownBudRadius = 0.0008f,
         CrownNodeHeightAboveSoil = 0.04f,
         CrownPitch = 90f * MathF.PI / 180f,
         HerbaceousGrowthRateScale = 0.25f,
+        RhizomeGrowthRateScale = 0.045f,
 
-        ShootMaximumRadius = 0.0020f,
+        // Must stay above PetioleRadius, otherwise the petiole support limit
+        // (PetioleLength scaled by radius/PetioleRadius) truncates every petiole.
+        ShootMaximumRadius = 0.0030f,
         // Bigroot geranium is a rhizomatous ground cover: a small number of
         // persistent axes spread into open soil, where each rooted segment
         // supplies a new rosette.  Each has one continuing tip and only rare
         // side shoots, filling a pot or bed as a carpet without rebuilding a
         // dense clump at the seed.  Its runners can occupy a metre-scale mat over
         // several seasons, while the event rate and resource cost remain gradual.
-        RhizomeOffshootProbabilityPerHour = 0.0005f,
-        RhizomeSecondaryLateralProbabilityPerHour = 0.0003f,
-        RhizomeOffshootsPerSegment = 1,
-        InitialRhizomeAxes = 4,
-        RhizomeMaximumSegmentDepth = 14,
+        RhizomeBudActivationPeriod = SeasonalPhase.PreFlower | SeasonalPhase.Flowering,
+        RhizomeBasalBudActivationProbabilityPerHour = 0.01f,
+        // Sympodial branching once a season is what closes the mat; as an hourly
+        // hazard it had to be so small that laterals never actually appeared.
+        RhizomeAxillaryBudActivationProbabilityPerSeason = 0.6f,
+        RhizomeAxillaryBudsPerSegment = 1,
+        InitialBasalRhizomeBuds = 6,
+        RhizomeMaximumSegmentDepth = 40,
         RhizomeSegmentLength = 0.04f,
-        RhizomeSegmentRadius = 0.0025f,
+        RhizomeSegmentRadius = 0.005f,
+        RhizomeBudRadius = 0.0015f,
         RetainDormantRhizomes = true,
 
         FlowerOrganElasticModulus = 5e7f,
@@ -63,11 +76,17 @@ public static class Geranium_Macrorrhizum
         // In the herbaceous algorithm these events advance a vegetative crown
         // as well as committing the first flower.  Hour-normalized rates keep
         // the rosette from producing a new two-leaf node every few hours.
-        PreFloweringCommitmentProbabilityPerHour = 0.0002f,
-        FloweringCommitmentProbabilityPerHour = 0.002f,
-        PostFloweringCommitmentProbabilityPerHour = 0.0005f,
+        PreFloweringCommitmentProbabilityPerHour = 0.0005f,
+        FloweringCommitmentProbabilityPerHour = 0.02f,
+        PostFloweringCommitmentProbabilityPerHour = 0.0002f,
         DormantFloweringCommitmentProbabilityPerHour = 0f,
-        ContinueCrownAfterFlowerCommitment = false,
+        // A rosette unfolds roughly 6-10 leaves a season; with two laterals per node
+        // that is 3-5 new nodes, not the ~1 per year the previous rates produced.
+        PreFloweringCrownContinuationProbabilityPerHour = 0.004f,
+        FloweringCrownContinuationProbabilityPerHour = 0.0015f,
+        PostFloweringCrownContinuationProbabilityPerHour = 0.002f,
+        DormantCrownContinuationProbabilityPerHour = 0f,
+        ContinueCrownAfterFlowerCommitment = true,
 
         FlowerSettings = new FlowerSettings
         {

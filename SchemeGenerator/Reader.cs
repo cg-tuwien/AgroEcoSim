@@ -107,7 +107,8 @@ public static partial class Reader
             foreach (var attribute in attributeList.Attributes)
             {
                 var actualName = NormalizeAttributeName(attribute.Name.ToString());
-                return accepted.Contains(actualName);
+                if (accepted.Contains(actualName))
+                    return true;
             }
 
         return false;
@@ -330,11 +331,20 @@ public static partial class Reader
 
         if (expr.StartsWith(nameof(SeasonalPhase)))
         {
-            var enumName = expr[(nameof(SeasonalPhase).Length + 1)..];
-            var flags = Enum.GetValues<SeasonalPhase>();
-            for(int i = 0; i < flags.Length; ++i)
-                if (flags[i].ToString() == enumName)
-                    return i.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            var value = (SeasonalPhase)0;
+            foreach (var component in expr.Split('|', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+            {
+                var prefix = $"{nameof(SeasonalPhase)}.";
+                if (!component.StartsWith(prefix, StringComparison.Ordinal) ||
+                    !Enum.TryParse<SeasonalPhase>(component[prefix.Length..], out var flag))
+                {
+                    return "0";
+                }
+
+                value |= flag;
+            }
+
+            return ((byte)value).ToString(System.Globalization.CultureInfo.InvariantCulture);
         }
 
         if (member.IsAngleInRadians)
@@ -522,7 +532,7 @@ public static partial class Reader
         if (name is nameof(SpeciesSettings.FloweringSeasonStart) or nameof(SpeciesSettings.FloweringSeasonEnd))
             return ("0", "1", "0.01");
 
-        if (name is nameof(SpeciesSettings.RhizomeOffshootsPerSegment) or nameof(SpeciesSettings.InitialRhizomeAxes))
+        if (name is nameof(SpeciesSettings.RhizomeAxillaryBudsPerSegment) or nameof(SpeciesSettings.InitialBasalRhizomeBuds))
             return ("0", "32", "1");
 
         if (name == nameof(SpeciesSettings.PetioleSegmentCount))

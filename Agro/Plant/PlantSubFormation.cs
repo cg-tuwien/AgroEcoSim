@@ -357,15 +357,22 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 
             var resEff = DailyResourceMax > 0f ? dst[i].PreviousDayEnvResourcesInvariant / DailyResourceMax : 1f;
             var prodEff = DailyProductionMax > 0f ? dst[i].PreviousDayProductionInvariant / DailyProductionMax : 1f;
-            var flowerOrgans = new List<OrganTypes>() { OrganTypes.FlowerStem, OrganTypes.FlowerPadel, OrganTypes.FlowerPedicel, OrganTypes.FlowerMeristem, OrganTypes.FlowerBud };
 
             if (IsAboveGround)
-			{
-				if (dst[i].IsRizome || (flowerOrgans.Contains(dst[i].Organ)))
-				{
-					resEff = 1f;
-				}
-			}
+            {
+                var parent = dst[i].Parent;
+                var isRhizomeSupportedCrownBase = !dst[i].IsRizome &&
+                    parent >= 0 && parent < dst.Length && dst[parent].IsRizome;
+                var isFlowerOrgan = dst[i].Organ is OrganTypes.FlowerStem or OrganTypes.FlowerPadel or
+                    OrganTypes.FlowerPedicel or OrganTypes.FlowerMeristem or OrganTypes.FlowerBud;
+                if (dst[i].IsRizome || isRhizomeSupportedCrownBase || isFlowerOrgan)
+                {
+                    // Rhizomes translocate stored carbohydrate to attached renewal buds and
+                    // establishing crown bases. Allocation cannot depend on downstream leaves
+                    // because physiological transport through the axis is bidirectional.
+                    resEff = 1f;
+                }
+            }
             Gathering[i] = new(lifeSupport, photosynthSupport, energyStorageCapacity, waterStorageCapacity, resEff,prodEff);
 		}
 
@@ -486,12 +493,17 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 			{
 				elasticity = Plant.Parameters.PetioleElasticModulus;
 			}
-			if (flowerOrgans.Contains(agent.Organ)) { elasticity = Math.Max(Plant.Parameters.FlowerOrganElasticModulus * (1 - woodiness), 5e4f);
-                if (agent.Organ.Equals(OrganTypes.FlowerPedicel))
-                {
-                    elasticity = Math.Max(Plant.Parameters.FlowerPedicelElasticModulus * (1 - woodiness), 1e2f);
-                }
-            }
+			if (flowerOrgans.Contains(agent.Organ))
+			{
+				// Supporting floral axes dry and lignify during senescence; they do
+				// not lose essentially all bending stiffness. Interpolate toward the
+				// species' mature structural-tissue modulus instead of toward zero.
+				var greenFlowerElasticity = agent.Organ == OrganTypes.FlowerPedicel
+					? Plant.Parameters.FlowerPedicelElasticModulus
+					: Plant.Parameters.FlowerOrganElasticModulus;
+				elasticity = greenFlowerElasticity * (1f - woodiness) +
+					Plant.Parameters.WoodElasticModulus * woodiness;
+			}
 			Quaternion rotation = Quaternion.Identity;
 			Quaternion appliedDelta = Quaternion.Identity;
 
@@ -1201,7 +1213,12 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 				default: FloweringStarted.Add(uint.MaxValue); break;
 			}
 
-			return SeasonalPhase.PreFlower;
+			//Dormancy is driven by the season, not by flowering history. A plant too
+			//young to flower reaches this branch all year round and would otherwise
+			//keep growing through the winter.
+			return season > species.SeasonalSenescence
+				? SeasonalPhase.ResetPending
+				: SeasonalPhase.PreFlower;
 		}
         else if (age_h >= species.FloweringStartAgeHours && season >= species.FloweringSeasonStart && season <= species.FloweringSeasonEnd && (FloweringStarted[^1] == PreFloweringState || (FloweringStarted[^1] < PostFloweringState && (Plant.World.Timestep - FloweringStarted[^1]) * Plant.World.HoursPerTick <= species.FloweringPhaseDurationHours)))
 		{
@@ -1209,10 +1226,24 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 				FloweringStarted[^1] = Plant.World.Timestep;
 			return SeasonalPhase.Flowering;
 		}
-        if (FloweringStarted[^1] < uint.MaxValue && ((Plant.World.Timestep - FloweringStarted[^1]) * Plant.World.HoursPerTick > species.FloweringPhaseDurationHours || season > species.FloweringSeasonEnd))
+		//Only a recorded start timestep may be closed off. PostFloweringState is
+		//uint.MaxValue - 1, so a "< uint.MaxValue" test also matched an already
+		//closed cycle: the branch re-entered every tick, appended a list entry each
+		//time, and evaluated the elapsed time against a wrapped-around sentinel.
+		//ResetPending then became unreachable, so winter dormancy never happened.
+		if (FloweringStarted[^1] < PostFloweringState && ((Plant.World.Timestep - FloweringStarted[^1]) * Plant.World.HoursPerTick > species.FloweringPhaseDurationHours || season > species.FloweringSeasonEnd))
 		{
-			FloweringStarted.Add(PostFloweringState);
+			FloweringStarted[^1] = PostFloweringState;
 			return SeasonalPhase.PostFlower;
+		}
+        else if (FloweringStarted[^1] == PostFloweringState)
+		{
+			//Fruiting and reserve refilling continue after anthesis until seasonal
+			//senescence sets in; from then on the plant is dormant and the Dormant*
+			//probabilities apply. Branch one returns it to PreFlower next spring.
+			return season > species.SeasonalSenescence
+				? SeasonalPhase.ResetPending
+				: SeasonalPhase.PostFlower;
 		}
         else
 		{

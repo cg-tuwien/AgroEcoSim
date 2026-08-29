@@ -34,16 +34,19 @@ public static class Geranium_x_Cantabrigiense
         LeafGrowthTimeVar = 24f * 3f,
         LeafMaximumAgeHours = 24 * 365,
 
-        PetioleLength = 0.06f,
-        PetioleLengthVar = 0.012f,
+        // A more compact hybrid than G. macrorrhizum: petioles 8-15 cm.
+        PetioleLength = 0.12f,
+        PetioleLengthVar = 0.025f,
         PetioleRadius = 0.0015f,
         PetioleRadiusVar = 0.0002f,
 
         CrownBudActivationPeriod = SeasonalPhase.PreFlower | SeasonalPhase.Flowering,
-        CrownBudActivationProbabilityPerSeason = 0.90f,
+        CrownBudActivationProbabilityPerSeason = 0.75f,
+        CrownBudRadius = 0.0007f,
         CrownNodeHeightAboveSoil = 0.010f,
         CrownPitch = 90f * DegToRad,
         HerbaceousGrowthRateScale = 0.25f,
+        RhizomeGrowthRateScale = 0.035f,
         ShootMaximumRadius = 0.003f,
 
         LateralPitch = 45 * (MathF.PI / 180f),
@@ -56,32 +59,35 @@ public static class Geranium_x_Cantabrigiense
         NodeDistanceVar = 0.00075f,
         DominanceFactor = 0.7f,
 
-        RhizomeOffshootsPerSegment = 1,
-        InitialRhizomeAxes = 4,
+        RhizomeAxillaryBudsPerSegment = 1,
+        InitialBasalRhizomeBuds = 6,
         // A lower, compact carpet than G. macrorrhizum, but still able to
         // colonise the free soil around its seed rather than remaining a tuft.
-        RhizomeMaximumSegmentDepth = 18,
+        RhizomeMaximumSegmentDepth = 30,
         RhizomeSegmentLength = 0.055f,
         RhizomeSegmentRadius = 0.0022f,
+        RhizomeBudRadius = 0.001f,
         RetainDormantRhizomes = true,
-        RhizomeOffshootProbabilityPerHour = 0.0005f,
-        RhizomeSecondaryLateralProbabilityPerHour = 0.00008f,
+        RhizomeBudActivationPeriod = SeasonalPhase.PreFlower | SeasonalPhase.Flowering,
+        RhizomeBasalBudActivationProbabilityPerHour = 0.008f,
+        // Annual sympodial branching, the event that turns radiating axes into a mat.
+        RhizomeAxillaryBudActivationProbabilityPerSeason = 0.6f,
         FloweringStartAgeHours = 24f * 55f,
         FloweringPhaseDurationHours = 24f * 60f,
 
         // These events create another two-leaf crown node.  They are hourly
-        // probabilities, so the old percent-level values made an impossible
-        // leaf pile before a rhizome could occupy the surrounding soil.
-        PreFloweringCrownContinuationProbabilityPerHour = 0.0002f,
-        FloweringCrownContinuationProbabilityPerHour = 0.001f,
-        PostFloweringCrownContinuationProbabilityPerHour = 0.0005f,
+        // probabilities; the previous values were low enough to yield roughly one
+        // node per year, so the rosette never stacked its leaves at all.
+        PreFloweringCrownContinuationProbabilityPerHour = 0.0035f,
+        FloweringCrownContinuationProbabilityPerHour = 0.0012f,
+        PostFloweringCrownContinuationProbabilityPerHour = 0.0018f,
         DormantCrownContinuationProbabilityPerHour = 0f,
 
-        PreFloweringCommitmentProbabilityPerHour = 0.0002f,
-        FloweringCommitmentProbabilityPerHour = 0.002f,
-        PostFloweringCommitmentProbabilityPerHour = 0.0005f,
+        PreFloweringCommitmentProbabilityPerHour = 0.0005f,
+        FloweringCommitmentProbabilityPerHour = 0.018f,
+        PostFloweringCommitmentProbabilityPerHour = 0.0002f,
         DormantFloweringCommitmentProbabilityPerHour = 0f,
-        ContinueCrownAfterFlowerCommitment = false,
+        ContinueCrownAfterFlowerCommitment = true,
 
         WoodElasticModulus = 1.2e8f,
         GreenElasticModulus = 5e6f,
