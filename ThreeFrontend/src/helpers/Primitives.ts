@@ -2,7 +2,10 @@ import * as THREE from "three";
 
 export enum Primitives { Disk, Rectangle, Cylinder, Sphere, Box }
 
-export enum Organs { Root = 1, Bud = 2, Stem = 4, Leaf = 5, Petiole = 6, Fruit = 7, Meristem = 8, FlowerBud = 9, FlowerStem = 10, FlowerPetal = 11, FlowerPetiole = 12, FlowerMeristem = 13, FlowerBaseBud = 14, RizomeMeristem = 15 }
+//Keep in sync with OrganTypes in Agro/Organs.cs. The organ code is written as a single
+//byte in front of every primitive record and decides the record layout, so any divergence
+//desynchronizes the whole binary stream, not just the affected organ.
+export enum Organs { Unspecified = 0, Seed = 1, Bud = 2, Root = 3, Stem = 4, Leaf = 5, Petiole = 6, Fruit = 7, Meristem = 8, RizomeMeristem = 9, FlowerBud = 10, FlowerStem = 11, FlowerPadel = 12, FlowerPedicel = 13, FlowerMeristem = 14, FlowerBaseBud = 15 }
 
 type StatsBase = {
     //water, energy, irradiance, dailyResources, dailyProduction, color for leaves

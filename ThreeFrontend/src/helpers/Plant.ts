@@ -59,7 +59,7 @@ export function UpdateLeafMesh(mesh: THREE.Mesh, primitive: Primitive, leafGeome
 }
 
 export function VisualizeLeafMesh(material: THREE.MeshStandardMaterial, index: Index) {
-    const primitive = appstate.scene.peek()[index.entity][index.primitive];
+    const primitive = appstate.scene.peek()[index.entity].primitives[index.primitive];
     const c = LeafColor(primitive, index.primitive);
     material.color = c.color;
     material.emissive = c.emissive;
@@ -88,7 +88,7 @@ export function UpdateStemMesh(mesh: THREE.Mesh, primitive: Primitive, index: In
 }
 
 export function VisualizeStemMesh(material: THREE.MeshStandardMaterial, index: Index) {
-    const primitive = appstate.scene.peek()[index.entity][index.primitive];
+    const primitive = appstate.scene.peek()[index.entity].primitives[index.primitive];
     const c = StemColor(primitive);
     material.color = c.color;
     material.emissive = c.emissive;
@@ -118,7 +118,7 @@ export function UpdateRootMesh(mesh: THREE.Mesh, primitive: Primitive, index: In
 }
 
 export function VisualizeRootMesh(material: THREE.MeshStandardMaterial, index: Index) {
-    const primitive = appstate.scene.peek()[index.entity][index.primitive];
+    const primitive = appstate.scene.peek()[index.entity].primitives[index.primitive];
     const c = RootColor(primitive);
     material.color = c.color;
     material.emissive = c.emissive;
@@ -150,7 +150,7 @@ export function UpdateBudMesh(mesh: THREE.Mesh, primitive: Primitive, index: Ind
 
 
 export function VisualizeBudMesh(material: THREE.MeshStandardMaterial, index: Index) {
-    const primitive = appstate.scene.peek()[index.entity][index.primitive];
+    const primitive = appstate.scene.peek()[index.entity].primitives[index.primitive];
     const c = BudColor(primitive);
     material.color = c.color;
     material.emissive = c.emissive;

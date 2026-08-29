@@ -560,14 +560,15 @@ export default function ThreeSceneFn (props: { gpu: GPUDevice}) {
             const material = x.material as THREE.MeshStandardMaterial;
             if (material)
             {
-                if (x.geometry == threePlanePrimitive) //leaf
-                    VisualizeLeafMesh(material, data.index);
-                else if (x.geometry == threeCylinderPrimitive) //stem
-                    VisualizeStemMesh(material, data.index);
-                else if (x.geometry == threeSpherePrimitive) //bud
-                    VisualizeBudMesh(material, data.index);
-                else
-                    VisualizeRootMesh(material, data.index);
+                //Do not derive the organ from the geometry: leaves use a per-species mesh whenever the
+                //backend provides one, so only the fallback plane would still be recognized here.
+                switch (appstate.scene.peek()[data.index?.entity]?.primitives[data.index?.primitive]?.type)
+                {
+                    case Primitives.Rectangle: VisualizeLeafMesh(material, data.index); break; //leaf / petal
+                    case Primitives.Cylinder: VisualizeStemMesh(material, data.index); break; //stem
+                    case Primitives.Sphere: VisualizeBudMesh(material, data.index); break; //bud
+                    case Primitives.Box: VisualizeRootMesh(material, data.index); break; //root
+                }
             }
         })
         renderOnce();

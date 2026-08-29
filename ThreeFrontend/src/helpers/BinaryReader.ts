@@ -290,7 +290,7 @@ export default class BinaryReader {
                 const organ = this.readUInt8();
                 switch(organ)
                 {
-                    case 5: case 11: { //leaf //flower_petal
+                    case Organs.Leaf: case Organs.FlowerPadel: { //lamina record: 12-float affine transform, no length/radius
                         const transform = this.readFloat32Vector(12);
                         if (doAnalytics)
                         {
@@ -313,7 +313,8 @@ export default class BinaryReader {
                         }
                     }
                     break;
-                    case 4: case 6: case 8: case 9: case 10: case 12: case 13: { //stem //petiole //meristem //flower_stem //flower_meristem //flower_petiole //flower_bud
+                    case Organs.Stem: case Organs.Petiole: case Organs.Meristem: case Organs.RizomeMeristem:
+                    case Organs.FlowerBud: case Organs.FlowerStem: case Organs.FlowerPedicel: case Organs.FlowerMeristem: { //cylinder record: length + radius + 12-float affine transform
                         const length = this.readFloat32();
                         const radius = this.readFloat32();
                         const transform = this.readFloat32Vector(12);
@@ -338,7 +339,7 @@ export default class BinaryReader {
                         }
                     }
                     break;
-                    case 2: { //bud
+                    case Organs.Bud: { //bud
                         const center = this.readFloat32Vector(3);
                         const radius = this.readFloat32();
                         if (doAnalytics)
@@ -352,26 +353,37 @@ export default class BinaryReader {
                         //entity.push({ type: Primitives.Sphere, organ: organ, center: center, radius: radius, stats: new Float32Array([waterRatio, energyRatio, auxins, cytokinins]) });
                     }
                     break;
+                    default:
+                        //Every record is preceded by its organ code and its length depends on that code.
+                        //An unknown code cannot be skipped, so everything after it would be decoded from
+                        //a wrong offset. Abort loudly instead of returning garbage geometry.
+                        console.error(`Unknown organ code ${organ} in the scene stream (entity ${i}, primitive ${j}). Organs in Primitives.ts is out of sync with OrganTypes in Agro/Organs.cs.`);
+                        return result;
                 }
             }
 
             if (doRoots)
             {
-                const rootsCount =  this.readUInt32();
+                //ExportV7 writes the VirtualRoots flag first; virtual root systems carry only their
+                //bounding size instead of a list of root segments.
+                const virtualRoots = this.readUInt8() != 0;
+                if (virtualRoots)
+                    this.readFloat32Vector(3); //bounding size of the virtual root system
+                const rootsCount = virtualRoots ? 0 : this.readUInt32();
                 for(let j = 0; j < rootsCount; ++j)
                 {
                     const parentIndex = this.readInt32();
                     switch(this.readUInt8())
                     {
-                        case 1: { //root
+                        case 1: { //root, the roots section uses a local code, not an OrganTypes value
                             const length = this.readFloat32();
                             const radius = this.readFloat32();
                             const transform = this.readFloat32Vector(12);
-                            const waterRatio = this.readFloat32();
-                            const energyRatio = this.readFloat32();
-                            const woodRatio = this.readFloat32();
-                            const dailyResource = this.readFloat32();
-                            const dailyProduction = this.readFloat32();
+                            const waterRatio = doAnalytics ? this.readFloat32() : 0;
+                            const energyRatio = doAnalytics ? this.readFloat32() : 0;
+                            const woodRatio = doAnalytics ? this.readFloat32() : 0;
+                            const dailyResource = doAnalytics ? this.readFloat32() : 0;
+                            const dailyProduction = doAnalytics ? this.readFloat32() : 0;
                             const auxins = 0;//this.readFloat32();
                             const cytokinins = 0;//this.readFloat32();
                             entity.push({ type: Primitives.Box, organ: Organs.Root, affineTransform: transform, length: length, radius: radius, stats: new Float32Array([waterRatio, energyRatio, auxins, cytokinins, woodRatio, dailyResource, dailyProduction, 0, 0]) });
