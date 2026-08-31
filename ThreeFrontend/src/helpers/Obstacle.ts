@@ -1,35 +1,17 @@
-import { Signal, batch, effect, signal } from "@preact/signals";
+import { Signal, batch, signal } from "@preact/signals";
 import appstate from "../appstate";
-import * as THREE from 'three';
-import { neutralColor } from "./Selection";
-import { BaseRequestObject, ReqObjMaterials } from "./BaseRequestObject";
+import { BaseRequestObject } from "./BaseRequestObject";
+import { MeshData, computeVertexNormals } from "../render/core/Geometry";
+import { makeSelectionPalette } from "../render/core/SelectionPalette";
+import { Geom } from "../render/core/GeometryIds";
+import { Mat4, identity, scaleInPlace, setPosition } from "../render/core/Mat4";
 
-const color = new THREE.Color("#999");
-const box = new THREE.BoxGeometry().translate(0, 0.5, 0);
-const disk = new THREE.CircleGeometry().rotateX(-Math.PI * 0.5);
-const defaultMaterial = new THREE.MeshLambertMaterial({
-    color: color,
-    polygonOffset: true,
-    polygonOffsetFactor: -2,
-    side: THREE.DoubleSide,
-    flatShading: true,
-    name: "obstacleDefault"
-});
-const hoverMaterial = new THREE.MeshLambertMaterial({ ...defaultMaterial, color: color.clone().lerpHSL(neutralColor, 0.1), name: "obstacleHover "});
-const selectMaterial = new THREE.MeshLambertMaterial({ ...defaultMaterial, color: color.clone().lerpHSL(neutralColor, 0.2), name: "obstacleSelect" });
-//disabled when using the gizmo
-//const grabMaterial = new THREE.MeshStandardMaterial({ color: color.clone().lerpHSL(new THREE.Color("#06a"), 0.5) });
-//const selectHoverMaterial = new THREE.MeshStandardMaterial({ color: grabMaterial.color.clone().lerpHSL(selectMaterial.color, 0.5) });
-const grabMaterial = selectMaterial;
-const selectHoverMaterial = selectMaterial;
+const obstaclePalette = makeSelectionPalette("#999");
 
-const obstacleMaterials : ReqObjMaterials = {
-    default: defaultMaterial,
-    hover: hoverMaterial,
-    select: selectMaterial,
-    grab: grabMaterial,
-    selectHover: selectHoverMaterial
-}
+//Stable identity for geometry registration. Obstacles have no natural key (imported meshes
+//share the type "mesh" and carry no id), and keying on list position would re-register a
+//different geometry whenever the list is reordered.
+let nextObstacleUid = 0;
 
 export type ObstacleType = "wall" | "umbrella" | "mesh";
 
@@ -44,10 +26,14 @@ export class Obstacle extends BaseRequestObject
 
     vertices: Float32Array;
     faces: number[];
-    bufferGeometry: THREE.BufferGeometry;
+    /** Renderer-neutral form of an imported mesh obstacle; undefined for wall/umbrella. */
+    meshData: MeshData | undefined;
+    /** Runtime geometry id assigned by the renderer when it registers meshData. */
+    meshGeom: number | undefined;
+    readonly uid = nextObstacleUid++;
 
     constructor(type: ObstacleType, x: number, y: number, z: number, ax: number, ay: number, l: number, h: number, t: number, verts: Float32Array, faces: number[]) {
-        super(x, y, z, obstacleMaterials);
+        super(x, y, z, obstaclePalette);
 
         this.type = signal(type);
         this.angleX = signal(ax);
@@ -59,96 +45,61 @@ export class Obstacle extends BaseRequestObject
         this.vertices = verts;
         this.faces = faces;
 
-        switch(type)
+        if (type === "mesh")
         {
-            case "wall":
-                this.mesh = new THREE.Mesh(box, obstacleMaterials.default);
-                this.setupWall();
-                break;
-            case "umbrella":
-                this.mesh = new THREE.Mesh(disk, obstacleMaterials.default);
-                this.setupUmbrella();
-                break;
-            case "mesh":
-                // console.log("Vertices", this.vertices, this.vertices.length % 3, this.vertices.length / 3);
-                // console.log("Faces", this.faces, this.faces.length % 3, this.faces.length / 3);
-                // console.log("MaxVertex", this.faces.reduce((a,c) => Math.max(a, c), 0));
-                this.movable = false;
-                this.bufferGeometry = new THREE.BufferGeometry();
-                this.bufferGeometry.setAttribute('position', new THREE.Float32BufferAttribute(this.vertices, 3));
-                this.bufferGeometry.setIndex(this.faces);
-                this.bufferGeometry.computeVertexNormals();
-                this.bufferGeometry.computeBoundingBox();
-                this.bufferGeometry.computeBoundingSphere();
-                // this.bufferGeometry.setIndex(new THREE.BufferAttribute(this.faces, 1))
-                // this.bufferGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array([-20, 0, 20,  20, 0, 20,  -20, 0, -20]), 3));
-                // this.bufferGeometry.setIndex([0, 1, 2]);
-                // this.bufferGeometry = new THREE.BoxGeometry();
-                // this.bufferGeometry.scale(100, 10, 2);
-                this.mesh = new THREE.Mesh(this.bufferGeometry, obstacleMaterials.default);
-                // this.setupMesh();
-                // this.wallLength_UmbrellaRadius.value = 1;
-                // this.height.value = 1;
-                // this.thickness.value = 1;
-                // this.mesh = new THREE.Mesh(box, meshMaterial);
-                // this.setupWall();
-                break;
+            this.movable = false;
+            //Built as neutral MeshData so either renderer can consume the same arrays.
+            const indices = Uint32Array.from(this.faces);
+            this.meshData = {
+                positions: this.vertices,
+                normals: computeVertexNormals(this.vertices, indices),
+                indices,
+                name: 'obstacle:mesh',
+            };
         }
 
-        this.mesh.userData = { type: "obstacle", obstacle: this };
-        appstate.objObstacles.add(this.mesh);
         appstate.needsRender.value = true;
-
-        // effect(() => {
-        //     this.mesh.position.set(this.px.value, this.py.value + (this.type.peek() == "wall" ? 0 : this.height.value), this.pz.value);
-        //     appstate.needsRender.value = true;
-        // });
-
-        effect(() => {
-            switch(this.type.value)
-            {
-                case "wall":
-                    this.mesh.geometry = box;
-                    this.setupWall();
-                    break;
-                case "umbrella":
-                    this.mesh.geometry = disk;
-                    this.setupUmbrella();
-                    break;
-                case "mesh":
-                    this.mesh.geometry = this.bufferGeometry;
-                    break;
-            }
-            appstate.needsRender.value = true;
-        });
-
-        effect(() => {
-            if (this.type.peek() !== "mesh")
-            {
-                const lr = this.wallLength_UmbrellaRadius.value;
-                const t = this.thickness.value;
-
-                this.mesh.scale.set(
-                    lr * (this.type.peek() == "wall" ? 1 : 0.5),
-                    this.height.value,
-                    this.type.peek() == "wall" ? t : lr * 0.5);
-            }
-            appstate.needsRender.value = true;
-        })
     }
 
-    private setupUmbrella() {
-        this.mesh.scale.set(this.wallLength_UmbrellaRadius.peek() * 0.5, this.height.peek(), this.wallLength_UmbrellaRadius.peek() * 0.5);
-        this.mesh.position.set(this.px.peek(), this.py.peek() + this.height.peek(), this.pz.peek());
+    /**
+     * Which geometry to draw. Mesh obstacles resolve to the runtime id the renderer assigned
+     * when it registered meshData; the renderer falls back to a plain box if it has not.
+     */
+    geomId(): number {
+        switch (this.type.value)
+        {
+            case "wall": return Geom.BoxBottomCentered;
+            case "umbrella": return Geom.CircleUnit;
+            default: return this.meshGeom ?? Geom.BoxBottomCentered;
+        }
     }
 
-    private setupWall() {
-        this.mesh.scale.set(this.wallLength_UmbrellaRadius.peek(), this.height.peek(), this.thickness.peek());
-        this.mesh.position.set(this.px.peek(), this.py.peek(), this.pz.peek());
-    }
+    /**
+     * Writes this obstacle's model matrix.
+     *
+     * Replaces setupWall/setupUmbrella plus the two effects that used to push scale and
+     * position into mesh. Reads through `.value` so a renderer effect re-runs on change.
+     * Umbrellas are anchored at their post, hence the +height on Y, and use half the
+     * diameter as the radius scale.
+     */
+    writeModel(out: Mat4): Mat4 {
+        identity(out);
+        const type = this.type.value;
+        const lr = this.wallLength_UmbrellaRadius.value;
+        const h = this.height.value;
+        const t = this.thickness.value;
 
-    private setupMesh() {
-        this.mesh.position.set(this.px.peek(), this.py.peek(), this.pz.peek());
+        switch (type)
+        {
+            case "wall":
+                scaleInPlace(out, lr, h, t);
+                return setPosition(out, this.px.value, this.py.value, this.pz.value);
+            case "umbrella":
+                scaleInPlace(out, lr * 0.5, h, lr * 0.5);
+                return setPosition(out, this.px.value, this.py.value + h, this.pz.value);
+            default:
+                return setPosition(out, this.px.value, this.py.value, this.pz.value);
+        }
     }
 
     static rndObstacle() {
@@ -160,12 +111,13 @@ export class Obstacle extends BaseRequestObject
             isWall ? 4 : 1, isWall ? 3 : 2.2,  isWall ? 0.4 : 0.08, undefined, undefined);
     }
 
-    transformMove() {
+    /** Undoes the umbrella's drawing offset so px/py/pz stay in anchor space. */
+    transformMove(x: number, y: number, z: number) {
         if (this.movable)
             batch(() => {
-                this.px.value = this.mesh.position.x;
-                this.py.value = this.mesh.position.y - (this.type.peek() == "wall" ? 0 : this.height.peek());
-                this.pz.value = this.mesh.position.z;
+                this.px.value = x;
+                this.py.value = y - (this.type.peek() == "wall" ? 0 : this.height.peek());
+                this.pz.value = z;
                 appstate.needsRender.value = true;
             });
     }
@@ -181,8 +133,9 @@ export class Obstacle extends BaseRequestObject
             t: this.thickness.peek(),
             ax: this.angleX.peek(),
             ay: this.angleY.peek(),
-            vt: Array.from(this.vertices),
-            fc: this.faces
+            //vertices/faces are only populated for imported mesh obstacles.
+            vt: this.vertices ? Array.from(this.vertices) : [],
+            fc: this.faces ?? []
         }
     }
 }

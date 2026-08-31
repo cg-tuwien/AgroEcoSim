@@ -1,6 +1,10 @@
-import * as THREE from "three";
+import { neutralColor as neutralRGB, backgroundColor as backgroundRGB } from "../render/core/Theme";
+import { toThreeColor } from "../render/three/ThreeColor";
 
 export type SelectionState = "none" | "hover" | "select" | "selecthover" | "grab";
 
-export const neutralColor = new THREE.Color(getComputedStyle(document.documentElement).getPropertyValue("color"));
-export const backgroundColor = new THREE.Color(getComputedStyle(document.documentElement).getPropertyValue("background"));
+//The CSS parsing moved to src/render/core/Theme.ts so the WebGPU renderer can read the same
+//theme without three. These stay as THREE.Color for the existing Three-side call sites
+//(scene.background, the lerpHSL material tinting in Seed/Obstacle/Terrain).
+export const neutralColor = toThreeColor(neutralRGB);
+export const backgroundColor = toThreeColor(backgroundRGB);

@@ -6,13 +6,35 @@ import { PlantModel } from "./Scene";
 
 const decoder = new TextDecoder("utf-8");
 
+/** "00".."ff", so the per-byte hex conversion is an index rather than toString plus a pad. */
+const HEX2: string[] = Array.from({ length: 256 }, (_, i) => i.toString(16).padStart(2, '0'));
+
+//Interned colour strings, keyed by packed rgb. Bounded only by the number of distinct colours
+//the simulation actually emits, which is a palette, not a continuum.
+const hexCache = new Map<number, string>();
+
 export default class BinaryReader {
     source: Uint8Array;
-    pos: 0;
+    pos: number;
+    /**
+     * A view over the same bytes, used for every multi-byte read.
+     *
+     * readFloat32 used to be `new Float32Array(source.slice(pos, pos + 4).buffer)`, which
+     * allocates a copy of the four bytes AND a typed array to reinterpret them - two objects
+     * per float, so roughly fifty per primitive once the affine transform and the analytics
+     * block are counted. At tens of thousands of primitives per timestep, redecoded on every
+     * frame of playback, that was the single largest source of garbage in the app.
+     *
+     * The byteOffset/byteLength must be passed through: `src` is frequently a view into a
+     * larger buffer (Node's Buffer pools its allocations), and a DataView over `src.buffer`
+     * alone would silently read from the wrong place.
+     */
+    private view: DataView;
 
     constructor(src: Uint8Array) {
         this.source = src;
         this.pos = 0;
+        this.view = new DataView(src.buffer, src.byteOffset, src.byteLength);
     }
 
     readUInt8() {
@@ -25,7 +47,7 @@ export default class BinaryReader {
     }
 
     readUInt16() {
-        const result = (this.source[this.pos + 1] << 8) | this.source[this.pos];
+        const result = this.view.getUint16(this.pos, true);
         this.pos += 2;
         return result;
     }
@@ -36,34 +58,40 @@ export default class BinaryReader {
     }
 
     readUInt32() {
-        const result = (this.source[this.pos + 3] << 24) | (this.source[this.pos + 2] << 16) | (this.source[this.pos + 1] << 8) | this.source[this.pos];
+        const result = this.view.getUint32(this.pos, true);
         this.pos += 4;
         return result;
     }
 
     readInt32() {
-        const result = this.readUInt32();
-        return result >= 2147483648 ? result - 4294967296 : result;
+        const result = this.view.getInt32(this.pos, true);
+        this.pos += 4;
+        return result;
     }
 
     readFloat32() {
-        //const result = new Float32Array([this.source[this.pos + 3], this.source[this.pos + 2], this.source[this.pos + 1], this.source[this.pos]]);
-        const result = new Float32Array(this.source.slice(this.pos, this.pos + 4).buffer);
+        const result = this.view.getFloat32(this.pos, true);
         this.pos += 4;
-        return result[0];
+        return result;
     }
 
     readFloat32Vector(n: number) {
         const result = new Float32Array(n);
-        for(let i = 0; i < n; ++i)
-            result[i] = this.readFloat32();
+        //Read straight into the destination rather than through readFloat32, so the whole
+        //vector costs one bounds check per element and no call overhead.
+        let p = this.pos;
+        for (let i = 0; i < n; ++i, p += 4)
+            result[i] = this.view.getFloat32(p, true);
+        this.pos = p;
         return result;
     }
 
     readInt32Array(n: number) {
-        const result : number[] = [];
-        for(let i = 0; i < n; ++i)
-            result[i] = this.readInt32();
+        const result : number[] = new Array(n);
+        let p = this.pos;
+        for (let i = 0; i < n; ++i, p += 4)
+            result[i] = this.view.getInt32(p, true);
+        this.pos = p;
         return result;
     }
 
@@ -87,14 +115,21 @@ export default class BinaryReader {
     }
 
     readHexRGB() {
-        const toHex2 = (n: number) => {
-            const s = n.toString(16);
-            return s.length === 1 ? "0" + s : s;
-        };
         const r = this.source[this.pos++];
         const g = this.source[this.pos++];
         const b = this.source[this.pos++];
-        return `#${toHex2(r)}${toHex2(g)}${toHex2(b)}`;
+
+        //One string per primitive adds up, and a scene draws from a small fixed palette - the
+        //shuffled green ramp plus a handful of organ colours - so the same few dozen strings
+        //are rebuilt tens of thousands of times per timestep. Interning by the packed 24-bit
+        //value makes the repeat case a map lookup and hands every caller the same instance.
+        const key = (r << 16) | (g << 8) | b;
+        const hit = hexCache.get(key);
+        if (hit !== undefined) return hit;
+
+        const made = `#${HEX2[r]}${HEX2[g]}${HEX2[b]}`;
+        hexCache.set(key, made);
+        return made;
     }
 
     isEnd() {

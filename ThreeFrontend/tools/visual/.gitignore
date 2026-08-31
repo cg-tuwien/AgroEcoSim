@@ -1,0 +1,2 @@
+# Capture output. The harness writes PNGs next to the scripts by default.
+*.png

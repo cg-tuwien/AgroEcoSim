@@ -1,4 +1,3 @@
-import * as THREE from "three";
 import { Primitive } from "./Primitives";
 
 export type PlantModel = { primitives: Primitive[], species: string };

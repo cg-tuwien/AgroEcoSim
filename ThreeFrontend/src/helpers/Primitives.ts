@@ -1,5 +1,3 @@
-import * as THREE from "three";
-
 export enum Primitives { Disk, Rectangle, Cylinder, Sphere, Box }
 
 //Keep in sync with OrganTypes in Agro/Organs.cs. The organ code is written as a single

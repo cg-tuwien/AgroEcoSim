@@ -2,7 +2,6 @@ import { Component, h, Fragment } from "preact";
 import appstate from "../../appstate";
 import { DecodePlantName } from "../../helpers/Plant";
 import { Primitive, Primitives } from "../../helpers/Primitives";
-import * as THREE from "three";
 import { Seed } from "src/helpers/Seed";
 
 const fixedPrecision = 4;
@@ -13,8 +12,9 @@ export function PickedDetails()
     if (seedPick >= 0 && seedPick <= appstate.seeds.value.length)
     {
         const seed = appstate.seeds.value[seedPick];
-        const v = new THREE.Vector3();
-        seed.mesh.getWorldPosition(v);
+        //Computed from the model rather than read back off a mesh, so this panel works
+        //whichever viewport backend is mounted.
+        const v = seed.worldPosition();
         return <ul style={{listStyleType: "none"}}>
             <li>Index: {seedPick}</li>
             <li>Species: {seed.species.value}</li>

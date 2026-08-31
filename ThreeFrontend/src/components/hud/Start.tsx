@@ -2,12 +2,16 @@ import { Component, h, Fragment } from "preact";
 import appstate, { PlayState } from "../../appstate";
 import { batch } from "@preact/signals-core";
 import { encodeTime } from "../../helpers/TimeUnits";
+import { sceneStats, leafGeomIdFor } from "../../render/core/SceneStats";
 //import "wired-elements"
 //import Button from 'preact-material-components/Button';
 //import 'preact-material-components/Button/style.css';
 
-const tris = [0, 12, 32, 0, 128, 0, 0, 0, 2];
 export function Start(props: { inclStats: boolean }) {
+    //Memoised on the scene array, so this is one walk per timestep rather than two per render -
+    //at 7,700 plants the inline version was ~2.5M iterations every time the HUD redrew.
+    const stats = () => sceneStats(appstate.scene.value, leafGeomIdFor);
+
     const time = () => {
         let playPointer = Math.max(0, Math.min(appstate.playPointer.value, appstate.history.length - 1));
         return appstate.simHoursPerTick * (appstate.history.length > 0 ? appstate.history[playPointer].t : 0);
@@ -37,8 +41,8 @@ export function Start(props: { inclStats: boolean }) {
         {props.inclStats ? <span>
             <div>Seeds: {appstate.seeds.value.length}</div>
             <div>Obstacles: {appstate.obstacles.value.length}</div>
-            <div>Objects: {Math.floor(appstate.scene.value.reduce((a,c) => a + c.primitives.length, 0) + appstate.playPointer.value * 0.01)}</div>
-            <div>Triangles: {Math.floor(appstate.scene.value.reduce((a,c) => a + c.primitives.reduce((b,d)=> b + tris[d.type], 0), 0) + appstate.playPointer.value * 0.01)}</div>
+            <div>Objects: {stats().objects}</div>
+            <div>Triangles: {stats().triangles}</div>
             <div>Backend Renderer: {appstate.renderer.value}</div>
         </span> : <></>}
     </p>;

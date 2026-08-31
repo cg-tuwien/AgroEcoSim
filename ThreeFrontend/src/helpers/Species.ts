@@ -2,6 +2,8 @@ import { signal } from "@preact/signals"
 import BinaryReader from "./BinaryReader";
 import * as THREE from 'three';
 import { SpeciesBase } from "./Species.gen";
+import { MeshData, computeVertexNormals } from "../render/core/Geometry";
+import { toBufferGeometry } from "../render/three/ThreeGeometry";
 
 const DegToRad = Math.PI / 180.0;
 const RadToDeg = 180.0 / Math.PI;
@@ -60,7 +62,17 @@ export class Species extends SpeciesBase {
     leafMorphology: any;
     leafPhenology: any;
 
-    leafGeometry: THREE.BufferGeometry | undefined = undefined;
+    /** Renderer-neutral form, consumed directly by the WebGPU geometry atlas. */
+    leafMesh: MeshData | undefined = undefined;
+
+    /**
+     * Three-side view of leafMesh, built lazily and cached by MeshData identity in
+     * toBufferGeometry. A getter rather than a field so that loading a leaf mesh does not
+     * force a BufferGeometry to exist on the WebGPU path.
+     */
+    get leafGeometry(): THREE.BufferGeometry | undefined {
+        return this.leafMesh ? toBufferGeometry(this.leafMesh) : undefined;
+    }
 
     public static Default() {
         const result = new Species();
@@ -245,17 +257,18 @@ export class Species extends SpeciesBase {
             vertices[v] = reader.readFloat32();
 
         const indicesCount = reader.readInt32();
-        const indices: number[] = [];
+        const indices = new Uint32Array(indicesCount);
         for(let f = 0; f < indicesCount; ++f)
-            indices.push(reader.readInt32());
+            indices[f] = reader.readInt32();
 
-        const geometry = new THREE.BufferGeometry();
-        geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-        geometry.setIndex(indices);
-        geometry.computeVertexNormals();
-        geometry.computeBoundingBox();
-        geometry.computeBoundingSphere();
-
-        this.leafGeometry = geometry;
+        //computeVertexNormals here reproduces THREE.BufferGeometry.computeVertexNormals
+        //exactly (area-weighted, normalized once at the end), so swapping in the neutral
+        //implementation does not change leaf shading.
+        this.leafMesh = {
+            positions: vertices,
+            normals: computeVertexNormals(vertices, indices),
+            indices,
+            name: `leaf:${this.name.peek()}`,
+        };
     }
 }

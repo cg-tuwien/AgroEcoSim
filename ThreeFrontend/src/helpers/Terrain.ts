@@ -1,28 +1,11 @@
-import * as THREE from 'three';
-import { BaseRequestObject, ReqObjMaterials } from "./BaseRequestObject";
-import { neutralColor } from "./Selection";
+import { BaseRequestObject } from "./BaseRequestObject";
+import { MeshData, computeVertexNormals } from "../render/core/Geometry";
+import { makeSelectionPalette } from "../render/core/SelectionPalette";
+import { Vec2, normalize2, perp2, vec2 } from "../render/core/Vec3";
+import { Geom } from "../render/core/GeometryIds";
+import { Mat4, identity, scaleInPlace, setPosition } from "../render/core/Mat4";
 
-const color = new THREE.Color("#573600");
-const defaultMaterial = new THREE.MeshLambertMaterial({
-    color: color,
-    side: THREE.DoubleSide,
-    flatShading: true,
-    name: "terrainDefault"
-});
-const hoverMaterial = new THREE.MeshLambertMaterial({ ...defaultMaterial, color: color.clone().lerpHSL(neutralColor, 0.1), name: "terrainHover "});
-const selectMaterial = new THREE.MeshLambertMaterial({ ...defaultMaterial, color: color.clone().lerpHSL(neutralColor, 0.2), name: "terrainSelect" });
-const grabMaterial = selectMaterial;
-const selectHoverMaterial = selectMaterial;
-
-const terrainMaterials : ReqObjMaterials = {
-    default: defaultMaterial,
-    hover: hoverMaterial,
-    select: selectMaterial,
-    grab: grabMaterial,
-    selectHover: selectHoverMaterial
-}
-
-export const terrainDefaultMaterial = defaultMaterial;
+export const terrainPalette = makeSelectionPalette("#573600");
 
 export abstract class ITerrainItem extends BaseRequestObject {
     abstract save(): void;
@@ -33,13 +16,18 @@ export abstract class ITerrainItem extends BaseRequestObject {
     abstract sx(): number;
     abstract sy(): number;
     abstract sz(): number;
+
+    /** Which geometry the renderer should draw for this item. */
+    abstract geomId(): number;
+    /** Writes this item's model matrix. Reads signals through .value where applicable. */
+    abstract writeModel(out: Mat4): Mat4;
 }
 
 export class BoxTerrainItem extends ITerrainItem {
     data: Float32Array;
 
     constructor(id: string, data: Float32Array, index: number) {
-        super(data[0], data[1], data[2], terrainMaterials, index);
+        super(data[0], data[1], data[2], terrainPalette, index);
         this.data = data;
         this.id = id;
         this.movable = false;
@@ -58,6 +46,21 @@ export class BoxTerrainItem extends ITerrainItem {
     qz = () => this.data[8];
     qw = () => this.data[9];
 
+    geomId(): number {
+        return Geom.BoxCorner;
+    }
+
+    /**
+     * The BoxCorner geometry has its origin at the min corner, so a box whose posy() is its
+     * TOP surface is positioned a full height lower. Mirrors what buildTerrain did with
+     * mesh.position.set(posx(), posy() - sy(), posz()).
+     */
+    writeModel(out: Mat4): Mat4 {
+        identity(out);
+        scaleInPlace(out, this.sx(), this.sy(), this.sz());
+        return setPosition(out, this.posx(), this.posy() - this.sy(), this.posz());
+    }
+
     save() {
         return {"id": this.id, "data": Array.from(this.data) }
     }
@@ -72,20 +75,21 @@ export class MeshTerrainItem extends ITerrainItem {
     points: Float32Array;
     triangles: number[];
     pos: Float32Array;
-    principalDir: THREE.Vector2;
-    secondaryDir: THREE.Vector2;
+    private cachedMeshData: MeshData | undefined;
+    principalDir: Vec2;
+    secondaryDir: Vec2;
     principalSize: number;
     secondarySize: number;
 
     constructor(id: string, x: number, y: number, z: number, points: Float32Array, triangles: number[], index: number) {
-        super(x, y, z, terrainMaterials, index);
+        super(x, y, z, terrainPalette, index);
         this.id = id;
         this.movable = false;
         this.points = points;
         this.triangles = triangles;
 
-        this.principalDir = this.principalDirection().normalize();
-        this.secondaryDir = new THREE.Vector2(-this.principalDir.y, this.principalDir.x);
+        this.principalDir = normalize2(this.principalDirection());
+        this.secondaryDir = perp2(this.principalDir);
 
         this.principalSize = this.computeExtent(this.principalDir);
         this.secondarySize = this.computeExtent(this.secondaryDir);
@@ -137,10 +141,10 @@ export class MeshTerrainItem extends ITerrainItem {
             vz = 0;
         }
 
-        return vx > 0 ? new THREE.Vector2(vx, vz) : new THREE.Vector2(-vx, -vz);
+        return vx > 0 ? vec2(vx, vz) : vec2(-vx, -vz);
     }
 
-    computeExtent(direction: THREE.Vector2) {
+    computeExtent(direction: Vec2) {
         let min = Infinity;
         let max = -Infinity;
         for(let i = 0; i < this.points.length; i += 3) {
@@ -151,6 +155,39 @@ export class MeshTerrainItem extends ITerrainItem {
         }
 
         return max - min;
+    }
+
+    /** Runtime geometry id assigned by the renderer when it registers meshData. */
+    meshGeom: number | undefined;
+
+    geomId(): number {
+        return this.meshGeom ?? Geom.BoxCorner;
+    }
+
+    writeModel(out: Mat4): Mat4 {
+        identity(out);
+        return setPosition(out, this.posx(), this.posy(), this.posz());
+    }
+
+    /**
+     * Renderer-neutral geometry, built once and cached.
+     *
+     * buildTerrain() used to rebuild a BufferGeometry and re-run computeVertexNormals on
+     * every terrain rebuild; caching here means an imported field mesh is triangulated once
+     * per import instead, and the WebGPU atlas can consume the same arrays.
+     */
+    get meshData(): MeshData {
+        if (!this.cachedMeshData)
+        {
+            const indices = Uint32Array.from(this.triangles);
+            this.cachedMeshData = {
+                positions: this.points,
+                normals: computeVertexNormals(this.points, indices),
+                indices,
+                name: `terrain:${this.id}`,
+            };
+        }
+        return this.cachedMeshData;
     }
 
     save() {

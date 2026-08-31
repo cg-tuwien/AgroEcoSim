@@ -1,6 +1,6 @@
 import { h, Fragment } from "preact";
 import appstate from "../../appstate";
-import { VisualMappingOptions } from "../../helpers/Plant";
+import { VisualMappingOptions } from "../../render/core/PlantColors";
 //import "wired-elements"
 
 export function VisualMapping() {

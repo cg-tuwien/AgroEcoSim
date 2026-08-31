@@ -4,13 +4,14 @@ import BinaryReader from "./helpers/BinaryReader";
 import { PlantModel } from "./helpers/Scene";
 import * as SignalR from "@microsoft/signalr";
 import { Seed } from "./helpers/Seed";
-import * as THREE from 'three';
 import { Obstacle } from "./helpers/Obstacle";
-import { TransformControls } from 'three/examples/jsm/controls/TransformControls';
 import { BaseRequestObject } from "./helpers/BaseRequestObject";
-import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter';
-import { scene } from "./components/viewport/ThreeSceneFn";
-import { VisualMappingOptions } from "./helpers/Plant";
+import { VisualMappingOptions } from "./render/core/PlantColors";
+import { activeRenderer } from "./render/IViewportRenderer";
+import { vec2, addScaled2 } from "./render/core/Vec3";
+import { downloadBinary, downloadText } from "./helpers/download";
+import { DEFAULT_INITIAL_DATE } from "./helpers/Sun";
+import { LIGHTING_OFF, LightingOptions, SHADOW_NORMAL_OFFSET_TEXELS, lightingFromLegacyTier } from "./render/core/Lighting";
 import { Species } from "./helpers/Species";
 import { IObjImport, Parse } from "./helpers/ObjParser";
 import { BoxTerrainItem, ITerrainItem, MeshTerrainItem } from "./helpers/Terrain";
@@ -110,8 +111,29 @@ hubConnection.on("terrain", (response: Uint8Array) => {
     st.terrainTimestamp.value = Date.now();
 })
 
-const start = async() => hubConnection.start();
-hubConnection.onclose(start);
+/**
+ * Whether the hub is usable, as a signal.
+ *
+ * `hubConnection.state` is a plain field, so an effect that consulted it could not be woken
+ * when it changed - and a preview request made before the socket came up was simply dropped.
+ * Because `previewRequest` was already `true`, setting it `true` again was not a change and
+ * did not re-run the effect either, so the request loop stalled for the rest of the session:
+ * the simulation ran to completion server-side and the viewport only updated at the very end.
+ * Whether that race was lost came down to how fast the browser opened the WebSocket, which is
+ * why it appeared in Firefox and not in Chromium.
+ */
+const hubConnected = signal(false);
+
+const start = async() => {
+    try {
+        await hubConnection.start();
+    } finally {
+        hubConnected.value = hubConnection.state === SignalR.HubConnectionState.Connected;
+    }
+};
+hubConnection.onclose(() => { hubConnected.value = false; start(); });
+hubConnection.onreconnecting(() => { hubConnected.value = false; });
+hubConnection.onreconnected(() => { hubConnected.value = true; });
 
 interface IPlantResponse
 {
@@ -206,6 +228,14 @@ class State {
     randomize = signal(false);
     renderMode = signal(1); //1 is Mitsuba
     exactPreview = signal(false);
+    /**
+     * Calendar date the simulation starts on, as YYYY-MM-DD.
+     *
+     * The frontend never used to send this, so the backend silently fell back to its own
+     * default of 2026-02-01 - a very low sun at 48°N, which makes light-driven growth behave
+     * quite differently from what a summer start would give. See Agro/AgroWorld.cs.
+     */
+    initialDate = signal(DEFAULT_INITIAL_DATE);
 
     //SPECIES
     species = signal<Species[]>([Species.Default()]);
@@ -221,10 +251,61 @@ class State {
     obstaclesCount = computed(() => this.obstacles.value.length);
 
     //RENDERING
-    objSeeds = new THREE.Object3D();
-    objTerrain = new THREE.Object3D();
-    objObstacles = new THREE.Object3D();
-    objPlants = new THREE.Object3D();
+    //The scene graph belongs to whichever renderer is mounted; appstate holds only the data
+    //it is built from. See src/render/IViewportRenderer.ts.
+    viewportBackend = signal<"auto" | "three" | "webgpu">("auto");
+    /**
+     * Which HUD tab is showing. Lifted out of app.tsx because the viewport needs it: the
+     * transform gizmo is a Three.js control with no WebGPU equivalent, so editing tabs
+     * mount the Three backend regardless of preference.
+     */
+    activeTab = signal("tab-home");
+
+    /**
+     * Viewport lighting quality. Purely visual - it never reaches the simulation.
+     *
+     * Deliberately separate from `renderMode`, which selects the SERVER's light-transport
+     * engine and changes the irradiance the plants actually consume.
+     */
+    //Independent switches rather than a ladder; see LightingOptions. All off is the parity
+    //look, which is what keeps the default byte-identical to the WebGL renderer.
+    //Physical daylight: a modest sky plus a dominant sun, instead of the historical flat
+    //ambient that makes occlusion and indirect light invisible. See LightingOptions.
+    lightDaylight = signal(false);
+    lightShadows = signal(false);
+    lightOcclusion = signal(false);
+    lightIndirect = signal(false);
+    lightSecondBounce = signal(false);
+    //Normal-offset shadow bias in shadow texels. Tunable because the right value depends on
+    //the canopy: too little and a leaf shadows itself, too much and light leaks between
+    //leaves that genuinely touch.
+    shadowBiasTexels = signal(SHADOW_NORMAL_OFFSET_TEXELS);
+
+    lightingOptions(): LightingOptions {
+        return {
+            daylight: this.lightDaylight.peek(),
+            shadows: this.lightShadows.peek(),
+            occlusion: this.lightOcclusion.peek(),
+            indirect: this.lightIndirect.peek(),
+            secondBounce: this.lightSecondBounce.peek(),
+            shadowBiasTexels: this.shadowBiasTexels.peek(),
+        };
+    }
+    //Diagnostic overlay for the voxel GI's density field. Not persisted and not sent to the
+    //server: it shows a rendering intermediate, not anything the simulation knows about.
+    showVoxels = signal(false);
+    voxelMip = signal(0);
+    voxelGain = signal(1);
+    voxelAlbedo = signal(false);
+    activeBackend = signal<"three" | "webgpu" | undefined>(undefined);
+
+    /**
+     * Set while the offline animation renderer is stepping through history.
+     *
+     * A plain field, NOT a signal: writing it must not trigger any effect, and its only job
+     * is to suppress the playback/preview poke that normally follows a plant rebuild.
+     */
+    offlineRendering = false;
 
     needsRender = signal(false);
     visualMapping = signal(VisualMappingOptions.Natural);
@@ -232,7 +313,6 @@ class State {
     seedPick = signal(-1);
     terrainPick = signal(-1);
 
-    transformControls: TransformControls | undefined;
     downloadRoots = signal(false);
     debugBoxes = signal(false);
     showLeaves = signal(true);
@@ -262,6 +342,33 @@ class State {
     samplesPerPixel = signal(2048);
     simHoursPerTick = 1;
 
+    /**
+     * The simulation timestep the viewport is currently showing.
+     *
+     * NOT the same as playPointer: that is an index into `history`, and previews can be
+     * skipped, so the two diverge as soon as the backend drops a frame. Using the pointer to
+     * drive the clock puts the sun at the wrong time of day - which reads as broken lighting
+     * rather than as the units mistake it is.
+     */
+    currentTimestep(): number {
+        return this.timestepAt(this.playPointer.peek());
+    }
+
+    /**
+     * The simulated timestep a playhead position refers to.
+     *
+     * Takes the pointer as an argument so a caller inside a signal effect can pass
+     * `playPointer.value` and actually subscribe to it. The obvious spelling - reading the
+     * signal for its subscription and calling `currentTimestep()` for the value - was written
+     * as `(playPointer.value, currentTimestep())`, and terser deletes the discarded operand of
+     * a comma expression as dead code. The effect then never re-ran as the animation played,
+     * so the sun stayed frozen at whatever time it was when the tier last changed.
+     */
+    timestepAt(pointer: number): number {
+        const i = Math.max(0, Math.min(pointer, this.history.length - 1));
+        return this.history[i]?.t ?? 0;
+    }
+
     history : {t: number, s: Uint8Array}[] = [];
     historySize = signal(0);
 
@@ -281,6 +388,7 @@ class State {
         FieldResolution: this.fieldResolution.peek(),
         FieldSize: { X: this.fieldSizeX.peek(), D: this.fieldSizeD.peek(), Z: this.fieldSizeZ.peek() },
         Seed: Math.trunc(this.randomize.peek() ? Math.random() * 4294967295 : this.initNumber.peek()),
+        InitialDate: this.initialDate.peek(),
         Species: this.species.peek().map(s => s.serialize()),
 
         Plants: this.seeds.peek().map((p: Seed) => ({ S: p.species.peek(), P: { X: p.px.peek(), Y: p.py.peek(), Z: p.pz.peek() }, F: p.fieldIndex.peek() })),
@@ -312,6 +420,7 @@ class State {
                 this.historySize.value = 0;
             });
             this.history.length = 0;
+            clearSceneCache();
             if (hubConnection.state !== SignalR.HubConnectionState.Connected)
                 await start();
 
@@ -369,14 +478,10 @@ class State {
                 else
                     keep.push(s);
             });
-            remove.forEach(i => { this.objSeeds.remove(src[i].mesh); src[i].mesh = undefined; });
             this.seeds.value = keep;
         }
         else
-        {
-            this.seeds.peek().forEach(seed => { this.objSeeds.remove(seed.mesh); seed.mesh = undefined; } );
             this.seeds.value = [ ];
-        }
         this.needsRender.value = true;
     }
 
@@ -397,7 +502,6 @@ class State {
                 else
                     keep.push(s);
             });
-            remove.forEach(i => { this.objSeeds.remove(src[i].mesh); src[i].mesh = undefined; });
             this.seeds.value = keep;
             this.needsRender.value = true;
         }
@@ -454,13 +558,14 @@ class State {
                             const xDist = sx / xCount;
                             const zDist = sz / zCount;
                             const xStart = xDist * 0.5;
-                            const start = new THREE.Vector2(principatDir.x * xStart, principatDir.y * xStart).addScaledVector(secondaryDir, zDist * 0.5);
+                            const start = addScaled2(vec2(principatDir.x * xStart, principatDir.y * xStart), secondaryDir, zDist * 0.5);
                             for(let x = 0; x < xCount; ++x)
                             {
                                 const mx = x * xDist;
                                 for(let z = 0; z < zCount; ++z)
                                 {
-                                    const pos = new THREE.Vector2(principatDir.x * mx, principatDir.y * mx).addScaledVector(secondaryDir, z * zDist).add(start);
+                                    const stepped = addScaled2(vec2(principatDir.x * mx, principatDir.y * mx), secondaryDir, z * zDist);
+                                    const pos = { x: stepped.x + start.x, y: stepped.y + start.y };
                                     result.push(new Seed(species[Math.floor(Math.random() * species.length)].name.peek(), pos.x, Math.max(0, terrain.sy() - 0.02), pos.y, i, false));
                                 }
                             }
@@ -499,11 +604,8 @@ class State {
 
     removeSeedAt = (i : number) => {
         const seeds = this.seeds.peek();
-        if (i >= 0 && i < seeds.length) {
-            const seed = seeds.splice(i, 1)[0];
-            this.objSeeds.remove(seed.mesh);
-            seed.mesh = undefined;
-        }
+        if (i >= 0 && i < seeds.length)
+            seeds.splice(i, 1);
         this.seeds.value = [...seeds];
         this.needsRender.value = true;
     };
@@ -515,7 +617,9 @@ class State {
     removeSpeciesAt = (i : number) => {
         const species = this.species.peek();
         if (i >= 0 && i < species.length && species.length > 1) {
-            species.splice(i, 1)[0];
+            //The [0] this used to end with was vestigial - copied from removeSeedAt, which
+            //actually needed the removed element. splice does the work.
+            species.splice(i, 1);
         }
         this.species.value = [...species];
     };
@@ -566,11 +670,7 @@ class State {
     removeObstacleAt = (i : number) => {
         const obstacles = this.obstacles.peek();
         if (i >= 0 && i < obstacles.length)
-        {
-            const item = obstacles.splice(i, 1)[0];
-            this.objObstacles.remove(item.mesh);
-            item.mesh = undefined;
-        }
+            obstacles.splice(i, 1);
 
         this.obstacles.value = [...obstacles];
         this.needsRender.value = true;
@@ -589,6 +689,9 @@ class State {
             initNumber: this.initNumber.peek(),
             randomize: this.randomize.peek(),
             renderMode: this.renderMode.peek(),
+            initialDate: this.initialDate.peek(),
+            lighting: this.lightingOptions(),
+            viewportBackend: this.viewportBackend.peek(),
             downloadRoots: this.downloadRoots.peek(),
             exactPreview: this.exactPreview.peek(),
 
@@ -646,6 +749,7 @@ class State {
                 const text = reader.result?.toString() ?? "";
                 const data = JSON.parse(text);
                 self.history = data.history;
+                clearSceneCache();
                 self.simHoursPerTick = data.simHoursPerTick ?? 1;
 
                 batch(() => {
@@ -660,6 +764,18 @@ class State {
                     self.initNumber.value = data.initNumber;
                     self.randomize.value = data.randomize;
                     self.renderMode.value = data.renderMode;
+                    self.initialDate.value = data.initialDate ?? DEFAULT_INITIAL_DATE;
+                    //Sessions saved before the ladder became independent switches carry a
+                    //single number instead; translate rather than dropping their setting.
+                    const lighting: LightingOptions = data.lighting
+                        ?? (data.lightingTier !== undefined ? lightingFromLegacyTier(data.lightingTier) : LIGHTING_OFF);
+                    self.lightDaylight.value = lighting.daylight ?? false;
+                    self.lightShadows.value = lighting.shadows;
+                    self.lightOcclusion.value = lighting.occlusion;
+                    self.lightIndirect.value = lighting.indirect;
+                    self.lightSecondBounce.value = lighting.secondBounce;
+                    self.shadowBiasTexels.value = lighting.shadowBiasTexels ?? SHADOW_NORMAL_OFFSET_TEXELS;
+                    self.viewportBackend.value = data.viewportBackend ?? "auto";
                     self.downloadRoots.value = data.downloadRoots;
                     self.exactPreview.value = data.exactPreview;
 
@@ -685,6 +801,7 @@ class State {
                     self.plants.value = data.plants;
                     self.historySize.value = data.historySize;
                     self.history = data.history;
+                    clearSceneCache();
                     self.simHoursPerTick = data.simHoursPerTick;
 
                     self.fieldModelPath.value = data.fieldModelPath;
@@ -692,7 +809,7 @@ class State {
                     self.fieldItemRegexMaterial.value = data.fieldItemRegexMaterial;
                     self.fieldModelData = data.fieldModelData;
 
-                    self.scene.value = getScene(0);
+                    self.scene.value = decodeSceneAt(0);
                 });
 
                 self.play(PlayState.SeekBackward);
@@ -705,14 +822,13 @@ class State {
     }
 
     gltf = () => {
-        const exporter = new GLTFExporter();
-        exporter.parse(
-            scene,
-            // called when the gltf has been generated
-            gltf => this.saveTextFile(JSON.stringify(gltf), 'gltf'),
-            // called when there is an error in the generation
-            error => console.log('An error happened', error),
-        );
+        //The scene graph lives in the renderer now, so it does the export. Backends that
+        //cannot export simply do not implement the optional method.
+        const renderer = activeRenderer.current;
+        if (renderer?.exportGLTF)
+            renderer.exportGLTF(json => this.saveTextFile(json, 'gltf'));
+        else
+            console.warn('The active viewport does not support glTF export.');
     }
 
     prim = () => {
@@ -812,32 +928,11 @@ class State {
     }
 
     private saveTextFile(data: string, ext: string) {
-        const blob = new Blob([data], { type: 'text/plain' });
-        const url = window.URL.createObjectURL(blob);
-
-        const a = document.createElement('a');
-        a.style.setProperty('display', 'none');
-        document.body.appendChild(a);
-        a.href = url;
-        a.download = `AgroEco-${new Date().toISOString().split("T")[0]}_${new Date().getHours()}-${new Date().getMinutes()}-${new Date().getSeconds()}.${ext}`;
-        a.click();
-        window.URL.revokeObjectURL(url);
-        a.remove();
+        downloadText(data, ext);
     }
 
     private saveBinaryFile(data: Uint8Array, frame: string, ext: string) {
-        const binaryData = base64ToArrayBuffer(data);
-        const blob = new Blob([binaryData], { type: 'application/octet-stream' });
-        const url = window.URL.createObjectURL(blob);
-
-        const a = document.createElement('a');
-        a.style.setProperty('display', 'none');
-        document.body.appendChild(a);
-        a.href = url;
-        a.download = `AgroEco-${new Date().toISOString().split("T")[0]}_${new Date().getHours()}-${new Date().getMinutes()}-${new Date().getSeconds()}${frame}.${ext}`;
-        a.click();
-        window.URL.revokeObjectURL(url);
-        a.remove();
+        downloadBinary(base64ToArrayBuffer(data), ext, frame);
     }
 };
 
@@ -854,8 +949,20 @@ fetch(`${location.protocol}//${BackendURI}/Simulation/species`, { headers: { 'Ac
 fetch(`${location.protocol}//${BackendURI}/Simulation/behaviors`, { headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' }}).then(response => response.json()).then((list: string[]) => st.behaviors.value = list);
 
 effect(() => {
-    if (st.previewRequest.value && hubConnection.state == SignalR.HubConnectionState.Connected) {
-        hubConnection.invoke("preview");
+    //Depending on hubConnected is what lets a request survive being made too early: the
+    //effect re-runs when the socket comes up and flushes it. The short-circuit is safe here
+    //only because the second read happens whenever the first is true, which is the only case
+    //that does anything.
+    if (st.previewRequest.value && hubConnected.value) {
+        //The hub can drop between the state check and the call, and an unhandled rejection
+        //would take out the effect. Re-arm only if the connection actually went away: that
+        //case is picked up again when hubConnected flips back, whereas re-arming on a
+        //server-side failure while still connected would spin the effect.
+        hubConnection.invoke("preview").catch(e => {
+            console.warn("preview request failed", e);
+            if (hubConnection.state !== SignalR.HubConnectionState.Connected)
+                st.previewRequest.value = true;
+        });
         st.previewRequest.value = false;
     }
 });
@@ -879,7 +986,7 @@ effect(() => {
 
                 if (playPointer < st.history.length)
                 {
-                    st.scene.value = getScene(playPointer);
+                    st.scene.value = decodeSceneAt(playPointer);
                     batch(() => {
                         st.playPointer.value = playPointer;
                         st.playRequest.value = false;
@@ -910,7 +1017,7 @@ effect(() => {
                 {
                     batch(() => {
                         st.playPointer.value = playPointer;
-                        st.scene.value = getScene(playPointer);
+                        st.scene.value = decodeSceneAt(playPointer);
                         st.playRequest.value = false;
                         st.playing.value = pv == PlayState.Backward ? PlayState.Backward : PlayState.None;
                     });
@@ -923,7 +1030,7 @@ effect(() => {
                     });
                 break;
             case PlayState.Seek:
-                st.scene.value = getScene(playPointer);
+                st.scene.value = decodeSceneAt(playPointer);
                 batch(() => {
                     st.playRequest.value = false;
                     st.playing.value = PlayState.None;
@@ -934,13 +1041,73 @@ effect(() => {
     }
 });
 
-const getScene = (index: number) => {
+/**
+ * Decodes the stored frame at `index` into renderable data.
+ *
+ * Exported because the offline animation renderer iterates history independently of the
+ * playback state machine. Results are memoised - see sceneCache below.
+ */
+export const decodeSceneAt = (index: number) => {
     const i = Math.min(index, st.history.length - 1);
-    if (i >= 0) {
-        const src = st.history[i].s;
-        const reader = new BinaryReader(base64ToArrayBuffer(src));
-        return reader.readAgroScene();
+    if (i < 0) return [];
+
+    const hit = sceneCache.get(i);
+    if (hit) {
+        //Re-insert to move it to the young end: a Map iterates in insertion order, which is
+        //all the ordering an LRU needs.
+        sceneCache.delete(i);
+        sceneCache.set(i, hit);
+        return hit;
     }
-    else
-        return [];
+
+    const decoded = new BinaryReader(base64ToArrayBuffer(st.history[i].s)).readAgroScene();
+    cacheScene(i, decoded);
+    return decoded;
+}
+
+/**
+ * Decoded scenes, keyed by history index, bounded by total primitive count rather than by
+ * entry count.
+ *
+ * A budget in entries cannot work here: one timestep of a seedling is a few dozen primitives
+ * and one of a mature stand is tens of thousands, so any fixed entry count is either useless
+ * early or hundreds of megabytes late. Counting primitives makes the cache hold many small
+ * frames or few large ones, which is the behaviour wanted in both cases.
+ *
+ * This does nothing for straight playback, where the pointer only ever advances onto a frame
+ * that has not been seen. It is for scrubbing - dragging the timeline back and forth over the
+ * same span - and for stepping back a frame to compare, which were re-parsing from base64
+ * every time.
+ */
+const SCENE_CACHE_PRIMITIVES = 200000;
+const sceneCache = new Map<number, PlantModel[]>();
+let sceneCachePrimitives = 0;
+
+function cacheScene(index: number, scene: PlantModel[]) {
+    let size = 0;
+    for (const plant of scene) size += plant.primitives.length;
+
+    //A single frame larger than the whole budget is not worth evicting everything for.
+    if (size > SCENE_CACHE_PRIMITIVES) return;
+
+    sceneCache.set(index, scene);
+    sceneCachePrimitives += size;
+
+    while (sceneCachePrimitives > SCENE_CACHE_PRIMITIVES && sceneCache.size > 1) {
+        const oldest = sceneCache.keys().next();
+        if (oldest.done) break;
+        const evicted = sceneCache.get(oldest.value)!;
+        for (const plant of evicted) sceneCachePrimitives -= plant.primitives.length;
+        sceneCache.delete(oldest.value);
+    }
+}
+
+/**
+ * Drops every cached scene. Must be called whenever `history` is replaced or truncated, since
+ * the cache is keyed by index and a new run reuses indices from zero - a stale entry would
+ * render a previous simulation's plants and look like a decoder bug.
+ */
+export function clearSceneCache() {
+    sceneCache.clear();
+    sceneCachePrimitives = 0;
 }
