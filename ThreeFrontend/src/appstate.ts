@@ -11,10 +11,12 @@ import { activeRenderer } from "./render/IViewportRenderer";
 import { vec2, addScaled2 } from "./render/core/Vec3";
 import { downloadBinary, downloadText } from "./helpers/download";
 import { DEFAULT_INITIAL_DATE } from "./helpers/Sun";
+import { convertCoordsTo_RH_rightPX_upPY } from "./helpers/CoordinateSystem";
 import { LIGHTING_OFF, LightingOptions, SHADOW_NORMAL_OFFSET_TEXELS, lightingFromLegacyTier } from "./render/core/Lighting";
 import { Species } from "./helpers/Species";
 import { IObjImport, Parse } from "./helpers/ObjParser";
 import { BoxTerrainItem, ITerrainItem, MeshTerrainItem } from "./helpers/Terrain";
+import { CoordinateSystem } from "./helpers/CoordinateSystem";
 
 interface RetryContext {
     readonly previousRetryCount: number; //The number of consecutive failed tries so far.
@@ -168,7 +170,7 @@ interface ITrayModel
     plants: IPlantModel[];
 }
 
-interface IPlantModel
+export interface IPlantModel
 {
     species?: string;
     key?: string;
@@ -178,6 +180,9 @@ interface IPlantModel
     x: number;
     y: number;
     z: number;
+
+    speciesName?: string;
+    botanicalName? : string;
 }
 
 function base64ToArrayBuffer(base64: any) {
@@ -864,6 +869,7 @@ class State {
         this.fieldModelPath.value = "";
     }
 
+
     uploadSeedsDistribution = async (f: File) => {
         const text = await f.text();
         const data = JSON.parse(text) as ITrayModel[];
@@ -880,19 +886,73 @@ class State {
                     .trim();
         };
         this.species.value.forEach(x => {
-            speciesMap.set(normalize(x.name.value), x);
-            speciesMap.set(normalize(x.aka.value), x);
+            if (x.name.value?.length > 0)
+                speciesMap.set(normalize(x.name.value), x);
+            if (x.aka.value?.length > 0)
+                speciesMap.set(normalize(x.aka.value), x);
         });
+
+        const speciesWordsMap : {words: string[], key: string}[] = [];
+        Array.from(speciesMap.keys()).forEach(key => {
+            speciesWordsMap.push({words: key.split(" "), key: key});
+        });
+
+        function bestSpeciesWordMatch(input: string)
+        {
+            const needle = input.split(" ");
+            let bestValue = -1;
+            let bestKey = undefined;
+            speciesWordsMap.forEach(item => {
+                let i = 0;
+                for(; i < needle.length && i < item.words.length && needle[i] === item.words[i]; ++i) { }
+                if (i > bestValue)
+                {
+                    bestValue = i;
+                    bestKey = item.key;
+                }
+            });
+
+            if (bestKey)
+            {
+                const result = speciesMap.get(bestKey);
+                if (result) speciesMap.set(input, result);
+                return result;
+            }
+            else
+                return undefined;
+        }
 
         const result : Seed[] = [];
         data.forEach(section => {
             section.plants.forEach(seed => {
-                const species = speciesMap.get(normalize(seed.species ?? ""));
+                const options : string[] = [];
+                if (seed.species)
+                    options.push(normalize(seed.species));
+                if (seed.speciesName)
+                    options.push(normalize(seed.speciesName));
+                if (seed.botanicalName)
+                    options.push(normalize(seed.botanicalName));
+
+                let species : Species | undefined = undefined;
+
+                for(let i = 0; i < options.length; ++i)
+                    if (!species) species = speciesMap.get(options[i]);
+
+                if (!species)
+                {
+                    for(let i = 0; i < options.length; ++i)
+                        if (!species)
+                            species = bestSpeciesWordMatch(options[i]);
+                }
+
                 if (species)
                 {
                     const sectionIndex = this.terrainList.findIndex(x => x.id == section.sectionId);
                     if (sectionIndex >= 0)
-                        result.push(new Seed(species.name.peek(), seed.x, seed.z, seed.y, sectionIndex, true));
+                    {
+                        seed = convertCoordsTo_RH_rightPX_upPY(seed, CoordinateSystem.RH_rightPX_upPZ);
+                        result.push(new Seed(species.name.peek(), seed.x, seed.y, seed.z, sectionIndex, true));
+                    }
                 }
             });
         });
@@ -942,7 +1002,12 @@ export default st;
 st.seeds.value = [ new Seed(st.species.peek()[0].name.peek(), st.fieldSizeX.peek() * 0.5, -0.01, st.fieldSizeZ.peek() * 0.5, 0, false) ];
 fetch(`${location.protocol}//${BackendURI}/Simulation/species`, { headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' }}).then(response => response.json()).then((list: Species[]) => {
     const species = list.map(x => new Species().load(x));
-    Promise.all(species.map(s => fetch(`${location.protocol}//${BackendURI}/Simulation/mesh/leaf/${s.name}`).then(resp => resp.arrayBuffer()).then(b => s.loadLeafGeometry(b))));
+    Promise.all(species.flatMap(s => [
+        fetch(`${location.protocol}//${BackendURI}/Simulation/mesh/leaf/${s.name}`).then(resp => resp.arrayBuffer()).then(b => s.loadLeafGeometry(b)),
+        //A petal is a lamina in the same wire record as a leaf, so it needs its own
+        //outline or it is drawn with the leaf's.
+        fetch(`${location.protocol}//${BackendURI}/Simulation/mesh/petal/${s.name}`).then(resp => resp.arrayBuffer()).then(b => s.loadPetalGeometry(b)),
+    ]));
     st.species.value = species;
 });
 

@@ -24,8 +24,138 @@ public readonly struct TerrainBufferItem
 public interface ITerrainBuffer
 {
     string Add(ImportedObjData terrain);
-    string Add(string terrain);
+    string Add(string terrain, CoordinateSystem coords);
     bool TryGetV2(string key, out ImportedObjDataV2 data);
+}
+
+public enum CoordinateSystem : byte { Unknown = 0,
+    LH_rightNX_upNY, LH_rightNX_upPY, LH_rightPX_upNY, LH_rightPX_upPY,
+    LH_rightNY_upNX, LH_rightNY_upPX, LH_rightPY_upNX, LH_rightPY_upPX,
+
+    LH_rightNX_upNZ, LH_rightNX_upPZ, LH_rightPX_upNZ, LH_rightPX_upPZ,
+    LH_rightNZ_upNX, LH_rightNZ_upPX, LH_rightPZ_upNX, LH_rightPZ_upPX,
+
+    LH_rightNY_upNZ, LH_rightNY_upPZ, LH_rightPY_upNZ, LH_rightPY_upPZ,
+    LH_rightNZ_upNY, LH_rightNZ_upPY, LH_rightPZ_upNY, LH_rightPZ_upPY,
+
+    RH_rightNX_upNY, RH_rightNX_upPY, RH_rightPX_upNY, RH_rightPX_upPY,
+    RH_rightNY_upNX, RH_rightNY_upPX, RH_rightPY_upNX, RH_rightPY_upPX,
+
+    RH_rightNX_upNZ, RH_rightNX_upPZ, RH_rightPX_upNZ, RH_rightPX_upPZ,
+    RH_rightNZ_upNX, RH_rightNZ_upPX, RH_rightPZ_upNX, RH_rightPZ_upPX,
+
+    RH_rightNY_upNZ, RH_rightNY_upPZ, RH_rightPY_upNZ, RH_rightPY_upPZ,
+    RH_rightNZ_upNY, RH_rightNZ_upPY, RH_rightPZ_upNY, RH_rightPZ_upPY,
+}
+
+public static class CoordinateConverter
+{
+    /// <summary>
+    /// Converts a whitespace-separated XYZ coordinate from the given coordinate
+    /// system to RH_rightPX_upPY.
+    ///
+    /// Example:
+    ///     "0.5 4.2 1.123"
+    /// </summary>
+    public static string ConvertCoordsTo_RH_rightPX_upPY(string vertex, CoordinateSystem coords)
+    {
+        var p = vertex.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+
+        if (p.Length != 3)
+            throw new ArgumentException($"Expected exactly 3 coordinates, got {p.Length}.", nameof(vertex));
+
+        // Textual negation only. No numeric parsing or arithmetic.
+        static string N(string s) => s.StartsWith('-') ? s[1..] : s.StartsWith('+') ? "-" + s[1..] : "-" + s;
+
+        var x = p[0];
+        var y = p[1];
+        var z = p[2];
+
+        return coords switch
+        {
+            // Left-handed
+            CoordinateSystem.LH_rightNX_upNY => $"{N(x)} {N(y)} {N(z)}",
+            CoordinateSystem.LH_rightNX_upPY => $"{N(x)} {y} {z}",
+            CoordinateSystem.LH_rightPX_upNY => $"{x} {N(y)} {z}",
+            CoordinateSystem.LH_rightPX_upPY => $"{x} {y} {N(z)}",
+
+            CoordinateSystem.LH_rightNY_upNX => $"{N(y)} {N(x)} {z}",
+            CoordinateSystem.LH_rightNY_upPX => $"{N(y)} {x} {N(z)}",
+            CoordinateSystem.LH_rightPY_upNX => $"{y} {N(x)} {N(z)}",
+            CoordinateSystem.LH_rightPY_upPX => $"{y} {x} {z}",
+
+
+            CoordinateSystem.LH_rightNX_upNZ => $"{N(x)} {N(z)} {y}",
+            CoordinateSystem.LH_rightNX_upPZ => $"{N(x)} {z} {N(y)}",
+            CoordinateSystem.LH_rightPX_upNZ => $"{x} {N(z)} {N(y)}",
+            CoordinateSystem.LH_rightPX_upPZ => $"{x} {z} {y}",
+
+            CoordinateSystem.LH_rightNZ_upNX => $"{N(z)} {N(x)} {N(y)}",
+            CoordinateSystem.LH_rightNZ_upPX => $"{N(z)} {x} {y}",
+            CoordinateSystem.LH_rightPZ_upNX => $"{z} {N(x)} {y}",
+            CoordinateSystem.LH_rightPZ_upPX => $"{z} {x} {N(y)}",
+
+
+            CoordinateSystem.LH_rightNY_upNZ => $"{N(y)} {N(z)} {N(x)}",
+            CoordinateSystem.LH_rightNY_upPZ => $"{N(y)} {z} {x}",
+            CoordinateSystem.LH_rightPY_upNZ => $"{y} {N(z)} {x}",
+            CoordinateSystem.LH_rightPY_upPZ => $"{y} {z} {N(x)}",
+
+            CoordinateSystem.LH_rightNZ_upNY => $"{N(z)} {N(y)} {x}",
+            CoordinateSystem.LH_rightNZ_upPY => $"{N(z)} {y} {N(x)}",
+            CoordinateSystem.LH_rightPZ_upNY => $"{z} {N(y)} {N(x)}",
+            CoordinateSystem.LH_rightPZ_upPY => $"{z} {y} {x}",
+
+            // Right-handed
+
+            CoordinateSystem.RH_rightNX_upNY => $"{N(x)} {N(y)} {z}",
+            CoordinateSystem.RH_rightNX_upPY => $"{N(x)} {y} {N(z)}",
+            CoordinateSystem.RH_rightPX_upNY => $"{x} {N(y)} {N(z)}",
+            CoordinateSystem.RH_rightPX_upPY => $"{x} {y} {z}",
+
+            CoordinateSystem.RH_rightNY_upNX => $"{N(y)} {N(x)} {N(z)}",
+            CoordinateSystem.RH_rightNY_upPX => $"{N(y)} {x} {z}",
+            CoordinateSystem.RH_rightPY_upNX => $"{y} {N(x)} {z}",
+            CoordinateSystem.RH_rightPY_upPX => $"{y} {x} {N(z)}",
+
+
+            CoordinateSystem.RH_rightNX_upNZ => $"{N(x)} {N(z)} {N(y)}",
+            CoordinateSystem.RH_rightNX_upPZ => $"{N(x)} {z} {y}",
+            CoordinateSystem.RH_rightPX_upNZ => $"{x} {N(z)} {y}",
+            CoordinateSystem.RH_rightPX_upPZ => $"{x} {z} {N(y)}",
+
+            CoordinateSystem.RH_rightNZ_upNX => $"{N(z)} {N(x)} {y}",
+            CoordinateSystem.RH_rightNZ_upPX => $"{N(z)} {x} {N(y)}",
+            CoordinateSystem.RH_rightPZ_upNX => $"{z} {N(x)} {N(y)}",
+            CoordinateSystem.RH_rightPZ_upPX => $"{z} {x} {y}",
+
+
+            CoordinateSystem.RH_rightNY_upNZ => $"{N(y)} {N(z)} {x}",
+            CoordinateSystem.RH_rightNY_upPZ => $"{N(y)} {z} {N(x)}",
+            CoordinateSystem.RH_rightPY_upNZ => $"{y} {N(z)} {N(x)}",
+            CoordinateSystem.RH_rightPY_upPZ => $"{y} {z} {x}",
+
+            CoordinateSystem.RH_rightNZ_upNY => $"{N(z)} {N(y)} {N(x)}",
+            CoordinateSystem.RH_rightNZ_upPY => $"{N(z)} {y} {x}",
+            CoordinateSystem.RH_rightPZ_upNY => $"{z} {N(y)} {x}",
+            CoordinateSystem.RH_rightPZ_upPY => $"{z} {y} {N(x)}",
+
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(coords), coords, "Unknown coordinate system.")
+        };
+    }
+
+    /// <summary>
+    /// Returns true if triangle/polygon winding must be reversed when converting to RH_rightPX_upPY.
+    /// </summary>
+    public static bool NeedsReverseTo_RH_rightPX_upPY(CoordinateSystem coords)
+    {
+        if (coords == CoordinateSystem.Unknown)
+            throw new ArgumentException("Coordinate system must not be Unknown.", nameof(coords));
+
+        // Axis permutations/sign changes inside the same handedness have determinant +1. Switching LH -> RH has determinant -1.
+        return coords < CoordinateSystem.RH_rightNX_upNY;
+    }
 }
 
 public class TerrainBuffer : ITerrainBuffer
@@ -53,7 +183,7 @@ public class TerrainBuffer : ITerrainBuffer
         }
     }
 
-    public string Add(string obj)
+    public string Add(string obj, CoordinateSystem coords)
     {
         var lines = obj.Replace("\r", "").Split('\n');
 
@@ -70,6 +200,8 @@ public class TerrainBuffer : ITerrainBuffer
 
         ReadOnlySpan<char> text = obj.AsSpan();
         int pos = 0;
+
+        var needsFaceFlip = CoordinateConverter.NeedsReverseTo_RH_rightPX_upPY(coords);
 
         while (pos < text.Length)
         {
@@ -99,6 +231,9 @@ public class TerrainBuffer : ITerrainBuffer
 
                     var vertexSpan = line[1..].Trim();
                     var vertexKey = vertexSpan.ToString();
+
+                    if (coords != CoordinateSystem.RH_rightPX_upPY)
+                        vertexKey = CoordinateConverter.ConvertCoordsTo_RH_rightPX_upPY(vertexKey, coords);
 
                     if (!vertexLookup.TryGetValue(vertexKey, out int index))
                     {
@@ -157,9 +292,18 @@ public class TerrainBuffer : ITerrainBuffer
 
                     currentObjectFaces?.Add([..faceVertices]);
 
-                    currentObjectTriangles?.Add(new Vector3i(faceVertices[0], faceVertices[1], faceVertices[2]));
-                    if (faceVerticesCount == 4)
-                        currentObjectTriangles?.Add(new Vector3i(faceVertices[0], faceVertices[2], faceVertices[3]));
+                    if (needsFaceFlip)
+                    {
+                        currentObjectTriangles?.Add(new Vector3i(faceVertices[2], faceVertices[1], faceVertices[0]));
+                        if (faceVerticesCount == 4)
+                            currentObjectTriangles?.Add(new Vector3i(faceVertices[3], faceVertices[2], faceVertices[0]));
+                    }
+                    else
+                    {
+                        currentObjectTriangles?.Add(new Vector3i(faceVertices[0], faceVertices[1], faceVertices[2]));
+                        if (faceVerticesCount == 4)
+                            currentObjectTriangles?.Add(new Vector3i(faceVertices[0], faceVertices[2], faceVertices[3]));
+                    }
                 }
                 break;
                 case 'o':
