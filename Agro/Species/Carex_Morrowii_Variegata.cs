@@ -22,11 +22,13 @@ public static class Carex_Morrowii_Variegata
         Aka = "Japanese Sedge",
         Behavior = Behavior.Herbaceous,
 
-        Height = 0.40f,
+        // naturadb gives 30-40 cm and RHS 0.1-0.5 m; the clump was reading short.
+        Height = 0.50f,
 
         // Carex has long, narrow, grass-like leaves that arch outward
-        LeafLength = 0.24f,
-        LeafLengthVar = 0.08f,
+        // Gardenia.net: leaves 15-40 cm long, 6-8 mm wide.
+        LeafLength = 0.30f,
+        LeafLengthVar = 0.09f,
         LeafRadius = 0.003f,       // ~3mm half-width = 6mm wide leaf
         LeafRadiusVar = 0.0008f,
         LeafPitchVar = 8f * DegToRad,
@@ -41,7 +43,7 @@ public static class Carex_Morrowii_Variegata
         PetioleRadius = 0.0012f,
         PetioleRadiusVar = 0.0002f,
 
-        CrownBudActivationProbabilityPerSeason = 0.70f,
+        CrownBudActivationProbabilityPerSeason = 0.45f,
         CrownPitch = 90f * DegToRad,
         HerbaceousGrowthRateScale = 0.15f,
         ShootMaximumRadius = 0.0025f,
@@ -52,6 +54,10 @@ public static class Carex_Morrowii_Variegata
         LateralRollVar = 8f * DegToRad,
 
         LateralsPerNode = 2,
+        // A sedge tiller carries six to ten leaves and then flowers or rests. Uncapped,
+        // each tiller kept adding nodes and the clump reached 906 leaves in two years
+        // against the 100-200 a 17-tiller tussock actually carries.
+        CrownMaximumNodes = 5,
         // Tiller internodes are very short but non-zero. They must still exceed the
         // shoot radius: a segment wider than it is long has an ill-conditioned axis,
         // and the bending solver can then flip it over.
@@ -65,26 +71,48 @@ public static class Carex_Morrowii_Variegata
         // With such short segments the depth cap is what bounds the tiller count
         // rather than the reach, so it has to stay low: each level roughly doubles
         // the number of shoots and four levels give a plausible young clump.
-        RhizomeMaximumSegmentDepth = 4,
+        // Four saturated the tussock at 41 tillers in year one; a sedge keeps adding
+        // tillers each spring.
+        RhizomeMaximumSegmentDepth = 5,
         RhizomeSegmentLength = 0.005f,
         RhizomeSegmentRadius = 0.0015f,      // ~1.5mm - much thinner for a sedge
         RhizomeGrowthRateScale = 0.05f,
         RhizomeBasalBudActivationProbabilityPerHour = 1f,
-        RhizomeAxillaryBudActivationProbabilityPerSeason = 0.45f,
+        RhizomeAxillaryBudActivationProbabilityPerSeason = 0.3f,
         RhizomeAxillaryBudsPerSegment = 1,
-        FloweringStartAgeHours = 24f * 80f,
-        FloweringPhaseDurationHours = 24 * 30,
-        FloweringSeasonStart = 0f,
-        FloweringSeasonEnd = 1f / 11f,
+        // The tussock persists through winter; its dormant tiller buds must not be
+        // deleted when their reserve runs down.
+        RetainDormantRhizomes = true,
+        // A sedge raised from seed does not raise culms in its first summer. At 80 days
+        // the plant matured on 20 May, inside that year's window, and flowered in June;
+        // 300 days moves the first culms to the second spring, where they belong.
+        FloweringStartAgeHours = 24f * 300f,
+        FloweringPhaseDurationHours = 24 * 40,
+        // April to May (naturadb "Maerz bis Mai", RHS "spring", MOBOT "April to July").
+        // Season 0 is 1 March, so 1 April = (91-59)/365 = 0.088 and
+        // 31 May = (151-59)/365 = 0.252.
+        //
+        // FloweringSeasonStart must stay above zero. The reset branch of
+        // GetFloweringPhase is guarded by "season < FloweringSeasonStart", which a
+        // value of zero makes unreachable; the annual re-arm in PlantSubFormation now
+        // covers that, but a window that opens on the very first day of the season year
+        // is not what this sedge does anyway.
+        FloweringSeasonStart = 0.088f,
+        FloweringSeasonEnd = 0.252f,
 
         PreFloweringCrownContinuationProbabilityPerHour = 0.008f,
         FloweringCrownContinuationProbabilityPerHour = 0.002f,
         PostFloweringCrownContinuationProbabilityPerHour = 0.003f,
         DormantCrownContinuationProbabilityPerHour = 0f,
 
-        PreFloweringCommitmentProbabilityPerHour = 0.001f,
+        // The PreFlower phase runs from 1 March to the start of the flowering window, and
+        // its own commitment rate is what puts flowers on the plant in March. Keep it at
+        // zero unless the species really does bloom before its main window.
+        PreFloweringCommitmentProbabilityPerHour = 0f,
         FloweringCommitmentProbabilityPerHour = 0.025f,
-        PostFloweringCommitmentProbabilityPerHour = 0.001f,
+        // A sedge raises its culms once, in spring. A non-zero post-flowering rate put
+        // spikes on the clump from May to December.
+        PostFloweringCommitmentProbabilityPerHour = 0f,
         DormantFloweringCommitmentProbabilityPerHour = 0f,
 
         WoodElasticModulus = 1.0e8f,
@@ -92,16 +120,17 @@ public static class Carex_Morrowii_Variegata
         // Effective culm stiffness includes the reinforcing leaf sheath that
         // the simplified solid-axis geometry does not model explicitly.
         FlowerOrganElasticModulus = 8e8f,
+        // A sedge culm is stiff and erect - "sedges have edges", a solid trigonous stem.
+        // Stated explicitly rather than inherited, because the scape and the spikes it
+        // carries are no longer the same tissue as far as bending is concerned.
+        FlowerScapeElasticModulus = 8e8f,
 
         FlowerSettings = new FlowerSettings
         {
             // Carex flowers grow on tall upright stems (culms) that rise above foliage
-            PetalLength = 0.002f,        // Very small - Carex flowers are inconspicuous
-            PetalRadius = 0.0008f,       // Tiny spikelet scales
-            PetalLengthVariance = 0.0005f,
+
             PetalAndPedicelGrowthDurationHours = 72f,
             PetalAndPedicelGrowthDurationVarianceHours = 18f,
-            PetalCount = 1,              // Single spikelet structure, not radial petals
 
             CreateLeavesOnFlowerBase = false,
             FlowerPhenology = new LeafPhenology(
@@ -131,39 +160,66 @@ public static class Carex_Morrowii_Variegata
             FlowerMaximumAgeHours = 600u,
 
             // Flower stem (culm) settings - tall and upright
+            // A SEDGE HAS NO PETALS AND NO PERIANTH AT ALL. Flora of North America on
+            // Carex: "staminate flowers without scales; pistillate flowers with 1 scale
+            // with fused margins (perigynium) enclosing flower ... perianth absent".
+            // MOBOT for this very species: "Brownish flowers (lack petals and sepals)".
+            // It is wind-pollinated, so there is nothing showy to render.
+            //
+            // What a photograph shows is a spike-like raceme on a trigonous culm: one
+            // terminal staminate spike 3-4 cm long and 3-5 mm thick, dark chestnut, its
+            // cream-white filaments and pale anthers exserted at 40-70 degrees so the
+            // whole thing reads as a narrow bottle-brush, and below it two to five
+            // slender pistillate spikes 1.5-3.5 cm long, erect to ascending, spaced
+            // further apart down the axis.
+            //
+            // So the mapping is: FlowerBud is the SPIKE AXIS, and the "petals" are the
+            // exserted anthers and glumes around it - many, tiny, narrow and pale, not
+            // five broad coloured blades. That is what the previous single 12 mm petal
+            // on a 3 mm bud looked wrong as.
             FlowerPedicelLength = 0.003f,       // Minimal pedicel
             FlowerPedicelRadius = 0.0003f,
             FlowerPedicelLengthVariance = 0.001f,
             FlowerPedicelRadiusVariance = 0.0001f,
             FlowerPedicelSegmentCount = 1,
 
-            // Base stem that elevates the flower - this is the main culm
-            FlowerBaseSegmentLength = 0.18f,         // ~18cm tall flowering stem (reaches leaf height)
-            FlowerBaseSegmentLengthVariance = 0.04f,
-            FlowerBaseSegmentRadius = 0.0012f,       // Thin but sturdy
+            // The culm: unbranched, trigonous, and standing clear of the arching
+            // foliage. Four segments of 11 cm reach 44 cm against a 30-40 cm leaf mound,
+            // which is what the photographs show - the culms rise above and beyond the
+            // leaves. One 18 cm segment left the spikes below the foliage.
+            // Four segments of 8.5 cm put the spikes a few centimetres above the
+            // 40 cm leaf mound. At 11 cm they stood 15 cm clear of it, which is more
+            // than "slightly taller than the leaves".
+            FlowerBaseSegmentLength = 0.085f,
+            FlowerBaseSegmentLengthVariance = 0.02f,
+            FlowerBaseSegmentRadius = 0.0011f,
             FlowerBaseSegmentRadiusVariance = 0.0002f,
 
-            FlowerBranchSegmentLength = 0.004f,         // Minimal additional stem segments
-            FlowerBranchSegmentLengthVariance = 0.001f,
-            FlowerBranchSegmentRadius = 0.0004f,
+            // Short peduncles carrying the lateral pistillate spikes.
+            FlowerBranchSegmentLength = 0.012f,
+            FlowerBranchSegmentLengthVariance = 0.004f,
+            FlowerBranchSegmentRadius = 0.0005f,
             FlowerBranchSegmentRadiusVariance = 0.0001f,
 
-            FlowerBaseSegmentCount = 1,         // Single flowering stem from base
+            FlowerBaseSegmentCount = 4,
             FlowerBranchMaximumDepth = 1,
-            FlowerBranchLateralsPerNode = 0,         // No lateral branches on flower stem
-            FlowersPerCluster = 1,             // Single terminal spikelet
-            FlowerClusterMaximumSpreadDegrees = 9f,
+            FlowerBranchLateralsPerNode = 0,
+            FlowersPerCluster = 1,             // one spike per site
+            FlowerClusterMaximumSpreadDegrees = 6f,
             UseDeterministicBranching = true,
-            CreateFlowersAtInternodes = false,     // Terminal flower only
+            CreateFlowersAtInternodes = false,
             InternodeFlowersHaveStems = false,
-            TerminalFlowerProbabilityAtMaximumBranchDepth = 0.3f,
+            TerminalFlowerProbabilityAtMaximumBranchDepth = 1.0f,
 
-            FlowerLateralInclinationDegrees = 5,            // Nearly vertical
-            FlowerLateralAzimuthOffsetDegrees = 3,
-            FlowerBaseLateralCount = 0,            // No basal laterals on flower stem
-            FlowerBaseLateralInclinationDegrees = 5,
-            FlowerBaseLateralAzimuthOffsetDegrees = 3,
-            FlowerBaseLateralProbability = 0.3f,
+            // Erect to slightly ascending, never nodding.
+            FlowerLateralInclinationDegrees = 12,
+            FlowerLateralAzimuthOffsetDegrees = 40,
+            // Two to five lateral spikes, on the upper half of the culm only.
+            FlowerBaseLateralCount = 1,
+            FlowerBaseLateralInclinationDegrees = 20,
+            FlowerBaseLateralAzimuthOffsetDegrees = 55,
+            FlowerBaseLateralProbability = 1.0f,
+            FlowerBaseLateralActiveTopFraction = 0.6f,
 
             // Spikelet bracts (reduced leaves on flower stem)
             FlowerBaseLeafLength = 0.015f,
@@ -171,7 +227,35 @@ public static class Carex_Morrowii_Variegata
             FlowerBaseLeafPetioleLength = 0.002f,
             FlowerBaseLeafPetioleRadius = 0.00015f,
 
-            FlowerStemSegmentGrowthDurationHours = 96f,
+            FlowerStemSegmentGrowthDurationHours = 24f,
+
+            // The spike axis, dark chestnut, 3 cm long and 2 mm thick.
+            FlowerCentreLength = 0.030f,
+            FlowerCentreRadius = 0.0020f,
+            FlowerCentreColor = new Vector3(0.36f, 0.19f, 0.11f),
+            // The culm is pale green flushed red-brown below the spikes.
+            ScapeColor = new Vector3(0.38f, 0.46f, 0.22f),
+
+            // Glumes and exserted anthers rather than petals: many, 4 mm long and only
+            // 0.6 mm wide, standing off the axis at about 55 degrees, cream-white.
+            PetalCount = 14,
+            PetalLength = 0.0045f,
+            PetalLengthVariance = 0.001f,
+            PetalRadius = 0.0003f,
+            PetalPitchDegrees = 55f,
+            PetalPitchVarianceDegrees = 12f,
+            PetalRollVarianceDegrees = 20f,
+            PetalRimFraction = 0.6f,
+            PetalMorphology = new LeafMorphology
+            {
+                Shape = new LanceolateLeafShape(),
+                Margin = LeafMarginType.Entire,
+                Venation = LeafVenationType.Parallel,
+                Apex = LeafApexType.Acuminate,
+                Base = LeafBaseType.Truncate,
+                Dimensions = LeafDimensions.Create(lengthM: 0.0045f, widthM: 0.0006f,
+                    thicknessM: 0.00008f, petioleM: 0f, curvature01: 0.1f),
+            },
         },
 
         LeafPhenology = new LeafPhenology(

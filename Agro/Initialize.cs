@@ -76,6 +76,8 @@ public static class Initialize
             result.FruitSettings = tmp_predefined.FruitSettings;
         }
 
+        result = tmp_predefined;
+
         return result;
     }
 

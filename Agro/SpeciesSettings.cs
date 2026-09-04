@@ -144,6 +144,21 @@ public class SpeciesSettings
     public float ShootsGravitaxis { get; set; } = 0.2f;
 
     /// <summary>
+    /// Angle from vertical that a shoot's own gravitropism steers toward.
+    /// </summary>
+    /// <value>
+    /// Radians. Zero is an orthotropic, upright shoot and keeps the historical
+    /// behaviour exactly. Values near pi/2 describe a plagiotropic shoot - a
+    /// decumbent, trailing or creeping stem that actively holds itself near the
+    /// horizontal rather than reaching for the vertical. Without it every shoot was
+    /// pulled upright whenever its axis dipped below horizontal, in proportion to how
+    /// far it had dipped and regardless of the species, so a trailing bellflower
+    /// climbed to 2.4 m in two seasons instead of sprawling into a mat.
+    /// </value>
+    [SpeciesUILabel("Shoot gravitropic set-point angle")]
+    public float ShootsGravitropicSetPointAngle { get; init; } = 0f;
+
+    /// <summary>
     /// Standard wood growth time (in hours)
     /// </summary>
     [SpeciesUILabel("Wood maturing time (hours)")]
@@ -541,6 +556,22 @@ public class SpeciesSettings
     public float FlowerPedicelElasticModulus { get; init; } = 4e7f;
 
     /// <summary>
+    /// Elastic modulus of the inflorescence axis - the scape, its branches and the
+    /// meristems that build them.
+    /// </summary>
+    /// <remarks>
+    /// Separate from <see cref="FlowerOrganElasticModulus"/> because the axis and the
+    /// flower it carries are not equally stiff, and because a species needs to choose:
+    /// a Bergenia scape is a rigid fleshy column that holds its panicle straight up,
+    /// while a Geranium peduncle is meant to bend under its own cyme. Sharing one value
+    /// made every scape as stiff as the stiffest one. Zero falls back to
+    /// <see cref="FlowerOrganElasticModulus"/>.
+    /// </remarks>
+    /// <value>Pascals; non-negative.</value>
+    [SpeciesUILabel("Flower scape elastic modulus")]
+    public float FlowerScapeElasticModulus { get; init; }
+
+    /// <summary>
     /// Age at which a herbaceous leaf and its petiole become eligible for renewal.
     /// </summary>
     /// <value>Hours; must be finite and greater than zero.</value>
@@ -642,6 +673,26 @@ public class SpeciesSettings
     /// </value>
     [SpeciesUILabel("Crown pitch")]
     public float CrownPitch { get; init; } = 0.5f * MathF.PI;
+
+    /// <summary>
+    /// Largest number of vegetative nodes one crown may carry in total before its
+    /// apices stop extending. Zero leaves the crown unbounded.
+    /// </summary>
+    /// <value>
+    /// A rosette perennial carries a compressed caudex, not an indeterminate shoot:
+    /// its apex adds leaf nodes for a season and the crown still stays a few
+    /// centimetres tall because old leaves are shed and new crowns arise beside it.
+    /// The simulator had no such bound, so a crown grew one node per continuation
+    /// event forever - a Fragaria crown reached 108 stacked nodes and 31 cm of stem in
+    /// two years, which renders as a leaf ball on a stick, and a Campanula axis reached
+    /// 2.4 m. The cap also stops the chain from curling underground: every segment
+    /// bends a little under load and a long enough chain always ends up pointing down.
+    /// Set it to roughly the number of live leaf nodes the rosette carries, divided by
+    /// <see cref="LateralsPerNode"/>. Leave it at zero for a genuinely indeterminate
+    /// trailing or climbing shoot.
+    /// </value>
+    [SpeciesUILabel("Max nodes per crown axis")]
+    public int CrownMaximumNodes { get; init; } = 0;
 
     /// <summary>
     /// Dimensionless multiplier for herbaceous shoot elongation and radial growth.
@@ -999,6 +1050,14 @@ public class SpeciesSettings
         }
 
         RequireFiniteNonNegative(FloweringStartAgeHours, nameof(FloweringStartAgeHours));
+        if (!float.IsFinite(ShootsGravitropicSetPointAngle) || ShootsGravitropicSetPointAngle < 0f ||
+            ShootsGravitropicSetPointAngle > MathF.PI * 0.5f)
+        {
+            throw new ArgumentOutOfRangeException(nameof(ShootsGravitropicSetPointAngle),
+                ShootsGravitropicSetPointAngle, "The set-point angle must lie between zero and pi/2 radians.");
+        }
+        if (CrownMaximumNodes < 0)
+            throw new ArgumentOutOfRangeException(nameof(CrownMaximumNodes), CrownMaximumNodes, "Value must be non-negative.");
         RequireProbability(FloweringSeasonStart, nameof(FloweringSeasonStart));
         RequireProbability(FloweringSeasonEnd, nameof(FloweringSeasonEnd));
         if (FloweringSeasonStart > FloweringSeasonEnd)
@@ -1031,6 +1090,7 @@ public class SpeciesSettings
         RequireFinitePositive(PetioleElasticModulus, nameof(PetioleElasticModulus));
         RequireFinitePositive(FlowerOrganElasticModulus, nameof(FlowerOrganElasticModulus));
         RequireFinitePositive(FlowerPedicelElasticModulus, nameof(FlowerPedicelElasticModulus));
+        RequireFiniteNonNegative(FlowerScapeElasticModulus, nameof(FlowerScapeElasticModulus));
 
         RequireFinitePositive(LeafMaximumAgeHours, nameof(LeafMaximumAgeHours));
         RequireColor(YoungLeafColor, nameof(YoungLeafColor));

@@ -29,29 +29,55 @@ public static class Heuchera_Micrantha_Palace_Purple
         LeafLengthVar = 0.015f,
         LeafRadius = 0.055f,
         LeafRadiusVar = 0.010f,
-        LeafPitchVar = 5f * (MathF.PI / 180f),
-        LeafPitch = 85 * (MathF.PI / 180f),
+        // LeafPitch is measured from the petiole, and LateralPitch from the vertical
+        // crown axis, so a blade only comes out horizontal when the two are
+        // complementary: LeafPitch ~ 90 - LateralPitch. Both Geraniums satisfied that
+        // and looked right; the species that did not held their blades edge-on or
+        // pointing at the ground.
+        LeafPitchVar = 6f * (MathF.PI / 180f),
+        LeafPitch = 35 * (MathF.PI / 180f),
 
         LeafGrowthTime = 24f * 10f * 2f,
         LeafGrowthTimeVar = 24f * 4f,
         LeafMaximumAgeHours = 24 * 200,
 
-        // Long-petioled basal rosette: 10-20 cm.
-        PetioleLength = 0.14f,
-        PetioleLengthVar = 0.03f,
+        // Long-petioled basal rosette. The petiole is age-dependent in the field, about
+        // 6 cm in the first year and 12-22 cm at maturity; the model has one length, so
+        // it takes the mature figure - a mature crown was reading too short and therefore
+        // too dense.
+        PetioleLength = 0.18f,
+        PetioleLengthVar = 0.04f,
         // Firm petioles, 4-5 mm across, stiff enough to hold the blade out at length.
-        PetioleRadius = 0.0025f,
+        // Firm petioles: an 18 cm petiole carrying a 12 cm blade needs the section, or
+        // the whole rosette sags below the soil line.
+        PetioleRadius = 0.0030f,
         PetioleRadiusVar = 0.0003f,
 
-        CrownBudActivationProbabilityPerSeason = 0.55f,
+        // Every leaf node that is shaded out leaves a bud behind, so a high activation
+        // rate compounds with the clump's own growth: 37 crowns and 640 leaves after one
+        // season, against the 20-40 leaves a first-year plant carries.
+        // Every petiole that is shaded out leaves a bud, and every bud that breaks is
+        // another rosette that flowers and hands over to yet another apex. The loop is
+        // what drove a first-year plant to seventeen crowns; a Heuchera raised from seed
+        // is one crown in its first year and three or four in its second.
+        CrownBudActivationProbabilityPerSeason = 0.2f,
         // An upright basal rosette on a caudex. Past 90 degrees the crown leans back
         // over its own base, which tipped the longer petioles below the horizontal.
         CrownPitch = 90f * DegToRad,
         HerbaceousGrowthRateScale = 0.22f,
         ShootMaximumRadius = 0.0035f,
 
-        LateralPitch = 15 * (MathF.PI / 180f),
-        LateralPitchVar = 10 * (MathF.PI / 180f),
+        // A basal rosette holds its petioles well away from the caudex: measured on
+        // photographs of an established plant the outer leaves stand about 30-40 degrees
+        // above the horizontal, so they diverge 50-60 degrees from the vertical crown
+        // axis. At the former 15 degrees every petiole rose almost parallel to the axis
+        // and the blades piled up on top of one another - the "ball-like crown" with
+        // almost no spread. Mean leaf distance from the axis was 10 cm against a 25 cm
+        // maximum, i.e. the foliage sat in the middle instead of forming a mound.
+        // Mature blades sit at 20-45 degrees and the mound reads as a loose spreading
+        // dome with gaps to the soil, not a packed hemisphere.
+        LateralPitch = 62 * (MathF.PI / 180f),
+        LateralPitchVar = 12 * (MathF.PI / 180f),
         LateralRoll = 45f * (MathF.PI / 180f),
         LateralRollVar = 5f * (MathF.PI / 180f),
 
@@ -63,37 +89,68 @@ public static class Heuchera_Micrantha_Palace_Purple
         NodeDistanceVar = 0.001f,
         CrownNodeHeightAboveSoil = 0.01f,
         DominanceFactor = 0.75f,
+        // A Heuchera caudex carries roughly 15-25 live leaves. With two petioles per
+        // node that is about ten nodes; the apex then rests and the clump gains width
+        // through offsets instead of stacking an ever taller stem.
+        // A looser rosette. FNA and the cultivar patents describe a branched woody
+        // caudex carrying three to nine separate crowns radiating outward from an
+        // opening centre - width comes from crown COUNT, not from packing more leaves
+        // into one crown.
+        CrownMaximumNodes = 7,
 
         // Not a runner: offsets crowd against the mother crown to form a clump.
-        RhizomeMaximumSegmentDepth = 1,
-        RhizomeSegmentLength = 0.012f,
+        // Three short segments of two centimetres reproduce the 30-45 cm clump a
+        // three-year-old plant makes without turning it into a creeping ground cover.
+        // Depth two saturated the clump at ten crowns during the first season and the
+        // organ count then never changed again. Four keeps it enlarging towards the
+        // 30-45 cm clump over the two to three years the nurseries quote.
+        RhizomeMaximumSegmentDepth = 2,
+        RhizomeSegmentLength = 0.02f,
         RhizomeSegmentRadius = 0.003f,
         RhizomeGrowthRateScale = 0.05f,
         RhizomeBasalBudActivationProbabilityPerHour = 1f,
-        RhizomeAxillaryBudActivationProbabilityPerSeason = 0.35f,
+        RhizomeAxillaryBudActivationProbabilityPerSeason = 0.25f,
         RhizomeAxillaryBudsPerSegment = 1,
-        FloweringStartAgeHours = 24f * 50f,
-        FloweringPhaseDurationHours = 24 * 60,
+        // A caudex is perennial. Without this a dormant offset bud whose local reserve
+        // empties over winter is simply deleted, and the clump never gains a crown:
+        // the two Geraniums were the only species that set it, and they were the only
+        // two that built a real clonal clump.
+        RetainDormantRhizomes = true,
+        // Heuchera raised from seed flowers in its second summer, not in its first.
+        FloweringStartAgeHours = 24f * 300f,
+        FloweringPhaseDurationHours = 24 * 70,
+        // June to July at 48.2 N (MOBOT "June to July"; FNA "Flowering May-Jul";
+        // German nursery catalogues VII-VIII). Season 0 is 1 March, so
+        // 1 June = (152-59)/365 = 0.255 and 31 July = (212-59)/365 = 0.419.
+        FloweringSeasonStart = 0.255f,
+        FloweringSeasonEnd = 0.419f,
 
         PreFloweringCrownContinuationProbabilityPerHour = 0.012f,
         FloweringCrownContinuationProbabilityPerHour = 0.003f,
         PostFloweringCrownContinuationProbabilityPerHour = 0.005f,
         DormantCrownContinuationProbabilityPerHour = 0f,
 
-        PreFloweringCommitmentProbabilityPerHour = 0.003f,
+        // The PreFlower phase runs from 1 March to the start of the flowering window, and
+        // its own commitment rate is what puts flowers on the plant in March. Keep it at
+        // zero unless the species really does bloom before its main window.
+        PreFloweringCommitmentProbabilityPerHour = 0f,
         FloweringCommitmentProbabilityPerHour = 0.045f,
-        PostFloweringCommitmentProbabilityPerHour = 0.003f,
+        // Deadheaded plants rebloom sparsely; the lead-time gate keeps whatever is
+        // committed here from opening after dormancy.
+        PostFloweringCommitmentProbabilityPerHour = 0.0008f,
         DormantFloweringCommitmentProbabilityPerHour = 0f,
 
         WoodElasticModulus = 1.0e8f,
         GreenElasticModulus = 4e6f,
         FlowerOrganElasticModulus = 4e7f,
+        // "Slender, wiry, dark red stems" (MOBOT) - wiry means thin AND stiff. At the
+        // shared flower modulus a 42 cm scape reached 48 cm, then the panicle opened and
+        // the whole thing folded to the ground: 1,977 inverted organs and the flowers
+        // back down at 19 cm.
+        FlowerScapeElasticModulus = 1.5e8f,
 
         FlowerSettings = new FlowerSettings
         {
-            PetalLength = 0.006f,
-            PetalRadius = 0.0025f,
-            PetalLengthVariance = 0.001f,
             PetalAndPedicelGrowthDurationHours = 60f,
             PetalAndPedicelGrowthDurationVarianceHours = 12f,
 
@@ -130,20 +187,39 @@ public static class Heuchera_Micrantha_Palace_Purple
             FlowerPedicelRadiusVariance = 0.0001f,
             FlowerPedicelSegmentCount = 1,
 
-            FlowerBaseSegmentLength = 0.008f,
-            FlowerBaseSegmentLengthVariance = 0.004f,
-            FlowerBaseSegmentRadius = 0.0006f,
-            FlowerBaseSegmentRadiusVariance = 0.0001f,
+            // The scape is the whole point of a Heuchera: Walters Gardens gives a
+            // "Scape Height" of 20 inches (51 cm) over 8-12 inch (20-30 cm) foliage, and
+            // FNA measures flowering stems at 6-57 cm. Seven segments of 5 cm carry the
+            // panicle to about 35 cm above the crown node, clearing the leaves by roughly
+            // 20 cm. The former 4 x 0.8 cm gave a 6 cm scape that was buried in the
+            // rosette, which is why no flowers were visible.
+            // Eight longer segments rather than twelve short ones. Segment growth is
+            // sequential AND resource-limited, so a twelve-segment scape only gained
+            // about 10 cm a fortnight and never reached its full 42 cm inside the
+            // flowering window - it topped out near 27 cm against the 38-60 cm that
+            // Walters Gardens and FNA measure.
+            FlowerBaseSegmentLength = 0.055f,
+            FlowerBaseSegmentLengthVariance = 0.005f,
+            // A 0.6 mm scape cannot hold 35 cm upright; the real stalk is 2-3 mm.
+            // The research measures the scape at 2.0-2.5 mm at the base.
+            FlowerBaseSegmentRadius = 0.0022f,
+            FlowerBaseSegmentRadiusVariance = 0.0002f,
 
-            FlowerBranchSegmentLength = 0.012f,
-            FlowerBranchSegmentLengthVariance = 0.002f,
-            FlowerBranchSegmentRadius = 0.0005f,
+            // Primary branches are 3-6 cm at the bottom of the flowering zone and only
+            // a few mm at the top; one length has to average them.
+            FlowerBranchSegmentLength = 0.022f,
+            FlowerBranchSegmentLengthVariance = 0.008f,
+            FlowerBranchSegmentRadius = 0.0006f,
             FlowerBranchSegmentRadiusVariance = 0.0001f,
 
-            FlowerBaseSegmentCount = 4,
+            FlowerBaseSegmentCount = 8,
+            // A THYRSE, not a panicle: FNA gives "Inflorescences thyrses (with cymose
+            // side branches) ... 100-1000-flowered" and, for this species, "diffuse".
+            // Two branch orders, then a small cyme of 2-7 flowers at every tip - the
+            // "compound" clusters. 150-400 flowers on one scape.
             FlowerBranchMaximumDepth = 2,
             FlowerBranchLateralsPerNode = 2,
-            FlowersPerCluster = 3,
+            FlowersPerCluster = 2,
             FlowerClusterMaximumSpreadDegrees = 32.4f,
             UseDeterministicBranching = true,
             CreateFlowersAtInternodes = true,
@@ -152,17 +228,56 @@ public static class Heuchera_Micrantha_Palace_Purple
 
             FlowerLateralInclinationDegrees = 25,
             FlowerLateralAzimuthOffsetDegrees = 12,
+            // THE most important correction to the shape of this inflorescence: the
+            // lower 55-65 % of the scape is a bare peduncle carrying no flowers at all,
+            // and the 8-16 primary branches occupy only the upper third to half. Without
+            // an active-top fraction the laterals were spread over the whole scape, so
+            // the flowers started at the leaves instead of standing clear above them.
             FlowerBaseLateralCount = 1,
-            FlowerBaseLateralInclinationDegrees = 65,
-            FlowerBaseLateralAzimuthOffsetDegrees = 8,
-            FlowerBaseLateralProbability = 0.6f,
+            FlowerBaseLateralInclinationDegrees = 45,
+            FlowerBaseLateralAzimuthOffsetDegrees = 137,
+            FlowerBaseLateralProbability = 1.0f,
+            FlowerBaseLateralActiveTopFraction = 0.4f,
 
             FlowerBaseLeafLength = 0.012f,
             FlowerBaseLeafRadius = 0.006f,
             FlowerBaseLeafPetioleLength = 0.003f,
             FlowerBaseLeafPetioleRadius = 0.0003f,
 
-            FlowerStemSegmentGrowthDurationHours = 90f,
+            // Seven segments at 90 h is a 34-day lead from commitment to open petals,
+            // which pushed the first flowers into July. 45 h opens them in late June.
+            FlowerStemSegmentGrowthDurationHours = 26f,
+
+            // The axis is "slender, wiry, dark red" (MOBOT), beetroot maroon.
+            ScapeColor = new Vector3(0.42f, 0.13f, 0.19f),
+            // What the eye reads as the flower is the campanulate hypanthium: a bell
+            // 2.5-4.5 mm long with a 1.5-3.4 mm mouth, greenish white flushed pink.
+            FlowerCentreLength = 0.0035f,
+            FlowerCentreRadius = 0.0016f,
+            FlowerCentreColor = new Vector3(0.94f, 0.94f, 0.88f),
+            // FNA measures the petals of H. micrantha at 1.6-3.3 mm long and only
+            // 0.2-0.7 mm WIDE - a white fringe barely past the sepals, not five showy
+            // blades. They were 6 mm long and 5 mm across, and drawn with the species'
+            // maple-shaped LEAF mesh, which is most of why the flower looked wrong.
+            PetalCount = 5,
+            PetalLength = 0.0026f,
+            PetalLengthVariance = 0.0006f,
+            PetalRadius = 0.00035f,
+            // Campanulate: the petals barely spread from the bell's axis.
+            PetalPitchDegrees = 22f,
+            PetalPitchVarianceDegrees = 6f,
+            PetalRollVarianceDegrees = 15f,
+            PetalRimFraction = 0.75f,
+            PetalMorphology = new LeafMorphology
+            {
+                Shape = new LanceolateLeafShape(),
+                Margin = LeafMarginType.Entire,
+                Venation = LeafVenationType.Parallel,
+                Apex = LeafApexType.Obtuse,
+                Base = LeafBaseType.Cuneate,
+                Dimensions = LeafDimensions.Create(lengthM: 0.0026f, widthM: 0.0007f,
+                    thicknessM: 0.00006f, petioleM: 0f, curvature01: 0.35f),
+            },
         },
 
         LeafPhenology = new LeafPhenology(

@@ -236,6 +236,28 @@ namespace Agro
 
             }
 
+            /// <summary>
+            /// Direction the next scape segment grows in.
+            /// </summary>
+            /// <remarks>
+            /// Every base segment used to be built with AdjustUpBase, which discards the
+            /// current axis and points the segment straight up. That is a stiff culm, and it
+            /// is what a Bergenia scape should be - but a Geranium peduncle ascends and then
+            /// curves, so its flowers finish only a little above the surrounding leaves.
+            /// With the set-point left at zero the target IS vertical, so a species that
+            /// does not configure it keeps exactly the old posture.
+            /// </remarks>
+            private Quaternion ScapeOrientation(Quaternion orientation)
+            {
+                if (_settings.ScapeGravitropicSetPointAngle <= 0f)
+                    return PlantFormation2.AdjustUpBase(orientation, up: true);
+
+                var target = AboveGroundAgent.GravitropicSetPointOrientation(orientation,
+                    _settings.ScapeGravitropicSetPointAngle);
+                return Quaternion.Slerp(orientation, target,
+                    Math.Clamp(_settings.ScapeGravitropism, 0f, 1f));
+            }
+
             private void CreateFlowerBaseLaterals(ref AboveGroundAgent agent, int agentID, PlantSubFormation<AboveGroundAgent> formation)
             {
                 if (_settings.FlowerBaseLateralCount == 0 ||
@@ -307,7 +329,7 @@ namespace Agro
                         if (agent.FlowerAgent.debth + 1 < _settings.FlowerBaseSegmentCount)
                         {
 
-                            var or = PlantFormation2.AdjustUpBase(agent.Orientation, up: true);
+                            var or = ScapeOrientation(agent.Orientation);
                             var floweragent = new Flower() { BirthTime = agent.FlowerAgent.BirthTime, debth = agent.FlowerAgent.debth + 1, FlowerStartTime = agent.FlowerAgent.FlowerStartTime, flowerBase = true };
                             var mari = new AboveGroundAgent(formation.Plant, agentID, OrganTypes.FlowerMeristem, or, 0.1f * agent.Energy, initialResources: formation.DailyResourceMax, initialProduction: formation.DailyProductionMax, flowerAgent: floweragent) { Water_g = 0.1f * agent.Water_g, LateralAngle = _settings.FlowerLateralInclinationDegrees * DegreesToRadians, DominanceLevel = agent.DominanceLevel, FlowerAgent = floweragent };
                             var meristem = formation.Birth(mari);
@@ -436,10 +458,20 @@ namespace Agro
                     int petalCount = _settings.PetalCount;
                     float angleStep = MathF.Tau / petalCount;
 
-                    float basePetalPitch = 0.95f;      // how much petals tilt outward/down
-                    float pitchVarRange = 0.05f;      // random pitch jitter
-                    float rollVarRange = 0.05f;      // random roll jitter
+                    //Anthesis. The bud becomes the receptacle the petals stand on, so it is
+                    //retargeted from an elongated bud to whatever disc the species declares.
+                    //Doing it before the petals are placed matters: the attachment ring is a
+                    //fraction of the centre's radius, so the petals would otherwise be pinned
+                    //to the closed bud's width.
+                    agent.RetargetSize(_settings.FlowerCentreLength, _settings.FlowerCentreRadius);
 
+                    //Formerly 0.95 rad of pitch and 0.05 of jitter for every species, which
+                    //is a shallow bowl - right for nothing in particular. Campanula and
+                    //Heuchera are campanulate and need far less; Fragaria and Geranium are
+                    //rotate and need close to a right angle.
+                    float basePetalPitch = _settings.PetalPitchDegrees * DegreesToRadians;
+                    float pitchVarRange = _settings.PetalPitchVarianceDegrees * DegreesToRadians;
+                    float rollVarRange = _settings.PetalRollVarianceDegrees * DegreesToRadians;
 
                     for (int i = 0; i < petalCount; i++)
                     {
@@ -452,7 +484,7 @@ namespace Agro
                         float pitch = formation.Plant.RNG.NextFloatVar(pitchVarRange);
                         var or = agent.Orientation;
                         Quaternion o = or * Quaternion.CreateFromAxisAngle(Vector3.UnitX, a) * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, (basePetalPitch + pitch)) * Quaternion.CreateFromAxisAngle(Vector3.UnitX, roll);
-                        float rim = agent.Radius * 0.85f;
+                        float rim = agent.Radius * _settings.PetalRimFraction;
 
 
                         Vector3 offset = Vector3.Transform(new Vector3(0f, MathF.Cos(a) * rim, MathF.Sin(a) * rim), or);

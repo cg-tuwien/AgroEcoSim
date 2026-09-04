@@ -23,14 +23,34 @@ public static class Campanula_Poscharskyana
         Aka = "Serbian Bellflower",
         Behavior = Behavior.Herbaceous,
 
-        Height = 0.3f,
+        // RHS gives "up to 10 cm" of height against a 0.1-0.5 m spread; Gaissmayer
+        // lists 15 cm for 'Stella'. The trailing stems spread about three times as far
+        // as the plant is tall.
+        Height = 0.18f,
 
         LeafLength = 0.04f,
         LeafLengthVar = 0.008f,
         LeafRadius = 0.02f,
         LeafRadiusVar = 0.006f,
-        LeafPitchVar = 5f * (MathF.PI / 180f),
-        LeafPitch = 85 * (MathF.PI / 180f),
+        // LeafPitch is measured from the petiole, and LateralPitch from the vertical
+        // crown axis, so a blade only comes out horizontal when the two are
+        // complementary: LeafPitch ~ 90 - LateralPitch. Both Geraniums satisfied that
+        // and looked right; the species that did not held their blades edge-on or
+        // pointing at the ground.
+        LeafPitchVar = 6f * (MathF.PI / 180f),
+        LeafPitch = 30 * (MathF.PI / 180f),
+
+        // Serbian bellflower is plagiotropic: its stems hold themselves near the
+        // horizontal and sprawl over the edge of a pot. Steering every shoot back to
+        // the vertical - which is what the generic gravitropism did whenever an axis
+        // dipped - turned the mat into a climber that reached 2.37 m and 9.3 m of
+        // total stem length in two years.
+        ShootsGravitropicSetPointAngle = 80f * DegToRad,
+        // The set point is approached one slerp step per node, so a weak pull never
+        // reaches it inside a stem that is only thirteen nodes long: at the default
+        // strength the axis was still at 40 degrees above horizontal after sixty nodes.
+        // This is an actively held posture, so hold it firmly.
+        ShootsGravitaxis = 1.5f,
 
         LeafGrowthTime = 24f * 7f * 2f,
         LeafGrowthTimeVar = 24f * 3f,
@@ -46,52 +66,115 @@ public static class Campanula_Poscharskyana
         // their nodes, not by a subsurface rhizome. A near-vertical crown pitch made
         // the shoots stand up instead; a shallow rise lets them sprawl and then
         // decumb further under their own weight.
-        CrownPitch = 30f * DegToRad,
+        // The stem leaves the crown almost flat and stays there; starting it 30 degrees
+        // up meant every axis spent its first nodes climbing back down.
+        CrownPitch = 12f * DegToRad,
         HerbaceousGrowthRateScale = 0.8f,
-        ShootMaximumRadius = 0.004f,
+        // The trailing stems are wiry, well under a millimetre thick at the tip and
+        // only 2 mm at the base. At 4 mm they read as twigs.
+        ShootMaximumRadius = 0.0022f,
 
-        LateralPitch = 15 * (MathF.PI / 180f),
-        LateralPitchVar = 10 * (MathF.PI / 180f),
+        // Leaves stand off a near-horizontal stem rather than lying along it.
+        LateralPitch = 60 * (MathF.PI / 180f),
+        LateralPitchVar = 12 * (MathF.PI / 180f),
         LateralRoll = 45f * (MathF.PI / 180f),
         LateralRollVar = 5f * (MathF.PI / 180f),
 
         LateralsPerNode = 2,
-        // Internodes of a trailing stem, 2-3 cm.
-        NodeDistance = 0.025f,
-        NodeDistanceVar = 0.005f,
+        // Internodes of a trailing stem. 2.5 cm spaced the leaves out so far that the
+        // mat was see-through; the real cushion is dense, with a leaf every centimetre
+        // or so along each stem. Halving the internode doubles the foliage density at
+        // the same stem length.
+        NodeDistance = 0.013f,
+        NodeDistanceVar = 0.003f,
         DominanceFactor = 0.7f,
+        // A trailing stem runs 20-35 cm before it stops; the mat closes because the
+        // crown puts out many such stems, not because one of them never ends. The
+        // unbounded axis produced a single 9.3 m strand with exactly one branch point,
+        // which is what "a single strand over a year" describes.
+        // A crown that flowers is spent, so the number of nodes a stem carries also sets
+        // how many successive flower flushes it can produce. At ten the mat bloomed for a
+        // fortnight instead of the June-to-September season the catalogues give.
+        // Twice the nodes at half the internode keeps each trailing stem around 25 cm
+        // while doubling the number of leaves on it. Eighteen rather than twenty-two,
+        // because the denser mat had also grown 10 cm wider and the crown size was
+        // already right.
+        // Density and width trade off against each other here: a longer stem carries
+        // more leaves but also reaches further. The cushion is dense because it has MANY
+        // short interwoven stems, so the node cap stays low and the stem count carries
+        // the density. Fourteen nodes at 1.3 cm is an 18 cm stem.
+        CrownMaximumNodes = 14,
 
-        // Only a short basal rhizome; the spread itself happens above ground.
-        RhizomeMaximumSegmentDepth = 1,
-        RhizomeSegmentLength = 0.04f,
+        // RHS: "spreads via underground runners". Short basal runners raise many
+        // crowns close together and each sends out its own trailing stem, which is what
+        // makes the interwoven leafy volume rather than one long strand.
+        // Axillary buds branch the runner system, so buds-per-segment above one makes
+        // the bud count grow as 2^depth: at depth 8 with two buds the plant carried
+        // 3,631 rhizome organs and 2,580 dormant buds against 362 leaves.
+        RhizomeMaximumSegmentDepth = 4,
+        RhizomeSegmentLength = 0.015f,
+        RhizomeSegmentLengthVar = 0.008f,
         RhizomeSegmentRadius = 0.0025f,
         RhizomeGrowthRateScale = 0.05f,
         RhizomeBasalBudActivationProbabilityPerHour = 1f,
-        RhizomeAxillaryBudActivationProbabilityPerSeason = 0.4f,
+        RhizomeAxillaryBudActivationProbabilityPerSeason = 0.5f,
         RhizomeAxillaryBudsPerSegment = 1,
+        // More main stems: the cushion is built from many trailing shoots crossing over
+        // each other, not from a few long ones.
+        InitialBasalRhizomeBuds = 4,
+        RetainDormantRhizomes = true,
         // Flowers are borne all along the trailing stems, not one per shoot.
-        MaximumFlowersPerCrown = 6,
+        MaximumFlowersPerCrown = 3,
         FloweringStartAgeHours = 24f * 45f,
-        FloweringPhaseDurationHours = 24f * 55f,
+        // June to September (Gaissmayer VI-VII + IX, naturadb "Juni bis September",
+        // RHS "summer and early autumn"). Season 0 is 1 March, so 1 June = 0.255 and
+        // 30 September = (273-59)/365 = 0.586. The window is long, so the phase has to
+        // last as long as the window or the plant stops flowering in midsummer.
+        FloweringSeasonStart = 0.255f,
+        // 30 September let commitment run to the very last day of the window, and with
+        // a 20-day lead plus a 21-day petal life that put a handful of flowers on the mat
+        // in November. Early September ends the display in mid-October, which is what the
+        // catalogues describe.
+        FloweringSeasonEnd = 0.520f,
+        FloweringPhaseDurationHours = 24f * 115f,
 
         PreFloweringCrownContinuationProbabilityPerHour = 0.015f,
         FloweringCrownContinuationProbabilityPerHour = 0.004f,
         PostFloweringCrownContinuationProbabilityPerHour = 0.008f,
         DormantCrownContinuationProbabilityPerHour = 0f,
 
-        PreFloweringCommitmentProbabilityPerHour = 0.004f,
-        FloweringCommitmentProbabilityPerHour = 0.05f,
-        PostFloweringCommitmentProbabilityPerHour = 0.004f,
+        // The PreFlower phase runs from 1 March to the start of the flowering window, and
+        // its own commitment rate is what puts flowers on the plant in March. Keep it at
+        // zero unless the species really does bloom before its main window.
+        PreFloweringCommitmentProbabilityPerHour = 0f,
+        FloweringCommitmentProbabilityPerHour = 0.02f,
+        // Even 0.001/h over a PostFlower phase that runs to mid-November put open
+        // flowers on the mat on 6 December. The documented season already ends in
+        // September, so the phase should not commit at all.
+        PostFloweringCommitmentProbabilityPerHour = 0f,
         DormantFloweringCommitmentProbabilityPerHour = 0f,
 
 
         WoodElasticModulus = 1.0e8f,
         GreenElasticModulus = 4e6f,
-        FlowerOrganElasticModulus = 4e7f,
+        // The star-shaped flowers face upwards and outwards. On 0.4 mm pedicels at the
+        // former stiffness 2,545 of them hung upside down at peak bloom.
+        FlowerOrganElasticModulus = 1.2e8f,
+        FlowerPedicelElasticModulus = 1.2e8f,
+        FlowerScapeElasticModulus = 8e7f,
 
         FlowerSettings = new FlowerSettings
         {
-            PetalLength = 0.010f,
+            // Star-shaped, so the petals lie almost flat - MOBOT: "flaring, star-shaped
+            // lobes (to 1 inch wide)".
+            PetalPitchDegrees = 86f,
+            PetalPitchVarianceDegrees = 6f,
+            PetalRollVarianceDegrees = 8f,
+            ScapeColor = new Vector3(0f, 0.6f, 0f),
+            FlowerCentreLength = 0.002f,
+            FlowerCentreRadius = 0.0025f,
+            FlowerCentreColor = new Vector3(0.93f, 0.94f, 0.99f),
+            PetalLength = 0.011f,
             PetalRadius = 0.004f,
             PetalLengthVariance = 0.002f,
             PetalAndPedicelGrowthDurationHours = 48f,

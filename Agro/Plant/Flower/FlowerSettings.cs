@@ -1,4 +1,5 @@
 using System;
+using System.Numerics;
 
 namespace Agro
 {
@@ -270,6 +271,21 @@ namespace Agro
         public float FlowerMaximumAgeHours { get; init; } = 720f;
 
         /// <summary>
+        /// Hours from committing a meristem to a flower until its petals are open.
+        /// The scape grows segment by segment, then the terminal bud swells, then the
+        /// petals and pedicel expand.
+        /// </summary>
+        /// <remarks>
+        /// This is what makes a late commitment bloom out of season. A bud committed in
+        /// early November opened in December, which is what produced winter flowers on
+        /// species whose real season ends in July, so the commitment test uses this lead
+        /// time to refuse a flower that could not open before seasonal senescence.
+        /// </remarks>
+        public float CommitmentToBloomLeadHours =>
+            FlowerBaseSegmentCount * FlowerStemSegmentGrowthDurationHours +
+            BudBloomDurationHours + PetalAndPedicelGrowthDurationHours;
+
+        /// <summary>
         /// Maximum angular spread of individual pedicels within a flower
         /// cluster.
         /// </summary>
@@ -312,6 +328,106 @@ namespace Agro
         /// Phenology and colour model used by flower organs.
         /// </summary>
         /// <value>Provide species-specific curves when floral colour changes with age or senescence.</value>
+        /// <summary>
+        /// Outline, relief and curvature of a single petal.
+        /// </summary>
+        /// <remarks>
+        /// Petals are laminae, exported through the same record as leaves, and the
+        /// viewport used to draw them with the SPECIES' LEAF mesh - so a Heuchera petal
+        /// was a maple-shaped blade three millimetres long. A petal needs its own
+        /// outline. <see cref="LeafDimensions.Curvature01"/> is what cups or reflexes it;
+        /// petals are deliberately left out of the bending solver, because a petal's
+        /// curve is its shape and not a response to load.
+        /// </remarks>
+        public LeafMorphology PetalMorphology { get; init; } = LeafMorphology.Petal;
+
+        /// <summary>
+        /// Angle between a petal's own axis and the axis of the flower it sits on.
+        /// </summary>
+        /// <value>
+        /// Degrees from 0 to 180. Zero points the petals along the flower axis, giving a
+        /// closed tube; 90 spreads them flat into a disc; beyond 90 they reflex back
+        /// towards the pedicel. A campanulate flower - Campanula, Heuchera, Bergenia -
+        /// sits well under 90; a rotate one - Fragaria, Geranium - sits near it.
+        /// </value>
+        public float PetalPitchDegrees { get; init; } = 54.4f;
+
+        /// <summary>Symmetric jitter on <see cref="PetalPitchDegrees"/>.</summary>
+        /// <value>Degrees; non-negative.</value>
+        public float PetalPitchVarianceDegrees { get; init; } = 3f;
+
+        /// <summary>Symmetric jitter on a petal's roll about its own axis.</summary>
+        /// <value>Degrees; non-negative.</value>
+        public float PetalRollVarianceDegrees { get; init; } = 3f;
+
+        /// <summary>
+        /// Where on the flower centre a petal is attached, as a fraction of the centre's
+        /// radius.
+        /// </summary>
+        /// <value>Zero attaches every petal on the axis; one puts them on the rim.</value>
+        public float PetalRimFraction { get; init; } = 0.85f;
+
+        /// <summary>
+        /// Length the terminal bud is retargeted to when the flower opens.
+        /// </summary>
+        /// <remarks>
+        /// The bud does not disappear at anthesis - it becomes the centre of the open
+        /// flower, the receptacle that the petals stand on. Retargeting it from an
+        /// elongated bud to a short wide disc is what gives a flower a visible eye, and
+        /// <see cref="FlowerCentreColor"/> is what makes that eye a different colour from
+        /// the petals. Zero leaves the bud's own dimensions alone.
+        /// </remarks>
+        /// <value>Metres; non-negative.</value>
+        public float FlowerCentreLength { get; init; }
+
+        /// <summary>Radius the terminal bud is retargeted to when the flower opens.</summary>
+        /// <value>Metres; non-negative. Zero leaves the bud's own radius alone.</value>
+        public float FlowerCentreRadius { get; init; }
+
+        /// <summary>
+        /// Colour of the open flower's centre, in sRGB from 0 to 1.
+        /// </summary>
+        /// <remarks>
+        /// Null falls back to the inflorescence phenology, which is the petal colour, so
+        /// the eye vanishes into the corolla. Fragaria wants a strong yellow here,
+        /// Geranium a much paler one than its petals.
+        /// </remarks>
+        public Vector3? FlowerCentreColor { get; init; }
+
+        /// <summary>
+        /// Colour of the inflorescence axis - scape, branches and pedicels - in sRGB
+        /// from 0 to 1.
+        /// </summary>
+        /// <remarks>
+        /// Null keeps the axis on the generic stem shading. Most scapes read as stem
+        /// green or a stem green flushed red, not as petal colour, which is what they
+        /// inherited when every floral organ shared one phenology.
+        /// </remarks>
+        public Vector3? ScapeColor { get; init; }
+
+        /// <summary>
+        /// Angle from vertical that the scape's own gravitropism steers towards.
+        /// </summary>
+        /// <remarks>
+        /// Zero is a stiffly erect scape and reproduces the previous behaviour exactly:
+        /// every base segment was oriented with AdjustUpBase, which forced it straight up
+        /// whatever the species. That is right for Bergenia and wrong for a Geranium,
+        /// whose peduncle ascends and then curves so the flowers end up only a little
+        /// above the surrounding leaves.
+        /// </remarks>
+        /// <value>Radians from 0 to pi/2.</value>
+        public float ScapeGravitropicSetPointAngle { get; init; }
+
+        /// <summary>
+        /// How firmly the scape holds <see cref="ScapeGravitropicSetPointAngle"/>.
+        /// </summary>
+        /// <remarks>
+        /// Applied once per base segment as a single slerp step, so a scape only reaches
+        /// its set point over several segments. One converges within two or three.
+        /// </remarks>
+        /// <value>Zero to one.</value>
+        public float ScapeGravitropism { get; init; } = 1f;
+
         public LeafPhenology FlowerPhenology { get; init; } = new();
 
         /// <summary>
@@ -346,6 +462,24 @@ namespace Agro
                 RequireNonNegative(variance, name);
                 if (variance >= mean)
                     throw new ArgumentOutOfRangeException(name, variance, "Variance must be smaller than its mean so sampled values remain positive.");
+            }
+
+            static void RequireAngleDegrees(float value, float max, string name)
+            {
+                if (!float.IsFinite(value) || value < 0f || value > max)
+                    throw new ArgumentOutOfRangeException(name, value, $"Angle must be between zero and {max} degrees.");
+            }
+
+            static void RequireSrgb(Vector3? value, string name)
+            {
+                if (!value.HasValue)
+                    return;
+                var c = value.Value;
+                if (!float.IsFinite(c.X) || !float.IsFinite(c.Y) || !float.IsFinite(c.Z) ||
+                    c.X < 0f || c.X > 1f || c.Y < 0f || c.Y > 1f || c.Z < 0f || c.Z > 1f)
+                {
+                    throw new ArgumentOutOfRangeException(name, c, "RGB components must be finite and between zero and one.");
+                }
             }
 
             static void RequireInclination(float value, string name)
@@ -405,6 +539,18 @@ namespace Agro
             RequirePositive(BudLength, nameof(BudLength));
             RequirePositive(BudRadius, nameof(BudRadius));
             RequirePositive(BudBloomDurationHours, nameof(BudBloomDurationHours));
+            RequireAngleDegrees(PetalPitchDegrees, 180f, nameof(PetalPitchDegrees));
+            RequireAngleDegrees(PetalPitchVarianceDegrees, 90f, nameof(PetalPitchVarianceDegrees));
+            RequireAngleDegrees(PetalRollVarianceDegrees, 90f, nameof(PetalRollVarianceDegrees));
+            RequireProbability(PetalRimFraction, nameof(PetalRimFraction));
+            RequireNonNegative(FlowerCentreLength, nameof(FlowerCentreLength));
+            RequireNonNegative(FlowerCentreRadius, nameof(FlowerCentreRadius));
+            RequireSrgb(FlowerCentreColor, nameof(FlowerCentreColor));
+            RequireSrgb(ScapeColor, nameof(ScapeColor));
+            RequireAngleDegrees(ScapeGravitropicSetPointAngle * 180f / MathF.PI, 90f, nameof(ScapeGravitropicSetPointAngle));
+            RequireProbability(ScapeGravitropism, nameof(ScapeGravitropism));
+            if (PetalMorphology is null)
+                throw new ArgumentNullException(nameof(PetalMorphology));
             RequirePositive(FlowerMaximumAgeHours, nameof(FlowerMaximumAgeHours));
             if (!float.IsFinite(FlowerClusterMaximumSpreadDegrees) || FlowerClusterMaximumSpreadDegrees < 0f || FlowerClusterMaximumSpreadDegrees > 180f)
                 throw new ArgumentOutOfRangeException(nameof(FlowerClusterMaximumSpreadDegrees), FlowerClusterMaximumSpreadDegrees, "Maximum cluster spread must be between zero and 180 degrees.");

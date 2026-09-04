@@ -9,14 +9,18 @@ public static class Bergenia_Cordifolia
     {
         Name = "Bergenia Cordifolia",
         Behavior = Behavior.Herbaceous,
-        LeafLength = 0.14f,
-        LeafRadius = 0.06f,
-        // Stout petioles roughly as long as the 14 cm blade: 5-20 cm in the field.
-        PetioleLength = 0.10f,
+        // MOBOT measures the blade at 10 x 8 inches, i.e. 25 x 20 cm; RHS says "to 30cm
+        // long". Mature leaves want the full figure - 17 cm was still short of it.
+        LeafLength = 0.24f,
+        LeafRadius = 0.095f,
+        // Stout petioles roughly as long as the blade: 5-20 cm in the field.
+        PetioleLength = 0.12f,
         PetioleLengthVar = 0.03f,
         PetioleRadius = 0.0025f,
         LeafGrowthTime = 24 * 7 * 12,
-        Height = 0.60f,
+        // MOBOT: height and spread 1.0-1.5 ft, foliage clump "to 12 inches tall",
+        // flower stalks "to 16 inches".
+        Height = 0.45f,
         // The rosette sits on a thick rhizome; internodes are short but not absent,
         // otherwise every leaf of a crown attaches at exactly the same point.
         NodeDistance = 0.004f,
@@ -30,8 +34,26 @@ public static class Bergenia_Cordifolia
 
         PreFloweringCommitmentProbabilityPerHour = 0f,
         FloweringCommitmentProbabilityPerHour = 0.005f,
-        PostFloweringCommitmentProbabilityPerHour = 0.0005f,
+        // The species itself does not rebloom - only cultivars such as 'Herbstbluete'
+        // and 'Doppelgaenger' carry a second IX-X flush. A non-zero rate here put
+        // Bergenia in flower in August and again in December.
+        PostFloweringCommitmentProbabilityPerHour = 0f,
         DormantFloweringCommitmentProbabilityPerHour = 0f,
+        // April to May at 48.2 N: naturadb "April bis Mai", German nursery catalogues
+        // list IV-V for every cultivar, RHS says "early spring". Season 0 is 1 March, so
+        // 1 April = (91-59)/365 = 0.088 and 31 May = (151-59)/365 = 0.252.
+        // Commitment happens at the window's start and the scape then takes about
+        // 26 days, so the window has to open in mid-March for the first flowers to be
+        // out in April.
+        FloweringSeasonStart = 0.035f,
+        FloweringSeasonEnd = 0.252f,
+        FloweringPhaseDurationHours = 24f * 45f,
+        // One thick scape per crown, which is what makes the "distinct strand" of a
+        // flowering Bergenia.
+        MaximumFlowersPerCrown = 1,
+        // A Bergenia rosette carries six to twelve leathery leaves; with two petioles
+        // per node that is about five nodes on a compressed rhizome apex.
+        CrownMaximumNodes = 5,
 
         LeafMaximumAgeHours = 24 * 360,
         CrownBudActivationProbabilityPerSeason = 0.5f,
@@ -41,15 +63,37 @@ public static class Bergenia_Cordifolia
         RhizomeGrowthRateScale = 0.05f,
         RhizomeBasalBudActivationProbabilityPerHour = 1f,
         // Branches occasionally, widening the clump by only a few cm a year.
-        RhizomeAxillaryBudActivationProbabilityPerSeason = 0.25f,
+        RhizomeAxillaryBudActivationProbabilityPerSeason = 0.15f,
         RhizomeAxillaryBudsPerSegment = 1,
-        RhizomeMaximumSegmentDepth = 4,
+        RhizomeMaximumSegmentDepth = 3,
         RhizomeSegmentLength = 0.03f,
         RhizomeSegmentRadius = 0.005f,
+        // A thick Bergenia rhizome survives dormancy; deleting a bud whose reserve is
+        // momentarily empty stops the clump from ever widening.
+        RetainDormantRhizomes = true,
         LateralRoll = 45f * DegToRad,
-        LateralPitch= 30f * DegToRad,
+        // The leathery blades are held out and slightly up, not gathered upright:
+        // photographs show the outer petioles about 45 degrees off the vertical axis.
+        // Bergenia holds its blades obliquely upright, not flat: at 45 degrees a single
+        // rosette of 20 cm leaves spanned 57 cm against the 30-46 cm MOBOT measures.
+        LateralPitch= 35f * DegToRad,
+        // LeafPitch is measured from the petiole, and LateralPitch from the vertical
+        // crown axis, so a blade only comes out horizontal when the two are
+        // complementary: LeafPitch ~ 90 - LateralPitch. Both Geraniums satisfied that
+        // and looked right; the species that did not held their blades edge-on or
+        // pointing at the ground.
+        // ... and complementary is HORIZONTAL, which is not what Bergenia does: its
+        // leathery blades stand at roughly 40-50 degrees of world pitch. The petiole
+        // already rises 55 degrees above the horizontal, so 10 degrees of leaf pitch
+        // leaves the blade near 45. At 55 it was pressed flat to the ground.
+        LeafPitch = 10f * DegToRad,
+        LeafPitchVar = 6f * DegToRad,
         PetioleElasticModulus = 1e8f,
         FlowerOrganElasticModulus = 5e7f,
+        // A Bergenia scape is a thick fleshy column that holds its panicle straight up.
+        // This one is deliberately the stiffest of the seven, and it is the reference the
+        // Geranium peduncles are meant NOT to behave like.
+        FlowerScapeElasticModulus = 2.5e8f,
         FlowerSettings = new FlowerSettings
         {
             PetalLength = 0.011f,
@@ -84,26 +128,47 @@ public static class Bergenia_Cordifolia
             BudBloomDurationHours = 144u,
             FlowerMaximumAgeHours = 504u,
 
-            FlowerPedicelLength = 0.0025f,
-            FlowerPedicelRadius = 0.0005f,
-            FlowerPedicelLengthVariance = 0.0010f,
+            // The scape is a thick fleshy RED stem, and the panicle is dense pink bells.
+            ScapeColor = new Vector3(0.62f, 0.24f, 0.26f),
+            FlowerCentreLength = 0.004f,
+            FlowerCentreRadius = 0.0028f,
+            FlowerCentreColor = new Vector3(0.95f, 0.83f, 0.88f),
+            // Campanulate, nodding bells: the petals spread only moderately.
+            PetalPitchDegrees = 40f,
+            PetalPitchVarianceDegrees = 8f,
+            PetalRollVarianceDegrees = 10f,
+            FlowerPedicelLength = 0.008f,
+            FlowerPedicelRadius = 0.0007f,
+            FlowerPedicelLengthVariance = 0.0020f,
             FlowerPedicelRadiusVariance = 0.0001f,
             FlowerPedicelSegmentCount = 1,
 
-            FlowerBaseSegmentLength = 0.0040f,
-            FlowerBaseSegmentLengthVariance = 0.0004f,
+            // The scape is the diagnostic feature: a thick fleshy red stem that lifts
+            // the panicle clear of the foliage. RHS describes "sprays atop erect red
+            // stems reaching 60cm"; German catalogues give 25-40 cm for the whole plant
+            // over a 25 cm rosette. Twenty-five segments of 1.4 cm reach 35 cm, roughly
+            // 10 cm above the leaves. The former 0.4 cm segments made a 10 cm scape that
+            // never emerged from the rosette.
+            FlowerBaseSegmentLength = 0.014f,
+            FlowerBaseSegmentLengthVariance = 0.002f,
             FlowerBaseSegmentRadius = 0.005f,
             FlowerBaseSegmentRadiusVariance = 0.001f,
 
-            FlowerBranchSegmentLength = 0.0015f,
-            FlowerBranchSegmentLengthVariance = 0.0003f,
+            FlowerBranchSegmentLength = 0.012f,
+            FlowerBranchSegmentLengthVariance = 0.002f,
             FlowerBranchSegmentRadius = 0.0012f,
             FlowerBranchSegmentRadiusVariance = 0.0003f,
 
             FlowerBaseSegmentCount = 25,
-            FlowerBranchMaximumDepth = 6,
+            // Branching is binary here - each node continues AND puts out a lateral -
+            // so the tip count is 2^depth per branch origin, and the base laterals
+            // multiply that again. At depth six with laterals on the top fifth of a
+            // 25-segment scape one crown carried 1,414 floral organs and the plant
+            // reached 45,565 organs with 27,440 open petals, most of them hanging
+            // upside down. A real panicle holds 20-40 bell flowers.
+            FlowerBranchMaximumDepth = 2,
             FlowerBranchLateralsPerNode = 1,
-            FlowersPerCluster = 2,
+            FlowersPerCluster = 3,
             FlowerClusterMaximumSpreadDegrees = 45f,
             UseDeterministicBranching = false,
             CreateFlowersAtInternodes = false,
@@ -117,14 +182,21 @@ public static class Bergenia_Cordifolia
             FlowerBaseLateralAzimuthOffsetDegrees = 15,
             FlowerBaseLateralProbability = 1.0f,
 
-            FlowerBaseLateralActiveTopFraction = 0.2f,
+            // Laterals only from the top eighth of the scape, so the panicle sits at
+            // its tip instead of running a third of its length.
+            FlowerBaseLateralActiveTopFraction = 0.12f,
 
             FlowerBaseLeafLength = 0.005f,
             FlowerBaseLeafRadius = 0.002f,
             FlowerBaseLeafPetioleLength = 0.001f,
             FlowerBaseLeafPetioleRadius = 0.0002f,
 
-            FlowerStemSegmentGrowthDurationHours = 72f,
+            // The scape's segments grow one after another, so the whole stalk costs
+            // FlowerBaseSegmentCount x this. At 72 h the 25-segment scape took 1,800 h
+            // to build and a flower committed on 1 April opened in mid-August. Fifteen
+            // hours puts the whole scape up in three weeks, which is what
+            // CommitmentToBloomLeadHours then reports to the commitment gate.
+            FlowerStemSegmentGrowthDurationHours = 15f,
 
 
         },

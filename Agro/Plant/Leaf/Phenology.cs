@@ -33,6 +33,24 @@ public readonly struct LeafPhenology
         writer.Write(rgb.Blue);
     }
 
+    /// <summary>
+    /// Writes a fixed sRGB colour in the same three-byte layout as
+    /// <see cref="WriteColor"/>.
+    /// </summary>
+    /// <remarks>
+    /// For the parts of an inflorescence whose colour is a constant of the species rather
+    /// than a phenological curve: the axis, which reads as stem tissue, and the flower's
+    /// centre. Both used to be handed the leaf phenology, so a scape came out leaf-green
+    /// on the wire and the centre was indistinguishable from the petals.
+    /// </remarks>
+    internal static void WriteFixedColor(BinaryWriter writer, Vector3 srgb)
+    {
+        static byte Channel(float v) => (byte)Math.Clamp((int)MathF.Round(v * 255f), 0, 255);
+        writer.Write(Channel(srgb.X));
+        writer.Write(Channel(srgb.Y));
+        writer.Write(Channel(srgb.Z));
+    }
+
     //public static LeafPhenology Default => new();
 }
 

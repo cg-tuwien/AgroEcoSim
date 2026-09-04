@@ -28,25 +28,37 @@ public static class Fragaria_Vesca_Ruegen
         LeafLengthVar = 0.012f,
         LeafRadius = 0.04f,
         LeafRadiusVar = 0.008f,
-        LeafPitchVar = 5f * (MathF.PI / 180f),
-        LeafPitch = 85 * (MathF.PI / 180f),
+        // LeafPitch is measured from the petiole, and LateralPitch from the vertical
+        // crown axis, so a blade only comes out horizontal when the two are
+        // complementary: LeafPitch ~ 90 - LateralPitch. Both Geraniums satisfied that
+        // and looked right; the species that did not held their blades edge-on or
+        // pointing at the ground.
+        LeafPitchVar = 6f * (MathF.PI / 180f),
+        LeafPitch = 50 * (MathF.PI / 180f),
 
         LeafGrowthTime = 24f * 10f * 2f,
         LeafGrowthTimeVar = 24f * 4f,
         LeafMaximumAgeHours = 24 * 180,
 
-        PetioleLength = 0.10f,
+        PetioleLength = 0.085f,
         PetioleLengthVar = 0.012f,
         PetioleRadius = 0.0018f,
         PetioleRadiusVar = 0.0003f,
 
-        CrownBudActivationProbabilityPerSeason = 0.9f,
-        CrownPitch = 18f * DegToRad, // shallow rise of the compact basal crown
+        // Same loop as Heuchera, and everbearing flowering drives it harder: 36 crowns
+        // and 472 leaves in the first year against the one to three crowns a seedling
+        // alpine strawberry makes.
+        CrownBudActivationProbabilityPerSeason = 0.25f,
+        // A strawberry crown is a short upright caudex sitting on the soil, not a
+        // reclining shoot.
+        CrownPitch = 75f * DegToRad,
         HerbaceousGrowthRateScale = 0.70f,
         ShootMaximumRadius = 0.003f,
 
-        LateralPitch = 85 * (MathF.PI / 180f),
-        LateralPitchVar = 10 * (MathF.PI / 180f),
+        // Strawberry petioles rise at roughly 50 degrees above the horizontal; at 85
+        // degrees off the axis the whole rosette lay flat on the soil.
+        LateralPitch = 40 * (MathF.PI / 180f),
+        LateralPitchVar = 12 * (MathF.PI / 180f),
         LateralRoll = 45f * (MathF.PI / 180f),
         LateralRollVar = 5f * (MathF.PI / 180f),
 
@@ -57,32 +69,67 @@ public static class Fragaria_Vesca_Ruegen
         NodeDistanceVar = 0.0007f,
         CrownNodeHeightAboveSoil = 0.005f,
         DominanceFactor = 0.70f,
+        // A strawberry crown carries five to eight live trifoliate leaves and then
+        // stops; it does not stack nodes indefinitely. Without the cap the 2 mm
+        // internode was applied 108 times over two years, so the crown rose to 31 cm
+        // and carried 432 leaves at every height along it - the "leaf ball" with no
+        // spread. Four nodes at four petioles each is a sixteen-leaf rosette.
+        // Everbearing: the crown needs enough nodes to flower repeatedly through the
+        // season, since each flowering node is spent. At four it managed one May flush.
+        CrownMaximumNodes = 6,
 
-        // 'Rügen' is a runnerless alpine strawberry. Keep its compact basal
-        // crown, but do not let the generic rhizome model spread it laterally.
-        // 'Ruegen' is a deliberately runnerless alpine cultivar: it makes no stolons
-        // and increases only by crown division. Leaving rhizome propagation disabled
-        // is correct here and must not be "fixed" to match the other species.
-        InitialBasalRhizomeBuds = 0,
-        RhizomeAxillaryBudsPerSegment = 0,
-        RhizomeMaximumSegmentDepth = 0,
-        RhizomeSegmentLength = 0.01f,
+        // 'Ruegen' is runnerless: it makes no stolons, and the rhizome model must not
+        // be used to give it any. It is NOT, however, a plant that stays a single
+        // crown. Hytonen et al. on the runnerless r mutant: "in the r mutant, the fate
+        // of an AXM that does not produce stolon is to remain dormant or to generate a
+        // BC terminated by an inflorescence" - the axillary meristems that would have
+        // been runners become BRANCH CROWNS instead. That is how a runnerless alpine
+        // strawberry reaches the 25-30 cm clump the nurseries quote, and it is why
+        // "increases only by crown division" was too strong a reading. The rhizome
+        // segments below are those branch crowns: two centimetres, immediately beside
+        // the mother crown, never the 10-20 cm arc of a real stolon.
+        InitialBasalRhizomeBuds = 2,
+        RhizomeAxillaryBudsPerSegment = 1,
+        RhizomeMaximumSegmentDepth = 3,
+        RhizomeSegmentLength = 0.015f,
+        RhizomeSegmentLengthVar = 0.005f,
         RhizomeSegmentRadius = 0.0025f,
-        RhizomeBasalBudActivationProbabilityPerHour = 0f,
-        RhizomeAxillaryBudActivationProbabilityPerHour = 0f,
+        RhizomeGrowthRateScale = 0.05f,
+        RhizomeBasalBudActivationProbabilityPerHour = 0.008f,
+        RhizomeAxillaryBudActivationProbabilityPerSeason = 0.3f,
+        // The branch-crown buds have to survive their first winter, or the plant is a
+        // single crown forever - which is exactly what it was.
+        RetainDormantRhizomes = true,
         // Everbearing: several cymes are carried by one crown through the season.
-        MaximumFlowersPerCrown = 3,
+        // Everbearing. With three slots the crowns spent them in one May flush and the
+        // plant was out of flower by the second week of June instead of carrying cymes
+        // until October.
+        MaximumFlowersPerCrown = 6,
         FloweringStartAgeHours = 24f * 40f,
-        FloweringPhaseDurationHours = 24f * 200,
+        // Everbearing, but not evergreen-flowering: May to October in Central Europe
+        // (Gaissmayer "Mai bis Oktober"; Austrian phenology has flowering from April
+        // until the first frost). Season 0 is 1 March, so 1 May = (121-59)/365 = 0.170
+        // and 15 October = (288-59)/365 = 0.627. Before this the default window plus a
+        // non-zero post-flowering rate produced open petals from late March to
+        // mid-December, every year.
+        FloweringSeasonStart = 0.170f,
+        FloweringSeasonEnd = 0.627f,
+        FloweringPhaseDurationHours = 24f * 170,
 
         PreFloweringCrownContinuationProbabilityPerHour = 0.01f,
         FloweringCrownContinuationProbabilityPerHour = 0.003f,
         PostFloweringCrownContinuationProbabilityPerHour = 0.006f,
         DormantCrownContinuationProbabilityPerHour = 0f,
 
-        PreFloweringCommitmentProbabilityPerHour = 0.005f,
-        FloweringCommitmentProbabilityPerHour = 0.06f,
-        PostFloweringCommitmentProbabilityPerHour = 0.008f,
+        // The PreFlower phase runs from 1 March to the start of the flowering window, and
+        // its own commitment rate is what puts flowers on the plant in March. Keep it at
+        // zero unless the species really does bloom before its main window.
+        PreFloweringCommitmentProbabilityPerHour = 0f,
+        // Each commitment hands the crown over to a replacement apex, and that apex
+        // arrives with its own whorl of petioles. At 0.06/h the plant carried 708 leaves
+        // and 930 petals in its first ninety days.
+        FloweringCommitmentProbabilityPerHour = 0.012f,
+        PostFloweringCommitmentProbabilityPerHour = 0.003f,
         DormantFloweringCommitmentProbabilityPerHour = 0f,
 
         WoodElasticModulus = 1.0e8f,
@@ -97,6 +144,29 @@ public static class Fragaria_Vesca_Ruegen
             PetalAndPedicelGrowthDurationHours = 72f,
             PetalAndPedicelGrowthDurationVarianceHours = 18f,
             PetalCount = 5,
+            // Flower APPEARANCE only - the architecture and size of this species are
+            // deliberately left as they are.
+            // A wild strawberry flower is rotate: five white petals spread almost flat
+            // around a conspicuous YELLOW centre, which is the receptacle ringed by the
+            // anthers. That centre had no existence of its own - the bud simply stayed
+            // the petals' colour - and the scape was handed the leaf phenology.
+            PetalPitchDegrees = 84f,
+            PetalPitchVarianceDegrees = 5f,
+            PetalRollVarianceDegrees = 6f,
+            FlowerCentreLength = 0.0015f,
+            FlowerCentreRadius = 0.0026f,
+            FlowerCentreColor = new Vector3(0.98f, 0.82f, 0.18f),
+            ScapeColor = new Vector3(0f, 0.6f, 0f),
+            PetalMorphology = new LeafMorphology
+            {
+                Shape = new OvateLeafShape(),
+                Margin = LeafMarginType.Entire,
+                Venation = LeafVenationType.Parallel,
+                Apex = LeafApexType.Rounded,
+                Base = LeafBaseType.Cuneate,
+                Dimensions = LeafDimensions.Create(lengthM: 0.008f, widthM: 0.007f,
+                    thicknessM: 0.00008f, petioleM: 0f, curvature01: 0.2f),
+            },
 
             CreateLeavesOnFlowerBase = false,
             FlowerPhenology = new LeafPhenology(
@@ -131,9 +201,12 @@ public static class Fragaria_Vesca_Ruegen
             FlowerPedicelRadiusVariance = 0.0001f,
             FlowerPedicelSegmentCount = 1,
 
-            FlowerBaseSegmentLength = 0.005f,
+            // Wikipedia on Fragaria vesca: the flowers are "borne on a green, soft
+            // fresh-hairy 3-15 centimetres stalk that usually lifts them above the
+            // leaves". Four segments of 2.5 cm give a 10 cm scape over a 15 cm rosette.
+            FlowerBaseSegmentLength = 0.025f,
             FlowerBaseSegmentLengthVariance = 0.002f,
-            FlowerBaseSegmentRadius = 0.0005f,
+            FlowerBaseSegmentRadius = 0.0009f,
             FlowerBaseSegmentRadiusVariance = 0.0001f,
 
             FlowerBranchSegmentLength = 0.008f,
@@ -141,7 +214,7 @@ public static class Fragaria_Vesca_Ruegen
             FlowerBranchSegmentRadius = 0.0004f,
             FlowerBranchSegmentRadiusVariance = 0.0001f,
 
-            FlowerBaseSegmentCount = 3,
+            FlowerBaseSegmentCount = 4,
             FlowerBranchMaximumDepth = 1,
             FlowerBranchLateralsPerNode = 1,
             FlowersPerCluster = 2,

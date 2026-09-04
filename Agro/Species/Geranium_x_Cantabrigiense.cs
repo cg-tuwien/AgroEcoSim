@@ -58,22 +58,35 @@ public static class Geranium_x_Cantabrigiense
         NodeDistance = 0.002f,
         NodeDistanceVar = 0.00075f,
         DominanceFactor = 0.7f,
+        // Six to ten leaves per rosette on a compressed apex.
+        CrownMaximumNodes = 6,
 
         RhizomeAxillaryBudsPerSegment = 1,
-        InitialBasalRhizomeBuds = 6,
+        // naturadb gives 'Biokovo' 20-30 cm of width and RHS 0.1-0.5 m. Six basal buds
+        // at depth 18 gave 205 crowns and a 91 cm mat in eighteen months, which is
+        // faster and wider than this hybrid creeps - it is the compact one of the pair.
+        InitialBasalRhizomeBuds = 4,
         // A lower, compact carpet than G. macrorrhizum, but still able to
         // colonise the free soil around its seed rather than remaining a tuft.
-        RhizomeMaximumSegmentDepth = 30,
-        RhizomeSegmentLength = 0.055f,
+        // naturadb gives 'Biokovo' 20-30 cm of width and describes only "kurze
+        // Auslaeufer"; 18 segments of 3.5 cm reach 63 cm, which is the RHS 0.1-0.5 m
+        // band for a mature clump. Thirty segments of 5.5 cm reached 87 cm in two
+        // years, faster than the hybrid actually creeps.
+        RhizomeMaximumSegmentDepth = 5,
+        RhizomeSegmentLength = 0.03f,
         RhizomeSegmentRadius = 0.0022f,
         RhizomeBudRadius = 0.001f,
         RetainDormantRhizomes = true,
         RhizomeBudActivationPeriod = SeasonalPhase.PreFlower | SeasonalPhase.Flowering,
-        RhizomeBasalBudActivationProbabilityPerHour = 0.008f,
+        RhizomeBasalBudActivationProbabilityPerHour = 0.004f,
         // Annual sympodial branching, the event that turns radiating axes into a mat.
-        RhizomeAxillaryBudActivationProbabilityPerSeason = 0.6f,
-        FloweringStartAgeHours = 24f * 55f,
+        RhizomeAxillaryBudActivationProbabilityPerSeason = 0.4f,
+        FloweringStartAgeHours = 24f * 60f,
         FloweringPhaseDurationHours = 24f * 60f,
+        // May to July at 48.2 N (naturadb "Mai bis Juli", MOBOT "May to June").
+        // Season 0 is 1 March: 1 May = 0.170, 31 July = 0.419.
+        FloweringSeasonStart = 0.170f,
+        FloweringSeasonEnd = 0.419f,
 
         // These events create another two-leaf crown node.  They are hourly
         // probabilities; the previous values were low enough to yield roughly one
@@ -83,15 +96,29 @@ public static class Geranium_x_Cantabrigiense
         PostFloweringCrownContinuationProbabilityPerHour = 0.0018f,
         DormantCrownContinuationProbabilityPerHour = 0f,
 
-        PreFloweringCommitmentProbabilityPerHour = 0.0005f,
+        // The PreFlower phase runs from 1 March to the start of the flowering window, and
+        // its own commitment rate is what puts flowers on the plant in March. Keep it at
+        // zero unless the species really does bloom before its main window.
+        PreFloweringCommitmentProbabilityPerHour = 0f,
         FloweringCommitmentProbabilityPerHour = 0.018f,
-        PostFloweringCommitmentProbabilityPerHour = 0.0002f,
+        // MOBOT records bloom "sporadically" into autumn for this hybrid, so a small
+        // rate is right - but only the commitment lead-time gate keeps what it commits
+        // in October from opening in January.
+        // Even 0.0002 puts petals into December: a bud committed on the last day the
+        // lead-time gate allows still opens close to senescence and then lives out its
+        // FlowerMaximumAgeHours. The sporadic autumn rebloom MOBOT records is not worth
+        // a plant in flower at the winter solstice.
+        PostFloweringCommitmentProbabilityPerHour = 0f,
         DormantFloweringCommitmentProbabilityPerHour = 0f,
         ContinueCrownAfterFlowerCommitment = true,
 
         WoodElasticModulus = 1.2e8f,
         GreenElasticModulus = 5e6f,
         FlowerOrganElasticModulus = 5e7f,
+        // A geranium peduncle is green herbaceous tissue and is meant to bow under its
+        // own cyme. Sharing FlowerOrganElasticModulus made it as rigid as a Bergenia
+        // scape, so it stood dead straight however long it grew.
+        FlowerScapeElasticModulus = 4.5e7f,
 
 
         FlowerSettings = new FlowerSettings
@@ -135,9 +162,30 @@ public static class Geranium_x_Cantabrigiense
             FlowerPedicelRadiusVariance = 0.0002f,
             FlowerPedicelSegmentCount = 1,
 
-            FlowerBaseSegmentLength = 0.01f,
+            // "Clusters of small, pink flowers that appear above the foliage" (MOBOT).
+            // Five segments of 3.5 cm carry the cyme to about 18 cm over a 15 cm mound;
+            // the former 5 x 1 cm left it level with the leaves.
+            // The peduncle ascends out of the rosette and then CURVES, so the flowers
+            // finish only a little above the surrounding leaves. Every base segment used
+            // to be built with AdjustUpBase, which forces it straight up regardless of
+            // the species - correct for a Bergenia scape, and the reason this one stuck
+            // out of the mat like a rod. A 40-degree set-point approached over two or
+            // three segments gives the spline the leaves already have.
+            ScapeGravitropicSetPointAngle = 20f * MathF.PI / 180f,
+            ScapeGravitropism = 0.35f,
+            // Stem green, so the scape reads as the stem tissue it is. Before this every
+            // floral organ was handed the leaf phenology on the wire and the viewport
+            // then ignored it and greyed the scape towards wood.
+            ScapeColor = new Vector3(0f, 0.6f, 0f),
+            PetalPitchDegrees = 80f,
+            PetalPitchVarianceDegrees = 5f,
+            PetalRollVarianceDegrees = 4f,
+            FlowerCentreLength = 0.002f,
+            FlowerCentreRadius = 0.0035f,
+            FlowerCentreColor = new Vector3(0.98f, 0.93f, 0.84f),
+            FlowerBaseSegmentLength = 0.035f,
             FlowerBaseSegmentLengthVariance = 0.008f,
-            FlowerBaseSegmentRadius = 0.0008f,
+            FlowerBaseSegmentRadius = 0.0013f,
             FlowerBaseSegmentRadiusVariance = 0.0001f,
 
             FlowerBranchSegmentLength = 0.015f,
@@ -167,7 +215,7 @@ public static class Geranium_x_Cantabrigiense
             FlowerBaseLeafPetioleLength = 0.005f,
             FlowerBaseLeafPetioleRadius = 0.0004f,
 
-            FlowerStemSegmentGrowthDurationHours = 120f,
+            FlowerStemSegmentGrowthDurationHours = 70f,
         },
 
 

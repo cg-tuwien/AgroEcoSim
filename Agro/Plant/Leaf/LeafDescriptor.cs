@@ -62,6 +62,28 @@ public sealed record LeafMorphology
 
     public static LeafMorphology Default => new();
 
+    /// <summary>
+    /// A plain petal: a small obovate lamina, rounded at the tip, entire at the margin
+    /// and slightly cupped.
+    /// </summary>
+    /// <remarks>
+    /// Petals go through the same lamina record as leaves, so without a petal outline of
+    /// their own the viewport drew them with the species' leaf mesh - a maple blade for
+    /// Heuchera, a heart for Bergenia. This is the neutral fallback; a species that cares
+    /// sets <see cref="FlowerSettings.PetalMorphology"/> explicitly. The dimensions here
+    /// only shape the template: the actual size comes from PetalLength and PetalRadius.
+    /// </remarks>
+    public static LeafMorphology Petal => new()
+    {
+        Shape = new OvateLeafShape(),
+        Margin = LeafMarginType.Entire,
+        Venation = LeafVenationType.Parallel,
+        Apex = LeafApexType.Rounded,
+        Base = LeafBaseType.Cuneate,
+        Dimensions = LeafDimensions.Create(lengthM: 0.01f, widthM: 0.006f,
+            thicknessM: 0.0001f, petioleM: 0f, curvature01: 0.25f),
+    };
+
     public float BaseAreaM2() => Shape.AreaM2(Dimensions);
 
 

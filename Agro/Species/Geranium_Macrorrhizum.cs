@@ -45,6 +45,10 @@ public static class Geranium_Macrorrhizum
         CrownBudRadius = 0.0008f,
         CrownNodeHeightAboveSoil = 0.04f,
         CrownPitch = 90f * MathF.PI / 180f,
+        // A rosette of six to ten leaves on a compressed rhizome apex. Uncapped, the
+        // apex stacked nodes until the axis curled over and a tenth of the foliage
+        // ended up below the soil surface.
+        CrownMaximumNodes = 6,
         HerbaceousGrowthRateScale = 0.25f,
         RhizomeGrowthRateScale = 0.045f,
 
@@ -63,24 +67,47 @@ public static class Geranium_Macrorrhizum
         // hazard it had to be so small that laterals never actually appeared.
         RhizomeAxillaryBudActivationProbabilityPerSeason = 0.6f,
         RhizomeAxillaryBudsPerSegment = 1,
-        InitialBasalRhizomeBuds = 6,
-        RhizomeMaximumSegmentDepth = 42,
-        RhizomeSegmentLength = 0.07f,
+        InitialBasalRhizomeBuds = 4,
+        // RHS gives a 0.5-1 m spread; 42 segments of 5.5 cm can reach 2.3 m and the mat
+        // measured 127 cm across at eighteen months.
+        RhizomeMaximumSegmentDepth = 20,
+        RhizomeSegmentLength = 0.055f,
         RhizomeSegmentLengthVar = 0.03f,
         RhizomeSegmentRadius = 0.005f,
         RhizomeBudRadius = 0.0015f,
         RetainDormantRhizomes = true,
 
         FlowerOrganElasticModulus = 5e7f,
+        // A geranium peduncle is green herbaceous tissue and is meant to bow under its
+        // own cyme. Sharing FlowerOrganElasticModulus made it as rigid as a Bergenia
+        // scape, so it stood dead straight however long it grew.
+        FlowerScapeElasticModulus = 4.5e7f,
 
         LeafPhenology = new(),
         // In the herbaceous algorithm these events advance a vegetative crown
         // as well as committing the first flower.  Hour-normalized rates keep
         // the rosette from producing a new two-leaf node every few hours.
-        PreFloweringCommitmentProbabilityPerHour = 0.0005f,
+        // The PreFlower phase runs from 1 March to the start of the flowering window, and
+        // its own commitment rate is what puts flowers on the plant in March. Keep it at
+        // zero unless the species really does bloom before its main window.
+        PreFloweringCommitmentProbabilityPerHour = 0f,
         FloweringCommitmentProbabilityPerHour = 0.02f,
-        PostFloweringCommitmentProbabilityPerHour = 0.0002f,
+        // Bigroot cranesbill flowers once, in late spring. The former non-zero rate ran
+        // through a PostFlower phase that lasts until mid-November and produced open
+        // petals from late September to February - the late-autumn and winter blooming
+        // that does not happen on a real plant.
+        PostFloweringCommitmentProbabilityPerHour = 0f,
         DormantFloweringCommitmentProbabilityPerHour = 0f,
+        // May to July at 48.2 N: naturadb V-VII, MOBOT "May to July", Swiss floras
+        // V-VII. Season 0 is 1 March, so 1 May = (121-59)/365 = 0.170 and
+        // 31 July = (212-59)/365 = 0.419. Nothing was set before, so the generic
+        // 5 May - 13 August default applied.
+        // Commitment plus a 31-day scape lead means the window has to open in mid-April
+        // for the first flowers to be out in mid-May.
+        FloweringSeasonStart = 0.115f,
+        FloweringSeasonEnd = 0.419f,
+        FloweringStartAgeHours = 24f * 60f,
+        FloweringPhaseDurationHours = 24f * 60f,
         // A rosette unfolds roughly 6-10 leaves a season; with two laterals per node
         // that is 3-5 new nodes, not the ~1 per year the previous rates produced.
         PreFloweringCrownContinuationProbabilityPerHour = 0.004f,
@@ -119,22 +146,48 @@ public static class Geranium_Macrorrhizum
             BudLength = 0.010f,
             BudRadius = 0.005f,
             BudBloomDurationHours = 216u,
-            FlowerMaximumAgeHours = 840u,
+            // 840 h kept spent petals on the plant into the end of August.
+            FlowerMaximumAgeHours = 500u,
             FlowerPedicelLength = 0.012f,
             FlowerPedicelRadius = 0.0006f,
             FlowerPedicelLengthVariance = 0.006f,
             FlowerPedicelRadiusVariance = 0.0002f,
             FlowerPedicelSegmentCount = 1,
 
-            FlowerBaseSegmentLength = 0.015f,
-            FlowerBaseSegmentLengthVariance = 0.006f,
-            FlowerBaseSegmentRadius = 0.0012f,
+            // MOBOT: the flowers are "held above the foliage on more or less upright
+            // stems". Six segments of 5 cm lift the cyme to about 30 cm over a 20-25 cm
+            // mound. The former 5 x 1.5 cm gave an 11.7 cm peduncle against petioles
+            // that are 18 cm long on their own, so every flower opened inside the
+            // crown and disappeared - which is exactly what was reported.
+            // The peduncle ascends out of the rosette and then CURVES, so the flowers
+            // finish only a little above the surrounding leaves. Every base segment used
+            // to be built with AdjustUpBase, which forces it straight up regardless of
+            // the species - correct for a Bergenia scape, and the reason this one stuck
+            // out of the mat like a rod. A 40-degree set-point approached over two or
+            // three segments gives the spline the leaves already have.
+            ScapeGravitropicSetPointAngle = 20f * MathF.PI / 180f,
+            ScapeGravitropism = 0.35f,
+            // Stem green, so the scape reads as the stem tissue it is. Before this every
+            // floral organ was handed the leaf phenology on the wire and the viewport
+            // then ignored it and greyed the scape towards wood.
+            ScapeColor = new Vector3(0f, 0.6f, 0f),
+            // Petals 14-16 mm, flat to shallowly cupped and facing outwards and up.
+            PetalPitchDegrees = 82f,
+            PetalPitchVarianceDegrees = 5f,
+            PetalRollVarianceDegrees = 4f,
+            // A visible paler eye at the centre of the flower.
+            FlowerCentreLength = 0.0025f,
+            FlowerCentreRadius = 0.004f,
+            FlowerCentreColor = new Vector3(0.98f, 0.92f, 0.80f),
+            FlowerBaseSegmentLength = 0.05f,
+            FlowerBaseSegmentLengthVariance = 0.008f,
+            FlowerBaseSegmentRadius = 0.0016f,
             FlowerBaseSegmentRadiusVariance = 0.0002f,
-            FlowerBranchSegmentLength = 0.015f,
-            FlowerBranchSegmentLengthVariance = 0.003f,
-            FlowerBranchSegmentRadius = 0.0008f,
+            FlowerBranchSegmentLength = 0.02f,
+            FlowerBranchSegmentLengthVariance = 0.004f,
+            FlowerBranchSegmentRadius = 0.0011f,
             FlowerBranchSegmentRadiusVariance = 0.0001f,
-            FlowerBaseSegmentCount = 5,
+            FlowerBaseSegmentCount = 6,
             FlowerBranchMaximumDepth = 2,
             FlowerBranchLateralsPerNode = 2,
             FlowersPerCluster = 1,
@@ -153,7 +206,9 @@ public static class Geranium_Macrorrhizum
             FlowerBaseLeafRadius = 0.008f,
             FlowerBaseLeafPetioleLength = 0.003f,
             FlowerBaseLeafPetioleRadius = 0.0005f,
-            FlowerStemSegmentGrowthDurationHours = 150f,
+            // Six segments at 150 h is a 54-day lead; the window opens on 1 May and the
+            // first flowers appeared at the end of June. 60 h opens them in early June.
+            FlowerStemSegmentGrowthDurationHours = 60f,
         },
         // Geranium macrorrhizum leaf morphology with a subtle non-planar surface.
         // X/Y and triangle topology are unchanged from the original asset.
