@@ -78,6 +78,7 @@ export class SpeciesBase {
     petioleElasticModulus = signal(200000000);
     flowerOrganElasticModulus = signal(5000000);
     flowerPedicelElasticModulus = signal(40000000);
+    flowerScapeElasticModulus = signal(0);
     leafMaximumAgeHours = signal(17520);
     crownBudActivationPeriod = signal(1);
     crownBudActivationProbabilityPerSeason = signal(1);
@@ -179,6 +180,7 @@ export class SpeciesBase {
             petioleElasticModulus: this.petioleElasticModulus.peek(),
             flowerOrganElasticModulus: this.flowerOrganElasticModulus.peek(),
             flowerPedicelElasticModulus: this.flowerPedicelElasticModulus.peek(),
+            flowerScapeElasticModulus: this.flowerScapeElasticModulus.peek(),
             leafMaximumAgeHours: this.leafMaximumAgeHours.peek(),
             crownBudActivationPeriod: this.crownBudActivationPeriod.peek(),
             crownBudActivationProbabilityPerSeason: this.crownBudActivationProbabilityPerSeason.peek(),
@@ -281,6 +283,7 @@ export class SpeciesBase {
         this.petioleElasticModulus.value = s.petioleElasticModulus;
         this.flowerOrganElasticModulus.value = s.flowerOrganElasticModulus;
         this.flowerPedicelElasticModulus.value = s.flowerPedicelElasticModulus;
+        this.flowerScapeElasticModulus.value = s.flowerScapeElasticModulus;
         this.leafMaximumAgeHours.value = s.leafMaximumAgeHours;
         this.crownBudActivationPeriod.value = s.crownBudActivationPeriod;
         this.crownBudActivationProbabilityPerSeason.value = s.crownBudActivationProbabilityPerSeason;
@@ -384,6 +387,7 @@ export class SpeciesBase {
             PetioleElasticModulus: this.petioleElasticModulus.peek(),
             FlowerOrganElasticModulus: this.flowerOrganElasticModulus.peek(),
             FlowerPedicelElasticModulus: this.flowerPedicelElasticModulus.peek(),
+            FlowerScapeElasticModulus: this.flowerScapeElasticModulus.peek(),
             LeafMaximumAgeHours: this.leafMaximumAgeHours.peek(),
             CrownBudActivationPeriod: this.crownBudActivationPeriod.peek(),
             CrownBudActivationProbabilityPerSeason: this.crownBudActivationProbabilityPerSeason.peek(),

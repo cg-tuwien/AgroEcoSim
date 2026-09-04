@@ -309,6 +309,10 @@ function plantInputs(): PlantFrameInputs {
             //matching the old `leafGeometry ?? threePlanePrimitive`.
             return s?.leafMesh ? registerGeometry(`leaf:${name}`, s.leafMesh) : Geom.Plane;
         },
+        petalGeom: (name: string) => {
+            const s = species.find(x => x.name.peek() === name);
+            return s?.petalMesh ? registerGeometry(`petal:${name}`, s.petalMesh) : Geom.Plane;
+        },
     };
 }
 

@@ -30,13 +30,14 @@ import { createMat4, Mat4 } from '../core/Mat4';
 import { paletteColor } from '../core/SelectionPalette';
 import { Ray } from '../core/Ray';
 import { backgroundColor } from '../../helpers/Selection';
-import { FrameLighting, SHADOW_SIZE, shadowBounds, SHADOW_NORMAL_OFFSET_TEXELS, SHADOW_GRAZING_OFFSET_TEXELS } from '../core/Lighting';
+import { FrameLighting, shadowBounds } from '../core/Lighting';
 import { forceOpaque, reportOpaque, warnIfFlat } from '../offline/opaque';
 import { OfflineSizeError } from '../offline/types';
 
 import { toBufferGeometry } from './ThreeGeometry';
 import { toThreeColor } from './ThreeColor';
 import { applyInstanceMaterial, newInstanceMaterial } from './ThreeMaterials';
+import { ThreeDensityField } from './ThreeDensityField';
 import '../core/StaticGeometry';   // side effect: fills the static geometry table
 
 /** Per-mesh bookkeeping that has nowhere else to live. */
@@ -58,6 +59,11 @@ export class ThreeRenderer implements IViewportRenderer {
     private objTerrain = new THREE.Object3D();
     private objObstacles = new THREE.Object3D();
     private objPlants = new THREE.Object3D();
+    /**
+     * Volumetric shadows and occlusion. Undefined on a WebGL1 context, which has no sampler3D -
+     * the patched shader would fail to compile and take the whole backend down with it.
+     */
+    private density: ThreeDensityField | undefined;
 
     //Seeds and obstacles keep a stable Mesh per object rather than being rebuilt, because the
     //transform gizmo attaches to one and would be orphaned by a rebuild.
@@ -70,8 +76,6 @@ export class ThreeRenderer implements IViewportRenderer {
     private scratch: Mat4 = createMat4();
     private raycaster = new THREE.Raycaster();
     private disposed = false;
-    /** What applyShadowFlags last pushed into the materials, so a no-op does not recompile. */
-    private shadowsApplied = false;
     /** rAF handle for the coalesced render; 0 when none is queued. */
     private renderPending = 0;
     private hemiLight: THREE.HemisphereLight | undefined;
@@ -101,6 +105,10 @@ export class ThreeRenderer implements IViewportRenderer {
             context: context as any,
         });
 
+        //sampler3D is WebGL2 only. On a WebGL1 context the field stays undefined and the
+        //backend renders exactly as it did before - ambient and sun, no occlusion.
+        if (this.renderer.capabilities.isWebGL2) this.density = new ThreeDensityField();
+
         this.renderer.outputColorSpace = THREE.SRGBColorSpace;
         this.renderer.useLegacyLights = true;
         this.renderer.toneMapping = THREE.LinearToneMapping;
@@ -120,18 +128,16 @@ export class ThreeRenderer implements IViewportRenderer {
         this.hemiLight.position.set(0, 10000, 0);
         this.scene.add(this.hemiLight);
 
-        //Added dark and disabled, so Tier 0 is byte-identical to the historical renderer:
-        //an intensity of zero contributes nothing, and shadowMap.enabled stays off until a
-        //tier that wants shadows asks for it.
+        //Added dark and disabled, so the default tier stays byte-identical to the historical
+        //renderer: an intensity of zero contributes nothing.
         this.sun = new THREE.DirectionalLight(0xffffff, 0);
         this.sun.visible = false;
-        this.sun.castShadow = true;
-        this.sun.shadow.mapSize.set(SHADOW_SIZE, SHADOW_SIZE);
-        //Acne on thin foliage is far worse than the slight peter-panning these cost.
-        //Both shadow biases are set per frame from the shadow bounds; see setLighting.
+        //No shadow map. A leaf is a zero-thickness double-sided quad, so it records its own
+        //depth and then tests against it - a tie that no bias settles, and the cause of the
+        //torn self-shadowing this backend used to show. Sun visibility comes from marching the
+        //density field instead; see ThreeDensityField.
+        this.sun.castShadow = false;
         this.scene.add(this.sun, this.sun.target);
-        this.renderer.shadowMap.enabled = false;
-        this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         this.scene.add(this.objSeeds, this.objTerrain, this.objObstacles, this.objPlants);
 
         this.camera = new THREE.PerspectiveCamera(50, this.aspect(), 0.025, 5000);
@@ -278,8 +284,26 @@ export class ThreeRenderer implements IViewportRenderer {
         buildPlants(this.plantInstances, inputs);
         //syncInstanceMeshes sets each mesh's shadow flags as it goes, so no traverse here.
         this.syncInstanceMeshes(this.objPlants, this.plantInstances);
+        //Rebuild the density field from the same instance list that was just drawn, so the
+        //shadows a frame casts always belong to the geometry that frame shows. Doing it on the
+        //rebuild rather than per frame is what keeps the CPU scatter off the camera path.
+        this.rebuildDensity();
         this.renderOnce();
     }
+
+    /** Refills the density field, or empties it when nothing needs it. */
+    private rebuildDensity() {
+        if (!this.density) return;
+        if (!this.densityWanted) { this.density.clear(); return; }
+        this.density.build(
+            this.plantInstances,
+            appstate.fieldSizeX.peek(),
+            appstate.fieldSizeZ.peek(),
+            appstate.fieldSizeD.peek());
+    }
+
+    /** Whether the current lighting asks for anything the field provides. */
+    private densityWanted = false;
 
     /**
      * Pools one Mesh per instance slot, mutating in place.
@@ -288,18 +312,6 @@ export class ThreeRenderer implements IViewportRenderer {
      * space - keeping the two aligned is what makes picking behave identically on both
      * backends.
      */
-    /**
-     * Reapplies the current shadow flags to meshes that were built after the last tier change.
-     *
-     * `castShadow` and `receiveShadow` live on the Mesh, and every rebuild makes new ones - so
-     * without this a plant that grew after shadows were switched on silently stopped casting.
-     * `changed` is false because the materials' programs already carry shadow support; only
-     * the per-object flags are missing.
-     */
-    private reapplyShadowFlags() {
-        if (this.shadowsApplied) this.applyShadowFlags(true, false);
-    }
-
     private syncInstanceMeshes(group: THREE.Object3D, list: InstanceList) {
         const children = group.children as THREE.Mesh[];
 
@@ -308,7 +320,9 @@ export class ThreeRenderer implements IViewportRenderer {
             let mesh = children[i];
 
             if (!mesh) {
-                mesh = new THREE.Mesh(this.geometryFor(inst.geom), newInstanceMaterial());
+                const instanceMaterial = newInstanceMaterial();
+                this.density?.patch(instanceMaterial);
+                mesh = new THREE.Mesh(this.geometryFor(inst.geom), instanceMaterial);
                 mesh.matrixAutoUpdate = false;
                 mesh.userData = { flags: -1 } as MeshUserData;
                 group.add(mesh);
@@ -319,12 +333,6 @@ export class ThreeRenderer implements IViewportRenderer {
             if (mesh.geometry !== geometry) mesh.geometry = geometry;
 
             applyInstanceMaterial(mesh.material as THREE.MeshStandardMaterial, inst.color, inst.emissive, inst.flags, ud.flags);
-
-            //Set here rather than by a separate traverse afterwards: the flags live on the
-            //Mesh, every rebuild makes new ones, and this loop already touches each one. Two
-            //full-scene traverses per timestep is exactly the cost that was sinking this.
-            mesh.castShadow = this.shadowsApplied;
-            mesh.receiveShadow = this.shadowsApplied;
 
             mesh.matrix.fromArray(inst.model);
             mesh.matrixWorldNeedsUpdate = true;
@@ -349,9 +357,11 @@ export class ThreeRenderer implements IViewportRenderer {
     /**
      * Applies the frame's lighting.
      *
-     * The ~100 lines this needs are why the shadow map is worth porting to the WebGL backend
-     * at all: it is the single largest perceptual gain in the whole lighting ladder, and this
-     * way it reaches everyone rather than only machines with WebGPU.
+     * Direct sun and ambient come from three's own lights; occlusion and the sun's *visibility*
+     * come from a leaf-area-density field marched in the fragment shader. The shadow map this
+     * used to drive is gone - see ThreeDensityShader for why a zero-thickness leaf cannot be
+     * shadow-mapped against itself at any bias - so both backends now shade a canopy the same
+     * way, by integrating extinction rather than comparing depths.
      */
     setLighting(lighting: FrameLighting) {
         if (!this.sun || !this.renderer) return;
@@ -365,7 +375,6 @@ export class ThreeRenderer implements IViewportRenderer {
         //off, or it is below the horizon - so this is the whole test.
         const wantsSun = lighting.sunColor.r + lighting.sunColor.g + lighting.sunColor.b > 0;
         this.sun.visible = wantsSun;
-        this.renderer.shadowMap.enabled = wantsSun && lighting.shadows;
 
         if (wantsSun) {
             //three scales a directional light's colour by intensity, so folding the intensity
@@ -373,21 +382,8 @@ export class ThreeRenderer implements IViewportRenderer {
             this.sun.color.setRGB(lighting.sunColor.r, lighting.sunColor.g, lighting.sunColor.b);
             this.sun.intensity = 1;
 
+            //A directional light only reads its direction, so any position along the ray does.
             const { center, radius } = shadowBounds(appstate.fieldSizeX.peek(), appstate.fieldSizeZ.peek());
-
-            //Both biases come from the same texel count, derived from the texel's world size
-            //rather than hard-coded, so they stay correct if the field or the map resolution
-            //changes and the one control moves both.
-            //
-            //Why BOTH: three's normalBias offsets along the surface normal as stored, and it
-            //does not flip that normal towards the light. For a leaf lit from behind - which
-            //this renderer deliberately lights, via abs(dot(n, L)), so canopies do not go
-            //black in patches - the offset therefore pushes the lookup DEEPER into shadow and
-            //makes self-shadowing worse. A plain depth bias has no direction to get wrong, so
-            //it is what actually covers that case. The WebGPU path flips the normal instead
-            //and needs no equivalent.
-            const texelWorld = (2 * radius) / SHADOW_SIZE;
-            this.sun.shadow.normalBias = texelWorld * (lighting.shadowBiasTexels + SHADOW_GRAZING_OFFSET_TEXELS * 0.5);
             const d = lighting.sunDirection;
             this.sun.position.set(
                 center.x + d.x * radius * 2,
@@ -395,69 +391,27 @@ export class ThreeRenderer implements IViewportRenderer {
                 center.z + d.z * radius * 2);
             this.sun.target.position.set(center.x, center.y, center.z);
             this.sun.target.updateMatrixWorld();
-
-            //Fitted to the field, not the plants: a frustum that resized as they grew would
-            //make the shadow map swim between timesteps.
-            const cam = this.sun.shadow.camera;
-            cam.left = -radius; cam.right = radius;
-            cam.top = radius; cam.bottom = -radius;
-            cam.near = 0.1; cam.far = radius * 4;
-            //Normalised depth spans the shadow camera's near..far, so a world offset converts
-            //by dividing through that range. Negative: three ADDS the bias before comparing,
-            //and moving the comparison towards the light is what avoids self-shadowing.
-            const depthRange = Math.max(1e-6, cam.far - cam.near);
-            this.sun.shadow.bias = -(texelWorld * lighting.shadowBiasTexels) / depthRange;
-            cam.updateProjectionMatrix();
         }
 
-        const shadows = wantsSun && lighting.shadows;
-        //Only traverse when the answer actually changed. setLighting now runs on every
-        //simulated timestep, because the sun follows the clock, and walking every mesh in a
-        //growing canopy each time is pure waste - the per-mesh flags are set during the
-        //rebuild that created those meshes.
-        if (shadows !== this.shadowsApplied) {
-            this.shadowsApplied = shadows;
-            this.applyShadowFlags(shadows, true);
+        //Shadows need the sun; occlusion is an ambient term and does not.
+        const wantShadows = wantsSun && lighting.shadows;
+        const wantOcclusion = lighting.ambientOcclusion;
+        const wanted = wantShadows || wantOcclusion;
+
+        if (this.density) {
+            this.density.setSunDirection(lighting.sunDirection);
+            this.density.setStrengths(wantShadows ? 1 : 0, wantOcclusion ? 1 : 0);
+
+            //The field is built during a plant rebuild, so switching either term on between
+            //timesteps would otherwise sample a field that was never filled - which is exactly
+            //how "the checkbox does nothing until a frame moves" used to present.
+            if (wanted !== this.densityWanted) {
+                this.densityWanted = wanted;
+                this.rebuildDensity();
+            }
         }
+
         this.renderOnce();
-    }
-
-    /**
-     * Turns shadow casting on or off across the scene.
-     *
-     * Leaves are single double-sided quads, so `shadowSide = DoubleSide` is required or half
-     * the canopy casts nothing.
-     */
-    /**
-     * @param changed Whether shadows just turned on or off, as opposed to merely being
-     *   reapplied to freshly built meshes.
-     *
-     * three compiles shadow support INTO each material's program, so flipping
-     * `renderer.shadowMap.enabled` or a mesh's `receiveShadow` after a program is cached does
-     * nothing until that program is rebuilt. Without `needsUpdate` the switch appeared to do
-     * nothing until the next timestep, when `buildPlants` happened to create new materials -
-     * which is exactly what "it only changes once a frame moves" looked like. It is set only
-     * on a real change because recompiling every material is not free.
-     */
-    private applyShadowFlags(enabled: boolean, changed: boolean) {
-        const apply = (group: THREE.Object3D) => group.traverse(o => {
-            const mesh = o as THREE.Mesh;
-            if (!mesh.isMesh) return;
-            mesh.castShadow = enabled;
-            mesh.receiveShadow = enabled;
-            const material = mesh.material as THREE.Material | THREE.Material[];
-            const one = (m: THREE.Material) => {
-                m.shadowSide = THREE.DoubleSide;
-                if (changed) m.needsUpdate = true;
-            };
-            if (Array.isArray(material)) material.forEach(one);
-            else if (material) one(material);
-        });
-
-        apply(this.objPlants);
-        apply(this.objTerrain);
-        apply(this.objObstacles);
-        apply(this.objSeeds);
     }
 
     refreshVisibility(inputs: VisibilityInputs) {
@@ -476,6 +430,9 @@ export class ThreeRenderer implements IViewportRenderer {
             side: THREE.DoubleSide,
             flatShading: true,
         });
+        //The ground is where a canopy's shadow reads most clearly, so it has to sample the
+        //field too - an unpatched terrain would sit in full sun under a closed canopy.
+        this.density?.patch(material);
 
         this.disposeGroup(this.objTerrain);
 
@@ -507,7 +464,6 @@ export class ThreeRenderer implements IViewportRenderer {
         }
 
         this.objTerrain.visible = inputs.visible;
-        this.reapplyShadowFlags();
         this.renderOnce();
     }
 
@@ -528,7 +484,9 @@ export class ThreeRenderer implements IViewportRenderer {
         for (const seed of seeds) {
             let mesh = this.seedMeshes.get(seed);
             if (!mesh) {
-                mesh = new THREE.Mesh(this.geometryFor(Geom.Dodecahedron), new THREE.MeshLambertMaterial());
+                const seedMaterial = new THREE.MeshLambertMaterial();
+                this.density?.patch(seedMaterial);
+                mesh = new THREE.Mesh(this.geometryFor(Geom.Dodecahedron), seedMaterial);
                 mesh.userData = { ref: { type: 'seed', seed }, flags: 0 } as MeshUserData;
                 this.objSeeds.add(mesh);
                 this.seedMeshes.set(seed, mesh);
@@ -541,7 +499,6 @@ export class ThreeRenderer implements IViewportRenderer {
         }
 
         this.objSeeds.visible = inputs.visible;
-        this.reapplyShadowFlags();
         this.renderOnce();
     }
 
@@ -560,13 +517,15 @@ export class ThreeRenderer implements IViewportRenderer {
         for (const obstacle of obstacles) {
             let mesh = this.obstacleMeshes.get(obstacle);
             if (!mesh) {
-                mesh = new THREE.Mesh(this.geometryFor(Geom.BoxBottomCentered), new THREE.MeshLambertMaterial({
+                const obstacleMaterial = new THREE.MeshLambertMaterial({
                     side: THREE.DoubleSide,
                     flatShading: true,
                     //Obstacles are frequently coplanar with the terrain they sit on.
                     polygonOffset: true,
                     polygonOffsetFactor: -2,
-                }));
+                });
+                this.density?.patch(obstacleMaterial);
+                mesh = new THREE.Mesh(this.geometryFor(Geom.BoxBottomCentered), obstacleMaterial);
                 mesh.matrixAutoUpdate = false;
                 mesh.userData = { ref: { type: 'obstacle', obstacle }, flags: 0 } as MeshUserData;
                 this.objObstacles.add(mesh);
@@ -587,7 +546,6 @@ export class ThreeRenderer implements IViewportRenderer {
         }
 
         this.objObstacles.visible = inputs.visible;
-        this.reapplyShadowFlags();
         this.renderOnce();
     }
 

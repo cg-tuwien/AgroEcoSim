@@ -66,12 +66,23 @@ export class Species extends SpeciesBase {
     leafMesh: MeshData | undefined = undefined;
 
     /**
+     * Petal outline, fetched separately from the leaf. A petal travels in the same lamina
+     * record as a leaf, so without this it was drawn with the leaf mesh - a maple blade
+     * for a Heuchera petal.
+     */
+    petalMesh: MeshData | undefined = undefined;
+
+    /**
      * Three-side view of leafMesh, built lazily and cached by MeshData identity in
      * toBufferGeometry. A getter rather than a field so that loading a leaf mesh does not
      * force a BufferGeometry to exist on the WebGPU path.
      */
     get leafGeometry(): THREE.BufferGeometry | undefined {
         return this.leafMesh ? toBufferGeometry(this.leafMesh) : undefined;
+    }
+
+    get petalGeometry(): THREE.BufferGeometry | undefined {
+        return this.petalMesh ? toBufferGeometry(this.petalMesh) : undefined;
     }
 
     public static Default() {
@@ -247,6 +258,14 @@ export class Species extends SpeciesBase {
     }
 
     loadLeafGeometry(binaryInput: ArrayBuffer): any {
+        this.leafMesh = this.readLamina(binaryInput, "leaf");
+    }
+
+    loadPetalGeometry(binaryInput: ArrayBuffer): any {
+        this.petalMesh = this.readLamina(binaryInput, "petal");
+    }
+
+    private readLamina(binaryInput: ArrayBuffer, kind: string): MeshData {
         const reader = new BinaryReader(new Uint8Array(binaryInput));
         const verticesCount = reader.readInt32();
         const coordsCount = verticesCount * 3;
@@ -264,11 +283,11 @@ export class Species extends SpeciesBase {
         //computeVertexNormals here reproduces THREE.BufferGeometry.computeVertexNormals
         //exactly (area-weighted, normalized once at the end), so swapping in the neutral
         //implementation does not change leaf shading.
-        this.leafMesh = {
+        return {
             positions: vertices,
             normals: computeVertexNormals(vertices, indices),
             indices,
-            name: `leaf:${this.name.peek()}`,
+            name: `${kind}:${this.name.peek()}`,
         };
     }
 }

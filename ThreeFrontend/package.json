@@ -8,7 +8,9 @@
     "serve": "sirv build --cors --single",
     "dev": "cross-env NODE_OPTIONS=--openssl-legacy-provider preact watch",
     "lint": "eslint src",
-    "test": "jest"
+    "typecheck": "tsc --noEmit",
+    "test": "jest",
+    "test:full": "npm run build && jest"
   },
   "eslintConfig": {
     "parser": "@typescript-eslint/parser",
@@ -18,7 +20,44 @@
     ],
     "ignorePatterns": [
       "build/"
-    ]
+    ],
+    "overrides": [
+      {
+        "files": [
+          "src/render/core/**/*.ts",
+          "src/render/core/**/*.tsx",
+          "src/render/webgpu/**/*.ts",
+          "src/render/webgpu/**/*.tsx"
+        ],
+        "rules": {
+          "no-restricted-imports": [
+            "error",
+            {
+              "patterns": [
+                {
+                  "group": [
+                    "three",
+                    "three/*"
+                  ],
+                  "message": "src/render/core and src/render/webgpu must stay renderer-neutral. Three.js belongs in src/render/three. The build transpiles with babel and never type-checks, so this lint rule is the only automated guard against the boundary eroding."
+                }
+              ]
+            }
+          ]
+        }
+      }
+    ],
+    "rules": {
+      "no-unused-expressions": [
+        "error",
+        {
+          "allowShortCircuit": false,
+          "allowTernary": false,
+          "allowTaggedTemplates": false
+        }
+      ],
+      "@typescript-eslint/no-unused-expressions": "off"
+    }
   },
   "dependencies": {
     "@microsoft/signalr": "^7.0.5",
@@ -38,6 +77,7 @@
     "@types/jest": "^27.5.2",
     "@typescript-eslint/eslint-plugin": "^5.59.8",
     "@typescript-eslint/parser": "^5.59.8",
+    "baseline-browser-mapping": "^2.11.20",
     "cross-env": "^7.0.3",
     "enzyme": "^3.11.0",
     "enzyme-adapter-preact-pure": "^4.1.0",

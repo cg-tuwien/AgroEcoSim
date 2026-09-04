@@ -48,18 +48,11 @@ export function Lighting() {
             '2 bounces',
             'A second indirect bounce, which lifts the interior of a dense canopy. Only applies with indirect light on.',
             !indirect)}
-        {/* WebGPU traces the sun through the density field, where there is no depth comparison
-            and so nothing to bias. The control would be inert there, and an inert control that
-            looks live is worse than no control. */}
-        {appstate.lightShadows.value && appstate.activeBackend.value === 'three'
-            ? <span class="lighting-option">
-                <label for="shadowBias" class="unit"
-                    title="Shadow-map bias, in texels. WebGL only \u2013 it is the one backend still using a shadow map. Raise it if a leaf casts a shadow onto itself; lower it if light leaks between leaves that touch.">bias</label>
-                <input type="number" id="shadowBias" name="shadowBias" min={0} max={64} step={1}
-                    value={appstate.shadowBiasTexels.value}
-                    onChange={e => appstate.shadowBiasTexels.value = Math.max(0, parseFloat(e.currentTarget.value) || 0)} />
-            </span>
-            : null}
+        {/* No bias control any more. Both backends now trace the sun through a density field
+            rather than comparing depths against a shadow map, so there is no comparison left to
+            bias - and on WebGL the control never worked anyway: a zero-thickness leaf records
+            its own depth, and the offset needed to clear that tie grows without bound as the
+            leaf turns edge-on to the sun. */}
         {dataMapping
             ? <label class="unit">(ambient only while a data mapping is shown)</label>
             : null}

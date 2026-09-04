@@ -71,12 +71,24 @@ export function leafColor(primitive: Primitive, index: number, mapping: VisualMa
     return sharedMapping(mapping, primitive.stats) ?? { color: neutral, emissive: black };
 }
 
+/**
+ * Cylinder organs whose colour the backend decides rather than the wood ramp: the
+ * petiole, and every part of an inflorescence. A scape is stem tissue and a flower's
+ * centre is its own colour, and both were being greyed towards wood by lignification -
+ * which is why a Fragaria flower had no yellow eye and a scape never matched the stems.
+ */
+const backendColoredCylinders = new Set<number>([
+    Organs.Petiole,
+    Organs.FlowerStem,
+    Organs.FlowerMeristem,
+    Organs.FlowerPedicel,
+    Organs.FlowerBud,
+]);
+
 export function stemColor(primitive: Primitive, mapping: VisualMappingOptions): OrganColor {
     if (mapping === VisualMappingOptions.Natural)
         return {
-            //Petioles carry a backend-supplied colour; every other cylinder organ greys
-            //towards wood as it lignifies.
-            color: primitive.type === Primitives.Cylinder && primitive.organ === Organs.Petiole && primitive.color
+            color: primitive.type === Primitives.Cylinder && backendColoredCylinders.has(primitive.organ) && primitive.color
                 ? fromHex(primitive.color)
                 : lerpHSL(greenColor, woodColor, primitive.stats[S_IRRADIANCE_OR_WOOD]),
             emissive: black,

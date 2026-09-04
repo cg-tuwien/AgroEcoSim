@@ -60,6 +60,11 @@ export type PlantFrameInputs = {
     showRoots: boolean;
     /** Resolves a species name to its registered leaf geometry id. */
     leafGeom: (species: string) => number;
+    /**
+     * Petal outline for a species. Separate from leafGeom because petals share the lamina
+     * wire record with leaves but are not leaf-shaped.
+     */
+    petalGeom: (species: string) => number;
 };
 
 export type TerrainFrameInputs = {

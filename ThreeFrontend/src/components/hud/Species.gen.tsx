@@ -74,6 +74,7 @@ export function GeneratedSpeciesFields(props: { species: Species; index: number 
 <SpeciesFloatField step={0.1} speciesIndex={index} tooltip={"Young\u0027s modulus used for vegetative leaf petioles."} signal={species.petioleElasticModulus} label={"Petiole elastic modulus"} />
 <SpeciesFloatField step={0.1} speciesIndex={index} tooltip={"Young\u0027s modulus used for flower organs other than individual pedicels."} signal={species.flowerOrganElasticModulus} label={"Flower organ elastic modulus"} />
 <SpeciesFloatField step={0.1} speciesIndex={index} tooltip={"Young\u0027s modulus used for the pedicel supporting an individual flower."} signal={species.flowerPedicelElasticModulus} label={"Flower pedicel elastic modulus"} />
+<SpeciesFloatField step={0.1} speciesIndex={index} tooltip={"Elastic modulus of the inflorescence axis - the scape, its branches and the meristems that build them."} signal={species.flowerScapeElasticModulus} label={"Flower scape elastic modulus"} />
 <hr/>
 <SpeciesFloatField step={1} speciesIndex={index} tooltip={"Age at which a herbaceous leaf and its petiole become eligible for renewal."} signal={species.leafMaximumAgeHours} label={"Maximum leaf age"} />
 <SpeciesFlagsField speciesIndex={index} tooltip={"Seasonal phases in which a dormant aerial crown bud on a rhizome may make its single activation attempt for the current seasonal cycle."} signal={species.crownBudActivationPeriod} label={"Crown bud activation period"} flags={['PreFlower','Flowering','PostFlower','ResetPending']}/>

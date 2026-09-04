@@ -6,7 +6,7 @@
 //frame under settings other than the ones the live viewport is showing.
 
 import { PlantModel } from '../../helpers/Scene';
-import { Primitive, Primitives } from '../../helpers/Primitives';
+import { Organs, Primitive, Primitives } from '../../helpers/Primitives';
 import { Geom } from './GeometryIds';
 import { IFlags, Instance, InstanceList } from './InstanceList';
 import { decodePrimitive } from './PrimitiveTransform';
@@ -27,6 +27,8 @@ export type PlantBuildInputs = {
      * per-species mesh, matching `leafGeometry ?? threePlanePrimitive` in the Three path.
      */
     leafGeom: (species: string) => number;
+    /** Petal outline for a species; falls back to the flat plane like leafGeom does. */
+    petalGeom: (species: string) => number;
 };
 
 function assign(inst: Instance, geom: number, color: RGB, emissive: RGB, flags: number, ref: Instance['ref']) {
@@ -49,6 +51,7 @@ export function buildPlants(out: InstanceList, inp: PlantBuildInputs) {
     for (let i = 0; i < inp.scene.length; ++i) {
         const entity = inp.scene[i];
         const leafGeomId = inp.leafGeom(entity.species);
+        const petalGeomId = inp.petalGeom(entity.species);
 
         for (let j = 0; j < entity.primitives.length; ++j) {
             const p = entity.primitives[j];
@@ -73,7 +76,10 @@ export function buildPlants(out: InstanceList, inp: PlantBuildInputs) {
             switch (p.type) {
                 case Primitives.Rectangle: {
                     const c = p.stats ? leafColor(p, j, inp.visualMapping) : { color: neutral, emissive: black };
-                    assign(inst, leafGeomId, c.color, c.emissive, IFlags.DoubleSided | hiddenFlag(p, inp), ref);
+                    //Leaves and petals are both laminae and arrive in the same record, so the
+                    //organ is the only thing that distinguishes them.
+                    const laminaGeom = p.organ === Organs.FlowerPadel ? petalGeomId : leafGeomId;
+                    assign(inst, laminaGeom, c.color, c.emissive, IFlags.DoubleSided | hiddenFlag(p, inp), ref);
                     break;
                 }
                 case Primitives.Cylinder: {
