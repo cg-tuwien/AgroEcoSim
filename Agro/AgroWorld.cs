@@ -127,7 +127,9 @@ public class AgroWorld : SimulationWorld
 				InitialTime = new(settings.InitialDate.Value.Year, settings.InitialDate.Value.Month, settings.InitialDate.Value.Day, 0, 0, 0, DateTimeKind.Unspecified);
 		}
 
-		Irradiance = new IrradianceClient(Latitude, Longitude, settings?.RenderMode ?? 0, settings?.SamplesPerPixel ?? 512);
+		Irradiance = new IrradianceClient(Latitude, Longitude, settings?.RenderMode ?? 0, settings?.SamplesPerPixel ?? 512,
+			settings?.LightSamples ?? 16, settings?.LeafAreaIndexObstacles, settings?.LeafAreaIndexSensors ?? 16384,
+			settings?.LeafAreaIndexDepth ?? 3f);
 
 		Init();
 	}
@@ -490,4 +492,11 @@ public class AgroWorld : SimulationWorld
 	public static float Cal2J(float calories) => calories * 4.186f;
 
 	public byte[] SerializeTerrain() => Soil.Serialize();
+
+	/// <summary>
+	/// Per-obstacle leaf area index and solar load, one sample per simulation step, for the
+	/// obstacles selected by <see cref="SimulationRequest.LeafAreaIndexObstacles"/>. Null when no
+	/// selection was requested or when no internal light model ran.
+	/// </summary>
+	public ObstacleLightMeter? ObstacleLight => Irradiance.ObstacleLight;
 }

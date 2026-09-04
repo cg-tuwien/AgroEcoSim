@@ -325,6 +325,29 @@ public partial struct AboveGroundAgent : IPlantAgent
     public readonly float GetRadiusVar() => RadiusVar;
 
     /// <summary>
+    /// Replaces this organ's target dimensions, and contracts it immediately if it has
+    /// already outgrown the new target.
+    /// </summary>
+    /// <remarks>
+    /// A herbaceous organ otherwise only ever grows, so a target alone cannot shrink one.
+    /// The flower centre needs it: the closed bud is taller than the receptacle it turns
+    /// into once the petals unfurl. A non-positive argument leaves that dimension alone.
+    /// </remarks>
+    [M(AI)] internal void RetargetSize(float length, float radius)
+    {
+        if (length > 0f)
+        {
+            LengthVar = length;
+            if (Length > length) Length = length;
+        }
+        if (radius > 0f)
+        {
+            RadiusVar = radius;
+            if (Radius > radius) Radius = radius;
+        }
+    }
+
+    /// <summary>
     /// Water amount in gramms which can be passed to the parent per hour
     /// </summary>
     [M(AI)]public readonly float WaterFlowToParentPerHour_g() => 4f * Radius * Radius * WaterTransportRatio * UnderGroundAgent.CubicMetersToGrammsOfWater;
@@ -1038,12 +1061,55 @@ public partial struct AboveGroundAgent : IPlantAgent
 		orientation *= Quaternion.CreateFromAxisAngle(Vector3.UnitY, a);
 		var y = Vector3.Transform(Vector3.UnitX, orientation).Y;
 
-		if (y < 0)
+		if (species.ShootsGravitropicSetPointAngle > 0f)
+			//A plagiotropic shoot holds a set-point angle away from the vertical instead
+			//of reaching for it. Steering it to vertical whenever its axis dipped is what
+			//made a trailing bellflower climb rather than sprawl.
+			orientation = Quaternion.Slerp(orientation,
+				GravitropicSetPointOrientation(orientation, species.ShootsGravitropicSetPointAngle),
+				Math.Clamp(plant.RNG.NextPositiveFloat(species.ShootsGravitaxis), 0f, 1f));
+		else if (y < 0)
 			orientation = Quaternion.Slerp(orientation, PlantFormation2.AdjustUpBase(orientation, up: true), plant.RNG.NextPositiveFloat(-y));
 		else //if (species.ShootsGravitaxis > 0)
 		  	orientation = Quaternion.Slerp(orientation, PlantFormation2.AdjustUpBase(orientation, up: true), plant.RNG.NextPositiveFloat(species.ShootsGravitaxis));
 
 		return orientation;
+	}
+
+	/// <summary>
+	/// The orientation this shoot's gravitropism aims at: the same compass direction,
+	/// inclined <paramref name="setPointAngle"/> away from the vertical.
+	/// </summary>
+	/// <remarks>
+	/// Rotating the current axis onto the target and applying that rotation to the whole
+	/// frame preserves the roll, so leaves keep the phyllotaxis they were built with.
+	/// A shoot pointing straight up or straight down has no azimuth to preserve and
+	/// borrows one from its own cross-section.
+	/// </remarks>
+	public static Quaternion GravitropicSetPointOrientation(Quaternion orientation, float setPointAngle)
+	{
+		var axis = Vector3.Transform(Vector3.UnitX, orientation);
+		var horizontal = new Vector3(axis.X, 0f, axis.Z);
+		if (horizontal.LengthSquared() < 1e-8f)
+		{
+			var side = Vector3.Transform(Vector3.UnitZ, orientation);
+			horizontal = new Vector3(side.X, 0f, side.Z);
+			if (horizontal.LengthSquared() < 1e-8f)
+				horizontal = Vector3.UnitX;
+		}
+		horizontal = Vector3.Normalize(horizontal);
+
+		var target = horizontal * MathF.Sin(setPointAngle) + Vector3.UnitY * MathF.Cos(setPointAngle);
+		var cos = Math.Clamp(Vector3.Dot(axis, target), -1f, 1f);
+		if (cos > 0.9999f)
+			return orientation;
+
+		var rotationAxis = Vector3.Cross(axis, target);
+		if (rotationAxis.LengthSquared() < 1e-8f)
+			return orientation;
+
+		return Quaternion.Normalize(
+			Quaternion.CreateFromAxisAngle(Vector3.Normalize(rotationAxis), MathF.Acos(cos)) * orientation);
 	}
 
 	public bool CompleteDay(uint timestep, byte ticksPerDay)

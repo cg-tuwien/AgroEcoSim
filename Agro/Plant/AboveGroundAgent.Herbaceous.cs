@@ -248,6 +248,28 @@ namespace Agro
                                     break;
                             }
 
+                            if (flowerCommitmentProbability > 0f)
+                            {
+                                //FloweringStartAgeHours gates the Flowering PHASE, but the
+                                //PreFlower phase has its own commitment rate, so a species that
+                                //should not bloom before its second summer flowered in its first
+                                //one anyway. Maturity has to gate the commitment itself.
+                                if (plant.GetAge_h() < species.FloweringStartAgeHours)
+                                    flowerCommitmentProbability = 0f;
+                                else
+                                {
+                                    //A flower committed now only opens after the scape, the bud and
+                                    //the petals have all grown. Committing that late produced open
+                                    //petals in December on species whose season ends in July,
+                                    //because the PostFlower phase runs from FloweringSeasonEnd all
+                                    //the way to SeasonalSenescence. Refuse a commitment whose bloom
+                                    //would fall past dormancy.
+                                    var leadSeason = species.FlowerSettings.CommitmentToBloomLeadHours / (365f * 24f);
+                                    if (world.Season + leadSeason > species.SeasonalSenescence)
+                                        flowerCommitmentProbability = 0f;
+                                }
+                            }
+
                             if (agent.Organ == OrganTypes.Meristem && agent.Length > agent.LengthVar)
                             {
                                 float prevResources, prevProduction;
@@ -269,10 +291,37 @@ namespace Agro
                                     agent.Organ = OrganTypes.Stem;
                                     agent.GrowthTimeVar = world.HoursPerTick / (species.WoodGrowthTime + plant.RNG.NextFloatVar(species.WoodGrowthTimeVar));
                                     wasMeristem = true;
-                                    if (species.ContinueCrownAfterFlowerCommitment)
+                                    //Committing a flower consumes the apex, so the crown needs a
+                                    //replacement or it is finished for good - a capped axis that
+                                    //flowered once simply stopped, and the plant froze at a
+                                    //constant organ count from its first summer onwards.
+                                    //
+                                    //A full axis must not grow, though: an old flower dying frees a
+                                    //slot under MaximumFlowersPerCrown, the same axis commits again
+                                    //a month later, and that path alone stacked 106 nodes on a
+                                    //Fragaria crown. So the hand-over is sympodial - the
+                                    //replacement is born as a SIBLING of the flowering node rather
+                                    //than as its child, which is what an axillary take-over
+                                    //actually is, and the axis keeps its length.
+                                    //Committing a flower consumes the apex. A crown with room left
+                                    //hands over to a replacement, which is the sympodial succession
+                                    //of a rosette; a crown that is already at CrownMaximumNodes is
+                                    //simply finished, and the plant renews itself from a rhizome or
+                                    //offset bud instead. Letting a full crown hand over anyway grew
+                                    //it by one node per flower - 93 stacked nodes on an everbearing
+                                    //Fragaria - and skipping the hand-over unconditionally left
+                                    //every crown apexless and the whole plant frozen.
+                                    //
+                                    //The apex test excludes the committing agent: its Organ was set
+                                    //to Stem on the local struct copy but the formation is
+                                    //double-buffered and still reports a Meristem.
+                                    if (species.ContinueCrownAfterFlowerCommitment
+                                        && CrownAxisHasRoom(formation, agentID, species)
+                                        && !HasVegetativeApex(formation, agentID, agentID))
                                         ContinueCrown(ref agent, formation, agentID, prevResources, prevProduction);
                                 }
-                                else if (plant.RNG.NextFloatAccum(crownContinuationProbability, world.HoursPerTick))
+                                else if (plant.RNG.NextFloatAccum(crownContinuationProbability, world.HoursPerTick)
+                                    && CrownAxisHasRoom(formation, agentID, species))
                                 {
                                     agent.Organ = OrganTypes.Stem;
                                     agent.GrowthTimeVar = world.HoursPerTick / (species.WoodGrowthTime + plant.RNG.NextFloatVar(species.WoodGrowthTimeVar));
@@ -544,6 +593,15 @@ namespace Agro
                 var species = plant.Parameters;
                 if (ageHours <= 24f || !species.CrownBudActivationPeriod.HasFlag(phase) ||
                     agent.Energy <= agent.EnoughEnergy())
+                    return false;
+
+                //A bud sitting on a rhizome starts a NEW crown, and the walk inside
+                //CrownAxisHasRoom stops at the rhizome, so that case is never blocked. A bud
+                //left behind by a shaded-out petiole inside an existing crown extends that
+                //crown, and this was the one node-creating path with no cap on it: one
+                //Fragaria crown reached 49 nodes against a limit of four, which is where its
+                //376 leaves came from.
+                if (!CrownAxisHasRoom(formation, agentID, species))
                     return false;
 
                 var date = plant.World.GetTime(timestep);
@@ -849,6 +907,75 @@ namespace Agro
                 bud.RhizomeDevelopment.SegmentDepth = segmentDepth;
                 bud.RhizomeDevelopment.OriginatingBudPosition = budPosition;
                 formation.Birth(bud);
+            }
+
+            /// <summary>
+            /// Whether this crown may add another vegetative node.
+            /// </summary>
+            /// <remarks>
+            /// Counts every Stem and Meristem in the whole crown, not just along the apex's
+            /// own axis. Bounding the axis alone is not enough: the sympodial hand-over
+            /// attaches its replacement to the flowering node's PARENT, so a crown that
+            /// flowers repeatedly hangs an unbounded fan of nodes - each with its own whorl
+            /// of petioles - off a four-node axis. The walk climbs to the crown base and
+            /// then sweeps its subtree, which is tens of nodes, and only runs once a
+            /// continuation or commitment roll has already succeeded.
+            /// </remarks>
+            static bool CrownAxisHasRoom(PlantSubFormation<AboveGroundAgent> formation, int agentID,
+                SpeciesSettings species)
+            {
+                var limit = species.CrownMaximumNodes;
+                if (limit <= 0)
+                    return true;
+
+                var baseNode = agentID;
+                while (true)
+                {
+                    var parent = formation.GetParent(baseNode);
+                    if (parent < 0 || formation.GetIsRizome(parent))
+                        break;
+                    baseNode = parent;
+                }
+
+                var nodes = 0;
+                var stack = new Stack<int>();
+                stack.Push(baseNode);
+                while (stack.Count > 0)
+                {
+                    var i = stack.Pop();
+                    if (formation.GetIsRizome(i))
+                        continue;
+                    var organ = formation.GetOrgan(i);
+                    if (organ == OrganTypes.Stem || organ == OrganTypes.Meristem)
+                    {
+                        if (++nodes >= limit)
+                            return false;
+                        foreach (var child in formation.GetChildren(i))
+                            stack.Push(child);
+                    }
+                }
+                return true;
+            }
+
+            /// <summary>
+            /// Whether this node already carries a living vegetative apex other than
+            /// <paramref name="excluding"/>.
+            /// </summary>
+            /// <remarks>
+            /// The exclusion is load-bearing. The committing agent is turned into a Stem on
+            /// the local struct copy, but the formation is double-buffered and still reports
+            /// it as a Meristem, so a scan that included it always found an apex, always
+            /// skipped the hand-over, and left every crown apexless: a two-year Fragaria
+            /// ended with 146 stems, 352 leaves and zero vegetative apices, in flower for
+            /// exactly one fortnight in its whole life.
+            /// </remarks>
+            static bool HasVegetativeApex(PlantSubFormation<AboveGroundAgent> formation, int nodeID, int excluding)
+            {
+                foreach (var child in formation.GetChildren(nodeID))
+                    if (child != excluding && formation.GetOrgan(child) == OrganTypes.Meristem
+                        && !formation.GetIsRizome(child))
+                        return true;
+                return false;
             }
 
             static void ContinueCrown(ref AboveGroundAgent agent, PlantSubFormation<AboveGroundAgent> formation,

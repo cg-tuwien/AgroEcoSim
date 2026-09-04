@@ -44,6 +44,9 @@ public class SimulationController// : ControllerBase
             }
 
             response.Renderer = world.RendererName;
+            response.ObstacleLight = ObstacleLightResponse.From(world.ObstacleLight);
+            if (response.ObstacleLight != null)
+                response.ObstacleLightTimesteps = [.. world.ObstacleLight.Timesteps];
 
             return response;
         });
@@ -63,10 +66,11 @@ public class SimulationController// : ControllerBase
 
             using var reader = new StreamReader(context.Request.Body);
             var data = await reader.ReadToEndAsync();
-            return Results.Text(terrainBuffer.Add(data));
+            return Results.Text(terrainBuffer.Add(data, CoordinateSystem.RH_rightPX_upPZ));
         });
 
-        api.MapPost("/seeds", (TrayModel[] data) => seedsBuffer.Add(data));
+        //probably not needed and not used
+        //api.MapPost("/seeds", (TrayModel[] data) => seedsBuffer.Add(data));
 
         //Returns a listing of all predefined species
         api.MapGet("/species", () => SpeciesSettings.Predefined);
@@ -74,27 +78,39 @@ public class SimulationController// : ControllerBase
         //Returns a listing of all predefined behaviors
         api.MapGet("/behaviors", () => Enum.GetNames<Behavior>());
 
-        api.MapGet("/mesh/leaf/{species}", (string species) => {
-            var data = SpeciesSettings.Predefined.FirstOrDefault(x => x.Name == species);
-            if (data == null) return Results.NotFound();
+        api.MapGet("/mesh/leaf/{species}", (string species) => LaminaMesh(species, petal: false));
 
-            var lod = RenderLeafLod.CoarseOutline;
-            if (!data.LeafMorphology.TryGetDefaultLeafMesh(lod, out var mesh))
-            {
-                var genericLeaf = new LeafInstance()
-                {
-                    Morphology = data.LeafMorphology,
-                    Physiology = new()
-                };
-                genericLeaf.InitializeLeafletsIfNeeded();
-
-                mesh = LeafMeshBuilder.Build(genericLeaf, lod);
-            }
-
-            using var binaryStream = new MemoryStream();
-            using var writer = new BinaryWriter(binaryStream);
-            mesh.WriteMesh(writer);
-            return Results.Bytes(binaryStream.ToArray());
-        });
+        //A petal is a lamina and travels in the same record as a leaf, so without an
+        //outline of its own the viewport drew it with the species' LEAF mesh - a maple
+        //blade for a three-millimetre Heuchera petal.
+        api.MapGet("/mesh/petal/{species}", (string species) => LaminaMesh(species, petal: true));
     }
+
+    static IResult LaminaMesh(string species, bool petal)
+    {
+        var data = SpeciesSettings.Predefined.FirstOrDefault(x => x.Name == species);
+        if (data == null) return Results.NotFound();
+
+        var morphology = petal ? data.FlowerSettings.PetalMorphology : data.LeafMorphology;
+        if (morphology == null) return Results.NotFound();
+
+        var lod = RenderLeafLod.CoarseOutline;
+        if (!morphology.TryGetDefaultLeafMesh(lod, out var mesh))
+        {
+            var generic = new LeafInstance()
+            {
+                Morphology = morphology,
+                Physiology = new()
+            };
+            generic.InitializeLeafletsIfNeeded();
+
+            mesh = LeafMeshBuilder.Build(generic, lod);
+        }
+
+        using var binaryStream = new MemoryStream();
+        using var writer = new BinaryWriter(binaryStream);
+        mesh.WriteMesh(writer);
+        return Results.Bytes(binaryStream.ToArray());
+    }
+
 }

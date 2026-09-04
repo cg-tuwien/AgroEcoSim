@@ -70,9 +70,42 @@ public class SimulationRequest
     public bool? RequestGeometry { get; init; }
 
     ///<summary>
-    ///Selects the renderer, 0 = no renderer, constant light; 1 = Mitsuba3, 2 = Tamashii (default: 0)
+    ///Selects the renderer, 0 = no renderer, constant light; 1 = Mitsuba3, 2 = Tamashii,
+    ///3 = the internal CPU light model. Modes 1 and 2 fall back to mode 3 when their renderer does
+    ///not answer. (default: 0)
     ///</summary>
     public byte? RenderMode { get; init; }
+
+    /// <summary>
+    /// Hemisphere rays per sensor and simulation step for the internal CPU light model. Higher
+    /// values trade simulation speed for less noise in the per-leaf irradiance. (default: 16)
+    /// </summary>
+    ///<example>16</example>
+    public int? LightSamples { get; init; }
+
+    /// <summary>
+    /// Case-insensitive substring of the obstacle names whose leaf area index and solar load should
+    /// be measured every simulation step, for example "Wand" to select the facades of an imported
+    /// building. Nothing is measured when this is not set. Only effective with the internal light
+    /// model (render mode 3, or 1 and 2 after a fallback).
+    /// </summary>
+    ///<example>Wand</example>
+    public string? LeafAreaIndexObstacles { get; init; }
+
+    /// <summary>
+    /// Total number of measurement points spread over all selected obstacles, in proportion to their
+    /// area. The cost of the measurement follows this number rather than the triangle count.
+    /// (default: 16384)
+    /// </summary>
+    ///<example>16384</example>
+    public int? LeafAreaIndexSensors { get; init; }
+
+    /// <summary>
+    /// How far in front of a selected obstacle, in metres, foliage still counts towards its leaf
+    /// area index. (default: 3)
+    /// </summary>
+    ///<example>3</example>
+    public float? LeafAreaIndexDepth { get; init; }
 
     /// <summary>
     /// Number of samples to render per pixel (usually a power of two between 64 and 4096)

@@ -9,6 +9,7 @@ namespace Agro;
 
 public partial class Wall : IObstacle
 {
+    public string Name { get; }
     public readonly float Length;
     public readonly float Height;
     public readonly float Thickness;
@@ -20,8 +21,9 @@ public partial class Wall : IObstacle
     readonly ArraySegment<byte> PrimitiveDataClustered;
     readonly ArraySegment<byte> PrimitiveDataInterleaved;
 
-    public Wall(float length, float height, float thickness, Vector3 position, float orientation)
+    public Wall(float length, float height, float thickness, Vector3 position, float orientation, string? name = null)
     {
+        Name = name ?? "wall";
         Length = length;
         Height = height;
         Thickness = thickness;
@@ -139,6 +141,14 @@ public partial class Wall : IObstacle
 
         foreach(var item in IndexData)
             writer.Write(item + p);
+    }
+
+    public void AppendTriangles(List<Vector3> vertices, List<int> indices)
+    {
+        var offset = vertices.Count;
+        vertices.AddRange(PointData);
+        foreach (var item in IndexData)
+            indices.Add((int)item + offset);
     }
 
     public void ExportObj(List<Vector3> points, StringBuilder obji)

@@ -841,6 +841,60 @@ public class SoilFormationTetrahedral : ISoilFormation
 		return stream.ToArray();
     }
 
+	/// <summary>
+	/// The boundary surface of the soil as world space triangles, wound so that every face normal
+	/// points out of the soil.
+	/// </summary>
+	/// <remarks>
+	/// <c>Faces</c> already holds exactly the hull, because a face shared by two tetrahedra cancels
+	/// out in <see cref="SimplexIndexes.ToggleFaces"/>. Its index triples are sorted rather than
+	/// wound, so the outward direction has to be recovered: every hull face belongs to exactly one
+	/// tetrahedron, and pointing the normal away from that tetrahedron's fourth vertex is outward by
+	/// construction. The internal light model needs this, because it only lets terrain shade what is
+	/// outside it - a seedling starts below the soil surface and must not be shadowed by it.
+	/// </remarks>
+	public void AppendSurfaceTriangles(List<Vector3> vertices, List<int> indices)
+	{
+		var offset = vertices.Count;
+		for (int i = 0; i < Points.Length; ++i)
+			vertices.Add(Points[i] + Position);
+
+		//Interior faces appear twice and hull faces once, so any owner found is the right one for a
+		//hull face.
+		var owner = new Dictionary<Hyperface, int>(Tetrahedralization.Length * 4);
+		for (int t = 0; t < Tetrahedralization.Length; ++t)
+		{
+			var s = Tetrahedralization[t];
+			owner[new Hyperface(s.A, s.B, s.C)] = t;
+			owner[new Hyperface(s.A, s.B, s.D)] = t;
+			owner[new Hyperface(s.A, s.C, s.D)] = t;
+			owner[new Hyperface(s.B, s.C, s.D)] = t;
+		}
+
+		for (int i = 0; i < Faces.Count; ++i)
+		{
+			var face = Faces[i];
+			var a = face.IA;
+			var b = face.IB;
+			var c = face.IC;
+
+			if (owner.TryGetValue(face, out var t))
+			{
+				var s = Tetrahedralization[t];
+				var inner = s.A != a && s.A != b && s.A != c ? s.A
+					: s.B != a && s.B != b && s.B != c ? s.B
+					: s.C != a && s.C != b && s.C != c ? s.C : s.D;
+				var normal = Vector3.Cross(Points[b] - Points[a], Points[c] - Points[a]);
+				if (Vector3.Dot(normal, Points[a] - Points[inner]) < 0f)
+					(b, c) = (c, b);
+			}
+
+			indices.Add(a + offset);
+			indices.Add(b + offset);
+			indices.Add(c + offset);
+		}
+	}
+
 	public void Write(BinaryWriter writer, int fieldIndex)
 	{
         writer.Write((byte)1); //type

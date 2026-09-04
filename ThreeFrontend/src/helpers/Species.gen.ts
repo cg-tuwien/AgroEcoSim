@@ -26,6 +26,7 @@ export class SpeciesBase {
     twigsBendingByLevel = signal(1);
     twigsBendingApical = signal(0.02);
     shootsGravitaxis = signal(0.2);
+    shootsGravitropicSetPointAngleDeg = signal(0);
     woodGrowthTime = signal(100);
     woodGrowthTimeVar = signal(10);
     leafLength = signal(0.12);
@@ -85,6 +86,7 @@ export class SpeciesBase {
     crownNodeHeightAboveSoil = signal(0.005);
     minimumInternodeLength = signal(0.001);
     crownPitchDeg = signal(90);
+    crownMaximumNodes = signal(0);
     herbaceousGrowthRateScale = signal(0.2);
     shootMaximumRadius = signal(0.0005);
     petioleReorientationMaximumAngleDeg = signal(54);
@@ -125,6 +127,7 @@ export class SpeciesBase {
             twigsBendingByLevel: this.twigsBendingByLevel.peek(),
             twigsBendingApical: this.twigsBendingApical.peek(),
             shootsGravitaxis: this.shootsGravitaxis.peek(),
+            shootsGravitropicSetPointAngle: this.shootsGravitropicSetPointAngleDeg.peek() * DegToRad,
             woodGrowthTime: this.woodGrowthTime.peek(),
             woodGrowthTimeVar: this.woodGrowthTimeVar.peek(),
             leafLength: this.leafLength.peek(),
@@ -184,6 +187,7 @@ export class SpeciesBase {
             crownNodeHeightAboveSoil: this.crownNodeHeightAboveSoil.peek(),
             minimumInternodeLength: this.minimumInternodeLength.peek(),
             crownPitch: this.crownPitchDeg.peek() * DegToRad,
+            crownMaximumNodes: this.crownMaximumNodes.peek(),
             herbaceousGrowthRateScale: this.herbaceousGrowthRateScale.peek(),
             shootMaximumRadius: this.shootMaximumRadius.peek(),
             petioleReorientationMaximumAngle: this.petioleReorientationMaximumAngleDeg.peek() * DegToRad,
@@ -225,6 +229,7 @@ export class SpeciesBase {
         this.twigsBendingByLevel.value = s.twigsBendingByLevel;
         this.twigsBendingApical.value = s.twigsBendingApical;
         this.shootsGravitaxis.value = s.shootsGravitaxis;
+        this.shootsGravitropicSetPointAngleDeg.value = s.shootsGravitropicSetPointAngle * RadToDeg;
         this.woodGrowthTime.value = s.woodGrowthTime;
         this.woodGrowthTimeVar.value = s.woodGrowthTimeVar;
         this.leafLength.value = s.leafLength;
@@ -284,6 +289,7 @@ export class SpeciesBase {
         this.crownNodeHeightAboveSoil.value = s.crownNodeHeightAboveSoil;
         this.minimumInternodeLength.value = s.minimumInternodeLength;
         this.crownPitchDeg.value = s.crownPitch * RadToDeg;
+        this.crownMaximumNodes.value = s.crownMaximumNodes;
         this.herbaceousGrowthRateScale.value = s.herbaceousGrowthRateScale;
         this.shootMaximumRadius.value = s.shootMaximumRadius;
         this.petioleReorientationMaximumAngleDeg.value = s.petioleReorientationMaximumAngle * RadToDeg;
@@ -326,6 +332,7 @@ export class SpeciesBase {
             TwigsBendingByLevel: this.twigsBendingByLevel.peek(),
             TwigsBendingApical: this.twigsBendingApical.peek(),
             ShootsGravitaxis: this.shootsGravitaxis.peek(),
+            ShootsGravitropicSetPointAngle: this.shootsGravitropicSetPointAngleDeg.peek() * DegToRad,
             WoodGrowthTime: this.woodGrowthTime.peek(),
             WoodGrowthTimeVar: this.woodGrowthTimeVar.peek(),
             LeafLength: this.leafLength.peek(),
@@ -385,6 +392,7 @@ export class SpeciesBase {
             CrownNodeHeightAboveSoil: this.crownNodeHeightAboveSoil.peek(),
             MinimumInternodeLength: this.minimumInternodeLength.peek(),
             CrownPitch: this.crownPitchDeg.peek() * DegToRad,
+            CrownMaximumNodes: this.crownMaximumNodes.peek(),
             HerbaceousGrowthRateScale: this.herbaceousGrowthRateScale.peek(),
             ShootMaximumRadius: this.shootMaximumRadius.peek(),
             PetioleReorientationMaximumAngle: this.petioleReorientationMaximumAngleDeg.peek() * DegToRad,

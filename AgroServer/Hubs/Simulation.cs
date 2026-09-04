@@ -73,7 +73,7 @@ public class SimulationHub : Hub<IEditorHub>
     {
         if (TerrainBuffer.TryGetV2(terrainId, out var objData))
         {
-            var terrain = new SoilFormationsList(null, objData, 1f, pattern, patternForMaterial, resolution, true);
+            var terrain = new SoilFormationsList(null, objData, 1f, pattern, patternForMaterial, resolution, false);
             lock (ClientTerrains)
             {
                 ClientTerrains[Context.ConnectionId] = terrain;
@@ -144,6 +144,9 @@ public class SimulationHub : Hub<IEditorHub>
         result.Renderer = world.RendererName;
         //result.Debug = $"{IrradianceClient.Address}";
         result.StepTimes = requests.StepTimes;
+        result.ObstacleLight = ObstacleLightResponse.From(world.ObstacleLight);
+        if (result.ObstacleLight != null)
+            result.ObstacleLightTimesteps = [.. world.ObstacleLight.Timesteps];
 
         await Clients.Caller.Result(result);
         lock (ClientSimulations) ClientSimulations.Remove(me);

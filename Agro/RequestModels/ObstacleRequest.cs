@@ -15,6 +15,15 @@ public class ObstacleRequest
     public string? Type { get; set; }
 
     ///<summary>
+    ///Name of the obstacle. Leaf area index measurement targets are selected by matching a substring
+    ///against it. For imported meshes the name of the source object is used instead. (default: the
+    ///type name)
+    ///</summary>
+    ///<example>Wand-002</example>
+    [JsonPropertyName("N")]
+    public string? Name { get; set; }
+
+    ///<summary>
     ///Rotation of the wall in radians with 0 being aligned with X axis; for an umbrella it has no effect (default: 0)
     ///</summary>
     [JsonPropertyName("O")]

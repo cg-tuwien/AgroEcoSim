@@ -9,6 +9,7 @@ namespace Agro;
 
 public partial class Umbrella : IObstacle
 {
+    public string Name { get; }
     public readonly float Radius;
     public readonly float Height;
     public readonly float Thickness;
@@ -20,8 +21,9 @@ public partial class Umbrella : IObstacle
     readonly ArraySegment<byte> PrimitiveDataClustered;
     readonly ArraySegment<byte> PrimitiveDataInterleaved;
 
-    public Umbrella(float radius, float height, float thickness, Vector3 position)
+    public Umbrella(float radius, float height, float thickness, Vector3 position, string? name = null)
     {
+        Name = name ?? "umbrella";
         Radius = radius;
         Height = height;
         Thickness = thickness;
@@ -118,6 +120,14 @@ public partial class Umbrella : IObstacle
 
         foreach(var item in IndexData)
             writer.Write(item + p);
+    }
+
+    public void AppendTriangles(List<Vector3> vertices, List<int> indices)
+    {
+        var offset = vertices.Count;
+        vertices.AddRange(PointData);
+        foreach (var item in IndexData)
+            indices.Add((int)item + offset);
     }
 
     public void ExportObj(List<Vector3> points, StringBuilder obji)

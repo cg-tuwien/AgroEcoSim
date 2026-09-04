@@ -84,7 +84,16 @@ foreach ENTITY
 		float32 matrix 4x3 (the bottom row is always 0 0 0 1)
 */
 
-public enum Mode : byte { Constant, Mitsuba, Tamashii }
+public enum Mode : byte
+{
+	/// <summary>No light model: every leaf receives the same ambient irradiance.</summary>
+	Constant,
+	Mitsuba,
+	Tamashii,
+	/// <summary>The built in CPU tracer of <see cref="CpuLightSolver"/>. Also used automatically
+	/// whenever Mitsuba or Tamashii fails to answer.</summary>
+	Internal,
+}
 
 public enum ExportFlags : byte { None = 0, Roots = 1, Analytics = 2 };
 
@@ -97,6 +106,12 @@ public class IrradianceClient
 
 	bool GlobalIllumination = true;
 
+	readonly Mode SelectedMode;
+	readonly CpuLightSolver? Solver;
+	/// <summary>True once the internal tracer has taken over, either because it was requested or
+	/// because the external renderer never answered.</summary>
+	bool UseInternal;
+
 	readonly List<float> Irradiances = new();
 	readonly List<int> SkipFormations = new();
 	readonly List<Vector3> IrradiancePoints = new();
@@ -108,7 +123,9 @@ public class IrradianceClient
 	ushort EnvMapX = 0;
 	string SamplesPerPixel;
 
-	public IrradianceClient(float latitude, float longitude, int _mode, ushort spp = 512)
+	public IrradianceClient(float latitude, float longitude, int _mode, ushort spp = 512,
+		int lightSamples = 16, string? leafAreaIndexObstacles = null, int leafAreaIndexSensors = 16384,
+		float leafAreaIndexDepth_m = 3f)
 	{
 		var mode = (Mode)_mode;
 		var port = 9001 + Math.Clamp(_mode - 1, 0, 8);
@@ -116,9 +133,19 @@ public class IrradianceClient
 		Client.DefaultRequestHeaders.Add("La", latitude.ToString(CultureInfo.InvariantCulture));
 		Client.DefaultRequestHeaders.Add("Lo", longitude.ToString(CultureInfo.InvariantCulture));
 		GlobalIllumination = mode != Mode.Constant;
+		SelectedMode = mode;
 		RequestedMode = mode.ToString();
 		SamplesPerPixel = spp.ToString();
+
+		//The tracer is built for every mode that is not deliberately flat, because modes 1 and 2 fall
+		//back to it as soon as their renderer fails to answer. Obstacle measurements are only ever
+		//requested explicitly, so nothing is spent on them otherwise.
+		if (GlobalIllumination)
+			Solver = new CpuLightSolver(lightSamples, leafAreaIndexObstacles, leafAreaIndexSensors, leafAreaIndexDepth_m);
 	}
+
+	/// <summary>Per-obstacle leaf area index and solar load series, when they were requested.</summary>
+	public ObstacleLightMeter? ObstacleLight => Solver?.Meter;
 
 	bool ProbeRenderer()
 	{
@@ -131,7 +158,7 @@ public class IrradianceClient
 		}
 		catch (Exception)
 		{
-			Console.WriteLine($"WARNING: No irradiance client responded at {Client.BaseAddress}. Falling back to ambient light pipeline.");
+			Console.WriteLine($"WARNING: No irradiance client responded at {Client.BaseAddress}. Falling back to the internal CPU light model.");
 			IsOnline = false;
 		}
 		return IsOnline;
@@ -156,20 +183,66 @@ public class IrradianceClient
 	{
 		if (timestep == 0)
 		{
-			if (GlobalIllumination)
+			if (SelectedMode == Mode.Internal)
+			{
+				UseInternal = true;
+				world.RendererName = Mode.Internal.ToString();
+			}
+			else if (GlobalIllumination)
 			{
 				ProbeRenderer();
-				world.RendererName = IsOnline ? RequestedMode : "none";
+				UseInternal = !IsOnline;
+				world.RendererName = IsOnline ? RequestedMode : $"{Mode.Internal} (no {RequestedMode})";
 			}
 			else
 				world.RendererName = RequestedMode;
 		}
 
+		//Every tick, for every light model. The exports read this list, and a plant that has not
+		//germinated yet lands on it; leaving it stale kept such a plant hidden from the viewport for
+		//the rest of the run even after it came up.
+		RefreshSkipFormations(formations);
+
 		var agroWorld = world as AgroWorld;
-		if (IsOnline && GlobalIllumination)
+		if (IsOnline && GlobalIllumination && SelectedMode != Mode.Internal)
 			DoTick(agroWorld, timestep, formations, obstacles);
+		else if (UseInternal && Solver != null)
+			DoInternalTick(agroWorld, timestep, formations, obstacles);
 		else
 			DoFallbackTick(agroWorld, timestep, formations);
+	}
+
+	/// <summary>
+	/// Rebuilds the list of formations that carry no live above-ground plant: the soil, and any plant
+	/// that has not germinated yet or has died. Both the light model and every export walk the
+	/// formations against it.
+	/// </summary>
+	void RefreshSkipFormations(IList<IFormation> formations)
+	{
+		SkipFormations.Clear();
+		for (int i = 0; i < formations.Count; ++i)
+			if (!(formations[i] is PlantFormation2 plant && plant.AG.Alive))
+				SkipFormations.Add(i);
+	}
+
+	/// <summary>Runs the internal CPU light model for one step.</summary>
+	void DoInternalTick(AgroWorld world, uint timestep, IList<IFormation> formations, IList<IObstacle> obstacles)
+	{
+		if (!world.GetDaylight(timestep))
+		{
+			IsNight = true;
+			return;
+		}
+
+		SW.Start();
+		try
+		{
+			IsNight = !Solver!.Solve(world, timestep, formations, obstacles, IrradianceFormationOffsets, Irradiances);
+		}
+		finally
+		{
+			SW.Stop();
+		}
 	}
 
 	void DoTick(AgroWorld world, uint timestep, IList<IFormation> formations, IList<IObstacle> obstacles)
@@ -178,11 +251,6 @@ public class IrradianceClient
 		{
 			//if (IsNight) Debug.WriteLine("DAY");
 			IsNight = false;
-
-			SkipFormations.Clear();
-			for(int i = 0; i < formations.Count; ++i)
-				if (!(formations[i] is PlantFormation2 plant && plant.AG.Alive))
-					SkipFormations.Add(i);
 
 			int offsetCounter = 0;
 			if (SkipFormations.Count < formations.Count)
@@ -273,8 +341,17 @@ public class IrradianceClient
                     {
 						IsOnline = false;
 						SW.Stop();
-						world.RendererName = "none (after failure)";
-						DoFallbackTick(world, timestep, formations);
+						if (Solver != null)
+						{
+							UseInternal = true;
+							world.RendererName = $"{Mode.Internal} (after {RequestedMode} failure)";
+							DoInternalTick(world, timestep, formations, obstacles);
+						}
+						else
+						{
+							world.RendererName = "none (after failure)";
+							DoFallbackTick(world, timestep, formations);
+						}
 					}
 					// Debug.WriteLine($"Irradiances length: {length} count: {Irradiances.Count}");
 
@@ -998,7 +1075,19 @@ public class IrradianceClient
 									writer.Write(ag.GetDailyProductionInv(i));
 								}
 								//writer.Write(organ == OrganTypes.Stem ? ag.GetDailyEfficiency(i) : 0);
-								plant.Parameters.LeafPhenology.WriteColor(writer, world.Season, ag.GetAdulcy(i, world.Timestep), ag.GetStress(i), ag.GetSenescence(i, world.Timestep));
+								//Every cylinder organ used to be handed the LEAF phenology, so a scape
+								//went out leaf-green and a flower's centre was the same colour as its
+								//petals. The axis is stem tissue and the centre is its own colour, both
+								//constants of the species rather than phenological curves.
+								var flowerSettings = plant.Parameters.FlowerSettings;
+								if (organ == OrganTypes.FlowerBud && flowerSettings.FlowerCentreColor.HasValue)
+									LeafPhenology.WriteFixedColor(writer, flowerSettings.FlowerCentreColor.Value);
+								else if (flowerSettings.ScapeColor.HasValue &&
+									(organ == OrganTypes.FlowerStem || organ == OrganTypes.FlowerMeristem ||
+									 organ == OrganTypes.FlowerPedicel || organ == OrganTypes.FlowerBud))
+									LeafPhenology.WriteFixedColor(writer, flowerSettings.ScapeColor.Value);
+								else
+									plant.Parameters.LeafPhenology.WriteColor(writer, world.Season, ag.GetAdulcy(i, world.Timestep), ag.GetStress(i), ag.GetSenescence(i, world.Timestep));
 							}
 							break;
 						case OrganTypes.Bud:
@@ -1087,12 +1176,9 @@ public class IrradianceClient
 
     void ExportToStream(ExportFlags flags, IList<IFormation> formations, IList<IObstacle>? obstacles, Stream target)
     {
+		//Safety net for a world that has not ticked yet; Tick keeps the list current otherwise.
 		if (SkipFormations.Count == 0)
-		{
-			for(int i = 0; i < formations.Count; ++i)
-				if (!(formations[i] is PlantFormation2 plant && plant.AG.Alive))
-					SkipFormations.Add(i);
-		}
+			RefreshSkipFormations(formations);
 
         // switch (version)
         // {
@@ -1128,11 +1214,6 @@ public class IrradianceClient
 	{
 		if (world.GetDaylight(timestep))
 		{
-			SkipFormations.Clear();
-			for(int i = 0; i < formations.Count; ++i)
-				if (!(formations[i] is PlantFormation2 plant && plant.AG.Alive))
-					SkipFormations.Add(i);
-
 			int offsetCounter = 0;
 
 			if (SkipFormations.Count < formations.Count)

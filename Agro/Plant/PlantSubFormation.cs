@@ -408,6 +408,43 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 	List<float> Weights = [];
 	List<int> WeightReoslveChildren = [];
 
+	/// <summary>
+	/// Shrinks a downward bend so the organ's tip stays at or above the soil surface.
+	/// </summary>
+	/// <remarks>
+	/// The rotation is monotone in the angle for the range that matters, so eight
+	/// bisection steps resolve the largest admissible bend to well under a degree. The
+	/// loop only runs for organs that would actually break the surface; everything else
+	/// returns on the first test.
+	/// </remarks>
+	static float LimitBendToSoilSurface(float baseY, float soilSurfaceY, Quaternion baseOrientation,
+		Vector3 axis, float delta, float length)
+	{
+		if (delta <= 0f || length <= 0f)
+			return delta;
+
+		static float TipY(Quaternion baseOrientation, Vector3 axis, float angle, float length, float baseY)
+		{
+			var rotated = Quaternion.CreateFromAxisAngle(axis, -angle) * baseOrientation;
+			return baseY + Vector3.Transform(Vector3.UnitX, rotated).Y * length;
+		}
+
+		if (TipY(baseOrientation, axis, delta, length, baseY) >= soilSurfaceY)
+			return delta;
+
+		var low = 0f;
+		var high = delta;
+		for (int step = 0; step < 8; ++step)
+		{
+			var mid = 0.5f * (low + high);
+			if (TipY(baseOrientation, axis, mid, length, baseY) >= soilSurfaceY)
+				low = mid;
+			else
+				high = mid;
+		}
+		return low;
+	}
+
 	internal void Gravity()
 	{
 		if (!IsAboveGround)
@@ -461,6 +498,13 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 		float tickSpeed = MathF.Max(0f, Plant.World.HoursPerTick);
 		const float responsePerHour = 0.05f;
 		float response = 1f - MathF.Pow(1f - responsePerHour, tickSpeed);
+		//Nothing above ground may droop through the soil. Bending is a pure downward
+		//rotation with no restoring term, so a long chain of segments - and every crown
+		//axis is one - eventually points straight down and buries its own leaves. Half of
+		//a two-year Heuchera's foliage sat below this line before the constraint existed.
+		//GetBaseCenter is expressed in the same frame the tree cache seeds roots with,
+		//which is Plant.Position, so the seed depth is the floor.
+		var soilSurfaceY = Plant.Position.Y;
         var nodesToVisit = new Queue<int>(GetRoots());
 		while (nodesToVisit.Count > 0)
 		{
@@ -498,9 +542,18 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 				// Supporting floral axes dry and lignify during senescence; they do
 				// not lose essentially all bending stiffness. Interpolate toward the
 				// species' mature structural-tissue modulus instead of toward zero.
-				var greenFlowerElasticity = agent.Organ == OrganTypes.FlowerPedicel
-					? Plant.Parameters.FlowerPedicelElasticModulus
+				//The axis, the pedicel and the flower itself are three different tissues. A
+				//Bergenia scape has to stay rigid and a Geranium peduncle has to bend, and one
+				//shared modulus cannot express both.
+				var scapeElasticity = Plant.Parameters.FlowerScapeElasticModulus > 0f
+					? Plant.Parameters.FlowerScapeElasticModulus
 					: Plant.Parameters.FlowerOrganElasticModulus;
+				var greenFlowerElasticity = agent.Organ switch
+				{
+					OrganTypes.FlowerPedicel => Plant.Parameters.FlowerPedicelElasticModulus,
+					OrganTypes.FlowerStem or OrganTypes.FlowerMeristem => scapeElasticity,
+					_ => Plant.Parameters.FlowerOrganElasticModulus,
+				};
 				elasticity = greenFlowerElasticity * (1f - woodiness) +
 					Plant.Parameters.WoodElasticModulus * woodiness;
 			}
@@ -533,6 +586,8 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 				if (len > 1e-4f)
 				{
 					axis /= len;
+					safeDelta = LimitBendToSoilSurface(GetBaseCenter(i).Y, soilSurfaceY, agent.baseOrientation,
+						axis, safeDelta, length);
 					rotation = Quaternion.CreateFromAxisAngle(axis, -safeDelta);
 					agent.targetOrientation = Quaternion.Normalize(rotation * agent.baseOrientation);
 					var newOr = Quaternion.Slerp(agent.Orientation, agent.targetOrientation, response);
@@ -1199,10 +1254,32 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 	const uint PreFloweringState = uint.MaxValue;
 	const uint PostFloweringState = uint.MaxValue - 1;
 
+	/// <summary>
+	/// Season year whose flowering window the state in <see cref="FloweringStarted"/> refers to.
+	/// A season year runs from 1 March to the end of the following February, matching
+	/// <see cref="AgroWorld.Season"/> and the crown-bud activation cycle.
+	/// </summary>
+	int FloweringCycle = int.MinValue;
+
+	static int SeasonCycle(DateTime date) => date.Month >= 3 ? date.Year : date.Year - 1;
+
     public SeasonalPhase GetFloweringPhase(SpeciesSettings species, uint timestep)
     {
 		var season = Plant.World.Season;
 		var age_h = Plant.GetAge_h();
+
+		//Re-arm the window once per season year. The old code re-armed only inside the
+		//"season < FloweringSeasonStart" branch, which a species with
+		//FloweringSeasonStart == 0 can never reach: Carex flowered once and then stayed
+		//in ResetPending - and with its Dormant* rates at zero that froze the whole plant
+		//for nine months. The season year is the same cycle TryActivateCrownBud uses.
+		var cycle = SeasonCycle(Plant.World.GetTime(timestep));
+		if (cycle != FloweringCycle)
+		{
+			FloweringCycle = cycle;
+			if (FloweringStarted[^1] != PreFloweringState)
+				FloweringStarted.Add(PreFloweringState);
+		}
 
         if (age_h < species.FloweringStartAgeHours || season < species.FloweringSeasonStart)
 		{
@@ -1247,9 +1324,13 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 		}
         else
 		{
-			if (FloweringStarted[^1] < PreFloweringState)
-				FloweringStarted.Add(PreFloweringState);
-			return SeasonalPhase.ResetPending;
+			//The window closed without this plant ever entering it - it was still too
+			//young when the season passed FloweringSeasonEnd. That is not dormancy:
+			//a perennial keeps growing vegetatively until seasonal senescence. Returning
+			//ResetPending here is what stalled a first-year Carex from May to March.
+			return season > species.SeasonalSenescence
+				? SeasonalPhase.ResetPending
+				: SeasonalPhase.PostFlower;
 		}
     }
 

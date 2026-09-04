@@ -184,12 +184,11 @@ public partial class SoilFormationsList : ISoilFormation
 			vertices[i] = new Vector3(float.Parse(vertex[0], CultureInfo.InvariantCulture), float.Parse(vertex[blenderToGl ? 2 : 1], CultureInfo.InvariantCulture), float.Parse(vertex[blenderToGl ? 1 : 2], CultureInfo.InvariantCulture)) * scale;
 		}
 		var regex = soilItemRegex != null ? new Regex(soilItemRegex, RegexOptions.IgnoreCase) : null;
-		var obstacleFaces = new List<List<int>>();
 
 		Items = [];
 		Addresses = [];
 		Span<byte> addr = stackalloc byte[4];
-		foreach (var (groupName, (_, polygons)) in objData.Faces)
+		foreach (var (groupName, (groupTriangles, polygons)) in objData.Faces)
 		{
 			//var nameToMatch = regexForMaterials && (objData.Materials?.TryGetValue(groupName, out var mat) ?? false) ? mat : groupName;
 			var nameParts = groupName.Split("_");
@@ -253,20 +252,23 @@ public partial class SoilFormationsList : ISoilFormation
 			}
 			else //otherwise consider it an obstacle
 			{
-				foreach(var poly in polygons)
-					obstacleFaces.Add([.. poly]);
-			}
-		}
+				//One obstacle per named object: a leaf area index is reported per obstacle, and the
+				//OBJ group name is what a request selects by. The parser already triangulated every
+				//face, so quads are kept instead of being silently dropped.
+				var obstacle = groupTriangles?.Count > 0
+					? new MeshObstacle(groupName, vertices, groupTriangles)
+					: new MeshObstacle(groupName, vertices, MeshObstacle.Triangulate(polygons));
+				if (obstacle.TriangleCount == 0)
+					continue;
 
-		if (obstacleFaces.Count > 0)
-		{
-			if (World == null)
-			{
-				Obstacles ??= [];
-				Obstacles.Add(new(vertices, obstacleFaces));
+				if (World == null)
+				{
+					Obstacles ??= [];
+					Obstacles.Add(obstacle);
+				}
+				else
+					World.Add(obstacle);
 			}
-			else
-				World.Add(new MeshObstacle(vertices, obstacleFaces));
 		}
     }
 
@@ -302,7 +304,6 @@ public partial class SoilFormationsList : ISoilFormation
 				vertices[i] *= scale;
 
 		var soilFaces = new List<List<int>>();
-		var obstacleFaces = new List<List<int>>();
 
 		Items = [];
 		var components = new List<Component>();
@@ -382,16 +383,6 @@ public partial class SoilFormationsList : ISoilFormation
 			}
 		}
 
-		if (obstacleFaces.Count > 0)
-		{
-			if (World == null)
-			{
-				Obstacles ??= [];
-				Obstacles.Add(new(vertices, obstacleFaces));
-			}
-			else
-				World.Add(new MeshObstacle(vertices, obstacleFaces));
-		}
 	}
 
 
@@ -473,12 +464,35 @@ public partial class SoilFormationsList : ISoilFormation
 		for (int i = 0; i < count; ++i)
 			Write(writer, i);
 
-		count = Obstacles?.Count ?? 0;
-		writer.Write(count);
-		for (int i = 0; i < count; ++i)
-			Obstacles[i].ExportMesh(writer);
+		//Obstacles are kept per named object so that leaf area index can be reported per object, but
+		//they are serialized as one merged mesh, exactly as before the split. A facade model holds
+		//around two thousand objects and the viewport used to receive a single mesh; handing it two
+		//thousand instead would be a gratuitous change for the frontend.
+		if ((Obstacles?.Count ?? 0) == 0)
+			writer.Write(0);
+		else
+		{
+			writer.Write(1);
+			var vertices = new List<Vector3>();
+			var indices = new List<int>();
+			for (int i = 0; i < Obstacles.Count; ++i)
+				Obstacles[i].AppendTriangles(vertices, indices);
+
+			writer.Write(vertices.Count);
+			for (int i = 0; i < vertices.Count; ++i)
+				writer.WriteV32(vertices[i]);
+			writer.Write(indices.Count);
+			for (int i = 0; i < indices.Count; ++i)
+				writer.Write(indices[i]);
+		}
 
 		return stream.ToArray();
+	}
+
+	public void AppendSurfaceTriangles(List<Vector3> vertices, List<int> indices)
+	{
+		for (int i = 0; i < Items.Count; ++i)
+			Items[i].AppendSurfaceTriangles(vertices, indices);
 	}
 
 	public void Write(BinaryWriter writer, int i) => Items[i].Write(writer, 0);

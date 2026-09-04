@@ -31,7 +31,7 @@ public static class Initialize
         FirstStageInit(world);
 
         var soil = terrainOverride?.Faces?.Count > 0
-			? new SoilFormationsList(world, terrainOverride, 1f, settings.FieldItemRegex, settings.FieldItemRegexMaterial ?? false, world.FieldResolution, true)
+			? new SoilFormationsList(world, terrainOverride, 1f, settings.FieldItemRegex, settings.FieldItemRegexMaterial ?? false, world.FieldResolution, false)
 			: DefaultSoil(world);
 
         return SecondStageInit(settings, world, soil);
@@ -130,10 +130,10 @@ public static class Initialize
                 switch (obstacle.Type.ToLower())
                 {
                     case "wall":
-                        world.Add(new Wall(obstacle.Length ?? (obstacle.Radius.HasValue ? obstacle.Radius.Value * 2f : 1f), obstacle.Height ?? 1f, obstacle.Thickness ?? 0.1f, obstacle.Position ?? Vector3.Zero, obstacle.Orientation ?? 0f));
+                        world.Add(new Wall(obstacle.Length ?? (obstacle.Radius.HasValue ? obstacle.Radius.Value * 2f : 1f), obstacle.Height ?? 1f, obstacle.Thickness ?? 0.1f, obstacle.Position ?? Vector3.Zero, obstacle.Orientation ?? 0f, obstacle.Name));
                         break;
                     case "umbrella":
-                        world.Add(new Umbrella(obstacle.Radius ?? (obstacle.Length.HasValue ? obstacle.Length.Value * 0.5f : 1f), obstacle.Height ?? 1f, obstacle.Thickness ?? 0.1f, obstacle.Position ?? Vector3.Zero));
+                        world.Add(new Umbrella(obstacle.Radius ?? (obstacle.Length.HasValue ? obstacle.Length.Value * 0.5f : 1f), obstacle.Height ?? 1f, obstacle.Thickness ?? 0.1f, obstacle.Position ?? Vector3.Zero, obstacle.Name));
                         break;
                     case "mesh": break; //should be already added in SetWorld
                     default: throw new ArgumentException($"There is no such obstacle type as {obstacle.Type}.");

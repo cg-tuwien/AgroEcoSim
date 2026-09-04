@@ -27,6 +27,7 @@ export function GeneratedSpeciesFields(props: { species: Species; index: number 
 <SpeciesFloatField max={1} step={0.01} speciesIndex={index} tooltip={"Twigs bending factor by hierarchy level (multiplicative)"} signal={species.twigsBendingByLevel} label={"Twigs hierarchical bending"} />
 <SpeciesFloatField max={1} step={0.01} speciesIndex={index} signal={species.twigsBendingApical} label={"Apex bending rate"} />
 <SpeciesFloatField max={1} step={0.01} speciesIndex={index} signal={species.shootsGravitaxis} label={"Shoots gravitaxis"} />
+<SpeciesFloatField max={180} step={0.1} speciesIndex={index} tooltip={"Angle from vertical that a shoot\u0027s own gravitropism steers toward."} signal={species.shootsGravitropicSetPointAngleDeg} label={"Shoot gravitropic set-point angle"} />
 <SpeciesFloatField step={1} speciesIndex={index} tooltip={"Standard wood growth time (in hours)"} signal={species.woodGrowthTime} label={"Wood maturing time (hours)"} variance={{ step: 0.01, signal: species.woodGrowthTimeVar}} />
 <hr/>
 <SpeciesFloatField step={0.001} speciesIndex={index} tooltip={"Maximum branch level that supports leaves (here level denotes the max. subtree depth)"} signal={species.leafLength} label={"Leaf length"} variance={{ step: 0.01, signal: species.leafLengthVar}} />
@@ -82,6 +83,7 @@ export function GeneratedSpeciesFields(props: { species: Species; index: number 
 <SpeciesFloatField step={0.1} speciesIndex={index} tooltip={"Vertical clearance between the soil surface and the first compact crown node."} signal={species.crownNodeHeightAboveSoil} label={"First crown node height above soil"} />
 <SpeciesFloatField step={0.001} speciesIndex={index} tooltip={"Shortest aerial shoot segment (in meters)"} signal={species.minimumInternodeLength} label={"Minimum internode length"} />
 <SpeciesFloatField max={180} step={0.1} speciesIndex={index} tooltip={"Pitch of a new aerial crown relative to its horizontal rhizome axis."} signal={species.crownPitchDeg} label={"Crown pitch"} />
+<SpeciesIntField step={1} speciesIndex={index} tooltip={"Largest number of vegetative nodes one crown may carry in total before its apices stop extending. Zero leaves the crown unbounded."} signal={species.crownMaximumNodes} label={"Max nodes per crown axis"} />
 <SpeciesFloatField step={0.1} speciesIndex={index} tooltip={"Dimensionless multiplier for herbaceous shoot elongation and radial growth."} signal={species.herbaceousGrowthRateScale} label={"Herbaceous growth rate scale"} />
 <SpeciesFloatField step={0.001} speciesIndex={index} tooltip={"Maximum radius of non-rhizome herbaceous shoot segments."} signal={species.shootMaximumRadius} label={"Maximum shoot radius"} />
 <SpeciesFloatField max={180} step={0.1} speciesIndex={index} tooltip={"Maximum reorientation of existing petioles when a crown adds another segment."} signal={species.petioleReorientationMaximumAngleDeg} label={"Maximum petiole reorientation"} />

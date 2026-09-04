@@ -27,6 +27,13 @@ public interface ISoilFormation : IFormation
     void SetWorld(AgroWorld world);
     byte[] Serialize();
     Vector3 GetFieldOrigin(int soilIndex);
+
+    /// <summary>
+    /// Appends the boundary surface of the soil as world space triangles, so that the internal
+    /// light model can treat the terrain as an occluder and a reflector. Indices are relative to
+    /// the start of <paramref name="vertices"/>.
+    /// </summary>
+    void AppendSurfaceTriangles(List<Vector3> vertices, List<int> indices);
 }
 
 public class SoilFormationRegularVoxels : IGrid3D, ISoilFormation
@@ -604,6 +611,20 @@ public class SoilFormationRegularVoxels : IGrid3D, ISoilFormation
 
 		return stream.ToArray();
     }
+
+	/// <summary>The regular grid is an axis aligned box whose top face sits at
+	/// <c>Position.Y</c>; only that face can shade or reflect anything above ground.</summary>
+	public void AppendSurfaceTriangles(List<Vector3> vertices, List<int> indices)
+	{
+		var metricSize = Size * CellSize; //Y of the cell size is the depth
+		var offset = vertices.Count;
+		vertices.Add(new Vector3(Position.X, Position.Y, Position.Z));
+		vertices.Add(new Vector3(Position.X + metricSize.X, Position.Y, Position.Z));
+		vertices.Add(new Vector3(Position.X + metricSize.X, Position.Y, Position.Z + metricSize.Z));
+		vertices.Add(new Vector3(Position.X, Position.Y, Position.Z + metricSize.Z));
+		//Wound so that the face normal points up.
+		indices.AddRange([offset, offset + 3, offset + 1, offset + 1, offset + 3, offset + 2]);
+	}
 
 	public void Write(BinaryWriter writer, int i)
 	{
