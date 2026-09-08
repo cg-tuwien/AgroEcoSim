@@ -550,7 +550,7 @@ public partial struct AboveGroundAgent : IPlantAgent
 	/// <summary>
 	/// If the plant structure changes (agents added or removed), parent entries need to be reindexed according to the map
 	/// </summary>
-	[M(AI)]public static void Reindex(AboveGroundAgent[] src, int[] map)
+	[M(AI)]public static void Reindex(Span<AboveGroundAgent> src, ReadOnlySpan<int> map)
 	{
 		for(int i = 0; i < src.Length; ++i)
 			src[i].Parent = src[i].Parent == -1 ? -1 : map[src[i].Parent];

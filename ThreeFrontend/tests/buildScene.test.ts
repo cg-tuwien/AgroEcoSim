@@ -28,6 +28,7 @@ function inputs(over: Partial<Parameters<typeof buildPlants>[1]> = {}) {
         showLeaves: true,
         showRoots: true,
         leafGeom: () => Geom.Plane as number,
+        petalGeom: () => Geom.Plane as number,
         ...over,
     };
 }
@@ -131,6 +132,19 @@ describe('buildPlants', () => {
 
         expect(out.items[0].geom).toBe(42);
         expect(out.items[1].geom).toBe(Geom.Plane);
+    });
+
+    it('draws a petal with the petal mesh, not the leaf mesh', () => {
+        const out = new InstanceList();
+        const petal = () => ({ ...leaf(), organ: Organs.FlowerPadel });
+        buildPlants(out, inputs({
+            scene: [{ species: 'sp', primitives: [leaf(), petal()] }],
+            leafGeom: () => 42,
+            petalGeom: () => 43,
+        }));
+
+        expect(out.items[0].geom).toBe(42);
+        expect(out.items[1].geom).toBe(43);
     });
 
     test('reset recycles instances without reallocating', () => {

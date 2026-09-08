@@ -1,5 +1,5 @@
-[System.AttributeUsage(System.AttributeTargets.Class |  System.AttributeTargets.Struct)]
-public class MessageAttribute : System.Attribute
+[AttributeUsage(AttributeTargets.Class |  System.AttributeTargets.Struct)]
+public class MessageAttribute : Attribute
 {
     public MessageAttribute() { }
 }

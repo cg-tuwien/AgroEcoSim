@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Numerics;
+using System.Runtime.InteropServices;
 
 namespace Agro;
 
@@ -38,47 +39,69 @@ public class Bvh
         public readonly int Right;
         public readonly int Parent;
         public readonly int AgentIndex;
+        public readonly bool CollisionEligible;
 
         public bool IsLeaf => Left < 0 && Right < 0;
 
-        public Node(BoundingBox bounds, int left, int right, int parent, int agentIndex)
+        public Node(BoundingBox bounds, int left, int right, int parent, int agentIndex, bool collisionEligible = true)
         {
             Bounds = bounds;
             Left = left;
             Right = right;
             Parent = parent;
             AgentIndex = agentIndex;
+            CollisionEligible = collisionEligible;
         }
 
-        public Node WithBounds(BoundingBox bounds) => new(bounds, Left, Right, Parent, AgentIndex);
+        public Node WithBounds(BoundingBox bounds) => new(bounds, Left, Right, Parent, AgentIndex, CollisionEligible);
     }
 
     int root = -1;
     readonly List<Node> nodes = new();
     readonly Dictionary<int, int> leafLookup = new();
+    (int agentIndex, BoundingBox bounds)[] buildItems = [];
+    bool[] pendingRefit = [];
+    readonly Stack<int> traversalStack = new();
+    readonly Stack<(int a, int b)> pairStack = new();
+    static readonly Comparison<(int agentIndex, BoundingBox bounds)>[] AxisComparisons =
+    [
+        (a, b) => a.bounds.Center.X.CompareTo(b.bounds.Center.X),
+        (a, b) => a.bounds.Center.Y.CompareTo(b.bounds.Center.Y),
+        (a, b) => a.bounds.Center.Z.CompareTo(b.bounds.Center.Z),
+    ];
 
     public bool IsEmpty => root < 0;
 
     public void Clear()
     {
+        pendingRefit.AsSpan().Clear();
         nodes.Clear();
         leafLookup.Clear();
         root = -1;
     }
 
-    public void Build(List<(int agentIndex, BoundingBox bounds)> leaves)
+    public void Build(List<(int agentIndex, BoundingBox bounds)> leaves) =>
+        Build(CollectionsMarshal.AsSpan(leaves));
+
+    public void Build(ReadOnlySpan<(int agentIndex, BoundingBox bounds)> leaves)
     {
         Clear();
-        if (leaves.Count == 0)
+        if (leaves.IsEmpty)
             return;
-
-        var items = new List<(int agentIndex, BoundingBox bounds)>(leaves);
+        if (buildItems.Length < leaves.Length)
+            Array.Resize(ref buildItems, Math.Max(leaves.Length, Math.Max(8, buildItems.Length + buildItems.Length / 2)));
+        var items = buildItems.AsSpan(0, leaves.Length);
+        leaves.CopyTo(items);
+        // Preserve the existing sort and traversal order: collision response is iterative.
+        // Span slices eliminate recursive list copies and per-node comparer closures.
         root = BuildRecursive(items, -1);
+        if (pendingRefit.Length < nodes.Count)
+            Array.Resize(ref pendingRefit, Math.Max(nodes.Count, pendingRefit.Length + pendingRefit.Length / 2));
     }
 
-    int BuildRecursive(List<(int agentIndex, BoundingBox bounds)> leaves, int parent)
+    int BuildRecursive(Span<(int agentIndex, BoundingBox bounds)> leaves, int parent)
     {
-        if (leaves.Count == 1)
+        if (leaves.Length == 1)
         {
             var index = nodes.Count;
             var (agentIndex, bounds) = leaves[0];
@@ -88,29 +111,27 @@ public class Bvh
         }
 
         int axis = ChooseSplitAxis(leaves);
-        leaves.Sort((a, b) => GetCenterComponent(a.bounds, axis).CompareTo(GetCenterComponent(b.bounds, axis)));
+        leaves.Sort(AxisComparisons[axis]);
 
-        int mid = leaves.Count / 2;
-        var leftLeaves = leaves.GetRange(0, mid);
-        var rightLeaves = leaves.GetRange(mid, leaves.Count - mid);
+        int mid = leaves.Length / 2;
 
         var nodeIndex = nodes.Count;
         nodes.Add(default);
 
-        int left = BuildRecursive(leftLeaves, nodeIndex);
-        int right = BuildRecursive(rightLeaves, nodeIndex);
+        int left = BuildRecursive(leaves[..mid], nodeIndex);
+        int right = BuildRecursive(leaves[mid..], nodeIndex);
 
         var merged = BoundingBox.Merge(nodes[left].Bounds, nodes[right].Bounds);
         nodes[nodeIndex] = new Node(merged, left, right, parent, -1);
         return nodeIndex;
     }
 
-    static int ChooseSplitAxis(List<(int agentIndex, BoundingBox bounds)> leaves)
+    static int ChooseSplitAxis(ReadOnlySpan<(int agentIndex, BoundingBox bounds)> leaves)
     {
         var min = leaves[0].bounds.Min;
         var max = leaves[0].bounds.Max;
 
-        for (int i = 1; i < leaves.Count; ++i)
+        for (int i = 1; i < leaves.Length; ++i)
         {
             min = Vector3.Min(min, leaves[i].bounds.Min);
             max = Vector3.Max(max, leaves[i].bounds.Max);
@@ -124,12 +145,52 @@ public class Bvh
         return 2;
     }
 
-    static float GetCenterComponent(in BoundingBox bounds, int axis) => axis switch
+    // A moving subtree updates many leaves that share ancestors. Mark each
+    // ancestor once and merge bottom-up after all leaf bounds have been written.
+    internal void UpdateLeafBounds(int agentIndex, BoundingBox bounds)
     {
-        0 => bounds.Center.X,
-        1 => bounds.Center.Y,
-        _ => bounds.Center.Z,
-    };
+        if (!leafLookup.TryGetValue(agentIndex, out var leaf))
+            return;
+        // AddLeaf may also have extended a tree since its last full build.
+        if (pendingRefit.Length < nodes.Count)
+            Array.Resize(ref pendingRefit, Math.Max(nodes.Count, Math.Max(8, pendingRefit.Length + pendingRefit.Length / 2)));
+        nodes[leaf] = nodes[leaf].WithBounds(bounds);
+        for (var parent = nodes[leaf].Parent; parent >= 0 && !pendingRefit[parent]; parent = nodes[parent].Parent)
+            pendingRefit[parent] = true;
+    }
+
+    internal void RefitUpdatedLeaves()
+    {
+        if (!IsEmpty)
+            RefitUpdatedNode(root);
+    }
+
+    void RefitUpdatedNode(int index)
+    {
+        if (!pendingRefit[index])
+            return;
+        var node = nodes[index];
+        RefitUpdatedNode(node.Left);
+        RefitUpdatedNode(node.Right);
+        nodes[index] = node.WithBounds(BoundingBox.Merge(nodes[node.Left].Bounds, nodes[node.Right].Bounds));
+        pendingRefit[index] = false;
+    }
+
+    internal void RefreshCollisionEligibility(Func<int, bool> eligible)
+    {
+        if (!IsEmpty)
+            RefreshCollisionNode(root, eligible);
+    }
+
+    bool RefreshCollisionNode(int index, Func<int, bool> eligible)
+    {
+        var node = nodes[index];
+        // Both subtrees must be refreshed even when the first one is eligible.
+        var active = node.IsLeaf ? eligible(node.AgentIndex)
+            : RefreshCollisionNode(node.Left, eligible) | RefreshCollisionNode(node.Right, eligible);
+        nodes[index] = new Node(node.Bounds, node.Left, node.Right, node.Parent, node.AgentIndex, active);
+        return active;
+    }
 
     public void RefitLeaf(int agentIndex, BoundingBox bounds)
     {
@@ -151,21 +212,29 @@ public class Bvh
     public List<(int first, int second)> GetOverlappingPairs()
     {
         var result = new List<(int, int)>();
+        GetOverlappingPairs(result);
+        return result;
+    }
+
+    /// <summary>Append pairs to a caller-owned buffer. The eligibility mask only applies to
+    /// collision queries; the full tree remains available for rhizome placement queries.</summary>
+    public void GetOverlappingPairs(List<(int first, int second)> result,
+        Func<int, int, bool>? filter = null, bool collisionsOnly = false)
+    {
         if (IsEmpty)
-            return result;
+            return;
 
-        var uniquePairs = new HashSet<(int, int)>();
-        var internalStack = new Stack<int>();
+        var internalStack = traversalStack;
+        internalStack.Clear();
+        pairStack.Clear();
         internalStack.Push(root);
-
-        var pairStack = new Stack<(int a, int b)>();
 
         while (internalStack.Count > 0)
         {
             int idx = internalStack.Pop();
             var n = nodes[idx];
 
-            if (n.IsLeaf)
+            if (n.IsLeaf || (collisionsOnly && !n.CollisionEligible))
                 continue;
 
             pairStack.Push((n.Left, n.Right));
@@ -178,7 +247,7 @@ public class Bvh
             var a = nodes[aIndex];
             var b = nodes[bIndex];
 
-            if (!a.Bounds.Intersects(in b.Bounds))
+            if ((collisionsOnly && (!a.CollisionEligible || !b.CollisionEligible)) || !a.Bounds.Intersects(in b.Bounds))
                 continue;
 
             bool aLeaf = a.IsLeaf;
@@ -190,7 +259,8 @@ public class Bvh
                     ? (a.AgentIndex, b.AgentIndex)
                     : (b.AgentIndex, a.AgentIndex);
 
-                if (uniquePairs.Add(pair))
+                // Each leaf pair belongs to exactly one lowest common ancestor.
+                if (filter == null || filter(pair.Item1, pair.Item2))
                     result.Add((pair.Item1, pair.Item2));
             }
             else if (aLeaf)
@@ -211,9 +281,6 @@ public class Bvh
                 pairStack.Push((a.Right, b.Right));
             }
         }
-
-
-        return result;
     }
 
     public void AddLeaf(int agentIndex, BoundingBox bounds)
@@ -315,11 +382,20 @@ public class Bvh
     public List<int> QueryOverlaps(int agentIndex)
     {
         var result = new List<int>();
-        if (!leafLookup.TryGetValue(agentIndex, out var leafIndex))
-            return result;
+        QueryOverlaps(agentIndex, result);
+        return result;
+    }
+
+    public void QueryOverlaps(int agentIndex, List<int> result,
+        Func<int, int, bool>? filter = null, bool collisionsOnly = false)
+    {
+        if (!leafLookup.TryGetValue(agentIndex, out var leafIndex) ||
+            (collisionsOnly && !nodes[leafIndex].CollisionEligible))
+            return;
 
         var targetBounds = nodes[leafIndex].Bounds;
-        var stack = new Stack<int>();
+        var stack = traversalStack;
+        stack.Clear();
         stack.Push(root);
 
         while (stack.Count > 0)
@@ -327,12 +403,12 @@ public class Bvh
             var nodeIndex = stack.Pop();
             var node = nodes[nodeIndex];
 
-            if (!targetBounds.Intersects(in node.Bounds))
+            if ((collisionsOnly && !node.CollisionEligible) || !targetBounds.Intersects(in node.Bounds))
                 continue;
 
             if (node.IsLeaf)
             {
-                if (node.AgentIndex != agentIndex)
+                if (node.AgentIndex != agentIndex && (filter == null || filter(agentIndex, node.AgentIndex)))
                     result.Add(node.AgentIndex);
             }
             else
@@ -341,9 +417,8 @@ public class Bvh
                 stack.Push(node.Right);
             }
         }
-
-        return result;
     }
+
     public List<int> QueryOverlaps(BoundingBox bounds)
     {
         var result = new List<int>();

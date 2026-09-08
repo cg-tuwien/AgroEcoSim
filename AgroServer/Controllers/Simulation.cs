@@ -10,9 +10,51 @@ namespace AgroServer.Controllers;
 public class SimulationController// : ControllerBase
 {
     [RequiresUnreferencedCode("SimulationController")]
-    public static void Map(RouteGroupBuilder api, IConfiguration configuration, ISimulationUploadService uploadService, ITerrainBuffer terrainBuffer, ISeedsBuffer seedsBuffer)
+    public static void Map(RouteGroupBuilder api, IConfiguration configuration, ISimulationUploadService uploadService, ITerrainBuffer terrainBuffer, ISeedsBuffer seedsBuffer, IRunStore runStore)
     {
         api.MapGet("/", () => Results.Ok());
+
+        //--- stored runs ----------------------------------------------------------------------
+        //
+        //REST rather than hub methods, deliberately. The SignalR JSON protocol base64-encodes
+        //every byte[], which is a third more bytes for nothing; these return the frame as it is
+        //stored. Frames are immutable once written, so the browser cache can hold the working
+        //set and the client need not manage one.
+
+        api.MapGet("/run/{runId}", (string runId) =>
+        {
+            var run = runStore.GetRun(runId);
+            return run == null ? Results.NotFound() : Results.Ok(new RunResponse(
+                run.Id, run.Status, run.CreatedUtc, run.HoursPerTick, run.TotalSteps,
+                run.StoredFrames, run.Analytics, run.Deterministic,
+                run.BytesOnDisk, run.ParentRunId, run.BranchStep));
+        });
+
+        //Eight bytes per stored frame: the simulated timestep, then the stored size. That is the
+        //whole of what the client needs eagerly - the clock, the frame maps and the export panel
+        //all read `t` and nothing else - so a 1,440-step run costs it about 11 KB instead of
+        //gigabytes.
+        api.MapGet("/run/{runId}/index", (string runId) =>
+            runStore.TryReadIndex(runId, out var bytes)
+                ? Results.Bytes(bytes, "application/octet-stream")
+                : Results.NotFound());
+
+        api.MapGet("/run/{runId}/frame/{step:int}", (HttpContext http, string runId, int step) =>
+        {
+            if (step < 0 || !runStore.TryReadFrameDeflated(runId, (uint)step, out var deflated))
+                return Results.NotFound();
+
+            //Stored deflated and served deflated: the browser inflates it natively, so neither
+            //side spends anything on compression and the transfer is ~1.7x smaller.
+            http.Response.Headers.ContentEncoding = "deflate";
+            //Frames never change once written.
+            http.Response.Headers.CacheControl = "public, max-age=31536000, immutable";
+            return Results.Bytes(deflated, "application/octet-stream");
+        });
+
+        api.MapGet("/runs", (int? limit) => Results.Ok(runStore.ListRuns(Math.Clamp(limit ?? 25, 1, 200))
+            .Select(r => new RunSummaryResponse(r.Id, r.Status, r.CreatedUtc,
+                                               r.StoredFrames, r.BytesOnDisk)).ToArray()));
 
         api.MapPost("/", (SimulationRequest request) =>
         {

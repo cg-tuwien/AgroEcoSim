@@ -116,17 +116,23 @@ export function mapNoon(history: HistoryEntry[], from: number, to: number, hours
 export class FrameSource<T> {
     private lastIndex = -1;
     private lastScene: T | undefined;
-    private decode: (index: number) => T;
+    private decode: (index: number) => T | Promise<T>;
 
-    constructor(decode: (index: number) => T) {
+    constructor(decode: (index: number) => T | Promise<T>) {
         this.decode = decode;
     }
 
-    at(historyIndex: number): { scene: T; reused: boolean } {
+    /**
+     * Awaited because a frame outside the hot window has to be decompressed first. The await is
+     * deliberately here and not around the `appstate.scene` write that follows it: that write
+     * runs the rebuild effects synchronously, and the export loop depends on the renderer being
+     * up to date by the time it calls renderToPixels.
+     */
+    async at(historyIndex: number): Promise<{ scene: T; reused: boolean }> {
         if (historyIndex === this.lastIndex && this.lastScene !== undefined)
             return { scene: this.lastScene, reused: true };
 
-        this.lastScene = this.decode(historyIndex);
+        this.lastScene = await this.decode(historyIndex);
         this.lastIndex = historyIndex;
         return { scene: this.lastScene, reused: false };
     }

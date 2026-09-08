@@ -11,6 +11,7 @@ import { FieldSizeD } from './hud/FieldCellsD';
 import { InitNumber } from './hud/InitNumber';
 import { PickedDetails } from './viewport/PickedDetails';
 import { Randomize } from './hud/Randomize';
+import { Deterministic } from './hud/Deterministic';
 import { Seeds } from './hud/Seeds';
 import RendererHost from '../render/RendererHost';
 import { ProgressBar } from './hud/ProgressBar';
@@ -63,6 +64,7 @@ const App = () => {
 				<InitialDate/>
 				<TotalHours/>
 				<Randomize/>
+				<Deterministic/>
 				<InitNumber/>
 				<Renderer/>
 				<SamplesPerPixel/>

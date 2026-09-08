@@ -12,62 +12,65 @@ namespace AgroServer.Hubs;
 public interface IEditorHub
 {
     Task Rejected();
+    /// <summary>
+    /// The id under which this run's frames are being stored, sent once at the start.
+    ///
+    /// The client needs it to fetch frames back rather than keeping them all in memory, and to
+    /// reattach to the run after a reload.
+    /// </summary>
+    Task RunStarted(string runId);
     Task Progress(uint step, uint length);
     Task Result(SimulationResponse response);
     Task Preview(PreviewResponse response);
     Task Terrain(byte[] response);
 }
 
-public class SimRequests
+public class SimulationHub : Hub
 {
-    public bool Preview = false;
-    public bool Abort = false;
-    public List<uint> StepTimes = new(1000);
-}
-
-public class SimulationHub : Hub<IEditorHub>
-{
-    readonly IConfiguration Config;
     readonly ISimulationUploadService UploadService;
     readonly ITerrainBuffer TerrainBuffer;
-    public SimulationHub(IConfiguration configuration, ISimulationUploadService uploadService, ITerrainBuffer terrainBuffer)
+    readonly ISimulationRunner Runner;
+    public SimulationHub(ISimulationUploadService uploadService, ITerrainBuffer terrainBuffer, ISimulationRunner runner)
     {
-        Config = configuration;
         UploadService = uploadService;
         TerrainBuffer = terrainBuffer;
+        Runner = runner;
     }
 
-    static readonly Dictionary<string, SimRequests> ClientSimulations = [];
     static readonly Dictionary<string, ISoilFormation> ClientTerrains = [];
 
-    public async Task Abort()
+    /// <summary>
+    /// Releases what this connection was holding.
+    ///
+    /// There was no override at all before, and two things leaked because of it. A built
+    /// SoilFormationsList for a 93.7 MB facade is 150-250 MB and one was kept per connection id
+    /// forever, while the frontend reconnects with infinite retry - so every reconnect leaked
+    /// another. And a client that dropped mid-run left its entry behind, marking that connection
+    /// permanently busy. The run itself is deliberately NOT stopped: it belongs to the runner
+    /// now, and a reconnecting client can attach to it again.
+    /// </summary>
+    public override Task OnDisconnectedAsync(Exception? exception)
     {
-        await Task.Run(() =>
-        {
-            lock (ClientSimulations)
-            {
-                if (ClientSimulations.TryGetValue(Context.ConnectionId, out var sim))
-                    sim.Abort = true;
-            }
-        });
+        lock (ClientTerrains) ClientTerrains.Remove(Context.ConnectionId);
+        Runner.DetachConnection(Context.ConnectionId);
+        return base.OnDisconnectedAsync(exception);
     }
 
-    public async Task<bool> Preview()
+    /// <summary>Rejoins a run after a reload or a dropped socket.</summary>
+    public async Task<bool> Subscribe(string runId)
     {
-        return await Task.Run(() =>
-        {
-            lock (ClientSimulations)
-            {
-                if (ClientSimulations.TryGetValue(Context.ConnectionId, out var sim))
-                {
-                    sim.Preview = true;
-                    return true;
-                }
-                else
-                    return false;
-            }
-        });
+        if (!Runner.Attach(runId, Context.ConnectionId)) return false;
+        await Groups.AddToGroupAsync(Context.ConnectionId, runId);
+        return true;
     }
+
+    public Task Abort()
+    {
+        Runner.Abort(Context.ConnectionId);
+        return Task.CompletedTask;
+    }
+
+    public Task<bool> Preview() => Task.FromResult(Runner.RequestPreview(Context.ConnectionId));
 
     public async Task Terrain(string terrainId, ushort hoursPerTick, string pattern, bool patternForMaterial, float resolution)
     {
@@ -84,72 +87,31 @@ public class SimulationHub : Hub<IEditorHub>
 
     public async Task Run(SimulationRequest request)
     {
-        var requests = new SimRequests();
-        var me = Context.ConnectionId;
-        lock (ClientSimulations)
+        if (Runner.HasRun(Context.ConnectionId))
         {
-            if (ClientSimulations.ContainsKey(me))
-            {
-                Clients.Caller.Rejected();
-                return;
-            }
-            else
-                ClientSimulations.Add(me, requests);
+            await Clients.Caller.Rejected();
+            return;
         }
-        var lazyPreviews = !(request.ExactPreview ?? false);
-        var exportFlags = (request.DownloadRoots ?? false ? ExportFlags.Roots : ExportFlags.None) | ExportFlags.Analytics;
 
         ClientTerrains.TryGetValue(Context.ConnectionId, out var terrain);
-        var world = Initialize.World(request, terrain);
-        //_ = Clients.Caller.Terrain(world.SerializeTerrain());
-        await Task.Run(() =>
+
+        //Create, join, then begin. Joining after the loop had started would race it: anything
+        //pushed before this connection is in the group goes nowhere.
+        var runId = Runner.Create(request, terrain, Context.ConnectionId);
+        try
         {
-            world.Irradiance.SetAddress(Config["RendererIPMitsuba"], Config["RendererPortMitsuba"], Config["RendererIPTamashii"], Config["RendererPortTamashii"], request?.RenderMode ?? 0);
-            var start = DateTime.UtcNow.Ticks;
-            var simulationLength = (uint)world.TimestepsTotal();
-            long prevTime;
-            for (uint i = 0; i < simulationLength && !requests.Abort;)
-                if (lazyPreviews || requests.Preview)
-                {
-                    prevTime = DateTime.UtcNow.Ticks;
-                    world.Run(1U);
-                    var now = DateTime.UtcNow.Ticks;
-                    requests.StepTimes.Add((uint)(now - prevTime));
-                    _ = Clients.Caller.Progress(i, simulationLength);
-
-                    if (requests.Preview)
-                    {
-                        requests.Preview = false;
-                        _ = Clients.Caller.Preview(new() { Step = i, Renderer = world.RendererName, Scene = world.ExportToStream((byte)exportFlags) });
-                    }
-
-                    ++i;
-                }
-                else
-                    Thread.Sleep(10);
-            var stop = DateTime.UtcNow.Ticks;
-            Debug.WriteLine($"Simulation time: {(stop - start) / TimeSpan.TicksPerMillisecond} ms");
-        });
-
-        var result = new SimulationResponse() { Plants = new(world.Count) };
-        world.ForEach(formation =>
+            await Groups.AddToGroupAsync(Context.ConnectionId, runId);
+            await Clients.Caller.RunStarted(runId);
+        }
+        catch
         {
-            if (formation is PlantFormation2 plant)
-                result.Plants.Add(new() { Volume = plant.AG.GetVolume() });
-        });
-
-        if (request?.RequestGeometry ?? false)
-            result.Scene = world.ExportToStream((byte)exportFlags);
-
-        result.Renderer = world.RendererName;
-        //result.Debug = $"{IrradianceClient.Address}";
-        result.StepTimes = requests.StepTimes;
-        result.ObstacleLight = ObstacleLightResponse.From(world.ObstacleLight);
-        if (result.ObstacleLight != null)
-            result.ObstacleLightTimesteps = [.. world.ObstacleLight.Timesteps];
-
-        await Clients.Caller.Result(result);
-        lock (ClientSimulations) ClientSimulations.Remove(me);
+            //A client that drops during the join would otherwise leave a run created and never
+            //begun: no loop, no cleanup, and a store record stuck at "running" that pins its
+            //bytes against the retention budget for the life of the process.
+            Runner.Cancel(runId);
+            throw;
+        }
+        Runner.Begin(runId);
     }
 
     public async Task Start(string id)

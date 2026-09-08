@@ -173,7 +173,8 @@ public class IrradianceClient
 		{
 			if (!AddressFixed && Client.BaseAddress?.ToString() != addr)
 			{
-				Client.BaseAddress = new Uri(addr);
+				if (Uri.IsWellFormedUriString(addr, UriKind.Absolute))
+					Client.BaseAddress = new Uri(addr);
 				AddressFixed = true;
 			}
 		}
@@ -1194,11 +1195,33 @@ public class IrradianceClient
 
     }
 
+	/// <summary>
+	/// Scratch buffer for the byte[] overload of ExportToStream.
+	///
+	/// A fresh MemoryStream starts at 256 bytes and grows by doubling, so exporting a 20 MB
+	/// frame meant about seventeen reallocations and some 40 MB of copying - every step, and
+	/// entirely on the large object heap. Keeping one buffer at its high-water mark removes
+	/// all of that; only the final ToArray still allocates.
+	///
+	/// Exports are serialised on the simulation thread, so one buffer per client is enough.
+	/// Do NOT export from two threads against the same client.
+	/// </summary>
+	int ExportCapacity = 1 << 16;
+
     public byte[] ExportToStream(byte flags, IList<IFormation> formations, IList<IObstacle>? obstacles = null)
 	{
-		using var stream = new MemoryStream();
+		//Sized from the last frame. The stream itself cannot be reused - ExportV7 wraps it in a
+		//BinaryWriter that closes it - but the capacity carries over, and that is where the cost
+		//was: an unsized MemoryStream starts at 256 bytes and doubles, so a 20 MB frame meant
+		//about seventeen reallocations and some 40 MB of copying, every step, all of it on the
+		//large object heap.
+		using var stream = new MemoryStream(ExportCapacity);
 		ExportToStream((ExportFlags)flags, formations, obstacles, stream);
-		return stream.ToArray();
+		var bytes = stream.ToArray();
+		//An eighth of headroom, so a frame that grows a little every step does not reallocate
+		//every step. Never shrinks: a run's frames only get bigger.
+		if (bytes.Length > ExportCapacity) ExportCapacity = bytes.Length + (bytes.Length >> 3);
+		return bytes;
 	}
 
 	public void ExportToObjFile(string fileName, IList<IFormation> formations, IList<IObstacle>? obstacles)

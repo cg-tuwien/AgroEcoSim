@@ -14,7 +14,9 @@ export function OfflineRender() {
     const busy = p.state === "running";
     const vram = vramEstimateMB();
     //Recomputed on render so it tracks history growing during a live simulation.
-    const frames = appstate.historySize.value >= 0 ? frameCount() : 0;
+    //historyCount is the subscription handle: it changes whenever the history does,
+    //including when a reload rebuilds it from the run index with no payloads resident.
+    const frames = appstate.historyCount.value >= 0 ? frameCount() : 0;
 
     const tooltip = "Renders the current view at a chosen resolution, independent of the window size. "
         + "Useful for figures. Supersampling renders larger and averages down, which is slower but smoother.";
@@ -103,7 +105,7 @@ export function OfflineRender() {
         </div>
         <div>
             {/* Reading history.length keeps this in step as previews stream in. */}
-            <span>{frames} frames from {appstate.historySize.value >= 0 ? appstate.history.length : 0} stored
+            <span>{frames} frames from {appstate.historyCount.value} stored
                 {frames > 0 ? ` (${(frames / Math.max(1, settings.fps.value)).toFixed(1)} s)` : ""}</span>
         </div>
         <div>

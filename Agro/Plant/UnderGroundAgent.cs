@@ -254,7 +254,7 @@ public struct UnderGroundAgent : IPlantAgent
 	/// <summary>
 	/// If the plant structure changes (agents added or removed), parent entries need to be reindexed according to the map
 	/// </summary>
-	[M(AI)]public static void Reindex(UnderGroundAgent[] src, int[] map)
+	[M(AI)]public static void Reindex(Span<UnderGroundAgent> src, ReadOnlySpan<int> map)
 	{
 		for(int i = 0; i < src.Length; ++i)
 			src[i].Parent = src[i].Parent == -1 ? -1 : map[src[i].Parent];

@@ -28,8 +28,10 @@ public class PostBox<T> where T : struct, IAgent
         lock(src) src.Clear();
     }
 
-    //There MUST NOT be a non-array Process method. Otherwise refs will not work
-    public void Process(uint timestep, T[] agents)
+    // A span preserves ref delivery while restricting broadcasts to live agents.
+    public void Process(uint timestep, T[] agents) => Process(timestep, agents.AsSpan());
+
+    public void Process(uint timestep, Span<T> agents)
     {
         var src = WriteTMP ? BufferTMP : Buffer;
         while (src.Count > 0)

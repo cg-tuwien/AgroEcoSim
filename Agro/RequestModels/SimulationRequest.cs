@@ -115,6 +115,14 @@ public class SimulationRequest
     ///<summary>
     ///If true, the backend will send a preview after each simulation step. Otherwise the previews are sent layzily. (default: false)
     ///</summary>
+    /// <summary>
+    /// Run the simulation sequentially so that it is reproducible.
+    ///
+    /// Off by default: the parallel path is faster and most runs do not need reproducibility.
+    /// Required for branching to mean anything - see SimulationWorld.Deterministic.
+    /// </summary>
+    public bool? Deterministic { get; init; }
+
     public bool? ExactPreview { get; init; }
 
     /// <summary>

@@ -205,3 +205,85 @@ not full — that is what a rejected bind group looks like. A real image sits we
 **All GPU timings from this harness are SwiftShader**, a software rasterizer. They establish
 correctness and the absence of validation errors. They are not frame times and must not be
 quoted as such.
+
+## toggle.mjs — the interactive path, not the offscreen one
+
+Screenshots the LIVE canvas either side of a lighting checkbox. The offscreen still
+(`renderToPixels`) and the interactive viewport are different code paths, and a bug reachable
+only from the second will not show up in the first. WebGL composites in headless Chromium so a
+real screenshot works here; WebGPU does not.
+
+    TOGGLE=lightOcclusion PRESET=lightShadows node toggle.mjs "http://localhost:8080/?gpu=0&debughook=1" ~/agro-fixture/session.json ./ao
+
+`PRESET` is a comma-separated list of boxes to tick first, so you can test "occlusion on top of
+shadows" rather than only "occlusion from nothing".
+
+Read the max delta, not just the pixel count. An effect can touch half a per cent of the frame
+and still be invisible if it moves each pixel by 10/255 — that is what the first volumetric AO
+did, and the count alone made it look like it was working.
+
+## recovercheck.mjs - a reload must not lose the run
+
+    node recovercheck.mjs "http://localhost:8080/?debughook=1" http://localhost:7215
+
+Starts a run, reloads the tab **while it is still computing**, and then asks the reloaded page what
+it has. Asserts the run id survived, the timeline came back from `GET /run/{id}/index`, a frame in
+the middle can be fetched and decoded, streaming resumed, and the finished timeline holds exactly
+as many frames as the server stored.
+
+`TOTAL_HOURS` (default 1200) sets the run length. It must be long enough that the reload really
+lands mid-run - the harness asserts `computing` was still true at that moment, so a run that
+finished early cannot pass as a successful mid-run reattach.
+
+Two ways this harness lied before it was right, both worth remembering:
+
+- it waited for the client's `computing` flag to go false, which after a reload is false from the
+  first instant, so it sampled a run that was still going. Wait on the **server's** status.
+- it asserted no transport control was disabled. At the end of a run the forward ones correctly
+  are, and `Previous frame` is too, because a finished run is left in `ForwardWaiting` with the
+  playhead one past the last frame. That is pre-existing - see `playstate.mjs`.
+
+## playstate.mjs - what the playback machine looks like when a run ends
+
+    node playstate.mjs "http://localhost:8080/?debughook=1" http://localhost:7215
+
+No reload, no persistence: just runs to completion and reports the playhead. It exists to settle
+whether something the recovery harness saw belongs to the reattach path or was already there.
+Measured on a plain run: 100 frames, `pointer` 100 (out of range), `playing` 3, `Previous frame`
+disabled. All pre-existing, all in the playback FSM rather than in Stage 2.
+
+## timelinecheck.mjs - the slider must span the run, not the download
+
+    PLANTS=300 TOTAL_HOURS=2400 node timelinecheck.mjs "http://localhost:8080/?debughook=1" http://localhost:7215
+
+The server stores every step; the wire sends a frame only when the browser asks for one. At a large
+stand the browser asks rarely, so the slider used to span the handful of frames that had arrived
+while the progress line under it counted on correctly.
+
+**It truncates the history mid-run on purpose.** At 300 small plants the browser keeps up, every
+frame arrives on the wire and the sync has nothing to do - so simply watching the gap passes while
+proving nothing, which is what the first version of this harness did. Cutting the history to five
+frames reproduces what a large stand does naturally, and the verdict requires frames to come back
+**with no payload**, because only the run index can produce those. A run that was never behind
+reports INCONCLUSIVE rather than a pass.
+
+## playstate.mjs - what the playback machine looks like when a run ends
+
+    node playstate.mjs "http://localhost:8080/?debughook=1" http://localhost:7215
+
+No reload, no persistence: runs to completion and reports the playhead. Written to settle whether
+something the recovery harness saw belonged to the reattach path or was already there - it was
+already there, twice over. Expected now: 100 frames, pointer 99, playing 0, step controls live.
+
+## determinism.mjs - is the same request the same run?
+
+    PLANTS=100 TOTAL_HOURS=1600 SEED=424242 node determinism.mjs "http://localhost:8080/?debughook=1" http://localhost:7215
+
+Three runs, not two: a process-global mutated once by the FIRST run looks exactly like per-run
+randomness if you only compare a pair. Frames are compared byte for byte through the run store,
+after checking the two runs were the same request at all - which is where two earlier attempts
+went wrong.
+
+Set the plants and positions explicitly, as this does. `pushSeedRaster` picks a random species per
+position, so any two runs seeded with it differ by construction and comparing them measures the
+helper. `DETERMINISTIC=1` additionally sets the sequential-tick flag.

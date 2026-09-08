@@ -75,21 +75,32 @@ describe('buildFrameMap', () => {
 });
 
 describe('FrameSource', () => {
-    test('decodes once per distinct index and reports reuse', () => {
+    test('decodes once per distinct index and reports reuse', async () => {
         let decodes = 0;
         const src = new FrameSource<string>(i => { decodes++; return `scene${i}`; });
 
-        expect(src.at(0)).toEqual({ scene: 'scene0', reused: false });
-        expect(src.at(0)).toEqual({ scene: 'scene0', reused: true });
+        expect(await src.at(0)).toEqual({ scene: 'scene0', reused: false });
+        expect(await src.at(0)).toEqual({ scene: 'scene0', reused: true });
         expect(decodes).toBe(1);
 
-        expect(src.at(1).reused).toBe(false);
+        expect((await src.at(1)).reused).toBe(false);
         expect(decodes).toBe(2);
 
         //Only the latest frame is remembered - going back re-decodes rather than growing
         //an unbounded cache.
-        expect(src.at(0).reused).toBe(false);
+        expect((await src.at(0)).reused).toBe(false);
         expect(decodes).toBe(3);
+    });
+
+    test('an asynchronous decode is awaited, not handed back as a promise', async () => {
+        //Frames outside the hot window are compressed, so the decode returns a promise. The
+        //export loop writes appstate.scene straight from `scene` and depends on the rebuild
+        //effects running synchronously off that write, so the await has to happen in here.
+        const src = new FrameSource<string>(async i => `scene${i}`);
+        const { scene, reused } = await src.at(3);
+        expect(scene).toBe('scene3');
+        expect(reused).toBe(false);
+        expect(await src.at(3)).toEqual({ scene: 'scene3', reused: true });
     });
 });
 

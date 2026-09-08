@@ -4,6 +4,19 @@ services:
     ports:
       - "7215:80"
     restart: on-failure
+    volumes:
+      #Stored simulation runs. Without this the frames live in the container's writable layer:
+      #lost on every restart, and unbounded against the host disk rather than against the store's
+      #own retention budget.
+      - runstore:/data
+    environment:
+      #Total bytes of stored frames to keep before whole runs are evicted, oldest first.
+      - AGRO_RunStoreRetentionBytes=68719476736
+      #Store a frame every Nth step. 1 stores every timestep, which makes the stored run complete
+      #and costs the most: each stored frame is an export the simulation thread waits for, about
+      #two thirds of a simulation step at 1,600 plants. Raise it on a large stand where total wall
+      #time matters more than per-step granularity; the last step is always stored.
+      #- AGRO_RunStoreFrameStride=1
   mitsuba:
    image: agroecorender
    expose:
@@ -35,3 +48,6 @@ services:
   #     - '/usr/share/glvnd/egl_vendor.d/10_nvidia.json:/usr/share/glvnd/egl_vendor.d/10_nvidia.json'
   #   devices:
   #     - /dev/dri:/dev/dri
+
+volumes:
+  runstore:

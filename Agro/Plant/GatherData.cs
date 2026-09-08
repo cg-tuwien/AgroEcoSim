@@ -1,10 +1,3 @@
-using System.Diagnostics;
-using System.Numerics;
-using AgentsSystem;
-using glTFLoader.Schema;
-using NumericHelpers;
-using System.Collections;
-
 namespace Agro;
 
 public readonly struct GatherDataBase

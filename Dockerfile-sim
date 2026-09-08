@@ -42,6 +42,19 @@ RUN apk update && apk add --no-cache ca-certificates && apk --no-cache add tzdat
 #USER user:user
 
 RUN addgroup -g 61000 docker && adduser -g 61000 -H -D -s /bin/false -u 61000 docker -G docker
+
+#Where the run store keeps every simulation frame.
+#
+#It cannot live under /app: that is copied in as root and the container then drops to an
+#unprivileged user, so the store fails to create its own root, disables itself, and the whole of
+#the server-side persistence silently does nothing in the deployed image while working perfectly
+#in development. Give it a directory this user owns, and declare it a volume so a container
+#restart does not take the runs with it - one two-month run at production plant count is ~17 GB,
+#which has no business in the writable layer either.
+RUN mkdir -p /data/runstore && chown -R 61000:61000 /data
+ENV AGRO_RunStoreRoot=/data/runstore
+VOLUME /data
+
 USER docker
 
 #does nothing, just documents the exposed port

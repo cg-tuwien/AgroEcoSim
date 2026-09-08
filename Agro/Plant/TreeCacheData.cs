@@ -9,6 +9,10 @@ internal class TreeCacheData
 	List<int>[] ChildrenNodes;
 	ushort[] DepthNodes;
 	Vector3[] PointNodes;
+	int[] Preorder = new int[2], SubtreeEnd = new int[2], CrownAncestor = new int[2];
+	readonly Stack<(int index, ushort depth, int crown, bool exit)> TopologyStack = new();
+	readonly Stack<int> TraversalStack = new();
+	readonly HashSet<int> Targets = [], StartNodes = [];
 	readonly List<int> Roots = [];
 	readonly List<int> Leaves = [];
 	public float Height { get; private set; }
@@ -30,11 +34,15 @@ internal class TreeCacheData
 		if (newSize > ChildrenNodes.Length)
 		{
 			var l = ChildrenNodes.Length;
-			Array.Resize(ref ChildrenNodes, newSize);
-			for(int i = l; i < newSize; ++i)
+			var capacity = Math.Max(newSize, l + l / 2);
+			Array.Resize(ref ChildrenNodes, capacity);
+			for(int i = l; i < capacity; ++i)
 				ChildrenNodes[i] = [];
-			Array.Resize(ref DepthNodes, newSize);
-			Array.Resize(ref PointNodes, newSize);
+			Array.Resize(ref DepthNodes, capacity);
+			Array.Resize(ref PointNodes, capacity);
+			Array.Resize(ref Preorder, capacity);
+			Array.Resize(ref SubtreeEnd, capacity);
+			Array.Resize(ref CrownAncestor, capacity);
 		}
 		Count = newSize;
 		for(int i = 0; i < newSize; ++i)
@@ -49,23 +57,35 @@ internal class TreeCacheData
 			Roots.Add(childIndex);
 	}
 
-	public void FinishUpdate()
+	public void FinishUpdate<T>(PlantSubFormation<T> formation) where T : struct, IPlantAgent
 	{
-		var buffer = new Stack<(int, ushort)>();
+		var buffer = TopologyStack;
+		buffer.Clear();
+		var preorder = 0;
 		foreach(var item in Roots)
-			buffer.Push((item, 0));
+			buffer.Push((item, 0, item, false));
 
 		MaxDepth = 0;
 
 		while(buffer.Count > 0)
 		{
-			var (index, depth) = buffer.Pop();
+			var (index, depth, crown, exit) = buffer.Pop();
+			if (exit)
+			{
+				SubtreeEnd[index] = preorder;
+				continue;
+			}
+			Preorder[index] = preorder++;
+			if (formation.GetIsRizome(index))
+				crown = index;
+			CrownAncestor[index] = crown;
+			buffer.Push((index, depth, crown, true));
 			DepthNodes[index] = depth;
 			if (depth > MaxDepth)
 				MaxDepth = depth;
 			var nextDepth = (ushort)(depth + 1);
 			foreach(var child in ChildrenNodes[index])
-				buffer.Push((child, nextDepth));
+				buffer.Push((child, nextDepth, crown, false));
 		}
 
 		++MaxDepth;
@@ -74,6 +94,11 @@ internal class TreeCacheData
 			if (ChildrenNodes[i].Count == 0)
 				Leaves.Add(i);
 	}
+
+	// The strict ancestor relation excludes a node from its own descendants.
+	internal bool IsDescendant(int ancestor, int node) =>
+		Preorder[ancestor] < Preorder[node] && Preorder[node] < SubtreeEnd[ancestor];
+	internal bool SharesCrown(int first, int second) => IsDescendant(CrownAncestor[first], second);
 
 	internal IList<int> GetChildren(int index) => ChildrenNodes[index];
 	internal ICollection<int> GetRoots() => Roots;
@@ -85,7 +110,8 @@ internal class TreeCacheData
 
 	internal void UpdateBases<T>(PlantSubFormation<T> formation) where T : struct, IPlantAgent
 	{
-		var buffer = new Stack<int>();
+		var buffer = TraversalStack;
+		buffer.Clear();
 		foreach(var root in Roots)
 		{
 			PointNodes[root] = formation.Plant.Position;
@@ -118,12 +144,10 @@ internal class TreeCacheData
 
 		UpdateHeight(formation);
 	}
-    internal void UpdateBases<T>(PlantSubFormation<T> formation, IEnumerable<int> indexes) where T : struct, IPlantAgent
+    internal void UpdateBases<T>(PlantSubFormation<T> formation, ReadOnlySpan<int> indexes) where T : struct, IPlantAgent
     {
-        if (indexes == null)
-            return;
-
-        var targets = new HashSet<int>();
+        var targets = Targets;
+        targets.Clear();
         foreach (var index in indexes)
         {
             if (index >= 0 && index < Count)
@@ -133,7 +157,8 @@ internal class TreeCacheData
         if (targets.Count == 0)
             return;
 
-        var startNodes = new HashSet<int>();
+        var startNodes = StartNodes;
+        startNodes.Clear();
         foreach (var index in targets)
         {
             var current = index;
@@ -146,7 +171,8 @@ internal class TreeCacheData
             startNodes.Add(current);
         }
 
-        var stack = new Stack<int>();
+        var stack = TraversalStack;
+        stack.Clear();
         foreach (var start in startNodes)
         {
             var parent = formation.GetParent(start);

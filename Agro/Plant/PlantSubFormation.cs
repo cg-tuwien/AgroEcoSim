@@ -1,13 +1,6 @@
 using AgentsSystem;
-using glTFLoader.Schema;
-using Microsoft.VisualBasic;
-using NumericHelpers;
-using System;
-using System.Collections;
 using System.Diagnostics;
-using System.Linq;
 using System.Numerics;
-using System.Reflection;
 using System.Runtime.InteropServices;
 
 namespace Agro;
@@ -26,28 +19,34 @@ public interface IPlantSubFormation<T> : IFormation where T: struct, IPlantAgent
 
 public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struct, IPlantAgent
 {
-	readonly Action<T[], int[]> Reindex;
+	public delegate void ReindexAgents(Span<T> agents, ReadOnlySpan<int> indexMap);
+	readonly ReindexAgents Reindex;
 	public Vector3 Size => throw new NotImplementedException();
 
 	public readonly PlantFormation2 Plant;
-	//Once GODOT supports C# 6.0: Make it a List and then for processing send System.Runtime.InteropServices.CollectionsMarshal.AsSpan(Stems);
+	// Backing capacity is independent of the live prefix exposed by Src/SrcDst.
+	int AgentCount;
 	bool ReadTMP = false;
 	T[] Agents = Array.Empty<T>();
 	T[] AgentsTMP = Array.Empty<T>();
 	readonly PostBox<T> Post = new();
 	readonly List<T> Births = [];
 	readonly HashSet<int> Deaths = [];
-	readonly List<int> DeathsHelper = [];
+	readonly HashSet<int> RemovedBirths = [];
+	int[] IndexMap = [];
 
 	readonly TreeCacheData TreeCache = new();
 
     public Bvh CollisionBvh { get; set; } = new();
 
-    public PlantSubFormation(PlantFormation2 plant, Action<T[], int[]> reindex, bool isAboveGround)
+    public PlantSubFormation(PlantFormation2 plant, ReindexAgents reindex, bool isAboveGround)
 	{
 		Plant = plant;
 		Reindex = reindex;
 		IsAboveGround = isAboveGround;
+		CollisionEligibility = IsCollisionEligible;
+		InitialCollisionFilter = InitialPairFilter;
+		IncrementalCollisionFilter = PairFilter;
 	}
 
 	internal float DailyResourceMax { get; private set; }
@@ -65,21 +64,34 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 		return Math.Clamp((GetBaseCenter(index).Y - Plant.Position.Y) / Height, 0f, 1f);
 	}
 
-	public bool CheckIndex(int index) => index < Agents.Length;
+	public bool CheckIndex(int index) => index < AgentCount;
 
-	public bool Alive => Agents.Length > 0 || Births.Count > 0;
-	public int Count => Agents.Length;
+	public bool Alive => AgentCount > 0 || Births.Count > 0;
+	public int Count => AgentCount;
 
 	/// <summary>
-	/// An ordered tuple of the double data-buffer entries ready for swap.
+	/// Live views of the double buffer. Capacity must never become a simulated organ.
 	/// </summary>
-	(T[], T[]) SrcDst() => ReadTMP ? (AgentsTMP, Agents) : (Agents, AgentsTMP);
-	T[] Src() => ReadTMP ? AgentsTMP : Agents;
+	void SrcDst(out Span<T> src, out Span<T> dst)
+	{
+		src = Src();
+		dst = (ReadTMP ? Agents : AgentsTMP).AsSpan(0, AgentCount);
+	}
+	Span<T> Src() => (ReadTMP ? AgentsTMP : Agents).AsSpan(0, AgentCount);
+
+	void EnsureAgentCapacity(int count)
+	{
+		if (Agents.Length >= count)
+			return;
+		var capacity = Math.Max(count, Math.Max(8, Agents.Length + Agents.Length / 2));
+		Array.Resize(ref Agents, capacity);
+		Array.Resize(ref AgentsTMP, capacity);
+	}
 
 	public int Birth(T agent)
 	{
 		Births.Add(agent);
-		return Agents.Length + Births.Count - 1;
+		return AgentCount + Births.Count - 1;
 	}
 
 	public List<int>? Death(int index)
@@ -117,7 +129,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 
 	public bool SendProtected(int dst, IMessage<T> msg)
 	{
-		if (Agents.Length > dst)
+		if (AgentCount > dst)
 		{
 			lock(Post) Post.Add(new (msg, dst));
 			return true;
@@ -128,178 +140,105 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 
 	public void Census()
 	{
-		//Ready for List and Span combination
-
-		// if (RootsDeaths.Count > 0)
-		// {
-		//     RootsDeaths.Sort();
-		//     for(int i = 1; i < RootsDeaths.Count; ++i)
-		//         for(int r = RootsDeaths[i - 1]; r < RootsDeaths[i]; ++r)
-		//             Roots[r - i] = Roots[r];
-		//     for(int r = RootsDeaths[^1]; r < Roots.Count; ++r)
-		//         Roots[r - RootsDeaths.Count] = Roots[r];
-		//     Roots.RemoveRange(Roots.Count - RootsDeaths.Count, RootsDeaths.Count); //todo can be done instead of the last for cycle
-		//     //TODO reindex children if any deaths
-		// }
-
-		// if (RootsBirths.Count > 0)
-		//     Roots.AddRange(RootsBirths);
 		if (Births.Count > 0 || Deaths.Count > 0)
 		{
-			//Debug.WriteLine($"{typeof(T).Name} census event: B = {Births.Count}   I = {Inserts.Count}   D = {Deaths.Count}");
-			var (src, dst) = SrcDst();
-			// #if DEBUG
-			// Console.WriteLine(DebugTreePrint(src));
-			// #endif
-			if (Deaths.Count > 0)
+			var oldCount = AgentCount;
+			RemovedBirths.Clear();
+			if (Deaths.Count > 0 && Births.Count > 0)
 			{
-				DeathsHelper.Clear();
-				DeathsHelper.AddRange(Deaths);
-				DeathsHelper.Sort();
-			}
-
-			var diff = Births.Count - Deaths.Count;
-			Debug.Assert(src.Length + diff >= 0);
-
-			//filter out addidions to death parts
-			BitArray? birthsHelper = null;
-			if (Deaths.Count > 0)
-			{
+				// A queued birth can itself parent another queued birth. Keep removing
+				// descendants until the set is closed, including forward references.
 				bool anyRemoved;
-				var localRemoved = new HashSet<int>();
-				if (Births.Count > 0)
+				do
 				{
-					do
+					anyRemoved = false;
+					for (int i = Births.Count - 1; i >= 0; --i)
 					{
-						anyRemoved = false;
-						for(int i = Births.Count - 1; i >= 0; --i)
-						{
-							var index = src.Length + i;
-							if (!localRemoved.Contains(index))
-							{
-								var p = Births[i].Parent;
-								if (Deaths.Contains(p) || localRemoved.Contains(p))
-								{
-									localRemoved.Add(index);
-									anyRemoved = true;
-								}
-							}
-						}
-					}
-					while (anyRemoved);
-				}
-
-				if (localRemoved.Count > 0)
-				{
-					diff -= localRemoved.Count;
-					if (Births.Count > 0)
-					{
-						birthsHelper = new BitArray(Births.Count, true);
-						for(int i = 0; i < Births.Count; ++i)
-							if (localRemoved.Contains(src.Length + i))
-								birthsHelper.Set(i, false);
+						var index = oldCount + i;
+						var parent = Births[i].Parent;
+						if (!RemovedBirths.Contains(index) &&
+							(Deaths.Contains(parent) || RemovedBirths.Contains(parent)))
+							anyRemoved |= RemovedBirths.Add(index);
 					}
 				}
+				while (anyRemoved);
 			}
 
-			var tmp = diff != 0 ? new T[src.Length + diff] : dst;
-
+			var newCount = oldCount + Births.Count - Deaths.Count - RemovedBirths.Count;
+			Debug.Assert(newCount >= 0);
+			EnsureAgentCapacity(newCount);
+			var src = Src();
+			var dst = (ReadTMP ? Agents : AgentsTMP).AsSpan(0, newCount);
 			if (Deaths.Count > 0)
 			{
-				var indexMap = new int[src.Length + Births.Count];
-				Array.Fill(indexMap, -1);
-
-				int a = 0;
-				{
-					if (DeathsHelper[0] > 0)
+				var mapCount = oldCount + Births.Count;
+				if (IndexMap.Length < mapCount)
+					Array.Resize(ref IndexMap, Math.Max(mapCount, Math.Max(8, IndexMap.Length + IndexMap.Length / 2)));
+				var map = IndexMap.AsSpan(0, mapCount);
+				map.Fill(-1);
+				var target = 0;
+				for (int i = 0; i < oldCount; ++i)
+					if (!Deaths.Contains(i))
 					{
-						var stop = DeathsHelper[0];
-						Array.Copy(src, 0, tmp, 0, stop);
-						for(int s = 0; s < stop; ++s)
-							indexMap[s] = a++;
+						map[i] = target;
+						dst[target++] = src[i];
 					}
-
-					var deathsCount = DeathsHelper.Count;
-					for(int d = 1; d < deathsCount; ++d)
+				for (int i = 0; i < Births.Count; ++i)
+					if (!RemovedBirths.Contains(oldCount + i))
 					{
-						var range = DeathsHelper[d] - DeathsHelper[d - 1];
-						if (range > 1) //there were some alive inbewteen
-						{
-							var s = DeathsHelper[d - 1] + 1;
-							Array.Copy(src, s, tmp, a, range - 1);
-							var stop = DeathsHelper[d];
-							while(s < stop)
-								indexMap[s++] = a++;
-						}
+						map[oldCount + i] = target;
+						dst[target++] = Births[i];
 					}
-
-					if (DeathsHelper[^1] < src.Length)
-					{
-						Array.Copy(src, DeathsHelper[^1] + 1, tmp, a, src.Length - 1 - DeathsHelper[^1]);
-						for(int s = DeathsHelper[^1] + 1; s < src.Length; ++s)
-							indexMap[s] = a++;
-					}
-				}
-
-				var birthsCount = Births.Count;
-				for(int i = 0; i < birthsCount; ++i)
-					if (birthsHelper?.Get(i) ?? true)
-					{
-						indexMap[src.Length + i] = a;
-						tmp[a++] = Births[i];
-					}
-
-				if (indexMap != null)
-					Reindex(tmp, indexMap);
-
+				Reindex(dst, map);
 				Deaths.Clear();
 			}
 			else
 			{
-				Array.Copy(src, tmp, src.Length);
-				var a = src.Length;
-
-				var birthsCount = Births.Count;
-				Births.CopyTo(tmp, a);
-				a += Births.Count;
+				src.CopyTo(dst);
+				CollectionsMarshal.AsSpan(Births).CopyTo(dst[oldCount..]);
 			}
 
-			if (ReadTMP)
-			{
-				Agents = new T[tmp.Length];
-				AgentsTMP = tmp;
-			}
-			else
-			{
-				Agents = tmp;
-				AgentsTMP = new T[tmp.Length];
-			}
-			// #if DEBUG
-			// Console.WriteLine(DebugTreePrint(Src()));
-			// #endif
+			// Census historically reset the previous-state buffer to zero. Gather
+			// reads it, so retaining the old values here would change resource deltas.
+			(ReadTMP ? AgentsTMP : Agents).AsSpan(0, Math.Max(oldCount, newCount)).Clear();
+			ReadTMP = !ReadTMP;
+			AgentCount = newCount;
+			if (newCount < oldCount)
+				(ReadTMP ? AgentsTMP : Agents).AsSpan(newCount, oldCount - newCount).Clear();
 
-			src = Src();
-			TreeCache.Clear(src.Length);
-			for(int i = 0; i < src.Length; ++i)
-				TreeCache.AddChild(src[i].Parent, i);
-
-			TreeCache.FinishUpdate();
+			TreeCache.Clear(newCount);
+			for (int i = 0; i < newCount; ++i)
+				TreeCache.AddChild(dst[i].Parent, i);
+			TreeCache.FinishUpdate(this);
 			TreeCache.UpdateBases(this);
-
 			Births.Clear();
 		}
 		else
 			TreeCache.UpdateBases(this);
-		BuildBvh();
+
+		if (IsAboveGround)
+			BuildBvh();
+		// The underground collision tree has no consumer at present. Reactivate
+		// this call when root collision queries are enabled again.
+		// else BuildBvh();
 	}
 
 	public void Tick(uint timestep)
 	{
-		var (src, dst) = SrcDst();
-		Array.Copy(src, dst, src.Length);
-		for(int i = 0; i < dst.Length; ++i)
-			dst[i].Tick(this, i, timestep);
-
+		SrcDst(out var src, out var dst);
+		src.CopyTo(dst);
+		FloweringPhaseCached = false;
+		PhaseCacheTimestep = timestep;
+		CacheFloweringPhase = true;
+		try
+		{
+			for(int i = 0; i < dst.Length; ++i)
+				dst[i].Tick(this, i, timestep);
+		}
+		finally
+		{
+			CacheFloweringPhase = false;
+		}
 		ReadTMP = !ReadTMP;
 	}
 
@@ -318,7 +257,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 		var waterCapacity = 0.0;
 		var energyRequirement = 0.0;
 		var waterRequirement = 0.0;
-		var (dst, src) = SrcDst(); //since Tick already swapped them
+		SrcDst(out var dst, out var src); //since Tick already swapped them
 		var prevLength = Gathering.Count;
 
 		if (prevLength > dst.Length)
@@ -457,7 +396,6 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 
         if (count == 0)
             return;
-        float cellSize = dst.Max(a => Math.Max(a.Radius, a.Length));
         if (Weights.Count < count)
             Weights.AddRange(new float[count - Weights.Count]);
         if (WeightReoslveChildren.Count < count)
@@ -597,7 +535,8 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 					agent.SetOrientation(newOr);
                 }
 
-                var children = new Queue<int>();
+                var children = CollisionChildren;
+        children.Clear();
 				children.Enqueue(i);
                 while (children.Count > 0)
                 {
@@ -632,43 +571,60 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
         float d = MathF.Abs(Quaternion.Dot(Quaternion.Normalize(q), Quaternion.Identity));
         return d > 0.999999f;
     }
-    bool PairFilter(int a, int b)
+    readonly Func<int, bool> CollisionEligibility;
+    readonly Func<int, int, bool> InitialCollisionFilter, IncrementalCollisionFilter;
+    readonly List<(int first, int second)> OverlappingPairs = [];
+    readonly Queue<(int first, int second)> PossibleCollisions = new();
+    readonly HashSet<(int, int)> SeenCollisions = [];
+    readonly Queue<int> CollisionChildren = new();
+    readonly List<int> SubtreeOverlaps = [];
+    readonly List<(int agentIndex, Bvh.BoundingBox bounds)> CollisionLeaves = [];
+
+    bool IsCollisionEligible(int index) =>
+        !GetIsRizome(index) && GetOrgan(index) != OrganTypes.Leaf && GetLength(index) > 1e-3;
+
+    bool InitialPairFilter(int a, int b) =>
+        GetParent(a) != b && GetParent(b) != a && GetParent(a) != GetParent(b) && ClaimCollision(a, b);
+
+    bool ClaimCollision(int a, int b)
     {
-        return GetParent(a) != b &&
-               GetParent(b) != a &&
-               GetParent(a) != GetParent(b) &&
-               !GetIsRizome(a) &&
-               !GetIsRizome(b) &&
-               GetOrgan(a) != OrganTypes.Leaf &&
-               GetOrgan(b) != OrganTypes.Leaf &&
-               GetOrgan(a) != OrganTypes.FlowerPadel &&
-               GetOrgan(b) != OrganTypes.FlowerPadel &&
-               GetOrgan(a) != OrganTypes.FlowerBud &&
-               GetOrgan(b) != OrganTypes.FlowerBud;
+        // Claim on enqueue, including rejected crown pairs. The crown test is
+        // directional across nested rhizomes; a later reversed pair must not
+        // bypass the rejection of the first occurrence in the original queue.
+        var pair = a < b ? (a, b) : (b, a);
+        return SeenCollisions.Add(pair) && !shareCrown(a, b);
     }
+
+    // Retain the existing distinction: incremental queries also exclude petals and buds.
+    bool PairFilter(int a, int b) =>
+        GetOrgan(a) is not (OrganTypes.FlowerPadel or OrganTypes.FlowerBud) &&
+        GetOrgan(b) is not (OrganTypes.FlowerPadel or OrganTypes.FlowerBud) && InitialPairFilter(a, b);
+
     internal void collisionHandling()
     {
         var dst = Src();
         if (dst.Length == 0 || CollisionBvh.IsEmpty)
             return;
 
-        var overlapping = CollisionBvh.GetOverlappingPairs().Where(c=> GetParent(c.first) != c.second && GetParent(c.second) != c.first && GetParent(c.first) != GetParent(c.second) && !GetIsRizome(c.first) && !GetIsRizome(c.second) && !GetOrgan(c.first).Equals(OrganTypes.Leaf)&& !GetOrgan(c.second).Equals(OrganTypes.Leaf));
-        var possibleCollisions =  new Queue<(int first, int second)>(overlapping);
-        var seenCollisions = new HashSet<(int, int)>();
+        // Tick can change an organ's type or grow it past the length threshold
+        // after the previous census built the hierarchy.
+        CollisionBvh.RefreshCollisionEligibility(CollisionEligibility);
+        SeenCollisions.Clear();
+        OverlappingPairs.Clear();
+        CollisionBvh.GetOverlappingPairs(OverlappingPairs, InitialCollisionFilter, collisionsOnly: true);
+        var possibleCollisions = PossibleCollisions;
+        possibleCollisions.Clear();
+        foreach (var pair in OverlappingPairs)
+            possibleCollisions.Enqueue(pair);
         while ( possibleCollisions.Count > 0)
 		{
             var overlap = possibleCollisions.Dequeue();
-			var orderedOverlap = overlap.first < overlap.second
-				? overlap
-				: (overlap.second, overlap.first);
-			if (!seenCollisions.Add(orderedOverlap))
-				continue;
 
             int index1 = overlap.first;
 			int index2 = overlap.second;
             //Console.WriteLine($"{index1} {index2}");
 
-            if (!BranchIntersect(index1, index2)|| dst[index1].Length <= 1e-3 || dst[index2].Length <= 1e-3 || shareCrown(index1,index2))
+            if (!BranchIntersect(index1, index2))
 				continue;
 
             bool isParentChild = isDescendant(index1, index2) || isDescendant(index2, index1);
@@ -699,7 +655,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 					index = index1;
 				}
 				RotateCellTowardPoints(index, Point1, Point2);
-				TreeCache.UpdateBases(this, new List<int> { index });
+				TreeCache.UpdateBases(this, [index]);
 				CollisionBvh.RefitLeaf(index, ComputeBounds(index));
 				refitChildrens(index);
 				getSubtreeCollisions(index, ref possibleCollisions);
@@ -720,7 +676,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 
 			RotateCellTowardPoints(index1, adjustedPoint1, weightedMidPoint, false);
 			RotateCellTowardPoints(index2, adjustedPoint2, weightedMidPoint, false);
-            TreeCache.UpdateBases(this, new List<int>{ index1, index2 });
+            TreeCache.UpdateBases(this, [index1, index2]);
 			refitChildrens(index2);
 			refitChildrens(index1);
             getSubtreeCollisions(index1, ref possibleCollisions);
@@ -732,7 +688,8 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 	private void refitChildrens(int i)
 	{
 
-        var children = new Queue<int>();
+        var children = CollisionChildren;
+        children.Clear();
 		children.Enqueue(i);
         while (children.Count > 0)
         {
@@ -740,15 +697,17 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
             foreach (var child in GetChildren(index))
             {
                 children.Enqueue(child);
-                CollisionBvh.RefitLeaf(child, ComputeBounds(child));
+                CollisionBvh.UpdateLeafBounds(child, ComputeBounds(child));
             }
 
         }
+        CollisionBvh.RefitUpdatedLeaves();
     }
     private void getSubtreeCollisions(int i,ref Queue<(int, int)> overlaps)
     {
 
-        var children = new Queue<int>();
+        var children = CollisionChildren;
+        children.Clear();
         children.Enqueue(i);
         while (children.Count > 0)
         {
@@ -756,12 +715,10 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
             foreach (var child in GetChildren(index))
             {
                 children.Enqueue(child);
-                var col = CollisionBvh.QueryOverlaps(child);
-				foreach(var overlap in col)
-				{
-					if(PairFilter(child,overlap))
-						overlaps.Enqueue((child,overlap));
-				}
+                SubtreeOverlaps.Clear();
+                CollisionBvh.QueryOverlaps(child, SubtreeOverlaps, IncrementalCollisionFilter, collisionsOnly: true);
+                foreach (var overlap in SubtreeOverlaps)
+                    overlaps.Enqueue((child, overlap));
             }
 
         }
@@ -784,31 +741,9 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
         }
     }
 
-	private bool shareCrown(int index1, int index2)
-	{
+    private bool shareCrown(int index1, int index2) => TreeCache.SharesCrown(index1, index2);
+    private bool isDescendant(int index, int descendant) => TreeCache.IsDescendant(index, descendant);
 
-        int i = index1;
-        while (!GetIsRizome(i) && GetAbsDepth(i) > 0)
-        {
-            if (isDescendant(i,index2))
-                return true;
-            i = GetParent(i);
-        }
-        if (isDescendant(i, index2))
-            return true;
-        return false;
-    }
-    private bool isDescendant(int index, int indexDescendant)
-    {
-        int i = indexDescendant;
-        while (index != i && GetAbsDepth(i) > 0)
-        {
-            if (index == GetParent(i))
-                return true;
-            i = GetParent(i);
-        }
-        return false;
-    }
     private (Vector3 point1, Vector3 Point2, float distance) ClosestPointBetweenBranches(int index1, int index2)
     {
         var dst = Src();
@@ -994,7 +929,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 		}
 	}
 
-	void DistributeAuxin(T[] dst, int initNode, List<PathData> path)
+	void DistributeAuxin(Span<T> dst, int initNode, List<PathData> path)
 	{
 		path.Clear();
 
@@ -1100,8 +1035,8 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 		// Roots.AddRange(RootsTMP);
 		if (Post.AnyMessages)
 		{
-			var (src, dst) = SrcDst();
-			Array.Copy(src, dst, src.Length);
+			SrcDst(out var src, out var dst);
+			src.CopyTo(dst);
 			Post.Process(timestep, dst);
 
 			ReadTMP = !ReadTMP;
@@ -1114,8 +1049,8 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 	///////////////////////////
 
 	public int GetParent(int index) => ReadTMP
-		? (AgentsTMP.Length > index ? AgentsTMP[index].Parent : int.MinValue)
-		: (Agents.Length > index ? Agents[index].Parent : int.MinValue);
+		? (AgentCount > index ? AgentsTMP[index].Parent : int.MinValue)
+		: (AgentCount > index ? Agents[index].Parent : int.MinValue);
 	public IList<int> GetChildren(int index) => TreeCache.GetChildren(index);
 	public int GetAbsDepth(int index) => TreeCache.GetAbsDepth(index);
 	public int GetAbsInvDepth(int index) => TreeCache.GetAbsInvDepth(index);
@@ -1130,21 +1065,21 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 	}
 
 	internal float GetEnergyCapacity(int index) => ReadTMP
-		? (AgentsTMP.Length > index ? AgentsTMP[index].EnergyStorageCapacity() : 0f)
-		: (Agents.Length > index ? Agents[index].EnergyStorageCapacity() : 0f);
+		? (AgentCount > index ? AgentsTMP[index].EnergyStorageCapacity() : 0f)
+		: (AgentCount > index ? Agents[index].EnergyStorageCapacity() : 0f);
 
 	internal float GetWaterStorageCapacity(int index) => ReadTMP
-		? (AgentsTMP.Length > index ? AgentsTMP[index].WaterStorageCapacity_g() : 0f)
-		: (Agents.Length > index ? Agents[index].WaterStorageCapacity_g() : 0f);
+		? (AgentCount > index ? AgentsTMP[index].WaterStorageCapacity_g() : 0f)
+		: (AgentCount > index ? Agents[index].WaterStorageCapacity_g() : 0f);
 
 	internal float GetWaterTotalCapacity(AgroWorld world, int index) => ReadTMP
-		? (AgentsTMP.Length > index ? AgentsTMP[index].WaterTotalCapacityPerTick_g(world) : 0f)
-		: (Agents.Length > index ? Agents[index].WaterTotalCapacityPerTick_g(world) : 0f);
+		? (AgentCount > index ? AgentsTMP[index].WaterTotalCapacityPerTick_g(world) : 0f)
+		: (AgentCount > index ? Agents[index].WaterTotalCapacityPerTick_g(world) : 0f);
 
 	internal float GetWaterEfficientCapacity(AgroWorld world, int index)
 	{
-		var src = ReadTMP ? AgentsTMP : Agents;
-		if (AgentsTMP.Length > index)
+		var src = Src();
+		if (AgentCount > index)
 		{
 			var agent = src[index];
 			return agent.WaterStorageCapacity_g() + agent.PhotosynthPerTick(world);
@@ -1154,90 +1089,96 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 	}
 
 	public float GetEnergy(int index) => ReadTMP
-		? (AgentsTMP.Length > index ? AgentsTMP[index].Energy : 0f)
-		: (Agents.Length > index ? Agents[index].Energy : 0f);
+		? (AgentCount > index ? AgentsTMP[index].Energy : 0f)
+		: (AgentCount > index ? Agents[index].Energy : 0f);
 
 	public float GetEnergyFlow_PerTick(AgroWorld world, int index) => ReadTMP
-		? (AgentsTMP.Length > index ? AgentsTMP[index].EnergyFlowToParentPerTick(world) : 0f)
-		: (Agents.Length > index ? Agents[index].EnergyFlowToParentPerTick(world) : 0f);
+		? (AgentCount > index ? AgentsTMP[index].EnergyFlowToParentPerTick(world) : 0f)
+		: (AgentCount > index ? Agents[index].EnergyFlowToParentPerTick(world) : 0f);
 
 	public float GetWater(int index) => ReadTMP
-		? (AgentsTMP.Length > index ? AgentsTMP[index].Water_g : 0f)
-		: (Agents.Length > index ? Agents[index].Water_g : 0f);
+		? (AgentCount > index ? AgentsTMP[index].Water_g : 0f)
+		: (AgentCount > index ? Agents[index].Water_g : 0f);
 
 	public float GetBaseRadius(int index) => ReadTMP
-		? (AgentsTMP.Length > index ? AgentsTMP[index].Radius : 0f)
-		: (Agents.Length > index ? Agents[index].Radius : 0f);
+		? (AgentCount > index ? AgentsTMP[index].Radius : 0f)
+		: (AgentCount > index ? Agents[index].Radius : 0f);
 
 	public float GetLength(int index) => ReadTMP
-		? (AgentsTMP.Length > index ? AgentsTMP[index].Length : 0f)
-		: (Agents.Length > index ? Agents[index].Length : 0f);
+		? (AgentCount > index ? AgentsTMP[index].Length : 0f)
+		: (AgentCount > index ? Agents[index].Length : 0f);
 
 	public Quaternion GetDirection(int index) => ReadTMP
-		? (AgentsTMP.Length > index ? AgentsTMP[index].Orientation : Quaternion.Identity)
-		: (Agents.Length > index ? Agents[index].Orientation : Quaternion.Identity);
+		? (AgentCount > index ? AgentsTMP[index].Orientation : Quaternion.Identity)
+		: (AgentCount > index ? Agents[index].Orientation : Quaternion.Identity);
 
 	public OrganTypes GetOrgan(int index) => ReadTMP
-		? (AgentsTMP.Length > index ? AgentsTMP[index].Organ : OrganTypes.Stem)
-		: (Agents.Length > index ? Agents[index].Organ : OrganTypes.Stem);
+		? (AgentCount > index ? AgentsTMP[index].Organ : OrganTypes.Stem)
+		: (AgentCount > index ? Agents[index].Organ : OrganTypes.Stem);
 
 	public float GetWoodRatio(int index) => ReadTMP
-		? (AgentsTMP.Length > index ? AgentsTMP[index].WoodRatio() : 0f)
-		: (Agents.Length > index ? Agents[index].WoodRatio() : 0f);
+		? (AgentCount > index ? AgentsTMP[index].WoodRatio() : 0f)
+		: (AgentCount > index ? Agents[index].WoodRatio() : 0f);
 
     public bool GetIsRizome(int index) => ReadTMP
-           ? (AgentsTMP.Length > index ? AgentsTMP[index].IsRizome : false)
-           : (Agents.Length > index ? Agents[index].IsRizome : false);
+           ? (AgentCount > index ? AgentsTMP[index].IsRizome : false)
+           : (AgentCount > index ? Agents[index].IsRizome : false);
     public bool GetHasFlowerSupport(int index) => ReadTMP
-       ? (AgentsTMP.Length > index ? AgentsTMP[index].flowerSupport : false)
-       : (Agents.Length > index ? Agents[index].flowerSupport : false);
+       ? (AgentCount > index ? AgentsTMP[index].flowerSupport : false)
+       : (AgentCount > index ? Agents[index].flowerSupport : false);
     public Vector3 GetBaseOffset(int index) => ReadTMP
-    ? (AgentsTMP.Length > index ? AgentsTMP[index].BaseOffset : Vector3.Zero)
-    : (Agents.Length > index ? Agents[index].BaseOffset : Vector3.Zero);
+    ? (AgentCount > index ? AgentsTMP[index].BaseOffset : Vector3.Zero)
+    : (AgentCount > index ? Agents[index].BaseOffset : Vector3.Zero);
 	public Vector3 GetColor(int index) => ReadTMP
-	? (AgentsTMP.Length > index ? AgentsTMP[index].Color : Vector3.Zero)
-	: (Agents.Length > index ? Agents[index].Color : Vector3.Zero);
+	? (AgentCount > index ? AgentsTMP[index].Color : Vector3.Zero)
+	: (AgentCount > index ? Agents[index].Color : Vector3.Zero);
 
     public Vector3 GetBaseCenter(int index) => TreeCache.GetBaseCenter(index);
 	public Vector3 GetBaseCenterWorld(int index) => TreeCache.GetBaseCenter(index) + Plant.Soil.GetFieldOrigin(Plant.SoilIndex);
 
 	public byte GetDominance(int index) => ReadTMP
-		? (AgentsTMP.Length > index ? AgentsTMP[index].DominanceLevel : (byte)0)
-		: (Agents.Length > index ? Agents[index].DominanceLevel : (byte)0);
+		? (AgentCount > index ? AgentsTMP[index].DominanceLevel : (byte)0)
+		: (AgentCount > index ? Agents[index].DominanceLevel : (byte)0);
 
 	/// <summary>
 	/// Production during the previous day, per m² i.e. invariant of size
 	/// </summary>
 	public float GetDailyProductionInv(int index) => ReadTMP
-		? (AgentsTMP.Length > index ? AgentsTMP[index].PreviousDayProductionInvariant : 0f)
-		: (Agents.Length > index ? Agents[index].PreviousDayProductionInvariant : 0f);
+		? (AgentCount > index ? AgentsTMP[index].PreviousDayProductionInvariant : 0f)
+		: (AgentCount > index ? Agents[index].PreviousDayProductionInvariant : 0f);
 
 	/// <summary>
 	/// Resources allocated during the previous day, per m² i.e. invariant of size
 	/// </summary>
 	public float GetDailyResourcesInv(int index) => ReadTMP
-		? (AgentsTMP.Length > index ? AgentsTMP[index].PreviousDayEnvResourcesInvariant : 0f)
-		: (Agents.Length > index ? Agents[index].PreviousDayEnvResourcesInvariant : 0f);
+		? (AgentCount > index ? AgentsTMP[index].PreviousDayEnvResourcesInvariant : 0f)
+		: (AgentCount > index ? Agents[index].PreviousDayEnvResourcesInvariant : 0f);
 
 	public float GetDailyEfficiency(int index) => ReadTMP
-		? (AgentsTMP.Length > index ? AgentsTMP[index].PreviousDayEnvResources : 0f)
-		: (Agents.Length > index ? Agents[index].PreviousDayEnvResources : 0f);
+		? (AgentCount > index ? AgentsTMP[index].PreviousDayEnvResources : 0f)
+		: (AgentCount > index ? Agents[index].PreviousDayEnvResources : 0f);
 
 	public Vector3 GetScale(int index) => ReadTMP
-		? (AgentsTMP.Length > index ? AgentsTMP[index].Scale() : Vector3.Zero)
-		: (Agents.Length > index ? Agents[index].Scale() : Vector3.Zero);
+		? (AgentCount > index ? AgentsTMP[index].Scale() : Vector3.Zero)
+		: (AgentCount > index ? Agents[index].Scale() : Vector3.Zero);
 
 	///<summary>
 	///Volume in m³
 	///</summary>
-	public float GetVolume() => (ReadTMP ? AgentsTMP : Agents).Aggregate(0f, (sum, current) => sum + current.Volume());
+	public float GetVolume()
+	{
+		var volume = 0f;
+		foreach (ref readonly var agent in Src())
+			volume += agent.Volume();
+		return volume;
+	}
 
 	///<summary>
 	///Weight in g
 	///</summary>
 	public float GetWeight(int index, SpeciesSettings species)
 	{
-		var src = ReadTMP ? AgentsTMP : Agents;
+		var src = Src();
 		if (index >= src.Length)
 			return 0f;
 		else
@@ -1263,7 +1204,28 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 
 	static int SeasonCycle(DateTime date) => date.Month >= 3 ? date.Year : date.Year - 1;
 
+    bool CacheFloweringPhase, FloweringPhaseCached;
+    uint PhaseCacheTimestep;
+    SeasonalPhase CachedFloweringPhase;
+
     public SeasonalPhase GetFloweringPhase(SpeciesSettings species, uint timestep)
+    {
+        // Cache only within the organ tick: age/calendar and the source buffer
+        // stay fixed there. Calls outside Tick retain their original state updates.
+        if (!CacheFloweringPhase || timestep != PhaseCacheTimestep || !ReferenceEquals(species, Plant.Parameters))
+            return CalculateFloweringPhase(species, timestep);
+        if (!FloweringPhaseCached)
+        {
+            CachedFloweringPhase = CalculateFloweringPhase(species, timestep);
+            // Closing a window after senescence returns PostFlower once, then
+            // ResetPending. Do not turn this existing transition into a whole tick.
+            FloweringPhaseCached = CachedFloweringPhase != SeasonalPhase.PostFlower ||
+                Plant.World.Season <= species.SeasonalSenescence;
+        }
+        return CachedFloweringPhase;
+    }
+
+    SeasonalPhase CalculateFloweringPhase(SpeciesSettings species, uint timestep)
     {
 		var season = Plant.World.Season;
 		var age_h = Plant.GetAge_h();
@@ -1335,24 +1297,24 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
     }
 
     public float GetAuxins(int index) => ReadTMP
-		? (index < AgentsTMP.Length ? AgentsTMP[index].Auxins : 0f)
-		: (index < Agents.Length ? Agents[index].Auxins : 0f);
+		? (index < AgentCount ? AgentsTMP[index].Auxins : 0f)
+		: (index < AgentCount ? Agents[index].Auxins : 0f);
 
     public uint GetAge_ticks(int index, uint timestep) => ReadTMP
-		? index < AgentsTMP.Length ? timestep - AgentsTMP[index].BirthTime : 0
-		: index < Agents.Length ? timestep - Agents[index].BirthTime : 0;
+		? index < AgentCount ? timestep - AgentsTMP[index].BirthTime : 0
+		: index < AgentCount ? timestep - Agents[index].BirthTime : 0;
 
 	public float GetAdulcy(int index, uint timestep) => ReadTMP
-		? index < AgentsTMP.Length ? AgentsTMP[index].Adulcy(timestep) : 0f
-		: index < Agents.Length ? Agents[index].Adulcy(timestep) : 0f;
+		? index < AgentCount ? AgentsTMP[index].Adulcy(timestep) : 0f
+		: index < AgentCount ? Agents[index].Adulcy(timestep) : 0f;
 
 	public float GetStress(int index) => ReadTMP
-		? index < AgentsTMP.Length ? AgentsTMP[index].Stress : 0f
-		: index < Agents.Length ? Agents[index].Stress : 0f;
+		? index < AgentCount ? AgentsTMP[index].Stress : 0f
+		: index < AgentCount ? Agents[index].Stress : 0f;
 
 	public float GetSenescence(int index, uint timestep) => ReadTMP
-		? index < AgentsTMP.Length ? AgentsTMP[index].Senescence(timestep) : 0f
-		: index < Agents.Length ? Agents[index].Senescence(timestep) : 0f;
+		? index < AgentCount ? AgentsTMP[index].Senescence(timestep) : 0f
+		: index < AgentCount ? Agents[index].Senescence(timestep) : 0f;
 	#endregion
 
 	///////////////////////////
@@ -1376,14 +1338,15 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
             CollisionBvh.Clear();
             return;
         }
-        var leaves = new List<(int agentIndex, Bvh.BoundingBox bounds)>(dst.Length);
+        var leaves = CollisionLeaves;
+        leaves.Clear();
         for (int i = 0; i < dst.Length; ++i)
         {
 
             leaves.Add((i, ComputeBounds(i)));
         }
 
-        CollisionBvh.Build(leaves);
+        CollisionBvh.Build(CollectionsMarshal.AsSpan(leaves));
     }
     public Bvh.BoundingBox ComputeBoundsFromParameters(Vector3 baseCenter, Quaternion orientation, float length, float radius)
     {
@@ -1595,6 +1558,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 	///////////////////////////
 	#region glTF EXPORT
 	///////////////////////////
+	/*
 	public List<Node> ExportToGLTF()
 	{
 		var src = Src();
@@ -1613,6 +1577,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 		}
 		return nodes;
 	}
+	*/
 	#endregion
 
 	#if DEBUG

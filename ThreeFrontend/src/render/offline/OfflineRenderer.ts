@@ -6,7 +6,7 @@
 //export that quietly drove it would change the simulation's behaviour.
 
 import { signal } from '@preact/signals';
-import appstate, { PlayState, decodeSceneAt } from '../../appstate';
+import appstate, { PlayState, prefetchFrame, sceneAt } from '../../appstate';
 import { activeRenderer } from '../IViewportRenderer';
 import { FrameLighting, resolveLighting } from '../core/Lighting';
 import { VisualMappingOptions } from '../core/PlantColors';
@@ -233,7 +233,7 @@ export async function renderAnimation(): Promise<void> {
 
     const restorePointer = appstate.playPointer.peek();
     const path = makeCameraPath();
-    const source = new FrameSource(index => decodeSceneAt(index));
+    const source = new FrameSource(index => sceneAt(index));
 
     //Pausing first stops the playback machine writing appstate.scene underneath us.
     appstate.playing.value = PlayState.None;
@@ -256,7 +256,18 @@ export async function renderAnimation(): Promise<void> {
             if (cancelRequested) break;
             const started = performance.now();
 
-            const { scene, reused } = source.at(map[i].historyIndex);
+            const { scene, reused } = await source.at(map[i].historyIndex);
+
+            //Start pulling the NEXT frame across the wire before rendering this one.
+            //
+            //Every frame the client no longer holds is an HTTP round trip, and until now that sat
+            //in series with the render: fetch, decode, render, fetch, decode, render. The render
+            //is the long pole, so overlapping the fetch with it is close to free. Only the bytes
+            //are prefetched - into the browser's own cache, since frames are immutable - so this
+            //does not resurrect the buffering the frame source deliberately avoids.
+            if (i + 1 < map.length && map[i + 1].historyIndex !== map[i].historyIndex)
+                void prefetchFrame(map[i + 1].historyIndex);
+
             if (!reused || !lastPixels) {
                 //Writing appstate.scene runs the rebuild effects synchronously, so the
                 //renderer is up to date by the time renderToPixels is called.
@@ -296,7 +307,7 @@ export async function renderAnimation(): Promise<void> {
         appstate.offlineRendering = false;
         //Put the viewport back where the user left it - the scene AND its sun, which the loop
         //has been advancing frame by frame.
-        appstate.scene.value = decodeSceneAt(restorePointer);
+        appstate.scene.value = await sceneAt(restorePointer);
         renderer.setLighting?.(lightingFor(restorePointer));
         appstate.needsRender.value = true;
     }

@@ -245,7 +245,19 @@ public class AgroWorld : SimulationWorld
 		}
 	}
 
-	internal DateTime GetTime(uint timestep) => TimeZoneInfo.ConvertTimeToUtc(InitialTime, TimeZone) + TimeSpan.FromHours(timestep * HoursPerTick);
+	sealed record CalendarOrigin(DateTime Local, DateTime Utc);
+	CalendarOrigin? CachedCalendarOrigin;
+
+	internal DateTime GetTime(uint timestep)
+	{
+		var initial = InitialTime;
+		var origin = CachedCalendarOrigin;
+		// InitialTime is public and can change between runs. Keep the source with
+		// its conversion and publish both together for parallel plant readers.
+		if (origin == null || origin.Local != initial || origin.Local.Kind != initial.Kind)
+			CachedCalendarOrigin = origin = new(initial, TimeZoneInfo.ConvertTimeToUtc(initial, TimeZone));
+		return origin.Utc + TimeSpan.FromHours(timestep * HoursPerTick);
+	}
 	///<summary>
 	///Rainfall in the given timestep in gramm per m²
 	///</summary>

@@ -7,6 +7,21 @@ public class SimulationWorld
 
 	public int Count => Formations.Count;
 
+	/// <summary>
+	/// Forces the sequential tick even when there is more than one formation.
+	///
+	/// The parallel path is NOT reproducible. Measured: the same request with the same seed, run
+	/// twice, is byte-identical for a single plant and diverges at the FIRST timestep once there
+	/// are several - 59 of 60 stored frames differed. Formations tick concurrently, so
+	/// cross-formation posts and soil water requests accumulate in whatever order the thread pool
+	/// produced, and float addition is not associative.
+	///
+	/// That is tolerable for exploratory runs and fatal for branching: a scenario branched from a
+	/// checkpoint could never be compared against its parent. Setting this trades throughput for
+	/// a run that can be reproduced and branched from meaningfully.
+	/// </summary>
+	public bool Deterministic { get; set; } = false;
+
 	internal readonly List<IObstacle> Obstacles = [];
 
 	public void ForEach(Action<IFormation> action) => Formations.ForEach(formation => action(formation));
@@ -20,7 +35,7 @@ public class SimulationWorld
     public void Run(uint simulationLength)
 	{
 		#if !DEBUG
-		if (Formations.Count > 1)
+		if (Formations.Count > 1 && !Deterministic)
 			RunParallel(simulationLength);
 		else
 		#endif

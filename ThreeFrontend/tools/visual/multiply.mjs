@@ -33,7 +33,7 @@ function scanEntity(r, base, doRoots, doAnalytics, xs) {
     r.i32();                                 // parentIndex
     const organ = r.u8();
     if (LAM.has(organ)) {
-      xs.push(r.p - base);                   // affineTransform[3]  = translation x
+      xs.push(r.p - base);                   // start of the 12-float affine transform
       r.skip(48);
       r.skip(doAnalytics ? 31 : 3);
     } else if (CYL.has(organ)) {
@@ -106,7 +106,11 @@ for (let c = 0; c < COPIES; ++c) {
   for (const blk of blocks) {
     const blockAt = at + (blk.base - headerEnd);
     for (const off of blk.xs) {
-      const px = blockAt + off, pz = px + 32;   // row-major 3x4: [3] is x, [11] is z, 32 bytes apart
+      //Row-major 3x4, so the rows are (m00 m01 m02 tx | m10 m11 m12 ty | m20 m21 m22 tz):
+      //translation is at float indices 3 and 11, i.e. byte 12 and byte 44 from the start of the
+      //transform. Patching byte 0 and byte 32 instead hits m00 and m20 - which does not move a
+      //plant, it shears it, and 7,700 sheared copies still look plausibly like a dense canopy.
+      const px = blockAt + off + 12, pz = blockAt + off + 44;
       out.writeFloatLE(out.readFloatLE(px) + dx, px);
       out.writeFloatLE(out.readFloatLE(pz) + dz, pz);
     }

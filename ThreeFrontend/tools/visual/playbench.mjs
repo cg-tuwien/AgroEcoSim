@@ -3,7 +3,7 @@
 // page. Reports the median so a single stall does not move the number.
 //
 // env: SIMULATE (total simulated hours), TICK (hours per step), LAPS (traversals to time)
-import { launch, newPage, collectDiagnostics, sleep, shutdown } from './cdp.mjs';
+import { launch, newPage, collectDiagnostics, lightingScript, sleep, shutdown } from './cdp.mjs';
 
 const url = process.argv[2];
 const SIM = process.env.SIMULATE || '480';
@@ -66,6 +66,13 @@ try {
     await sleep(3000);
   }
 
+  //Lighting affects the per-step cost on the WebGL backend, which rebuilds its density field
+  //whenever the plants change, so the tier has to be part of the measurement.
+  if (process.env.TIER !== undefined && process.env.TIER !== '') {
+    await ev(lightingScript(process.env.TIER, process.env.DAYLIGHT === '1'));
+    await sleep(2500);
+  }
+
   // Step the playhead one frame at a time through the whole history, timing each step. The
   // step buttons drive the same playback FSM the play button does, so this measures the real
   // decode-plus-rebuild-plus-render path rather than a synthetic one.
@@ -113,7 +120,7 @@ try {
 
   if (result.error) throw new Error(result.error);
   console.log(JSON.stringify({
-    frames: result.frames, samples: result.samples,
+    tier: process.env.TIER ?? null, frames: result.frames, samples: result.samples,
     syncMs: result.sync, settleMs: result.settle, stepMs: result.step,
     settleFps: +(1000 / result.settle.median).toFixed(1),
     errors: logs.filter(l => l.level === 'error' || l.level === 'exception').map(l => l.text.split('\n')[0].slice(0, 120)),

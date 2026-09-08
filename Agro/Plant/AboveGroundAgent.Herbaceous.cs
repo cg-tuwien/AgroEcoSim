@@ -225,28 +225,7 @@ namespace Agro
                         //TDMI maybe do it even if no growth
                         if (agent.Organ == OrganTypes.Stem || agent.Organ == OrganTypes.Meristem)
                         {
-                            var crownContinuationProbability = 0f;
-                            var flowerCommitmentProbability = 0f;
-
-                            //chaining (meristem then continues in a new segment)
-                            switch (phase) {
-                                case SeasonalPhase.PreFlower:
-                                    flowerCommitmentProbability = species.PreFloweringCommitmentProbabilityPerHour;
-                                    crownContinuationProbability = species.PreFloweringCrownContinuationProbabilityPerHour;
-                                    break;
-                                case SeasonalPhase.Flowering:
-                                    flowerCommitmentProbability = species.FloweringCommitmentProbabilityPerHour;
-                                    crownContinuationProbability = species.FloweringCrownContinuationProbabilityPerHour;
-                                    break;
-                                case SeasonalPhase.PostFlower:
-                                    flowerCommitmentProbability = species.PostFloweringCommitmentProbabilityPerHour;
-                                    crownContinuationProbability = species.PostFloweringCrownContinuationProbabilityPerHour;
-                                    break;
-                                case SeasonalPhase.ResetPending:
-                                    flowerCommitmentProbability = species.DormantFloweringCommitmentProbabilityPerHour;
-                                    crownContinuationProbability = species.DormantCrownContinuationProbabilityPerHour;
-                                    break;
-                            }
+                            var (flowerCommitmentProbability, crownContinuationProbability) = plant.TickProbabilities.ForPhase(phase);
 
                             if (flowerCommitmentProbability > 0f)
                             {
@@ -284,7 +263,7 @@ namespace Agro
                                     prevProduction = formation.DailyProductionMax;
                                 }
 
-                                var committedToFlower = plant.RNG.NextFloatAccum(flowerCommitmentProbability, world.HoursPerTick) &&
+                                var committedToFlower = (plant.RNG.NextFloat() < flowerCommitmentProbability) &&
                                     CommitToFlower(ref agent, formation, agentID, prevResources, prevProduction);
                                 if (committedToFlower)
                                 {
@@ -320,7 +299,7 @@ namespace Agro
                                         && !HasVegetativeApex(formation, agentID, agentID))
                                         ContinueCrown(ref agent, formation, agentID, prevResources, prevProduction);
                                 }
-                                else if (plant.RNG.NextFloatAccum(crownContinuationProbability, world.HoursPerTick)
+                                else if ((plant.RNG.NextFloat() < crownContinuationProbability)
                                     && CrownAxisHasRoom(formation, agentID, species))
                                 {
                                     agent.Organ = OrganTypes.Stem;
@@ -615,9 +594,7 @@ namespace Agro
                 //attempt per year: at a 0.2 seasonal probability the expected wait to
                 //raise a crown was five years, so only the first shoots ever appeared.
                 //The marker is now claimed only by an activation that actually happens.
-                var activationProbability = SpeciesSettings.SeasonalProbabilityPerTick(
-                    species.CrownBudActivationProbabilityPerSeason,
-                    species.CrownBudBreakWindowHours, plant.World.HoursPerTick);
+                var activationProbability = plant.TickProbabilities.CrownBud;
                 if (plant.RNG.NextFloat() >= activationProbability)
                     return false;
 
@@ -761,9 +738,7 @@ namespace Agro
                 if (agent.RhizomeDevelopment.OriginatingBudPosition == RhizomeBudPosition.Axillary
                     && species.RhizomeAxillaryBudActivationProbabilityPerSeason > 0f)
                 {
-                    probability = SpeciesSettings.SeasonalProbabilityPerTick(
-                        species.RhizomeAxillaryBudActivationProbabilityPerSeason,
-                        species.RhizomeBudBreakWindowHours, plant.World.HoursPerTick);
+                    probability = plant.TickProbabilities.RhizomeAxillarySeason;
                     if (plant.RNG.NextFloat() >= probability)
                         return;
                 }
@@ -771,11 +746,11 @@ namespace Agro
                 {
                     probability = agent.RhizomeDevelopment.OriginatingBudPosition switch
                     {
-                        RhizomeBudPosition.Basal => species.RhizomeBasalBudActivationProbabilityPerHour,
-                        RhizomeBudPosition.Axillary => species.RhizomeAxillaryBudActivationProbabilityPerHour,
+                        RhizomeBudPosition.Basal => plant.TickProbabilities.RhizomeBasal,
+                        RhizomeBudPosition.Axillary => plant.TickProbabilities.RhizomeAxillary,
                         _ => 0f
                     };
-                    if (!plant.RNG.NextFloatAccum(probability, plant.World.HoursPerTick))
+                    if (!(plant.RNG.NextFloat() < probability))
                         return;
                 }
 

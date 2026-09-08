@@ -163,7 +163,7 @@ public sealed class CpuLightSolver
 
 		if (Sensors.Length < SensorTotal)
 		{
-			Sensors = new LeafSensor[Math.Max(SensorTotal, 1024)];
+			Sensors = new LeafSensor[Math.Max(SensorTotal, Math.Max(1024, Sensors.Length + Sensors.Length / 2))];
 			SensorValues = new float[Sensors.Length];
 		}
 
@@ -175,8 +175,9 @@ public sealed class CpuLightSolver
 			if (PrimCounts[i] == 0)
 				return;
 			var ag = ((PlantFormation2)formations[i]).AG;
-			var organs = RentOffsets(i, ag.Count);
-			FillPlant(ag, FirstPlantGroup + i, Scene.PlantPrimitives(i), organs, SensorFirst[i]);
+			var organs = GetOffsetBuffer(i, ag.Count);
+			organs.AsSpan(ag.Count).Fill(-1);
+			FillPlant(ag, FirstPlantGroup + i, Scene.PlantPrimitives(i), organs.AsSpan(0, ag.Count), SensorFirst[i]);
 			OffsetArrays[i] = organs;
 		});
 
@@ -294,7 +295,7 @@ public sealed class CpuLightSolver
 	};
 
 	void FillPlant(PlantSubFormation<AboveGroundAgent> ag, int group, Span<RayPrimitive> destination,
-				   int[] organOffsets, int sensorFirst)
+				   Span<int> organOffsets, int sensorFirst)
 	{
 		var count = ag.Count;
 		int prim = 0, sensor = 0;
@@ -452,7 +453,7 @@ public sealed class CpuLightSolver
 	{
 		if (PrimCounts.Length >= slots)
 			return;
-		var capacity = Math.Max(slots, 64);
+		var capacity = Math.Max(slots, Math.Max(64, PrimCounts.Length + PrimCounts.Length / 2));
 		PrimCounts = new int[capacity];
 		SensorCounts = new int[capacity];
 		SensorFirst = new int[capacity];
@@ -465,20 +466,20 @@ public sealed class CpuLightSolver
 		Array.Copy(PlantRadiosityKnown, known, PlantRadiosityKnown.Length);
 		PlantRadiosity = radiosity;
 		PlantRadiosityKnown = known;
-		OffsetPool = new int[]?[capacity];
+		Array.Resize(ref OffsetPool, capacity);
 	}
 
 	int[]?[] OffsetPool = [];
 
-	/// <summary>Reuses the per-organ offset array of a plant whenever its organ count is unchanged.
-	/// Reallocating one per plant per step is what the previous ambient fallback did, and on a scene
-	/// with thousands of plants it is pure garbage.</summary>
-	int[] RentOffsets(int slot, int count)
+	/// <summary>Keep capacity as plants grow and shrink. These arrays remain referenced by the
+	/// irradiance lookup between ticks, so they are owned here rather than rented per call.</summary>
+	int[] GetOffsetBuffer(int slot, int count)
 	{
 		var cached = OffsetPool[slot];
-		if (cached != null && cached.Length == count)
+		if (cached != null && cached.Length >= count)
 			return cached;
-		var fresh = new int[count];
+		var capacity = Math.Max(count, Math.Max(8, (cached?.Length ?? 0) * 3 / 2));
+		var fresh = new int[capacity];
 		OffsetPool[slot] = fresh;
 		return fresh;
 	}

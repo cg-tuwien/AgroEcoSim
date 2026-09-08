@@ -1,12 +1,6 @@
-using System;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
 using System.Numerics;
-using System.Timers;
 using AgentsSystem;
-using glTFLoader.Schema;
-using NumericHelpers;
 using Utils;
 
 namespace Agro;
@@ -65,6 +59,7 @@ public partial class PlantFormation2 : IPlantFormation
 	/// Species settings
 	/// </summary>
 	public SpeciesSettings Parameters { get; private set; }
+	internal readonly PlantTickProbabilities TickProbabilities;
 
 	public PlantFormation2(AgroWorld world, SpeciesSettings parameters, ISoilFormation soil, SeedAgent seed, Pcg parentRNG, int hoursPerTick)
 	{
@@ -72,6 +67,7 @@ public partial class PlantFormation2 : IPlantFormation
 		Parameters = parameters ?? SpeciesSettings.Default;
         Console.WriteLine($"PlantFormation2 ctor: {Parameters.Name}, BudLength: {Parameters.FlowerSettings.BudLength}");
         Parameters.Init(hoursPerTick);
+		TickProbabilities = new(Parameters, world.HoursPerTick);
         Console.WriteLine($"PlantFormation2 after Init: {Parameters.Name}, BudLength: {Parameters.FlowerSettings.BudLength}");
         Soil = soil;
 		Seed[0] = seed;
@@ -478,10 +474,7 @@ public partial class PlantFormation2 : IPlantFormation
 			(UG as PlantSubFormation<UnderGroundAgent>).Birth(agent);
 	}
 
-	///////////////////////////
-	#region glTF EXPORT
-	///////////////////////////
-	public List<Node> ExportToGLTF() => AG.ExportToGLTF();
+	//public List<Node> ExportToGLTF() => AG.ExportToGLTF();
 
     internal uint GetAge_h()
     {
@@ -490,7 +483,6 @@ public partial class PlantFormation2 : IPlantFormation
 		else
 			return 0;
     }
-    #endregion
 
     // internal int InsertSegments(byte segmentsCount, Quaternion orientation)
     // {

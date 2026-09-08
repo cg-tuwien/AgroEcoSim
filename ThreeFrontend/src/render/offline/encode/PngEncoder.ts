@@ -14,12 +14,13 @@
 //dependency and no hand-rolled deflate.
 
 import { crc32 } from './ZipStoreWriter';
+import { canDeflate, deflateBytes } from '../../../helpers/deflate';
 
 const PNG_SIGNATURE = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
 /** True when this browser can deflate for us; without it the caller must fall back. */
 export function canEncodePng(): boolean {
-    return typeof CompressionStream !== 'undefined';
+    return canDeflate();
 }
 
 function chunk(type: string, body: Uint8Array): Uint8Array {
@@ -57,32 +58,6 @@ function scanlines(rgba: Uint8ClampedArray, width: number, height: number): Uint
     return out;
 }
 
-async function deflate(raw: Uint8Array): Promise<Uint8Array> {
-    //Fed from a ReadableStream and drained by hand rather than going through Blob.stream()
-    //and Response: those are two more browser surfaces to depend on for no benefit, and the
-    //whole point of this module is to depend on less.
-    const source = new ReadableStream<Uint8Array>({
-        start(controller) { controller.enqueue(raw); controller.close(); },
-    });
-    //TypeScript 4.9's lib.dom types CompressionStream's output as unknown, so the cast is the
-    //cheapest honest way to say what the spec already guarantees.
-    const compressed = source.pipeThrough(new CompressionStream('deflate')) as ReadableStream<Uint8Array>;
-    const reader = compressed.getReader();
-
-    const parts: Uint8Array[] = [];
-    let total = 0;
-    for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        parts.push(value);
-        total += value.length;
-    }
-
-    const out = new Uint8Array(total);
-    let at = 0;
-    for (const part of parts) { out.set(part, at); at += part.length; }
-    return out;
-}
 
 /** The PNG bytes. Split from the Blob so the encoding can be tested without a Blob at all. */
 export async function encodePngBytes(rgba: Uint8ClampedArray, width: number, height: number): Promise<Uint8Array> {
@@ -96,7 +71,7 @@ export async function encodePngBytes(rgba: Uint8ClampedArray, width: number, hei
     ihdr[11] = 0;     // adaptive filtering
     ihdr[12] = 0;     // no interlace
 
-    const idat = await deflate(scanlines(rgba, width, height));
+    const idat = await deflateBytes(scanlines(rgba, width, height));
     const parts = [PNG_SIGNATURE, chunk('IHDR', ihdr), chunk('IDAT', idat), chunk('IEND', new Uint8Array(0))];
 
     const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));

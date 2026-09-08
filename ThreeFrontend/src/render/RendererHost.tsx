@@ -9,7 +9,8 @@ import { h } from 'preact';
 import { useEffect, useRef } from 'preact/compat';
 import { useSignalEffect } from '@preact/signals';
 
-import appstate, { PlayState } from '../appstate';
+import BinaryReader from '../helpers/BinaryReader';
+import appstate, { PlayState, sceneAt } from '../appstate';
 import { CameraPose, IViewportRenderer, activeRenderer, PlantFrameInputs, TerrainFrameInputs, SeedFrameInputs, ObstacleFrameInputs, VisibilityInputs } from './IViewportRenderer';
 import { VisualMappingOptions } from './core/PlantColors';
 import { resolveLighting } from './core/Lighting';
@@ -131,7 +132,20 @@ export default function RendererHost() {
             //Diagnostics handle for the visual harness, which drives the app through the DOM
             //and otherwise has no way to reach a module-scoped registry. Gated on an explicit
             //URL flag so a normal session exposes nothing.
-            if (debugHookRequested()) (window as unknown as Record<string, unknown>).__renderer = renderer;
+            if (debugHookRequested()) {
+                const w = window as unknown as Record<string, unknown>;
+                w.__renderer = renderer;
+                //appstate too, not just the renderer: the harness needs to assert on things the
+                //DOM does not show - the shape of `history` in memory, what save() wrote, the
+                //memory ceiling - and those are exactly the invariants that broke silently.
+                w.__appstate = appstate;
+                //The asynchronous frame read, so the harness can prove a compressed frame still
+                //decodes to the same scene.
+                w.__sceneAt = sceneAt;
+                //Decodes raw V7 bytes, so the harness can prove a frame fetched from the run
+                //store is a usable scene and not merely the right number of bytes.
+                w.__decodeSceneBytes = (bytes: Uint8Array) => new BinaryReader(bytes).readAgroScene();
+            }
             appstate.activeBackend.value = renderer.kind;
 
             //Carry the camera across a backend switch so the view does not jump.

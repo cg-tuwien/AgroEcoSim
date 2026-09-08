@@ -37,7 +37,9 @@ public readonly struct MessageWrapper<T> where T : struct, IAgent
         Recipients = recipients;
     }
 
-    public void Process(T[] agents, uint timestep)
+    public void Process(T[] agents, uint timestep) => Process(agents.AsSpan(), timestep);
+
+    public void Process(Span<T> agents, uint timestep)
     {
         if (Recipients == null)
         {

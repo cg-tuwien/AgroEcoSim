@@ -1,4 +1,3 @@
-using System;
 using System.Diagnostics;
 using System.Runtime.Serialization;
 using System.Runtime.CompilerServices;
@@ -464,13 +463,13 @@ public class Pcg
 
 	[M(AI)]internal ulong GetSeed() => _state;
 
-	[M(AI)]internal void SaveBinary(System.IO.BinaryWriter writer)
+	[M(AI)]internal void SaveBinary(BinaryWriter writer)
 	{
 		writer.Write(_state);
 		writer.Write(_increment);
 	}
 
-	[M(AI)]internal Pcg(System.IO.BinaryReader reader)
+	[M(AI)]internal Pcg(BinaryReader reader)
 	{
 		_state = reader.ReadUInt64();
 		_increment = reader.ReadUInt64();
