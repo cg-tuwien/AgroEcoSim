@@ -52,6 +52,21 @@ public class SimulationController// : ControllerBase
             return Results.Bytes(deflated, "application/octet-stream");
         });
 
+        //The complete leaf-area-index measurement, with every per-obstacle daily series present.
+        //
+        //The copy that travelled over the socket has them dropped above DailyRecordBudget, because
+        //a browser cannot hold a hundred megabytes of JSON delivered as one message. Here it is a
+        //file to save: served gzipped, never parsed by the page, and as large as the study needs.
+        api.MapGet("/run/{runId}/obstaclelight", (HttpContext http, string runId) =>
+        {
+            if (!runStore.TryReadObstacleLight(runId, out var gzipped))
+                return Results.NotFound();
+            http.Response.Headers.ContentEncoding = "gzip";
+            http.Response.Headers.CacheControl = "public, max-age=31536000, immutable";
+            http.Response.Headers.ContentDisposition = $"attachment; filename=\"leafareaindex-{runId}.json\"";
+            return Results.Bytes(gzipped, "application/json");
+        });
+
         api.MapGet("/runs", (int? limit) => Results.Ok(runStore.ListRuns(Math.Clamp(limit ?? 25, 1, 200))
             .Select(r => new RunSummaryResponse(r.Id, r.Status, r.CreatedUtc,
                                                r.StoredFrames, r.BytesOnDisk)).ToArray()));
@@ -86,9 +101,15 @@ public class SimulationController// : ControllerBase
             }
 
             response.Renderer = world.RendererName;
-            response.ObstacleLight = ObstacleLightResponse.From(world.ObstacleLight);
-            if (response.ObstacleLight != null)
-                response.ObstacleLightTimesteps = [.. world.ObstacleLight.Timesteps];
+            response.ObstacleLight = ObstacleLightResponse.From(world.ObstacleLight, out var omitted);
+            //Reported whenever a measurement was asked for, even when the filter matched nothing:
+            //without it the client cannot tell a mistyped filter from a run that never measured.
+            if (world.ObstacleLightSelection.Filter != null)
+                response.ObstacleLightMeta = ObstacleLightMetaResponse.From(world, world.ObstacleLight, world.ObstacleList);
+            if (response.ObstacleLightMeta != null)
+                response.ObstacleLightMeta.DailySeriesOmitted = omitted;
+            if (world.ObstacleLight != null)
+                response.ObstacleLightSelection = ObstacleLightSelectionResponse.From(world.ObstacleLight);
 
             return response;
         });

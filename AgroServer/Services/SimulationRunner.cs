@@ -190,6 +190,35 @@ public class SimulationRunner : ISimulationRunner
         Console.WriteLine($"Run {runId} was created but never begun; discarded.");
     }
 
+    /// <summary>
+    /// Writes the complete leaf-area-index measurement to the run store.
+    ///
+    /// Best-effort and deliberately last: it runs after the result has been assembled, so a failure
+    /// here costs the study its detailed file and nothing else. Serialising sixteen hundred trays
+    /// with a daily series each is not free, which is the other reason it only happens when the
+    /// wire copy was actually truncated.
+    /// </summary>
+    void StoreFullObstacleLight(string runId, AgroWorld world, ObstacleLightMetaResponse meta,
+                                ObstacleLightSelectionResponse selection)
+    {
+        try
+        {
+            var document = new ObstacleLightDocumentResponse
+            {
+                RunId = runId,
+                Meta = meta,
+                Selection = selection,
+                Obstacles = ObstacleLightResponse.From(world.ObstacleLight, out _, unbudgeted: true),
+            };
+            Store.WriteObstacleLight(runId, System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(
+                document, ObstacleLightJsonContext.Default.ObstacleLightDocumentResponse));
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine($"Run {runId}: could not store the full leaf area index measurement: {e.Message}");
+        }
+    }
+
     async Task Loop(RunState run, AgroWorld world, bool lazyPreviews, ExportFlags exportFlags, SimulationRequest request)
     {
         var to = Hub.Clients.Group(run.RunId);
@@ -280,9 +309,22 @@ public class SimulationRunner : ISimulationRunner
 
             result.Renderer = world.RendererName;
             result.StepTimes = run.StepTimes;
-            result.ObstacleLight = ObstacleLightResponse.From(world.ObstacleLight);
-            if (result.ObstacleLight != null)
-                result.ObstacleLightTimesteps = [.. world.ObstacleLight.Timesteps];
+            result.ObstacleLight = ObstacleLightResponse.From(world.ObstacleLight, out var omitted);
+            //Reported whenever a measurement was asked for, even when the filter matched nothing:
+            //without it the client cannot tell a mistyped filter from a run that never measured.
+            if (world.ObstacleLightSelection.Filter != null)
+                result.ObstacleLightMeta = ObstacleLightMetaResponse.From(world, world.ObstacleLight, world.ObstacleList);
+            if (result.ObstacleLightMeta != null)
+                result.ObstacleLightMeta.DailySeriesOmitted = omitted;
+            if (world.ObstacleLight != null)
+                result.ObstacleLightSelection = ObstacleLightSelectionResponse.From(world.ObstacleLight);
+
+            //When the wire copy had to drop the per-obstacle series, keep the whole measurement on
+            //disk instead. That budget exists because a browser cannot hold a hundred megabytes of
+            //JSON arriving as one socket message - it is not a statement about how much the study
+            //is allowed to know. Fetched over REST it is a file the browser saves without parsing.
+            if (omitted && world.ObstacleLight != null)
+                StoreFullObstacleLight(run.RunId, world, result.ObstacleLightMeta, result.ObstacleLightSelection);
 
             Store.CompleteRun(run.RunId, run.Abort);
             await to.Result(result);

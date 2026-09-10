@@ -162,10 +162,85 @@ Units are unchanged: `GetIrradiance` returns Wh/m2 accumulated over the tick.
   not traced recursively: a ray landing on a surface reads that surface's
   exitant radiance from `SurfaceRadianceModel`, built from the previous step, so
   the effective path length grows as the simulation runs.
-- `Irradiance/ObstacleLightMeter.cs` - leaf area index and solar load per
-  obstacle per step, for the obstacles whose name contains
-  `LeafAreaIndexObstacles`. Reports three readings side by side because the term
-  has no single definition; see the remarks on `ObstacleLightSample`.
+- `Irradiance/ObstacleLightMeter.cs` + `ObstacleLightSeries.cs` - leaf area
+  index and solar load for the obstacles whose name contains
+  `LeafAreaIndexObstacles`. Three things about its data model are load-bearing
+  and each was forced by a measurement, not by taste:
+  - **Per day, never per step.** Each step folds into the running day and the day
+    is closed when the local date turns over; nothing per-step is retained. A
+    season of per-step records over a few hundred facade objects is hundreds of
+    megabytes and answers nothing a daily total does not.
+  - **Resolved per orientation and per height band.** An imported wall is a
+    solid, so one number per object averages the planted street face against the
+    bare courtyard face: measured on a test wall, 14% shading against the 27% its
+    planted face actually sees. Height matters for the same reason - foliage grows
+    from the planting level, and the bottom band of that wall reached 58% while
+    the top read 0.6%. Orientation classes are assigned from each sensor's
+    outward normal *after* the scene corrects it, because mesh winding cannot be
+    trusted (`Wall` is wound inwards throughout).
+  - **Transmittances are ratios of summed energies, never means of per-step
+    ratios.** A plain mean lets a dim step just after dawn, where the foliage
+    blocks nothing, count as much as noon.
+
+  Two traps recorded in that file, both found by probing: the outward side of a
+  surface is the side that sees **more sky**, not the side without geometry within
+  a fixed probe distance - the fixed probe left a six metre wall's top and reveals
+  pointing inwards and silently dropped them from every reading. And surfaces are
+  ordered by the **solar load** they carry, not by area: a slab has two faces of
+  equal area, and ordering by area picked the shaded north side of a planted south
+  wall as "the dominant facade".
+
+  **The measurement does not depend on which model lights the plants.** Mitsuba
+  and Tamashii light plants but measure nothing on a facade, so when a filter is
+  set `CpuLightSolver.MeasureObstacles` runs beside them - it needs the same
+  traced scene either way, and the only thing it gives up is that the canopy's own
+  reflected contribution falls back to the analytic seed. Before that, a leaf area
+  index study silently produced nothing the moment Mitsuba happened to be
+  reachable, which is exactly how it was reported.
+
+  **A filter that matches nothing says so.** It logs the count and a sample of the
+  actual names, and `ObstacleLightMeta` is emitted even with zero matches, so the
+  HUD can distinguish "your filter is wrong" from "the measurement never ran".
+  Those two were indistinguishable and it cost a debugging session. Note the
+  naming rule that decides what is even available: an imported object becomes soil
+  when its last underscore-separated part is `S<digit>`, and an obstacle
+  otherwise. In the FAV11 facade model the trays are `P001_Y026_T001`, their soil
+  is `P001_Y026_T001_S001`, so `_T` matches 1645 of 1651 obstacles.
+
+  **Payload is budgeted.** Sixteen hundred trays with a daily series each is
+  ~28 MB of JSON at twelve days and over a hundred at a season, which no socket
+  should carry. Above `DailyRecordBudget` the per-obstacle series are dropped and
+  only summaries are sent; the selection-wide daily series is always kept, because
+  the seasonal curve of the facade as a whole is what the study is about. The
+  viewport mapping falls back to the summary when a series is absent, or it would
+  go blank on exactly the large scenes it is most useful on.
+
+  Call `Finish()` before reading the results, or the last day stays open.
+  `AgroWorld.ObstacleLight` exposes the meter; `ObstacleLightResponse.From`
+  snapshots it for the API and calls `Finish` itself.
+
+  **Repainting is gated on a signature, and that is load-bearing.** Picking runs
+  on every mouse move and flips an obstacle's hover state, which the renderer host
+  digests into the obstacle frame revision - so orbiting the camera re-runs
+  `rebuildObstacles` once per mouse-move event. Nothing about a hover changes a
+  measured value, but an unguarded repaint rewrote 2.9M floats twice and had the
+  WebGPU atlas re-upload its whole 42 MB vertex buffer, every event, which read as
+  violent flicker while moving the camera. `writeObstacleColors` therefore returns
+  `unpaintable` / `unchanged` / `repainted`, and only `repainted` may trigger an
+  upload. If stutter remains on a large scene, the next suspect is the same
+  trigger: `rebuildStatics` rebuilds the entire instance list per mouse move, which
+  predates this work.
+
+  The frontend reads that series in `helpers/ObstacleLight.ts`, exports it as a
+  self-describing JSON document (daily records, whole-period summaries and a
+  definitions block - the three leaf area index variants differ by a factor of two
+  on the same canopy, so a file that does not say which it carries invites the
+  wrong reading), and colours the measured obstacles from it. Colouring needs the
+  obstacle group table that terrain blob version 1 appends: imported obstacles are
+  merged into one mesh to keep a single draw call, and the table says which
+  vertices each named object owns. `core/ObstacleColors.ts` paints them in place,
+  because the atlas never reclaims space and re-registering a million-vertex
+  facade on every step of playback would grow it without bound.
 
 Cost, measured on 32 cores: about 2.1 us per leaf per step, flat in scale up to
 230k leaves (800 plants, 100 days, 4 h ticks: 508 ms per step at 231k leaves and
@@ -875,7 +950,7 @@ buffers, draws and texture readback all work, but the canvas never composites,
 so a blank viewport there means nothing. Verify the renderer through
 `renderToPixels` (see `tools/visual/still.mjs`), which bypasses the canvas
 entirely. Measured parity that way: WebGPU vs WebGL offscreen stills differ in
-**665 of 1,024,000 pixels (0.065%)**, all single-pixel edges — rasterisation
+**665 of 1,024,000 pixels (0.065%)** at the time, all single-pixel edges — rasterisation
 fill rules and depth encoding, the irreducible part.
 
 ## Offscreen rendering
@@ -1132,7 +1207,8 @@ backend down.
 
 Measured on the fixture: occlusion changes 0.52 % of pixels on a single plant and 12.27 % on a
 60-plant canopy, every changed pixel darker. Cast shadows are clearly visible on the ground.
-Tier-0 parity against WebGPU stayed at exactly 665 pixels.
+Tier-0 parity against WebGPU stayed at exactly 665 pixels. (It is **21** since the depth range was
+shortened - see "Obstacle mapping flicker" below. Compare against 21, not 665.)
 
 **The cost is a CPU voxelisation on every plant rebuild** - about 7.5 ms per timestep on a
 231-frame session (settle 1.1 ms to 8.6 ms). `DENSITY_TRIANGLE_BUDGET` refuses scenes past
@@ -1522,7 +1598,7 @@ the join left a run that exists everywhere and runs nowhere, with a store record
 | Unwritable store root | HTTP 200, store disabled with a diagnostic, frames 404 |
 | Retention eviction | 8 runs / 451 KB -> 2 runs / 24.7 KB, oldest first, no orphaned directories |
 | Evicted run, traversal, bad step | 404 throughout, never a 500 |
-| Cross-backend parity | **665** of 1,024,000, unchanged |
+| Cross-backend parity | **665** of 1,024,000 at that time; **21** since the depth range changed |
 | Unit tests | 318 in 21 suites, `tsc` clean |
 
 ### Stage 2 made the simulation two to three times slower, and why
@@ -1682,6 +1758,302 @@ exercise real branching, but it is not 4,134 plants over a thousand steps, and s
 contention scales with the stand rather than with the run length. Treat determinism as measured
 where measured and open above it.
 
+### The memory ceiling was governing nine per cent of the problem
+
+The tab still ran out of memory after Stage 2, so the heap was measured instead of reasoned about
+(`tools/visual/heapcheck.mjs`, one 7,700-plant frame, 4,192 MB limit):
+
+| resident | MB |
+| --- | --- |
+| one frame loaded and drawn | **1,148** |
+| of that, the history payload the budget governs | 108 |
+| the decoded scene | ~461 |
+| **never comes back, even with an empty scene and no payloads** | **579** |
+
+So `historyBudget` - 45 % of the heap, 1,886 MB - was policing the 9 % while the other 91 % was
+nobody's business. 1,886 of payloads plus 1,148 for one frame on screen is 3,034 MB before a
+single transient, against a 4,192 MB ceiling.
+
+**The 45 % was correct for a client that was the only copy.** Dropping a frame lost it, so the only
+alternative to holding on was stopping the run. With a run store neither is true: a dropped frame
+comes back in about three milliseconds. `HISTORY_BUDGET_FRACTION_WITH_STORE` is **0.15**, applied
+whenever a run id exists and reverted whenever one does not - a loaded session has no server behind
+it and must still hoard.
+
+The 579 MB that never returns is the renderer's own structures (`InstanceList.items` pools one
+`Instance` per primitive and its `trim()` still has no callers; the WebGPU geometry atlas is
+append-only). Not fixed here, and it is the next thing worth attacking - it is the largest single
+resident item at production scale.
+
+### Exporting a video should not need the run in memory
+
+The tab is most likely to die at exactly the moment an export starts: a long run has just finished,
+the history is at its budget, and one frame on screen already costs a gigabyte. But every frame is
+in the run store and the export reads them one at a time, so the copy in memory buys nothing there.
+
+`releaseHeldFrames()` hands them all back before the export begins. Measured on a 200-frame run:
+200 payloads released, history 3.2 MB -> 0, heap peak **102 MB**, and a complete 48,600-byte
+archive produced. Without a run id it does nothing - then the payloads really are the only copy.
+
+Combined with the prefetch already added to the frame loop, an export after a crash and reload
+works from the timeline that `recoverRun` rebuilt, with nothing resident at all.
+
+### The forward transport controls flickered, and the old fix was worse than the bug
+
+Reported as "the >>| button now blinks all the time", and correctly identified as the consequence
+of removing a deliberate hack: the playback machine used to leave the playhead one index PAST the
+last frame, which pinned `playPointer >= history.length - 1` permanently true and held the button
+still.
+
+The comparison is unstable while a run streams, and syncing the timeline during the run made it
+much more so: the playhead follows the frames that have ARRIVED while the history spans the frames
+the server has STORED, and the two chase each other. Hence the flicker.
+
+The hack is still not the fix - an out-of-range playhead disabled the step-back controls over a
+perfectly good history and made the clock report a step that did not exist. The stable statement is
+the honest one: **while the tab is following the live edge, "seek to end" and "step forward" have
+nothing to do**. `atLiveEdge()` in `Start.tsx` says it once, and no amount of racing between the
+two counters can make it flicker.
+
+`tools/visual/timelinecheck.mjs` counts state changes of that button while a run streams. Measured:
+**0 flickers**, one state throughout.
+
+### `null !== undefined`
+
+`ObstacleMapping.tsx` and `LeafAreaIndex.tsx` both did
+`const measured = light !== undefined && light.length > 0;`. The server sends `obstacleLight: null`
+whenever a run measured no obstacles - `ObstacleLightResponse.From` returns null rather than an
+empty array - so the guard passed and the next term read `.length` off null, throwing inside the
+component's render. A run with no obstacles is the ordinary case, so this threw after almost every
+simulation. `!= null` catches both.
+
+Worth noting how it was found: the export harness reported it, and it looked like the export was
+broken. It was not - the export had produced a valid archive. The lesson is the older one: a
+console error during a render is not evidence about the thing you were testing, and `producedBytes`
+is. Minified stacks map cleanly through `build/*.map`, which is faster than guessing at a
+component from `c.i [as constructor]`.
+
+### The leaf area index export was complete, and unreadable
+
+Reported as "empty `days: []` all over the place ... shouldn't there be some data?". The file was
+behaving exactly as designed - and the report was still right, because nothing in the file said so.
+
+What was verified (`tools/visual/laiexport.mjs`, walls with plants in front, render mode 3):
+
+| obstacles | budget | result |
+| --- | --- | --- |
+| 3 | under | every obstacle and every surface carries days; selection 30 days |
+| 60 | over | per-obstacle and per-surface days empty, **selection series intact, 18 non-zero fields** |
+
+So the measurement runs, the summaries are exact, and the seasonal curve of the whole selection
+survives. `DailyRecordBudget` (8,000 records) drops the rest, which at 1,645 trays it always will:
+one series per tray plus one per orientation is ~180 records each, so the budget is gone at 45
+objects.
+
+**Three things were wrong about how that was communicated, and one about the design.**
+
+`meta.dailySeriesOmitted` was the only evidence, a bare boolean in a metadata block, with its
+explanation living in a C# doc comment the reader never sees. The export now carries a top-level
+`dailySeries` block saying in words that the arrays were dropped, why, what is still complete, and
+where the rest is - and `definitions.days` says the same beside every other field definition. The
+export promises to be self-describing; on the one point that confused a reader, it was not.
+
+The HUD said "narrow the filter for per-obstacle curves", which for a 1,645-tray facade is not
+advice, it is a refusal.
+
+**And the budget was solving the wrong problem.** It exists because a browser cannot hold a hundred
+megabytes of JSON arriving as one socket message - which is a fact about the WIRE, not about how
+much a study is allowed to know. Stage 2 already put a run store and REST behind the app, and this
+is the same shape as streaming frames: the complete measurement is now written to
+`<run>/obstaclelight.json.gz` and served from `GET /Simulation/run/{id}/obstaclelight`. The export
+saves the small readable document and, when it was truncated, downloads the full one beside it.
+
+Two files rather than one merged document, deliberately: merging means parsing a hundred megabytes
+of JSON in the tab that has just finished a long run - the exact allocation the budget exists to
+avoid - whereas a second download streams to disk and the browser never looks inside it.
+
+Measured at 60 obstacles over 30 days: wire copy truncated, stored file **5.8 MB, 60 obstacles all
+carrying 30 days, 300 surfaces carrying days**, meta and selection present.
+
+**One trap worth keeping.** The stored document came out **PascalCase** and parsed in the browser
+to an object with no obstacles, no meta and no selection - silently, erroring nowhere. ASP.NET and
+SignalR camelCase their payloads through their own serializer options; a direct
+`JsonSerializer.SerializeToUtf8Bytes` with the source-generated context does not, and the context
+has no naming policy. It now has a context of its own with `JsonKnownNamingPolicy.CamelCase`,
+rather than a policy on the shared one, which would have renamed every wire payload the frontend
+already reads. The two files must agree because the same reader opens both.
+
+### Obstacle mapping flicker: corrected diagnosis and rendering fix (10 September 2026)
+
+The earlier diagnosis below is superseded. Counting distinct Z coordinates across a mesh does
+not measure distances between overlapping surfaces; different triangulations of the same plane
+need not share any vertices. On FAV11 the measured `_T` tray backs and unmeasured `P001`–`P006`
+panels occupy the same planes. Double-precision rays through the remaining artifact pixels put
+the two surfaces only 3–7 nanometres apart. They are effectively coplanar, not a dense stack of
+micrometre-thick objects.
+
+`core/ObstacleMappingGeometry.ts` partitions indices into context and measured ranges, sharing
+all vertex arrays and preserving source geometry and group ranges. Each face is drawn once.
+Only the measured range gets a small depth preference; the previous common offset on both
+ranges could not resolve their tie. Index ordering is cached by measurement membership, so
+changing values or hovering does not repartition the mesh. WebGL shares BufferAttributes;
+WebGPU draws two ranges from the same atlas slice rather than allocating another vertex buffer.
+
+`tools/visual/obstacledepth.mjs` is the regression: overlapping panels with different
+triangulations, five camera poses, a real occluder 2 cm nearer, changed membership, and exact
+restoration after None. Run it for both backends. Full-facade verification uses the real `_T`
+selection and compares interior pixels with measured-face-only reference renders.
+
+One more correction: r152's offscreen WebGL render target defaulted to **16-bit depth**, so the
+old screenshot measurements did not test the assumed 24-bit buffer. The still renderer now
+explicitly requests 24-bit depth. Old cross-backend pixel counts, including 21, are historical
+measurements rather than acceptance invariants for the new offscreen format.
+
+Historical investigation (the geometric conclusions and precision claims are superseded):
+
+Reproduced and diagnosed. The screenshots settled it: diagonal hatching and horizontal scanlines
+across the trays that REORGANISE with the camera. Wrong vertex colours do not do that; a depth tie
+does, because a tie is decided by whichever triangle last won the comparison.
+
+Measured on the FAV11 facade (`tools/visual/coplanarcheck.mjs`):
+
+| | |
+| --- | --- |
+| depth extent of the whole facade | **220 mm** |
+| distinct Z planes within it | **36,665** |
+| median spacing between adjacent planes | **1 micrometre** |
+| what a 24-bit buffer resolved at 20 m with near 0.025 / far 5000 | **0.95 mm** |
+
+Roughly a thousand times finer than the buffer could separate. `near = 0.025` against `far = 5000`
+is a ratio of **200,000:1**, and depth precision is spent on the RATIO, not the distance - so the
+range was throwing away about five bits for a scene that never needed to see past fifty metres.
+
+That accounts for every part of the report: invisible while everything is white, because both
+winners are the same colour; appearing the instant a mapping gives neighbouring trays different
+values; "grey and blue", being two tray colours or a tray against the dark; and enormous change
+from tiny camera movements. It is also why it appears in BOTH backends - reversed-Z on
+`depth32float` gives about 2.4 um of relative precision at that distance, which is the same order
+as the spacing.
+
+Ruled out on the way, each by measurement rather than reading: the trays are not duplicated between
+the terrain and the obstacle lists (0 of 948,409 vertices shared), and near-coincident vertices
+belonging to DIFFERENT named groups are only 0.16 % of positions - so it is not duplicate geometry,
+it is a dense stack of genuinely distinct surfaces.
+
+**`CAMERA_NEAR` / `CAMERA_FAR` now live in `core/Mat4.ts`**, at 0.05 and 500, read by both backends
+so they cannot drift apart. 500 m still clears a 38 m facade by an order of magnitude and 5 cm is
+closer than anything is worth inspecting.
+
+**It does not fix the flicker, and that is measured, not assumed.** Under a 0.2 % camera nudge:
+
+| depth range | pixels changed |
+| --- | --- |
+| 0.05 / 500 (ratio 10,000) | **18,638** |
+| 0.0377 / 754 (ratio 20,000) | 18,361 |
+| `logarithmicDepthBuffer: true` | **24,790 - worse** |
+
+Ten times the range makes no difference and a logarithmic buffer makes it a third worse, most
+likely because three writes `gl_FragDepth` itself under that flag and the hardware `polygonOffset`
+the obstacles rely on stops applying. It was tried, measured and **reverted**; do not reach for it
+again without re-reading this table. The problem is a factor of a thousand and no depth encoding
+spans that, so the remaining fix is geometric: weld or separate the surfaces at import.
+
+**The cross-backend parity invariant moved from 665 to 21**, and this is why: shortening the range
+gave both backends enough precision to resolve the fixture's coplanar surfaces the same way, so the
+disagreements it used to count are gone. Stable across repeats, `maxDelta` unchanged at 188. **21
+is the new figure to compare against.**
+
+### How a harness can be blind to a violent fault
+
+Worth recording on its own, because the first three runs of `obstaclepaint.mjs` all reported
+STABLE on a scene that flickers unmistakably in front of a person.
+
+1. **It rendered nothing.** The imported model sits nowhere near the default camera, so two blank
+   images diffed to a confident `0 differing`. It now frames the model and refuses to run on a
+   render with fewer than a thousand non-background pixels.
+2. **It framed the whole model**, which left it a 3 % sliver of the frame - too small for a speckle
+   artifact to register. It now fills the frame.
+3. **It fabricated a smooth ramp of values**, so neighbouring trays got nearly identical colours
+   and a flipped depth tie repainted a pixel to almost the same colour. The fault was present in
+   every one of those runs and the test could not see it by construction. Fabricated data must
+   make neighbours CONTRAST - alternating extremes - or it hides exactly the class of fault that
+   only shows where two surfaces meet.
+4. **Its input was missing and it never checked.** `npm run build` recreates the build directory,
+   which deleted the model the harness fetched over HTTP - so it uploaded a 404 page as a File,
+   parsed it to nothing, and reported "import produced no colour groups". From that one root cause
+   came two confident and wrong diagnoses: that the server's 3.24 GB RSS made a second import fail,
+   and that `logarithmicDepthBuffer` broke the WebGL context. Neither was true. The harness now
+   copies the model in itself and sniffs the first bytes before uploading - and note that copying
+   is not enough on its own, because **sirv reads the directory once at startup** and serves a
+   later addition as 404.
+5. **It launched the browser with the WebGPU flags for a WebGL run.**
+   `--use-webgpu-adapter=swiftshader --enable-features=Vulkan` intermittently leaves the GL context
+   reporting `maxTextureSize: 0` here. That is what actually broke the runs blamed on log depth.
+   Set those flags only for WebGPU.
+6. **It held the camera still.** The reported symptom is a response to camera movement, and no
+   single frame contains it. A 0.2 % nudge of the camera position now runs as its own comparison,
+   and that is the check that finally caught it: **18,361 pixels changed, a tenth of the painted
+   facade, worst-case swing 250 of 255.**
+
+### Obstacle mapping flicker: not reproduced, one hazard closed
+
+Reported on real hardware in the WebGPU viewport: with an obstacle mapping on, vertices go randomly
+grey and blue and flicker while orbiting; with the mapping off every obstacle is a stable white.
+
+**It has not been reproduced here, and nothing below claims to have fixed it.**
+`tools/visual/obstaclepaint.mjs` imports a real facade, fabricates a measurement over its named
+groups, frames the model and then separates the two candidate causes, because they call for
+opposite fixes:
+
+- the same pose rendered twice - any difference is the DRAW being unstable;
+- the same pose before and after 24 mouse moves - which is what orbiting actually does to the
+  obstacle rebuild, through picking and the hover state.
+
+Both come back byte-identical, with `obstacleRepaints` at 1 and `atlasUploads` unchanged across the
+mouse moves. So the paint signature and the upload guard hold. The caveat is real, though: this is
+SwiftShader with a fixed camera, and z-fighting in particular behaves differently on real hardware.
+
+**Re-run on the real facade, filling the frame.** 1,651 named groups, 948,409 vertices, the model
+covering 167,246 pixels of a 256,000-pixel render: still 0 differing on both checks, repaints 1,
+uploads unchanged. And with a value fabricated for EVERY group, **zero pixels of the unmeasured
+background grey** - which is the sharper test, because it does not need the fault to be unstable:
+any grey at all would mean a second surface fighting for the depth, or colours written where they
+do not belong.
+
+**Leads checked and closed by reading, so they are not checked again.** The `IFlags` values do not
+collide (`VertexColorsEmissive = 64`, clear of `Hidden`/`DepthBias`/`ExcludeFromGI`). The depth
+bias has the right sign for reversed Z - `DEPTH_BIAS_TOWARDS_CAMERA` is +1 and `Targets.ts` derives
+it from `REVERSED_Z`. And `variantFor` tests `flags & IFlags.DepthBias` as a bitmask, so the two
+flags a painted obstacle gains do not knock it out of the biased pipeline variant, which would have
+brought back exactly the terrain z-fighting the bias exists to cure.
+
+**What that leaves.** The facade is ONE merged obstacle mesh, so obstacle-against-obstacle fighting
+is impossible; the only coplanarity available is obstacle against TERRAIN, and the imported soils
+sit inside their trays (`P001_Y026_T001` beside `P001_Y026_T001_S001`). Grey is what an unmapped
+terrain surface would read as. Toggling terrain visibility off is therefore a one-checkbox test
+that would settle it, and it is the first thing to try on hardware that reproduces this.
+
+**The one hazard that does produce that exact symptom, now closed.** `GeometrySlice` recorded
+`firstIndex`, `indexCount` and `baseVertex` but **not** the vertex count, while
+`GeometryRegistry.register` REPLACES the mesh stored under an existing id and the atlas keeps the
+slice it appended from the old one. `refreshVertexColors` then wrote
+`mesh.positions.length / 3` vertices from `slice.baseVertex` with no bound - so a mesh that grew
+would repaint whatever geometry the atlas appended next, in the obstacle ramp's colours. Unrelated
+objects wearing grey and blue is precisely what that looks like, and it would change as the camera
+brings different objects into view.
+
+No path was found that actually re-registers an obstacle mesh at a different size - obstacle keys
+carry a per-instance uid - so this is a latent hazard rather than a demonstrated cause. The slice
+now carries its vertex count, the write is clamped to it, and a mismatch logs loudly instead of
+corrupting silently.
+
+**Diagnostics, so the next look is not another guess.** `window.__rendererStats()` reports
+`obstacleRepaints`, `atlasUploads` and `atlasUploadedMb`. Orbiting must not move any of them:
+nothing about a camera move changes a measured value, and a full atlas re-upload per mouse-move
+event - 42 MB on an imported facade - is the documented cause of this exact flicker. If those
+counters climb while only the camera moves, the guard has been defeated again and the numbers say
+which one; if they do not, the cause is in the draw and not in the upload.
+
 ### Two traps worth remembering
 
 **Two sources of truth for one number.** The HUD measured against the `historyBudget` signal
@@ -1702,7 +2074,12 @@ silently rendered through **three**, because headless WebGPU needs
 and without them the fallback chain quietly serves WebGL. The diff was `0 differing` and both PNGs
 were byte-identical in size - which reads like the best possible result and is actually the
 measurement not happening. **Check `cfg.resolved.kind` in the `still.mjs` output before believing
-any cross-backend number.** With the flags set the invariant is 665, as it has always been.
+any cross-backend number.** The invariant was 665 for the whole of that work and is **21** since
+the depth range was shortened.
+
+**And do NOT set those flags for a WebGL run.** They intermittently leave the GL context reporting
+`maxTextureSize: 0`, which surfaces as an `OfflineSizeError` from `renderToPixels` and reads
+exactly like a renderer regression. Two measurements were wasted on that before it was noticed.
 
 **A flag the client sets to false on load cannot be waited on.** The recovery harness waited for
 `computing` to go false before sampling; after a reload it is false from the first instant, so the

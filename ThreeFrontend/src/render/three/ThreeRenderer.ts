@@ -16,6 +16,8 @@ import appstate from '../../appstate';
 import { Seed } from '../../helpers/Seed';
 import { Obstacle } from '../../helpers/Obstacle';
 import { ITerrainItem, MeshTerrainItem, terrainPalette } from '../../helpers/Terrain';
+import { writeObstacleColors } from '../core/ObstacleColors';
+import { obstacleMappingGeometry, OBSTACLE_MAPPING_DEPTH_UNITS, OBSTACLE_MAPPING_DEPTH_SLOPE } from '../core/ObstacleMappingGeometry';
 import { BaseRequestObject } from '../../helpers/BaseRequestObject';
 import { EncodePlantName } from '../../helpers/Plant';
 
@@ -26,7 +28,7 @@ import { buildPlants } from '../core/BuildScene';
 import { VisualMappingOptions } from '../core/PlantColors';
 import { Geom } from '../core/GeometryIds';
 import { getGeometry, registerGeometry } from '../core/GeometryStore';
-import { createMat4, Mat4 } from '../core/Mat4';
+import { createMat4, Mat4, CAMERA_FAR, CAMERA_NEAR } from '../core/Mat4';
 import { paletteColor } from '../core/SelectionPalette';
 import { Ray } from '../core/Ray';
 import { backgroundColor } from '../../helpers/Selection';
@@ -140,7 +142,7 @@ export class ThreeRenderer implements IViewportRenderer {
         this.scene.add(this.sun, this.sun.target);
         this.scene.add(this.objSeeds, this.objTerrain, this.objObstacles, this.objPlants);
 
-        this.camera = new THREE.PerspectiveCamera(50, this.aspect(), 0.025, 5000);
+        this.camera = new THREE.PerspectiveCamera(50, this.aspect(), CAMERA_NEAR, CAMERA_FAR);
         this.camera.position.set(0, 3, 5);
 
         this.controls = new OrbitControls(this.camera, this.renderer.domElement);
@@ -248,8 +250,8 @@ export class ThreeRenderer implements IViewportRenderer {
             target: t ? { x: t.x, y: t.y, z: t.z } : { x: 0, y: 0, z: 0 },
             up: c ? { x: c.up.x, y: c.up.y, z: c.up.z } : { x: 0, y: 1, z: 0 },
             fovY: c?.fov ?? 50,
-            near: c?.near ?? 0.025,
-            far: c?.far ?? 5000,
+            near: c?.near ?? CAMERA_NEAR,
+            far: c?.far ?? CAMERA_FAR,
         };
     }
 
@@ -502,14 +504,28 @@ export class ThreeRenderer implements IViewportRenderer {
         this.renderOnce();
     }
 
+    private newObstacleMaterial(): THREE.MeshLambertMaterial {
+        const material = new THREE.MeshLambertMaterial({
+            side: THREE.DoubleSide,
+            flatShading: true,
+            //Obstacles are frequently coplanar with the terrain they sit on.
+            polygonOffset: true,
+            polygonOffsetFactor: -2,
+        });
+        this.density?.patch(material);
+        return material;
+    }
+
     rebuildObstacles(inputs: ObstacleFrameInputs) {
         const obstacles = inputs.obstacles as Obstacle[];
         const live = new Set(obstacles);
+        const mapped = inputs.mapping.values !== undefined;
 
         for (const [obstacle, mesh] of this.obstacleMeshes) {
             if (!live.has(obstacle)) {
                 this.objObstacles.remove(mesh);
-                (mesh.material as THREE.Material).dispose();
+                const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+                materials.forEach(m => m.dispose());
                 this.obstacleMeshes.delete(obstacle);
             }
         }
@@ -517,32 +533,75 @@ export class ThreeRenderer implements IViewportRenderer {
         for (const obstacle of obstacles) {
             let mesh = this.obstacleMeshes.get(obstacle);
             if (!mesh) {
-                const obstacleMaterial = new THREE.MeshLambertMaterial({
-                    side: THREE.DoubleSide,
-                    flatShading: true,
-                    //Obstacles are frequently coplanar with the terrain they sit on.
-                    polygonOffset: true,
-                    polygonOffsetFactor: -2,
-                });
-                this.density?.patch(obstacleMaterial);
-                mesh = new THREE.Mesh(this.geometryFor(Geom.BoxBottomCentered), obstacleMaterial);
+                mesh = new THREE.Mesh(this.geometryFor(Geom.BoxBottomCentered), this.newObstacleMaterial());
                 mesh.matrixAutoUpdate = false;
                 mesh.userData = { ref: { type: 'obstacle', obstacle }, flags: 0 } as MeshUserData;
                 this.objObstacles.add(mesh);
                 this.obstacleMeshes.set(obstacle, mesh);
             }
 
+            const layout = mapped && obstacle.meshData && obstacle.groups
+                ? obstacleMappingGeometry(obstacle.meshData, obstacle.groups, inputs.mapping.values!)
+                : undefined;
             if (obstacle.meshData)
-                obstacle.meshGeom = registerGeometry(`obstacle:${obstacle.uid}`, obstacle.meshData);
+                obstacle.meshGeom = registerGeometry(`obstacle:${obstacle.uid}`, layout?.mesh ?? obstacle.meshData);
 
-            const geometry = this.geometryFor(obstacle.geomId());
+            const geometry = layout ? toBufferGeometry(layout.mesh, obstacle.meshData) : this.geometryFor(obstacle.geomId());
             if (mesh.geometry !== geometry) mesh.geometry = geometry;
 
             mesh.matrix.fromArray(obstacle.writeModel(this.scratch));
             mesh.matrixWorldNeedsUpdate = true;
 
-            const c = paletteColor(obstacle.palette, obstacle.state.value);
-            (mesh.material as THREE.MeshLambertMaterial).color.setRGB(c.r, c.g, c.b);
+            //A measured obstacle is painted per named object, from the group table the import
+            //carried. Everything else keeps its palette colour. The result also says whether the
+            //colours actually moved: this runs on every mouse move, and re-uploading a
+            //million-vertex facade each time is what made orbiting flicker.
+            const paint = mapped
+                ? writeObstacleColors(obstacle.meshData, obstacle.groups, inputs.mapping.values,
+                    inputs.mapping.range[0], inputs.mapping.range[1])
+                : 'unpaintable';
+            const painted = paint !== 'unpaintable';
+
+            //A data readout has to be UNLIT, or the value is modulated by which way the wall
+            //faces and stops being readable as a quantity - the same reason the plant mappings
+            //put their value in emissive. three's vertex colours multiply the diffuse term, so
+            //the only way to get that here is an unlit material, hence the swap.
+            const isUnlit = Array.isArray(mesh.material);
+            if (painted !== isUnlit) {
+                const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+                materials.forEach(m => m.dispose());
+                mesh.material = painted
+                    ? [
+                        new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide }),
+                        new THREE.MeshBasicMaterial({
+                            vertexColors: true, side: THREE.DoubleSide,
+                            polygonOffset: true, polygonOffsetFactor: -OBSTACLE_MAPPING_DEPTH_SLOPE,
+                            polygonOffsetUnits: -OBSTACLE_MAPPING_DEPTH_UNITS,
+                        }),
+                    ]
+                    : this.newObstacleMaterial();
+            }
+
+            if (painted) {
+                if (layout && mesh.userData.mappingIndexVersion !== layout.version) {
+                    geometry.clearGroups();
+                    if (layout.contextCount) geometry.addGroup(0, layout.contextCount, 0);
+                    const count = layout.mesh.indices.length - layout.contextCount;
+                    if (count) geometry.addGroup(layout.contextCount, count, 1);
+                    if (geometry.index) geometry.index.needsUpdate = true;
+                    mesh.userData.mappingIndexVersion = layout.version;
+                }
+                //The array is the one writeObstacleColors filled, so only the upload has to be
+                //told about it - and only when it was actually rewritten.
+                if (paint === 'repainted') {
+                    const attribute = geometry.getAttribute('color');
+                    if (attribute) attribute.needsUpdate = true;
+                }
+            } else {
+                mesh.userData.mappingIndexVersion = undefined;
+                const c = paletteColor(obstacle.palette, obstacle.state.value);
+                (mesh.material as THREE.MeshLambertMaterial).color.setRGB(c.r, c.g, c.b);
+            }
         }
 
         this.objObstacles.visible = inputs.visible;
@@ -654,6 +713,10 @@ export class ThreeRenderer implements IViewportRenderer {
             stencilBuffer: false,
             samples: msaa > 1 ? msaa : 0,
         });
+        //r152 otherwise uses a 16-bit depth renderbuffer here. At 30 m that cannot even
+        //separate centimetres, and a bias sized for the viewport's 24-bit buffer hides real
+        //occluders in screenshots. UnsignedIntType requests DEPTH_COMPONENT24 in WebGL2.
+        big.depthTexture = new THREE.DepthTexture(rw, rh, THREE.UnsignedIntType);
         //THE bug to avoid: renderer.outputColorSpace applies only to the canvas. Without this
         //the offscreen image comes out darker than the viewport, because the shader would
         //write linear values where the canvas gets sRGB-encoded ones.

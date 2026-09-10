@@ -108,6 +108,15 @@ public class SimulationRequest
     public float? LeafAreaIndexDepth { get; init; }
 
     /// <summary>
+    /// Height of the horizontal bands each selected obstacle is measured in, in metres. Foliage on a
+    /// facade develops from the planting level upwards, so a wall reported as a single number hides
+    /// that gradient. Set it larger than the tallest obstacle to get one band per object.
+    /// (default: 0.5)
+    /// </summary>
+    ///<example>0.5</example>
+    public float? LeafAreaIndexBandHeight { get; init; }
+
+    /// <summary>
     /// Number of samples to render per pixel (usually a power of two between 64 and 4096)
     /// </summary>
     public ushort? SamplesPerPixel { get; init; }

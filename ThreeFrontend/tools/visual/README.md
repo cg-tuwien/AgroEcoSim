@@ -287,3 +287,79 @@ went wrong.
 Set the plants and positions explicitly, as this does. `pushSeedRaster` picks a random species per
 position, so any two runs seeded with it differ by construction and comparing them measures the
 helper. `DETERMINISTIC=1` additionally sets the sequential-tick flag.
+
+## heapcheck.mjs - where the heap actually goes
+
+    CHROME_EXTRA_FLAGS="--enable-unsafe-webgpu --enable-features=Vulkan --use-webgpu-adapter=swiftshader" \
+      node heapcheck.mjs "http://localhost:8080/?gpu=1&debughook=1" ~/agro-fixture/x7700.json
+
+Loads one 7,700-plant frame and reports the heap at each stage, collecting garbage before every
+reading so what is reported is retained rather than merely allocated. It releases the history
+payloads, then the decoded-scene cache, then the scene itself, **separately** - one number saying
+"a gigabyte is resident" points at nothing, while knowing how much each stage gives back is the
+difference between a budget that is too generous and something that never reclaims at all.
+
+Measured: 1,148 MB for one frame, of which 108 MB is the payload the memory budget governs and
+579 MB never comes back.
+
+## exportfromstore.mjs - a video from a run that is on disk
+
+    node exportfromstore.mjs "http://localhost:8080/?gpu=1&debughook=1" http://localhost:7215
+
+Runs a real simulation, then exports the animation and checks the export gave the frames back
+first. Asserts on **producedBytes**, not on the panel's "Saved N MB" text - `animate.mjs` reports
+`done: false` on exports that demonstrably produced a file, so that text is not a completion
+signal and treating it as one turns a working export into a phantom failure.
+
+## laiexport.mjs - is the leaf area index export complete?
+
+    OBSTACLES=3  node laiexport.mjs "http://localhost:8080/?debughook=1" http://localhost:7215 small.json
+    OBSTACLES=60 node laiexport.mjs "http://localhost:8080/?debughook=1" http://localhost:7215 big.json
+
+Runs a real measurement - walls with plants in front, render mode 3, since modes 1 and 2 light
+plants but measure nothing on a facade - and asserts on the export DOCUMENT rather than on a
+downloaded blob's size. Empty `days` arrays are both a legitimate outcome of the payload budget and
+the symptom of a broken measurement, and only the document distinguishes them.
+
+Run it at both scales. Under the budget every level must carry days; over it the per-obstacle
+series go but `selection.days` must survive with real numbers in it, and the full series must be
+retrievable from the run store - a `fullSeriesUrl` written into an exported file that 404s is worse
+than no URL at all, so the harness fetches and parses it.
+
+## obstaclepaint.mjs - do the obstacle mapping colours hold still?
+
+    cp "<a facade>.obj" build/facade.obj
+    CHROME_EXTRA_FLAGS="--enable-unsafe-webgpu --enable-features=Vulkan --use-webgpu-adapter=swiftshader" \
+      node obstaclepaint.mjs "http://localhost:8080/?gpu=1&debughook=1" "" /tmp/out
+
+Imports a facade through the app's own upload, fabricates a measurement over its named groups, and
+separates the two causes of a flickering mapping: the same pose rendered twice (an unstable DRAW)
+and the same pose before and after a burst of mouse moves (a REBUILD that corrupts the colours -
+picking flips a hover state on every mouse move, so "while the camera moves" may have nothing to do
+with the camera). It also reads `__rendererStats()`: orbiting must not change `obstacleRepaints` or
+`atlasUploads`.
+
+**It frames the model first, and refuses to continue on an empty render.** The first version did
+neither and reported a confident `0 differing` on two blank images - the imported model sits
+nowhere near the default camera. Needs an imported mesh: procedural walls carry no colour array and
+are never painted.
+
+## obstacledepth.mjs
+
+Analytic regression for the obstacle mapping depth tie. A measured panel overlaps a differently
+triangulated, unmeasured panel at facade-scale coordinates; a third panel sits 2 cm in front.
+Five camera poses check the measured interior, real occlusion, changed measurement membership,
+and exact pixel restoration after switching through None. A wrong renderer or any failed check
+exits nonzero. No OBJ or simulation run is needed.
+
+```
+node tools/visual/obstacledepth.mjs 'http://localhost:8080/?gpu=0&debughook=1'
+CHROME_EXTRA_FLAGS="--enable-unsafe-webgpu --enable-features=Vulkan --use-webgpu-adapter=swiftshader" \
+  node tools/visual/obstacledepth.mjs 'http://localhost:8080/?gpu=1&debughook=1'
+```
+
+For the FAV11 facade, use the real measurement selection (`_T`) when fabricating readings:
+the large `P001`–`P006` panels are unmeasured context and share a plane with the tray backs.
+Counting distinct Z coordinates across the model does not measure separation of overlapping
+surfaces. Nor does the number of pixels changed by moving the camera isolate flicker: ordinary
+silhouette motion changes pixels too. Check interior colours against a geometry reference.

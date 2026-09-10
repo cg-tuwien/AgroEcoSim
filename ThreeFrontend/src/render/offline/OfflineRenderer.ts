@@ -6,7 +6,7 @@
 //export that quietly drove it would change the simulation's behaviour.
 
 import { signal } from '@preact/signals';
-import appstate, { PlayState, prefetchFrame, sceneAt } from '../../appstate';
+import appstate, { PlayState, prefetchFrame, releaseHeldFrames, sceneAt } from '../../appstate';
 import { activeRenderer } from '../IViewportRenderer';
 import { FrameLighting, resolveLighting } from '../core/Lighting';
 import { VisualMappingOptions } from '../core/PlantColors';
@@ -233,6 +233,17 @@ export async function renderAnimation(): Promise<void> {
 
     const restorePointer = appstate.playPointer.peek();
     const path = makeCameraPath();
+    //Give the frames back before starting.
+    //
+    //Every one of them is on the server, and this loop reads them one at a time - so the copy in
+    //memory is worth nothing here and costs everything. At 7,700 plants a single frame on screen
+    //already occupies about 1.1 GB of heap, which is why an export started at the end of a long
+    //run is the moment the tab is most likely to die. Frames come back over HTTP in a few
+    //milliseconds, prefetched one ahead, which the render time hides.
+    const releasedFrames = releaseHeldFrames();
+    if (releasedFrames > 0)
+        console.log(`Offline export: released ${releasedFrames} frames held in memory; they stream from the run store.`);
+
     const source = new FrameSource(index => sceneAt(index));
 
     //Pausing first stops the playback machine writing appstate.scene underneath us.

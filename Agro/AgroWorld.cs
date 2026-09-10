@@ -128,8 +128,8 @@ public class AgroWorld : SimulationWorld
 		}
 
 		Irradiance = new IrradianceClient(Latitude, Longitude, settings?.RenderMode ?? 0, settings?.SamplesPerPixel ?? 512,
-			settings?.LightSamples ?? 16, settings?.LeafAreaIndexObstacles, settings?.LeafAreaIndexSensors ?? 16384,
-			settings?.LeafAreaIndexDepth ?? 3f);
+			settings?.LightSamples ?? 16, settings?.LeafAreaIndexObstacles, settings?.LeafAreaIndexSensors ?? 32768,
+			settings?.LeafAreaIndexDepth ?? 3f, settings?.LeafAreaIndexBandHeight ?? 0.5f);
 
 		Init();
 	}
@@ -511,4 +511,8 @@ public class AgroWorld : SimulationWorld
 	/// selection was requested or when no internal light model ran.
 	/// </summary>
 	public ObstacleLightMeter? ObstacleLight => Irradiance.ObstacleLight;
+
+	/// <summary>What the leaf area index filter was offered and what it matched, so a caller can
+	/// tell a mistyped filter from a measurement that never ran.</summary>
+	public (string? Filter, int Candidates, int Matches) ObstacleLightSelection => Irradiance.ObstacleLightSelection;
 }

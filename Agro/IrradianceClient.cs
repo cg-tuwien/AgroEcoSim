@@ -124,8 +124,8 @@ public class IrradianceClient
 	string SamplesPerPixel;
 
 	public IrradianceClient(float latitude, float longitude, int _mode, ushort spp = 512,
-		int lightSamples = 16, string? leafAreaIndexObstacles = null, int leafAreaIndexSensors = 16384,
-		float leafAreaIndexDepth_m = 3f)
+		int lightSamples = 16, string? leafAreaIndexObstacles = null, int leafAreaIndexSensors = 32768,
+		float leafAreaIndexDepth_m = 3f, float leafAreaIndexBandHeight_m = 0.5f)
 	{
 		var mode = (Mode)_mode;
 		var port = 9001 + Math.Clamp(_mode - 1, 0, 8);
@@ -141,11 +141,16 @@ public class IrradianceClient
 		//back to it as soon as their renderer fails to answer. Obstacle measurements are only ever
 		//requested explicitly, so nothing is spent on them otherwise.
 		if (GlobalIllumination)
-			Solver = new CpuLightSolver(lightSamples, leafAreaIndexObstacles, leafAreaIndexSensors, leafAreaIndexDepth_m);
+			Solver = new CpuLightSolver(lightSamples, leafAreaIndexObstacles, leafAreaIndexSensors,
+				leafAreaIndexDepth_m, leafAreaIndexBandHeight_m);
 	}
 
 	/// <summary>Per-obstacle leaf area index and solar load series, when they were requested.</summary>
 	public ObstacleLightMeter? ObstacleLight => Solver?.Meter;
+	/// <summary>Obstacles the leaf area index filter was offered, and how many it matched. Both zero
+	/// when no measurement was requested.</summary>
+	public (string? Filter, int Candidates, int Matches) ObstacleLightSelection
+		=> (Solver?.ObstacleFilterText, Solver?.ObstacleCandidates ?? 0, Solver?.ObstacleMatches ?? 0);
 
 	bool ProbeRenderer()
 	{
@@ -206,7 +211,18 @@ public class IrradianceClient
 
 		var agroWorld = world as AgroWorld;
 		if (IsOnline && GlobalIllumination && SelectedMode != Mode.Internal)
+		{
 			DoTick(agroWorld, timestep, formations, obstacles);
+			//An external renderer lights the plants but measures nothing on the facade, so the
+			//obstacle measurement runs on its own. Without this a leaf area index study silently
+			//produced nothing the moment Mitsuba happened to be reachable.
+			if (!UseInternal && (Solver?.MeasuresObstacles ?? false) && agroWorld.GetDaylight(timestep))
+			{
+				SW.Start();
+				try { Solver.MeasureObstacles(agroWorld, timestep, formations, obstacles); }
+				finally { SW.Stop(); }
+			}
+		}
 		else if (UseInternal && Solver != null)
 			DoInternalTick(agroWorld, timestep, formations, obstacles);
 		else

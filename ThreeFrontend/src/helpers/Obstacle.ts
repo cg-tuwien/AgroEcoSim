@@ -15,6 +15,21 @@ let nextObstacleUid = 0;
 
 export type ObstacleType = "wall" | "umbrella" | "mesh";
 
+/**
+ * One named object inside a merged mesh obstacle.
+ *
+ * Imported scenes arrive as a single mesh so the viewport keeps one draw call, but the leaf area
+ * index is measured per named object, so colouring one needs to know which vertices are its own.
+ * The ranges are contiguous because the backend appends the objects one after another.
+ */
+export type ObstacleGroup = {
+    name: string;
+    vertexFirst: number;
+    vertexCount: number;
+    indexFirst: number;
+    indexCount: number;
+};
+
 export class Obstacle extends BaseRequestObject
 {
     type: Signal<ObstacleType>;
@@ -30,6 +45,8 @@ export class Obstacle extends BaseRequestObject
     meshData: MeshData | undefined;
     /** Runtime geometry id assigned by the renderer when it registers meshData. */
     meshGeom: number | undefined;
+    /** Named objects merged into this mesh, when it came from an import. */
+    groups: ObstacleGroup[] | undefined;
     readonly uid = nextObstacleUid++;
 
     constructor(type: ObstacleType, x: number, y: number, z: number, ax: number, ay: number, l: number, h: number, t: number, verts: Float32Array, faces: number[]) {
@@ -50,9 +67,14 @@ export class Obstacle extends BaseRequestObject
             this.movable = false;
             //Built as neutral MeshData so either renderer can consume the same arrays.
             const indices = Uint32Array.from(this.faces);
+            //The colour array exists from the start, even unmapped. Both backends can refresh a
+            //buffer in place but neither can add an attribute to a geometry they already built,
+            //and the obstacle mapping repaints this mesh whenever the shown day changes.
+            const colors = new Float32Array(this.vertices.length);
             this.meshData = {
                 positions: this.vertices,
                 normals: computeVertexNormals(this.vertices, indices),
+                colors,
                 indices,
                 name: 'obstacle:mesh',
             };
@@ -135,7 +157,10 @@ export class Obstacle extends BaseRequestObject
             ay: this.angleY.peek(),
             //vertices/faces are only populated for imported mesh obstacles.
             vt: this.vertices ? Array.from(this.vertices) : [],
-            fc: this.faces ?? []
+            fc: this.faces ?? [],
+            //Without the group table a reloaded session can no longer colour objects by their
+            //measured value: the mesh is merged and nothing says which vertices are whose.
+            gr: this.groups
         }
     }
 }

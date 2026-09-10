@@ -5,6 +5,7 @@ import { GTAO_BLUR_WGSL, GTAO_WGSL, MESH_WGSL, PICK_WGSL, PREPASS_WGSL } from '.
 import { VERTEX_LAYOUT } from './GeometryAtlas';
 import { AO_FORMAT, DEPTH_BIAS_TOWARDS_CAMERA, DEPTH_COMPARE, DEPTH_FORMAT, GI_FORMAT, GBUFFER_DEPTH_FORMAT, GBUFFER_NORMAL_FORMAT, PICK_FORMAT, SAMPLE_COUNT, SHADOW_FORMAT } from './Targets';
 import { PipelineVariant } from './InstanceBuffers';
+import { OBSTACLE_MAPPING_DEPTH_UNITS, OBSTACLE_MAPPING_FLOAT_DEPTH_UNITS, OBSTACLE_MAPPING_DEPTH_SLOPE } from '../core/ObstacleMappingGeometry';
 
 export type PipelineSet = {
     /** Uniform + shadow map + comparison sampler. Scene pipelines only. */
@@ -23,7 +24,7 @@ export type PipelineSet = {
     coneTraceLayout: GPUBindGroupLayout;
 };
 
-const VARIANTS: PipelineVariant[] = ['opaqueFront', 'opaqueDouble', 'opaqueDoubleBias'];
+const VARIANTS: PipelineVariant[] = ['opaqueFront', 'opaqueDouble', 'opaqueDoubleBias', 'opaqueDoubleMapping'];
 
 function primitiveFor(variant: PipelineVariant): GPUPrimitiveState {
     return {
@@ -48,6 +49,11 @@ function depthStencilFor(variant: PipelineVariant, sampleCount: number): GPUDept
         //the z-fighting it was there to cure comes back.
         state.depthBias = 0;
         state.depthBiasSlopeScale = 2 * DEPTH_BIAS_TOWARDS_CAMERA;
+    }
+    if (variant === 'opaqueDoubleMapping') {
+        const units = DEPTH_FORMAT === 'depth32float' ? OBSTACLE_MAPPING_FLOAT_DEPTH_UNITS : OBSTACLE_MAPPING_DEPTH_UNITS;
+        state.depthBias = units * DEPTH_BIAS_TOWARDS_CAMERA;
+        state.depthBiasSlopeScale = OBSTACLE_MAPPING_DEPTH_SLOPE * DEPTH_BIAS_TOWARDS_CAMERA;
     }
     void sampleCount;
     return state;

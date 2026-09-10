@@ -6,7 +6,7 @@
 
 import appstate from '../../appstate';
 import {
-    CameraPose, IViewportRenderer, ObstacleFrameInputs, PixelReadback,
+    CameraPose, IViewportRenderer, ObstacleFrameInputs, ObstacleMappingInputs, PixelReadback,
     PlantFrameInputs, SeedFrameInputs, TerrainFrameInputs, VisibilityInputs,
 } from '../IViewportRenderer';
 import { Clicks, applyPick, toNDC } from '../core/Picking';
@@ -14,6 +14,7 @@ import { InstanceList, IFlags } from '../core/InstanceList';
 import { buildPlants } from '../core/BuildScene';
 import { Geom } from '../core/GeometryIds';
 import { registerGeometry } from '../core/GeometryStore';
+import { writeObstacleColors } from '../core/ObstacleColors';
 //Side effect: fills the static geometry table. Imported here and not left to the Three
 //adapter, which used to be the only thing populating it - so the WebGPU path silently
 //depended on three having been loaded first.
@@ -33,6 +34,7 @@ import { VoxelField } from './gi/VoxelField';
 import { VoxelDebug } from './gi/VoxelDebug';
 import { DEFAULT_VOXEL_DEBUG, GIFrameInputs, MAX_SAMPLE_BATCHES, SAMPLES_PER_INVOCATION, VoxelDebugOptions, scatterTriangleArea } from '../core/VoxelGrid';
 import { GeometryAtlas } from './GeometryAtlas';
+import { obstacleMappingGeometry } from '../core/ObstacleMappingGeometry';
 import { InstanceBuffers, INSTANCE_FLOATS } from './InstanceBuffers';
 import { createPipelines, createOffscreenPipelines, PipelineSet } from './Pipelines';
 import { OrbitCamera } from './OrbitCamera';
@@ -257,6 +259,7 @@ export class WebGPURenderer implements IViewportRenderer {
         this.atlas?.destroy();
         this.plants.destroy();
         this.statics.destroy();
+        this.obstacleIndexVersions.clear();
         this.frameBuffer?.destroy();
         this.aoBuffer?.destroy();
         this.traceBuffer?.destroy();
@@ -926,17 +929,70 @@ export class WebGPURenderer implements IViewportRenderer {
         }
     }
 
+    private obstacleIndexVersions = new Map<number, number>();
+
     private appendObstacles(list: InstanceList) {
+        const mapping = this.obstacleMapping;
         for (const obstacle of appstate.obstacles.peek()) {
             const o = obstacle as any;
-            if (o.meshData) o.meshGeom = registerGeometry(`obstacle:${o.uid}`, o.meshData);
+            const layout = mapping.values !== undefined && o.meshData && o.groups
+                ? obstacleMappingGeometry(o.meshData, o.groups, mapping.values)
+                : undefined;
+            if (o.meshData) {
+                o.meshGeom = registerGeometry(`obstacle:${o.uid}`, layout?.mesh ?? o.meshData);
+            }
             const inst = list.push();
             inst.geom = o.geomId();
             o.writeModel(inst.model);
-            inst.color = paletteColor(obstacle.palette, obstacle.state.peek());
-            inst.emissive = { r: 0, g: 0, b: 0 };
-            inst.flags = IFlags.DoubleSided | IFlags.FlatShaded | IFlags.DepthBias;
+
+            //A measured obstacle is painted per named object and drawn unlit, so the value is not
+            //modulated by which way the wall faces.
+            const paint = mapping.values !== undefined
+                ? writeObstacleColors(o.meshData, o.groups, mapping.values, mapping.range[0], mapping.range[1])
+                : 'unpaintable';
+            const painted = paint !== 'unpaintable';
+            if (painted) {
+                //The atlas caches by geometry id and never reclaims, so re-registering a
+                //million-vertex facade is not an option: the colours are refreshed where they
+                //already are. And only when they moved - this runs on every mouse move, and a
+                //42 MB re-upload per event is what made orbiting flicker.
+                if (paint === 'repainted') {
+                    ++this.obstacleRepaints;
+                    this.atlas?.refreshVertexColors(inst.geom);
+                }
+                inst.color = { r: 0, g: 0, b: 0 };
+                inst.emissive = { r: 0, g: 0, b: 0 };
+                inst.flags = IFlags.DoubleSided | IFlags.FlatShaded
+                    | IFlags.VertexColorsEmissive | IFlags.ExcludeFromGI;
+                if (layout) {
+                    const measuredCount = layout.mesh.indices.length - layout.contextCount;
+                    if (layout.contextCount && measuredCount) {
+                        inst.indexRange = { first: 0, count: layout.contextCount };
+                        const measured = list.push();
+                        measured.geom = inst.geom;
+                        measured.model.set(inst.model);
+                        measured.color = inst.color;
+                        measured.emissive = inst.emissive;
+                        measured.flags = inst.flags | IFlags.MappingDepthBias;
+                        measured.indexRange = { first: layout.contextCount, count: measuredCount };
+                        measured.ref = { type: 'obstacle', obstacle };
+                    } else if (measuredCount) inst.flags |= IFlags.MappingDepthBias;
+                }
+            } else {
+                inst.color = paletteColor(obstacle.palette, obstacle.state.peek());
+                inst.emissive = { r: 0, g: 0, b: 0 };
+                inst.flags = IFlags.DoubleSided | IFlags.FlatShaded | IFlags.DepthBias;
+            }
             inst.ref = { type: 'obstacle', obstacle };
+            if (o.meshData) {
+                const version = layout?.version ?? 0;
+                if (this.obstacleIndexVersions.get(o.meshGeom) !== version) {
+                    //After colours: if they dirtied the atlas, fold the index change into that
+                    //upload instead of uploading this large slice twice.
+                    this.atlas?.refreshIndices(o.meshGeom);
+                    this.obstacleIndexVersions.set(o.meshGeom, version);
+                }
+            }
         }
     }
 
@@ -950,8 +1006,34 @@ export class WebGPURenderer implements IViewportRenderer {
         this.rebuildStatics();
     }
 
+    /**
+     * Latest obstacle mapping, kept because rebuildStatics rebuilds every static instance and has
+     * no inputs of its own. The host owns the subscription; this is only the last value it sent.
+     */
+    private obstacleMapping: ObstacleMappingInputs = { values: undefined, range: [0, 1] };
+
+    /** How many times the obstacle colours were actually rewritten. See GeometryAtlas.uploads. */
+    private obstacleRepaints = 0;
+
+    /**
+     * Counters for diagnosing viewport flicker, read through the debug hook.
+     *
+     * Orbiting must not repaint or re-upload anything: nothing about a camera move changes a
+     * measured value. If `repaints` or `uploads` climb while only the camera moves, the guard that
+     * is supposed to stop that has been defeated again, and the numbers say which one.
+     */
+    debugStats() {
+        return {
+            obstacleRepaints: this.obstacleRepaints,
+            atlasUploads: this.atlas?.uploads ?? 0,
+            atlasUploadedMb: +(((this.atlas?.uploadedBytes ?? 0) / 1048576).toFixed(1)),
+            staticInstances: this.staticList.count,
+        };
+    }
+
     rebuildObstacles(inputs: ObstacleFrameInputs) {
         this.visibility = { ...this.visibility, obstacles: inputs.visible };
+        this.obstacleMapping = inputs.mapping;
         this.rebuildStatics();
     }
 

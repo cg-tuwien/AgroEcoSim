@@ -62,7 +62,8 @@ const heatColors = [
 ];
 const heatColorsMax = heatColors.length - 1;
 
-/** HSL lerp across 5 stops. Currently unreferenced, kept so the ramp set stays complete. */
+/** HSL lerp across 5 stops. Used by the obstacle mapping, which needs a sequential ramp that
+ * reads as data rather than as a natural surface colour. */
 export function HeatColor(value: number): RGB {
     const p = Math.max(0, Math.min(1, value)) * heatColorsMax;
     const s = Math.floor(p);

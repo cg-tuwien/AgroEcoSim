@@ -34,6 +34,25 @@ function fakeDevice(maxStorageBufferBindingSize = 134217728) {
 /** An atlas stub: every geometry resolves to the same one-triangle slice. */
 const atlas = { ensure: () => ({ firstIndex: 0, indexCount: 3, baseVertex: 0 }) } as any;
 
+test('index ranges share atlas vertices and remain separate in draws and picking', () => {
+    const { device } = fakeDevice();
+    const buffers = new InstanceBuffers(device);
+    const list = listOf(3, IFlags.DoubleSided);
+    list.items[0].indexRange = { first: 0, count: 6 };
+    list.items[1].indexRange = { first: 6, count: 9 };
+    list.items[2].indexRange = { first: 15, count: 3 };
+    list.items[2].flags |= IFlags.MappingDepthBias;
+    const shared = { firstIndex: 30, indexCount: 18, baseVertex: 42, vertexCount: 12 };
+    buffers.pack(list, { ensure: () => shared } as any);
+    expect(buffers.buckets.map(b => [b.slice.firstIndex, b.slice.indexCount, b.slice.baseVertex]))
+        .toEqual([[30, 6, 42], [36, 9, 42], [45, 3, 42]]);
+    expect(buffers.buckets[2].variant).toBe('opaqueDoubleMapping');
+    expect(buffers.refFor(3)).toBe(list.items[2].ref);
+    expect(shared.indexCount).toBe(18);
+    list.reset();
+    expect(list.push().indexRange).toBeUndefined();
+});
+
 function listOf(count: number, flags = IFlags.None): InstanceList {
     const list = new InstanceList();
     for (let i = 0; i < count; ++i) {

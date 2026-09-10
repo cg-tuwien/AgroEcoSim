@@ -85,6 +85,9 @@ const LEAF_ROUGHNESS : f32 = 0.6;
 const F_DOUBLE : u32 = 1u;
 const F_FLAT   : u32 = 2u;
 const F_VCOL   : u32 = 4u;
+//Vertex colour as an unlit readout: straight into emissive, with no albedo. Obstacles coloured by
+//a measured value must not have it modulated by which way the wall faces.
+const F_VCOL_E : u32 = 64u;
 
 @group(0) @binding(0) var<uniform> frame : Frame;
 @group(1) @binding(0) var<storage, read> instances : array<Instance>;
@@ -132,8 +135,9 @@ fn vs(
   out.nrmView  = v3 * (nm * nrm);
   out.flags    = inst.flags;
   out.pickId   = inst.pickId;
-  out.color    = select(inst.color.rgb, vcol, (inst.flags & F_VCOL) != 0u);
-  out.emissive = inst.emissive.rgb;
+  let emissiveVcol = (inst.flags & F_VCOL_E) != 0u;
+  out.color    = select(select(inst.color.rgb, vcol, (inst.flags & F_VCOL) != 0u), vec3f(0.0), emissiveVcol);
+  out.emissive = select(inst.emissive.rgb, vcol, emissiveVcol);
   return out;
 }
 

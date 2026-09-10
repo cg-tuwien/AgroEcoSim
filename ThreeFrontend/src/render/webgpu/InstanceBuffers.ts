@@ -28,13 +28,14 @@ export type DrawBucket = {
 };
 
 /** Only fixed-function state forks a pipeline; shading differences ride in `flags`. */
-export type PipelineVariant = 'opaqueFront' | 'opaqueDouble' | 'opaqueDoubleBias';
+export type PipelineVariant = 'opaqueFront' | 'opaqueDouble' | 'opaqueDoubleBias' | 'opaqueDoubleMapping';
 
 function alignTo(value: number, alignment: number): number {
     return Math.ceil(value / alignment) * alignment;
 }
 
 function variantFor(flags: number): PipelineVariant {
+    if (flags & IFlags.MappingDepthBias) return 'opaqueDoubleMapping';
     if (flags & IFlags.DepthBias) return 'opaqueDoubleBias';
     return flags & IFlags.DoubleSided ? 'opaqueDouble' : 'opaqueFront';
 }
@@ -77,7 +78,8 @@ export class InstanceBuffers {
             if (inst.flags & IFlags.Hidden) continue;
 
             const variant = variantFor(inst.flags);
-            const key = `${variant}|${inst.geom}`;
+            const range = inst.indexRange;
+            const key = range ? `${variant}|${inst.geom}|${range.first}|${range.count}` : `${variant}|${inst.geom}`;
             let g = groups.get(key);
             if (!g) { g = { variant, geom: inst.geom, items: [] }; groups.set(key, g); }
             g.items.push(i);
@@ -91,8 +93,12 @@ export class InstanceBuffers {
 
         let slot = 0;
         for (const g of groups.values()) {
-            const slice = atlas.ensure(g.geom);
-            if (!slice) continue;           // geometry not registered yet
+            const fullSlice = atlas.ensure(g.geom);
+            if (!fullSlice) continue;           // geometry not registered yet
+            const range = list.items[g.items[0]].indexRange;
+            const slice = range ? {
+                ...fullSlice, firstIndex: fullSlice.firstIndex + range.first, indexCount: range.count,
+            } : fullSlice;
 
             const firstInstance = slot;
             //Largest linear scale any instance in this bucket applies. Tracked here because

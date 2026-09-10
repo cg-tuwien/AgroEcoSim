@@ -76,6 +76,7 @@ public sealed class CpuLightSolver
 	readonly string? ObstacleFilter;
 	readonly int ObstacleSensorBudget;
 	readonly float CanopyDepth;
+	readonly float BandHeight;
 
 	SkyDome[] SunDomes = [];
 	int SunSubSteps;
@@ -97,38 +98,72 @@ public sealed class CpuLightSolver
 	int SensorTotal;
 
 	public ObstacleLightMeter? Meter { get; private set; }
+	/// <summary>Obstacles the scene offered the filter, and how many it matched. Reported even when
+	/// the answer is zero, so a mistyped filter is distinguishable from a measurement that never
+	/// ran.</summary>
+	public int ObstacleCandidates { get; private set; }
+	public int ObstacleMatches { get; private set; }
+	/// <summary>The requested filter, or null when none was.</summary>
+	public string? ObstacleFilterText => ObstacleFilter;
 
 	/// <summary>Number of primitives in the traced scene after the last solve.</summary>
 	public int TracedPrimitives { get; private set; }
 
-	public CpuLightSolver(int diffuseSamples, string? obstacleFilter, int obstacleSensorBudget, float canopyDepth)
+	public CpuLightSolver(int diffuseSamples, string? obstacleFilter, int obstacleSensorBudget, float canopyDepth,
+						 float bandHeight)
 	{
 		//An even count keeps the two faces of a leaf equally sampled.
 		DiffuseSamples = Math.Max(2, diffuseSamples + (diffuseSamples & 1));
 		ObstacleFilter = string.IsNullOrWhiteSpace(obstacleFilter) ? null : obstacleFilter.Trim();
 		ObstacleSensorBudget = Math.Max(64, obstacleSensorBudget);
 		CanopyDepth = MathF.Max(0.05f, canopyDepth);
+		BandHeight = MathF.Max(0.05f, bandHeight);
 	}
+
+	/// <summary>True when a leaf area index measurement was requested, whether or not this solver
+	/// is also the one lighting the plants.</summary>
+	public bool MeasuresObstacles => ObstacleFilter != null;
 
 	/// <summary>
 	/// Computes this step's irradiance for every leaf and petal, filling
 	/// <paramref name="irradiances"/> with Wh/m² accumulated over the step and
 	/// <paramref name="offsets"/> with the per-organ index into it (-1 where an organ is no sensor).
+	/// Also measures the selected obstacles.
 	/// </summary>
 	/// <returns>False when there is no daylight worth tracing, so the caller can treat the step as
 	/// night.</returns>
 	public bool Solve(AgroWorld world, uint timestep, IList<IFormation> formations, IList<IObstacle> obstacles,
 					  Dictionary<IFormation, int[]> offsets, List<float> irradiances)
+		=> Run(world, timestep, formations, obstacles, offsets, irradiances, gatherLeaves: true);
+
+	/// <summary>
+	/// Measures the selected obstacles only, leaving the per-leaf irradiance to whoever else is
+	/// computing it.
+	/// </summary>
+	/// <remarks>
+	/// This exists so that a leaf area index study does not force a choice of plant light model.
+	/// Mitsuba and Tamashii light the plants but measure nothing on the facade, and the facade
+	/// measurement needs the same traced scene either way - so when a filter is set it runs
+	/// regardless, and the only thing it gives up is that the canopy's own reflected contribution
+	/// falls back to the analytic seed rather than the measured per-leaf irradiance.
+	/// </remarks>
+	public void MeasureObstacles(AgroWorld world, uint timestep, IList<IFormation> formations, IList<IObstacle> obstacles)
 	{
-		offsets.Clear();
-		irradiances.Clear();
+		if (MeasuresObstacles)
+			Run(world, timestep, formations, obstacles, null, null, gatherLeaves: false);
+	}
+
+	bool Run(AgroWorld world, uint timestep, IList<IFormation> formations, IList<IObstacle> obstacles,
+			 Dictionary<IFormation, int[]>? offsets, List<float>? irradiances, bool gatherLeaves)
+	{
+		offsets?.Clear();
+		irradiances?.Clear();
 
 		var diffuseDome = BuildDomes(world, timestep);
+		//Nothing to measure in the dark: the obstacle meter accumulates energies, so a step that
+		//carries none simply does not belong to any day.
 		if (!diffuseDome.IsLit)
-		{
-			Meter?.SkipStep(timestep);
 			return false;
-		}
 
 		EnsureStatic(world, obstacles);
 
@@ -181,9 +216,10 @@ public sealed class CpuLightSolver
 			OffsetArrays[i] = organs;
 		});
 
-		for (int i = 0; i < slots; ++i)
-			if (OffsetArrays[i] is int[] organs)
-				offsets[((PlantFormation2)formations[i]).AG] = organs;
+		if (offsets != null)
+			for (int i = 0; i < slots; ++i)
+				if (OffsetArrays[i] is int[] organs)
+					offsets[((PlantFormation2)formations[i]).AG] = organs;
 
 		Scene.BuildPlants();
 		TracedPrimitives = Scene.PrimitiveCount;
@@ -198,7 +234,7 @@ public sealed class CpuLightSolver
 		var model = new SurfaceRadianceModel(StaticAlbedo, StaticShading, PlantRadiosity, FirstPlantGroup);
 		var hoursPerTick = (float)world.HoursPerTick;
 
-		if (SensorTotal > 0)
+		if (SensorTotal > 0 && gatherLeaves)
 		{
 			var suns = SunDomes;
 			var sunCount = SunSubSteps;
@@ -209,7 +245,7 @@ public sealed class CpuLightSolver
 					SensorValues[i] = GatherSensor(i, timestep, in diffuseDome, suns, sunCount, in model, samples) * hoursPerTick;
 			});
 
-			irradiances.EnsureCapacity(SensorTotal);
+			irradiances!.EnsureCapacity(SensorTotal);
 			for (int i = 0; i < SensorTotal; ++i)
 				irradiances.Add(SensorValues[i]);
 
@@ -227,7 +263,13 @@ public sealed class CpuLightSolver
 			});
 		}
 
-		Meter?.Measure(Scene, in diffuseDome, SunDomes, SunSubSteps, in model, DiffuseSamples, hoursPerTick, timestep, StaticShading);
+		if (Meter != null)
+		{
+			//Days are closed on the local calendar date at the site, so the meter needs local time.
+			var localStart = TimeZoneInfo.ConvertTimeFromUtc(world.GetTime(timestep), world.TimeZone);
+			Meter.Measure(Scene, in diffuseDome, SunDomes, SunSubSteps, in model, DiffuseSamples,
+				hoursPerTick, localStart, StaticShading);
+		}
 		return true;
 	}
 
@@ -425,11 +467,27 @@ public sealed class CpuLightSolver
 		}
 
 		var array = prims.ToArray();
-		if (ObstacleFilter != null && obstacles.Count > 0)
+		if (ObstacleFilter != null)
 		{
-			var meter = new ObstacleLightMeter(obstacles, array, ranges, ObstacleFilter, ObstacleSensorBudget, CanopyDepth);
+			ObstacleCandidates = obstacles.Count;
+			var meter = obstacles.Count > 0
+				? new ObstacleLightMeter(obstacles, array, ranges, ObstacleFilter, ObstacleSensorBudget, CanopyDepth, BandHeight)
+				: null;
 			//A filter that matched nothing stays null, so callers can tell "no targets" from "no request".
-			Meter = meter.Targets.Count > 0 ? meter : null;
+			Meter = meter?.Targets.Count > 0 ? meter : null;
+			ObstacleMatches = Meter?.Targets.Count ?? 0;
+
+			//Say so out loud. A filter that quietly matches nothing is indistinguishable from a
+			//measurement that never ran, and that ambiguity has already cost a debugging session.
+			if (Meter == null)
+			{
+				var sample = string.Join(", ", obstacles.Take(6).Select(o => o.Name));
+				Console.WriteLine($"WARNING: LeafAreaIndexObstacles \"{ObstacleFilter}\" matched none of the "
+					+ $"{obstacles.Count} obstacles, so nothing will be measured. Names look like: {sample}");
+			}
+			else
+				Console.WriteLine($"Leaf area index: \"{ObstacleFilter}\" matched {Meter.Targets.Count} of "
+					+ $"{obstacles.Count} obstacles, {Meter.SensorCount} measurement points.");
 		}
 
 		//The hierarchy reorders its own copy, so the meter had to be built from the list above.

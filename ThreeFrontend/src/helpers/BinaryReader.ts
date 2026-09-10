@@ -2,6 +2,7 @@ import { ConsoleLogger } from "@microsoft/signalr/dist/esm/Utils";
 import { Obstacle } from "./Obstacle";
 import { Organs, Primitive, Primitives } from "./Primitives";
 import { BoxTerrainItem, ITerrainItem, MeshTerrainItem } from "./Terrain";
+import type { ObstacleGroup } from "./Obstacle";
 import { PlantModel } from "./Scene";
 
 const decoder = new TextDecoder("utf-8");
@@ -488,6 +489,26 @@ export default class BinaryReader {
             const trianglesCount = this.readInt32();
             const faces = this.readInt32Array(trianglesCount);
             obstacles.push(new Obstacle('mesh', 0, 0, 0, 0, 0, 0, 0, 0, vertices, faces));
+        }
+
+        //Version 1 appends the group table: the imported obstacles arrive merged into one mesh so
+        //the viewport keeps a single draw call, and this says which slice of it each named object
+        //owns. Without it an obstacle cannot be coloured by its own measured value.
+        if (version >= 1) {
+            const groupCount = this.readInt32();
+            const groups: ObstacleGroup[] = [];
+            for (let i = 0; i < groupCount; ++i) {
+                const name = this.readString();
+                const vertexFirst = this.readInt32();
+                const vertexCount = this.readInt32();
+                const indexFirst = this.readInt32();
+                const indexCount = this.readInt32();
+                if (vertexCount > 0)
+                    groups.push({ name, vertexFirst, vertexCount, indexFirst, indexCount });
+            }
+            //Every group indexes the one merged mesh, which is the only imported obstacle there is.
+            if (groups.length > 0 && obstacles.length > 0)
+                obstacles[0].groups = groups;
         }
 
         return {terrains: terrains, obstacles: obstacles};

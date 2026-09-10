@@ -19,6 +19,8 @@ import { Obstacles } from './hud/Obstacles';
 import { Renderer } from './hud/RenderMode';
 import { ExportImport } from './hud/ExportImport';
 import { VisualMapping } from './hud/VisualMapping';
+import { ObstacleMapping } from './hud/ObstacleMapping';
+import { LeafAreaIndex } from './hud/LeafAreaIndex';
 import { SpeciesList } from './hud/Species';
 import { ExactPreview } from './hud/ExactPreview';
 import { DownloadRoots } from './hud/DownloadRoots';
@@ -90,10 +92,13 @@ const App = () => {
 			<div role="tabpanel" id="tab-analysis" aria-selected={appstate.activeTab.value.endsWith("tab-analysis")}>
 				<Start inclStats={false}/>
 				<VisualMapping/>
+				<ObstacleMapping/>
 				<Lighting/>
 				<VoxelDebugControl/>
 				<ViewportBackend/>
 				<PickedDetails/>
+				<h4>Leaf area index on obstacles</h4>
+				<LeafAreaIndex/>
 			</div>
 
 			<div role="tabpanel" id="tab-export" aria-selected={appstate.activeTab.value.endsWith("tab-export")}>

@@ -5,7 +5,7 @@
 //and panning is screen-space (OrbitControls' screenSpacePanning: true).
 
 import { CameraPose } from '../IViewportRenderer';
-import { Mat4, createMat4, lookAt, multiply, perspectiveReversedZ } from '../core/Mat4';
+import { CAMERA_FAR, CAMERA_NEAR, Mat4, createMat4, lookAt, multiply, perspectiveReversedZ } from '../core/Mat4';
 import { Vec3, add, sub, length } from '../core/Vec3';
 
 const MIN_POLAR = 1e-6;
@@ -16,8 +16,8 @@ export class OrbitCamera {
     target: Vec3 = { x: 0, y: 0, z: 0 };
     up: Vec3 = { x: 0, y: 1, z: 0 };
     fovY = 50;                     // degrees, as three states it
-    near = 0.025;
-    far = 5000;
+    near = CAMERA_NEAR;
+    far = CAMERA_FAR;
 
     private radius = 5.83;
     private azimuth = 0;

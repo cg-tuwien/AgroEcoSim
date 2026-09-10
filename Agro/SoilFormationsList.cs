@@ -458,7 +458,7 @@ public partial class SoilFormationsList : ISoilFormation
 		using var stream = new MemoryStream();
 		using var writer = new BinaryWriter(stream);
 
-		writer.Write((byte)0); //version
+		writer.Write((byte)1); //version 1 adds the obstacle group table
 		var count = FieldsCount;
 		writer.Write(count);
 		for (int i = 0; i < count; ++i)
@@ -468,15 +468,29 @@ public partial class SoilFormationsList : ISoilFormation
 		//they are serialized as one merged mesh, exactly as before the split. A facade model holds
 		//around two thousand objects and the viewport used to receive a single mesh; handing it two
 		//thousand instead would be a gratuitous change for the frontend.
+		//
+		//The group table that follows says which slice of that one mesh each named object owns, so
+		//the viewport can still colour objects individually - by leaf area index, say - without
+		//giving up the single draw call. The ranges are contiguous because AppendTriangles appends
+		//one obstacle after another.
 		if ((Obstacles?.Count ?? 0) == 0)
+		{
 			writer.Write(0);
+			writer.Write(0); //no groups
+		}
 		else
 		{
 			writer.Write(1);
 			var vertices = new List<Vector3>();
 			var indices = new List<int>();
+			var groups = new (string Name, int VertexFirst, int VertexCount, int IndexFirst, int IndexCount)[Obstacles.Count];
 			for (int i = 0; i < Obstacles.Count; ++i)
+			{
+				var vertexFirst = vertices.Count;
+				var indexFirst = indices.Count;
 				Obstacles[i].AppendTriangles(vertices, indices);
+				groups[i] = (Obstacles[i].Name, vertexFirst, vertices.Count - vertexFirst, indexFirst, indices.Count - indexFirst);
+			}
 
 			writer.Write(vertices.Count);
 			for (int i = 0; i < vertices.Count; ++i)
@@ -484,6 +498,16 @@ public partial class SoilFormationsList : ISoilFormation
 			writer.Write(indices.Count);
 			for (int i = 0; i < indices.Count; ++i)
 				writer.Write(indices[i]);
+
+			writer.Write(groups.Length);
+			for (int i = 0; i < groups.Length; ++i)
+			{
+				writer.Write(groups[i].Name ?? string.Empty);
+				writer.Write(groups[i].VertexFirst);
+				writer.Write(groups[i].VertexCount);
+				writer.Write(groups[i].IndexFirst);
+				writer.Write(groups[i].IndexCount);
+			}
 		}
 
 		return stream.ToArray();

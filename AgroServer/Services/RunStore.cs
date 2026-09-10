@@ -60,6 +60,20 @@ public interface IRunStore
     /// <summary>One (step, storedBytes) pair per stored frame, in step order.</summary>
     bool TryReadIndex(string runId, out byte[] indexBytes);
 
+    /// <summary>
+    /// Files the run's complete leaf-area-index measurement, gzipped.
+    ///
+    /// The copy sent over the socket has its per-obstacle daily series dropped above
+    /// `DailyRecordBudget`, because sixteen hundred trays with a series each is a hundred
+    /// megabytes of JSON that no browser should receive in one message. That budget is a property
+    /// of the WIRE, not of the measurement - so the whole thing is written here and fetched over
+    /// REST, where size is the browser's own business and it never has to parse it at all.
+    /// </summary>
+    void WriteObstacleLight(string runId, byte[] utf8Json);
+
+    /// <summary>The stored measurement as gzipped bytes, for serving with Content-Encoding: gzip.</summary>
+    bool TryReadObstacleLight(string runId, out byte[] gzipped);
+
     RunRecord? GetRun(string runId);
     IReadOnlyList<RunRecord> ListRuns(int limit);
 }
@@ -197,6 +211,7 @@ public class RunStore : IRunStore, IDisposable
     string FramesDir(string runId) => Path.Combine(RunDir(runId), "frames");
     string IndexPath(string runId) => Path.Combine(RunDir(runId), "index.bin");
     string FramePath(string runId, uint step) => Path.Combine(FramesDir(runId), $"{step:D6}.z");
+    string ObstacleLightPath(string runId) => Path.Combine(RunDir(runId), "obstaclelight.json.gz");
 
     /// <summary>Rejects anything that is not a plain id, so a path cannot escape the store.</summary>
     static bool IsSafeId(string id) =>
@@ -358,6 +373,32 @@ public class RunStore : IRunStore, IDisposable
         var path = IndexPath(runId);
         if (!File.Exists(path)) return false;
         try { indexBytes = File.ReadAllBytes(path); return true; }
+        catch { return false; }
+    }
+
+    public void WriteObstacleLight(string runId, byte[] utf8Json)
+    {
+        if (Disabled || !IsSafeId(runId) || utf8Json == null || utf8Json.Length == 0) return;
+        try
+        {
+            //gzip rather than the frames' zlib: this one is served to a browser as a file to save,
+            //and Content-Encoding: gzip is the form every client handles without ambiguity.
+            using var output = new FileStream(ObstacleLightPath(runId), FileMode.Create, FileAccess.Write, FileShare.Read);
+            using (var gz = new GZipStream(output, CompressionLevel.Optimal, leaveOpen: true))
+                gz.Write(utf8Json, 0, utf8Json.Length);
+            Console.WriteLine($"RunStore: stored the full leaf area index measurement of {runId} " +
+                              $"({Size(utf8Json.Length)} of JSON, {Size(output.Length)} on disk).");
+        }
+        catch (Exception e) { Console.Error.WriteLine($"RunStore: could not store the measurement of {runId}: {e.Message}"); }
+    }
+
+    public bool TryReadObstacleLight(string runId, out byte[] gzipped)
+    {
+        gzipped = [];
+        if (Disabled || !IsSafeId(runId)) return false;
+        var path = ObstacleLightPath(runId);
+        if (!File.Exists(path)) return false;
+        try { gzipped = File.ReadAllBytes(path); return true; }
         catch { return false; }
     }
 

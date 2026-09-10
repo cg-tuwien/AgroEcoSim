@@ -11,15 +11,22 @@ const cache = new WeakMap<MeshData, THREE.BufferGeometry>();
  * buildPlants() do not reallocate. MeshData is treated as immutable; mutate one and you
  * must drop it and register a replacement.
  */
-export function toBufferGeometry(m: MeshData): THREE.BufferGeometry {
+export function toBufferGeometry(m: MeshData, sharedVertices?: MeshData): THREE.BufferGeometry {
     const hit = cache.get(m);
     if (hit) return hit;
 
     const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.BufferAttribute(m.positions, 3));
-    g.setAttribute('normal', new THREE.BufferAttribute(m.normals, 3));
-    if (m.uvs) g.setAttribute('uv', new THREE.BufferAttribute(m.uvs, 2));
-    if (m.colors) g.setAttribute('color', new THREE.BufferAttribute(m.colors, 3));
+    if (sharedVertices) {
+        //An obstacle mapping changes only index order. Reuse BufferAttributes as well as CPU
+        //arrays, or three allocates a second full vertex buffer for the same facade.
+        const base = toBufferGeometry(sharedVertices);
+        for (const name of Object.keys(base.attributes)) g.setAttribute(name, base.getAttribute(name));
+    } else {
+        g.setAttribute('position', new THREE.BufferAttribute(m.positions, 3));
+        g.setAttribute('normal', new THREE.BufferAttribute(m.normals, 3));
+        if (m.uvs) g.setAttribute('uv', new THREE.BufferAttribute(m.uvs, 2));
+        if (m.colors) g.setAttribute('color', new THREE.BufferAttribute(m.colors, 3));
+    }
     g.setIndex(new THREE.BufferAttribute(m.indices, 1));
     g.computeBoundingBox();
     g.computeBoundingSphere();

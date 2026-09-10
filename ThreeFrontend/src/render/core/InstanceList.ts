@@ -21,10 +21,21 @@ export const enum IFlags {
     FlatShaded = 2,
     /** Take the albedo from the vertex colour attribute. Only the debug orientation box. */
     VertexColors = 4,
+    /**
+     * Take the EMISSIVE from the vertex colour attribute, and no albedo.
+     *
+     * The unlit counterpart of VertexColors, and what a data readout needs: obstacles coloured by
+     * a measured leaf area index or shading fraction must not have that value modulated by which
+     * way the wall happens to face. Same reasoning as the plant visual mappings, which put their
+     * value in emissive and leave colour black - see core/PlantColors.
+     */
+    VertexColorsEmissive = 64,
     /** Excluded from drawing AND from picking, per the showLeaves/showRoots toggles. */
     Hidden = 8,
     /** Pull towards the viewer to survive coplanarity. Mirrors polygonOffsetFactor -2. */
     DepthBias = 16,
+    /** A small depth preference for measured faces over coplanar context. */
+    MappingDepthBias = 128,
     /**
      * Keep out of the GI density field. Set on terrain.
      *
@@ -51,6 +62,8 @@ export type Instance = {
     emissive: RGB;           // linear
     flags: number;           // IFlags bitfield
     ref: DataRef | undefined; // what a pick on this instance resolves to
+    /** Optional index range within geom; shares its vertices and GPU allocation. */
+    indexRange?: { first: number; count: number };
 };
 
 function blankInstance(): Instance {
@@ -84,7 +97,9 @@ export class InstanceList {
     push(): Instance {
         if (this.count === this.items.length)
             this.items.push(blankInstance());
-        return this.items[this.count++];
+        const inst = this.items[this.count++];
+        inst.indexRange = undefined;
+        return inst;
     }
 
     /** Iterates only the live prefix. */

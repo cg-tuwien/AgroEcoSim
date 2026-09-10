@@ -188,6 +188,28 @@ export function perspectiveZeroToOne(fovYRadians: number, aspect: number, near: 
 }
 
 /**
+ * The viewport's depth range, shared by both backends so they cannot drift apart.
+ *
+ * These used to be 0.025 and 5000 - a ratio of 200,000 - and that is what made an imported facade
+ * flicker. Measured on the FAV11 model: its surfaces span 220 mm of depth across 36,665 distinct
+ * planes, a median of ONE MICROMETRE apart, while a 24-bit buffer at that ratio resolves 0.95 mm
+ * at twenty metres. Every one of those surfaces was tied with its neighbours, and a tie is decided
+ * by whichever triangle happened to win the comparison - so a 0.2 % camera move repainted a tenth
+ * of the facade, swinging pixels by 250 levels out of 255. It was invisible until an obstacle
+ * mapping gave neighbouring trays different colours, which is why it read as a colouring bug.
+ *
+ * Depth precision is spent on the ratio, not the distance, so shortening the range is nearly free:
+ * `far` at 500 m still clears the largest scene here - a 38 m facade in a field of tens of metres -
+ * by an order of magnitude, and `near` at 5 cm is closer than anything is worth inspecting. The
+ * two together buy about twenty times the resolution.
+ *
+ * This does NOT make the facade fully separable; a micrometre never will be. What it does is move
+ * the tie from most of the surface to the few places genuinely modelled coincident. See AGENTS.md.
+ */
+export const CAMERA_NEAR = 0.05;
+export const CAMERA_FAR = 500;
+
+/**
  * Reversed-Z perspective projection: the near plane maps to 1 and the far plane to 0.
  *
  * Why bother. Depth precision under a standard [0,1] mapping is governed by 1/z, so almost

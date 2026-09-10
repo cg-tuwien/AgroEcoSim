@@ -81,7 +81,21 @@ export type TerrainFrameInputs = {
  * minifier keeps them.
  */
 export type SeedFrameInputs = { seeds: any[]; visible: boolean; rev: number };
-export type ObstacleFrameInputs = { obstacles: any[]; visible: boolean; rev: number };
+/**
+ * `mapping` colours obstacles by a measured value instead of by their palette. `values` is keyed
+ * by the imported object's name and is undefined when nothing is mapped; `range` is the span the
+ * ramp covers.
+ */
+export type ObstacleMappingInputs = {
+    values: Map<string, number> | undefined;
+    range: [number, number];
+};
+export type ObstacleFrameInputs = {
+    obstacles: any[];
+    visible: boolean;
+    rev: number;
+    mapping: ObstacleMappingInputs;
+};
 export type VisibilityInputs = { terrain: boolean; seeds: boolean; obstacles: boolean };
 
 export interface IViewportRenderer {

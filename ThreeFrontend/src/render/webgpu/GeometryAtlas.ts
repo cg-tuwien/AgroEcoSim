@@ -12,7 +12,16 @@ import { getGeometry } from '../core/GeometryStore';
 export const VERTEX_FLOATS = 11;
 export const VERTEX_BYTES = VERTEX_FLOATS * 4;
 
-export type GeometrySlice = { firstIndex: number; indexCount: number; baseVertex: number };
+/**
+ * Where one geometry lives in the atlas.
+ *
+ * `vertexCount` is carried so that a write into the slice can be bounded. It used not to be, and
+ * nothing else records it: the registry REPLACES the mesh stored under an existing id
+ * (GeometryRegistry.register), while the atlas keeps the slice it appended from the old one. Any
+ * write sized from the current mesh could then run past the end of its slice and into whatever
+ * geometry was appended next - which shows up as unrelated objects wearing this one's colours.
+ */
+export type GeometrySlice = { firstIndex: number; indexCount: number; baseVertex: number; vertexCount: number };
 
 export const VERTEX_LAYOUT: GPUVertexBufferLayout = {
     arrayStride: VERTEX_BYTES,
@@ -109,6 +118,59 @@ export class GeometryAtlas {
         return slice;
     }
 
+    /**
+     * Re-reads a geometry's vertex colours into the atlas in place.
+     *
+     * The obstacle mapping repaints a million-vertex facade mesh on every step of playback. The
+     * atlas never reclaims space, so re-registering the mesh would grow the buffer without bound;
+     * the colours are the only thing that changed and the vertex count did not, so they can be
+     * overwritten where they already are. flush() re-uploads the whole buffer, hence just the
+     * dirty flag.
+     */
+    refreshVertexColors(geomId: number): boolean {
+        const slice = this.slices.get(geomId);
+        const mesh = getGeometry(geomId);
+        if (!slice || !mesh?.colors) return false;
+
+        //Bounded by the SLICE, not by the mesh. The two are the same geometry only as long as
+        //nothing re-registered this id with a different mesh; if something did, sizing the write
+        //from the mesh would silently repaint the geometry stored after it, and the symptom would
+        //appear on an unrelated object rather than here.
+        const meshVerts = mesh.positions.length / 3;
+        if (meshVerts !== slice.vertexCount) {
+            console.warn(`Geometry ${geomId} was re-registered with ${meshVerts} vertices but the atlas `
+                + `holds a ${slice.vertexCount}-vertex slice for it. Refreshing only what fits; the atlas `
+                + `entry is stale and the geometry should be re-appended.`);
+        }
+        const verts = Math.min(meshVerts, slice.vertexCount);
+        const v = this.vertexData;
+        for (let i = 0; i < verts; ++i) {
+            const at = (slice.baseVertex + i) * VERTEX_FLOATS;
+            v[at + 8] = mesh.colors[i * 3];
+            v[at + 9] = mesh.colors[i * 3 + 1];
+            v[at + 10] = mesh.colors[i * 3 + 2];
+        }
+        this.dirty = true;
+        return true;
+    }
+
+    /** Replace only an existing index slice when obstacle measurement membership changes. */
+    refreshIndices(geomId: number): boolean {
+        const slice = this.slices.get(geomId);
+        const mesh = getGeometry(geomId);
+        if (!slice || !mesh) return false;
+        if (mesh.indices.length !== slice.indexCount)
+            throw new Error(`Geometry ${geomId} index count changed inside an existing atlas slice`);
+        this.indexData.set(mesh.indices, slice.firstIndex);
+        if (this.indexBuffer && !this.dirty) {
+            this.device.queue.writeBuffer(this.indexBuffer, slice.firstIndex * 4,
+                mesh.indices.buffer, mesh.indices.byteOffset, mesh.indices.byteLength);
+            ++this.uploads;
+            this.uploadedBytes += mesh.indices.byteLength;
+        } else this.dirty = true;
+        return true;
+    }
+
     private append(mesh: MeshData): GeometrySlice {
         const verts = mesh.positions.length / 3;
         const baseVertex = this.vertexCount;
@@ -141,7 +203,7 @@ export class GeometryAtlas {
         this.indexCount += mesh.indices.length;
         this.dirty = true;
 
-        return { firstIndex, indexCount: mesh.indices.length, baseVertex };
+        return { firstIndex, indexCount: mesh.indices.length, baseVertex, vertexCount: verts };
     }
 
     private dirty = false;
@@ -159,6 +221,18 @@ export class GeometryAtlas {
         next.set(this.indexData);
         this.indexData = next;
     }
+
+    /**
+     * How much this atlas has re-uploaded, and how often.
+     *
+     * A diagnostic rather than a metric. The documented cause of obstacle flicker is a full vertex
+     * re-upload once per mouse-move event - 42 MB on an imported facade - and the guards against it
+     * live in three places (the paint signature, the resident-slice check, the dirty flag). If the
+     * viewport flickers again, the first question is whether this counter is climbing while nothing
+     * but the camera moves; if it is not, the cause is in the draw and not in the upload.
+     */
+    uploads = 0;
+    uploadedBytes = 0;
 
     /** Uploads anything appended since the last call. */
     flush() {
@@ -190,6 +264,8 @@ export class GeometryAtlas {
 
         this.device.queue.writeBuffer(this.vertexBuffer, 0, this.vertexData.buffer, 0, vBytes);
         this.device.queue.writeBuffer(this.indexBuffer, 0, this.indexData.buffer, 0, iBytes);
+        ++this.uploads;
+        this.uploadedBytes += vBytes + iBytes;
     }
 
     destroy() {

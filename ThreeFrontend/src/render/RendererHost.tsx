@@ -10,7 +10,8 @@ import { useEffect, useRef } from 'preact/compat';
 import { useSignalEffect } from '@preact/signals';
 
 import BinaryReader from '../helpers/BinaryReader';
-import appstate, { PlayState, sceneAt } from '../appstate';
+import appstate, { PlayState, clearSceneCache, sceneAt } from '../appstate';
+import { buildObstacleLightExport } from '../helpers/ObstacleLight';
 import { CameraPose, IViewportRenderer, activeRenderer, PlantFrameInputs, TerrainFrameInputs, SeedFrameInputs, ObstacleFrameInputs, VisibilityInputs } from './IViewportRenderer';
 import { VisualMappingOptions } from './core/PlantColors';
 import { resolveLighting } from './core/Lighting';
@@ -145,6 +146,18 @@ export default function RendererHost() {
                 //Decodes raw V7 bytes, so the harness can prove a frame fetched from the run
                 //store is a usable scene and not merely the right number of bytes.
                 w.__decodeSceneBytes = (bytes: Uint8Array) => new BinaryReader(bytes).readAgroScene();
+                //The decoded-scene cache, so a heap measurement can tell what the CACHE is holding
+                //from what the renderer never gives back. Without separating those two, one large
+                //number says only "memory is full" and points at nothing.
+                w.__clearSceneCache = clearSceneCache;
+                //The leaf-area-index export document, so a harness can assert on its CONTENT
+                //rather than on the size of a downloaded blob. Empty `days` arrays are a legitimate
+                //outcome of the payload budget and a symptom of a broken measurement, and only the
+                //document itself distinguishes them.
+                w.__buildObstacleLightExport = buildObstacleLightExport;
+                //Repaint and upload counters, for telling a flicker in the DRAW from a flicker
+                //caused by re-uploading the geometry once per mouse-move event.
+                w.__rendererStats = () => (renderer as unknown as { debugStats?: () => unknown }).debugStats?.() ?? null;
             }
             appstate.activeBackend.value = renderer.kind;
 
@@ -411,7 +424,13 @@ function obstacleInputs(): ObstacleFrameInputs {
         o.state.value, o.type.value, o.height.value, o.thickness.value,
         o.wallLength_UmbrellaRadius.value, o.px.value, o.py.value, o.pz.value,
     ]));
-    return { obstacles, visible: appstate.showObstacles.value, rev };
+    //Read here, in the host, so the effect that calls this re-runs when the mapping or the shown
+    //day changes - the renderers only peek.
+    const mapping = {
+        values: appstate.obstacleMappingValues.value,
+        range: appstate.obstacleMappingRange.value,
+    };
+    return { obstacles, visible: appstate.showObstacles.value, rev, mapping };
 }
 
 async function createWebGPU(onLost: () => void): Promise<IViewportRenderer | undefined> {

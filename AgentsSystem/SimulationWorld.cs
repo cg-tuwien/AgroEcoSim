@@ -24,6 +24,13 @@ public class SimulationWorld
 
 	internal readonly List<IObstacle> Obstacles = [];
 
+	/// <summary>The obstacles, for a caller that has to report on them - the leaf area index
+	/// measurement names the ones it matched, and a few of the ones it did not.</summary>
+	public IReadOnlyList<IObstacle> ObstacleList => Obstacles;
+
+	/// <summary>The formations, for a caller that measures the scene without driving it.</summary>
+	public IReadOnlyList<IFormation> FormationList => Formations;
+
 	public void ForEach(Action<IFormation> action) => Formations.ForEach(formation => action(formation));
 
     public void Add(IFormation formation) => Formations.Add(formation);

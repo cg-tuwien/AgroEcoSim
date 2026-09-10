@@ -9,7 +9,11 @@ import { BaseRequestObject } from "./helpers/BaseRequestObject";
 import { VisualMappingOptions } from "./render/core/PlantColors";
 import { activeRenderer } from "./render/IViewportRenderer";
 import { vec2, addScaled2 } from "./render/core/Vec3";
-import { downloadBinary, downloadBlob, downloadText } from "./helpers/download";
+import { downloadBinary, downloadBlob, downloadText, timestampedName } from "./helpers/download";
+import {
+    buildObstacleLightExport, IObstacleLight, IObstacleLightMeta, IObstacleLightSelection,
+    obstacleValueOn, ObstacleMappingOptions, obstacleMappingSpec, stepDate,
+} from "./helpers/ObstacleLight";
 import { canDeflate, deflateBytes, inflateBytes } from "./helpers/deflate";
 import { DEFAULT_INITIAL_DATE } from "./helpers/Sun";
 import { convertCoordsTo_RH_rightPX_upPY } from "./helpers/CoordinateSystem";
@@ -112,6 +116,9 @@ hubConnection.on("result", (result: ISimResponse) => {
             st.renderer.value = result.renderer;
             st.simLength.value = 0;
             st.historyCount.value = st.history.length;
+            st.obstacleLight.value = result.obstacleLight;
+            st.obstacleLightMeta.value = result.obstacleLightMeta;
+            st.obstacleLightSelection.value = result.obstacleLightSelection;
         });
     }
     else
@@ -122,6 +129,9 @@ hubConnection.on("result", (result: ISimResponse) => {
             st.computing.value = false;
             st.renderer.value = result.renderer;
             st.simLength.value = 0;
+            st.obstacleLight.value = result.obstacleLight;
+            st.obstacleLightMeta.value = result.obstacleLightMeta;
+            st.obstacleLightSelection.value = result.obstacleLightSelection;
         });
     }
 
@@ -152,6 +162,8 @@ hubConnection.on("result", (result: ISimResponse) => {
 //to be the only place the history exists.
 hubConnection.on("runStarted", (runId: string) => {
     st.runId.value = runId;
+    //There is somewhere to put the frames now, so stop hoarding them here.
+    refreshHistoryBudget();
     //Survives a reload. Without it the id is lost, resubscribe() has nothing to rejoin, and the
     //run's stored frames become unreachable from the page that started them.
     try { sessionStorage.setItem('agro.runId', runId); } catch { /* private mode, not fatal */ }
@@ -285,6 +297,8 @@ async function resubscribe() {
  */
 function forgetRun() {
     st.runId.value = '';
+    //Nothing behind the client any more: a dropped frame would be gone, so go back to holding on.
+    refreshHistoryBudget();
     try { sessionStorage.removeItem('agro.runId'); } catch { /* private mode */ }
 }
 
@@ -308,6 +322,7 @@ async function recoverRun() {
     if (!meta) { forgetRun(); return; }
 
     st.runId.value = saved;
+    refreshHistoryBudget();
     //The clock multiplies a frame's step by this, so without it a recovered run is drawn on the
     //wrong timeline - and it is not otherwise recoverable from the page.
     st.simHoursPerTick = meta.hoursPerTick;
@@ -356,6 +371,10 @@ interface ISimResponse
     debug: string,
     stepTimes: Uint32Array,
     ticksPerMillisecond: number,
+    //Only present when the request selected obstacles and the internal light model ran.
+    obstacleLight?: IObstacleLight[],
+    obstacleLightMeta?: IObstacleLightMeta,
+    obstacleLightSelection?: IObstacleLightSelection,
 }
 
 interface ISimPreview
@@ -392,9 +411,9 @@ export interface IPlantModel
 }
 
 function base64ToArrayBuffer(base64: any) {
-    var binaryString = atob(base64);
-    var bytes = new Uint8Array(binaryString.length);
-    for (var i = 0; i < binaryString.length; i++) {
+    const binaryString = atob(base64);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
         bytes[i] = binaryString.charCodeAt(i);
     }
     return bytes;
@@ -523,6 +542,37 @@ export function evictOldestPayloads() {
 }
 
 /**
+ * Hands every resident frame payload back to the server, which already has them.
+ *
+ * Eviction does this under pressure, one budget's worth at a time. This does it deliberately, and
+ * it exists because of the arithmetic at production scale: one 7,700-plant frame on screen costs
+ * about 1.1 GB of heap all by itself, so a tab that has just finished a long run is already near
+ * its ceiling before an export allocates anything. The frames are on disk; the export reads them
+ * one at a time; holding the whole run in memory as well buys nothing and is what puts the tab
+ * over the edge.
+ *
+ * Does nothing without a run id. Then the payloads really are the only copy.
+ *
+ * Returns how many were released.
+ */
+export function releaseHeldFrames(keepAround = -1): number {
+    if (!st.runId.peek()) return 0;
+    let dropped = 0;
+    for (let i = 0; i < st.history.length; ++i) {
+        //A small window is kept around a frame the caller says it is about to need, so releasing
+        //does not immediately cost a round trip for the frame on screen.
+        if (keepAround >= 0 && Math.abs(i - keepAround) <= NEAR_PLAYHEAD) continue;
+        const e = st.history[i];
+        if (!e || !e.s) continue;
+        st.historySize.value -= historyEntryBytes(e.s);
+        e.s = undefined;
+        ++dropped;
+    }
+    if (dropped > 0) st.evictedFrames.value += dropped;
+    return dropped;
+}
+
+/**
  * Rehydrates a saved session's history.
  *
  * The on-disk format keeps base64, so sessions saved before the in-memory switch to bytes still
@@ -567,13 +617,35 @@ export function measureHistoryBytes(history: { s: Uint8Array | undefined }[]): n
  * when the limit is reached is itself the largest one so far.
  */
 const HISTORY_BUDGET_FRACTION = 0.45;
+
+/**
+ * The same budget once the frames also exist on the server.
+ *
+ * 0.45 was chosen for a client that was the only place the history existed: dropping a frame lost
+ * it, so the only alternative to holding on was stopping the run, and holding on was worth
+ * pushing. With a run store neither is true - a dropped frame comes back in about three
+ * milliseconds - so holding 1.9 GB of recoverable bytes is simply spending the headroom that the
+ * rest of the tab needs.
+ *
+ * And it needs a lot. Measured at 7,700 plants (`tools/visual/heapcheck.mjs`), ONE frame on
+ * screen costs 1,148 MB: about 461 MB for the decoded scene, 579 MB in renderer structures that
+ * never come back, and only 108 MB - nine per cent - for the payload the budget actually governs.
+ * A budget that ignores the other 91 % is not a ceiling, and that is why the tab still died.
+ */
+const HISTORY_BUDGET_FRACTION_WITH_STORE = 0.15;
 const HISTORY_BUDGET_FALLBACK = 1_200_000_000;
 
-function historyBudgetBytes(): number {
+function historyBudgetBytes(hasStore: boolean): number {
+    const fraction = hasStore ? HISTORY_BUDGET_FRACTION_WITH_STORE : HISTORY_BUDGET_FRACTION;
     const limit = (performance as any)?.memory?.jsHeapSizeLimit;
     return typeof limit === 'number' && limit > 0
-        ? limit * HISTORY_BUDGET_FRACTION
-        : HISTORY_BUDGET_FALLBACK;
+        ? limit * fraction
+        : HISTORY_BUDGET_FALLBACK * (fraction / HISTORY_BUDGET_FRACTION);
+}
+
+/** Re-reads the budget for the current storage situation. */
+function refreshHistoryBudget() {
+    st.historyBudget.value = historyBudgetBytes(!!st.runId.peek());
 }
 
 function exportObstacle(o: Obstacle) {
@@ -596,7 +668,7 @@ export enum PlayState {
     NextBackward, //one frame backward
     NextForward, //one frame forward
     Seek //jump to the specified frame
-};
+}
 
 class State {
     // SETTINGS
@@ -614,6 +686,79 @@ class State {
     initNumber = signal(42);
     randomize = signal(false);
     renderMode = signal(1); //1 is Mitsuba
+
+    /**
+     * Substring that selects which obstacles get a leaf area index and a solar load, e.g. "Wand"
+     * for the walls of an imported building. Empty measures nothing, which is the default because
+     * the measurement costs rays on every simulation step.
+     *
+     * Only the internal CPU light model measures - render mode 3, or 1 and 2 once their renderer
+     * fails to answer and they fall back to it.
+     */
+    leafAreaIndexObstacles = signal("");
+    /** Measurement points spread over the selected obstacles, in proportion to area. */
+    leafAreaIndexSensors = signal(32768);
+    /** How far in front of a surface foliage still counts towards its leaf area index, metres. */
+    leafAreaIndexDepth = signal(3);
+    /** Height of the bands each obstacle is resolved into, metres. */
+    leafAreaIndexBandHeight = signal(0.5);
+
+    //RESPONSE of the leaf area index measurement. Arrives once, with the finished run.
+    obstacleLight = signal<IObstacleLight[] | undefined>(undefined);
+    obstacleLightMeta = signal<IObstacleLightMeta | undefined>(undefined);
+    obstacleLightSelection = signal<IObstacleLightSelection | undefined>(undefined);
+    /** Which measured quantity, if any, colours the obstacles in the viewport. */
+    obstacleMapping = signal<ObstacleMappingOptions>(ObstacleMappingOptions.None);
+
+    /** Local date the viewport's current step falls on, or undefined before a run has data. */
+    shownObstacleDate = computed<string | undefined>(() => {
+        const meta = this.obstacleLightMeta.value;
+        if (!meta) return undefined;
+        //playPointer.value is the subscription and timestepAt turns it into the simulated step;
+        //passing the value in rather than calling currentTimestep() is deliberate, see timestepAt.
+        return stepDate(meta.initialDate, meta.hoursPerTick, this.timestepAt(this.playPointer.value));
+    });
+
+    /**
+     * Obstacle name to measured value for the day the viewport is showing, or undefined when
+     * nothing is mapped. Recomputed only when the mapping, the data or the shown day changes -
+     * the renderer rebuilds vertex colours from it, so it must not churn per frame.
+     */
+    obstacleMappingValues = computed<Map<string, number> | undefined>(() => {
+        const mapping = this.obstacleMapping.value;
+        const light = this.obstacleLight.value;
+        if (mapping === ObstacleMappingOptions.None || !light || light.length === 0)
+            return undefined;
+
+        const date = this.shownObstacleDate.value;
+        const values = new Map<string, number>();
+        for (const item of light) {
+            const value = obstacleValueOn(item, mapping, date);
+            if (value !== undefined)
+                values.set(item.name, value);
+        }
+        return values;
+    });
+
+    /**
+     * Value range the obstacle colours span. Fixed by the mapping where the quantity has a natural
+     * scale, so facades stay comparable between runs, and taken from the data only where it does
+     * not - avoided irradiation grows with the length of the run.
+     */
+    obstacleMappingRange = computed<[number, number]>(() => {
+        const mapping = this.obstacleMapping.value;
+        if (mapping === ObstacleMappingOptions.None)
+            return [0, 1];
+        const spec = obstacleMappingSpec[mapping];
+        if (spec.max !== undefined)
+            return [spec.min, spec.max];
+        let max = 0;
+        const values = this.obstacleMappingValues.value;
+        if (values)
+            for (const v of values.values())
+                max = Math.max(max, v);
+        return [spec.min, max > 0 ? max : 1];
+    });
     exactPreview = signal(false);
     /**
      * Calendar date the simulation starts on, as YYYY-MM-DD.
@@ -782,7 +927,7 @@ class State {
     /** Set when a run was stopped because the history filled the heap budget. */
     historyLimitHit = signal(false);
     /** The ceiling `historySize` is measured against, so the HUD can show a share, not a number. */
-    historyBudget = signal(historyBudgetBytes());
+    historyBudget = signal(historyBudgetBytes(false));
     /**
      * The server-side store backing this run, when there is one.
      *
@@ -842,6 +987,12 @@ class State {
         RequestGeometry: true,
         RenderMode: this.renderMode.value,
         SamplesPerPixel: this.samplesPerPixel.value,
+
+        LeafAreaIndexObstacles: this.leafAreaIndexObstacles.value.trim().length > 0
+            ? this.leafAreaIndexObstacles.value.trim() : null,
+        LeafAreaIndexSensors: Math.trunc(this.leafAreaIndexSensors.value),
+        LeafAreaIndexDepth: this.leafAreaIndexDepth.value,
+        LeafAreaIndexBandHeight: this.leafAreaIndexBandHeight.value,
         ExactPreview: this.exactPreview.value,
         DownloadRoots: this.downloadRoots.value,
 
@@ -873,8 +1024,14 @@ class State {
                 lastReceivedIndex = -1;
                 this.historyLimitHit.value = false;
                 this.runId.value = '';
+                //A new run's measurement has not arrived yet; leaving the old one would colour
+                //the obstacles by numbers that belong to a scene that no longer exists.
+                this.obstacleLight.value = undefined;
+                this.obstacleLightMeta.value = undefined;
+                this.obstacleLightSelection.value = undefined;
                 this.evictedFrames.value = 0;
             });
+            refreshHistoryBudget();
             //The stored id has to go at the same moment the signal does. A reload in the window
             //between asking for a run and `runStarted` arriving would otherwise resubscribe to
             //the PREVIOUS run and stream its frames into this one's empty history.
@@ -892,7 +1049,7 @@ class State {
                     body: JSON.stringify(this.requestBody()),
                     method: 'post',
                     headers: {
-                        'Accept': 'application/json',
+                        Accept: 'application/json',
                         'Content-Type': 'application/json'
                     }
                 });
@@ -927,7 +1084,7 @@ class State {
             this.playing.value = PlayState.ForwardWaiting;
     }
 
-    clearSeeds = (fieldIndex: number = -1) => {
+    clearSeeds = (fieldIndex = -1) => {
         if (fieldIndex >= 0)
         {
             const remove : number[] = [];
@@ -1151,6 +1308,10 @@ class State {
             randomize: this.randomize.peek(),
             renderMode: this.renderMode.peek(),
             initialDate: this.initialDate.peek(),
+            leafAreaIndexObstacles: this.leafAreaIndexObstacles.peek(),
+            leafAreaIndexSensors: this.leafAreaIndexSensors.peek(),
+            leafAreaIndexDepth: this.leafAreaIndexDepth.peek(),
+            leafAreaIndexBandHeight: this.leafAreaIndexBandHeight.peek(),
             lighting: this.lightingOptions(),
             viewportBackend: this.viewportBackend.peek(),
             downloadRoots: this.downloadRoots.peek(),
@@ -1175,6 +1336,12 @@ class State {
             performPicking: this.performPicking.peek(),
 
             plants: this.plants.peek(),
+            //The measurement is a result, like plants: without it a reloaded session cannot show
+            //the leaf area index mapping or re-export the numbers.
+            obstacleLight: this.obstacleLight.peek(),
+            obstacleLightMeta: this.obstacleLightMeta.peek(),
+            obstacleLightSelection: this.obstacleLightSelection.peek(),
+            obstacleMapping: this.obstacleMapping.peek(),
             historySize: this.historySize.peek(),
             //History is emitted separately, entry by entry - see below.
             simHoursPerTick: this.simHoursPerTick,
@@ -1206,6 +1373,53 @@ class State {
 
         downloadBlob(new Blob(parts, { type: 'application/json' }), '', 'json');
     }
+
+    /**
+     * Writes the leaf area index and solar load measurement to a JSON file.
+     *
+     * Daily records and whole-period summaries at object, surface and band level, with a
+     * definitions block so the file can be read without the source. See helpers/ObstacleLight.ts
+     * for why the per-step series is deliberately absent.
+     */
+    exportObstacleLight = async () => {
+        const light = this.obstacleLight.peek();
+        if (!light || light.length === 0)
+            return false;
+        const meta = this.obstacleLightMeta.peek();
+        const runId = this.runId.peek();
+
+        //Where the complete measurement lives when this file cannot carry it. The server keeps it
+        //for as long as it keeps the run, which is also why the URL is worth writing INTO the file:
+        //a study opened months later can still say where the rest of its own data was.
+        const fullSeriesUrl = meta?.dailySeriesOmitted && runId
+            ? `${location.protocol}//${BackendURI}/simulation/run/${runId}/obstaclelight`
+            : undefined;
+
+        const document_ = buildObstacleLightExport(meta, light, this.obstacleLightSelection.peek(), fullSeriesUrl);
+        downloadBlob(new Blob([JSON.stringify(document_, undefined, 1)], { type: 'application/json' }),
+            '-leafareaindex', 'json');
+
+        //And the detailed one alongside it, if the budget truncated this file.
+        //
+        //Two files rather than one merged document, deliberately. Merging means parsing a hundred
+        //megabytes of JSON in the tab that has just finished a long run - the exact allocation the
+        //budget exists to avoid - whereas this streams straight to disk and the browser never looks
+        //inside it. The small file is the one a person opens; the large one is the one they load
+        //into whatever actually does the analysis.
+        if (fullSeriesUrl) {
+            try {
+                const res = await fetch(fullSeriesUrl);
+                if (res.ok)
+                    downloadBlob(await res.blob(), '-leafareaindex-full', 'json');
+                else
+                    console.warn(`The full leaf area index series is not on the server (HTTP ${res.status}). `
+                        + `The summaries and the selection-wide series are complete in the file that was saved.`);
+            } catch (err) {
+                console.warn('Could not fetch the full leaf area index series:', err);
+            }
+        }
+        return true;
+    };
 
     load = async() => {
         const input = document.createElement("input");
@@ -1250,6 +1464,15 @@ class State {
                     self.randomize.value = data.randomize;
                     self.renderMode.value = data.renderMode;
                     self.initialDate.value = data.initialDate ?? DEFAULT_INITIAL_DATE;
+                    //Sessions saved before the measurement existed carry none of these.
+                    self.leafAreaIndexObstacles.value = data.leafAreaIndexObstacles ?? "";
+                    self.leafAreaIndexSensors.value = data.leafAreaIndexSensors ?? 32768;
+                    self.leafAreaIndexDepth.value = data.leafAreaIndexDepth ?? 3;
+                    self.leafAreaIndexBandHeight.value = data.leafAreaIndexBandHeight ?? 0.5;
+                    self.obstacleLight.value = data.obstacleLight;
+                    self.obstacleLightMeta.value = data.obstacleLightMeta;
+                    self.obstacleLightSelection.value = data.obstacleLightSelection;
+                    self.obstacleMapping.value = data.obstacleMapping ?? ObstacleMappingOptions.None;
                     //Sessions saved before the ladder became independent switches carry a
                     //single number instead; translate rather than dropping their setting.
                     const lighting: LightingOptions = data.lighting
@@ -1271,7 +1494,12 @@ class State {
                     self.seedsOptimalDistance.value = data.seedsOptimalDistance;
                     self.seeds.value = data.seeds.map(s => new Seed(s.species, s.px, s. py, s.pz, s.fi, false));
 
-                    self.obstacles.value = data.obstacles.map(o => new Obstacle(o.type, o.px, o.py, o.pz, o.ax, o.ay, o.l, o.h, o.t, new Float32Array(o.vt), o.fc));
+                    self.obstacles.value = data.obstacles.map(o => {
+                        const obstacle = new Obstacle(o.type, o.px, o.py, o.pz, o.ax, o.ay, o.l, o.h, o.t, new Float32Array(o.vt), o.fc);
+                        //Sessions saved before the group table existed simply have no mapping.
+                        obstacle.groups = o.gr;
+                        return obstacle;
+                    });
 
                     self.visualMapping.value = data.visualMapping;
                     self.debugBoxes.value = data.debugDisplayOrientations;
@@ -1296,6 +1524,7 @@ class State {
                     //and fetching one back returns the SAME step of a DIFFERENT simulation, which
                     //decodes perfectly and is simply the wrong plants.
                     self.runId.value = '';
+                    self.historyBudget.value = historyBudgetBytes(false);
                     self.evictedFrames.value = 0;
                     self.historyLimitHit.value = false;
                     try { sessionStorage.removeItem('agro.runId'); } catch { /* private mode */ }
@@ -1353,7 +1582,7 @@ class State {
                 body: this.fieldModelData,
                 method: 'post',
                 headers: {
-                    'Accept': 'application/json',
+                    Accept: 'application/json',
                     'Content-Type': 'text/plain'
                 }
             });
@@ -1392,14 +1621,14 @@ class State {
 
         const speciesWordsMap : {words: string[], key: string}[] = [];
         Array.from(speciesMap.keys()).forEach(key => {
-            speciesWordsMap.push({words: key.split(" "), key: key});
+            speciesWordsMap.push({words: key.split(" "), key});
         });
 
         function bestSpeciesWordMatch(input: string)
         {
             const needle = input.split(" ");
             let bestValue = -1;
-            let bestKey = undefined;
+            let bestKey;
             speciesWordsMap.forEach(item => {
                 let i = 0;
                 for(; i < needle.length && i < item.words.length && needle[i] === item.words[i]; ++i) { }
@@ -1416,8 +1645,7 @@ class State {
                 if (result) speciesMap.set(input, result);
                 return result;
             }
-            else
-                return undefined;
+            return undefined;
         }
 
         const result : Seed[] = [];
@@ -1431,7 +1659,7 @@ class State {
                 if (seed.botanicalName)
                     options.push(normalize(seed.botanicalName));
 
-                let species : Species | undefined = undefined;
+                let species : Species | undefined;
 
                 for(let i = 0; i < options.length; ++i)
                     if (!species) species = speciesMap.get(options[i]);
@@ -1495,7 +1723,7 @@ class State {
         //a 60 MB frame for nothing.
         downloadBinary(data as unknown as BlobPart, ext, frame);
     }
-};
+}
 
 const st = new State();
 export default st;
@@ -1503,7 +1731,7 @@ export default st;
 void recoverRun();
 //now that the singleton is exported push in the default seed
 st.seeds.value = [ new Seed(st.species.peek()[0].name.peek(), st.fieldSizeX.peek() * 0.5, -0.01, st.fieldSizeZ.peek() * 0.5, 0, false) ];
-fetch(`${location.protocol}//${BackendURI}/Simulation/species`, { headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' }}).then(response => response.json()).then((list: Species[]) => {
+fetch(`${location.protocol}//${BackendURI}/Simulation/species`, { headers: { Accept: 'application/json', 'Content-Type': 'application/json' }}).then(response => response.json()).then((list: Species[]) => {
     const species = list.map(x => new Species().load(x));
     Promise.all(species.flatMap(s => [
         fetch(`${location.protocol}//${BackendURI}/Simulation/mesh/leaf/${s.name}`).then(resp => resp.arrayBuffer()).then(b => s.loadLeafGeometry(b)),
@@ -1514,7 +1742,7 @@ fetch(`${location.protocol}//${BackendURI}/Simulation/species`, { headers: { 'Ac
     st.species.value = species;
 });
 
-fetch(`${location.protocol}//${BackendURI}/Simulation/behaviors`, { headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' }}).then(response => response.json()).then((list: string[]) => st.behaviors.value = list);
+fetch(`${location.protocol}//${BackendURI}/Simulation/behaviors`, { headers: { Accept: 'application/json', 'Content-Type': 'application/json' }}).then(response => response.json()).then((list: string[]) => st.behaviors.value = list);
 
 effect(() => {
     //Depending on hubConnected is what lets a request survive being made too early: the
