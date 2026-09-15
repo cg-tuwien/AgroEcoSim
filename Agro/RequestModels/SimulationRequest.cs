@@ -17,7 +17,10 @@ public class ImportedObjDataV2
     public Dictionary<string, (List<Vector3i> Triangles, List<int[]> Polygons)> Faces { get; set; }
 }
 
-public class SimulationRequest
+//A record rather than a class purely for `with`: resuming a run needs the SAME request with one
+//field changed, and a hand-written copy constructor would silently drop the next field somebody
+//adds. Every property is still `init`, so nothing else about how it is used changes.
+public record SimulationRequest
 {
     ///<summary>
     ///Number of simulation steps per hour (default: 1)
@@ -195,4 +198,17 @@ public class SimulationRequest
     /// always the more recent intent.
     /// </summary>
     public string? FieldModelRunId { get; init; }
+
+    /// <summary>
+    /// Resume this stored run from its checkpoint instead of starting a new simulation.
+    ///
+    /// Unlike <see cref="ParentRunId"/>, which is lineage on a run computed again from scratch,
+    /// this carries the ORIGINAL run forward: its world is restored from the state it reached and
+    /// the loop picks up at that step. Set <see cref="TotalHours"/> higher than the run's own to
+    /// take it past the horizon it was originally given.
+    ///
+    /// The resumed frames are appended to that same run - it is the same simulation, and splitting
+    /// it across two ids would leave neither of them the whole thing.
+    /// </summary>
+    public string? ResumeRunId { get; init; }
 }

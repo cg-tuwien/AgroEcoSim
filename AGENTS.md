@@ -1560,6 +1560,44 @@ reference set, and the next eviction would delete every model in the store. `Col
 to run at all while any run names a model without naming which - an incomplete reference set does
 not produce a partial clean-up, it deletes precisely the models that are still in use.
 
+### Resume carries a run on; continue and fork recompute it
+
+`runs/<id>/checkpoint.bin.gz` is the live simulation state, written every
+`AGRO_RunStoreCheckpointStride` steps (default 32) and always at the end however the run finished.
+Restoring it and carrying on is **byte-identical to never having stopped** - `Agro --checkpoint-selftest`
+proves it across three scenarios and four resume points each, and is the only test this can have:
+correctness is not a property of any one field but of the whole set, and a miss shows up as a run
+that continues plausibly while diverging from the one it claims to continue.
+
+What the checkpoint holds is what the request cannot rebuild. The structure comes back for free -
+Initialize is deterministic, so the same request builds the same soil, the same plants in the same
+order, and formations are append-only and never removed, which is what makes a positional restore
+safe. What it cannot rebuild is everything the simulation has done since: the clock, the water in
+each cell, every organ, and what each plant's generator will say next.
+
+Three pieces of that are easy to mistake for derived state and are not:
+
+- **The previous step's irradiance** (`IrradianceClient.Irradiances` and its per-formation offsets).
+  It is recomputed every step - but by a callback that runs AFTER the agents tick, so the agents
+  consume the previous step's values. A world restored without it spends its first step in the dark.
+- **Queued deaths.** `PlantFormation2.Census` calls `AG.Death` for emergency energy pruning *after*
+  `AG.Census` has run, so those deaths are applied by the NEXT step. Dropping them reprieves organs
+  the plant had already decided it could not feed.
+- **Flowering history and the daily maxima.** The first would let a plant flower twice in one year;
+  the second normalises every organ's share until the next `NewDay` runs.
+
+The tree cache and the BVHs genuinely are derived - but they are NOT rebuilt by the next tick, only
+by a `Census` that has something to do, so `ReadState` rebuilds them the same four ways `Census`
+does. Agents are blitted rather than written field by field: they are unmanaged structs, so their
+memory is their state, and a hand-written serializer is a second description of the same layout that
+is free to drift from it.
+
+A resumed run **appends to the same run**. It is the same simulation, and splitting it across two
+ids would leave neither of them the whole thing; the frames keep their step numbers, the index
+extends, and `TotalSteps` moves to the new horizon. Extending past the original total is the same
+operation with a larger one - safe because the weather table forks its own RNG stream and plans
+months sequentially, so a longer table has a byte-identical prefix.
+
 ### Continue and fork are re-runs, not resumes
 
 Nothing in this project serializes live world state. The store holds exported geometry, which is a

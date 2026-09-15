@@ -1297,6 +1297,55 @@ public class IrradianceClient
 
 	static string OF(int a, int b, int c) => $"f {a+1} {b+1} {c+1}";
 
+	//--- checkpointing ------------------------------------------------------------------------
+	//
+	//The irradiance of the PREVIOUS step, which the next one consumes.
+	//
+	//Easy to mistake for derived state - it is recomputed every step by a callback - but the order
+	//is what matters: agents tick first and read this, and the light model runs afterwards. So a
+	//world restored without it spends its first step in the dark, every leaf photosynthesising
+	//nothing, and never catches up with the run it claims to continue.
+	//
+	//Written positionally against the plant formations, because the dictionary is keyed by the
+	//sub-formation OBJECT and a restored world has new ones in the same order.
+
+	internal void WriteState(BinaryWriter writer, IReadOnlyList<IFormation> formations)
+	{
+		writer.Write(IsNight);
+		writer.Write(Irradiances.Count);
+		foreach (var value in Irradiances) writer.Write(value);
+
+		foreach (var formation in formations)
+		{
+			if (formation is not PlantFormation2 plant) continue;
+			if (IrradianceFormationOffsets.TryGetValue(plant.AG, out var offsets))
+			{
+				writer.Write(offsets.Length);
+				foreach (var offset in offsets) writer.Write(offset);
+			}
+			else writer.Write(-1);
+		}
+	}
+
+	internal void ReadState(BinaryReader reader, IReadOnlyList<IFormation> formations)
+	{
+		IsNight = reader.ReadBoolean();
+		var count = reader.ReadInt32();
+		Irradiances.Clear();
+		for (int i = 0; i < count; ++i) Irradiances.Add(reader.ReadSingle());
+
+		IrradianceFormationOffsets.Clear();
+		foreach (var formation in formations)
+		{
+			if (formation is not PlantFormation2 plant) continue;
+			var length = reader.ReadInt32();
+			if (length < 0) continue;   //this formation had no offsets when the checkpoint was taken
+			var offsets = new int[length];
+			for (int i = 0; i < length; ++i) offsets[i] = reader.ReadInt32();
+			IrradianceFormationOffsets.Add(plant.AG, offsets);
+		}
+	}
+
 	public float GetIrradiance(IFormation formation, int agentIndex)
 	{
 		if (!IsNight && IrradianceFormationOffsets.TryGetValue(formation, out var offset))

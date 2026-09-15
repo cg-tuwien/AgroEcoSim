@@ -856,6 +856,27 @@ public class SoilFormationTetrahedral : ISoilFormation
         }
     }
 
+	/// <summary>Water, temperature and steam per tetrahedron; the mesh itself is rebuilt.</summary>
+	public void WriteState(BinaryWriter writer)
+	{
+		writer.Write(Water_g.Length);
+		writer.Write(MemoryMarshal.AsBytes<float>(Water_g));
+		writer.Write(MemoryMarshal.AsBytes<float>(Temperature));
+		writer.Write(MemoryMarshal.AsBytes<float>(Steam));
+	}
+
+	public void ReadState(BinaryReader reader)
+	{
+		var count = reader.ReadInt32();
+		if (count != Water_g.Length)
+			throw new InvalidDataException(
+				$"The checkpoint holds {count} soil cells and this field has {Water_g.Length}. " +
+				$"The field model or resolution has changed since the run was saved.");
+		SoilFormationRegularVoxels.ReadInto(reader, Water_g);
+		SoilFormationRegularVoxels.ReadInto(reader, Temperature);
+		SoilFormationRegularVoxels.ReadInto(reader, Steam);
+	}
+
     public byte[] Serialize()
 	{
 		using var stream = new MemoryStream();

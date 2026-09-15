@@ -1,5 +1,7 @@
 using System.Diagnostics;
 using System.Numerics;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using AgentsSystem;
 using Utils;
 
@@ -113,6 +115,65 @@ public partial class PlantFormation2 : IPlantFormation
 	}
 
 	public bool SeedAlive => Seed.Length == 1;
+
+	//--- checkpointing ------------------------------------------------------------------------
+
+	/// <summary>
+	/// Writes everything about this plant that the next step depends on.
+	///
+	/// Position, soil index and species are NOT here: they come from the request, and a resumed
+	/// world is rebuilt from that same request before this is read back. What is here is what the
+	/// simulation has changed since - the balances it carries between steps, the generator that
+	/// decides its next branch, its seed, and its organs.
+	/// </summary>
+	public void WriteState(BinaryWriter writer)
+	{
+		writer.Write(SeedAlive);
+		if (SeedAlive) writer.Write(MemoryMarshal.AsBytes(Seed.AsSpan(0, 1)));
+		writer.Write(DeathSeed);
+
+		writer.Write(WaterBalancePrev);
+		writer.Write(WaterBalance);
+		writer.Write(WaterBalanceUG);
+		writer.Write(EnergyBalance);
+		writer.Write(EnergyProductionMax);
+
+		//The per-plant generator. Reseeding instead would carry the same plants on with different
+		//random decisions - a different experiment that looks like a continuation.
+		var (state, increment) = RNG.GetState();
+		writer.Write(state);
+		writer.Write(increment);
+
+		AG.WriteState(writer);
+		UG.WriteState(writer);
+	}
+
+	public void ReadState(BinaryReader reader)
+	{
+		var seedAlive = reader.ReadBoolean();
+		if (seedAlive)
+		{
+			var bytes = reader.ReadBytes(Unsafe.SizeOf<SeedAgent>());
+			if (bytes.Length != Unsafe.SizeOf<SeedAgent>())
+				throw new EndOfStreamException("The checkpoint ended inside a seed.");
+			bytes.AsSpan().CopyTo(MemoryMarshal.AsBytes(Seed.AsSpan(0, 1)));
+		}
+		else if (Seed.Length == 1)
+			//Germinated before the checkpoint: the seed is gone and the organs carry the plant.
+			Seed = [];
+		DeathSeed = reader.ReadBoolean();
+
+		WaterBalancePrev = reader.ReadSingle();
+		WaterBalance = reader.ReadSingle();
+		WaterBalanceUG = reader.ReadSingle();
+		EnergyBalance = reader.ReadSingle();
+		EnergyProductionMax = reader.ReadSingle();
+
+		RNG.SetState(reader.ReadUInt64(), reader.ReadUInt64());
+
+		AG.ReadState(reader);
+		UG.ReadState(reader);
+	}
 
 	public void Census()
 	{

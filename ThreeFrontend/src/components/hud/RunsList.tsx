@@ -93,6 +93,8 @@ function RunRow({ run }: { run: IStoredRun }) {
     //A run can hold no frames at all - stopped before its first step - and there is nothing to
     //open. Saying so on the button beats an error message after the current scene has been cleared.
     const empty = run.storedFrames === 0;
+    //Stopped before its horizon: aborted, or complete but short of the steps it was asked for.
+    const unfinished = run.status !== 'running' && run.lastStep < run.totalSteps;
 
     //What a run reached against what it asked for. They differ whenever a run was stopped, and
     //that difference is the first thing worth knowing about an archived run.
@@ -137,6 +139,18 @@ function RunRow({ run }: { run: IStoredRun }) {
                     title="Load this run's settings into the editor as the starting point for a new run. Nothing starts until you press Simulate.">
                 Fork
             </button>
+            {/* Only where it can actually happen. A run with no checkpoint - one stored before they
+                were written - can still be forked, which recomputes it; saying "Resume" and then
+                recomputing would be the wrong word for an hour of compute. */}
+            {run.hasCheckpoint
+                ? <button onClick={() => appstate.resumeStoredRun(run, resumeHoursFor(run))}
+                          disabled={busy || appstate.computing.value}
+                          title={unfinished
+                              ? `Carry this run on from step ${run.lastStep}, where it stopped, without recomputing any of it.`
+                              : `This run finished. Resuming extends it past the ${run.totalHours} h it was given, starting from its final state.`}>
+                    {unfinished ? 'Resume' : 'Extend'}
+                  </button>
+                : null}
             <button onClick={() => expanded.value = open ? '' : run.id}
                     title="Everything else about this run.">
                 {open ? '▴' : '▾'}
@@ -156,6 +170,19 @@ function RunRow({ run }: { run: IStoredRun }) {
 
         {open ? <RunDetails run={run} busy={busy} /> : null}
     </div>;
+}
+
+/**
+ * How much simulated time a Resume should add.
+ *
+ * For a run that stopped short, none: finishing it means reaching the total it already has, and
+ * asking the user for a number to complete something they already asked for is a question with one
+ * sensible answer. For a run that finished, the box in the details panel decides - extending is a
+ * new decision and needs one.
+ */
+function resumeHoursFor(run: IStoredRun): number {
+    if (run.lastStep < run.totalSteps) return 0;
+    return extraHours.value[run.id] ?? 24;
 }
 
 function RunDetails({ run, busy }: { run: IStoredRun, busy: boolean }) {
@@ -193,6 +220,14 @@ function RunDetails({ run, busy }: { run: IStoredRun, busy: boolean }) {
                     download the full leaf area index
                   </a></div>
                 : null}
+
+            {run.hasCheckpoint
+                ? <div title="A checkpoint of the live simulation, written as the run went. It is what lets the run be carried on instead of computed again.">
+                    resumable from step {run.lastStep}
+                  </div>
+                : <div title="Runs stored before checkpoints existed, or whose checkpoint could not be written, can only be recomputed.">
+                    no checkpoint - can only be forked
+                  </div>}
 
             {/* Continue is a RE-RUN and the wording has to say so. Nothing here stores live world
                 state, so the extension is computed from step zero - exactly reproducing the parent

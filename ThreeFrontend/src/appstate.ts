@@ -2239,6 +2239,78 @@ class State {
     }
 
     /**
+     * Carries an incomplete run on from where it stopped, without recomputing a step of it.
+     *
+     * The real thing, as opposed to `continueStoredRun`: the server restores the world from the
+     * checkpoint it wrote and the loop picks up at that step, so a run stopped at simulated month
+     * four resumes at month four rather than spending the compute again to get back there. The same
+     * path extends a FINISHED run past the horizon it was given, because a completed run writes a
+     * checkpoint too.
+     *
+     * Everything but the total comes from the run itself. A world grown under one set of parameters
+     * cannot be handed different ones half way through and still be one experiment.
+     */
+    resumeStoredRun = async (run: IStoredRun, extraHours: number): Promise<boolean> => {
+        if (this.computing.peek()) {
+            this.runsError.value = 'A simulation is running in this tab. Stop it before resuming another.';
+            return false;
+        }
+        if (!run.hasCheckpoint) {
+            this.runsError.value = `Run ${run.id} has no checkpoint, so it cannot be resumed. Fork it to recompute it instead.`;
+            return false;
+        }
+        //Opened first, so the tab is showing the run it is about to extend - and so its timeline,
+        //trays and scenario are the ones the new frames will append to.
+        if (!await this.openStoredRun(run.id, true)) return false;
+
+        const total = Math.max(1, (run.totalHours || this.totalHours.peek()) + Math.max(0, extraHours));
+        batch(() => {
+            this.totalHours.value = total;
+            this.computing.value = true;
+            this.playing.value = PlayState.ForwardWaiting;
+            this.simLength.value = 0;
+            this.lineageParentRunId.value = '';
+            this.fieldModelRunId.value = '';
+        });
+
+        if (hubConnection.state !== SignalR.HubConnectionState.Connected) await start();
+        if (hubConnection.state !== SignalR.HubConnectionState.Connected) {
+            this.computing.value = false;
+            this.runsError.value = 'Not connected to the server.';
+            return false;
+        }
+
+        //Through the same upload-then-start path a normal run takes; only ResumeRunId differs, and
+        //the server reads the scenario from the run rather than from this body.
+        const body = { ...this.requestBodyForResume(), TotalHours: Math.trunc(total), ResumeRunId: run.id };
+        try {
+            const prepared = await fetch(`${location.protocol}//${BackendURI}/simulation/upload`, {
+                body: JSON.stringify(body), method: 'post',
+                headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+            });
+            const preparedID = await prepared.text();
+            if (!(preparedID?.length > 0)) throw new Error('the server did not accept the request');
+            await hubConnection.invoke('start', preparedID);
+            this.previewRequest.value = true;
+            this.runsError.value = '';
+            return true;
+        } catch (err) {
+            batch(() => { this.computing.value = false; this.renderer.value = 'error'; });
+            //The server refuses a resume it cannot honour - no checkpoint, a checkpoint that does
+            //not fit, or a total the run has already passed - and says which.
+            this.runsError.value = `Could not resume run ${run.id}: ${(err as any)?.message ?? err}`;
+            return false;
+        }
+    }
+
+    /** The request body a resume sends. Only TotalHours and ResumeRunId are read by the server. */
+    private requestBodyForResume = () => ({
+        HoursPerTick: Math.trunc(this.hoursPerTick.peek()),
+        TotalHours: Math.trunc(this.totalHours.peek()),
+        RequestGeometry: true,
+    });
+
+    /**
      * Starts a new run that carries a stored one further in simulated time.
      *
      * It is a RE-RUN, not a resume, and the panel says so: the world is rebuilt from the recorded

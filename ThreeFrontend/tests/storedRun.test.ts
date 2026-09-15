@@ -29,7 +29,7 @@ function run(overrides: Partial<IStoredRun> = {}): IStoredRun {
         plants: 4134, trays: 857, obstacles: 1622, species: 8,
         analytics: true, deterministic: false,
         bytesOnDisk: 68201033, auxBytesOnDisk: 116655,
-        fieldModelName: null, hasFieldModel: false, hasTerrain: true, hasObstacleLight: false,
+        fieldModelName: null, hasFieldModel: false, hasTerrain: true, hasObstacleLight: false, hasCheckpoint: true,
         parentRunId: null, branchStep: null,
         ...overrides,
     };

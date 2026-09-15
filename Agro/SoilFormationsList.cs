@@ -453,6 +453,23 @@ public partial class SoilFormationsList : ISoilFormation
 
 	[M(AI)] public Vector3 GetFieldOrigin(int soilIndex) => Items[soilIndex].GetFieldOrigin(0);
 
+	/// <summary>Delegates to each tray in order; the list itself holds no simulated state.</summary>
+	public void WriteState(BinaryWriter writer)
+	{
+		writer.Write(Items.Count);
+		for (int i = 0; i < Items.Count; ++i) Items[i].WriteState(writer);
+	}
+
+	public void ReadState(BinaryReader reader)
+	{
+		var count = reader.ReadInt32();
+		if (count != Items.Count)
+			throw new InvalidDataException(
+				$"The checkpoint holds {count} trays and this field model builds {Items.Count}. " +
+				$"The model or the tray selection has changed since the run was saved.");
+		for (int i = 0; i < Items.Count; ++i) Items[i].ReadState(reader);
+	}
+
 	public byte[] Serialize()
 	{
 		using var stream = new MemoryStream();

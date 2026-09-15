@@ -46,6 +46,9 @@ public sealed record RunResponse(
     bool HasFieldModel,
     bool HasTerrain,
     bool HasObstacleLight,
+    /// <summary>Whether this run can be RESUMED - carried on from where it stopped - rather than
+    /// recomputed from its request.</summary>
+    bool HasCheckpoint,
     string? ParentRunId,
     uint? BranchStep);
 

@@ -46,6 +46,34 @@ public class VirtualRootsFormation : IPlantSubFormation<UnderGroundAgent>
 
     public void DeliverPost(uint timestep) { }
 
+    /// <summary>
+    /// The whole of this formation's state: a size, a liveness flag and two resource pools.
+    ///
+    /// It stands in for a root system rather than simulating one, so there are no agents to write -
+    /// which is exactly why it needs its own implementation instead of inheriting the array blit.
+    /// </summary>
+    public void WriteState(BinaryWriter writer)
+    {
+        writer.Write(Alive);
+        writer.Write(Size.X); writer.Write(Size.Y); writer.Write(Size.Z);
+        writer.Write(Water_g);
+        writer.Write(Energy);
+        writer.Write(DailyResourceMax);
+        writer.Write(DailyProductionMax);
+        writer.Write(DailyEfficiencyMax);
+    }
+
+    public void ReadState(BinaryReader reader)
+    {
+        Alive = reader.ReadBoolean();
+        Size = new(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
+        Water_g = reader.ReadSingle();
+        Energy = reader.ReadSingle();
+        DailyResourceMax = reader.ReadSingle();
+        DailyProductionMax = reader.ReadSingle();
+        DailyEfficiencyMax = reader.ReadSingle();
+    }
+
     internal void Birth(float water_g, float energy)
     {
         Water_g = water_g;

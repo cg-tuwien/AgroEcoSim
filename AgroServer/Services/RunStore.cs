@@ -95,6 +95,30 @@ public interface IRunStore
     /// <summary>The request this run was started from, as stored. The client forks from it.</summary>
     bool TryReadRequest(string runId, out byte[] utf8Json);
 
+    /// <summary>
+    /// Files the simulation's live state so the run can be RESUMED rather than recomputed.
+    ///
+    /// Only the latest is kept: a checkpoint is a place to carry on from, not a history - the
+    /// history is the frames. It is overwritten in place, so it costs its own size once however
+    /// long the run turns out to be.
+    /// </summary>
+    void WriteCheckpoint(string runId, uint step, byte[] state);
+
+    /// <summary>The stored state and the step it was taken at. False when the run has none.</summary>
+    bool TryReadCheckpoint(string runId, out uint step, out byte[] state);
+
+    /// <summary>Whether this run can be resumed rather than recomputed.</summary>
+    bool HasCheckpoint(string runId);
+
+    /// <summary>
+    /// Re-opens a finished run that is being resumed, and records its new horizon.
+    ///
+    /// The run goes back to "running" and its request.json is rewritten with the new total, so a
+    /// later reader - the panel, an adoption pass, a second resume - sees the horizon the run is
+    /// actually working towards rather than the one it was first given.
+    /// </summary>
+    void ResumeRun(string runId, uint totalSteps, int totalHours, string requestJson);
+
     /// <summary>The serialized soil as gzipped bytes, for serving with Content-Encoding: gzip.</summary>
     bool TryReadTerrain(string runId, out byte[] gzipped);
 
@@ -651,6 +675,7 @@ public class RunStore : IRunStore, IDisposable
     string LegacyFramePath(string runId, uint step) => Path.Combine(FramesDir(runId), $"{step:D6}.z");
     string ObstacleLightPath(string runId) => Path.Combine(RunDir(runId), "obstaclelight.json.gz");
     string TerrainMetaPath(string runId) => Path.Combine(RunDir(runId), "terrain.json");
+    string CheckpointPath(string runId) => Path.Combine(RunDir(runId), "checkpoint.bin.gz");
     string ModelPath(string hash) => Path.Combine(ModelsDir, $"{hash}.obj.gz");
 
     /// <summary>Files how this run's terrain was built, beside the run. Best-effort.</summary>
@@ -753,12 +778,20 @@ public class RunStore : IRunStore, IDisposable
         catch (Exception e) { Console.Error.WriteLine($"RunStore: could not store the terrain of {runId}: {e.Message}"); }
     }
 
-    /// <summary>Opens the run's index file and starts the single worker that owns it.</summary>
-    void StartWriter(string runId)
+    /// <summary>
+    /// Opens the run's index file and starts the single worker that owns it.
+    ///
+    /// The counts are carried in rather than started at zero, because a RESUMED run already has
+    /// frames on disk: its writer continues an existing tally, and a fresh one would flush its own
+    /// count over the top and report a forty-frame run as holding twenty.
+    /// </summary>
+    void StartWriter(string runId, uint storedFrames = 0, long bytesOnDisk = 0)
     {
         var writer = new RunWriter
         {
             RunId = runId,
+            StoredFrames = storedFrames,
+            BytesOnDisk = bytesOnDisk,
             Queue = new BlockingCollection<(uint, byte[])>(QueueDepth),
             //Opened ONCE for the run. Reopening it per frame was a file open, append and close on
             //the simulation thread for eight bytes.
@@ -929,6 +962,88 @@ public class RunStore : IRunStore, IDisposable
         try { bytes = File.ReadAllBytes(path); return true; }
         catch { return false; }
     }
+
+    public void WriteCheckpoint(string runId, uint step, byte[] state)
+    {
+        if (Disabled || !IsSafeId(runId) || state == null || state.Length == 0) return;
+        try
+        {
+            //Written beside and moved into place. A checkpoint truncated by a crash is worse than
+            //no checkpoint: it is the one file a resume trusts completely, and a half-written one
+            //reads back as a world with fewer organs rather than as a failure.
+            var path = CheckpointPath(runId);
+            var temp = $"{path}.tmp";
+            long size;
+            using (var output = new FileStream(temp, FileMode.Create, FileAccess.Write, FileShare.None))
+            {
+                //The step goes in first and uncompressed, so reading it back costs four bytes
+                //rather than inflating hundreds of megabytes to find out where the run had got to.
+                output.Write(BitConverter.GetBytes(step));
+                using (var gz = new GZipStream(output, CompressionLevel.Fastest, leaveOpen: true))
+                    gz.Write(state, 0, state.Length);
+                size = output.Length;
+            }
+
+            var previous = File.Exists(path) ? new FileInfo(path).Length : 0;
+            File.Move(temp, path, overwrite: true);
+            //Only the difference: the file replaces itself rather than accumulating.
+            if (size != previous) AddAuxBytes(runId, size - previous);
+        }
+        catch (Exception e) { Console.Error.WriteLine($"RunStore: could not checkpoint {runId}: {e.Message}"); }
+    }
+
+    public bool TryReadCheckpoint(string runId, out uint step, out byte[] state)
+    {
+        step = 0;
+        state = [];
+        if (Disabled || !IsSafeId(runId)) return false;
+        var path = CheckpointPath(runId);
+        if (!File.Exists(path)) return false;
+        try
+        {
+            using var input = File.OpenRead(path);
+            Span<byte> header = stackalloc byte[4];
+            if (input.ReadAtLeast(header, 4, throwOnEndOfStream: false) < 4) return false;
+            step = BitConverter.ToUInt32(header);
+
+            using var gz = new GZipStream(input, CompressionMode.Decompress);
+            using var buffer = new MemoryStream();
+            gz.CopyTo(buffer);
+            state = buffer.ToArray();
+            return state.Length > 0;
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine($"RunStore: could not read the checkpoint of {runId}: {e.Message}");
+            return false;
+        }
+    }
+
+    public void ResumeRun(string runId, uint totalSteps, int totalHours, string requestJson)
+    {
+        if (Disabled || !IsSafeId(runId)) return;
+        try
+        {
+            File.WriteAllText(RequestPath(runId), requestJson);
+            lock (MetadataLock)
+            {
+                var run = Runs.FindById(runId);
+                if (run == null) return;
+                run.Status = "running";
+                run.TotalSteps = totalSteps;
+                run.TotalHours = totalHours;
+                run.UpdatedUtc = DateTime.UtcNow;
+                Runs.Update(run);
+                //Seeded from what the run already holds, so the resumed writer adds to the tally
+                //rather than replacing it.
+                StartWriter(runId, run.StoredFrames, run.BytesOnDisk);
+            }
+        }
+        catch (Exception e) { Console.Error.WriteLine($"RunStore: could not reopen {runId}: {e.Message}"); }
+    }
+
+    public bool HasCheckpoint(string runId) =>
+        !Disabled && IsSafeId(runId) && File.Exists(CheckpointPath(runId));
 
     public bool HasTerrain(string runId) =>
         !Disabled && IsSafeId(runId) && File.Exists(TerrainPath(runId));

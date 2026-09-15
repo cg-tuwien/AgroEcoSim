@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using System.Numerics;
 using AgentsSystem;
 using Utils;
@@ -11,6 +12,11 @@ namespace Agro;
 public interface ISoilFormation : IFormation
 {
 	int FieldsCount { get; }
+
+	/// <summary>Writes the soil's primary state for a checkpoint: what the simulation has changed,
+	/// not the geometry, which the same request rebuilds identically.</summary>
+	void WriteState(BinaryWriter writer);
+	void ReadState(BinaryReader reader);
 
 	float GetMetricGroundDepth(float x, float z, int soilIndex);
 	void ProcessRequests();
@@ -597,6 +603,39 @@ public class SoilFormationRegularVoxels : IGrid3D, ISoilFormation
         //in case the ground was hit earlier distribute the rest among the cells
 
     }
+
+	/// <summary>
+	/// Water, temperature and steam per cell. Everything else this formation holds - cell volumes,
+	/// capacities, ground addresses, the surface triangles - is a function of the field geometry,
+	/// which the constructor derives from the request and derives the same way every time.
+	/// </summary>
+	public void WriteState(BinaryWriter writer)
+	{
+		writer.Write(Water_g.Length);
+		writer.Write(MemoryMarshal.AsBytes<float>(Water_g));
+		writer.Write(MemoryMarshal.AsBytes<float>(Temperature));
+		writer.Write(MemoryMarshal.AsBytes<float>(Steam));
+	}
+
+	public void ReadState(BinaryReader reader)
+	{
+		var count = reader.ReadInt32();
+		if (count != Water_g.Length)
+			throw new InvalidDataException(
+				$"The checkpoint holds {count} soil cells and this field has {Water_g.Length}. " +
+				$"The field resolution or size has changed since the run was saved.");
+		ReadInto(reader, Water_g);
+		ReadInto(reader, Temperature);
+		ReadInto(reader, Steam);
+	}
+
+	internal static void ReadInto(BinaryReader reader, float[] target)
+	{
+		var bytes = reader.ReadBytes(target.Length * sizeof(float));
+		if (bytes.Length != target.Length * sizeof(float))
+			throw new EndOfStreamException("The checkpoint ended inside a soil array.");
+		bytes.AsSpan().CopyTo(MemoryMarshal.AsBytes(target.AsSpan()));
+	}
 
     public byte[] Serialize()
 	{

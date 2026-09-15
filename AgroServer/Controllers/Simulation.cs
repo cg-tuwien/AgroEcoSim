@@ -225,7 +225,7 @@ public class SimulationController// : ControllerBase
         //a stored model the endpoint can rebuild one from.
         store.HasFieldModel(run.FieldModelHash),
         store.HasTerrain(run.Id) || store.HasFieldModel(run.FieldModelHash),
-        store.HasObstacleLight(run.Id), run.ParentRunId, run.BranchStep);
+        store.HasObstacleLight(run.Id), store.HasCheckpoint(run.Id), run.ParentRunId, run.BranchStep);
 
     /// <summary>
     /// Builds a stored run's soil from the field model filed with it, and keeps the result.

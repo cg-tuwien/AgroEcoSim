@@ -76,6 +76,25 @@ public class Pcg
 	[IgnoreDataMember]
 	const double ToDouble01 = 1.0 / uint.MaxValue;
 
+	/// <summary>
+	/// The generator's whole state, for a checkpoint.
+	///
+	/// Two ulongs and nothing else: PCG is a counter and a stream selector, so restoring these two
+	/// numbers restores the exact sequence. A resumed simulation that reseeded instead would carry
+	/// on with different random decisions from the same plants, which decodes perfectly and is
+	/// simply a different experiment.
+	/// </summary>
+	public (ulong State, ulong Increment) GetState() => (_state, _increment);
+
+	public void SetState(ulong state, ulong increment)
+	{
+		_state = state;
+		//An even increment would make the generator degenerate; PCG requires it odd, and the
+		//constructor enforces that by construction. A checkpoint written by this class always
+		//holds an odd one, so this only guards a corrupted file.
+		_increment = increment | 1ul;
+	}
+
 	// This attribute ensures that every thread will get its own instance of PCG.
 	// An alternative, since PCG supports streams, is to use a different stream per
 	// thread.

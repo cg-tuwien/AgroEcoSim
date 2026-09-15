@@ -516,6 +516,109 @@ public class AgroWorld : SimulationWorld
 
 	public byte[] SerializeTerrain() => Soil.Serialize();
 
+	//--- checkpointing ----------------------------------------------------------------------------
+	//
+	//What a resumed run needs that the request does not already give it.
+	//
+	//The request rebuilds the STRUCTURE identically every time - the same soil, the same plants in
+	//the same order, the same obstacles - because Initialize is deterministic in exactly that sense.
+	//What it cannot rebuild is everything the simulation has done since: how far the clock has run,
+	//how much water is in each cell, where every organ is, and what each plant's generator will say
+	//next. That is what travels here, positionally, against a world that has just been rebuilt.
+	//
+	//Nothing derived is written. The collision BVH, the tree caches, the irradiance client and the
+	//weather tables are all functions of the above or of the request, and they are rebuilt on the
+	//first tick after a restore - which is why a resumed run has to be given a world built the
+	//normal way rather than an empty one.
+
+	/// <summary>The format this world writes and accepts. Bumped when the payload changes shape.</summary>
+	public const byte CheckpointVersion = 1;
+
+	/// <summary>
+	/// Everything the next step depends on that the request does not determine.
+	///
+	/// Safe to call only BETWEEN steps: mid-tick the agent arrays are half-swapped and the postboxes
+	/// hold undelivered messages, neither of which is captured here.
+	/// </summary>
+	public byte[] SerializeState()
+	{
+		using var stream = new MemoryStream();
+		using var writer = new BinaryWriter(stream);
+
+		writer.Write(CheckpointVersion);
+		writer.Write(Timestep);
+		//The world generator. It is consumed only while the world is being built - the weather table
+		//forks a stream from it - so a rebuilt world already has it in the right place. Written
+		//anyway, at sixteen bytes, so that the day something draws from it during a run this
+		//checkpoint does not quietly become wrong.
+		var (worldState, worldIncrement) = RNG.GetState();
+		writer.Write(worldState);
+		writer.Write(worldIncrement);
+		//Counted so a restore can refuse a world of a different shape rather than silently reading
+		//one formation's state into another's.
+		writer.Write(Count);
+
+		ForEach(formation =>
+		{
+			switch (formation)
+			{
+				case PlantFormation2 plant: plant.WriteState(writer); break;
+				case ISoilFormation soil: soil.WriteState(writer); break;
+			}
+		});
+
+		//Last, because it is keyed against the formations written above.
+		Irradiance.WriteState(writer, FormationList);
+
+		return stream.ToArray();
+	}
+
+	/// <summary>
+	/// Restores a world that has just been built from the same request.
+	///
+	/// Positional: formations are appended in a fixed order by Initialize - the soil, then the
+	/// plants - and nothing ever removes one, so index N in the checkpoint is index N here. A
+	/// mismatch in the count means the request and the checkpoint describe different worlds, and
+	/// that is refused rather than reconciled.
+	/// </summary>
+	public void RestoreState(byte[] checkpoint)
+	{
+		using var stream = new MemoryStream(checkpoint);
+		using var reader = new BinaryReader(stream);
+
+		var version = reader.ReadByte();
+		if (version != CheckpointVersion)
+			throw new InvalidDataException(
+				$"This checkpoint is version {version} and this build writes version {CheckpointVersion}. " +
+				$"A run saved by a different build of the simulation cannot be resumed.");
+
+		var timestep = reader.ReadUInt32();
+		RNG.SetState(reader.ReadUInt64(), reader.ReadUInt64());
+		var count = reader.ReadInt32();
+		if (count != Count)
+			throw new InvalidDataException(
+				$"The checkpoint holds {count} formations and this request builds {Count}. " +
+				$"The scenario has changed since the run was saved.");
+
+		ForEach(formation =>
+		{
+			switch (formation)
+			{
+				case PlantFormation2 plant: plant.ReadState(reader); break;
+				case ISoilFormation soil: soil.ReadState(reader); break;
+			}
+		});
+
+		Irradiance.ReadState(reader, FormationList);
+
+		if (stream.Position != stream.Length)
+			throw new InvalidDataException(
+				$"The checkpoint has {stream.Length - stream.Position} bytes left over after every " +
+				$"formation was restored, so it does not describe this world.");
+
+		RestoreTimestep(timestep);
+	}
+
 	/// <summary>
 	/// How many soil fields this world has: one for a plain box field, one per tray for an
 	/// imported facade.

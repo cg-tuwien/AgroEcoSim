@@ -1,12 +1,18 @@
 using AgentsSystem;
 using System.Diagnostics;
 using System.Numerics;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 namespace Agro;
 
 public interface IPlantSubFormation<T> : IFormation where T: struct, IPlantAgent
 {
+	/// <summary>Writes the live agents for a checkpoint.</summary>
+	void WriteState(BinaryWriter writer);
+	/// <summary>Restores agents into a formation freshly built from the same request.</summary>
+	void ReadState(BinaryReader reader);
+
 	bool Alive { get; }
 	Vector3 Size { get; }
 	float DailyProductionMax { get; }
@@ -140,6 +146,115 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 		}
 		else
 			return false;
+	}
+
+	//--- checkpointing ------------------------------------------------------------------------
+	//
+	//Only the AGENTS are written. Everything else this class holds is derived and is rebuilt on the
+	//next tick from the agents themselves: the tree cache, both BVHs, the index map. Births, deaths
+	//and the postbox are empty at a step boundary - Census drains the first two and DeliverPost the
+	//last - which is the only moment a checkpoint is ever taken.
+	//
+	//The agents go out as raw bytes. T is an unmanaged struct, so its memory IS its state and a
+	//field-by-field writer would be a second description of the same layout, free to drift from it
+	//the day someone adds a field. A blit cannot drift; it can only fail to compile.
+
+	/// <summary>Writes the live agents. See the note above on what is deliberately not written.</summary>
+	public void WriteState(BinaryWriter writer)
+	{
+		var live = Src();
+		writer.Write(live.Length);
+		writer.Write(MemoryMarshal.AsBytes(live));
+
+		//Beyond the organs: what this formation remembers ACROSS steps rather than within one.
+		//The daily maxima are recomputed by NewDay, but a checkpoint taken part-way through a day
+		//lands before that, and they normalise every organ's share until it runs.
+		writer.Write(DailyResourceMax);
+		writer.Write(DailyProductionMax);
+		writer.Write(DailyEfficiencyMax);
+
+		//Flowering is a history, not a state: which season's window this refers to and how far
+		//through it each level has got. Restarting it would let a plant flower twice in one year.
+		writer.Write(FloweringCycle);
+		writer.Write(FloweringStarted.Count);
+		foreach (var started in FloweringStarted) writer.Write(started);
+
+		//Queued births and deaths, which DO cross the step boundary. PlantFormation2.Census calls
+		//AG.Death for emergency energy pruning AFTER AG.Census has run, so those deaths are applied
+		//by the NEXT step's Census - a checkpoint that dropped them would quietly reprieve organs
+		//the plant had already decided it could not feed.
+		writer.Write(Deaths.Count);
+		foreach (var death in Deaths) writer.Write(death);
+		writer.Write(Births.Count);
+		if (Births.Count > 0)
+		{
+			var born = CollectionsMarshal.AsSpan(Births);
+			writer.Write(MemoryMarshal.AsBytes(born));
+		}
+	}
+
+	/// <summary>
+	/// Restores the agents into a formation that has just been built from the same request.
+	///
+	/// Reads into the primary array and leaves ReadTMP false, which is the state a freshly
+	/// constructed formation is in - so a restored one is indistinguishable from one that has
+	/// simply not ticked yet, rather than one caught mid-swap.
+	/// </summary>
+	public void ReadState(BinaryReader reader)
+	{
+		var count = reader.ReadInt32();
+		if (count < 0) throw new InvalidDataException($"Negative agent count {count} in the checkpoint.");
+
+		EnsureAgentCapacity(count);
+		var bytes = reader.ReadBytes(count * Unsafe.SizeOf<T>());
+		if (bytes.Length != count * Unsafe.SizeOf<T>())
+			throw new EndOfStreamException($"The checkpoint ended inside an agent array of {count} agents.");
+		bytes.AsSpan().CopyTo(MemoryMarshal.AsBytes(Agents.AsSpan(0, count)));
+
+		AgentCount = count;
+		ReadTMP = false;
+		//RemovedBirths is scratch that Census clears before every use; the other two are not.
+		RemovedBirths.Clear();
+
+		//And rebuild what the agents imply. The tree cache is derived, but it is NOT rebuilt on the
+		//next tick - Census only touches it when something was born or died, and the first tick
+		//after a restore asks it for an organ's children before that can happen. The same four
+		//calls Census makes, in the same order, because this is the same situation: a complete set
+		//of agents whose parent links have never been walked.
+		InvalidateStaticClearance();
+		var live = Agents.AsSpan(0, count);
+		TreeCache.Clear(count);
+		for (int i = 0; i < count; ++i)
+			TreeCache.AddChild(live[i].Parent, i);
+		TreeCache.FinishUpdate(this);
+		TreeCache.UpdateBases(this);
+
+		DailyResourceMax = reader.ReadSingle();
+		DailyProductionMax = reader.ReadSingle();
+		DailyEfficiencyMax = reader.ReadSingle();
+
+		FloweringCycle = reader.ReadInt32();
+		var flowering = reader.ReadInt32();
+		FloweringStarted.Clear();
+		for (int i = 0; i < flowering; ++i) FloweringStarted.Add(reader.ReadUInt32());
+
+		Deaths.Clear();
+		var deaths = reader.ReadInt32();
+		for (int i = 0; i < deaths; ++i) Deaths.Add(reader.ReadInt32());
+
+		Births.Clear();
+		var births = reader.ReadInt32();
+		if (births > 0)
+		{
+			var bornBytes = reader.ReadBytes(births * Unsafe.SizeOf<T>());
+			if (bornBytes.Length != births * Unsafe.SizeOf<T>())
+				throw new EndOfStreamException("The checkpoint ended inside the queued births.");
+			for (int i = 0; i < births; ++i) Births.Add(default);
+			bornBytes.AsSpan().CopyTo(MemoryMarshal.AsBytes(CollectionsMarshal.AsSpan(Births)));
+		}
+
+		if (IsAboveGround)
+			BuildBvh();
 	}
 
 	public void Census()

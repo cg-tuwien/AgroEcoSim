@@ -29,6 +29,11 @@ services:
       #then the budget is enforced only when a run starts or is deleted - on a host that uploads and
       #browses more than it simulates, that is never.
       #- AGRO_RunStoreSweepMinutes=30
+      #How often the live world is written down so a run can be RESUMED rather than recomputed.
+      #Every step would double the I/O of a large run for a file only the last copy of which is ever
+      #read; 32 bounds what an interrupted run throws away to about a day of simulated time at four
+      #hours a tick. A checkpoint is ~19 KB per plant, so a 4,000 plant stand is a few hundred MB.
+      #- AGRO_RunStoreCheckpointStride=32
       #Total bytes of uploaded field models to keep. Their own budget, not a share of the run
       #retention: evicting a run does not release its model, which outlives it and may be shared.
       #- AGRO_RunStoreModelBytes=8589934592

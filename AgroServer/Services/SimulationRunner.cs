@@ -32,6 +32,15 @@ public interface ISimulationRunner
     /// </summary>
     string Create(SimulationRequest request, Hubs.ClientTerrain? terrain, string connectionId);
 
+    /// <summary>
+    /// Restarts a stored run from its checkpoint, appending to the SAME run.
+    ///
+    /// Returns the run id on success. The request supplies the new total; everything else comes
+    /// from the run itself, because a resumed run is the same simulation and changing its scenario
+    /// half way through would make its frames describe two different experiments.
+    /// </summary>
+    string? Resume(string runId, int totalHours, Hubs.ClientTerrain? terrain, string connectionId, out string reason);
+
     /// <summary>Starts the loop for a run created by <see cref="Create"/>.</summary>
     void Begin(string runId);
 
@@ -65,6 +74,8 @@ public interface ISimulationRunner
 class RunState
 {
     public required string RunId { get; init; }
+    /// <summary>The step a resumed run picks up at. Zero for a run that starts from nothing.</summary>
+    public uint StartStep { get; init; }
     public volatile bool Preview;
     public volatile bool Abort;
     public List<uint> StepTimes { get; } = new(1000);
@@ -232,6 +243,67 @@ public class SimulationRunner : ISimulationRunner
         return runId;
     }
 
+    public string? Resume(string runId, int totalHours, Hubs.ClientTerrain? terrain, string connectionId, out string reason)
+    {
+        reason = "";
+        if (Runs.ContainsKey(runId)) { reason = "That run is already computing."; return null; }
+
+        var stored = Store.GetRun(runId);
+        if (stored == null) { reason = "No such run."; return null; }
+        if (!Store.TryReadCheckpoint(runId, out var step, out var state))
+        {
+            reason = "That run has no checkpoint, so it cannot be resumed. Fork it to recompute it instead.";
+            return null;
+        }
+
+        if (!Store.TryReadRequest(runId, out var requestJson)) { reason = "That run's request is missing."; return null; }
+        var request = System.Text.Json.JsonSerializer.Deserialize(requestJson, AppJsonSerializerContext.Default.SimulationRequest);
+        if (request == null) { reason = "That run's request could not be read."; return null; }
+
+        //The ONLY thing the caller may change. The rest of the scenario is the run's own, because
+        //a world restored from a checkpoint was grown under those settings and cannot be
+        //retrospectively given different ones.
+        var hoursPerTick = request.HoursPerTick ?? 1;
+        var extended = request with { TotalHours = Math.Max(totalHours, (int)(step * hoursPerTick)) };
+
+        var lazyPreviews = !(extended.ExactPreview ?? false);
+        var exportFlags = (extended.DownloadRoots ?? false ? ExportFlags.Roots : ExportFlags.None) | ExportFlags.Analytics;
+
+        var world = Initialize.World(extended, terrain?.Terrain);
+        world.Deterministic = extended.Deterministic ?? false;
+        try { world.RestoreState(state); }
+        catch (Exception e)
+        {
+            //A checkpoint that does not fit the world the request builds is refused rather than
+            //patched: the alternative is a run that continues as a different simulation.
+            reason = $"That checkpoint does not fit this scenario: {e.Message}";
+            return null;
+        }
+
+        if (world.Timestep != step)
+        {
+            reason = $"The checkpoint says step {step} but the restored world is at {world.Timestep}.";
+            return null;
+        }
+
+        var totalSteps = (uint)world.TimestepsTotal();
+        if (totalSteps <= step)
+        {
+            reason = $"That run already reached step {step} of {totalSteps}; give it more hours to carry it further.";
+            return null;
+        }
+
+        Store.ResumeRun(runId, totalSteps, extended.TotalHours ?? 0,
+            System.Text.Json.JsonSerializer.Serialize(extended, AppJsonSerializerContext.Default.SimulationRequest));
+
+        var run = new RunState { RunId = runId, ConnectionId = connectionId, StartStep = step };
+        Pending[runId] = () => Loop(run, world, lazyPreviews, exportFlags, extended);
+        Runs[runId] = run;
+        ConnectionToRun[connectionId] = runId;
+        Console.WriteLine($"Run {runId} resumed at step {step} of a new total {totalSteps}.");
+        return runId;
+    }
+
     public void Begin(string runId)
     {
         if (!Pending.TryRemove(runId, out var loop)) return;
@@ -302,7 +374,16 @@ public class SimulationRunner : ISimulationRunner
             if (frameStride > 1)
                 Console.WriteLine($"Run {run.RunId}: storing every {frameStride} steps ({frameStride * (request.HoursPerTick ?? 1)} simulated hours per stored frame).");
 
-            for (uint i = 0; i < simulationLength && !run.Abort;)
+            //How often the live world is written down so the run can be RESUMED rather than
+            //recomputed. Every step would double the I/O of a large run for a file only the last
+            //copy of which is ever read; every 32 steps bounds what a stop throws away to about a
+            //day of simulated time at four hours a tick, for one checkpoint's worth of disk.
+            var checkpointStride = uint.TryParse(Config["RunStoreCheckpointStride"], out var cs) && cs > 0 ? cs : 32u;
+
+            //A resumed run starts where its checkpoint left off, not at zero. The world has already
+            //lived those steps and its Timestep says so; the loop counter has to agree, or the
+            //frames would be filed under step numbers the run already used.
+            for (uint i = run.StartStep; i < simulationLength && !run.Abort;)
             {
                 //Checked on EVERY iteration, not only on the ones that compute a step.
                 //
@@ -348,6 +429,12 @@ public class SimulationRunner : ISimulationRunner
                     }
 
                     ++i;
+
+                    //Taken BETWEEN steps, which is the only moment the world is consistent: mid-tick
+                    //the agent arrays are half-swapped and the postboxes hold undelivered messages,
+                    //neither of which a checkpoint captures.
+                    if (i % checkpointStride == 0)
+                        Store.WriteCheckpoint(run.RunId, i, world.SerializeState());
                 }
                 else
                 {
@@ -387,6 +474,12 @@ public class SimulationRunner : ISimulationRunner
             //is allowed to know. Fetched over REST it is a file the browser saves without parsing.
             if (omitted && world.ObstacleLight != null)
                 StoreFullObstacleLight(run.RunId, world, result.ObstacleLightMeta, result.ObstacleLightSelection);
+
+            //Always, however the run ended. On an abort it is what makes the run resumable at all;
+            //on a completed one it is what lets the horizon be extended later without recomputing
+            //the months already paid for.
+            try { Store.WriteCheckpoint(run.RunId, (uint)world.Timestep, world.SerializeState()); }
+            catch (Exception e) { Console.Error.WriteLine($"Run {run.RunId}: could not write the final checkpoint: {e.Message}"); }
 
             Store.CompleteRun(run.RunId, run.Abort);
             await to.Result(result);

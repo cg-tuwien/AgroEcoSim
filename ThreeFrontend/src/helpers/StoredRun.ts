@@ -40,6 +40,8 @@ export interface IStoredRun {
     /** Whether viewing this run draws its trays and facade. */
     hasTerrain: boolean;
     hasObstacleLight: boolean;
+    /** Whether this run can be RESUMED from where it stopped, rather than recomputed. */
+    hasCheckpoint: boolean;
     parentRunId: string | null;
     branchStep: number | null;
 }

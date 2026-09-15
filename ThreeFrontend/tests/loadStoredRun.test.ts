@@ -25,7 +25,7 @@ const RUN = {
     plants: 1, trays: 1, obstacles: 1, species: 0,
     analytics: true, deterministic: true,
     bytesOnDisk: 1000, auxBytesOnDisk: 100,
-    fieldModelName: 'mini.obj', hasFieldModel: true, hasTerrain: true, hasObstacleLight: false,
+    fieldModelName: 'mini.obj', hasFieldModel: true, hasTerrain: true, hasObstacleLight: false, hasCheckpoint: true,
     parentRunId: null, branchStep: null,
 };
 

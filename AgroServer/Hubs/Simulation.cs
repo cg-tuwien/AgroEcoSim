@@ -150,6 +150,27 @@ public class SimulationHub : Hub
 
         ClientTerrain? terrain;
         lock (ClientTerrains) ClientTerrains.TryGetValue(Context.ConnectionId, out terrain);
+
+        //Resuming is a different thing from starting, and it happens before anything else is set
+        //up: the world comes from the run's own checkpoint, not from this request, and the frames
+        //continue the run's own numbering rather than beginning at zero.
+        if (!string.IsNullOrEmpty(request.ResumeRunId))
+        {
+            var resumeTerrain = terrain ?? RebuildStoredTerrain(request.ResumeRunId);
+            var resumed = Runner.Resume(request.ResumeRunId, request.TotalHours ?? 0, resumeTerrain,
+                                        Context.ConnectionId, out var why);
+            if (resumed == null) throw new HubException(why);
+
+            try
+            {
+                await Groups.AddToGroupAsync(Context.ConnectionId, resumed);
+                await Clients.Caller.RunStarted(resumed);
+            }
+            catch { Runner.Cancel(resumed); throw; }
+            Runner.Begin(resumed);
+            return;
+        }
+
         //An upload on this connection always wins: it is the more recent statement of intent.
         //Only when there is none does a continued or forked run fall back to its parent's model.
         if (terrain == null && !string.IsNullOrEmpty(request.FieldModelRunId))

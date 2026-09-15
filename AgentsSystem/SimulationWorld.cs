@@ -5,6 +5,15 @@ public class SimulationWorld
 	internal readonly List<Action<SimulationWorld, uint, IList<IFormation>, IList<IObstacle>>> Callbacks = [];
 	public virtual uint Timestep { get; protected set; } = 0U;
 
+	/// <summary>
+	/// Puts the clock back where a checkpoint left it.
+	///
+	/// Deliberately narrow and deliberately not a public setter: the timestep is what the sun, the
+	/// weather tables and every age in the simulation are read against, so the only legitimate
+	/// reason to move it is restoring a world that has already lived those steps.
+	/// </summary>
+	protected void RestoreTimestep(uint timestep) => Timestep = timestep;
+
 	public int Count => Formations.Count;
 
 	/// <summary>
