@@ -29,12 +29,28 @@ var members = Reader.Extract(classNode);
 var speciesInterface = Reader.GenerateInterface(members);
 var speciesForm = Reader.GenerateForm(members);
 
-var currentInterface = File.Exists(interfaceOutputPath) ? File.ReadAllText(interfaceOutputPath) : "";
-if (currentInterface != speciesInterface)
-    File.WriteAllText(interfaceOutputPath, speciesInterface);
-
-var currentForm = File.Exists(formOutputPath) ? File.ReadAllText(formOutputPath) : "";
-if (currentForm != speciesForm)
-    File.WriteAllText(formOutputPath, speciesForm);
+WriteIfChanged(interfaceOutputPath, speciesInterface);
+WriteIfChanged(formOutputPath, speciesForm);
 
 return 0;
+
+/// <summary>
+/// Writes the file only when its content would change, and never leaves a partial one behind.
+///
+/// Both halves matter. Unchanged output must not be rewritten, or every build touches two files
+/// that the frontend's watcher is watching and the whole bundle rebuilds for nothing.
+///
+/// And the write has to be atomic, because this program runs as a build step that MSBuild fires
+/// once per target framework - two copies of it can be writing these exact two paths at the same
+/// moment. WriteAllText truncates first, so the loser of that race leaves a half-written .ts that
+/// compiles to nothing and a build error pointing at generated code nobody edited. Writing beside
+/// the target and moving into place makes the switch a rename, which cannot be observed halfway.
+/// </summary>
+static void WriteIfChanged(string path, string content)
+{
+    if (File.Exists(path) && File.ReadAllText(path) == content) return;
+
+    var temp = $"{path}.{Environment.ProcessId}.tmp";
+    File.WriteAllText(temp, content);
+    File.Move(temp, path, overwrite: true);
+}

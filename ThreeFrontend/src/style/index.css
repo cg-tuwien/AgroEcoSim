@@ -135,3 +135,46 @@ ul.scrollable-listing {
 	height: 83vh;
 	padding-right: 1em;
 }
+/* The stored-runs panel.
+   One card per run, because the HUD is a quarter of the window wide and the data wants a table
+   it cannot have. The borders are what separate one run's numbers from the next one's at that
+   width - without them the list reads as one paragraph of figures. */
+#hud ul.scrollable-listing > li {
+	margin: 0 0 6px 0;
+}
+
+.runCard {
+	border: 1px solid rgba(128, 128, 128, 0.35);
+	border-radius: 3px;
+	padding: 4px 6px;
+}
+
+.runCard > div {
+	margin: 1px 0;
+}
+
+.runCard button {
+	margin-right: 3px;
+}
+
+/* Status is the one field worth reading before any of the numbers: an aborted run is a partial
+   measurement and nothing else on the card says so. */
+.runStatus-running {
+	color: #33aa55;
+}
+
+.runStatus-aborted {
+	color: #ffaa33;
+}
+
+.runDetails {
+	margin-top: 4px;
+	padding-top: 4px;
+	border-top: 1px dotted rgba(128, 128, 128, 0.35);
+	opacity: 0.85;
+}
+
+.runDetails code {
+	font-size: 90%;
+	word-break: break-all;
+}

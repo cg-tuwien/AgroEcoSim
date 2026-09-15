@@ -26,6 +26,15 @@ export type Disk = PrimitiveBase & {
 export type Rectangle = PrimitiveBase & {
     type: Primitives.Rectangle;
     color: string;
+    /**
+     * Position of this organ within its blade, for a leaf simulated as a chain of segments.
+     * Zero for the segment at the sheath, and for any leaf that is not segmented at all.
+     *
+     * A segment is an ordinary leaf organ on the wire, so without this every one of them would
+     * be drawn with the species' whole-leaf outline - and a chain of outlines pinches to a point
+     * at every joint instead of running on as one blade.
+     */
+    laminaSlice: number;
 }
 
 export type Cylinder = PrimitiveBase & {

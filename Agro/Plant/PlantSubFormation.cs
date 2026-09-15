@@ -39,14 +39,18 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 
     public Bvh CollisionBvh { get; set; } = new();
 
+    /// <summary>Rhizome organs only. A creeping apex asks whether its next segment would run into
+    /// an established runner, and that is the only query that needs them.</summary>
+    public Bvh RhizomeBvh { get; set; } = new();
+
     public PlantSubFormation(PlantFormation2 plant, ReindexAgents reindex, bool isAboveGround)
 	{
 		Plant = plant;
 		Reindex = reindex;
 		IsAboveGround = isAboveGround;
 		CollisionEligibility = IsCollisionEligible;
+		PrunableCrown = TreeCache.PrunableCrown;
 		InitialCollisionFilter = InitialPairFilter;
-		IncrementalCollisionFilter = PairFilter;
 	}
 
 	internal float DailyResourceMax { get; private set; }
@@ -206,6 +210,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 			if (newCount < oldCount)
 				(ReadTMP ? AgentsTMP : Agents).AsSpan(newCount, oldCount - newCount).Clear();
 
+			InvalidateStaticClearance();
 			TreeCache.Clear(newCount);
 			for (int i = 0; i < newCount; ++i)
 				TreeCache.AddChild(dst[i].Parent, i);
@@ -346,42 +351,86 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 	//work in progress
 	List<float> Weights = [];
 	List<int> WeightReoslveChildren = [];
+	/// <summary>Weight-times-position of each organ's subtree, so a node knows where the load it
+	/// carries actually acts. Dividing by the subtree weight gives its centre of mass.</summary>
+	readonly List<Vector3> WeightedCentroids = [];
+
+	//Per-formation counters, summed by a probe. Instance fields rather than shared atomics so the
+	//parallel tick does not contend on them.
+	/// <summary>Stopwatch ticks spent in the collision pass.</summary>
+	public long CollisionTicks;
+	/// <summary>Candidate pairs the broad phase produced.</summary>
+	public long CollisionCandidatePairs;
+	/// <summary>Pairs that survived the narrow phase and were actually resolved.</summary>
+	public long CollisionContacts;
+	/// <summary>Sub-phase timings, so the pass can be attributed rather than guessed at.</summary>
+	public long TicksEligibility, TicksBroad, TicksNarrow, TicksRebase;
+
+	/// <summary>Bodies in the collision hierarchy after the last census, and how many petals were
+	/// folded into their receptacle instead of getting one each.</summary>
+	public int CollisionBodies, AggregatedPetals;
+
+	//One plant ticks on one thread, so a single scratch buffer is enough for the growth query
+	//a meristem issues against its own collision tree every step.
+	internal readonly List<int> GrowthOverlapBuffer = [];
+
+	//Gravity runs for every plant on every step; these buffers keep it allocation free.
+	readonly List<int> WeightFrontA = [], WeightFrontB = [];
+	readonly Queue<int> GravityQueue = new();
+
+	/// <summary>The floral axes whose stiffness follows the flower senescence curve.
+	/// Deliberately excludes FlowerBaseBud, so this is not the whole FlowerBud..FlowerBaseBud range.</summary>
+	static bool IsFloralAxis(OrganTypes organ) => organ is OrganTypes.FlowerStem or OrganTypes.FlowerPadel
+		or OrganTypes.FlowerPedicel or OrganTypes.FlowerMeristem or OrganTypes.FlowerBud;
 
 	/// <summary>
-	/// Shrinks a downward bend so the organ's tip stays at or above the soil surface.
+	/// Effective keel thickness for one blade segment, tapering from base to tip.
 	/// </summary>
 	/// <remarks>
-	/// The rotation is monotone in the angle for the range that matters, so eight
-	/// bisection steps resolve the largest admissible bend to well under a degree. The
-	/// loop only runs for organs that would actually break the surface; everything else
-	/// returns on the first test.
+	/// The position is found by counting leaf ancestors, which is at most
+	/// <see cref="SpeciesSettings.MaximumLeafSegments"/> steps and needs no extra per-agent state.
+	/// An unsegmented blade is all base, and keeps the full thickness.
 	/// </remarks>
-	static float LimitBendToSoilSurface(float baseY, float soilSurfaceY, Quaternion baseOrientation,
-		Vector3 axis, float delta, float length)
+	float BladeKeelAt(int index)
 	{
-		if (delta <= 0f || length <= 0f)
-			return delta;
+		var keel = Plant.Parameters.LeafKeelThickness;
+		var tipFraction = Plant.Parameters.LeafTipStiffnessFraction;
+		var segments = Plant.Parameters.LeafSegmentCount;
+		if (segments <= 1 || tipFraction >= 1f)
+			return keel;
 
-		static float TipY(Quaternion baseOrientation, Vector3 axis, float angle, float length, float baseY)
-		{
-			var rotated = Quaternion.CreateFromAxisAngle(axis, -angle) * baseOrientation;
-			return baseY + Vector3.Transform(Vector3.UnitX, rotated).Y * length;
-		}
+		var position = 0;
+		for (var p = GetParent(index); p >= 0 && GetOrgan(p) == OrganTypes.Leaf; p = GetParent(p))
+			if (++position >= segments)
+				break;
 
-		if (TipY(baseOrientation, axis, delta, length, baseY) >= soilSurfaceY)
-			return delta;
+		var t = position / (float)(segments - 1);
+		return keel * (1f - t * (1f - tipFraction));
+	}
 
-		var low = 0f;
-		var high = delta;
-		for (int step = 0; step < 8; ++step)
-		{
-			var mid = 0.5f * (low + high);
-			if (TipY(baseOrientation, axis, mid, length, baseY) >= soilSurfaceY)
-				low = mid;
-			else
-				high = mid;
-		}
-		return low;
+	/// <summary>Second moment of area of a blade about its MINOR axis - the width axis, which is
+	/// what a leaf droops about: a rectangle of the blade's full width and an effective thickness
+	/// representing its keel.</summary>
+	static float BladeInertia(float halfWidth, float keelThickness)
+	{
+		var width = 2f * MathF.Max(halfWidth, 1e-6f);
+		var thickness = MathF.Max(keelThickness, AboveGroundAgent.LeafThickness);
+		return width * thickness * thickness * thickness / 12f;
+	}
+
+	/// <summary>Second moment of area of a blade about its MAJOR axis - the blade normal, which is
+	/// what it would have to bend about to curve sideways in its own plane.</summary>
+	/// <remarks>
+	/// A lamina is not a rod, and using one figure for both directions is what let a Carex blade
+	/// fold sideways as readily as it droops. The two swap width and thickness, so the ratio is
+	/// (w/t)^2 - for a 6 mm blade on a 2.8 mm effective keel that is only 4.6, but for the 0.1 mm
+	/// a real strip is thick it is over three thousand.
+	/// </remarks>
+	static float BladeInertiaMajor(float halfWidth, float keelThickness)
+	{
+		var width = 2f * MathF.Max(halfWidth, 1e-6f);
+		var thickness = MathF.Max(keelThickness, AboveGroundAgent.LeafThickness);
+		return thickness * width * width * width / 12f;
 	}
 
 	internal void Gravity()
@@ -400,17 +449,27 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
             Weights.AddRange(new float[count - Weights.Count]);
         if (WeightReoslveChildren.Count < count)
             WeightReoslveChildren.AddRange(new int[count - WeightReoslveChildren.Count]);
+        if (WeightedCentroids.Count < count)
+            WeightedCentroids.AddRange(new Vector3[count - WeightedCentroids.Count]);
 
         //initialize weights with self weight converted to Newtons
         for (int i = 0; i < count; ++i)
         {
             var weight = GetWeight(i, Plant.Parameters) * 0.001f * 9.81f;
             Weights[i] = weight;
+            //Where that weight acts: the midpoint of the organ. Accumulated up the tree alongside
+            //the weight, this gives every node the centre of mass of everything it carries, which
+            //is the only thing that can supply a correct lever arm.
+            var selfDir = Vector3.Transform(Vector3.UnitX, dst[i].Orientation);
+            WeightedCentroids[i] = weight * (GetBaseCenter(i) + selfDir * (dst[i].Length * 0.5f));
             WeightReoslveChildren[i] = GetChildren(i).Count;
         }
         //accumulate weights from leaves up
-        var leavesToProcess = new List<int>(GetLeaves());
-        var internalNodesToProcess = new List<int>();
+        var leavesToProcess = WeightFrontA;
+        var internalNodesToProcess = WeightFrontB;
+        leavesToProcess.Clear();
+        leavesToProcess.AddRange(GetLeaves());
+        internalNodesToProcess.Clear();
         while (leavesToProcess.Count > 0)
         {
             internalNodesToProcess.Clear();
@@ -419,7 +478,15 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
                 var parent = GetParent(idx);
                 if (parent >= 0)
                 {
-                    Weights[parent] += Weights[idx];
+                    //A supported organ's load is carried by the surface it rests on, not by its
+                    //ancestors - that is what a reaction force means. Without this the moment at
+                    //every node upstream of a grounded blade tip never collapses, so gravity keeps
+                    //driving it into the ground while the hard pass keeps pushing it back out.
+                    if (!dst[idx].GroundSupported)
+                    {
+                        Weights[parent] += Weights[idx];
+                        WeightedCentroids[parent] += WeightedCentroids[idx];
+                    }
                     if (--WeightReoslveChildren[parent] == 0)
                         internalNodesToProcess.Add(parent);
                 }
@@ -427,7 +494,6 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
             (leavesToProcess, internalNodesToProcess) = (internalNodesToProcess, leavesToProcess);
         }
 
-        var flowerOrgans = new List<OrganTypes>() { OrganTypes.FlowerStem, OrganTypes.FlowerPadel, OrganTypes.FlowerPedicel, OrganTypes.FlowerMeristem, OrganTypes.FlowerBud };
 
 
 		// Process nodes from roots to leaves, propagating rotations.  The response
@@ -436,14 +502,17 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 		float tickSpeed = MathF.Max(0f, Plant.World.HoursPerTick);
 		const float responsePerHour = 0.05f;
 		float response = 1f - MathF.Pow(1f - responsePerHour, tickSpeed);
-		//Nothing above ground may droop through the soil. Bending is a pure downward
-		//rotation with no restoring term, so a long chain of segments - and every crown
-		//axis is one - eventually points straight down and buries its own leaves. Half of
-		//a two-year Heuchera's foliage sat below this line before the constraint existed.
-		//GetBaseCenter is expressed in the same frame the tree cache seeds roots with,
-		//which is Plant.Position, so the seed depth is the floor.
-		var soilSurfaceY = Plant.Position.Y;
-        var nodesToVisit = new Queue<int>(GetRoots());
+		//Bending used to be clamped here so no tip could drop below the flat plane
+		//Plant.Position.Y - which is the SEED, a few centimetres under the surface. It kept a long
+		//chain of segments from pointing straight down and burying its own leaves, and it also made
+		//it impossible for anything to hang below its own trough, so a Geranium could not cascade
+		//over a trough edge. The hard soil pass in Agro/Collisions/CollisionWorld.cs replaces it
+		//with containment in the actual soil hull, which forbids the first without forbidding the
+		//second.
+        var nodesToVisit = GravityQueue;
+        nodesToVisit.Clear();
+        foreach (var root in GetRoots())
+            nodesToVisit.Enqueue(root);
 		while (nodesToVisit.Count > 0)
 		{
 
@@ -475,7 +544,17 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 			{
 				elasticity = Plant.Parameters.PetioleElasticModulus;
 			}
-			if (flowerOrgans.Contains(agent.Organ))
+			if (agent.Organ is OrganTypes.Leaf or OrganTypes.FlowerPadel)
+			{
+				//A blade's stiffness belongs to the blade, not to how deep it sits in the plant. The
+				//basal ramp above is keyed on topological depth to stiffen the base of a shoot, and
+				//because it is applied with a max() it was overriding the species' own figure for
+				//every leaf.
+				elasticity = Plant.Parameters.LeafElasticModulus > 0f
+					? Plant.Parameters.LeafElasticModulus
+					: Plant.Parameters.GreenElasticModulus;
+			}
+			if (IsFloralAxis(agent.Organ))
 			{
 				// Supporting floral axes dry and lignify during senescence; they do
 				// not lose essentially all bending stiffness. Interpolate toward the
@@ -498,15 +577,121 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 			Quaternion rotation = Quaternion.Identity;
 			Quaternion appliedDelta = Quaternion.Identity;
 
+			//A supported organ rests on something; the surface takes the load and the cantilever is
+			//no longer loaded at all.
+			if (agent.GroundSupported)
+				totalWeight = 0f;
+
 			if (length > 1e-4f && radius > 0f && totalWeight > 0f)
 			{
 				var baseDir = Vector3.Transform(Vector3.UnitX, agent.baseOrientation);
+				var isBlade = agent.Organ is OrganTypes.Leaf or OrganTypes.FlowerPadel;
+				//A petiole is the end-loaded cantilever the old scalar law gets most wrong: it holds a
+				//whole blade out at its tip, and putting that load at the petiole's own midpoint
+				//understates the moment by roughly the ratio of the blade's reach to half the
+				//petiole - so a long one (Heuchera's, Geranium macrorrhizum's 18 cm) came out rigid
+				//when it should visibly arch.
+				var isPetiole = agent.Organ is OrganTypes.Petiole;
+
+				//These get the real thing: the torque of the load they carry about their own base,
+				//resolved in their own frame. Everything below is the old scalar law, kept for the
+				//structural axes - see the remark on the two formulations further down.
+				if ((isBlade || isPetiole) && Collisions.CollisionSettings.VectorBending)
+				{
+					//tau = r x F with F = (0, -W, 0), so |tau| = W * |horizontal offset to the load|
+					//and the axis falls out of the same cross product. This replaces BOTH the
+					//length*0.5 lever and the transverseLoadFactor heuristic: the old form put the
+					//WHOLE subtree's weight at the midpoint of the current segment, which is right
+					//only for the tip. For segment k of n the true arm is the distance to the centre
+					//of mass of everything beyond it, so the base of an 8-segment blade was short by
+					//a factor of 8 and the error grew with the segment count - the arch got weaker
+					//the finer the blade was divided, which is the opposite of converging.
+					var centroid = WeightedCentroids[i] / totalWeight;
+					var r = centroid - GetBaseCenter(i);
+					var torque = new Vector3(r.Z, 0f, -r.X) * totalWeight;
+
+					//Resolved in the organ's own frame: X along it, and for a blade Y is its normal
+					//and Z runs across the width.
+					var ex = Vector3.Transform(Vector3.UnitX, agent.baseOrientation);
+					var ey = Vector3.Transform(Vector3.UnitY, agent.baseOrientation);
+					var ez = Vector3.Transform(Vector3.UnitZ, agent.baseOrientation);
+					Vector3 kappa;
+					if (isBlade)
+					{
+						var keel = BladeKeelAt(i);
+						//Drooping is rotation about the WIDTH axis and is easy; curving sideways is
+						//rotation about the blade normal and is (w/t)^2 harder. One isotropic figure
+						//for both let a blade fold sideways as readily as it drooped. The component
+						//about the blade's own long axis is torsion, which this model has no degree of
+						//freedom for and which gravity cannot produce in a symmetric blade anyway - it
+						//is dropped rather than silently bent, because feeding it back as bending is
+						//what crumpled the lamina.
+						kappa = ez * (Vector3.Dot(torque, ez) / (elasticity * BladeInertia(radius, keel)))
+							+ ey * (Vector3.Dot(torque, ey) / (elasticity * BladeInertiaMajor(radius, keel)));
+					}
+					else
+					{
+						//A petiole is a rod: the same second moment about every transverse axis, so
+						//only the axial component has to come out - that is torsion, and there is no
+						//degree of freedom for it here either.
+						var rodInertia = MathF.PI * MathF.Pow(radius, 4) / 4f;
+						kappa = (torque - ex * Vector3.Dot(torque, ex)) / (elasticity * rodInertia);
+					}
+
+					var deltaThetaBlade = kappa.Length() * length;
+					if (deltaThetaBlade > 1e-7f)
+					{
+						var bladeAxis = kappa / kappa.Length();
+						//The equilibrium offset from the rest pose, not a per-step increment - the
+						//slerp below does the rate limiting. Capped well short of the old bound,
+						//which was "anything up to straight down": that turned a saturated segment's
+						//TARGET into vertical, so an over-driven blade did not arc, it folded.
+						var maxBlade = Collisions.CollisionSettings.MaxElasticBendRadians;
+						var angleFromDown = MathF.Acos(Math.Clamp(Vector3.Dot(baseDir, -Vector3.UnitY), -1f, 1f));
+						var safeBlade = Math.Clamp(deltaThetaBlade, 0f, MathF.Min(maxBlade, angleFromDown));
+						if (safeBlade > 1e-7f)
+						{
+							rotation = Quaternion.CreateFromAxisAngle(bladeAxis, safeBlade);
+							agent.targetOrientation = Quaternion.Normalize(rotation * agent.baseOrientation);
+							var bladeOr = Quaternion.Slerp(agent.Orientation, agent.targetOrientation, response);
+							appliedDelta = bladeOr * Quaternion.Inverse(agent.Orientation);
+							agent.SetOrientation(bladeOr);
+						}
+					}
+
+					PropagateToSubtree(dst, i, appliedDelta);
+					foreach (var child in GetChildren(i))
+						nodesToVisit.Enqueue(child);
+					continue;
+				}
+
 				// Only the component perpendicular to the organ bends a cantilever.
 				// The previous implementation applied maximum bending even to a
 				// vertical stem, where gravity is an axial load.
+				//
+				//This is the OLD scalar law and it has the same lever-arm defect the lamina branch
+				//above describes: the subtree's whole weight is applied at this organ's own
+				//midpoint. It is left in place for rods deliberately. For an organ whose subtree is
+				//itself the two agree on the MAGNITUDE of the moment - which is why the lamina
+				//change is about the arch of a segmented blade rather than about how hard a single
+				//leaf droops - but for a stem carrying a whole shoot they differ by a large factor,
+				//and correcting that would rescale the bending of every species at once against
+				//elastic moduli calibrated to this form. That is a retune, not a fix, and it wants
+				//its own pass.
 				var transverseLoadFactor = MathF.Sqrt(MathF.Max(0f, 1f - baseDir.Y * baseDir.Y));
 				var bendingMoment = totalWeight * transverseLoadFactor * length * 0.5f;
-				var inertia = MathF.PI * MathF.Pow(radius, 4) / 4f;
+				//Second moment of area. A stem is a rod; a blade is not, and treating one as the
+				//other is not a small error: the circular form with the blade's HALF WIDTH as the
+				//radius gives a Carex leaf 6.4e-11 m^4, where a rectangle of its real 0.1 mm
+				//thickness gives 5e-16 - a factor of 128,000, which is why a 30 cm blade never bends.
+				//
+				//The rectangle is not taken at face value either. A real sedge leaf is keeled, and a
+				//flat strip 0.1 mm thick would simply collapse; the keel is what holds it up, so the
+				//blade bends as a rectangle of an EFFECTIVE thickness that stands in for that
+				//structure. See SpeciesSettings.LeafKeelThickness.
+				var inertia = agent.Organ is OrganTypes.Leaf or OrganTypes.FlowerPadel
+					? BladeInertia(radius, BladeKeelAt(i))
+					: MathF.PI * MathF.Pow(radius, 4) / 4f;
 				var curvature = bendingMoment / (elasticity * inertia);
 				var deltaTheta = curvature * length;
 
@@ -524,8 +709,6 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 				if (len > 1e-4f)
 				{
 					axis /= len;
-					safeDelta = LimitBendToSoilSurface(GetBaseCenter(i).Y, soilSurfaceY, agent.baseOrientation,
-						axis, safeDelta, length);
 					rotation = Quaternion.CreateFromAxisAngle(axis, -safeDelta);
 					agent.targetOrientation = Quaternion.Normalize(rotation * agent.baseOrientation);
 					var newOr = Quaternion.Slerp(agent.Orientation, agent.targetOrientation, response);
@@ -535,26 +718,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 					agent.SetOrientation(newOr);
                 }
 
-                var children = CollisionChildren;
-        children.Clear();
-				children.Enqueue(i);
-                while (children.Count > 0)
-                {
-                    var index = children.Dequeue();
-                    foreach (var child in GetChildren(index))
-                    {
-                        children.Enqueue(child);
-                        ref var c = ref dst[child];
-                       // if (!IsNearlyIdentity(appliedDelta))
-
-                            c.SetOrientation(Quaternion.Normalize(appliedDelta * c.Orientation));
-                            c.baseOrientation = Quaternion.Normalize(appliedDelta * c.baseOrientation);
-                            c.restOrientation = Quaternion.Normalize(appliedDelta * c.restOrientation);
-
-                    }
-
-                }
-
+                PropagateToSubtree(dst, i, appliedDelta);
             }
 			foreach (var child in GetChildren(i))
 			{
@@ -562,43 +726,74 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
             }
         }
 		TreeCache.UpdateBases(this);
-		refitChildrens(0);
-        collisionHandling();
+		refitAllBounds();
+        //Foliage against foliage within one plant. Obstacles and soil are hard constraints and are
+        //handled by the world collision phase regardless of this switch.
+        if (Collisions.CollisionSettings.Enabled && Plant.World.SoftCollisions)
+            collisionHandling();
     }
+    /// <summary>
+    /// Carries a rotation of one organ rigidly through everything beyond it.
+    /// </summary>
+    /// <remarks>
+    /// Orientations here are absolute, so turning an organ does not move its subtree - and that
+    /// applies to the rest poses too, not only the current ones. All three are transported by the
+    /// same delta, which is what keeps the subtree's RELATIVE rest configuration unchanged; a
+    /// transport is not a deformation.
+    /// </remarks>
+    void PropagateToSubtree(Span<T> dst, int index, Quaternion appliedDelta)
+    {
+        var children = CollisionChildren;
+        children.Clear();
+        children.Enqueue(index);
+        while (children.Count > 0)
+        {
+            var node = children.Dequeue();
+            foreach (var child in GetChildren(node))
+            {
+                children.Enqueue(child);
+                ref var c = ref dst[child];
+                c.SetOrientation(Quaternion.Normalize(appliedDelta * c.Orientation));
+                c.baseOrientation = Quaternion.Normalize(appliedDelta * c.baseOrientation);
+                c.restOrientation = Quaternion.Normalize(appliedDelta * c.restOrientation);
+            }
+        }
+    }
+
     static bool IsNearlyIdentity(Quaternion q)
     {
         // identity and -identity are the same rotation; use dot as a robust check
         float d = MathF.Abs(Quaternion.Dot(Quaternion.Normalize(q), Quaternion.Identity));
         return d > 0.999999f;
     }
+    readonly Func<int, int> PrunableCrown;
     readonly Func<int, bool> CollisionEligibility;
-    readonly Func<int, int, bool> InitialCollisionFilter, IncrementalCollisionFilter;
+    readonly Func<int, int, bool> InitialCollisionFilter;
     readonly List<(int first, int second)> OverlappingPairs = [];
-    readonly Queue<(int first, int second)> PossibleCollisions = new();
-    readonly HashSet<(int, int)> SeenCollisions = [];
     readonly Queue<int> CollisionChildren = new();
-    readonly List<int> SubtreeOverlaps = [];
     readonly List<(int agentIndex, Bvh.BoundingBox bounds)> CollisionLeaves = [];
+    readonly List<(int agentIndex, Bvh.BoundingBox bounds)> RhizomeLeaves = [];
+
+    /// <summary>The soft-pass mask, for the cross-plant pass which lives outside this class.</summary>
+    internal bool IsCollisionEligiblePublic(int index) => IsCollisionEligible(index);
 
     bool IsCollisionEligible(int index) =>
         !GetIsRizome(index) && GetOrgan(index) != OrganTypes.Leaf && GetLength(index) > 1e-3;
 
+    /// <summary>
+    /// Accepts a broad-phase pair for the narrow phase.
+    /// </summary>
+    /// <remarks>
+    /// This used to claim each pair in a hash set first, so that a pair re-offered by the
+    /// incremental re-query could not bypass the crown rejection recorded for its first
+    /// occurrence. That re-query is gone, and <see cref="Bvh.GetOverlappingPairs"/> emits every
+    /// leaf pair exactly once - each belongs to exactly one lowest common ancestor - so the claim
+    /// could never fail and the hashing was pure overhead on the hottest path in the pass.
+    /// The pair arrives already ordered, which keeps the directional crown test deterministic.
+    /// </remarks>
     bool InitialPairFilter(int a, int b) =>
-        GetParent(a) != b && GetParent(b) != a && GetParent(a) != GetParent(b) && ClaimCollision(a, b);
+        GetParent(a) != b && GetParent(b) != a && GetParent(a) != GetParent(b) && !shareCrown(a, b);
 
-    bool ClaimCollision(int a, int b)
-    {
-        // Claim on enqueue, including rejected crown pairs. The crown test is
-        // directional across nested rhizomes; a later reversed pair must not
-        // bypass the rejection of the first occurrence in the original queue.
-        var pair = a < b ? (a, b) : (b, a);
-        return SeenCollisions.Add(pair) && !shareCrown(a, b);
-    }
-
-    // Retain the existing distinction: incremental queries also exclude petals and buds.
-    bool PairFilter(int a, int b) =>
-        GetOrgan(a) is not (OrganTypes.FlowerPadel or OrganTypes.FlowerBud) &&
-        GetOrgan(b) is not (OrganTypes.FlowerPadel or OrganTypes.FlowerBud) && InitialPairFilter(a, b);
 
     internal void collisionHandling()
     {
@@ -606,139 +801,193 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
         if (dst.Length == 0 || CollisionBvh.IsEmpty)
             return;
 
+        var started = System.Diagnostics.Stopwatch.GetTimestamp();
+        try
+        {
+        var budget = Collisions.CollisionSettings.ContactsPerPlantPerRound;
+        for (int round = 0; round < Collisions.CollisionSettings.SoftRounds && budget > 0; ++round)
+        {
         // Tick can change an organ's type or grow it past the length threshold
         // after the previous census built the hierarchy.
+        var tEligibility = System.Diagnostics.Stopwatch.GetTimestamp();
         CollisionBvh.RefreshCollisionEligibility(CollisionEligibility);
-        SeenCollisions.Clear();
+        var tBroad = System.Diagnostics.Stopwatch.GetTimestamp();
+        TicksEligibility += tBroad - tEligibility;
         OverlappingPairs.Clear();
         CollisionBvh.GetOverlappingPairs(OverlappingPairs, InitialCollisionFilter, collisionsOnly: true);
-        var possibleCollisions = PossibleCollisions;
-        possibleCollisions.Clear();
-        foreach (var pair in OverlappingPairs)
-            possibleCollisions.Enqueue(pair);
-        while ( possibleCollisions.Count > 0)
+        var tNarrow = System.Diagnostics.Stopwatch.GetTimestamp();
+        TicksBroad += tNarrow - tBroad;
+        CollisionCandidatePairs += OverlappingPairs.Count;
+        if (OverlappingPairs.Count == 0)
+            break;
+
+        var resolved = 0;
+        foreach (var overlap in OverlappingPairs)
 		{
-            var overlap = possibleCollisions.Dequeue();
+            if (resolved >= budget)
+                break;
 
             int index1 = overlap.first;
 			int index2 = overlap.second;
-            //Console.WriteLine($"{index1} {index2}");
 
-            if (!BranchIntersect(index1, index2))
+            if (!BranchIntersect(index1, index2, out var closestPoints))
 				continue;
 
-            bool isParentChild = isDescendant(index1, index2) || isDescendant(index2, index1);
-			var closestPoints = ClosestPointBetweenBranches(index1, index2);
-			var separation = closestPoints.Point2 - closestPoints.point1;
-			if (!float.IsFinite(separation.X) || !float.IsFinite(separation.Y) || !float.IsFinite(separation.Z) ||
-				separation.LengthSquared() <= 1e-12f)
-				continue;
-			var separationDirection = Vector3.Normalize(separation);
+            ++CollisionContacts;
+            ++resolved;
 
+            //Push the pair apart by the depth they overlap, each about its own base, sharing the
+            //correction so the heavier organ moves less.
+            //
+            //The previous form aimed both organs at a weighted midpoint BETWEEN them, which is a
+            //direction that would drive them together, and then rotated with an axis of
+            //Cross(target, current) - the reverse of what turns one onto the other. The two sign
+            //errors cancelled into a separation, which is why it worked at all, and neither could
+            //be corrected without the other. Stating the depth and the direction explicitly avoids
+            //the question.
+            var separation = closestPoints.Point2 - closestPoints.point1;
+            var distance = closestPoints.distance;
+            if (!float.IsFinite(distance) || separation.LengthSquared() <= 1e-12f)
+                continue;
 
-			if (isParentChild)
-			{
-				Vector3 Point1;
-				Vector3 Point2;
-				int index;
+            var pushDirection = separation / MathF.Sqrt(separation.LengthSquared());
+            var penetration = dst[index1].Radius + dst[index2].Radius - distance;
+            if (penetration <= 0f)
+                continue;
 
-				if (isDescendant(index1, index2))
-				{
-					Point1 = closestPoints.point1 + separationDirection * dst[index1].Radius;
-					Point2 = closestPoints.Point2 - separationDirection * dst[index2].Radius;
-					index = index2;
-				}
-				else
-				{
-					Point1 = closestPoints.point1 - separationDirection * dst[index2].Radius;
-					Point2 = closestPoints.Point2 + separationDirection * dst[index1].Radius;
-					index = index1;
-				}
-				RotateCellTowardPoints(index, Point1, Point2);
-				TreeCache.UpdateBases(this, [index]);
-				CollisionBvh.RefitLeaf(index, ComputeBounds(index));
-				refitChildrens(index);
-				getSubtreeCollisions(index, ref possibleCollisions);
-				continue;
+            //A contact in the basal quarter of an organ is answered by its parent, which has the
+            //leverage to clear it. A root has no parent, so the escalation stops there.
+            if (Vector3.Distance(closestPoints.point1, GetBaseCenter(index1)) < dst[index1].Length * 0.25f)
+            {
+                var escalated = GetParent(index1);
+                if (escalated >= 0) index1 = escalated;
+            }
+            if (Vector3.Distance(closestPoints.Point2, GetBaseCenter(index2)) < dst[index2].Length * 0.25f)
+            {
+                var escalated = GetParent(index2);
+                if (escalated >= 0) index2 = escalated;
             }
 
+            if (index1 == index2 || isDescendant(index1, index2) || isDescendant(index2, index1))
+            {
+                //One organ carries the other. Rotating the ancestor moves the descendant with it,
+                //so only the descendant is worth turning, and it takes the whole correction.
+                var mover = isDescendant(index1, index2) ? index2 : index1;
+                if (mover == index1 && !isDescendant(index2, index1))
+                    continue;
+                SeparateOrgan(mover, mover == index2 ? closestPoints.Point2 : closestPoints.point1,
+                    mover == index2 ? pushDirection : -pushDirection, penetration);
+                continue;
+            }
 
-			Vector3 adjustedPoint1 = closestPoints.point1 + separationDirection * dst[index1].Radius;
-			Vector3 adjustedPoint2 = closestPoints.Point2 - separationDirection * dst[index2].Radius;
+            var w1 = Weights.Count > index1 ? Weights[index1] : 0f;
+            var w2 = Weights.Count > index2 ? Weights[index2] : 0f;
+            var total = w1 + w2;
+            //Without usable weights, split it evenly.
+            var share1 = float.IsFinite(total) && total > 1e-9f ? w2 / total : 0.5f;
 
-			if (Vector3.Distance(closestPoints.point1, GetBaseCenter(index1)) < (dst[index1].Length * 0.25f)) index1 = GetParent(index1);
-			if (Vector3.Distance(closestPoints.Point2, GetBaseCenter(index2)) < (dst[index2].Length * 0.25f)) index2 = GetParent(index2);
+            SeparateOrgan(index1, closestPoints.point1, -pushDirection, penetration * share1);
+            SeparateOrgan(index2, closestPoints.Point2, pushDirection, penetration * (1f - share1));
+        }
 
-			var totalWeight = Weights[index1] + Weights[index2];
-			if (!float.IsFinite(totalWeight) || totalWeight <= 1e-9f)
-				continue;
-			Vector3 weightedMidPoint = (adjustedPoint1 * Weights[index1] + adjustedPoint2 * Weights[index2]) / totalWeight;
+        TicksNarrow += System.Diagnostics.Stopwatch.GetTimestamp() - tNarrow;
 
-			RotateCellTowardPoints(index1, adjustedPoint1, weightedMidPoint, false);
-			RotateCellTowardPoints(index2, adjustedPoint2, weightedMidPoint, false);
-            TreeCache.UpdateBases(this, [index1, index2]);
-			refitChildrens(index2);
-			refitChildrens(index1);
-            getSubtreeCollisions(index1, ref possibleCollisions);
-            getSubtreeCollisions(index2, ref possibleCollisions);
+        if (resolved == 0)
+            break;
 
+        var tRebase = System.Diagnostics.Stopwatch.GetTimestamp();
 
+        //One rebase and one refit for the whole round, instead of one per contact. Later contacts
+        //in a round therefore read the positions the round started from - a Jacobi sweep. That is
+        //the trade that removes the cascade: the alternative walked every descendant of every
+        //moved organ and re-queried the hierarchy for each of them.
+        TreeCache.UpdateBases(this);
+        refitAllBounds();
+        TicksRebase += System.Diagnostics.Stopwatch.GetTimestamp() - tRebase;
+        }
+        }
+        finally
+        {
+            CollisionTicks += System.Diagnostics.Stopwatch.GetTimestamp() - started;
         }
     }
+	/// <summary>Refits <paramref name="i"/> and its whole subtree. The organ itself has to be
+	/// included: a resolved contact rotates it, so its own bounds are stale too.</summary>
 	private void refitChildrens(int i)
 	{
-
         var children = CollisionChildren;
         children.Clear();
 		children.Enqueue(i);
+        CollisionBvh.UpdateLeafBounds(i, CollisionBounds(i));
         while (children.Count > 0)
         {
 			var index = children.Dequeue();
             foreach (var child in GetChildren(index))
             {
                 children.Enqueue(child);
-                CollisionBvh.UpdateLeafBounds(child, ComputeBounds(child));
+                CollisionBvh.UpdateLeafBounds(child, CollisionBounds(child));
             }
 
         }
         CollisionBvh.RefitUpdatedLeaves();
     }
-    private void getSubtreeCollisions(int i,ref Queue<(int, int)> overlaps)
-    {
 
+	/// <summary>Refits every organ. The previous whole-tree refit passed index 0, which skipped
+	/// agent 0's own bounds and any subtree under a second root.</summary>
+	private void refitAllBounds()
+	{
         var children = CollisionChildren;
         children.Clear();
-        children.Enqueue(i);
+        foreach (var root in GetRoots())
+        {
+            children.Enqueue(root);
+            CollisionBvh.UpdateLeafBounds(root, CollisionBounds(root));
+        }
         while (children.Count > 0)
         {
             var index = children.Dequeue();
             foreach (var child in GetChildren(index))
             {
                 children.Enqueue(child);
-                SubtreeOverlaps.Clear();
-                CollisionBvh.QueryOverlaps(child, SubtreeOverlaps, IncrementalCollisionFilter, collisionsOnly: true);
-                foreach (var overlap in SubtreeOverlaps)
-                    overlaps.Enqueue((child, overlap));
+                CollisionBvh.UpdateLeafBounds(child, CollisionBounds(child));
             }
-
         }
+        CollisionBvh.RefitUpdatedLeaves();
     }
-    private void RotateCellTowardPoints(int index, Vector3 point1, Vector3 point2, bool flipAxis = false)
+    /// <summary>
+    /// Turns one organ about its base so that <paramref name="contact"/> moves
+    /// <paramref name="distance"/> along <paramref name="direction"/>.
+    /// </summary>
+    /// <remarks>
+    /// The turn is carried into the subtree, because orientations here are absolute: rotating an
+    /// organ alone leaves its descendants pointing where they were and shears the branch instead of
+    /// swinging it. Soft contacts are transient - they do not touch the rest pose - so a foliage
+    /// contact relaxes out again once the neighbour moves, which is what interleaved growth needs.
+    /// </remarks>
+    private void SeparateOrgan(int index, Vector3 contact, Vector3 direction, float distance)
     {
-        var dst = Src();
-        Vector3 ab = Vector3.Normalize(point2 - GetBaseCenter(index));
-        Vector3 cb = Vector3.Normalize(point1 - GetBaseCenter(index));
-        float dot = Vector3.Dot(ab, cb);
+        if (index < 0 || distance <= 0f)
+            return;
 
-        float angle = MathF.Acos(Math.Clamp(dot, -1f, 1f));
+        var lever = contact - GetBaseCenter(index);
+        var leverLength = lever.Length();
+        if (leverLength < 1e-4f)
+            return;
 
-        Vector3 axis = !flipAxis ? Vector3.Cross(ab, cb) : Vector3.Cross(cb, ab);
-        if (angle > 0f && axis.LengthSquared() > 0f)
-        {
-            var rot = Quaternion.CreateFromAxisAngle(Vector3.Normalize(axis), angle);
-            dst[index].SetOrientation(Quaternion.Normalize(rot * dst[index].Orientation));
+        var turn = Vector3.Cross(lever, direction);
+        var turnLength = turn.Length();
+        if (turnLength < 1e-9f)
+            return;
 
-        }
+        //Small angle. Rotating by theta about turn/turnLength advances the contact point along
+        //`direction` by theta * turnLength, not theta * leverLength - the two differ by the sine of
+        //the angle between the organ and the push, so dividing by the lever delivered only part of
+        //the separation asked for, and none at all as the push approached the organ's own axis.
+        var angle = MathF.Min(distance / turnLength, Collisions.CollisionSettings.MaxSoftCorrectionRadians);
+        if (angle <= 0f)
+            return;
+
+        ApplyRotationDelta(index, Quaternion.CreateFromAxisAngle(turn / turnLength, angle), plastic: false);
     }
 
     private bool shareCrown(int index1, int index2) => TreeCache.SharesCrown(index1, index2);
@@ -747,11 +996,20 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
     private (Vector3 point1, Vector3 Point2, float distance) ClosestPointBetweenBranches(int index1, int index2)
     {
         var dst = Src();
+        return ClosestPointBetweenBranches(
+            GetBaseCenter(index1), Vector3.Transform(Vector3.UnitX, GetDirection(index1)), dst[index1].Length,
+            GetBaseCenter(index2), Vector3.Transform(Vector3.UnitX, GetDirection(index2)), dst[index2].Length);
+    }
 
-        Vector3 u = Vector3.Normalize(Vector3.Transform(Vector3.UnitX, GetDirection(index1))) * dst[index1].Length;
-        Vector3 v = Vector3.Normalize(Vector3.Transform(Vector3.UnitX, GetDirection(index2))) * dst[index2].Length;
+    /// <summary>Closest points of two organ axes. Transforming a unit vector by a unit quaternion
+    /// already yields a unit vector, so the directions are not renormalised.</summary>
+    private static (Vector3 point1, Vector3 Point2, float distance) ClosestPointBetweenBranches(
+        Vector3 base1, Vector3 dir1, float len1, Vector3 base2, Vector3 dir2, float len2)
+    {
+        Vector3 u = dir1 * len1;
+        Vector3 v = dir2 * len2;
 
-        Vector3 w = GetBaseCenter(index1) - GetBaseCenter(index2);
+        Vector3 w = base1 - base2;
 
         float a = Vector3.Dot(u, u);
         float b = Vector3.Dot(u, v);
@@ -769,8 +1027,8 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
         }
         s = Math.Clamp(s, 0f, 1f);
         t = Math.Clamp(t, 0f, 1f);
-        Vector3 cp1 = GetBaseCenter(index1) + s * u;
-        Vector3 cp2 = GetBaseCenter(index2) + t * v;
+        Vector3 cp1 = base1 + s * u;
+        Vector3 cp2 = base2 + t * v;
         float distance = Vector3.Distance(cp1, cp2);
 
         return (cp1, cp2, distance);
@@ -782,82 +1040,114 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
         return GetBaseCenter(index) + direction * dst[index].Length;
     }
     public bool BranchIntersect(int index1, int index2)
+        => BranchIntersect(index1, index2, out _);
+
+    /// <summary>
+    /// Capsule against capsule, returning the closest points so the caller does not recompute them.
+    /// </summary>
+    /// <remarks>
+    /// Same acceptance rule as before, reordered and with the transcendentals removed. This runs
+    /// once per candidate pair and the broad phase produces tens of thousands of them per plant per
+    /// step, so the order of the tests is the whole cost: the enum and index rejections are free
+    /// and now come first, the closest points are computed once instead of three times (here, again
+    /// inside baseCheck, and again in the caller), and
+    /// <c>|acos(d) - pi/2| &gt; 1e-3</c> is written as <c>|d| &gt; sin(1e-3)</c>, which is the same
+    /// test without two inverse cosines.
+    /// </remarks>
+    public bool BranchIntersect(int index1, int index2, out (Vector3 point1, Vector3 Point2, float distance) closest)
     {
+        closest = default;
         if (index1 == index2)
+            return false;
+
+        var dst = Src();
+        //Cheapest first: organ type and topology need no geometry at all.
+        if (dst[index1].Organ == OrganTypes.Leaf || dst[index2].Organ == OrganTypes.Leaf)
             return false;
         if (GetParent(index1) == index2 || GetParent(index2) == index1)
             return false;
 
-        var dst = Src();
-        Vector3 center1 = GetBaseCenter(index1) + Vector3.Transform(Vector3.UnitX, GetDirection(index1)) * (dst[index1].Length * 0.5f);
-        Vector3 center2 = GetBaseCenter(index2) + Vector3.Transform(Vector3.UnitX, GetDirection(index2)) * (dst[index2].Length * 0.5f);
-        float r1 = dst[index1].Length * 0.5f + dst[index1].Radius;
-        float r2 = dst[index2].Length * 0.5f + dst[index2].Radius;
+        var base1 = GetBaseCenter(index1);
+        var base2 = GetBaseCenter(index2);
+        //Siblings share one base point exactly - TreeCacheData assigns every child of a node from
+        //the same expression - so this equality is meaningful rather than a float accident.
+        if (base1 == base2)
+            return false;
 
+        var dir1 = Vector3.Transform(Vector3.UnitX, GetDirection(index1));
+        var dir2 = Vector3.Transform(Vector3.UnitX, GetDirection(index2));
+        var len1 = dst[index1].Length;
+        var len2 = dst[index2].Length;
+
+        var center1 = base1 + dir1 * (len1 * 0.5f);
+        var center2 = base2 + dir2 * (len2 * 0.5f);
+        var r1 = len1 * 0.5f + dst[index1].Radius;
+        var r2 = len2 * 0.5f + dst[index2].Radius;
         if (Vector3.DistanceSquared(center1, center2) > (r1 + r2) * (r1 + r2))
             return false;
 
-        if (!baseCheck(index1, index2) || !baseCheck(index2, index1)) return false;
-
-        if (GetBaseCenter(index1) == GetBaseCenter(index2))
-            return false;
-        if (dst[index1].Organ == OrganTypes.Leaf)
-            return false;
-        if (dst[index2].Organ == OrganTypes.Leaf)
-            return false;
-        var base1 = GetBaseCenter(index1);
-        var base2 = GetBaseCenter(index2);
-        var tip1 = GetTipPosition(index1);
-        var tip2 = GetTipPosition(index2);
-
+        var tip1 = base1 + dir1 * len1;
+        var tip2 = base2 + dir2 * len2;
         // Exclude if base of one is tip of the other
-        if (base1 == tip2 || base2 == tip1 || base1 == base2)
+        if (base1 == tip2 || base2 == tip1)
             return false;
-        var (p1, p2, distance) = ClosestPointBetweenBranches(index1, index2);
 
+        //The capsule test itself, hoisted ahead of everything that follows. Every remaining test
+        //can only reject, and this one rejects about 99 of every 100 pairs the broad phase emits,
+        //so running it first is what keeps the expensive predicates off the hot path. The sphere
+        //reject above is kept because it is cheaper still.
+        var (p1, p2, distance) = ClosestPointBetweenBranches(base1, dir1, len1, base2, dir2, len2);
+        closest = (p1, p2, distance);
+        if (distance - (dst[index1].Radius + dst[index2].Radius) >= 1e-3f)
+            return false;
 
-        if (Math.Abs(Math.Acos(Vector3.Dot(Vector3.Normalize(p2 - p1), Vector3.Normalize(Vector3.Transform(Vector3.UnitX, GetDirection(index1))))) - (Math.PI / 2f)) > 1e-3f)
+        if (!baseCheck(index1, index2) || !baseCheck(index2, index1))
+            return false;
+
+        var delta = p2 - p1;
+        var deltaLenSq = delta.LengthSquared();
+        if (deltaLenSq > 1e-24f)
         {
-            if (distance > dst[index2].Radius) return false;
-        }
-        if (Math.Abs(Math.Acos(Vector3.Dot(Vector3.Normalize(p1 - p2), Vector3.Normalize(Vector3.Transform(Vector3.UnitX, GetDirection(index2))))) - (Math.PI / 2f)) > 1e-3f)
-        {
-            if (distance > dst[index1].Radius) return false;
+            var deltaDir = delta * (1f / MathF.Sqrt(deltaLenSq));
+            //sin(1e-3) - the angular tolerance the inverse cosines used to express.
+            const float PerpendicularTolerance = 0.0009999998f;
+
+            if (MathF.Abs(Vector3.Dot(deltaDir, dir1)) > PerpendicularTolerance && distance > dst[index2].Radius)
+                return false;
+            if (MathF.Abs(Vector3.Dot(deltaDir, dir2)) > PerpendicularTolerance && distance > dst[index1].Radius)
+                return false;
+
+            if (Vector3.Dot(dir1, deltaDir) < 0f)
+                return false;
+            if (Vector3.Dot(dir2, -deltaDir) < 0f)
+                return false;
         }
 
-        var dir1 = Vector3.Transform(Vector3.UnitX, dst[index1].Orientation);
-        var dir2 = Vector3.Transform(Vector3.UnitX, dst[index2].Orientation);
-        if (Vector3.Dot(Vector3.Normalize(dir1), Vector3.Normalize((p2 - p1))) < 0f) return false;
-        if (Vector3.Dot(Vector3.Normalize(dir2), Vector3.Normalize((p1 - p2))) < 0f) return false;
-
-        return (distance - (dst[index1].Radius + dst[index2].Radius)) < 1e-3;
+        return true;
     }
 
     private bool baseCheck(int index1, int index2)
     {
         var dst = Src();
-        if (isDescendant(index1, index2))
+        if (!isDescendant(index1, index2))
+            return true;
+
+        var topmost = -1;
+        for (var i = GetParent(index2); i >= 0; i = GetParent(i))
         {
-            List<int> tocheck = new List<int>();
-            int i = GetParent(index2);
-            while (GetChildren(GetParent(i)).Contains(index1))
-            {
-                tocheck.Add(i);
-                i = GetParent(i);
-            }
-            tocheck.Reverse();
-            foreach (int child in tocheck)
-            {
-                var (b1, b2, distanceBaseToBranch) = ClosestPointBetweenBranches(index1, index2);
-                if (GetBaseCenter(child) == b2 && distanceBaseToBranch < dst[index1].Radius)
-                    return false;
-                else
-                {
-                    return true;
-                }
-            }
+            var parent = GetParent(i);
+            if (parent < 0 || !GetChildren(parent).Contains(index1))
+                break;
+            topmost = i;
         }
-        return true;
+
+        if (topmost < 0)
+            return true;
+
+        var (_, b2, distanceBaseToBranch) = ClosestPointBetweenBranches(index1, index2);
+        //Exact equality is deliberate: sibling base points are assigned from one shared
+        //expression in TreeCacheData.UpdateBases, so they are bitwise identical when they coincide.
+        return !(GetBaseCenter(topmost) == b2 && distanceBaseToBranch < dst[index1].Radius);
     }
 
     private void TryResolveGroundByRotation(int index, float groundHeight)
@@ -884,6 +1174,271 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
         agent.SetOrientation(Quaternion.Normalize(correction * agent.Orientation));
 
     }
+
+	/// <summary>Recomputes every base point and refits the collision hierarchy. The collision phase
+	/// calls this once per plant after it has finished moving organs, not once per contact.</summary>
+	internal void RebaseAndRefit()
+	{
+		TreeCache.UpdateBases(this);
+		refitAllBounds();
+	}
+
+	/// <summary>
+	/// Rotates an organ and its whole subtree rigidly about the organ's base.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// Orientations in this model are absolute, not relative to the parent, so a subtree does not
+	/// follow its root on its own - <see cref="Gravity"/> has to propagate its bend explicitly, and
+	/// anything that turns an organ must do the same or it shears the subtree instead of swinging
+	/// it. Descendant base points are fixed up by the caller's rebase.
+	/// </para>
+	/// <para>
+	/// <paramref name="plastic"/> also carries the turn into <c>baseOrientation</c>, the pose
+	/// gravity bends away from, so the organ keeps the new heading instead of springing back next
+	/// step. It is applied as a delta rather than through
+	/// <see cref="AboveGroundAgent.SetStructuralOrientation"/>, which would overwrite the rest pose
+	/// and discard the bend accumulated so far.
+	/// </para>
+	/// <para>
+	/// The plastic share applies to the contacted organ ALONE. Descendants are rigidly carried, so
+	/// they take the full delta in every pose they hold - see the remark at the propagation loop.
+	/// </para>
+	/// </remarks>
+	internal void ApplyRotationDelta(int index, Quaternion delta, bool plastic)
+	{
+		var dst = Src();
+		if (index < 0 || index >= dst.Length)
+			return;
+
+		delta = Quaternion.Normalize(delta);
+		//Only part of the turn is kept in the rest pose - see CollisionSettings.PlasticFraction -
+		//and only up to a budget. An organ in sustained contact was reshaping its rest pose every
+		//step with nothing to stop it, so a blade lying on the soil walked its own rest orientation
+		//through hundreds of degrees over a couple of seasons. Past the budget a contact still
+		//deflects the organ elastically; it simply no longer remodels it.
+		var kept = Quaternion.Identity;
+		if (plastic && dst[index].PlasticAngle < Collisions.CollisionSettings.MaxPlasticRadians)
+		{
+			kept = Quaternion.Normalize(Quaternion.Slerp(Quaternion.Identity, delta, Collisions.CollisionSettings.PlasticFraction));
+			dst[index].PlasticAngle += 2f * MathF.Acos(Math.Clamp(MathF.Abs(kept.W), 0f, 1f));
+		}
+
+		dst[index].SetOrientation(Quaternion.Normalize(delta * dst[index].Orientation));
+		if (plastic)
+			dst[index].baseOrientation = Quaternion.Normalize(kept * dst[index].baseOrientation);
+
+		var queue = CollisionChildren;
+		queue.Clear();
+		queue.Enqueue(index);
+		while (queue.Count > 0)
+		{
+			var node = queue.Dequeue();
+			foreach (var child in GetChildren(node))
+			{
+				queue.Enqueue(child);
+				ref var c = ref dst[child];
+				//The FULL delta, not the plastic share. Turning an organ is a rigid transport of
+				//everything beyond it, and baseOrientation is an ABSOLUTE pose, so a descendant's
+				//rest orientation has to be carried by exactly the same rotation as its actual one
+				//or the relative rest configuration of the subtree silently changes. Only the
+				//contacted organ's OWN rest pose is a deformation, and only that one takes
+				//PlasticFraction.
+				//
+				//This was briefly the other way round, on the reasoning that a transient contact
+				//should not reach a descendant's rest pose at all. That reasoning confuses a
+				//deformation with a change of frame: writing `kept` here left every descendant
+				//(delta - kept) away from its own rest pose after every single contact, with
+				//nothing to write it back, and the residue is about whatever axis the contact
+				//happened to use. Hundreds of steps of that is what turned a Carex blade from an
+				//arc into a zig-zag. Gravity's own subtree propagation has always used the full
+				//delta for exactly this reason.
+				c.SetOrientation(Quaternion.Normalize(delta * c.Orientation));
+				c.baseOrientation = Quaternion.Normalize(delta * c.baseOrientation);
+				c.restOrientation = Quaternion.Normalize(delta * c.restOrientation);
+			}
+		}
+	}
+
+	/// <summary>Offset from this plant's field-local frame to world space. Plants in different
+	/// soil fields do not share an origin, and on the facade those origins span tens of metres.</summary>
+	internal Vector3 FieldOrigin => Plant.Soil.GetFieldOrigin(Plant.SoilIndex);
+
+	/// <summary>The plant's canopy box in world space, for a probe that measures canopy overlap.</summary>
+	public bool TryGetWorldBoundsPublic(out Vector3 min, out Vector3 max) => TryGetWorldBounds(out min, out max);
+
+	/// <summary>The plant's canopy box in world space, for the top level of the inter-plant
+	/// broad phase.</summary>
+	internal bool TryGetWorldBounds(out Vector3 min, out Vector3 max)
+	{
+		if (!CollisionBvh.TryGetRootBounds(out var local))
+		{
+			min = max = Vector3.Zero;
+			return false;
+		}
+		var origin = FieldOrigin;
+		min = local.Min + origin;
+		max = local.Max + origin;
+		return true;
+	}
+
+	/// <summary>Organs whose bounds meet <paramref name="worldBox"/>. The hierarchy is field-local,
+	/// so the query box is brought into that frame first.</summary>
+	internal void QueryWorldBounds(Vector3 worldMin, Vector3 worldMax, List<int> result)
+	{
+		var origin = FieldOrigin;
+		CollisionBvh.QueryOverlaps(new Bvh.BoundingBox(worldMin - origin, worldMax - origin), result);
+	}
+
+	/// <summary>An organ's axis in world space.</summary>
+	internal void GetWorldSegment(int index, out Vector3 basePoint, out Vector3 tip, out float radius)
+	{
+		var dst = Src();
+		basePoint = GetBaseCenter(index) + dst[index].BaseOffset + FieldOrigin;
+		tip = basePoint + Vector3.Transform(Vector3.UnitX, GetDirection(index)) * dst[index].Length;
+		radius = dst[index].Radius;
+	}
+
+	/// <summary>Separates one organ from a contact found by the inter-plant pass.</summary>
+	internal void SeparateFromNeighbour(int index, Vector3 contact, Vector3 direction, float distance)
+		=> SeparateOrgan(index, contact - FieldOrigin, direction, distance);
+
+	internal bool GetGrowthBlocked(int index) => ReadTMP
+		? index < AgentCount && AgentsTMP[index].GrowthBlocked
+		: index < AgentCount && Agents[index].GrowthBlocked;
+
+	internal void SetGrowthBlocked(int index, bool blocked)
+	{
+		var dst = Src();
+		if (index >= 0 && index < dst.Length)
+			dst[index].GrowthBlocked = blocked;
+	}
+
+	/// <summary>
+	/// Answers a hard contact on a blade by bending the WHOLE blade, the way a beam under a point
+	/// load actually responds, instead of hinging the one segment that happens to touch.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// A contact used to rotate exactly one organ about its own base and carry everything beyond it
+	/// rigidly. For a blade that is the wrong body: the load at the contact is reacted by every
+	/// segment between it and the sheath, each turning in proportion to its own compliance, and a
+	/// blade whose tip meets the ground lifts along its length rather than folding at one joint.
+	/// Hinging one segment also puts the whole correction into one place, so clearing a tip by a
+	/// few millimetres swung it through the full remaining lever and overshot.
+	/// </para>
+	/// <para>
+	/// The distribution is Euler-Bernoulli and needs no tuning constant. A turn of theta_k about
+	/// axis a_k at node k moves the contact point by theta_k * |r_k x u| along the escape direction
+	/// u, and the moment a point load there exerts on node k is proportional to the same quantity,
+	/// so theta_k = lambda * c_k * g_k with c_k the node's angular compliance L/(EI) and
+	/// g_k = |r_k x u|. Requiring the displacements to sum to the correction fixes lambda at
+	/// distance / sum(c_k * g_k^2). Segments BEYOND the contact are carried rigidly and that is
+	/// correct: a free end past a point load carries no moment.
+	/// </para>
+	/// </remarks>
+	internal bool DistributeBladeCorrection(int index, Vector3 contactPoint, Vector3 escape, float distance, bool plastic)
+	{
+		if (!Collisions.CollisionSettings.DistributeBladeContacts)
+			return false;
+
+		var dst = Src();
+		if (index < 0 || index >= dst.Length || distance <= 0f)
+			return false;
+		if (dst[index].Organ is not (OrganTypes.Leaf or OrganTypes.FlowerPadel))
+			return false;
+
+		var direction = escape.LengthSquared() > 1e-12f ? Vector3.Normalize(escape) : Vector3.Zero;
+		if (direction == Vector3.Zero)
+			return false;
+
+		//The blade, from the contacted segment back to the sheath.
+		var chain = BladeChainBuffer;
+		chain.Clear();
+		for (var node = index; node >= 0 && GetOrgan(node) is OrganTypes.Leaf or OrganTypes.FlowerPadel; node = GetParent(node))
+		{
+			chain.Add(node);
+			if (chain.Count > SpeciesSettings.MaximumLeafSegments)
+				break;
+		}
+		if (chain.Count < 2)
+			return false;
+
+		Span<float> gains = stackalloc float[SpeciesSettings.MaximumLeafSegments + 1];
+		Span<float> weights = stackalloc float[SpeciesSettings.MaximumLeafSegments + 1];
+		var total = 0f;
+		for (int k = 0; k < chain.Count; ++k)
+		{
+			var node = chain[k];
+			var lever = contactPoint - GetBaseCenter(node);
+			var cross = Vector3.Cross(lever, direction);
+			gains[k] = cross.Length();
+			//Angular compliance of one segment: how far it turns per unit moment.
+			var keel = BladeKeelAt(node);
+			var inertia = BladeInertia(dst[node].Radius, keel);
+			var elasticity = Plant.Parameters.LeafElasticModulus > 0f
+				? Plant.Parameters.LeafElasticModulus
+				: Plant.Parameters.GreenElasticModulus;
+			var compliance = inertia > 1e-20f && elasticity > 1f ? dst[node].Length / (elasticity * inertia) : 0f;
+			weights[k] = compliance * gains[k];
+			total += weights[k] * gains[k];
+		}
+		if (total <= 1e-20f)
+			return false;
+
+		var lambda = distance / total;
+
+		//If any node's share overruns the per-step cap, scale the WHOLE distribution rather than
+		//clipping that one node: clipping keeps the total down but distorts the shape of the
+		//response, leaving the blade bent in a way no load produces. A scaled response is simply a
+		//partial one, and the next step continues it.
+		var largest = 0f;
+		for (int k = 0; k < chain.Count; ++k)
+			largest = MathF.Max(largest, lambda * weights[k]);
+		if (largest > Collisions.CollisionSettings.MaxCorrectionRadians)
+			lambda *= Collisions.CollisionSettings.MaxCorrectionRadians / largest;
+
+		var moved = false;
+		//Base first, so each turn is applied to a configuration its ancestors have already settled.
+		for (int k = chain.Count - 1; k >= 0; --k)
+		{
+			var angle = lambda * weights[k];
+			if (angle <= 1e-7f || gains[k] <= 1e-9f)
+				continue;
+
+			var node = chain[k];
+			var lever = contactPoint - GetBaseCenter(node);
+			var turn = Vector3.Cross(lever, direction);
+			var turnLength = turn.Length();
+			if (turnLength < 1e-9f)
+				continue;
+			ApplyRotationDelta(node, Quaternion.CreateFromAxisAngle(turn / turnLength, angle), plastic);
+			moved = true;
+		}
+		return moved;
+	}
+
+	readonly List<int> BladeChainBuffer = [];
+
+	/// <summary>Records that a surface is carrying this organ's load. See
+	/// <see cref="AboveGroundAgent.GroundSupported"/>.</summary>
+	internal void SetGroundSupported(int index, bool supported)
+	{
+		var dst = Src();
+		if (index >= 0 && index < dst.Length)
+			dst[index].GroundSupported = supported;
+	}
+
+	internal ushort GetObstructionSteps(int index) => ReadTMP
+		? index < AgentCount ? AgentsTMP[index].ObstructionSteps : (ushort)0
+		: index < AgentCount ? Agents[index].ObstructionSteps : (ushort)0;
+
+	internal void SetObstructionSteps(int index, ushort steps)
+	{
+		var dst = Src();
+		if (index >= 0 && index < dst.Length)
+			dst[index].ObstructionSteps = steps;
+	}
 
 	public void setAgentOrientation(int id, Quaternion orientation)
 	{
@@ -1051,12 +1606,12 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 	public int GetParent(int index) => ReadTMP
 		? (AgentCount > index ? AgentsTMP[index].Parent : int.MinValue)
 		: (AgentCount > index ? Agents[index].Parent : int.MinValue);
-	public IList<int> GetChildren(int index) => TreeCache.GetChildren(index);
+	public List<int> GetChildren(int index) => TreeCache.GetChildren(index);
 	public int GetAbsDepth(int index) => TreeCache.GetAbsDepth(index);
 	public int GetAbsInvDepth(int index) => TreeCache.GetAbsInvDepth(index);
 	public float GetRelDepth(int index) => TreeCache.GetRelDepth(index);
-	public ICollection<int> GetRoots() => TreeCache.GetRoots();
-	public ICollection<int> GetLeaves() => TreeCache.GetLeaves();
+	public List<int> GetRoots() => TreeCache.GetRoots();
+	public List<int> GetLeaves() => TreeCache.GetLeaves();
 
 	public Vector3 GetBoundingBoxSize()
 	{
@@ -1338,16 +1893,148 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
             CollisionBvh.Clear();
             return;
         }
+        //Two hierarchies over disjoint organ sets, rather than one over every organ with a mask.
+        //The excluded organs are the problem: a leaf's bounds are inflated by its half WIDTH in
+        //all three axes, so the laminae - a quarter of all organs and never collision eligible -
+        //were the fattest boxes in the tree and inflated every ancestor of the ones that are.
         var leaves = CollisionLeaves;
+        var rhizomes = RhizomeLeaves;
         leaves.Clear();
+        rhizomes.Clear();
+
+        AggregatedPetals = 0;
+        var aggregated = MarkAggregatedFlowerHeads(dst.Length);
         for (int i = 0; i < dst.Length; ++i)
         {
-
-            leaves.Add((i, ComputeBounds(i)));
+            if (IsCollisionEligible(i))
+            {
+                //A petal whose head is small enough is not a body of its own; its receptacle
+                //carries the whole head.
+                if (aggregated && AggregatedPetal[i])
+                {
+                    ++AggregatedPetals;
+                    continue;
+                }
+                leaves.Add((i, CollisionBounds(i)));
+            }
+            else if (GetIsRizome(i))
+                rhizomes.Add((i, ComputeBounds(i)));
         }
 
+        CollisionBodies = leaves.Count;
         CollisionBvh.Build(CollectionsMarshal.AsSpan(leaves));
+        if (Collisions.CollisionSettings.PruneByCrown)
+            CollisionBvh.SetCrowns(PrunableCrown);
+        RhizomeBvh.Build(CollectionsMarshal.AsSpan(rhizomes));
     }
+    //Temporal coherence for the static passes: an organ that was measured well clear of every
+    //wall does not have to be measured again until it has moved far enough to matter. Indexed by
+    //agent, so Census invalidates the lot whenever it reindexes.
+    internal float[] StaticClearance = [];
+    internal Vector3[] ClearanceCentre = [];
+    internal float[] ClearanceExtent = [];
+
+    internal void EnsureClearanceCapacity(int count)
+    {
+        if (StaticClearance.Length >= count)
+            return;
+        Array.Resize(ref StaticClearance, count);
+        Array.Resize(ref ClearanceCentre, count);
+        Array.Resize(ref ClearanceExtent, count);
+    }
+
+    /// <summary>Drops every cached clearance. Census moves agents between indices, so a cache keyed
+    /// by index cannot survive it.</summary>
+    internal void InvalidateStaticClearance() => Array.Clear(StaticClearance);
+
+    /// <summary>
+    /// The bounds an organ occupies in the collision hierarchy.
+    /// </summary>
+    /// <remarks>
+    /// A receptacle whose petals were folded into it carries the whole head, so it must be bounded
+    /// by the head and not by itself. Every refit recomputes bounds from scratch, so returning
+    /// <see cref="ComputeBounds"/> here would shrink an aggregated head back to the receptacle on
+    /// the first refit and leave its petals - which were never inserted as bodies - represented by
+    /// nothing at all.
+    /// </remarks>
+    Bvh.BoundingBox CollisionBounds(int index)
+    {
+        var bounds = ComputeBounds(index);
+        if (index >= HeadBoundsValid.Length || !HeadBoundsValid[index])
+            return bounds;
+
+        foreach (var child in GetChildren(index))
+            if (GetOrgan(child) == OrganTypes.FlowerPadel)
+                bounds = Bvh.BoundingBox.Merge(bounds, ComputeBounds(child));
+        return bounds;
+    }
+
+    bool[] AggregatedPetal = [];
+    bool[] HeadBoundsValid = [];
+    Bvh.BoundingBox[] HeadBounds = [];
+
+    /// <summary>
+    /// Collapses each small flower head into a single body carried by its receptacle.
+    /// </summary>
+    /// <remarks>
+    /// Every petal of a head hangs off the same receptacle, so the tree cache gives them all the
+    /// same base point and the narrow phase rejects every petal pair on that exact equality - they
+    /// were costing broad-phase work and producing no contact at all. Above
+    /// <see cref="FlowerSettings.CollisionAggregationDiameter"/> the petals are big enough to be
+    /// worth resolving individually and are left alone.
+    ///
+    /// The head's size is the largest side of the box enclosing the receptacle and its petals.
+    /// </remarks>
+    /// <returns>False when nothing was aggregated, so the caller can skip the lookups.</returns>
+    bool MarkAggregatedFlowerHeads(int count)
+    {
+        var limit = Plant.Parameters.FlowerSettings.CollisionAggregationDiameter;
+        if (AggregatedPetal.Length < count)
+        {
+            Array.Resize(ref AggregatedPetal, count);
+            Array.Resize(ref HeadBoundsValid, count);
+            Array.Resize(ref HeadBounds, count);
+        }
+        Array.Clear(AggregatedPetal, 0, AggregatedPetal.Length);
+        Array.Clear(HeadBoundsValid, 0, HeadBoundsValid.Length);
+        if (limit <= 0f)
+            return false;
+
+        var any = false;
+        for (int i = 0; i < count; ++i)
+        {
+            if (GetOrgan(i) != OrganTypes.FlowerBud)
+                continue;
+
+            var children = GetChildren(i);
+            var petals = 0;
+            var bounds = ComputeBounds(i);
+            foreach (var child in children)
+                if (GetOrgan(child) == OrganTypes.FlowerPadel)
+                {
+                    bounds = Bvh.BoundingBox.Merge(bounds, ComputeBounds(child));
+                    ++petals;
+                }
+
+            if (petals == 0)
+                continue;
+
+            var extent = bounds.Max - bounds.Min;
+            if (MathF.Max(extent.X, MathF.Max(extent.Y, extent.Z)) > limit)
+                continue;
+
+            foreach (var child in children)
+                if (GetOrgan(child) == OrganTypes.FlowerPadel)
+                    AggregatedPetal[child] = true;
+
+            HeadBounds[i] = bounds;
+            HeadBoundsValid[i] = true;
+            any = true;
+        }
+
+        return any;
+    }
+
     public Bvh.BoundingBox ComputeBoundsFromParameters(Vector3 baseCenter, Quaternion orientation, float length, float radius)
     {
         var direction = Vector3.Transform(Vector3.UnitX, orientation);
@@ -1361,23 +2048,65 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
         return new Bvh.BoundingBox(min, max);
     }
 
+    /// <summary>
+    /// Bounds of an organ's collision body, in the same shape the light model and the primitive
+    /// export give it.
+    /// </summary>
+    /// <remarks>
+    /// This used to treat every organ as a capsule inflated by <c>Radius</c> in all three axes.
+    /// For a lamina that is wrong twice over: <c>Radius</c> is its half WIDTH, not a stem radius,
+    /// so the box was inflated by centimetres along the blade normal where the blade is 0.1 mm
+    /// thick. It also ignored <see cref="GetBaseOffset"/>, which every other consumer applies -
+    /// so a petal was bounded at its receptacle rather than out on the rim where it actually sits.
+    /// </remarks>
     public Bvh.BoundingBox ComputeBounds(int index, bool usePendingOrientation = false)
     {
         var dst = Src();
         if (index < 0 || index >= dst.Length)
             return new Bvh.BoundingBox(Vector3.Zero, Vector3.Zero);
 
-        var baseCenter = GetBaseCenter(index);
-        Quaternion orientation =  GetDirection(index);
-        var direction = Vector3.Transform(Vector3.UnitX, orientation);
-        if (direction.LengthSquared() < 1e-6f)
-            direction = Vector3.UnitX;
+        var orientation = GetDirection(index);
+        var axis = Vector3.Transform(Vector3.UnitX, orientation);
+        if (axis.LengthSquared() < 1e-6f)
+            axis = Vector3.UnitX;
 
-        var tip = baseCenter + Vector3.Normalize(direction) * dst[index].Length;
-        var radiusVec = new Vector3(dst[index].Radius);
-        var min = Vector3.Min(baseCenter, tip) - radiusVec;
-        var max = Vector3.Max(baseCenter, tip) + radiusVec;
-        return new Bvh.BoundingBox(min, max);
+        var baseCenter = GetBaseCenter(index) + dst[index].BaseOffset;
+        var length = dst[index].Length;
+        var radius = dst[index].Radius;
+
+        switch (dst[index].Organ)
+        {
+            case OrganTypes.Leaf:
+            case OrganTypes.FlowerPadel:
+            {
+                //A flat rectangle: length along the organ axis, half width across it, and a
+                //thickness that is almost nothing along the blade normal.
+                var across = Vector3.Transform(Vector3.UnitZ, orientation) * radius;
+                var normal = Vector3.Transform(Vector3.UnitY, orientation) * (AboveGroundAgent.LeafThickness * 0.5f);
+                var tip = baseCenter + axis * length;
+                var half = Vector3.Abs(across) + Vector3.Abs(normal);
+                return new Bvh.BoundingBox(Vector3.Min(baseCenter, tip) - half, Vector3.Max(baseCenter, tip) + half);
+            }
+
+            case OrganTypes.Bud:
+            case OrganTypes.FlowerBud:
+            case OrganTypes.FlowerBaseBud:
+            case OrganTypes.Fruit:
+            case OrganTypes.Seed:
+            {
+                //A sphere whose radius is the organ length, matching CpuLightSolver.FillPlant and
+                //the primitive export.
+                var r = new Vector3(MathF.Max(length, radius));
+                return new Bvh.BoundingBox(baseCenter - r, baseCenter + r);
+            }
+
+            default:
+            {
+                var tip = baseCenter + axis * length;
+                var radiusVec = new Vector3(radius);
+                return new Bvh.BoundingBox(Vector3.Min(baseCenter, tip) - radiusVec, Vector3.Max(baseCenter, tip) + radiusVec);
+            }
+        }
     }
     public void NewDay(uint timestep, byte ticksPerDay)
 	{
@@ -1410,8 +2139,18 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 					else
 						NewDayIncomplete.Add(i);
 
-					ReadyNodes0.Add(i);
-					ChildrenToWaitFor.Add(0);
+					//A leaf is not necessarily a tip any more: a long blade is a chain of leaf
+					//segments, so a segment may have a leaf child to wait for. Seeding those with
+					//zero put them in the ready set immediately, and the child's later
+					//--ChildrenToWaitFor[parent] then underflowed a byte from 0 to 255 - the
+					//bubbling stopped there and every ancestor lost its share of the tree's
+					//resources and volume. The assertion below is what catches it in a debug build;
+					//in release it corrupts the distribution silently.
+					Debug.Assert(GetChildren(i).Count < 255);
+					var leafChildren = (byte)GetChildren(i).Count;
+					ChildrenToWaitFor.Add(leafChildren);
+					if (leafChildren == 0)
+						ReadyNodes0.Add(i);
 					LeavesCount.Add(1);
 					Resources.Add(src[i].PreviousDayEnvResources);
 				}

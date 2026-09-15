@@ -9,6 +9,7 @@ namespace Agro;
 [JsonDerivedType(typeof(LanceolateLeafShape), "lanceolate")]
 [JsonDerivedType(typeof(OvateLeafShape), "ovate")]
 [JsonDerivedType(typeof(MapleLikeLeafShape), "mapleLike")]
+[JsonDerivedType(typeof(LinearLeafShape), "linear")]
 public interface ILeafShape
 {
     /// <summary>Area in m^2 based on dimensions. Should match outline generator roughly.</summary>
@@ -183,5 +184,72 @@ public sealed record MapleLikeLeafShape : ILeafShape
         var r = 1f - LobeDepth01 * lobeWave;
 
         return new Vector2(r * MathF.Cos(theta), r * MathF.Sin(theta));
+    }
+}
+
+/// <summary>
+/// A strap: parallel sided over most of its length, tapering only into an acuminate tip.
+/// </summary>
+/// <remarks>
+/// The grass and sedge outline. An ellipse is the wrong silhouette for one of these - at a
+/// 50:1 aspect ratio it reads as a very long lens, at full width only at its midpoint - and
+/// it is doubly wrong for a blade drawn as a chain of segments, because a segment near the
+/// tip then comes out a fraction of the width of a segment near the middle.
+/// </remarks>
+public sealed record LinearLeafShape : ILeafShape
+{
+    /// <summary>Where the tip taper begins, measured from the base (0) to the tip (1).</summary>
+    public float TipStart { get; init; } = 0.75f;
+
+    /// <summary>How sharply the tip draws in. Above one the taper is concave, i.e. acuminate.</summary>
+    public float TipSharpness { get; init; } = 1.6f;
+
+    /// <summary>Half width where the blade leaves the sheath, as a fraction of the maximum.</summary>
+    public float BaseWidth01 { get; init; } = 0.6f;
+
+    /// <summary>How far the basal widening reaches, measured from the base.</summary>
+    public float BaseRun { get; init; } = 0.06f;
+
+    //A strap is nearly all straight edge, but the tip taper and the sheath both need enough
+    //samples not to read as facets - and a segmented blade divides whatever it is given.
+    public int RecommendedSegments => 128;
+
+    /// <summary>Half width at <paramref name="s"/>, the normalized distance from base to tip.</summary>
+    float HalfWidth(float s)
+    {
+        s = Math.Clamp(s, 0f, 1f);
+        if (s < BaseRun)
+            return BaseWidth01 + (1f - BaseWidth01) * (s / MathF.Max(BaseRun, 1e-6f));
+        if (s <= TipStart)
+            return 1f;
+        var t = (s - TipStart) / MathF.Max(1f - TipStart, 1e-6f);
+        return MathF.Pow(MathF.Max(0f, 1f - t), TipSharpness);
+    }
+
+    public float AreaM2(in LeafDimensions dims)
+    {
+        //Area is the width profile integrated along the length; the profile is piecewise and
+        //cheap to sample, and this is only ever called to size leaflets.
+        const int samples = 64;
+        var sum = 0f;
+        for (int i = 0; i < samples; ++i)
+            sum += HalfWidth((i + 0.5f) / samples);
+        return dims.MaxWidthM * dims.LengthM * sum / samples;
+    }
+
+    public Vector2 OutlinePoint(in LeafDimensions dims, float t)
+    {
+        var p = OutlinePointInvariant(t);
+        return new(p.X * dims.MaxWidthM * 0.5f, p.Y * dims.LengthM * 0.5f);
+    }
+
+    public Vector2 OutlinePointInvariant(float t)
+    {
+        //Up one margin and back down the other, so the loop runs counter-clockwise in (across,
+        //along) exactly as the conic shapes above do.
+        t -= MathF.Floor(t);
+        var side = t < 0.5f ? 1f : -1f;
+        var s = t < 0.5f ? t * 2f : (1f - t) * 2f;
+        return new(side * HalfWidth(s), s * 2f - 1f);
     }
 }

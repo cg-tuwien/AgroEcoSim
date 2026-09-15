@@ -47,6 +47,15 @@ public static class Heuchera_Micrantha_Palace_Purple
         // too dense.
         PetioleLength = 0.18f,
         PetioleLengthVar = 0.04f,
+        //An 18 cm petiole modelled as one organ can only swing rigidly about its base, so it stayed
+        //dead straight no matter how correct its bending law became. Four segments let it arch, the
+        //way a Heuchera's does under its own blade.
+        PetioleSegmentLength = 0.045f,
+        //Half the 2e8 default, which holds a 3 mm petiole dead rigid however it is divided. Swept at
+        //day 730: 2e8 gives 0.8 degrees of arch, 1e8 gives 2.4 (14.6 on the most loaded petioles) at
+        //17.7 cm tall, 5e7 gives 4.5 at 15.5 cm. The arch is paid for in height, so this is the
+        //middle of that trade rather than the most visible setting.
+        PetioleElasticModulus = 1e8f,
         // Firm petioles, 4-5 mm across, stiff enough to hold the blade out at length.
         // Firm petioles: an 18 cm petiole carrying a 12 cm blade needs the section, or
         // the whole rosette sags below the soil line.

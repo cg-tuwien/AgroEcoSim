@@ -114,6 +114,15 @@ public struct UnderGroundAgent : IPlantAgent
     //gravity - not used in undergroundAgent
     public Quaternion baseOrientation { get; set; }
     public Quaternion restOrientation { get; set; }
+
+    /// <summary>Roots are not held out of obstacles; they are cut when they leave the soil volume
+    /// instead. Present because the shared agent interface carries it.</summary>
+    public bool GrowthBlocked { get; set; }
+    public ushort ObstructionSteps { get; set; }
+    //Roots are inside the soil by definition, so nothing ever supports one against gravity and
+    //nothing bends one plastically; these exist to satisfy IPlantAgent.
+    public bool GroundSupported { get; set; }
+    public float PlasticAngle { get; set; }
     public Quaternion targetOrientation { get; set; }
 
     public Vector3 BaseOffset => throw new NotImplementedException();

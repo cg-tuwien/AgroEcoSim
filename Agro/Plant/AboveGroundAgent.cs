@@ -108,6 +108,100 @@ public partial struct AboveGroundAgent : IPlantAgent
 		return growth;
 	}
 
+	/// <summary>
+	/// Births a petiole as a chain of segments and returns the LAST one, which is what a blade hangs
+	/// off. A species that does not divide its petioles gets a single organ, exactly as before.
+	/// </summary>
+	/// <remarks>
+	/// Size variance belongs to the petiole, not to each of its segments - the same lesson the blade
+	/// chain taught. It is drawn only when there is a chain to share it with, so an undivided species
+	/// consumes the RNG exactly as it did and no scene is reshuffled by a change meant for the
+	/// long-petioled ones. Every segment starts along the same heading because orientations here are
+	/// absolute.
+	/// </remarks>
+	static int BirthPetiole(PlantFormation2 plant, int parentIndex, Quaternion orientation, float energy,
+		float water, byte dominance, float parentRadius, float initialResources, float initialProduction)
+	{
+		var species = plant.Parameters;
+		var segments = species.PetioleSegmentCount;
+		var shared = segments > 1;
+		var lengthVar = shared ? plant.RNG.NextFloatVar(species.PetioleLengthVar) : 0f;
+		var radiusVar = shared ? plant.RNG.NextFloatVar(species.PetioleRadiusVar) : 0f;
+		var share = 1f / segments;
+
+		for (int segment = 0; segment < segments; ++segment)
+		{
+			var born = new AboveGroundAgent(plant, parentIndex, OrganTypes.Petiole, orientation,
+				energy * (shared ? share : 1f),
+				initialResources: initialResources, initialProduction: initialProduction)
+			{
+				Water_g = water * (shared ? share : 1f),
+				DominanceLevel = dominance,
+				ParentRadiusAtBirth = parentRadius
+			};
+			if (shared)
+			{
+				born.LengthVar = lengthVar;
+				born.RadiusVar = radiusVar;
+			}
+			parentIndex = plant.AG.Birth(born);
+		}
+		return parentIndex;
+	}
+
+	/// <summary>The first segment of a petiole, walking back through its own segments.</summary>
+	internal static int PetioleChainRoot(PlantSubFormation<AboveGroundAgent> formation, int index)
+	{
+		for (var guard = 0; index >= 0; ++guard)
+		{
+			var parent = formation.GetParent(index);
+			if (parent < 0 || formation.GetOrgan(parent) != OrganTypes.Petiole || guard > SpeciesSettings.MaximumPetioleSegments)
+				return index;
+			index = parent;
+		}
+		return index;
+	}
+
+	/// <summary>Total length of a petiole, summed over the segments it is built from.</summary>
+	/// <remarks>
+	/// The support a blade gets is a property of the whole petiole. Reading only the segment the
+	/// blade hangs off would report a fraction of the length and throttle every leaf of a
+	/// segmented species to that fraction forever.
+	/// </remarks>
+	internal static float PetioleChainLength(PlantSubFormation<AboveGroundAgent> formation, int index)
+	{
+		var total = 0f;
+		for (var guard = 0; index >= 0 && formation.GetOrgan(index) == OrganTypes.Petiole; ++guard)
+		{
+			total += formation.GetLength(index);
+			if (guard > SpeciesSettings.MaximumPetioleSegments)
+				break;
+			index = formation.GetParent(index);
+		}
+		return total;
+	}
+
+	/// <summary>
+	/// The petiole a blade hangs from, walking back through the blade's own segments.
+	/// </summary>
+	/// <remarks>
+	/// A segmented blade is a chain of leaf organs, so only its FIRST segment has the petiole as
+	/// its parent. Asking each segment about its own parent therefore throttled segment 0 against a
+	/// young petiole and let segments 1..n grow free, which put a systematic step at the joint to
+	/// the sheath on every leaf of the plant.
+	/// </remarks>
+	internal static int BladePetiole(PlantSubFormation<AboveGroundAgent> formation, int parent)
+	{
+		//Bounded by SpeciesSettings.MaximumLeafSegments, so this cannot walk a long way.
+		for (var guard = 0; parent >= 0 && formation.GetOrgan(parent) == OrganTypes.Leaf; ++guard)
+		{
+			if (guard > SpeciesSettings.MaximumLeafSegments)
+				return -1;
+			parent = formation.GetParent(parent);
+		}
+		return parent;
+	}
+
 	static Vector2 LimitLeafGrowthToPetioleSupport(
 		PlantSubFormation<AboveGroundAgent> formation,
 		int parent,
@@ -116,10 +210,15 @@ public partial struct AboveGroundAgent : IPlantAgent
 		Vector2 growth,
 		Vector2 petioleSizeLimit)
 	{
+		parent = BladePetiole(formation, parent);
 		if (parent < 0 || (formation.GetOrgan(parent) != OrganTypes.Petiole && formation.GetOrgan(parent) != OrganTypes.FlowerPedicel))
 			return growth;
 
-		var lengthSupport = petioleSizeLimit.X > 1e-8f ? formation.GetLength(parent) / petioleSizeLimit.X : 1f;
+		//The whole petiole, not the one segment the blade happens to hang off.
+		var grown = formation.GetOrgan(parent) == OrganTypes.Petiole
+			? PetioleChainLength(formation, parent)
+			: formation.GetLength(parent);
+		var lengthSupport = petioleSizeLimit.X > 1e-8f ? grown / petioleSizeLimit.X : 1f;
 		var radiusSupport = petioleSizeLimit.Y > 1e-8f ? formation.GetBaseRadius(parent) / petioleSizeLimit.Y : 1f;
 		var support = Math.Clamp(MathF.Min(lengthSupport, radiusSupport), 0f, 1f);
 		var supportedSize = sizeLimit * support;
@@ -308,6 +407,46 @@ public partial struct AboveGroundAgent : IPlantAgent
 	public int LastCrownActivationCycle { get; set; } = int.MinValue;
 
 	public bool flowerSupport { get; set; } = true;
+
+	/// <summary>
+	/// Set by the collision phase while this organ, or anything between it and the seed, is in
+	/// unresolved contact with an obstacle. Growth is suspended for as long as it is set.
+	/// </summary>
+	/// <remarks>
+	/// Tissue already grown can be deflected elastically, but tissue not yet grown should simply
+	/// not appear: pushing an organ out of a wall it is still actively growing into is a fight the
+	/// collision pass cannot win.
+	/// </remarks>
+	public bool GrowthBlocked { get; set; }
+
+	/// <summary>
+	/// Set by the collision phase while this organ is resting on a surface that carries its load.
+	/// </summary>
+	/// <remarks>
+	/// A cantilever that has come to rest on the ground is no longer a cantilever: the surface
+	/// supplies a reaction, and the bending moment at every node upstream of the contact collapses.
+	/// Nothing modelled that, so a blade lying on the soil kept carrying its full subtree moment,
+	/// gravity kept driving it further in, and the hard pass kept shoving it back out - a fight that
+	/// never ends and that banks a quarter of every shove into the rest pose. Gravity reads this to
+	/// stop transporting a supported organ's weight to its ancestors.
+	/// </remarks>
+	public bool GroundSupported { get; set; }
+
+	/// <summary>
+	/// Total plastic rotation this organ's rest pose has accumulated from contacts, in radians.
+	/// </summary>
+	/// <remarks>
+	/// The plastic share of a hard correction is written into <see cref="baseOrientation"/> with
+	/// nothing bounding the total, so an organ in sustained contact performs a random walk in SO(3)
+	/// - measured at roughly 0.06 deg a step for a blade merely touching down, which is 200 degrees
+	/// over a couple of seasons. Real tissue yields and then stops yielding; this is the bound.
+	/// </remarks>
+	public float PlasticAngle { get; set; }
+
+	/// <summary>Consecutive steps this organ has been in unresolved contact with an obstacle. Past
+	/// a limit its subtree is cut away, the same remedy the roots already apply when they leave the
+	/// soil volume.</summary>
+	public ushort ObstructionSteps { get; set; }
 
     #region Variances
     /// <summary>
@@ -962,21 +1101,8 @@ public partial struct AboveGroundAgent : IPlantAgent
 			var orientation = parent.Orientation * Quaternion.CreateFromAxisAngle(Vector3.UnitX, lateralIndex * angleStep + lateralAngle) * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, -species.LateralPitch);
 			orientation = TurnUpwards(orientation) * Quaternion.CreateFromAxisAngle(Vector3.UnitX, roll) * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, pitch);
 			var petioleEnergy = transferredEnergyPerOrgan ?? parent.Energy * 0.1f;
-			var petioleID = plant.AG.Birth(new(plant, meristem, OrganTypes.Petiole, orientation, petioleEnergy, initialResources: initialResources, initialProduction: initialProduction)
-			{
-				Water_g = transferredWaterPerOrgan,
-				DominanceLevel = parent.DominanceLevel,
-				ParentRadiusAtBirth = parent.Radius
-			});
-			for (var segment = 2; segment <= species.PetioleSegmentCount; ++segment)
-			{
-				petioleID = plant.AG.Birth(new(plant, petioleID, OrganTypes.Petiole, orientation, petioleEnergy, initialResources: initialResources, initialProduction: initialProduction)
-				{
-					Water_g = transferredWaterPerOrgan,
-					DominanceLevel = parent.DominanceLevel,
-					ParentRadiusAtBirth = parent.Radius
-				});
-			}
+			var petioleID = BirthPetiole(plant, meristem, orientation, petioleEnergy, transferredWaterPerOrgan,
+				parent.DominanceLevel, parent.Radius, initialResources, initialProduction);
 			if (!transferredEnergyPerOrgan.HasValue)
 				parent.Energy *= 0.9f;
 
@@ -1000,12 +1126,52 @@ public partial struct AboveGroundAgent : IPlantAgent
 		var species = plant.Parameters;
 		var leafPitchVariance = plant.RNG.NextFloatVar(species.LateralPitchVar);
 		var orientation = petioleOrientation * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, leafPitchVariance - species.LeafPitch);
-		plant.AG.Birth(new(plant, petioleID, OrganTypes.Leaf, orientation, initialEnergy, initialResources: initialResources, initialProduction: initialProduction)
+
+		//A long blade is built as a chain of segments so it can arch instead of staying a rigid
+		//strip - see SpeciesSettings.LeafSegmentLength. Each is an ordinary leaf organ, and the
+		//species' leaf length is divided among them, so the blade's area is unchanged.
+		var segments = species.LeafSegmentCount;
+		var parent = petioleID;
+		//Every segment starts along the same heading - orientations here are absolute, so a segment
+		//left at identity would point along world +X rather than continuing the blade - and each
+		//takes an equal share of the blade's energy and water, or it would be culled on its first
+		//tick for having none.
+		var share = 1f / segments;
+		//Size variance belongs to the BLADE, not to each of its segments. The constructor draws
+		//LengthVar, RadiusVar and GrowthTimeVar per organ, and a segment is an ordinary organ, so
+		//without this every segment of one leaf targeted its own width and its own length: for
+		//Carex, LeafRadius 3 mm +/- 0.8 mm gave neighbouring segments of the SAME blade half widths
+		//anywhere in 2.2-3.8 mm, which is the staircase the blade was drawn as. It also mis-spent
+		//the variance the species author wrote down - averaging eight independent draws collapsed
+		//the intended difference BETWEEN leaves by about sqrt(8) and re-expressed it as raggedness
+		//INSIDE each leaf.
+		//Drawn only when there is a chain to share it with: an unsegmented species must keep
+		//consuming the RNG exactly as it did, or every plant in the scene is reshuffled by a change
+		//that was meant to affect strap-leaved species alone.
+		var shared = segments > 1;
+		var lengthVar = shared ? plant.RNG.NextFloatVar(species.LeafLengthVar) : 0f;
+		var radiusVar = shared ? plant.RNG.NextFloatVar(species.LeafRadiusVar) : 0f;
+		var growthTimeVar = shared
+			? plant.World.HoursPerTick / (species.LeafGrowthTime + plant.RNG.NextFloatVar(species.LeafGrowthTimeVar))
+			: 0f;
+		for (int segment = 0; segment < segments; ++segment)
 		{
-				Water_g = initialWater,
-			DominanceLevel = energySource.DominanceLevel,
-			ParentRadiusAtBirth = float.MaxValue
-		});
+			var born = new AboveGroundAgent(plant, parent, OrganTypes.Leaf, orientation,
+				initialEnergy * share,
+				initialResources: initialResources, initialProduction: initialProduction)
+			{
+				Water_g = initialWater * share,
+				DominanceLevel = energySource.DominanceLevel,
+				ParentRadiusAtBirth = float.MaxValue
+			};
+			if (shared)
+			{
+				born.LengthVar = lengthVar;
+				born.RadiusVar = radiusVar;
+				born.GrowthTimeVar = growthTimeVar;
+			}
+			parent = plant.AG.Birth(born);
+		}
 	}
     [M(AI)] internal static void CreateFirstFlowerBaseLeaves(AboveGroundAgent parent, PlantFormation2 plant, float lateralAngle, int meristem) => CreateFlowerBaseLeavesBase(parent, plant, lateralAngle, meristem, 1f, 1f);
     [M(AI)] internal readonly void CreateFlowerBaseLeaves(AboveGroundAgent parent, PlantFormation2 plant, float lateralAngle, int meristem) => CreateFlowerBaseLeavesBase(parent, plant, lateralAngle, meristem, PreviousDayEnvResourcesInvariant, PreviousDayProductionInvariant);

@@ -25,19 +25,38 @@ public interface IEditorHub
     Task Terrain(byte[] response);
 }
 
+/// <summary>
+/// A built terrain and everything needed to build the same one again.
+///
+/// The built <see cref="SoilFormationsList"/> cannot be turned back into the model it came from,
+/// and the parameters it was built with are not all in the request - the resolution used is the
+/// one that was on screen when the OBJ was uploaded, which the user may well have changed before
+/// starting the run. So they are captured here, at the one moment they are known to belong
+/// together, and travel with the run into its stored record.
+/// </summary>
+public sealed record ClientTerrain(
+    ISoilFormation Terrain,
+    string? ModelHash,
+    string Pattern,
+    bool PatternForMaterial,
+    float Resolution);
+
 public class SimulationHub : Hub
 {
     readonly ISimulationUploadService UploadService;
     readonly ITerrainBuffer TerrainBuffer;
     readonly ISimulationRunner Runner;
-    public SimulationHub(ISimulationUploadService uploadService, ITerrainBuffer terrainBuffer, ISimulationRunner runner)
+    readonly IRunStore RunStore;
+
+    public SimulationHub(ISimulationUploadService uploadService, ITerrainBuffer terrainBuffer, ISimulationRunner runner, IRunStore runStore)
     {
         UploadService = uploadService;
         TerrainBuffer = terrainBuffer;
         Runner = runner;
+        RunStore = runStore;
     }
 
-    static readonly Dictionary<string, ISoilFormation> ClientTerrains = [];
+    static readonly Dictionary<string, ClientTerrain> ClientTerrains = [];
 
     /// <summary>
     /// Releases what this connection was holding.
@@ -74,14 +93,50 @@ public class SimulationHub : Hub
 
     public async Task Terrain(string terrainId, ushort hoursPerTick, string pattern, bool patternForMaterial, float resolution)
     {
-        if (TerrainBuffer.TryGetV2(terrainId, out var objData))
+        if (TerrainBuffer.TryGetV2(terrainId, out var objData, out var modelHash))
         {
             var terrain = new SoilFormationsList(null, objData, 1f, pattern, patternForMaterial, resolution, false);
             lock (ClientTerrains)
             {
-                ClientTerrains[Context.ConnectionId] = terrain;
+                ClientTerrains[Context.ConnectionId] = new(terrain, modelHash, pattern, patternForMaterial, resolution);
                 Clients.Caller.Terrain(terrain.Serialize());
             }
+        }
+    }
+
+    /// <summary>
+    /// Rebuilds the terrain of a stored run, so it can be continued or forked without the user
+    /// uploading its model again.
+    ///
+    /// Not cheap - a facade is seconds of parsing and a few hundred megabytes - but it happens
+    /// once, on an explicit click, and the alternative is that a run archived last month simply
+    /// cannot be re-run. Returns null whenever anything is missing, which is the ordinary case for
+    /// a run that used the default box field and needs no model at all.
+    /// </summary>
+    ClientTerrain? RebuildStoredTerrain(string? sourceRunId)
+    {
+        if (string.IsNullOrEmpty(sourceRunId)) return null;
+        var source = RunStore.GetRun(sourceRunId);
+        if (source?.FieldModelHash == null) return null;
+        if (!RunStore.TryReadFieldModel(source.FieldModelHash, out var objSource)) return null;
+
+        try
+        {
+            //Parsed through the same buffer and the same coordinate system the upload endpoint
+            //uses. Anything else here would silently mirror or rotate a rebuilt facade against
+            //the run it claims to continue.
+            var key = TerrainBuffer.Add(objSource, CoordinateSystem.RH_rightPX_upPZ, source.FieldModelHash);
+            if (!TerrainBuffer.TryGetV2(key, out var objData)) return null;
+
+            var terrain = new SoilFormationsList(null, objData, 1f, source.FieldItemRegex,
+                source.FieldItemRegexMaterial, source.FieldResolution, false);
+            Console.WriteLine($"Rebuilt the terrain of run {sourceRunId} from stored field model {source.FieldModelHash[..12]}.");
+            return new(terrain, source.FieldModelHash, source.FieldItemRegex ?? "", source.FieldItemRegexMaterial, source.FieldResolution);
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine($"Could not rebuild the terrain of run {sourceRunId}: {e.Message}");
+            return null;
         }
     }
 
@@ -93,7 +148,24 @@ public class SimulationHub : Hub
             return;
         }
 
-        ClientTerrains.TryGetValue(Context.ConnectionId, out var terrain);
+        ClientTerrain? terrain;
+        lock (ClientTerrains) ClientTerrains.TryGetValue(Context.ConnectionId, out terrain);
+        //An upload on this connection always wins: it is the more recent statement of intent.
+        //Only when there is none does a continued or forked run fall back to its parent's model.
+        if (terrain == null && !string.IsNullOrEmpty(request.FieldModelRunId))
+        {
+            terrain = RebuildStoredTerrain(request.FieldModelRunId);
+            //Refused rather than run on a plain field. The request NAMED a model, and the client
+            //only names one the server has just said it holds - so failing here means the model
+            //went away underneath it. Quietly substituting a flat field would produce a run that
+            //completes, looks plausible, is filed next to its parent as a continuation, and
+            //simulates a different scenario. A HubException carries its message to the caller
+            //whether or not detailed errors are enabled.
+            if (terrain == null)
+                throw new HubException(
+                    $"The field model of run {request.FieldModelRunId} is no longer available, so this run " +
+                    $"cannot be continued or forked from it. Upload the model again to run this scenario.");
+        }
 
         //Create, join, then begin. Joining after the loop had started would race it: anything
         //pushed before this connection is in the group goes nowhere.

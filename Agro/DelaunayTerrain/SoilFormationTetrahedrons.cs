@@ -50,6 +50,11 @@ public class SoilFormationTetrahedral : ISoilFormation
 
     Vector3[] Points;
     readonly List<Hyperface> Faces;
+    /// <summary>The boundary as it was imported, triangulated and wound outward: index triples
+    /// into <see cref="Points"/>. The tetrahedralisation's own boundary is not usable as a
+    /// surface - it is numerically fragile and comes out non-manifold on real trays - and the
+    /// source mesh is a closed manifold already, which is what an inside/outside test needs.</summary>
+    readonly int[] SurfaceTriangles = [];
     readonly SimplexIndexes[] Tetrahedralization;
     static readonly FacesSharing[] PossibleFaces = Enum.GetValues<FacesSharing>();
     List<NeighborData>[] Neighs;
@@ -172,22 +177,33 @@ public class SoilFormationTetrahedral : ISoilFormation
 
         var raincatchers = new List<RainCatcher>(Tetrahedralization.Length);
         Neighs = new List<NeighborData>[Tetrahedralization.Length];
+        //Which of each tetrahedron's four faces is shared with some other tetrahedron.
+        //Accumulated for BOTH members of a pair: the scan below only visits s > t, so a face
+        //shared with a lower-indexed neighbour would otherwise never be marked, and every
+        //interior face was emitted into Faces as though it were on the boundary. That left the
+        //soil surface massively non-manifold - measured on an imported tray, 222 of 246 edges
+        //carried more than two triangles - which makes any inside/outside test on it meaningless.
+        var sharedFaces = new FacesSharing[Tetrahedralization.Length];
         for(int t = 0; t < Tetrahedralization.Length; ++t)
         {
-            var neighFaces = FacesSharing.None;
             Neighs[t] = [];
             for(int s = t + 1; s < Tetrahedralization.Length; ++s)
             {
                 var conn = Tetrahedralization[t].Shares(FacesSharing.None, Tetrahedralization[s]);
                 if (conn != FacesSharing.None)
                 {
-                    neighFaces |= conn;
+                    sharedFaces[t] |= conn;
+                    sharedFaces[s] |= Tetrahedralization[s].Shares(FacesSharing.None, Tetrahedralization[t]);
                     var (antigravityRatio, area) = Tetrahedralization[t].NeighInterface(Points, conn);
                     if (antigravityRatio < 0f)
                         Neighs[t].Add(new (s, -antigravityRatio * area));
                 }
             }
+        }
 
+        for(int t = 0; t < Tetrahedralization.Length; ++t)
+        {
+            var neighFaces = sharedFaces[t];
             var raincatch = 0f;
             //for faces without neighbors check whether it is able to catch rain
             foreach(var face in PossibleFaces)
@@ -281,6 +297,8 @@ public class SoilFormationTetrahedral : ISoilFormation
         }
         Position = Points[closestToMin];
 
+        SurfaceTriangles = BuildSurfaceTriangles(faces, vertexMap, Points);
+
         var pointsInt = new Vector3int[regularCount + 8];
         var pointsInclude = new BitArray(regularCount);
         var mergedMapping = new HashSet<Vector3int>(regularCount);
@@ -349,22 +367,33 @@ public class SoilFormationTetrahedral : ISoilFormation
 
         var raincatchers = new List<RainCatcher>(Tetrahedralization.Length);
         Neighs = new List<NeighborData>[Tetrahedralization.Length];
+        //Which of each tetrahedron's four faces is shared with some other tetrahedron.
+        //Accumulated for BOTH members of a pair: the scan below only visits s > t, so a face
+        //shared with a lower-indexed neighbour would otherwise never be marked, and every
+        //interior face was emitted into Faces as though it were on the boundary. That left the
+        //soil surface massively non-manifold - measured on an imported tray, 222 of 246 edges
+        //carried more than two triangles - which makes any inside/outside test on it meaningless.
+        var sharedFaces = new FacesSharing[Tetrahedralization.Length];
         for(int t = 0; t < Tetrahedralization.Length; ++t)
         {
-            var neighFaces = FacesSharing.None;
             Neighs[t] = [];
             for(int s = t + 1; s < Tetrahedralization.Length; ++s)
             {
                 var conn = Tetrahedralization[t].Shares(FacesSharing.None, Tetrahedralization[s]);
                 if (conn != FacesSharing.None)
                 {
-                    neighFaces |= conn;
+                    sharedFaces[t] |= conn;
+                    sharedFaces[s] |= Tetrahedralization[s].Shares(FacesSharing.None, Tetrahedralization[t]);
                     var (antigravityRatio, area) = Tetrahedralization[t].NeighInterface(Points, conn);
                     if (antigravityRatio < 0f)
                         Neighs[t].Add(new (s, -antigravityRatio * area));
                 }
             }
+        }
 
+        for(int t = 0; t < Tetrahedralization.Length; ++t)
+        {
+            var neighFaces = sharedFaces[t];
             var raincatch = 0f;
             //for faces without neighbors check whether it is able to catch rain
             foreach(var face in PossibleFaces)
@@ -832,11 +861,20 @@ public class SoilFormationTetrahedral : ISoilFormation
 		using var stream = new MemoryStream();
 		using var writer = new BinaryWriter(stream);
 
-		writer.Write((byte)0); //version
+		writer.Write((byte)1); //version 1: fields, then an obstacle section
 		var count = FieldsCount;
 		writer.Write(count);
 		for (int i = 0; i < count; ++i)
 			Write(writer, i);
+
+		//The obstacle section, empty. It is not optional: the single reader of this format
+		//(BinaryReader.readTerrain) always reads an obstacle count after the fields, so a stream
+		//that stops here throws RangeError past its own last byte. Only SoilFormationsList ever
+		//reached that reader before - a box field was never on this wire - and storing runs put it
+		//there. Version 1 because the shape is now the one version 1 describes: an obstacle count
+		//followed by a group count, both zero when there is nothing to send.
+		writer.Write(0);
+		writer.Write(0); //no groups
 
 		return stream.ToArray();
     }
@@ -853,8 +891,58 @@ public class SoilFormationTetrahedral : ISoilFormation
 	/// construction. The internal light model needs this, because it only lets terrain shade what is
 	/// outside it - a seedling starts below the soil surface and must not be shadowed by it.
 	/// </remarks>
+	/// <summary>
+	/// Fan-triangulates the imported boundary polygons and orients them outward.
+	/// </summary>
+	/// <remarks>
+	/// Orientation is settled by the divergence theorem rather than by trusting the source
+	/// winding: on a closed surface the signed volume is positive exactly when the winding is
+	/// outward, so one sum over the whole mesh decides whether to flip it.
+	/// </remarks>
+	static int[] BuildSurfaceTriangles(IList<int[]> faces, Dictionary<int, int> vertexMap, Vector3[] points)
+	{
+		var triangles = new List<int>(faces.Count * 3);
+		foreach (var face in faces)
+		{
+			if (face.Length < 3)
+				continue;
+			var a = vertexMap[face[0]];
+			for (int i = 1; i + 1 < face.Length; ++i)
+			{
+				triangles.Add(a);
+				triangles.Add(vertexMap[face[i]]);
+				triangles.Add(vertexMap[face[i + 1]]);
+			}
+		}
+
+		double signedVolume = 0d;
+		for (int t = 0; t + 2 < triangles.Count; t += 3)
+		{
+			var p0 = points[triangles[t]];
+			var p1 = points[triangles[t + 1]];
+			var p2 = points[triangles[t + 2]];
+			signedVolume += Vector3.Dot(p0, Vector3.Cross(p1 - p0, p2 - p0)) / 6d;
+		}
+
+		if (signedVolume < 0d)
+			for (int t = 0; t + 2 < triangles.Count; t += 3)
+				(triangles[t + 1], triangles[t + 2]) = (triangles[t + 2], triangles[t + 1]);
+
+		return [..triangles];
+	}
+
 	public void AppendSurfaceTriangles(List<Vector3> vertices, List<int> indices)
 	{
+		if (SurfaceTriangles.Length > 0)
+		{
+			var first = vertices.Count;
+			for (int i = 0; i < Points.Length; ++i)
+				vertices.Add(Points[i] + Position);
+			for (int i = 0; i < SurfaceTriangles.Length; ++i)
+				indices.Add(SurfaceTriangles[i] + first);
+			return;
+		}
+
 		var offset = vertices.Count;
 		for (int i = 0; i < Points.Length; ++i)
 			vertices.Add(Points[i] + Position);

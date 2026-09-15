@@ -17,7 +17,7 @@
 
 import { PlantModel } from '../../helpers/Scene';
 import { Primitives } from '../../helpers/Primitives';
-import { Geom } from './GeometryIds';
+import { Geom, leafGeomKey } from './GeometryIds';
 import { geometryIdFor, getGeometry } from './GeometryStore';
 import { triangleCount } from './Geometry';
 
@@ -30,8 +30,8 @@ export type SceneStats = { objects: number; triangles: number };
  * when it builds the scene, and a species whose mesh has not arrived yet draws the fallback
  * plane, which is exactly what should be counted for it.
  */
-export function leafGeomIdFor(species: string): number {
-    return geometryIdFor(`leaf:${species}`) ?? Geom.Plane;
+export function leafGeomIdFor(species: string, slice: number): number {
+    return geometryIdFor(leafGeomKey(species, slice)) ?? Geom.Plane;
 }
 
 const cache = new WeakMap<PlantModel[], SceneStats>();
@@ -46,18 +46,29 @@ function trianglesOf(geomId: number): number {
  * BuildScene does; pass undefined and leaves are counted as the fallback plane, which is what
  * the renderer draws when the backend served no per-species mesh anyway.
  */
-export function sceneStats(scene: PlantModel[], leafGeom?: (species: string) => number): SceneStats {
+export function sceneStats(scene: PlantModel[], leafGeom?: (species: string, slice: number) => number): SceneStats {
     const hit = cache.get(scene);
     if (hit) return hit;
 
     let objects = 0, triangles = 0;
+    //A segmented blade's slices differ in triangle count, so the per-slice lookups are memoized
+    //per species rather than resolved once - a facade frame carries hundreds of thousands of them.
+    const leafTrisBySlice = new Map<string, number>();
     for (const plant of scene) {
-        const leafTris = trianglesOf(leafGeom ? leafGeom(plant.species) : Geom.Plane);
         objects += plant.primitives.length;
 
         for (const p of plant.primitives)
             switch (p.type) {
-                case Primitives.Rectangle: triangles += leafTris; break;
+                case Primitives.Rectangle: {
+                    const key = `${plant.species}:${p.laminaSlice}`;
+                    let tris = leafTrisBySlice.get(key);
+                    if (tris === undefined) {
+                        tris = trianglesOf(leafGeom ? leafGeom(plant.species, p.laminaSlice) : Geom.Plane);
+                        leafTrisBySlice.set(key, tris);
+                    }
+                    triangles += tris;
+                    break;
+                }
                 case Primitives.Cylinder:  triangles += trianglesOf(Geom.Cylinder); break;
                 case Primitives.Box:       triangles += trianglesOf(Geom.BoxCentered); break;
                 case Primitives.Disk:      triangles += trianglesOf(Geom.CircleHalf); break;

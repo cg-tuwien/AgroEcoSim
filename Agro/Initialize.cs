@@ -146,6 +146,9 @@ public static class Initialize
 
     private static void FirstStageInit(AgroWorld world)
     {
+        //Ahead of irradiance, so the light model measures geometry that has already been
+        //pushed out of the walls and troughs rather than geometry that is still inside them.
+        world.AddCallback(world.Collisions.Tick);
         world.AddCallback(world.Irradiance.Tick);
 
         world.StreamExporterFunc = world.Irradiance.ExportToStream;

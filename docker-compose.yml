@@ -2,7 +2,10 @@ services:
   simulation:
     image: agroecosim
     ports:
-      - "7215:80"
+      #host:container. The container listens on 7215 (AGRO_ListenAnyIP + the default port), so the
+      #right-hand side is 7215 - it was 80, where nothing has ever listened, which made the service
+      #unreachable from the host no matter what the server was doing.
+      - "7215:7215"
     restart: on-failure
     volumes:
       #Stored simulation runs. Without this the frames live in the container's writable layer:
@@ -10,13 +13,29 @@ services:
       #own retention budget.
       - runstore:/data
     environment:
-      #Total bytes of stored frames to keep before whole runs are evicted, oldest first.
-      - AGRO_RunStoreRetentionBytes=68719476736
+      #Total bytes of stored runs to keep before whole runs are evicted, oldest first. 1 TiB.
+      #
+      #A production figure, not a safe one: a ten month run of a green facade is hundreds of
+      #gigabytes, so the previous 64 GiB evicted last month's work to make room for this week's.
+      #Set it to what the VOLUME can actually hold - eviction is the only thing standing between a
+      #long run and a full disk, and it can only act on what it is told the budget is.
+      - AGRO_RunStoreRetentionBytes=1099511627776
       #Store a frame every Nth step. 1 stores every timestep, which makes the stored run complete
       #and costs the most: each stored frame is an export the simulation thread waits for, about
       #two thirds of a simulation step at 1,600 plants. Raise it on a large stand where total wall
       #time matters more than per-step granularity; the last step is always stored.
       #- AGRO_RunStoreFrameStride=1
+      #How often the store enforces its budgets, in minutes. 0 turns periodic maintenance off, and
+      #then the budget is enforced only when a run starts or is deleted - on a host that uploads and
+      #browses more than it simulates, that is never.
+      #- AGRO_RunStoreSweepMinutes=30
+      #Total bytes of uploaded field models to keep. Their own budget, not a share of the run
+      #retention: evicting a run does not release its model, which outlives it and may be shared.
+      #- AGRO_RunStoreModelBytes=8589934592
+      #How long an unreferenced field model is kept. A model is stored at UPLOAD, before any run
+      #refers to it, so this must comfortably exceed the time between picking a file and pressing
+      #Simulate. A 15 minute floor applies regardless.
+      #- AGRO_RunStoreModelGraceHours=6
   mitsuba:
    image: agroecorender
    expose:

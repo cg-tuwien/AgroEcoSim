@@ -76,6 +76,22 @@ public class SimulationRequest
     ///</summary>
     public byte? RenderMode { get; init; }
 
+    ///<summary>
+    ///Foliage-against-foliage collisions, within a plant and between neighbouring plants.
+    ///(default: true)
+    ///</summary>
+    ///<remarks>
+    ///Collisions with obstacles and with the soil are hard constraints and are always resolved; this
+    ///switch governs only the best-effort foliage work. Turning it off is a real trade. Measured on
+    ///the green facade at 1,882 plants over 120 days: with it on, 1.13% of organs end inside the soil
+    ///and 3.23% point downwards, at 68.5 ms per step; with it off, 0.95% and 0.64% at 37.5 ms. The
+    ///foliage pass costs about two thirds of the collision phase, and at that density it does not
+    ///reduce burial - that is the hard passes' work - while its response is what tips organs over.
+    ///It still reduces interpenetration between neighbours, which is what it is for.
+    ///</remarks>
+    ///<example>true</example>
+    public bool? SoftCollisions { get; init; }
+
     /// <summary>
     /// Hemisphere rays per sensor and simulation step for the internal CPU light model. Higher
     /// values trade simulation speed for less noise in the per-leaf irradiance. (default: 16)
@@ -155,4 +171,28 @@ public class SimulationRequest
     /// Deciedes whether the regex matches object names or materials
     /// </summary>
     public bool? FieldItemRegexMaterial { get; init; }
+
+    /// <summary>
+    /// The stored run this one continues or was forked from, recorded for lineage.
+    ///
+    /// Lineage only - it changes nothing about how the simulation runs. There is no checkpoint of
+    /// live world state anywhere in this project, so a child does not resume its parent: it is
+    /// computed again from this request. That is exact for a <see cref="Deterministic"/> parent
+    /// and merely similar for any other, which is what the recorded flag is for.
+    /// </summary>
+    public string? ParentRunId { get; init; }
+
+    /// <summary>
+    /// Build the terrain from the field model stored with this run.
+    ///
+    /// Without it a stored run cannot be re-run at all once its facade is gone from the upload
+    /// cache, which takes five minutes: the model reaches the simulation through
+    /// <c>POST /terrain</c> and a per-connection cache, and <see cref="FieldModelKey"/> has never
+    /// been set by anything. The run store keeps the OBJ source, so continuing or forking a run
+    /// months later costs the user nothing and re-uploads nothing.
+    ///
+    /// Ignored when the connection has already uploaded a model of its own - an explicit upload is
+    /// always the more recent intent.
+    /// </summary>
+    public string? FieldModelRunId { get; init; }
 }

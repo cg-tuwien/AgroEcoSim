@@ -186,6 +186,87 @@ public class SpeciesSettings
     public float LeafLengthVar { get; init; } = 0.02f;
 
     ///<summary>
+    /// Longest blade segment a leaf is built from, in metres. Zero keeps a leaf as one rigid piece.
+    ///</summary>
+    ///<remarks>
+    /// A Carex blade is 30 cm long and 6 mm wide - a 50:1 strip simulated as one rectangle, which
+    /// cannot arch the way a real sedge leaf does. Splitting it into a chain of <see
+    /// cref="OrganTypes.Leaf"/> segments lets gravity bend it progressively, and it makes the
+    /// collision response local: a correction rotates an organ about its base, so a 2 degree turn
+    /// sweeps a 30 cm blade's tip by a centimetre while a 2 cm petiole moves 0.07 mm.
+    ///
+    /// Segments are ordinary leaf organs, so every export path, the leaf area index and the
+    /// photosynthesis loop handle them unchanged, and the total blade area is unaffected - the
+    /// species' leaf length is divided among the segments rather than repeated by each.
+    ///
+    /// Organ count is the cost: at day 730 Campanula carries 1,588 leaves, so a four-way split adds
+    /// nearly five thousand organs to one plant. Leave this at zero for species whose leaves are
+    /// short enough not to need it.
+    ///</remarks>
+    public float LeafSegmentLength { get; init; } = 0f;
+
+    ///<summary>
+    /// Effective thickness of a blade for bending, in metres. Stands in for the keel, midrib and
+    /// turgor that hold a real leaf up; the drawn blade stays <see cref="AboveGroundAgent.LeafThickness"/>.
+    ///</summary>
+    ///<remarks>
+    /// Bending stiffness goes as the cube of this, so it is the knob that decides whether a long
+    /// blade arches gently or collapses. A flat strip of the rendered 0.1 mm would have essentially
+    /// no bending stiffness at all, which is not how a sedge behaves.
+    ///</remarks>
+    public float LeafKeelThickness { get; init; } = 0.0028f;
+
+    ///<summary>
+    /// Elastic modulus of a leaf blade, in pascals. Zero falls back to
+    /// <see cref="GreenElasticModulus"/>.
+    ///</summary>
+    ///<remarks>
+    /// A blade needs its own figure because the basal stiffness ramp does not apply to one. That
+    /// ramp exists to stiffen the base of a shoot and is keyed on topological depth, which is
+    /// meaningless for a leaf - and because it is applied with a max(), it was raising every Carex
+    /// blade to <see cref="BasalGreenElasticModulus"/>, 1.8e8 against the species' own 3e6. Sixty
+    /// times too stiff is why segmented blades came out straight: 0.9 degrees of curvature over a
+    /// 30 cm leaf.
+    ///</remarks>
+    public float LeafElasticModulus { get; init; } = 0f;
+
+    ///<summary>
+    /// Effective keel thickness at the tip of a blade as a fraction of its value at the base.
+    /// One means a blade of uniform stiffness.
+    ///</summary>
+    ///<remarks>
+    /// A uniform blade cannot do what a sedge leaf does. Stiffness drives both the arch and the
+    /// plant's overall height, so with one figure for the whole blade the two trade directly against
+    /// each other: measured on Carex at day 100, enough compliance for a 39 degree arch cost ten
+    /// centimetres of height and put 58 organs under the soil, while enough stiffness to hold 31 cm
+    /// left only 9 degrees of curve. A real blade tapers - it is thickest and most strongly keeled
+    /// where it leaves the sheath - so the base holds the leaf up while the tip is free to fall.
+    /// Bending stiffness goes as the cube of this, so 0.35 makes a tip roughly twenty times more
+    /// compliant than the base.
+    ///</remarks>
+    public float LeafTipStiffnessFraction { get; init; } = 1f;
+
+    ///<summary>
+    /// Number of segments a blade of this species is built from. Derived from
+    /// <see cref="LeafSegmentLength"/>, and computed from the species length alone so that every
+    /// leaf of a species is divided the same way regardless of its own length variance.
+    ///</summary>
+    public int LeafSegmentCount => LeafSegmentLength > 0f && LeafLength > LeafSegmentLength
+        ? Math.Min(MaximumLeafSegments, (int)MathF.Ceiling(LeafLength / LeafSegmentLength - CountEpsilon))
+        : 1;
+
+    /// <summary>Slack on the segment-count division, so a length that divides exactly does not get
+    /// an extra segment from a float quotient landing a few ulps above the integer.</summary>
+    const float CountEpsilon = 1e-4f;
+
+    /// <summary>Upper bound on the split, so a species preset cannot multiply the organ count without limit.</summary>
+    /// <remarks>
+    /// Sixteen rather than eight because eight was exactly the value Carex asks for, and a cap that
+    /// coincides with a species' own figure silently becomes the thing that decides it.
+    /// </remarks>
+    public const int MaximumLeafSegments = 16;
+
+    ///<summary>
     /// Standard leaf radius, i.e. the span perpendicular to its main axis (in meters)
     ///</summary>
     [SpeciesUILabel("Leaf radius")]
@@ -731,11 +812,31 @@ public class SpeciesSettings
     public float PetioleReorientationStepAngle { get; init; }
 
     /// <summary>
-    /// Number of serial segments used to model a vegetative leaf petiole.
+    /// Length of one petiole segment, in metres. Zero leaves a petiole as a single organ.
+    /// </summary>
+    /// <remarks>
+    /// The same device <see cref="LeafSegmentLength"/> gives a blade, for the same reason: one organ
+    /// can only rotate rigidly about its base, so a petiole modelled as one segment stays dead
+    /// straight however correct its bending law is. A long one - Heuchera's, or Geranium
+    /// macrorrhizum's 18 cm - visibly should not.
+    ///
+    /// Each segment is an ordinary petiole organ, so nothing downstream needed a new organ type,
+    /// and the species' petiole length is divided among them, leaving the petiole the same length.
+    /// </remarks>
+    [SpeciesUILabel("Petiole segment length")]
+    public float PetioleSegmentLength { get; init; } = 0f;
+
+    /// <summary>
+    /// Number of serial segments used to model a vegetative leaf petiole. Derived from
+    /// <see cref="PetioleSegmentLength"/>, so every petiole of a species divides the same way.
     /// </summary>
     /// <value>An integer of at least one. One creates a single straight petiole.</value>
-    [SpeciesUILabel("Petiole segment count")]
-    public int PetioleSegmentCount { get; init; } = 1;
+    public int PetioleSegmentCount => PetioleSegmentLength > 0f && PetioleLength > PetioleSegmentLength
+        ? Math.Min(MaximumPetioleSegments, (int)MathF.Ceiling(PetioleLength / PetioleSegmentLength - CountEpsilon))
+        : 1;
+
+    /// <summary>Upper bound on the split, so a preset cannot multiply the organ count without limit.</summary>
+    public const int MaximumPetioleSegments = 8;
 
     /// <summary>
     /// Dimensionless multiplier for rhizome axial and radial growth.

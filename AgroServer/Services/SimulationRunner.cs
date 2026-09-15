@@ -30,7 +30,7 @@ public interface ISimulationRunner
     /// Starting the loop here would race it: frames pushed before the connection is in the group
     /// go nowhere, and there is no way to notice that other than a missing first progress tick.
     /// </summary>
-    string Create(SimulationRequest request, ISoilFormation? terrain, string connectionId);
+    string Create(SimulationRequest request, Hubs.ClientTerrain? terrain, string connectionId);
 
     /// <summary>Starts the loop for a run created by <see cref="Create"/>.</summary>
     void Begin(string runId);
@@ -150,18 +150,80 @@ public class SimulationRunner : ISimulationRunner
         return false;
     }
 
-    public string Create(SimulationRequest request, ISoilFormation? terrain, string connectionId)
+    public string Create(SimulationRequest request, Hubs.ClientTerrain? terrain, string connectionId)
     {
         var lazyPreviews = !(request.ExactPreview ?? false);
         var exportFlags = (request.DownloadRoots ?? false ? ExportFlags.Roots : ExportFlags.None) | ExportFlags.Analytics;
 
-        var world = Initialize.World(request, terrain);
+        var world = Initialize.World(request, terrain?.Terrain);
         world.Deterministic = request.Deterministic ?? false;
 
-        var runId = Store.BeginRun(
-            System.Text.Json.JsonSerializer.Serialize(request, AppJsonSerializerContext.Default.SimulationRequest),
-            (ushort)(request.HoursPerTick ?? 1), (uint)world.TimestepsTotal(),
-            (exportFlags & ExportFlags.Analytics) != 0, world.Deterministic);
+        //Counted off the BUILT WORLD, not off the request, because for an imported facade the two
+        //are not the same measurement. The request carries a single 'mesh' obstacle standing for
+        //the whole model - SoilFormationsList merges them before they reach the browser - while
+        //the world holds one per named OBJ group, which is the number that means anything. Trays
+        //are not in the request at all.
+        var plants = 0;
+        world.ForEach(formation => { if (formation is PlantFormation2) ++plants; });
+
+        var runId = Store.BeginRun(new RunSpec
+        {
+            RequestJson = System.Text.Json.JsonSerializer.Serialize(request, AppJsonSerializerContext.Default.SimulationRequest),
+            HoursPerTick = (ushort)(request.HoursPerTick ?? 1),
+            TotalSteps = (uint)world.TimestepsTotal(),
+            Analytics = (exportFlags & ExportFlags.Analytics) != 0,
+            Deterministic = world.Deterministic,
+            TotalHours = request.TotalHours ?? 0,
+            InitialDay = (request.InitialDate ?? default).ToString("yyyy-MM-dd"),
+            Seed = request.Seed ?? 0,
+            RenderMode = request.RenderMode ?? 0,
+            Plants = (uint)plants,
+            Trays = (uint)world.SoilFieldsCount,
+            Obstacles = (uint)world.ObstacleList.Count,
+            Species = (uint)(request.Species?.Length ?? 0),
+            //Recorded only when a model was ACTUALLY used. The request carries FieldModelPath
+            //whenever the editor has a file name on screen, which outlives the model itself: a run
+            //forked from one whose OBJ is gone still names it, and so does any run started after an
+            //upload failed. Taking the name from the request alone produced rows claiming a model
+            //while running on the default box field - see the `terrain != null` guard on
+            //WriteTerrain below, which already knows there was no imported field.
+            FieldModelName = terrain != null && !string.IsNullOrEmpty(request.FieldModelPath) ? request.FieldModelPath : null,
+            FieldModelHash = terrain?.ModelHash,
+            FieldItemRegex = terrain?.Pattern ?? request.FieldItemRegex,
+            FieldItemRegexMaterial = terrain?.PatternForMaterial ?? (request.FieldItemRegexMaterial ?? false),
+            //The resolution the TRAYS were built with, which is the one that was on screen when
+            //the model was uploaded - not necessarily the one in the request by the time the run
+            //started. Rebuilding with the wrong one gives a different set of trays.
+            FieldResolution = terrain?.Resolution ?? (request.FieldResolution ?? 0),
+            ParentRunId = string.IsNullOrEmpty(request.ParentRunId) ? null : request.ParentRunId,
+        });
+
+        //The soil exactly as the socket sends it to a viewport, so this run can be opened and
+        //drawn months from now. Written once, here, rather than with every frame.
+        //
+        //Only for an IMPORTED field. A plain box field is already drawn by the viewport from the
+        //configured field size when it has no terrain of its own - that is what a live run shows -
+        //so storing one would hand the same box back through a second path whose position and
+        //extent are derived differently, and a reopened run would sit in a subtly different box
+        //from the one it ran in. Nothing is lost by not storing it: it is not data, it is a shape
+        //the client can already draw from numbers it has.
+        //
+        //Wrapped, because SerializeTerrain is evaluated HERE and not inside WriteTerrain's own
+        //try: it materialises the whole merged obstacle mesh and then doubles it in ToArray(), so
+        //on a large facade in a memory-capped container it is a plausible place to throw. A throw
+        //escaping this point is the worst shape of failure available - BeginRun has already
+        //inserted a "running" row and started the frame writer, while Runs/Pending/ConnectionToRun
+        //are still empty, so nothing could abort it, delete it or evict it for the life of the
+        //process. Losing the ability to redraw this run later is a far smaller loss.
+        if (terrain != null)
+        {
+            try { Store.WriteTerrain(runId, world.SerializeTerrain()); }
+            catch (Exception e)
+            {
+                Console.Error.WriteLine($"Run {runId}: could not store the terrain ({e.Message}). " +
+                                        $"The run proceeds; it will replay without its trays.");
+            }
+        }
 
         var run = new RunState { RunId = runId, ConnectionId = connectionId };
         Pending[runId] = () => Loop(run, world, lazyPreviews, exportFlags, request);

@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Numerics;
 
 namespace Agro
@@ -71,7 +71,11 @@ namespace Agro
                     //leafs fall off with increasing age
                     case OrganTypes.Petiole:
                     {
-                        if (ageHours > species.LeafMaximumAgeHours && formation.GetOrgan(agent.Parent) != OrganTypes.Meristem)
+                        //Only the first segment of a petiole ages out. An inner segment renewing
+                        //itself would replace one link of the chain and orphan everything past it.
+                        if (ageHours > species.LeafMaximumAgeHours
+                            && formation.GetOrgan(agent.Parent) != OrganTypes.Meristem
+                            && formation.GetOrgan(agent.Parent) != OrganTypes.Petiole)
                         {
                             var p = ageHours / (7000 ); //6 months in hours
                             if (plant.RNG.NextFloatAccum(p * p, world.HoursPerTick))
@@ -127,7 +131,9 @@ namespace Agro
                     return;
                 }
 
-                if (agent.Energy > enoughEnergyState && !agent.IsRizome) //maybe make it a factor storedEnergy/lifeSupport so that it grows fast when it has full storage
+                //Nothing between this organ and the seed may be stuck in an obstacle: see
+                //AboveGroundAgent.GrowthBlocked.
+                if (agent.Energy > enoughEnergyState && !agent.IsRizome && !agent.GrowthBlocked)
                 {
                     //Growth and branching
                     if (agent.Organ != OrganTypes.Bud) //for simplicity dormant buds do not grow
@@ -143,7 +149,11 @@ namespace Agro
                                 //TDMI take env res efficiency into account
                                 //TDMI thickness of the parent and parent-parent decides the max. leaf size,
                                 //  also the energy consumption of the siblings beyond the node should have effect
-                                var sizeLimit = !agent.FlowerAgent.flowerBase ? new Vector2(species.LeafLength + agent.LengthVar, species.LeafRadius + agent.RadiusVar): new Vector2(species.FlowerSettings.FlowerBaseLeafLength , species.FlowerSettings.FlowerBaseLeafRadius );
+                                //A segmented blade divides the species' leaf length among its
+                                //segments, so the whole blade still reaches the same length and area.
+                                var sizeLimit = !agent.FlowerAgent.flowerBase
+                                    ? new Vector2((species.LeafLength + agent.LengthVar) / species.LeafSegmentCount, species.LeafRadius + agent.RadiusVar)
+                                    : new Vector2(species.FlowerSettings.FlowerBaseLeafLength, species.FlowerSettings.FlowerBaseLeafRadius);
                                 if (currentSize.X < sizeLimit.X || currentSize.Y < sizeLimit.Y)
                                 {
                                     //HoursPerTick are included in GrowthTimeVar
@@ -156,12 +166,28 @@ namespace Agro
                                     growth = resultingSize - currentSize;
                                     agent.Length += growth.X;
                                     agent.Radius += growth.Y;
+                                    //A blade has ONE width. Its segments share a target now, but they
+                                    //still reach it at their own pace - growth is scaled by each organ's
+                                    //own productionFactor, and a shaded inner segment earns less than a
+                                    //sunlit one - so their widths would still drift apart by a few
+                                    //percent and the drawn blade would still step at every joint. The
+                                    //width is a property of the leaf, so a segment takes its parent's:
+                                    //it propagates outward one segment per step, which against an
+                                    //864-hour growth time is no delay at all.
+                                    if (agent.Parent >= 0 && formation.GetOrgan(agent.Parent) == OrganTypes.Leaf)
+                                        agent.Radius = formation.GetBaseRadius(agent.Parent);
                                 }
                             }
                             break;
                             case OrganTypes.Petiole:
                             {
-                                var sizeLimit = !agent.FlowerAgent.flowerBase ? new Vector2(species.PetioleLength + agent.LengthVar, species.PetioleRadius + agent.RadiusVar) : new Vector2(species.FlowerSettings.FlowerBaseLeafPetioleLength , species.FlowerSettings.FlowerBaseLeafPetioleRadius );
+                                //A divided petiole shares the species' length among its segments, so the
+                                //petiole as a whole still reaches PetioleLength. Without this each
+                                //segment grew to the full length and a four-way split gave a petiole
+                                //four times too long.
+                                var sizeLimit = !agent.FlowerAgent.flowerBase
+                                    ? new Vector2((species.PetioleLength + agent.LengthVar) / species.PetioleSegmentCount, species.PetioleRadius + agent.RadiusVar)
+                                    : new Vector2(species.FlowerSettings.FlowerBaseLeafPetioleLength, species.FlowerSettings.FlowerBaseLeafPetioleRadius);
                                 if (currentSize.X < sizeLimit.X || currentSize.Y < sizeLimit.Y)
                                 {
                                     //HoursPerTick are included in GrowthTimeVar
@@ -361,7 +387,11 @@ namespace Agro
                                 if (!agent.FlowerAgent.flowerBase)
                                 {
                                     formation.Death(agentID);
-                                    formation.Death(agent.Parent); //remove the petiole as well
+                                    //The whole petiole, not the segment this organ hangs off - Death
+                                    //cascades to children, so killing the first segment takes the
+                                    //rest of the chain with it. Killing the last one left the
+                                    //earlier segments standing as a bare stub.
+                                    formation.Death(PetioleChainRoot(formation, agent.Parent));
                                 }
                             }
                             break;
@@ -482,9 +512,12 @@ namespace Agro
                                 var growth = new Vector2(1e-3f, 2e-5f) * (dominanceFactor * energyReserve * waterReserve * world.HoursPerTick * (agent.IsRizome ? species.RhizomeGrowthRateScale : species.HerbaceousGrowthRateScale));
                                 // Console.WriteLine($"growm {growth.X} {energyReserve} {waterReserve} {agent.PreviousDayProductionInvariant / formation.DailyProductionMax} {agent.PreviousDayProductionInvariant} {formation.DailyProductionMax}");
                                 //assure not to outgrow the parent unless parent is rizome
-                                var test = formation.CollisionBvh.QueryOverlaps(formation.ComputeBoundsFromParameters(formation.GetTipPosition(agent.Parent), agent.Orientation, agent.Length + growth.X, agent.Radius+ growth.Y));
+                                var test = formation.GrowthOverlapBuffer;
+                                test.Clear();
+                                formation.RhizomeBvh.QueryOverlaps(
+                                    formation.ComputeBoundsFromParameters(formation.GetTipPosition(agent.Parent), agent.Orientation, agent.Length + growth.X, agent.Radius + growth.Y),
+                                    test);
                                 var blocked = false;
-                                if (test != null)
                                 {
                                     foreach (var colission in test)
                                     {
@@ -979,6 +1012,20 @@ namespace Agro
                     ParentRadiusAtBirth = formation.GetBaseRadius(agent.Parent)
                 };
                 var replacementID = formation.Birth(replacement);
+                //A divided petiole is replaced as a whole petiole. The renewal only ever runs on a
+                //chain's first segment, so the remaining segments are rebuilt here; without them the
+                //replacement would be one segment long and the leaf would sit at a fraction of the
+                //petiole's reach.
+                for (var segment = 2; segment <= plant.Parameters.PetioleSegmentCount; ++segment)
+                    replacementID = formation.Birth(new AboveGroundAgent(
+                        plant, replacementID, OrganTypes.Petiole, replacement.Orientation,
+                        0.1f * Math.Max(agent.Energy, 0f) / plant.Parameters.PetioleSegmentCount,
+                        initialResources: agent.PreviousDayEnvResourcesInvariant,
+                        initialProduction: agent.PreviousDayProductionInvariant)
+                    {
+                        DominanceLevel = agent.DominanceLevel,
+                        ParentRadiusAtBirth = formation.GetBaseRadius(agent.Parent)
+                    });
                 AboveGroundAgent.CreateLeaf(replacement.Orientation, replacement, plant, replacementID,
                     agent.PreviousDayEnvResourcesInvariant,
                     agent.PreviousDayProductionInvariant);

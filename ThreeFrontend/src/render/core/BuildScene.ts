@@ -23,10 +23,12 @@ export type PlantBuildInputs = {
     showLeaves: boolean;
     showRoots: boolean;
     /**
-     * Geometry id for a species' leaf mesh. Returns Geom.Plane when the backend served no
-     * per-species mesh, matching `leafGeometry ?? threePlanePrimitive` in the Three path.
+     * Geometry id for one slice of a species' leaf mesh - a blade split into segments is drawn
+     * a slice at a time, and slice 0 is the whole leaf for a species that is not split at all.
+     * Returns Geom.Plane when the backend served no per-species mesh, matching
+     * `leafGeometry ?? threePlanePrimitive` in the Three path.
      */
-    leafGeom: (species: string) => number;
+    leafGeom: (species: string, slice: number) => number;
     /** Petal outline for a species; falls back to the flat plane like leafGeom does. */
     petalGeom: (species: string) => number;
 };
@@ -50,7 +52,6 @@ export function buildPlants(out: InstanceList, inp: PlantBuildInputs) {
 
     for (let i = 0; i < inp.scene.length; ++i) {
         const entity = inp.scene[i];
-        const leafGeomId = inp.leafGeom(entity.species);
         const petalGeomId = inp.petalGeom(entity.species);
 
         for (let j = 0; j < entity.primitives.length; ++j) {
@@ -78,7 +79,9 @@ export function buildPlants(out: InstanceList, inp: PlantBuildInputs) {
                     const c = p.stats ? leafColor(p, j, inp.visualMapping) : { color: neutral, emissive: black };
                     //Leaves and petals are both laminae and arrive in the same record, so the
                     //organ is the only thing that distinguishes them.
-                    const laminaGeom = p.organ === Organs.FlowerPadel ? petalGeomId : leafGeomId;
+                    const laminaGeom = p.organ === Organs.FlowerPadel
+                        ? petalGeomId
+                        : inp.leafGeom(entity.species, p.laminaSlice);
                     assign(inst, laminaGeom, c.color, c.emissive, IFlags.DoubleSided | hiddenFlag(p, inp), ref);
                     break;
                 }

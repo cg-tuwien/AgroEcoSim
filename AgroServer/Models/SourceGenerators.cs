@@ -31,7 +31,9 @@ namespace AgroServer.Models;
 [JsonSerializable(typeof(List<SpeciesSettings>))]
 [JsonSerializable(typeof(string[]))]
 [JsonSerializable(typeof(RunResponse))]
-[JsonSerializable(typeof(RunSummaryResponse[]))]
+[JsonSerializable(typeof(RunResponse[]))]
+[JsonSerializable(typeof(RunDeleteResponse))]
+[JsonSerializable(typeof(StoredTerrainMeta))]
 // Hub arguments and completion results are resolved by their runtime type.
 [JsonSerializable(typeof(string))]
 [JsonSerializable(typeof(bool))]

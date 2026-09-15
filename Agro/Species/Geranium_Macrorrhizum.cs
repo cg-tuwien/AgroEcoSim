@@ -13,6 +13,15 @@ public static class Geranium_Macrorrhizum
         LeafLengthVar = 0.008f,
         LeafRadius = 0.035f,
         LeafRadiusVar = 0.004f,
+        //Not segmented, deliberately. A blade's stiffness about its minor axis goes with its WIDTH,
+        //so this 7 cm by 7 cm leaf is 12 times stiffer lengthwise than a 6 mm Carex strap while its
+        //segments would be four times shorter: measured, three segments bent it 0.3 degrees in
+        //total and doubled the plant's organ count. A broad leaf is stiff along its length precisely
+        //because it is broad. What droops a real Geranium leaf is its 18 cm petiole, which is
+        //already modelled, and cupping ACROSS the blade, which a chain of segments cannot express.
+        //Its own modulus still helps: without one a leaf falls back to GreenElasticModulus, the
+        //stiff 1e8 default meant for stems.
+        LeafElasticModulus = 6e6f,
         LeafPitchVar = 5f * (MathF.PI / 180f),
         // A broad basal rosette: petioles rise diagonally and the blades return
         // to near-horizontal rather than collecting in a terminal crown.
@@ -21,6 +30,11 @@ public static class Geranium_Macrorrhizum
         // commonly 15-25 cm on an established plant, against a 7 cm blade.
         PetioleLength = 0.18f,
         PetioleLengthVar = 0.04f,
+        //Its petiole is as long as Heuchera's and dividing it works - measured 15.5 degrees of arch
+        //at day 140 - but it costs 70% more organs (4,891 to 8,333 at day 730) and buys nothing in
+        //the mature form, which is 31.7 by 111.3 cm either way because this species' spread is
+        //clonal. This is the dominant species of the facade, so the trade is left to whoever sets up
+        //that scene: PetioleSegmentLength = 0.045f and PetioleElasticModulus = 5e7f turn it on.
         PetioleRadius = 0.0018f,
         PetioleRadiusVar = 0.0002f,
 
@@ -121,6 +135,11 @@ public static class Geranium_Macrorrhizum
             PetalLength = 0.016f,
             PetalRadius = 0.007f,
             PetalLengthVariance = 0.002f,
+            //The only species here whose head clears the 4 cm default: 2 * (BudRadius * rim +
+            //PetalLength) is 4.05 cm, and 4.45 cm once the petal variance is spent. Without this
+            //its flowers - a third of the production planting - would be the one case still
+            //carrying a separate collision body per petal.
+            CollisionAggregationDiameter = 0.05f,
             PetalAndPedicelGrowthDurationHours = 180f,
             PetalAndPedicelGrowthDurationVarianceHours = 36f,
             FlowerPhenology = new LeafPhenology(

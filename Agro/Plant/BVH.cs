@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Numerics;
 using System.Runtime.InteropServices;
 
@@ -40,10 +40,13 @@ public class Bvh
         public readonly int Parent;
         public readonly int AgentIndex;
         public readonly bool CollisionEligible;
+        /// <summary>The crown every organ under this node belongs to, or -1 when they differ or
+        /// when the node must never be pruned by crown. See <see cref="Bvh.SetCrowns"/>.</summary>
+        public readonly int Crown;
 
         public bool IsLeaf => Left < 0 && Right < 0;
 
-        public Node(BoundingBox bounds, int left, int right, int parent, int agentIndex, bool collisionEligible = true)
+        public Node(BoundingBox bounds, int left, int right, int parent, int agentIndex, bool collisionEligible = true, int crown = -1)
         {
             Bounds = bounds;
             Left = left;
@@ -51,9 +54,10 @@ public class Bvh
             Parent = parent;
             AgentIndex = agentIndex;
             CollisionEligible = collisionEligible;
+            Crown = crown;
         }
 
-        public Node WithBounds(BoundingBox bounds) => new(bounds, Left, Right, Parent, AgentIndex, CollisionEligible);
+        public Node WithBounds(BoundingBox bounds) => new(bounds, Left, Right, Parent, AgentIndex, CollisionEligible, Crown);
     }
 
     int root = -1;
@@ -188,8 +192,45 @@ public class Bvh
         // Both subtrees must be refreshed even when the first one is eligible.
         var active = node.IsLeaf ? eligible(node.AgentIndex)
             : RefreshCollisionNode(node.Left, eligible) | RefreshCollisionNode(node.Right, eligible);
-        nodes[index] = new Node(node.Bounds, node.Left, node.Right, node.Parent, node.AgentIndex, active);
+        //Forward the crown: the six-argument overload would silently reset it to -1, and this runs
+        //before every broad-phase query, which left the crown pruning permanently disabled.
+        nodes[index] = new Node(node.Bounds, node.Left, node.Right, node.Parent, node.AgentIndex, active, node.Crown);
         return active;
+    }
+
+    /// <summary>
+    /// Labels every node with the crown its organs belong to, so a pair of subtrees that lie
+    /// wholly inside one crown can be rejected without being opened.
+    /// </summary>
+    /// <remarks>
+    /// The pair filter rejects two organs of the same crown anyway, but it did so one leaf pair at
+    /// a time, after the descent that produced them. In a dense rosette essentially every bounding
+    /// box overlaps every other, so that descent is quadratic and over 99% of what it produced was
+    /// then discarded. Labelling costs one bottom-up pass per census.
+    ///
+    /// <paramref name="crownOf"/> must return -1 for an organ that is itself a crown root: the
+    /// leaf-level test treats such a pair as distinct crowns, so it must stay enumerable.
+    /// </remarks>
+    internal void SetCrowns(Func<int, int> crownOf)
+    {
+        if (!IsEmpty)
+            SetCrownNode(root, crownOf);
+    }
+
+    int SetCrownNode(int index, Func<int, int> crownOf)
+    {
+        var node = nodes[index];
+        int crown;
+        if (node.IsLeaf)
+            crown = crownOf(node.AgentIndex);
+        else
+        {
+            var left = SetCrownNode(node.Left, crownOf);
+            var right = SetCrownNode(node.Right, crownOf);
+            crown = left >= 0 && left == right ? left : -1;
+        }
+        nodes[index] = new Node(node.Bounds, node.Left, node.Right, node.Parent, node.AgentIndex, node.CollisionEligible, crown);
+        return crown;
     }
 
     public void RefitLeaf(int agentIndex, BoundingBox bounds)
@@ -248,6 +289,12 @@ public class Bvh
             var b = nodes[bIndex];
 
             if ((collisionsOnly && (!a.CollisionEligible || !b.CollisionEligible)) || !a.Bounds.Intersects(in b.Bounds))
+                continue;
+
+            //Everything under both nodes shares one crown, and the pair filter rejects same-crown
+            //pairs, so nothing below can survive. Skipping here is what keeps the descent out of
+            //the quadratic case.
+            if (collisionsOnly && a.Crown >= 0 && a.Crown == b.Crown)
                 continue;
 
             bool aLeaf = a.IsLeaf;
@@ -422,10 +469,20 @@ public class Bvh
     public List<int> QueryOverlaps(BoundingBox bounds)
     {
         var result = new List<int>();
-        if (IsEmpty)
-            return result;
+        QueryOverlaps(in bounds, result);
+        return result;
+    }
 
-        var stack = new Stack<int>();
+    /// <summary>Appends the agents whose bounds meet <paramref name="bounds"/> to a caller-owned
+    /// buffer. The allocating overload above is called once per growing meristem per step, and
+    /// used to allocate both the result list and its traversal stack every time.</summary>
+    public void QueryOverlaps(in BoundingBox bounds, List<int> result)
+    {
+        if (IsEmpty)
+            return;
+
+        var stack = traversalStack;
+        stack.Clear();
         stack.Push(root);
 
         while (stack.Count > 0)
@@ -446,9 +503,19 @@ public class Bvh
                 stack.Push(node.Right);
             }
         }
-
-        return result;
     }
+    /// <summary>Bounds of everything in the hierarchy, which is the plant's canopy box.</summary>
+    public bool TryGetRootBounds(out BoundingBox bounds)
+    {
+        if (IsEmpty)
+        {
+            bounds = default;
+            return false;
+        }
+        bounds = nodes[root].Bounds;
+        return true;
+    }
+
     public bool TryGetBounds(int agentIndex, out BoundingBox bounds)
     {
         if (leafLookup.TryGetValue(agentIndex, out var leaf))

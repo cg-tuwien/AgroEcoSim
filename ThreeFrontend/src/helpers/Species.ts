@@ -66,6 +66,16 @@ export class Species extends SpeciesBase {
     leafMesh: MeshData | undefined = undefined;
 
     /**
+     * The blade outline cut into the pieces a segmented leaf is drawn from, base first.
+     *
+     * A long blade is simulated as a chain of leaf organs. Drawn with the whole outline each,
+     * they pinch to a point at every joint; each segment carries its own slice instead, and the
+     * chain reassembles into the species' leaf. One entry for a species whose leaves are not
+     * segmented, identical to leafMesh.
+     */
+    leafMeshSlices: MeshData[] = [];
+
+    /**
      * Petal outline, fetched separately from the leaf. A petal travels in the same lamina
      * record as a leaf, so without this it was drawn with the leaf mesh - a maple blade
      * for a Heuchera petal.
@@ -261,12 +271,40 @@ export class Species extends SpeciesBase {
         this.leafMesh = this.readLamina(binaryInput, "leaf");
     }
 
+    /** Reads the slice set served by /mesh/leaf/{species}/slices: a count, then that many meshes. */
+    loadLeafSlices(binaryInput: ArrayBuffer): any {
+        const reader = new BinaryReader(new Uint8Array(binaryInput));
+        const count = reader.readUInt8();
+        const slices: MeshData[] = [];
+        for (let i = 0; i < count; ++i)
+            slices.push(this.readLaminaFrom(reader, `leaf:${i}/${count}`));
+        this.leafMeshSlices = slices;
+        //The unsliced mesh stays the first slice's source of truth for anything that asks for
+        //"the" leaf mesh, and for an unsegmented species the two are the same thing.
+        if (slices.length > 0 && !this.leafMesh)
+            this.leafMesh = slices[0];
+    }
+
+    /**
+     * The slice to draw an organ at position `index` of a blade chain with.
+     *
+     * A chain that has lost segments, or one longer than the served set, clamps to the tip
+     * slice rather than falling back to the whole outline, which would pinch the joint again.
+     */
+    leafSlice(index: number): MeshData | undefined {
+        if (this.leafMeshSlices.length === 0) return this.leafMesh;
+        return this.leafMeshSlices[Math.min(Math.max(index, 0), this.leafMeshSlices.length - 1)];
+    }
+
     loadPetalGeometry(binaryInput: ArrayBuffer): any {
         this.petalMesh = this.readLamina(binaryInput, "petal");
     }
 
     private readLamina(binaryInput: ArrayBuffer, kind: string): MeshData {
-        const reader = new BinaryReader(new Uint8Array(binaryInput));
+        return this.readLaminaFrom(new BinaryReader(new Uint8Array(binaryInput)), kind);
+    }
+
+    private readLaminaFrom(reader: BinaryReader, kind: string): MeshData {
         const verticesCount = reader.readInt32();
         const coordsCount = verticesCount * 3;
         //Taken as authored: x and y are normalized to the organ's half length and half width,

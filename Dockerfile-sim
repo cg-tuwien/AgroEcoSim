@@ -53,6 +53,14 @@ RUN addgroup -g 61000 docker && adduser -g 61000 -H -D -s /bin/false -u 61000 do
 #which has no business in the writable layer either.
 RUN mkdir -p /data/runstore && chown -R 61000:61000 /data
 ENV AGRO_RunStoreRoot=/data/runstore
+
+#Listen on every interface, not just loopback.
+#
+#An explicit Listen call in ConfigureKestrel overrides UseUrls and ASPNETCORE_URLS, so without this
+#the server binds 127.0.0.1 inside the container's own network namespace and NOTHING outside the
+#container can reach it, however the port is published. The default stays loopback because the API
+#has no authentication; a container is the place that opts in.
+ENV AGRO_ListenAnyIP=true
 VOLUME /data
 
 USER docker

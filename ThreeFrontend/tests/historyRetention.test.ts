@@ -244,16 +244,52 @@ describe('eviction copes with frames larger than budget/window', () => {
         expect(appstate.historyLimitHit.value).toBe(false);
     });
 
-    test('the newest frame and the playhead window are never dropped', () => {
+    test('the newest frame and the playhead window are spared while there is room', () => {
         appstate.runId.value = 'run1';
-        appstate.historyBudget.value = 1000;   //impossible to satisfy, so it drops all it may
+        //Satisfiable: dropping the unprotected frames is enough, so the comfort window is a
+        //luxury the budget can afford and a scrub nearby costs no round trip.
+        appstate.historyBudget.value = 2_000_000;
         fill(40, 100_000);
         appstate.playPointer.value = 20;
         evictOldestPayloads();
 
-        //The frame on screen and the ones a scrub is about to reach must survive.
+        expect(appstate.historySize.value).toBeLessThanOrEqual(appstate.historyBudget.value);
+        expect(appstate.historyLimitHit.value).toBe(false);
         expect(appstate.history[39].s).toBeDefined();
         for (let i = 16; i <= 24; ++i) expect(appstate.history[i].s).toBeDefined();
+    });
+
+    test('the window is released rather than stopping a run the server can serve back', () => {
+        //THE REGRESSION THIS EXISTS FOR. A mature stand's frames are hundreds of megabytes, so the
+        //ten protected frames alone exceed the budget and the old rule stopped the run - at
+        //simulated month 4 of 10, with every frame safely on disk. With a store they are all three
+        //milliseconds away, so the window goes and the run continues.
+        appstate.runId.value = 'run1';
+        appstate.historyBudget.value = 1000;   //unsatisfiable while anything but one frame is held
+        fill(40, 100_000);
+        appstate.playPointer.value = 20;
+        evictOldestPayloads();
+
+        //Only the frame actually on screen survives; dropping that one would blank the viewport
+        //for a round trip and it is a single frame.
+        expect(appstate.history[20].s).toBeDefined();
+        expect(appstate.history[39].s).toBeUndefined();
+        for (const i of [16, 19, 21, 24]) expect(appstate.history[i].s).toBeUndefined();
+        expect(appstate.evictedFrames.value).toBeGreaterThan(30);
+    });
+
+    test('without a store the window is kept and the run stops, because a dropped frame is gone', () => {
+        //The old trade, which is still the right one when the client is the only copy: stopping
+        //loses the rest of the run, dropping loses frames outright.
+        appstate.runId.value = '';
+        appstate.historyBudget.value = 1000;
+        fill(40, 100_000);
+        appstate.playPointer.value = 20;
+        evictOldestPayloads();
+
+        expect(appstate.history[39].s).toBeDefined();
+        for (let i = 16; i <= 24; ++i) expect(appstate.history[i].s).toBeDefined();
+        expect(appstate.historyLimitHit.value).toBe(true);
     });
 
     test('a history that cannot be shrunk enough stops the run', () => {

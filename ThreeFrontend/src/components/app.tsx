@@ -33,6 +33,7 @@ import { FieldModelUpload } from './hud/FieldModelUpload';
 import { FieldItemRegex } from './hud/FieldItemRegex';
 import { TerrainsList } from './viewport/TerrainsList';
 import { SeedsDistributionUpload } from './hud/SeedsDistributionUpload';
+import { RunsList } from './hud/RunsList';
 //import {Tab, initTE } from "tw-elements"; initTE({ Tab }); //tried but failed
 
 const App = () => {
@@ -51,6 +52,7 @@ const App = () => {
 				<li role="presentation"><a role="tab" onClick={e => appstate.activeTab.value = "tab-obstacles"} aria-selected={appstate.activeTab.value.endsWith("tab-obstacles")}>Obstacles</a></li>
 				<li role="presentation"><a role="tab" onClick={e => appstate.activeTab.value = "tab-analysis"} aria-selected={appstate.activeTab.value.endsWith("tab-analysis")}>Analysis</a></li>
 				<li role="presentation"><a role="tab" onClick={e => appstate.activeTab.value = "tab-export"} aria-selected={appstate.activeTab.value.endsWith("tab-export")}>Export</a></li>
+				<li role="presentation"><a role="tab" onClick={e => appstate.activeTab.value = "tab-runs"} aria-selected={appstate.activeTab.value.endsWith("tab-runs")}>Runs</a></li>
 				{() => "TODO: make analysis a separate panel always visible"}
 			</ul>
 
@@ -103,6 +105,10 @@ const App = () => {
 
 			<div role="tabpanel" id="tab-export" aria-selected={appstate.activeTab.value.endsWith("tab-export")}>
 				<OfflineRender/>
+			</div>
+
+			<div role="tabpanel" id="tab-runs" aria-selected={appstate.activeTab.value.endsWith("tab-runs")}>
+				<RunsList/>
 			</div>
 		</nav>
 	</>

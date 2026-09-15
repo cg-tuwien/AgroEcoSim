@@ -177,7 +177,7 @@ export default class BinaryReader {
                     //     entity.push({ type: Primitives.Sphere, center: center, radius: radius, stats: undefined });
                     // }
                     // break;
-                    case 8: entity.push({ type: Primitives.Rectangle, organ: undefined, affineTransform: this.readFloat32Vector(12), stats: undefined, color: undefined }); break; //plane / leaf
+                    case 8: entity.push({ type: Primitives.Rectangle, organ: undefined, affineTransform: this.readFloat32Vector(12), stats: undefined, color: undefined, laminaSlice: 0 }); break; //plane / leaf
                 }
                 const isSensor = this.readUInt8();
             }
@@ -214,7 +214,7 @@ export default class BinaryReader {
                         const color = this.readHexRGB();
                         const auxins = this.readFloat32();
                         const dailyEfficiency = this.readFloat32();
-                        entity.push({ type: Primitives.Rectangle, organ: organ, affineTransform: transform, stats: new Float32Array([waterRatio, energyRatio, auxins, 0, lastIrradiance, dailyResource, dailyProduction, 0, 0]), color: color });
+                        entity.push({ type: Primitives.Rectangle, organ: organ, affineTransform: transform, stats: new Float32Array([waterRatio, energyRatio, auxins, 0, lastIrradiance, dailyResource, dailyProduction, 0, 0]), color: color, laminaSlice: 0 });
                         maxDailyProductionShoots = Math.max(dailyProduction, maxDailyProductionShoots);
                         maxDailyResourceShoots = Math.max(dailyResource, maxDailyResourceShoots);
                     }
@@ -320,13 +320,28 @@ export default class BinaryReader {
             let maxDailyProductionShoots = 0;
             let maxDailyResourceRoots = 0;
             let maxDailyProductionRoots = 0;
+            //A long blade is simulated as a chain of leaf organs, and each of them needs to be
+            //drawn with its own slice of the species outline rather than the whole of it. The
+            //position within the chain is what says which slice; it is not on the wire, but the
+            //parent link is, and a parent always precedes its child in the record order.
+            //Indexed by ORGAN index, which is not the primitive index - buds are decoded and
+            //then dropped, so the two run apart as soon as one appears.
+            const leafOrgan = new Uint8Array(primitivesCount);
+            const chainPosition = new Int32Array(primitivesCount);
             for(let j = 0; j < primitivesCount; ++j)
             {
                 const parentIndex = this.readInt32();
                 const organ = this.readUInt8();
+                if (organ === Organs.Leaf)
+                {
+                    leafOrgan[j] = 1;
+                    if (parentIndex >= 0 && parentIndex < j && leafOrgan[parentIndex])
+                        chainPosition[j] = chainPosition[parentIndex] + 1;
+                }
                 switch(organ)
                 {
                     case Organs.Leaf: case Organs.FlowerPadel: { //lamina record: 12-float affine transform, no length/radius
+                        const slice = organ === Organs.Leaf ? chainPosition[j] : 0;
                         const transform = this.readFloat32Vector(12);
                         if (doAnalytics)
                         {
@@ -338,14 +353,14 @@ export default class BinaryReader {
                             const color = this.readHexRGB();
                             const auxins = this.readFloat32();
                             const dailyEfficiency = this.readFloat32();
-                            entity.push({ type: Primitives.Rectangle, organ: organ, affineTransform: transform, stats: new Float32Array([waterRatio, energyRatio, auxins, 0, lastIrradiance, dailyResource, dailyProduction, 0, 0]), color: color });
+                            entity.push({ type: Primitives.Rectangle, organ: organ, affineTransform: transform, stats: new Float32Array([waterRatio, energyRatio, auxins, 0, lastIrradiance, dailyResource, dailyProduction, 0, 0]), color: color, laminaSlice: slice });
                             maxDailyProductionShoots = Math.max(dailyProduction, maxDailyProductionShoots);
                             maxDailyResourceShoots = Math.max(dailyResource, maxDailyResourceShoots);
                         }
                         else
                         {
                             const color = this.readHexRGB();
-                            entity.push({ type: Primitives.Rectangle, organ: organ, affineTransform: transform, stats: new Float32Array([0, 0, 0, 0, 0, 0, 0, 0, 0]), color: color });
+                            entity.push({ type: Primitives.Rectangle, organ: organ, affineTransform: transform, stats: new Float32Array([0, 0, 0, 0, 0, 0, 0, 0, 0]), color: color, laminaSlice: slice });
                         }
                     }
                     break;

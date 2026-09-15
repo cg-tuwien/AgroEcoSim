@@ -42,6 +42,27 @@ RUN apk update && apk add --no-cache ca-certificates && apk --no-cache add tzdat
 #USER user:user
 
 RUN addgroup -g 61000 docker && adduser -g 61000 -H -D -s /bin/false -u 61000 docker -G docker
+
+#Where the run store keeps every simulation frame.
+#
+#It cannot live under /app: that is copied in as root above and the container then drops to an
+#unprivileged user, so the store fails to create its own root, disables itself, and the whole of the
+#server-side persistence silently does nothing - while docker-compose mounts a volume at a path
+#nothing writes to and sets a retention budget for a store that is not running. This is the image
+#buildDocker actually builds and compose actually runs, so the equivalent block in Dockerfile-sim was
+#protecting an image nobody ships.
+RUN mkdir -p /data/runstore && chown -R 61000:61000 /data
+ENV AGRO_RunStoreRoot=/data/runstore
+
+#Listen on every interface, not just loopback.
+#
+#An explicit Listen call in ConfigureKestrel overrides UseUrls and ASPNETCORE_URLS, so without this
+#the server binds 127.0.0.1 inside the container's own network namespace and NOTHING outside the
+#container can reach it, however the port is published. The default stays loopback because the API
+#has no authentication; a container is the place that opts in.
+ENV AGRO_ListenAnyIP=true
+VOLUME /data
+
 USER docker
 
 #does nothing, just documents the exposed port

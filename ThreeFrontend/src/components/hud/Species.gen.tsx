@@ -31,6 +31,11 @@ export function GeneratedSpeciesFields(props: { species: Species; index: number 
 <SpeciesFloatField step={1} speciesIndex={index} tooltip={"Standard wood growth time (in hours)"} signal={species.woodGrowthTime} label={"Wood maturing time (hours)"} variance={{ step: 0.01, signal: species.woodGrowthTimeVar}} />
 <hr/>
 <SpeciesFloatField step={0.001} speciesIndex={index} tooltip={"Maximum branch level that supports leaves (here level denotes the max. subtree depth)"} signal={species.leafLength} label={"Leaf length"} variance={{ step: 0.01, signal: species.leafLengthVar}} />
+<SpeciesFloatField step={0.001} speciesIndex={index} signal={species.leafSegmentLength} label={"Longest blade segment a leaf is built from, in metres. Zero keeps a leaf as one rigid piece."} />
+<SpeciesFloatField step={0.1} speciesIndex={index} signal={species.leafKeelThickness} label={"Effective thickness of a blade for bending, in metres. Stands in for the keel, midrib and turgor that hold a real leaf up; the drawn blade stays \u003Csee cref=\u0022AboveGroundAgent.LeafThickness\u0022/\u003E."} />
+<SpeciesFloatField step={0.1} speciesIndex={index} signal={species.leafElasticModulus} label={"Elastic modulus of a leaf blade, in pascals. Zero falls back to \u003Csee cref=\u0022GreenElasticModulus\u0022/\u003E."} />
+<SpeciesFloatField step={0.1} speciesIndex={index} signal={species.leafTipStiffnessFraction} label={"Effective keel thickness at the tip of a blade as a fraction of its value at the base. One means a blade of uniform stiffness."} />
+<SpeciesIntField step={1} speciesIndex={index} signal={species.maximumLeafSegments} label={"Upper bound on the split, so a species preset cannot multiply the organ count without limit."} />
 <SpeciesFloatField step={0.001} speciesIndex={index} tooltip={"Standard leaf radius, i.e. the span perpendicular to its main axis (in meters)"} signal={species.leafRadius} label={"Leaf radius"} variance={{ step: 0.01, signal: species.leafRadiusVar}} />
 <SpeciesFloatField max={180} step={0.1} speciesIndex={index} tooltip={"Mean leaf angle to the petiole (in deg)"} signal={species.leafPitchDeg} label={"Leaf pitch"} variance={{ step: 0.1, signal: species.leafPitchDegVar}} />
 <SpeciesFloatField step={0.001} speciesIndex={index} tooltip={"Standard petiole length (in meters)"} signal={species.petioleLength} label={"Petiole length"} variance={{ step: 0.01, signal: species.petioleLengthVar}} />
@@ -89,7 +94,8 @@ export function GeneratedSpeciesFields(props: { species: Species; index: number 
 <SpeciesFloatField step={0.001} speciesIndex={index} tooltip={"Maximum radius of non-rhizome herbaceous shoot segments."} signal={species.shootMaximumRadius} label={"Maximum shoot radius"} />
 <SpeciesFloatField max={180} step={0.1} speciesIndex={index} tooltip={"Maximum reorientation of existing petioles when a crown adds another segment."} signal={species.petioleReorientationMaximumAngleDeg} label={"Maximum petiole reorientation"} />
 <SpeciesFloatField max={180} step={0.1} speciesIndex={index} tooltip={"Petiole angle added when a crown continues with another segment."} signal={species.petioleReorientationStepAngleDeg} label={"Petiole reorientation step"} />
-<SpeciesIntField min={1} step={1} speciesIndex={index} tooltip={"Number of serial segments used to model a vegetative leaf petiole."} signal={species.petioleSegmentCount} label={"Petiole segment count"} />
+<SpeciesFloatField step={0.001} speciesIndex={index} tooltip={"Length of one petiole segment, in metres. Zero leaves a petiole as a single organ."} signal={species.petioleSegmentLength} label={"Petiole segment length"} />
+<SpeciesIntField step={1} speciesIndex={index} signal={species.maximumPetioleSegments} label={"Upper bound on the split, so a preset cannot multiply the organ count without limit."} />
 <hr/>
 <SpeciesFloatField step={0.1} speciesIndex={index} tooltip={"Dimensionless multiplier for rhizome axial and radial growth."} signal={species.rhizomeGrowthRateScale} label={"Rhizome growth rate scale"} />
 <SpeciesFlagsField speciesIndex={index} tooltip={"Seasonal phases in which dormant basal and axillary rhizome buds may activate into growing rhizome meristems."} signal={species.rhizomeBudActivationPeriod} label={"Rhizome bud activation period"} flags={['PreFlower','Flowering','PostFlower','ResetPending']}/>

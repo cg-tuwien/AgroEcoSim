@@ -31,6 +31,18 @@ export const enum Geom {
 export const STATIC_GEOMETRY_COUNT = Geom.FirstDynamic;
 
 /**
+ * Registry key for one slice of a species' leaf mesh.
+ *
+ * A blade simulated as a chain of leaf organs is drawn a slice at a time, so the species name
+ * alone no longer identifies a geometry. Slice 0 is the whole leaf for a species whose blades
+ * are not segmented. One definition because the renderer registers under this key and the HUD's
+ * triangle counter looks it up; a divergence would silently count the fallback plane instead.
+ */
+export function leafGeomKey(species: string, slice: number): string {
+    return `leaf:${species}:${slice}`;
+}
+
+/**
  * Allocates ids for geometry that only exists at runtime.
  *
  * Registration is keyed so that re-registering the same logical geometry (a species' leaf

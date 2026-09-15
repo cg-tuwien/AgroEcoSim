@@ -9,6 +9,22 @@
     <NoWarn>$(NoWarn);1591</NoWarn>
     <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
     <StripSymbols>false</StripSymbols>
+
+    <!--
+      Keep build output and the run store out of the project's own item globs.
+
+      publish_and_run.sh publishes into AgroServer/publish/, which is INSIDE the project directory, so
+      without this the SDK globs that directory as project content and the next publish copies the
+      previous output into the new one. Measured: seven levels of publish/publish/publish/... and a
+      publish that failed with MSB3030 because a file vanished from under the copy while the tree was
+      being written into itself.
+
+      `runstore/**` is the more important half. The store defaults to AppContext.BaseDirectory/runstore,
+      so it lands inside whatever directory the server runs from - bin/ or publish/ - and a run there is
+      tens of gigabytes of frames. Globbing that into a build is slow at best and destructive at worst;
+      simulation results have no business being treated as project content.
+    -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);publish/**;**/runstore/**</DefaultItemExcludes>
   </PropertyGroup>
 
   <ItemGroup>
@@ -20,9 +36,31 @@
   </ItemGroup>
 
 
+  <!--
+    Regenerates the species TypeScript from SpeciesSettings.cs.
+
+    This is a BUILD INSIDE A BUILD: `dotnet run` compiles SchemeGenerator, which references Agro,
+    so without a private artifacts path the nested build writes Agro's own bin/obj - the same files
+    the outer build, the IDE's design-time build and a second target framework's copy of this very
+    target are all writing at that moment. The result is an intermittent
+
+        MSB4018 ... Agro.runtimeconfig.json ... being used by another process
+
+    that has nothing to do with the code being built. Pointing the nested build at a private
+    artifacts directory takes it out of that contention entirely; it costs one extra compile of
+    Agro, once, in a directory nothing else touches.
+
+    It still fires once per target framework (MSBuild has no clean once per build hook for an
+    inner target), which is why the generator writes its two outputs atomically.
+
+    Note that the artifacts path is honoured by the .NET 10 SDK and silently ignored by the .NET 8
+    SDK, which is what Dockerfile-simaot builds with. That is acceptable rather than lucky: the
+    image build is a single publish with no IDE and no second target framework beside it, so the
+    contention this avoids does not arise there. It is the developer machine that has three writers.
+  -->
   <Target Name="GenerateSpeciesTypescript" AfterTargets="CoreCompile">
     <Message Importance="high" Text="Generating Species.generated.ts from SpeciesSettings.cs" />
 
-    <Exec Command="dotnet run --framework $(TargetFramework) --project &quot;$(MSBuildProjectDirectory)/../SchemeGenerator/SchemeGenerator.csproj&quot; -- &quot;$(MSBuildProjectDirectory)/../Agro/SpeciesSettings.cs&quot; &quot;$(MSBuildProjectDirectory)/../ThreeFrontend/src/helpers/Species.gen.ts&quot; &quot;$(MSBuildProjectDirectory)/../ThreeFrontend/src/components/hud/Species.gen.tsx&quot;" />
+    <Exec Command="dotnet run --framework $(TargetFramework) --artifacts-path &quot;$(MSBuildProjectDirectory)/../SchemeGenerator/artifacts&quot; --project &quot;$(MSBuildProjectDirectory)/../SchemeGenerator/SchemeGenerator.csproj&quot; -- &quot;$(MSBuildProjectDirectory)/../Agro/SpeciesSettings.cs&quot; &quot;$(MSBuildProjectDirectory)/../ThreeFrontend/src/helpers/Species.gen.ts&quot; &quot;$(MSBuildProjectDirectory)/../ThreeFrontend/src/components/hud/Species.gen.tsx&quot;" />
   </Target>
 </Project>

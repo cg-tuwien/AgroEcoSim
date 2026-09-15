@@ -22,6 +22,7 @@ import { Species } from "./helpers/Species";
 import { IObjImport, Parse } from "./helpers/ObjParser";
 import { BoxTerrainItem, ITerrainItem, MeshTerrainItem } from "./helpers/Terrain";
 import { CoordinateSystem } from "./helpers/CoordinateSystem";
+import { IStoredRun, camelizeTopLevel } from "./helpers/StoredRun";
 
 interface RetryContext {
     readonly previousRetryCount: number; //The number of consecutive failed tries so far.
@@ -75,6 +76,17 @@ hubConnection.on("progress", (step: number, length: number) => {
  * couple of seconds, and only when the run is actually ahead of what is held. `Progress` arrives
  * once per simulated step, which at a large stand is far too often to fetch anything.
  */
+/**
+ * Settles when the startup species fetch has finished, however it finished.
+ *
+ * Anything that REPLACES the species list has to wait for it. The fetch is fired from the module
+ * body and assigns `st.species.value` when it lands, so a stored run applied before then has its
+ * species silently overwritten a moment later by the defaults - and the plants are then drawn with
+ * the wrong morphology, with nothing having failed. Declared here, and only assigned at the fetch,
+ * so awaiting it before that point is a no-op rather than a hazard.
+ */
+let speciesReady: Promise<unknown> = Promise.resolve();
+
 let timelineSyncing = false;
 let lastTimelineSync = 0;
 const TIMELINE_SYNC_INTERVAL_MS = 2000;
@@ -214,7 +226,7 @@ hubConnection.on("terrain", (response: Uint8Array) => {
     const result = reader.readTerrain();
     st.terrainList = result.terrains;
     st.obstacles.value = [...st.obstacles.value.filter(x => x.type.value !== 'mesh'), ...result.obstacles];
-    st.terrainTimestamp.value = Date.now();
+    st.bumpTerrain();
 })
 
 /**
@@ -318,7 +330,7 @@ async function recoverRun() {
     try { saved = sessionStorage.getItem('agro.runId') ?? ''; } catch { return; }
     if (!saved) return;
 
-    const meta = await fetchRunMeta(saved);
+    const meta = await fetchStoredRun(saved);
     if (!meta) { forgetRun(); return; }
 
     st.runId.value = saved;
@@ -326,6 +338,16 @@ async function recoverRun() {
     //The clock multiplies a frame's step by this, so without it a recovered run is drawn on the
     //wrong timeline - and it is not otherwise recoverable from the page.
     st.simHoursPerTick = meta.hoursPerTick;
+    //The soil, which a reload loses with everything else in the tab: it arrives over the socket at
+    //upload time and is never part of a frame. Without it a recovered run - one still computing
+    //just as much as a finished one - draws its plants floating in an empty field, which reads as
+    //a broken scene rather than as a reload. The store keeps it for exactly this.
+    await st.restoreStoredTerrain(saved, meta.hasTerrain, meta.fieldModelName);
+    //And the scenario behind it. A reload empties the editor, so without this the run comes back
+    //as frames over the right trays with somebody else's species, seeds and length beside them -
+    //and Fork from that state would carry the defaults rather than the run.
+    try { await st.restoreStoredScenario(saved); }
+    catch (err) { console.warn(`Could not restore the scenario of run ${saved}:`, err); }
     if (await syncTimelineToIndex(saved, true) === 0) { forgetRun(); return; }
 
     //A finished run needs no socket at all: its timeline is final and its frames come over REST.
@@ -343,15 +365,74 @@ async function recoverRun() {
     batch(() => {
         st.computing.value = true;
         st.simLength.value = meta.totalSteps;
-        st.simStep.value = meta.storedFrames;
+        //The step reached, not the number of files. They are the same only at a stride of one,
+        //and with a stride the counter would read a quarter of the true progress.
+        st.simStep.value = meta.lastStep;
         st.playing.value = PlayState.ForwardWaiting;
     });
     st.previewRequest.value = true;
 }
 
-/** A stored run's metadata, or undefined when the server has never heard of it. */
-async function fetchRunMeta(runId: string): Promise<{ status: string, hoursPerTick: number,
-        totalSteps: number, storedFrames: number } | undefined> {
+/**
+ * Gives freshly loaded species their leaf and petal outlines back.
+ *
+ * `Species.load()` copies settings and nothing else: `leafMeshSlices` and `petalMesh` are filled
+ * only by the one-shot fetch at startup, against the instances that existed then. So replacing the
+ * list - which both opening a stored run and loading a session do - leaves every plant drawing the
+ * `Geom.Plane` fallback quad for every leaf and every petal, silently and with nothing in the UI
+ * to say why.
+ *
+ * Copied from the previous same-named instance where there is one, because that costs nothing and
+ * covers the common case: a stored run almost always uses the species the page already has. Only a
+ * name the page has never seen goes to the network, and a failure there leaves exactly the fallback
+ * that would have happened anyway.
+ */
+function adoptSpeciesGeometry(loaded: Species[], previous: Species[]): Species[] {
+    const known = new Map(previous.map(s => [s.name.peek(), s]));
+    const missing: Species[] = [];
+    for (const species of loaded) {
+        const old = known.get(species.name.peek());
+        if (old && (old.leafMeshSlices.length > 0 || old.petalMesh)) {
+            species.leafMesh = old.leafMesh;
+            species.leafMeshSlices = old.leafMeshSlices;
+            species.petalMesh = old.petalMesh;
+        }
+        else missing.push(species);
+    }
+    if (missing.length > 0) void fetchSpeciesGeometry(missing);
+    return loaded;
+}
+
+/**
+ * Fetches the leaf slices and petal outline for species the page has no geometry for.
+ *
+ * The slice set rather than the single whole-leaf mesh: a long blade is a chain of leaf organs and
+ * each needs its own piece of the outline, or the blade pinches to a point at every joint.
+ */
+async function fetchSpeciesGeometry(species: Species[]): Promise<void> {
+    await Promise.all(species.flatMap(s => [
+        fetch(`${location.protocol}//${BackendURI}/Simulation/mesh/leaf/${s.name}/slices`)
+            .then(r => r.ok ? r.arrayBuffer() : undefined).then(b => b && s.loadLeafSlices(b))
+            .catch(() => { /* the fallback quad is what happens anyway */ }),
+        fetch(`${location.protocol}//${BackendURI}/Simulation/mesh/petal/${s.name}`)
+            .then(r => r.ok ? r.arrayBuffer() : undefined).then(b => b && s.loadPetalGeometry(b))
+            .catch(() => { /* ditto */ }),
+    ]));
+    //The species objects are mutated in place, so nothing re-runs on its own.
+    st.needsRender.value = true;
+}
+
+/**
+ * How many stored runs one listing asks for. The server clamps to 500.
+ *
+ * A page, not the store: the panel says so when it comes back full, because the total it prints is
+ * the number a user weighs before deleting anything and "200 runs, 31 GB" for a store holding 350
+ * and 48 GB sends them looking for a leak that does not exist.
+ */
+export const RUNS_PAGE_LIMIT = 500;
+
+/** One stored run in full, or undefined when the server has never heard of it. */
+async function fetchStoredRun(runId: string): Promise<IStoredRun | undefined> {
     try {
         const res = await fetch(`${location.protocol}//${BackendURI}/simulation/run/${runId}`);
         return res.ok ? await res.json() : undefined;
@@ -520,24 +601,48 @@ export function evictOldestPayloads() {
     const target = budget * 0.75;
     const pointer = st.playPointer.peek();
     const last = st.history.length - 1;
-    let dropped = 0;
 
-    for (let i = 0; i <= last && st.historySize.peek() > target; ++i) {
-        //The newest frame is what the viewport is showing as the run streams; the playhead window
-        //is what a user scrubbing is about to ask for.
-        if (i === last || Math.abs(i - pointer) <= NEAR_PLAYHEAD) continue;
+    //Two passes, because the comfort window is a luxury and the budget is not.
+    //
+    //The first pass spares the newest frame and the frames either side of the playhead: those are
+    //about to be drawn, and re-fetching one mid-playback stalls it. That is worth a few hundred
+    //megabytes when there are a few hundred megabytes to spare.
+    //
+    //When there are not, the second pass takes them too. It used to stop the run instead, on the
+    //reasoning that a handful of frames exceeding the budget leaves nothing to do - but that was
+    //written for a client that was the only copy. With a store every one of those frames is on the
+    //server and comes back in about three milliseconds, so refusing to drop them buys a smoother
+    //scrub at the price of the rest of the simulation. Measured on a mature stand, ten retained
+    //frames are hundreds of megabytes against a budget under two gigabytes: the run stopped at
+    //simulated month 4 of 10 with 16 GB safely on disk and nothing wrong except this rule.
+    const evict = (spareWindow: boolean) => {
+        let dropped = 0;
+        for (let i = 0; i <= last && st.historySize.peek() > target; ++i) {
+            if (spareWindow && (i === last || Math.abs(i - pointer) <= NEAR_PLAYHEAD)) continue;
+            //The frame on screen is the one exception that survives both passes: dropping it would
+            //blank the viewport until a round trip completed, and it is a single frame.
+            if (!spareWindow && i === pointer) continue;
 
-        const e = st.history[i];
-        if (!e || !e.s) continue;
-        st.historySize.value -= historyEntryBytes(e.s);
-        e.s = undefined;
-        ++dropped;
-    }
+            const e = st.history[i];
+            if (!e || !e.s) continue;
+            st.historySize.value -= historyEntryBytes(e.s);
+            e.s = undefined;
+            ++dropped;
+        }
+        return dropped;
+    };
+
+    let dropped = evict(true);
+    //Only when a store can serve them back. Without one a dropped frame is gone, and the old
+    //behaviour - stop the run, keep what was computed - remains the right trade.
+    const recoverable = !!st.runId.peek();
+    if (st.historySize.peek() > budget && recoverable) dropped += evict(false);
 
     if (dropped > 0) st.evictedFrames.value += dropped;
 
-    //Still over after dropping everything droppable - a handful of frames alone exceed the
-    //budget. Stopping loses the rest of the run; not stopping loses the whole tab.
+    //Still over after dropping everything droppable. With a store that means ONE frame - the one
+    //being displayed - exceeds the whole budget, and no amount of eviction will help; without one
+    //it means the frames worth keeping do. Either way the tab cannot hold what is arriving.
     if (st.historySize.peek() > budget) st.stopForMemory();
 }
 
@@ -935,6 +1040,35 @@ class State {
      * id the payload can be fetched back, without one it is gone for good.
      */
     runId = signal('');
+
+    //--- the archive ---------------------------------------------------------------------
+    /** Stored runs as the server last reported them. Empty until something asks for them. */
+    runs = signal<IStoredRun[]>([]);
+    runsLoading = signal(false);
+    /** The last thing that went wrong in the runs panel, for the panel to show. */
+    runsError = signal('');
+    /** A run id while an action on it is in flight, so its row can disable its own buttons. */
+    runsBusy = signal('');
+    /** The stored run currently open for viewing, as opposed to one this tab is computing. */
+    viewingRunId = signal('');
+    /**
+     * The stored run the NEXT run will be recorded as derived from.
+     *
+     * Lineage only. Nothing resumes: there is no checkpoint of live world state anywhere in this
+     * project, so a continued or forked run is computed again from the recorded request. That
+     * reproduces the parent exactly only when the parent was deterministic, which is why the flag
+     * is stored per run and shown in the panel.
+     */
+    lineageParentRunId = signal('');
+    /**
+     * The stored run whose field model the next run should be built from.
+     *
+     * Held separately from the lineage because they come apart: a user can fork a run, upload a
+     * different facade, and still want the lineage recorded. An upload clears this; nothing else
+     * does, so a fork can be re-run repeatedly without the 94 MB model being sent again.
+     */
+    fieldModelRunId = signal('');
+
     /**
      * Run sequentially so the result can be reproduced.
      *
@@ -1000,6 +1134,10 @@ class State {
         Deterministic: this.deterministic.value,
         FieldItemRegexMaterial: this.fieldItemRegexMaterial.value,
         FieldModelPath: this.fieldModelPath.value,
+        //Lineage, and where to get the terrain from when this tab has not uploaded one. Null
+        //rather than "" - the server treats an empty string as a run id and looks it up.
+        ParentRunId: this.lineageParentRunId.value || null,
+        FieldModelRunId: this.fieldModelRunId.value || null,
         //FieldModelData is deliberately NOT sent. `SimulationRequest` has no such member (only
         //`FieldModelKey`, which nothing sets), so System.Text.Json discarded it silently - while
         //every run JSON-stringified, escaped and uploaded the whole facade OBJ again for it.
@@ -1459,7 +1597,11 @@ class State {
                     self.fieldSizeZ.value = data.fieldSizeZ;
                     self.fieldSizeD.value = data.fieldSizeD;
                     self.terrainList = data.terrainList?.map((item, index) => item.hasOwnProperty('points') ? MeshTerrainItem.load(item, index) : BoxTerrainItem.load(item, index)) ?? [];
-                    self.terrainTimestamp.value = data.terrainTimestamp;
+                    //Bumped, not restored. The saved number is a revision marker from another
+                    //session, and a session saved and reloaded in the same tab can carry the value
+                    //the signal already holds - which is no change, so the viewport keeps drawing
+                    //the terrain the file was supposed to replace.
+                    self.bumpTerrain();
                     self.initNumber.value = data.initNumber;
                     self.randomize.value = data.randomize;
                     self.renderMode.value = data.renderMode;
@@ -1487,7 +1629,11 @@ class State {
                     self.downloadRoots.value = data.downloadRoots;
                     self.exactPreview.value = data.exactPreview;
 
-                    self.species.value = data.species.map(s => new Species().load(s));
+                    //Through the same adopter as a stored run, for the same reason: `load()` copies
+                    //settings and no geometry, so a replaced species list draws every leaf and
+                    //petal as the flat fallback quad until something re-fetches the outlines.
+                    self.species.value = adoptSpeciesGeometry(
+                        data.species.map(s => new Species().load(s)), self.species.peek());
                     self.behaviors.value = data.behaviors;
 
                     self.seedsPerField.value = data.seedsPerField;
@@ -1569,6 +1715,10 @@ class State {
     }
 
     uploadFieldModel = async (f: File) => {
+        //An explicit upload is the more recent intent, so it replaces whatever stored run was
+        //going to supply the terrain. Leaving it set would send the server looking for a model
+        //that the user has just decided against.
+        this.fieldModelRunId.value = '';
         this.fieldModelData = await Parse(f);
         // const bytes = new Uint8Array(await f.arrayBuffer());
         // this.fieldModelData = bytes;
@@ -1594,6 +1744,7 @@ class State {
     clearFieldModel = () => {
         this.fieldModelData = undefined;
         this.fieldModelPath.value = "";
+        this.fieldModelRunId.value = '';
     }
 
 
@@ -1713,6 +1864,401 @@ class State {
         return this.seeds.value.reduce((a, c) => a + (c.species.value == species ? 1 : 0), 0)
     }
 
+    //--- the archive of stored runs -------------------------------------------------------
+    //
+    //A run outlives the tab that started it: the server keeps its frames, its request, its soil
+    //and its measurement. What was missing was any way back to one. These five methods are that
+    //way - list them, open one, delete one, and start a new run from one either unchanged
+    //(continue) or as a starting point to edit (fork).
+    //
+    //Neither continue nor fork RESUMES anything, and the wording in the panel says so. Nothing in
+    //this project serializes live world state, so a child run is computed again from its parent's
+    //recorded request. For a deterministic parent that reproduces it exactly and the comparison
+    //means something; for any other it is a second sample of the same scenario.
+
+    refreshRuns = async () => {
+        this.runsLoading.value = true;
+        try {
+            const res = await fetch(`${location.protocol}//${BackendURI}/simulation/runs?limit=${RUNS_PAGE_LIMIT}`);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const listing = await res.json() as IStoredRun[];
+            batch(() => {
+                this.runs.value = listing;
+                this.runsError.value = '';
+            });
+        } catch (err) {
+            this.runsError.value = `Could not list the stored runs: ${err}`;
+            console.warn('Could not list the stored runs:', err);
+        } finally {
+            this.runsLoading.value = false;
+        }
+    }
+
+    /**
+     * Opens a stored run for viewing: its soil, its scenario and its whole timeline.
+     *
+     * The fetches are not interchangeable in order. Seeds are positioned against `terrainList` -
+     * `new Seed` reads the tray it belongs to - so the terrain has to be in place before the
+     * request is applied, and the timeline comes last because showing a frame needs both.
+     *
+     * Everything this tab was holding goes first, deliberately. A stored run is a different
+     * simulation from whatever was on screen, and keeping the old history would leave frames in
+     * the timeline that the new run id cannot serve: re-fetching one returns the same step of a
+     * DIFFERENT simulation, which decodes perfectly and is simply the wrong plants.
+     */
+    loadStoredRun = (runId: string): Promise<boolean> => this.openStoredRun(runId, false);
+
+    /**
+     * The shared body of View and Fork.
+     *
+     * They differ in one thing: View is about the frames and is pointless without them, while a
+     * Fork wants the SCENARIO - which survives even when the frames do not. A run stopped before
+     * its first step has a complete request.json and an empty frames directory, and its settings
+     * are as forkable as any other run's.
+     */
+    private openStoredRun = async (runId: string, allowEmpty: boolean): Promise<boolean> => {
+        if (this.computing.peek()) {
+            this.runsError.value = 'A simulation is running in this tab. Stop it before opening a stored run.';
+            return false;
+        }
+        //One at a time, globally and not per row. Two opens in flight interleave their terrain,
+        //scenario and timeline writes into one tab, and the result is a scene assembled from two
+        //different simulations with nothing to say which parts came from where.
+        if (this.runsBusy.peek()) {
+            this.runsError.value = 'Still opening the previous run.';
+            return false;
+        }
+        this.runsBusy.value = runId;
+        try {
+            const meta = await fetchStoredRun(runId);
+            if (!meta) {
+                this.runsError.value = `Run ${runId} is no longer on the server.`;
+                await this.refreshRuns();
+                return false;
+            }
+            //Checked BEFORE anything is torn down. A run can genuinely hold no frames - one that
+            //was stopped before its first step, which every store accumulates - and finding that
+            //out after clearing the timeline costs the user the scene they were looking at in
+            //exchange for an error message.
+            const hasFrames = meta.storedFrames > 0;
+            if (!hasFrames && !allowEmpty) {
+                this.runsError.value = `Run ${runId} stored no frames; there is nothing to show.`;
+                return false;
+            }
+
+            batch(() => {
+                this.playing.value = PlayState.None;
+                this.playPointer.value = 0;
+                //The scene, not only the timeline. `syncTimelineToIndex` redraws only when the
+                //pointer MOVES, so a run with a single stored frame lands on pointer 0 - where the
+                //pointer already was - and leaves the previous run's plants on screen under this
+                //run's name.
+                this.scene.value = [];
+                this.historySize.value = 0;
+                this.historyCount.value = 0;
+                this.historyLimitHit.value = false;
+                this.evictedFrames.value = 0;
+                this.renderer.value = '';
+                this.simLength.value = 0;
+                this.simStep.value = 0;
+                //A stored run carries no measurement on the wire. Leaving the previous one would
+                //colour these obstacles by numbers belonging to a scene that is no longer shown.
+                this.obstacleLight.value = undefined;
+                this.obstacleLightMeta.value = undefined;
+                this.obstacleLightSelection.value = undefined;
+                this.plants.value = [];
+            });
+            this.history.length = 0;
+            clearSceneCache();
+            resetCompression();
+
+            //Whatever fork was being set up, this run supersedes it. Carrying the old values over
+            //would file the next simulation as a child of a run nobody is looking at any more, and
+            //build it on a facade belonging to a third one. Fork and Continue set them again
+            //immediately afterwards, for the run the user actually picked.
+            batch(() => {
+                this.lineageParentRunId.value = '';
+                this.fieldModelRunId.value = '';
+            });
+
+            //The soil as the socket delivered it when the model was uploaded. A run stored before
+            //terrains were kept simply has none, and draws its plants over the default field -
+            //which is why the panel says whether a run has one before offering to open it.
+            await this.restoreStoredTerrain(runId, meta.hasTerrain, meta.fieldModelName);
+            await this.restoreStoredScenario(runId);
+
+            this.runsError.value = '';
+            //A run with no frames leaves the tab pointed at nothing. Deliberate: `runId` is what
+            //makes dropping a payload from memory safe, and an id that serves no frames turns that
+            //promise into a lie the moment a new run fills the history.
+            if (!hasFrames) {
+                console.log(`Loaded the scenario of run ${runId}; it stored no frames.`);
+                return true;
+            }
+
+            batch(() => {
+                this.runId.value = runId;
+                this.viewingRunId.value = runId;
+                //The clock multiplies a frame's step by this; without it the run is drawn on the
+                //wrong timeline and nothing else on the page could tell.
+                this.simHoursPerTick = meta.hoursPerTick;
+            });
+            refreshHistoryBudget();
+            //Reattaching this tab to a run it did not start is what makes the id survive a reload.
+            try { sessionStorage.setItem('agro.runId', runId); } catch { /* private mode */ }
+
+            const frames = await syncTimelineToIndex(runId, true);
+            if (frames === 0) {
+                this.runsError.value = `Run ${runId} has no stored frames to show.`;
+                return false;
+            }
+            console.log(`Opened stored run ${runId}: ${frames} frames, ${meta.plants} plants.`);
+            return true;
+        } catch (err) {
+            this.runsError.value = `Could not open run ${runId}: ${err}`;
+            console.warn(`Could not open run ${runId}:`, err);
+            return false;
+        } finally {
+            this.runsBusy.value = '';
+        }
+    }
+
+    /**
+     * Rebuilds the trays and the imported obstacles of a stored run.
+     *
+     * The same bytes and the same decoder as the socket's `terrain` message - this is that message
+     * fetched over REST instead of pushed. Mesh obstacles are replaced rather than appended, for
+     * the same reason the socket handler replaces them: they belong to the model, not to the user.
+     */
+    restoreStoredTerrain = async (runId: string, available: boolean, modelName?: string | null) => {
+        if (available) {
+            try {
+                const res = await fetch(`${location.protocol}//${BackendURI}/simulation/run/${runId}/terrain`);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const reader = new BinaryReader(new Uint8Array(await res.arrayBuffer()));
+                const result = reader.readTerrain();
+                this.terrainList = result.terrains;
+                this.obstacles.value = [...this.obstacles.peek().filter(x => x.type.value !== 'mesh'), ...result.obstacles];
+                this.bumpTerrain();
+                return;
+            } catch (err) {
+                console.warn(`Could not read the terrain of run ${runId}:`, err);
+            }
+        }
+
+        //Nothing stored, or it could not be read. Keep what this tab is already showing when it
+        //came from the SAME model file the run names - a user who has just uploaded that facade,
+        //or who opened a sibling run built on it, is looking at the right trays already, and
+        //throwing them away to show nothing is the worse of the two wrong answers. `fieldModelPath`
+        //still holds the previous scenario's model here; the new one is applied afterwards.
+        const loaded = this.fieldModelPath.peek();
+        if (modelName && loaded && modelName === loaded && this.terrainList.length > 0) {
+            console.log(`Run ${runId} has no stored terrain; keeping the loaded '${loaded}', which is the model it names.`);
+            return;
+        }
+
+        //Otherwise clear, rather than draw this run's plants inside somebody else's trays.
+        this.terrainList = [];
+        this.obstacles.value = this.obstacles.peek().filter(x => x.type.value !== 'mesh');
+        this.bumpTerrain();
+    }
+
+    /**
+     * Marks the terrain dirty for the viewport.
+     *
+     * `terrainList` is a plain array, so nothing reacts to it: `terrainTimestamp` is the only thing
+     * the renderer subscribes to. A counter rather than `Date.now()`, which it used to be - two
+     * terrain loads inside one millisecond wrote the same value, the signal saw no change, and the
+     * trays sat in appstate while the screen kept the previous scene.
+     */
+    bumpTerrain() {
+        this.terrainTimestamp.value = this.terrainTimestamp.peek() + 1;
+    }
+
+    /**
+     * Puts a stored run's scenario back into the editor.
+     *
+     * The stored request is the SERVER's shape, not the session file's: PascalCase, angles in
+     * radians, and short keys inside `Plants` and `Obstacles` (`S`/`P`/`F`, `T`/`H`/`D`/`O`/`L`).
+     * That is what makes this its own function rather than a call to `load()` - the two formats
+     * describe the same scenario and share not one key.
+     */
+    restoreStoredScenario = async (runId: string) => {
+        //Ordered against the startup fetch rather than racing it - see `speciesReady`.
+        await speciesReady;
+        const res = await fetch(`${location.protocol}//${BackendURI}/simulation/run/${runId}/request`);
+        if (!res.ok) throw new Error(`the stored request is missing (HTTP ${res.status})`);
+        const request = await res.json();
+
+        //Replaced wholesale rather than removed one at a time. `removeSeedAt` copies the whole
+        //array and writes the signal for EACH removal, so clearing a 4,134-plant stand that way is
+        //four thousand array copies and four thousand re-renders before the first new seed exists -
+        //on precisely the runs this panel is for. The assignments below replace both lists anyway.
+        const meshObstacles = this.obstacles.peek().filter(x => x.type.peek() === 'mesh');
+
+        batch(() => {
+            this.hoursPerTick.value = request.HoursPerTick ?? 1;
+            this.totalHours.value = request.TotalHours ?? 744;
+            this.fieldResolution.value = request.FieldResolution ?? 0.5;
+            if (request.FieldSize) {
+                this.fieldSizeX.value = request.FieldSize.X;
+                this.fieldSizeD.value = request.FieldSize.D;
+                this.fieldSizeZ.value = request.FieldSize.Z;
+            }
+            //`randomize` off, because the stored seed is the point: a run reopened to be forked
+            //should start from the number that produced it, not from a fresh random one.
+            this.initNumber.value = Number(request.Seed ?? 42);
+            this.randomize.value = false;
+            //A CALENDAR DAY, not an instant. The request stores a C# DateTime, so this arrives as
+            //"2026-02-01T00:00:00", while everything downstream treats initialDate as YYYY-MM-DD:
+            //`<input type="date">` blanks anything else, `localMidnightToUtc` does
+            //`split('-').map(Number)` and gets NaN for the day, and `new Date(`${date}T11:00:00Z`)`
+            //becomes an Invalid Date - which propagates as a NaN sun altitude that never trips the
+            //`altitude <= 0` night check, so the shadow map is pointed in a direction made of NaN.
+            this.initialDate.value = request.InitialDate
+                ? String(request.InitialDate).slice(0, 10) : DEFAULT_INITIAL_DATE;
+            this.renderMode.value = request.RenderMode ?? 0;
+            if (request.SamplesPerPixel) this.samplesPerPixel.value = request.SamplesPerPixel;
+            this.deterministic.value = request.Deterministic ?? false;
+            this.exactPreview.value = request.ExactPreview ?? false;
+            this.downloadRoots.value = request.DownloadRoots ?? false;
+
+            this.leafAreaIndexObstacles.value = request.LeafAreaIndexObstacles ?? '';
+            this.leafAreaIndexSensors.value = request.LeafAreaIndexSensors ?? 32768;
+            this.leafAreaIndexDepth.value = request.LeafAreaIndexDepth ?? 3;
+            this.leafAreaIndexBandHeight.value = request.LeafAreaIndexBandHeight ?? 0.5;
+
+            this.fieldModelPath.value = request.FieldModelPath ?? '';
+            this.fieldItemRegex.value = request.FieldItemRegex ?? 'erde';
+            this.fieldItemRegexMaterial.value = request.FieldItemRegexMaterial ?? false;
+            //The OBJ itself is on the SERVER, not here. Nothing in this tab can re-upload it, and
+            //nothing needs to: a run started from here names the stored run instead.
+            this.fieldModelData = undefined;
+
+            if (Array.isArray(request.Species) && request.Species.length > 0)
+                this.species.value = adoptSpeciesGeometry(
+                    request.Species.map((x: any) => new Species().load(camelizeTopLevel(x))),
+                    this.species.peek());
+
+            //Unconditional, so a run with no seeds clears the previous scenario's rather than
+            //inheriting them - the panel would then show plants this run never had.
+            this.seeds.value = Array.isArray(request.Plants)
+                ? request.Plants.map((p: any) =>
+                    new Seed(p.S ?? '', p.P?.X ?? 0, p.P?.Y ?? 0, p.P?.Z ?? 0, p.F ?? 0, false))
+                : [];
+
+            //Only the primitives are rebuilt here. An imported model's obstacles travel as ONE
+            //'mesh' placeholder in the request and as real geometry in the terrain, which has
+            //already been applied - rebuilding the placeholder would add an empty mesh on top of
+            //the real one.
+            this.obstacles.value = [
+                ...meshObstacles,
+                ...(Array.isArray(request.Obstacles) ? request.Obstacles : [])
+                    .filter((o: any) => o.T === 'wall' || o.T === 'umbrella')
+                    .map((o: any) => new Obstacle(o.T, o.P?.X ?? 0, o.P?.Y ?? 0, o.P?.Z ?? 0,
+                        0, o.O ?? 0, (o.T === 'umbrella' ? o.R : o.L) ?? 0, o.H ?? 0, o.D ?? 0,
+                        new Float32Array(0), [])),
+            ];
+        });
+        this.needsRender.value = true;
+    }
+
+    /**
+     * Deletes a stored run, after asking.
+     *
+     * The only way a user gets bytes back on their own terms - eviction is oldest-first and knows
+     * nothing about which run mattered. Irreversible and often tens of gigabytes, hence the
+     * confirmation, and hence quoting the size in it.
+     */
+    deleteStoredRun = async (run: IStoredRun): Promise<boolean> => {
+        if (this.runsBusy.peek()) {
+            this.runsError.value = 'Another run is being opened; try again in a moment.';
+            return false;
+        }
+        this.runsBusy.value = run.id;
+        try {
+            const res = await fetch(`${location.protocol}//${BackendURI}/simulation/run/${run.id}`, { method: 'DELETE' });
+            const body = await res.json().catch(() => ({ deleted: res.ok, reason: `HTTP ${res.status}` }));
+            if (!body.deleted) {
+                this.runsError.value = body.reason || `Could not delete run ${run.id}.`;
+                return false;
+            }
+            //This tab was showing the run that has just gone. Clearing the id is not enough: the
+            //timeline it left behind is mostly entries whose payloads live on the server, so
+            //scrubbing onto one would fetch a run that no longer exists and quietly draw nothing.
+            //Better an empty viewport than a timeline that lies about what it can show.
+            if (this.runId.peek() === run.id) {
+                this.history.length = 0;
+                clearSceneCache();
+                resetCompression();
+                batch(() => {
+                    this.viewingRunId.value = '';
+                    this.historyCount.value = 0;
+                    this.historySize.value = 0;
+                    this.evictedFrames.value = 0;
+                    this.playPointer.value = 0;
+                    this.playing.value = PlayState.None;
+                    this.scene.value = [];
+                    this.plants.value = [];
+                });
+                //Drops the id, restores the no-server memory budget and forgets the reload hint.
+                forgetRun();
+            }
+            if (this.lineageParentRunId.peek() === run.id) this.lineageParentRunId.value = '';
+            if (this.fieldModelRunId.peek() === run.id) this.fieldModelRunId.value = '';
+            this.runsError.value = '';
+            await this.refreshRuns();
+            return true;
+        } catch (err) {
+            this.runsError.value = `Could not delete run ${run.id}: ${err}`;
+            return false;
+        } finally {
+            this.runsBusy.value = '';
+        }
+    }
+
+    /**
+     * Loads a stored run's scenario into the editor as the starting point for a new one.
+     *
+     * Stops there on purpose: a fork exists to be CHANGED, so it opens the run, records where the
+     * new run will come from, and leaves the user on the simulation tab with everything editable.
+     * Pressing Simulate is the fork.
+     */
+    forkStoredRun = async (run: IStoredRun): Promise<boolean> => {
+        //`allowEmpty`, because a fork wants the settings and a run that stored no frames still has
+        //all of them.
+        if (!await this.openStoredRun(run.id, true)) return false;
+        batch(() => {
+            this.lineageParentRunId.value = run.id;
+            //Only when the model is actually still there. Pointing at a run whose model has been
+            //collected would have the server silently fall back to a flat default field.
+            this.fieldModelRunId.value = run.hasFieldModel ? run.id : '';
+            this.activeTab.value = 'tab-sim';
+        });
+        return true;
+    }
+
+    /**
+     * Starts a new run that carries a stored one further in simulated time.
+     *
+     * It is a RE-RUN, not a resume, and the panel says so: the world is rebuilt from the recorded
+     * request and computed from step zero to the new total. There is no checkpoint of live world
+     * state to start from - the store holds exported geometry, which is a picture of the plants
+     * and not the plants. For a deterministic parent the first stretch reproduces it exactly, so
+     * the extension is genuinely a continuation; otherwise it is a fresh sample of the scenario.
+     */
+    continueStoredRun = async (run: IStoredRun, extraHours: number): Promise<boolean> => {
+        if (!await this.openStoredRun(run.id, true)) return false;
+        batch(() => {
+            this.totalHours.value = Math.max(1, (run.totalHours || this.totalHours.peek()) + Math.max(0, extraHours));
+            this.lineageParentRunId.value = run.id;
+            this.fieldModelRunId.value = run.hasFieldModel ? run.id : '';
+            this.activeTab.value = 'tab-home';
+        });
+        await this.run();
+        return true;
+    }
+
     private saveTextFile(data: string, ext: string) {
         downloadText(data, ext);
     }
@@ -1731,14 +2277,11 @@ export default st;
 void recoverRun();
 //now that the singleton is exported push in the default seed
 st.seeds.value = [ new Seed(st.species.peek()[0].name.peek(), st.fieldSizeX.peek() * 0.5, -0.01, st.fieldSizeZ.peek() * 0.5, 0, false) ];
-fetch(`${location.protocol}//${BackendURI}/Simulation/species`, { headers: { Accept: 'application/json', 'Content-Type': 'application/json' }}).then(response => response.json()).then((list: Species[]) => {
+speciesReady = fetch(`${location.protocol}//${BackendURI}/Simulation/species`, { headers: { Accept: 'application/json', 'Content-Type': 'application/json' }}).then(response => response.json()).then((list: Species[]) => {
     const species = list.map(x => new Species().load(x));
-    Promise.all(species.flatMap(s => [
-        fetch(`${location.protocol}//${BackendURI}/Simulation/mesh/leaf/${s.name}`).then(resp => resp.arrayBuffer()).then(b => s.loadLeafGeometry(b)),
-        //A petal is a lamina in the same wire record as a leaf, so it needs its own
-        //outline or it is drawn with the leaf's.
-        fetch(`${location.protocol}//${BackendURI}/Simulation/mesh/petal/${s.name}`).then(resp => resp.arrayBuffer()).then(b => s.loadPetalGeometry(b)),
-    ]));
+    //One place fetches leaf and petal outlines, so that replacing the species list - which opening
+    //a stored run and loading a session both do - cannot quietly skip it.
+    void fetchSpeciesGeometry(species);
     st.species.value = species;
 });
 

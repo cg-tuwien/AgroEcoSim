@@ -12,7 +12,7 @@ docker stop $(docker ps -qa)
 #docker system prune -f
 
 docker build --rm -f "Dockerfile-render" -t agroecorender "."
-docker build --rm -f "Dockerfile-sim" -t agroecosim "."
+docker build --rm -f "Dockerfile-simaot" -t agroecosim "."
 docker build --rm -f "Dockerfile-web" -t agroecoweb "." --build-arg BACKEND=$1
 docker save agroecorender | gzip > agroecoRender.tar.gz
 docker save agroecosim | gzip > agroecoSim.tar.gz

@@ -39,3 +39,16 @@ data_*/
 /Screens/20*
 /.vs
 /ThreeFrontend/.vs
+.aider*
+
+# Build output published into the project tree, and the run store that lands inside it.
+#
+# publish_and_run.sh publishes into AgroServer/publish/, and the server's run store defaults to
+# AppContext.BaseDirectory/runstore - so a single run puts tens of gigabytes of exported frames
+# under a path git would otherwise offer to commit.
+AgroServer/publish/
+runstore/
+
+# The species codegen builds itself (and Agro) in here, deliberately apart from everyone else's
+# bin/obj - see the GenerateSpeciesTypescript target in AgroServer.csproj.
+SchemeGenerator/artifacts/

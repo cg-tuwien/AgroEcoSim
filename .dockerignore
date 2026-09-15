@@ -40,3 +40,12 @@ data_*/
 
 **/package-lock.json
 **/size-plugin.json
+
+# Build output published into the project tree, the species codegen's private build, and above all
+# the RUN STORE. `COPY . .` copies the build context into the image, and a single stored run is tens
+# of gigabytes of exported frames - publish_and_run.sh now puts the store at the repo root, so
+# without this a `docker build` would try to ship the entire simulation archive into the image.
+/runstore/
+AgroServer/publish/
+SchemeGenerator/artifacts/
+**/runstore/

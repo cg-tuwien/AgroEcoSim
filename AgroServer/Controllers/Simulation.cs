@@ -24,10 +24,7 @@ public class SimulationController// : ControllerBase
         api.MapGet("/run/{runId}", (string runId) =>
         {
             var run = runStore.GetRun(runId);
-            return run == null ? Results.NotFound() : Results.Ok(new RunResponse(
-                run.Id, run.Status, run.CreatedUtc, run.HoursPerTick, run.TotalSteps,
-                run.StoredFrames, run.Analytics, run.Deterministic,
-                run.BytesOnDisk, run.ParentRunId, run.BranchStep));
+            return run == null ? Results.NotFound() : Results.Ok(Describe(runStore, run));
         });
 
         //Eight bytes per stored frame: the simulated timestep, then the stored size. That is the
@@ -67,9 +64,59 @@ public class SimulationController// : ControllerBase
             return Results.Bytes(gzipped, "application/json");
         });
 
-        api.MapGet("/runs", (int? limit) => Results.Ok(runStore.ListRuns(Math.Clamp(limit ?? 25, 1, 200))
-            .Select(r => new RunSummaryResponse(r.Id, r.Status, r.CreatedUtc,
-                                               r.StoredFrames, r.BytesOnDisk)).ToArray()));
+        //The complete record per run, not a summary. What the panel has to show - length, plants,
+        //trays, obstacles, size, lineage, and whether the run can be re-run or drawn - is a few
+        //hundred bytes; fetching each run separately to find it out would be a request per row.
+        api.MapGet("/runs", (int? limit) => Results.Ok(runStore.ListRuns(Math.Clamp(limit ?? 50, 1, 500))
+            .Select(r => Describe(runStore, r)).ToArray()));
+
+        //The request a run was started from, so the client can fork or continue it.
+        //
+        //Served as stored rather than re-serialised: it is what the run actually ran with, down to
+        //the explicit nulls, and re-encoding it through a second serializer is one more place for
+        //the two shapes to drift apart.
+        api.MapGet("/run/{runId}/request", (string runId) =>
+            runStore.TryReadRequest(runId, out var bytes)
+                ? Results.Bytes(bytes, "application/json")
+                : Results.NotFound());
+
+        //The soil as the socket delivers it at upload time, so a stored run can be DRAWN and not
+        //just replayed. Without it a past run opens as plants floating in nothing: trays and
+        //facade never travel in a frame.
+        //
+        //Rebuilt from the stored model when the cached copy is absent, which is every run stored
+        //before terrains were kept. The model outlives the cache - it is content-addressed and
+        //shared - so a run from before this existed is still drawable as long as its OBJ was
+        //uploaded once since. The rebuild is seconds and a few hundred megabytes, so the result is
+        //written back: the cost is paid by the first person to open that run and by nobody after.
+        api.MapGet("/run/{runId}/terrain", (HttpContext http, string runId) =>
+        {
+            if (!runStore.TryReadTerrain(runId, out var gzipped)
+                && !TryRebuildTerrain(runStore, terrainBuffer, runId, out gzipped))
+                return Results.NotFound();
+            http.Response.Headers.ContentEncoding = "gzip";
+            //NOT immutable: a rebuilt terrain is served before it is cached, and a run whose model
+            //arrives later would otherwise be pinned as "no trays" in the browser for a year.
+            http.Response.Headers.CacheControl = "public, max-age=300";
+            return Results.Bytes(gzipped, "application/octet-stream");
+        });
+
+        //Deleting is the only way a user can get bytes back on their own terms - eviction is
+        //oldest-first and cares nothing for which run mattered. A refusal answers 409 WITH its
+        //reason: "this run is still computing" is something the user can act on, and a bare status
+        //code reads as a bug.
+        api.MapDelete("/run/{runId}", (string runId) =>
+        {
+            var outcome = runStore.DeleteRun(runId, out var reason);
+            return outcome switch
+            {
+                DeleteOutcome.Deleted => Results.Ok(new RunDeleteResponse(true, "")),
+                DeleteOutcome.NoSuchRun => Results.Json(new RunDeleteResponse(false, reason),
+                                                        statusCode: StatusCodes.Status404NotFound),
+                _ => Results.Json(new RunDeleteResponse(false, reason),
+                                  statusCode: StatusCodes.Status409Conflict),
+            };
+        });
 
         api.MapPost("/", (SimulationRequest request) =>
         {
@@ -129,7 +176,13 @@ public class SimulationController// : ControllerBase
 
             using var reader = new StreamReader(context.Request.Body);
             var data = await reader.ReadToEndAsync();
-            return Results.Text(terrainBuffer.Add(data, CoordinateSystem.RH_rightPX_upPZ));
+            //Filed here, at the upload, because this is the last moment the OBJ source exists. The
+            //parse is not reversible and the buffer entry is single-use and five minutes old at
+            //most, so a run that wants to be continued or forked later has to capture its model
+            //now or never. Content-addressed, so uploading the same facade for the tenth run costs
+            //nothing, and collected again when no run refers to it.
+            var modelHash = runStore.StoreFieldModel(data);
+            return Results.Text(terrainBuffer.Add(data, CoordinateSystem.RH_rightPX_upPZ, modelHash));
         });
 
         //probably not needed and not used
@@ -147,6 +200,94 @@ public class SimulationController// : ControllerBase
         //outline of its own the viewport drew it with the species' LEAF mesh - a maple
         //blade for a three-millimetre Heuchera petal.
         api.MapGet("/mesh/petal/{species}", (string species) => LaminaMesh(species, petal: true));
+
+        //A long blade is simulated as a chain of leaf organs. Drawing each of them with the whole
+        //leaf outline pinches the blade to a point at every joint, so each segment gets the slice
+        //of the outline that belongs to its own stretch. An unsegmented species returns one slice,
+        //identical to what /mesh/leaf serves.
+        api.MapGet("/mesh/leaf/{species}/slices", (string species) => LaminaSlices(species));
+    }
+
+    /// <summary>
+    /// One stored run on the wire.
+    ///
+    /// The three "Has" flags are what let the panel offer only the actions that will work: a run
+    /// whose field model has been collected cannot be continued without the user uploading the OBJ
+    /// again, and one stored before terrains were kept cannot be drawn with its trays. Offering
+    /// those buttons anyway and failing afterwards is worse than not offering them.
+    /// </summary>
+    static RunResponse Describe(IRunStore store, RunRecord run) => new(
+        run.Id, run.Status, run.CreatedUtc, run.UpdatedUtc, run.HoursPerTick, run.TotalSteps,
+        run.StoredFrames, run.LastStep, run.TotalHours, run.InitialDay, run.Seed, run.RenderMode,
+        run.Plants, run.Trays, run.Obstacles, run.Species, run.Analytics, run.Deterministic,
+        run.BytesOnDisk, run.AuxBytesOnDisk, run.FieldModelName,
+        //"Can be drawn with its trays", which is what the panel decides with - a cached terrain, or
+        //a stored model the endpoint can rebuild one from.
+        store.HasFieldModel(run.FieldModelHash),
+        store.HasTerrain(run.Id) || store.HasFieldModel(run.FieldModelHash),
+        store.HasObstacleLight(run.Id), run.ParentRunId, run.BranchStep);
+
+    /// <summary>
+    /// Builds a stored run's soil from the field model filed with it, and keeps the result.
+    ///
+    /// The one path by which a run stored before terrains were cached becomes viewable again. It
+    /// needs the same coordinate system and the same build parameters the run used - the store
+    /// records them beside the run precisely because the request does not carry them.
+    /// </summary>
+    static bool TryRebuildTerrain(IRunStore store, ITerrainBuffer buffer, string runId, out byte[] gzipped)
+    {
+        gzipped = [];
+        var run = store.GetRun(runId);
+        if (run?.FieldModelHash == null) return false;
+        if (!store.TryReadFieldModel(run.FieldModelHash, out var objSource)) return false;
+        try
+        {
+            var key = buffer.Add(objSource, CoordinateSystem.RH_rightPX_upPZ, run.FieldModelHash);
+            if (!buffer.TryGetV2(key, out var objData)) return false;
+
+            var soil = new SoilFormationsList(null, objData, 1f, run.FieldItemRegex,
+                                              run.FieldItemRegexMaterial, run.FieldResolution, false);
+            store.WriteTerrain(runId, soil.Serialize());
+            Console.WriteLine($"Rebuilt and cached the terrain of run {runId} from stored field model {run.FieldModelHash[..12]}.");
+            return store.TryReadTerrain(runId, out gzipped);
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine($"Could not rebuild the terrain of run {runId}: {e.Message}");
+            return false;
+        }
+    }
+
+    static IResult LaminaSlices(string species)
+    {
+        var data = SpeciesSettings.Predefined.FirstOrDefault(x => x.Name == species);
+        if (data?.LeafMorphology == null) return Results.NotFound();
+
+        var whole = BuildLamina(data.LeafMorphology);
+        var count = Math.Max(1, data.LeafSegmentCount);
+
+        using var binaryStream = new MemoryStream();
+        using var writer = new BinaryWriter(binaryStream);
+        writer.Write((byte)count);
+        for (int i = 0; i < count; ++i)
+            LaminaMeshSlicer.Slice(whole, i, count).WriteMesh(writer);
+        return Results.Bytes(binaryStream.ToArray());
+    }
+
+    static MeshData BuildLamina(LeafMorphology morphology)
+    {
+        var lod = RenderLeafLod.CoarseOutline;
+        if (morphology.TryGetDefaultLeafMesh(lod, out var mesh))
+            return mesh;
+
+        var generic = new LeafInstance()
+        {
+            Morphology = morphology,
+            Physiology = new()
+        };
+        generic.InitializeLeafletsIfNeeded();
+
+        return LeafMeshBuilder.Build(generic, lod);
     }
 
     static IResult LaminaMesh(string species, bool petal)
@@ -157,18 +298,7 @@ public class SimulationController// : ControllerBase
         var morphology = petal ? data.FlowerSettings.PetalMorphology : data.LeafMorphology;
         if (morphology == null) return Results.NotFound();
 
-        var lod = RenderLeafLod.CoarseOutline;
-        if (!morphology.TryGetDefaultLeafMesh(lod, out var mesh))
-        {
-            var generic = new LeafInstance()
-            {
-                Morphology = morphology,
-                Physiology = new()
-            };
-            generic.InitializeLeafletsIfNeeded();
-
-            mesh = LeafMeshBuilder.Build(generic, lod);
-        }
+        var mesh = BuildLamina(morphology);
 
         using var binaryStream = new MemoryStream();
         using var writer = new BinaryWriter(binaryStream);

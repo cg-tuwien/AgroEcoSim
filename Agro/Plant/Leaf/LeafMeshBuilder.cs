@@ -493,7 +493,10 @@ public static class LeafMeshBuilder
     private static MeshData BuildCoarseOutline(LeafInstance leaf)
     {
         if (!leaf.IsCompound)
-            return BuildSimpleLeafMesh(leaf.Morphology, 12);
+            //A strap needs more outline samples than a blob, and a segmented blade divides
+            //whatever resolution it is given among its segments.
+            return BuildSimpleLeafMesh(leaf.Morphology,
+                Math.Clamp(leaf.Morphology.Shape.RecommendedSegments / 2, 12, 128));
 
         // Compound leaf coarse envelope:
         // create a silhouette around all leaflet origins and extents,
@@ -537,12 +540,27 @@ public static class LeafMeshBuilder
             var t = i / (float)segments;
             var p = shape.OutlinePointInvariant(t);
 
-            // x across width, z along length
-            var zNorm = p.Y / Math.Max(1e-6f, 0.5f);
-            //Relief is in metres, as in the authored per-species meshes.
-            var y = dims.Curvature01 * 0.004f * (1f - zNorm * zNorm);
+            //ILeafShape returns (across, along); a lamina template is authored the other way
+            //round - X along the blade with -1 at the junction and +1 at the tip, Y across it,
+            //Z relief in metres - which is what ExportV7's three columns scale. Emitting the
+            //shape's own order put the length in the width's column. It stayed invisible only
+            //because the one species without an authored mesh used an ellipse, whose outline is
+            //the same set of points under the swap.
+            //Relief peaks mid blade and vanishes at both ends, in metres as in the authored meshes.
+            //
+            //Scaled by the blade's WIDTH, not by a fixed four millimetres. The fixed figure was
+            //written for a broad leaf and is ruinous on a strap: a 6 mm Carex blade was given 2.4 mm
+            //of camber, and because a segmented blade applies its template's relief along its OWN
+            //normal, two segments meeting at a fold separated by 2*relief*sin(fold/2) - measured at
+            //0.16 mm mean and 1.99 mm worst across a blade only 6 mm wide, which is the "angular
+            //gap" at the internodes. The in-plane geometry was never the problem; this was.
+            //
+            //A real keel is a CROSS-blade fold and this topology cannot express one - the template
+            //is a fan with a single centre vertex, not a midrib - so what is left here is a gentle
+            //lengthwise camber at a magnitude proportional to the blade it belongs to.
+            var relief = dims.Curvature01 * dims.MaxWidthM * 0.15f * (1f - p.Y * p.Y);
 
-            mesh.Positions.Add(new Vector3(p.X, p.Y, y));
+            mesh.Positions.Add(new Vector3(p.Y, p.X, relief));
             // mesh.Normals.Add(Vector3.UnitY);
             // mesh.UV0.Add(new Vector2(
             //     0.5f + p.X / Math.Max(1e-6f, dims.MaxWidthM),

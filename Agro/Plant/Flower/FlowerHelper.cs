@@ -1,4 +1,4 @@
-﻿using AgentsSystem;
+using AgentsSystem;
 using Microsoft.VisualBasic;
 using System;
 using System.Collections.Generic;
@@ -41,6 +41,10 @@ namespace Agro
             }
             public void grow(ref AboveGroundAgent agent, int agentID, PlantSubFormation<AboveGroundAgent> formation)
             {
+                //A flower on a shoot that is stuck in a wall does not keep growing either.
+                if (agent.GrowthBlocked)
+                    return;
+
                 var currentSize = new Vector2(agent.Length, agent.Radius);
 
                 switch (agent.Organ)

@@ -603,11 +603,20 @@ public class SoilFormationRegularVoxels : IGrid3D, ISoilFormation
 		using var stream = new MemoryStream();
 		using var writer = new BinaryWriter(stream);
 
-		writer.Write((byte)0); //version
+		writer.Write((byte)1); //version 1: fields, then an obstacle section
 		var count = FieldsCount;
 		writer.Write(count);
 		for (int i = 0; i < count; ++i)
 			Write(writer, i);
+
+		//The obstacle section, empty. It is not optional: the single reader of this format
+		//(BinaryReader.readTerrain) always reads an obstacle count after the fields, so a stream
+		//that stops here throws RangeError past its own last byte. Only SoilFormationsList ever
+		//reached that reader before - a box field was never on this wire - and storing runs put it
+		//there. Version 1 because the shape is now the one version 1 describes: an obstacle count
+		//followed by a group count, both zero when there is nothing to send.
+		writer.Write(0);
+		writer.Write(0); //no groups
 
 		return stream.ToArray();
     }

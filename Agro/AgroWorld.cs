@@ -71,6 +71,9 @@ public class AgroWorld : SimulationWorld
 
 	public readonly IrradianceClient Irradiance;
 
+	/// <summary>The collision phase: hard constraints against obstacles and soil, then foliage.</summary>
+	public readonly Collisions.CollisionWorld Collisions = new();
+
 	//clouds_coverage, precipitation
 	WeatherStats[] Weather;
 	BitArray Daylight;
@@ -86,6 +89,11 @@ public class AgroWorld : SimulationWorld
 	public DateTime InitialTime = new(2026, 2, 1, 0, 0, 0, DateTimeKind.Unspecified);
 
 	public readonly bool VirtualRoots = false;
+
+	/// <summary>Foliage-against-foliage collisions, within a plant and between neighbours. Obstacle
+	/// and soil collisions are hard constraints and are not governed by this. Per world rather than
+	/// a process-wide static, so two simulations running in one server cannot change each other's.</summary>
+	public readonly bool SoftCollisions = true;
 
 	public AgroWorld(SimulationRequest? settings = null) : base()
 	{
@@ -122,6 +130,9 @@ public class AgroWorld : SimulationWorld
 
 			if (settings?.Seed.HasValue ?? false)
 				InitRNG(settings.Seed.Value);
+
+			if (settings?.SoftCollisions.HasValue ?? false)
+				SoftCollisions = settings.SoftCollisions.Value;
 
 			if (settings?.InitialDate.HasValue ?? false)
 				InitialTime = new(settings.InitialDate.Value.Year, settings.InitialDate.Value.Month, settings.InitialDate.Value.Day, 0, 0, 0, DateTimeKind.Unspecified);
@@ -504,6 +515,16 @@ public class AgroWorld : SimulationWorld
 	public static float Cal2J(float calories) => calories * 4.186f;
 
 	public byte[] SerializeTerrain() => Soil.Serialize();
+
+	/// <summary>
+	/// How many soil fields this world has: one for a plain box field, one per tray for an
+	/// imported facade.
+	///
+	/// Exposed because a stored run has to be describable from outside - "1,600 trays" is the
+	/// first thing that distinguishes one archived facade run from another, and the soil itself
+	/// is internal.
+	/// </summary>
+	public int SoilFieldsCount => Soil?.FieldsCount ?? 0;
 
 	/// <summary>
 	/// Per-obstacle leaf area index and solar load, one sample per simulation step, for the

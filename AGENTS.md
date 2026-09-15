@@ -1432,13 +1432,20 @@ limit, and a LiteDB file that size is outside where it behaves well. Keeping fra
 files also sidesteps LiteDB's reflection-based mapper being at odds with `CreateSlimBuilder` plus
 the trim analyzer.
 
-    <root>/index.litedb              run metadata only
-    <root>/runs/<id>/request.json    so a resumed run can rebuild itself
-    <root>/runs/<id>/index.bin       8 bytes per frame, APPENDED
-    <root>/runs/<id>/frames/<step>.z
+    <root>/index.litedb                 run metadata only
+    <root>/models/<sha256>.obj.gz       field model sources, SHARED between runs
+    <root>/runs/<id>/request.json       so a resumed run can rebuild itself
+    <root>/runs/<id>/index.bin          8 bytes per frame, APPENDED
+    <root>/runs/<id>/terrain.bin.gz     the serialized soil, so a stored run can be VIEWED
+    <root>/runs/<id>/frames/<step>.g
 
 The index is an appended file rather than a LiteDB document because at a frame per timestep a
 growing document would be rewritten thousands of times to add eight bytes.
+
+The frame extension is **`.g`**. Runs written before that read back unchanged - the reader falls
+back to `.z`, which is the same zlib stream under the older name. Nothing renames them: a rename
+pass over the 42,000 frame files of an existing store is a large destructive startup operation in
+exchange for nothing the fallback does not already give.
 
 **The stored run is complete where the streamed one has holes.** The export used to happen only
 on the steps a `Preview` request happened to land on, so what the client held depended on how
@@ -1451,6 +1458,119 @@ spends anything on it - measured: 443 bytes stored, 716 received, decoded to a v
 app's own reader. `Cache-Control: immutable` lets the browser cache hold the working set, since a
 frame never changes once written. REST rather than a hub method, because the SignalR JSON
 protocol base64-encodes every `byte[]` - a third more bytes for nothing.
+
+### Making a stored run re-runnable, and viewable
+
+`request.json` alone is **not** enough to rebuild a run that used an imported facade, and the two
+missing pieces are not recoverable after the fact:
+
+- **The model.** It reaches the simulation through `POST /terrain` and a per-connection cache that
+  is single-use and expires in five minutes, and `FieldModelKey` has never been set by anything -
+  it is `null` in every request ever stored. So the OBJ source is filed at UPLOAD time, which is
+  the last moment it exists, content-addressed under `<root>/models` and shared between the runs
+  that use it. A run then names its model by hash, and continuing it months later re-uploads
+  nothing. Unreferenced models are collected, but only once they are older than `ModelGrace` - a
+  model is stored before any run refers to it, so collecting immediately would delete the one
+  about to be used, every time.
+- **The parameters the trays were built with.** The resolution used is the one that was on screen
+  when the OBJ was uploaded, which is not necessarily the one in the request by the time the run
+  started. Rebuilding with the wrong one gives a different set of trays, so the upload-time values
+  travel with the run.
+
+All three soil implementations now write the SAME stream - version 1, the fields, then an obstacle
+section that is a pair of zeros when there is nothing to send. They did not before:
+`SoilFormationsList` wrote version 1 with the section while the box and tetrahedral fields wrote
+version 0 and stopped after the fields. That was invisible for as long as the only terrain on this
+wire came from an imported model, and storing every run's terrain put a box field there - where
+`readTerrain`, which always reads an obstacle count next, ran off the end of a 54-byte buffer with
+a RangeError. `ThreeFrontend/tests/terrainFormat.test.ts` pins both directions, because a truncated
+stream that half-decodes looks exactly like a correct one.
+
+A terrain is stored **only for an imported field**. A plain box field is already drawn by the
+viewport from the configured field size when it has no terrain of its own - that is what a live run
+shows - so storing one would hand the same box back through a second path whose position and extent
+are derived differently, and a reopened run would sit in a subtly different box from the one it ran
+in. It is not data; it is a shape the client can already draw from numbers it has.
+
+When the cached terrain is absent but the model is not, `GET /run/{id}/terrain` **rebuilds it and
+writes it back**, so a run stored before terrains were cached is still viewable and the rebuild is
+paid for once. `hasTerrain` on the wire therefore means "can be drawn with its trays" - a cached
+terrain, or a model to rebuild one from - because that is the question the panel is asking.
+
+`terrain.bin.gz` is separate from the model and serves the other half: it is the soil exactly as
+the socket sends it to a viewport. Rebuilding it from the OBJ costs seconds and a few hundred
+megabytes; serving the bytes costs neither, and **viewing** a past run is the common case. Without
+it a stored run opens as plants floating in nothing, because trays and facade never travel in a
+frame.
+
+**Counts are taken off the built world, not off the request.** For an imported facade the two are
+different measurements: the request carries a single `mesh` obstacle standing for the whole model -
+`SoilFormationsList` merges them before they reach the browser - while the world holds one per
+named OBJ group. Trays are not in the request at all. Runs stored before these were recorded report
+**0, meaning "not measured"**, and the panel prints `?` rather than a zero that would read as a
+count. What CAN be recovered from an old run is backfilled once, by `RunStore.Reconcile`: the
+request gives plants, species, seed and dates, the directory gives the sizes, and the first frame's
+six-byte header gives the export flags.
+
+### The client evicts the comfort window before it stops a run
+
+Eviction spares the newest frame and four either side of the playhead - they are about to be drawn,
+and re-fetching one mid-playback stalls it. When sparing them means the budget cannot be met, they
+go too, and only the frame actually on screen survives. That rule used to be absolute and it stopped
+a ten month run at simulated month 4: a mature stand's frames are hundreds of megabytes, so the ten
+protected frames alone exceeded a budget under two gigabytes while every frame sat safely on disk.
+The window is a comfort, not a correctness requirement - with a store each frame is about three
+milliseconds away. Without a store the old trade still holds and the run stops, because a dropped
+frame is then gone.
+
+Note which limit is which: "full - run stopped" is the BROWSER's heap budget
+(`jsHeapSizeLimit * 0.15` with a store), not the disk. `AGRO_RunStoreRetentionBytes` is the disk
+budget and it never stops a run - it evicts old ones.
+
+### The store maintains itself on a timer
+
+Eviction used to happen only when a simulation STARTED, and model collection only from eviction or
+an explicit delete. On a host that uploads and browses but does not simulate - most of a working day
+- nothing swept at all: a store already over budget stayed over it, and uploaded models accumulated
+with nothing to collect them, at up to 256 MB per upload and *before* any run refers to them. A
+one-shot timer re-armed at the end of each pass (`AGRO_RunStoreSweepMinutes`, default 30, 0 to
+disable) collects abandoned partials, collects dead models, then evicts.
+
+**Field models have their own budget** (`AGRO_RunStoreModelBytes`, default 8 GiB) rather than a share
+of `RetentionBytes`. The two cannot be spent against each other: evicting a run does not release its
+model - it outlives the run and may be shared - so a single budget has the eviction loop deleting
+every completed run in the store chasing a total that only model collection can bring down. A
+*referenced* model is never deleted at any size, for the same reason a branched-from run is pinned:
+it is the only copy of the OBJ that makes its run re-runnable and drawable. Over cap with everything
+referenced, the store says so and deletes nothing.
+
+Collection is two-stage: unreferenced and older than `ModelGrace`, then - only over the cap -
+unreferenced regardless of age, oldest-touched first. Both stages re-check the timestamp **under the
+metadata lock immediately before deleting**, because between building the reference set and reaching
+the file, an upload of the same OBJ can have claimed it: `StoreFieldModel` returns the hash of an
+existing file without rewriting it, and the touch is the only evidence. A 15 minute floor
+(`ModelMinGrace`) is never crossed whatever the budget says - it has to exceed the upload buffer's
+own five-minute lifetime, since a model whose buffer entry is still live is about to be used.
+
+A store whose `index.litedb` was lost, replaced, or assembled by copying run directories between
+machines is adopted at startup rather than ignored - the frames are the run, and the database is a
+description of them. Which is why the model hash is written to `runs/<id>/terrain.json` as well as
+the database: an adopted run that cannot say which model it used contributes nothing to the
+reference set, and the next eviction would delete every model in the store. `CollectModels` refuses
+to run at all while any run names a model without naming which - an incomplete reference set does
+not produce a partial clean-up, it deletes precisely the models that are still in use.
+
+### Continue and fork are re-runs, not resumes
+
+Nothing in this project serializes live world state. The store holds exported geometry, which is a
+picture of the plants and not the plants, so a child run is **computed again from its parent's
+recorded request**, from step zero. For a deterministic parent the first stretch reproduces it
+exactly and the comparison means something; for any other it is a second sample of the same
+scenario, which is why `Deterministic` is recorded per run and shown in the panel. `ParentRunId`
+is lineage only and changes nothing about how the simulation runs.
+
+The two differ only in what happens next: **continue** raises `TotalHours` and starts immediately;
+**fork** loads the scenario into the editor and stops, because a fork exists to be changed.
 
 ### Client side
 

@@ -58,8 +58,11 @@ export type PlantFrameInputs = {
     debugBoxes: boolean;
     showLeaves: boolean;
     showRoots: boolean;
-    /** Resolves a species name to its registered leaf geometry id. */
-    leafGeom: (species: string) => number;
+    /**
+     * Resolves a species name and a segment's position within its blade to the registered leaf
+     * geometry id. Zero is the whole leaf for a species whose blades are not segmented.
+     */
+    leafGeom: (species: string, slice: number) => number;
     /**
      * Petal outline for a species. Separate from leafGeom because petals share the lamina
      * wire record with leaves but are not leaf-shaped.

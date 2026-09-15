@@ -20,6 +20,21 @@ public interface IPlantAgent : ITreeAgent
 	Quaternion Orientation { get; }
     Quaternion baseOrientation { get; set; }
     Quaternion restOrientation { get; set; }
+
+	/// <summary>Growth is suspended while this organ, or anything between it and the seed, is stuck
+	/// in an obstacle. See <see cref="AboveGroundAgent.GrowthBlocked"/>.</summary>
+	bool GrowthBlocked { get; set; }
+
+	/// <summary>Consecutive steps in unresolved contact with an obstacle.</summary>
+	ushort ObstructionSteps { get; set; }
+
+	/// <summary>True while a surface carries this organ's load, so its weight must not be
+	/// transported to its ancestors. See <see cref="AboveGroundAgent.GroundSupported"/>.</summary>
+	bool GroundSupported { get; set; }
+
+	/// <summary>Plastic rotation banked into the rest pose so far, in radians.
+	/// See <see cref="AboveGroundAgent.PlasticAngle"/>.</summary>
+	float PlasticAngle { get; set; }
     Quaternion targetOrientation { get; set; }
 
     byte DominanceLevel { get; }

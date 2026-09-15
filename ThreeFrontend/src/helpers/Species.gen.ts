@@ -31,6 +31,11 @@ export class SpeciesBase {
     woodGrowthTimeVar = signal(10);
     leafLength = signal(0.12);
     leafLengthVar = signal(0.02);
+    leafSegmentLength = signal(0);
+    leafKeelThickness = signal(0.0028);
+    leafElasticModulus = signal(0);
+    leafTipStiffnessFraction = signal(1);
+    maximumLeafSegments = signal(16);
     leafRadius = signal(0.04);
     leafRadiusVar = signal(0.01);
     leafPitchDeg = signal(20);
@@ -92,7 +97,8 @@ export class SpeciesBase {
     shootMaximumRadius = signal(0.0005);
     petioleReorientationMaximumAngleDeg = signal(54);
     petioleReorientationStepAngleDeg = signal(0);
-    petioleSegmentCount = signal(1);
+    petioleSegmentLength = signal(0);
+    maximumPetioleSegments = signal(8);
     rhizomeGrowthRateScale = signal(0.05);
     rhizomeBudActivationPeriod = signal(7);
     rhizomeBasalBudActivationProbabilityPerHour = signal(0.005);
@@ -133,6 +139,11 @@ export class SpeciesBase {
             woodGrowthTimeVar: this.woodGrowthTimeVar.peek(),
             leafLength: this.leafLength.peek(),
             leafLengthVar: this.leafLengthVar.peek(),
+            leafSegmentLength: this.leafSegmentLength.peek(),
+            leafKeelThickness: this.leafKeelThickness.peek(),
+            leafElasticModulus: this.leafElasticModulus.peek(),
+            leafTipStiffnessFraction: this.leafTipStiffnessFraction.peek(),
+            maximumLeafSegments: this.maximumLeafSegments.peek(),
             leafRadius: this.leafRadius.peek(),
             leafRadiusVar: this.leafRadiusVar.peek(),
             leafPitch: this.leafPitchDeg.peek() * DegToRad,
@@ -194,7 +205,8 @@ export class SpeciesBase {
             shootMaximumRadius: this.shootMaximumRadius.peek(),
             petioleReorientationMaximumAngle: this.petioleReorientationMaximumAngleDeg.peek() * DegToRad,
             petioleReorientationStepAngle: this.petioleReorientationStepAngleDeg.peek() * DegToRad,
-            petioleSegmentCount: this.petioleSegmentCount.peek(),
+            petioleSegmentLength: this.petioleSegmentLength.peek(),
+            maximumPetioleSegments: this.maximumPetioleSegments.peek(),
             rhizomeGrowthRateScale: this.rhizomeGrowthRateScale.peek(),
             rhizomeBudActivationPeriod: this.rhizomeBudActivationPeriod.peek(),
             rhizomeBasalBudActivationProbabilityPerHour: this.rhizomeBasalBudActivationProbabilityPerHour.peek(),
@@ -236,6 +248,11 @@ export class SpeciesBase {
         this.woodGrowthTimeVar.value = s.woodGrowthTimeVar;
         this.leafLength.value = s.leafLength;
         this.leafLengthVar.value = s.leafLengthVar;
+        this.leafSegmentLength.value = s.leafSegmentLength;
+        this.leafKeelThickness.value = s.leafKeelThickness;
+        this.leafElasticModulus.value = s.leafElasticModulus;
+        this.leafTipStiffnessFraction.value = s.leafTipStiffnessFraction;
+        this.maximumLeafSegments.value = s.maximumLeafSegments;
         this.leafRadius.value = s.leafRadius;
         this.leafRadiusVar.value = s.leafRadiusVar;
         this.leafPitchDeg.value = s.leafPitch * RadToDeg;
@@ -297,7 +314,8 @@ export class SpeciesBase {
         this.shootMaximumRadius.value = s.shootMaximumRadius;
         this.petioleReorientationMaximumAngleDeg.value = s.petioleReorientationMaximumAngle * RadToDeg;
         this.petioleReorientationStepAngleDeg.value = s.petioleReorientationStepAngle * RadToDeg;
-        this.petioleSegmentCount.value = s.petioleSegmentCount;
+        this.petioleSegmentLength.value = s.petioleSegmentLength;
+        this.maximumPetioleSegments.value = s.maximumPetioleSegments;
         this.rhizomeGrowthRateScale.value = s.rhizomeGrowthRateScale;
         this.rhizomeBudActivationPeriod.value = s.rhizomeBudActivationPeriod;
         this.rhizomeBasalBudActivationProbabilityPerHour.value = s.rhizomeBasalBudActivationProbabilityPerHour;
@@ -340,6 +358,11 @@ export class SpeciesBase {
             WoodGrowthTimeVar: this.woodGrowthTimeVar.peek(),
             LeafLength: this.leafLength.peek(),
             LeafLengthVar: this.leafLengthVar.peek(),
+            LeafSegmentLength: this.leafSegmentLength.peek(),
+            LeafKeelThickness: this.leafKeelThickness.peek(),
+            LeafElasticModulus: this.leafElasticModulus.peek(),
+            LeafTipStiffnessFraction: this.leafTipStiffnessFraction.peek(),
+            MaximumLeafSegments: this.maximumLeafSegments.peek(),
             LeafRadius: this.leafRadius.peek(),
             LeafRadiusVar: this.leafRadiusVar.peek(),
             LeafPitch: this.leafPitchDeg.peek() * DegToRad,
@@ -401,7 +424,8 @@ export class SpeciesBase {
             ShootMaximumRadius: this.shootMaximumRadius.peek(),
             PetioleReorientationMaximumAngle: this.petioleReorientationMaximumAngleDeg.peek() * DegToRad,
             PetioleReorientationStepAngle: this.petioleReorientationStepAngleDeg.peek() * DegToRad,
-            PetioleSegmentCount: this.petioleSegmentCount.peek(),
+            PetioleSegmentLength: this.petioleSegmentLength.peek(),
+            MaximumPetioleSegments: this.maximumPetioleSegments.peek(),
             RhizomeGrowthRateScale: this.rhizomeGrowthRateScale.peek(),
             RhizomeBudActivationPeriod: this.rhizomeBudActivationPeriod.peek(),
             RhizomeBasalBudActivationProbabilityPerHour: this.rhizomeBasalBudActivationProbabilityPerHour.peek(),

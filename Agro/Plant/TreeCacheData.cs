@@ -100,9 +100,19 @@ internal class TreeCacheData
 		Preorder[ancestor] < Preorder[node] && Preorder[node] < SubtreeEnd[ancestor];
 	internal bool SharesCrown(int first, int second) => IsDescendant(CrownAncestor[first], second);
 
-	internal IList<int> GetChildren(int index) => ChildrenNodes[index];
-	internal ICollection<int> GetRoots() => Roots;
-	internal ICollection<int> GetLeaves() => Leaves;
+	/// <summary>The crown an organ belongs to, for the hierarchy's node-level crown pruning, or -1
+	/// when the organ is itself a crown root. <see cref="SharesCrown"/> is a strict descendancy
+	/// test, so a crown root does not share a crown with its own subtree and its pairs must stay
+	/// enumerable.</summary>
+	internal int PrunableCrown(int index)
+	{
+		var crown = CrownAncestor[index];
+		return crown == index ? -1 : crown;
+	}
+
+	internal List<int> GetChildren(int index) => ChildrenNodes[index];
+	internal List<int> GetRoots() => Roots;
+	internal List<int> GetLeaves() => Leaves;
 	internal ushort GetAbsDepth(int index) => DepthNodes[index];
 	internal ushort GetAbsInvDepth(int index) => (ushort)(MaxDepth - DepthNodes[index]);
 	internal float GetRelDepth(int index) => MaxDepth > 0 ? (DepthNodes[index] + 1) / (float)MaxDepth : 1f;
@@ -196,9 +206,38 @@ internal class TreeCacheData
                 }
             }
         }
-
-		UpdateHeight(formation);
     }
+
+	/// <summary>Rebases a single subtree. The collision solver calls this per contact, so it must
+	/// not allocate and must not run the O(Count) height pass.</summary>
+	internal void UpdateBases<T>(PlantSubFormation<T> formation, int index) where T : struct, IPlantAgent
+	{
+		if (index < 0 || index >= Count)
+			return;
+
+		var stack = TraversalStack;
+		stack.Clear();
+		var parent = formation.GetParent(index);
+		PointNodes[index] = parent >= 0
+			? PointNodes[parent] + Vector3.Transform(Vector3.UnitX, formation.GetDirection(parent)) * formation.GetLength(parent)
+			: formation.Plant.Position;
+
+		stack.Push(index);
+		while (stack.Count > 0)
+		{
+			var node = stack.Pop();
+			var children = GetChildren(node);
+			if (children.Count == 0)
+				continue;
+
+			var point = PointNodes[node] + Vector3.Transform(Vector3.UnitX, formation.GetDirection(node)) * formation.GetLength(node);
+			foreach (var child in children)
+			{
+				PointNodes[child] = point;
+				stack.Push(child);
+			}
+		}
+	}
 
 	private void UpdateHeight<T>(PlantSubFormation<T> formation) where T : struct, IPlantAgent
 	{

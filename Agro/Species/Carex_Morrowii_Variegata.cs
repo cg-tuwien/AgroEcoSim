@@ -30,6 +30,19 @@ public static class Carex_Morrowii_Variegata
         LeafLength = 0.30f,
         LeafLengthVar = 0.09f,
         LeafRadius = 0.003f,       // ~3mm half-width = 6mm wide leaf
+        //A 30 cm strip 6 mm wide is the clearest case in the set for a segmented blade: as one
+        //rigid rectangle it cannot arch, and a collision correction about its base swings the tip a
+        //centimetre. Eight 3.75 cm segments bend progressively and keep the response local; at the
+        //three the first version used, the arch read as three straight facets rather than a curve.
+        LeafSegmentLength = 0.04f,
+        //Stiff where it leaves the sheath, compliant at the tip - the taper is what lets the
+        //blade arch without the whole plant sagging.
+        LeafTipStiffnessFraction = 0.22f,
+        //Its own figure rather than the shared default: the blade bending law now uses the real
+        //lever arm to the load a segment carries, which at the base of an eight-segment blade is
+        //about eight times what the old form applied. Stiffness goes as the cube of this, so the
+        //compensating factor is the cube root of that.
+        LeafKeelThickness = 0.0048f,
         LeafRadiusVar = 0.0008f,
         LeafPitchVar = 8f * DegToRad,
         LeafPitch = 12f * DegToRad,  // Small pitch - leaves grow mostly horizontal then arch down
@@ -268,9 +281,18 @@ public static class Carex_Morrowii_Variegata
             )
         ),
 
-        // Placeholder for leaf shape - to be replaced with actual Carex linear leaf mesh later
-        // Leaves are linear/grass-like with parallel venation and cream-white margins
+        // Leaves are linear/grass-like with parallel venation and cream-white margins. No authored
+        // mesh: the generic builder makes a good strap from the outline below, and the blade is
+        // drawn as a chain of segments, each carrying its own slice of that outline.
         LeafMorphology = new() {
+            Shape = new LinearLeafShape(),
+            Margin = LeafMarginType.Serrate,
+            Venation = LeafVenationType.Parallel,
+            Apex = LeafApexType.Acuminate,
+            Base = LeafBaseType.Truncate,
+            //Only the silhouette comes from here; the drawn size is LeafLength by LeafRadius.
+            Dimensions = LeafDimensions.Create(lengthM: 0.30f, widthM: 0.006f,
+                thicknessM: 0.0002f, petioleM: 0.015f, curvature01: 0.6f),
             LowResVertices = null,
             LowResIndices = null,
             HighResVertices = null,

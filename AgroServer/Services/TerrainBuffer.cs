@@ -10,22 +10,36 @@ public readonly struct TerrainBufferItem
     public readonly ImportedObjDataV2 DataV2;
     internal readonly ImportedObjData Data;
 
+    /// <summary>
+    /// Where the OBJ behind this entry was filed in the run store, or null when it was not.
+    ///
+    /// Carried through the buffer rather than looked up later because this is the ONLY moment the
+    /// source text and the parsed model are known to be the same thing. The buffer entry is gone
+    /// five minutes after the upload and the parse is not reversible, so a run that wants to be
+    /// re-runnable has to record the source's identity here or never.
+    /// </summary>
+    public readonly string? ModelHash;
+
     public TerrainBufferItem(ImportedObjData terrain)
     {
         Data = terrain;
     }
 
-    public TerrainBufferItem(ImportedObjDataV2 terrain)
+    public TerrainBufferItem(ImportedObjDataV2 terrain, string? modelHash = null)
     {
         DataV2 = terrain;
+        ModelHash = modelHash;
     }
 }
 
 public interface ITerrainBuffer
 {
     string Add(ImportedObjData terrain);
-    string Add(string terrain, CoordinateSystem coords);
+    string Add(string terrain, CoordinateSystem coords, string? modelHash = null);
     bool TryGetV2(string key, out ImportedObjDataV2 data);
+    /// <summary>As <see cref="TryGetV2(string, out ImportedObjDataV2)"/>, and also reports where the
+    /// source OBJ was filed, so the run that uses this model can be re-run later.</summary>
+    bool TryGetV2(string key, out ImportedObjDataV2 data, out string? modelHash);
 }
 
 public enum CoordinateSystem : byte { Unknown = 0,
@@ -183,7 +197,7 @@ public class TerrainBuffer : ITerrainBuffer
         }
     }
 
-    public string Add(string obj, CoordinateSystem coords)
+    public string Add(string obj, CoordinateSystem coords, string? modelHash = null)
     {
         var lines = obj.Replace("\r", "").Split('\n');
 
@@ -344,7 +358,7 @@ public class TerrainBuffer : ITerrainBuffer
         lock (TerrainPerConnection)
         {
             var key = Guid.NewGuid().ToString();
-            TerrainPerConnection[key] = new(terrain);
+            TerrainPerConnection[key] = new(terrain, modelHash);
             var toRemove = new List<string>();
             var now = DateTime.UtcNow;
 
@@ -377,7 +391,9 @@ public class TerrainBuffer : ITerrainBuffer
         }
     }
 
-    public bool TryGetV2(string key, out ImportedObjDataV2 data)
+    public bool TryGetV2(string key, out ImportedObjDataV2 data) => TryGetV2(key, out data, out _);
+
+    public bool TryGetV2(string key, out ImportedObjDataV2 data, out string? modelHash)
     {
         lock (TerrainPerConnection)
         {
@@ -385,11 +401,13 @@ public class TerrainBuffer : ITerrainBuffer
             {
                 TerrainPerConnection.Remove(key);
                 data = result.DataV2;
+                modelHash = result.ModelHash;
                 return true;
             }
             else
             {
                 data = default;
+                modelHash = null;
                 return false;
             }
         }

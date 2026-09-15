@@ -400,7 +400,7 @@ public partial class SoilFormationsList : ISoilFormation
 		HasUndeliveredPost = false;
 	}
 
-	public float GetMetricGroundDepth(float x, float z, int soilIndex) => Items.Count < soilIndex && soilIndex >= 0 ? Items[soilIndex].GetMetricGroundDepth(x, z, 0) : 0f;
+	public float GetMetricGroundDepth(float x, float z, int soilIndex) => soilIndex >= 0 && soilIndex < Items.Count ? Items[soilIndex].GetMetricGroundDepth(x, z, 0) : 0f;
 
 	public float GetTemperature(int index, int soilIndex) => 20f;
 

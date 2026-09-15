@@ -16,7 +16,7 @@ import { CameraPose, IViewportRenderer, activeRenderer, PlantFrameInputs, Terrai
 import { VisualMappingOptions } from './core/PlantColors';
 import { resolveLighting } from './core/Lighting';
 import type { GIFrameInputs, VoxelDebugOptions } from './core/VoxelGrid';
-import { Geom } from './core/GeometryIds';
+import { Geom, leafGeomKey } from './core/GeometryIds';
 import { registerGeometry } from './core/GeometryStore';
 import { ThreeRenderer } from './three/ThreeRenderer';
 import { Clicks } from './core/Picking';
@@ -330,11 +330,15 @@ function plantInputs(): PlantFrameInputs {
         debugBoxes: appstate.debugBoxes.value,
         showLeaves: appstate.showLeaves.value,
         showRoots: appstate.showRoots.value,
-        leafGeom: (name: string) => {
+        leafGeom: (name: string, slice: number) => {
             const s = species.find(x => x.name.peek() === name);
             //A species whose leaf mesh has not arrived yet falls back to the flat plane,
             //matching the old `leafGeometry ?? threePlanePrimitive`.
-            return s?.leafMesh ? registerGeometry(`leaf:${name}`, s.leafMesh) : Geom.Plane;
+            if (!s) return Geom.Plane;
+            const mesh = s.leafSlice(slice);
+            //Keyed by slice, so a blade's eight segments are eight registrations rather than
+            //one that every segment overwrites with its own piece.
+            return mesh ? registerGeometry(leafGeomKey(name, slice), mesh) : Geom.Plane;
         },
         petalGeom: (name: string) => {
             const s = species.find(x => x.name.peek() === name);

@@ -368,6 +368,21 @@ namespace Agro
         public float PetalRimFraction { get; init; } = 0.85f;
 
         /// <summary>
+        /// Head diameter at or below which the whole flower is one collision body instead of one
+        /// per petal.
+        /// </summary>
+        /// <remarks>
+        /// A flower of five petals costs seven organs, and each petal was a separate body in the
+        /// broad phase while producing no useful contact at all: every petal of a head hangs off
+        /// the same receptacle, so they share a base point exactly and the narrow phase rejects
+        /// each pair on that equality. Collapsing the head to its receptacle removes that work.
+        /// Above this size the petals are large enough to matter on their own - a sunflower is the
+        /// obvious case - and are kept as individual bodies.
+        /// </remarks>
+        /// <value>Metres. Must be non-negative; zero keeps every petal separate.</value>
+        public float CollisionAggregationDiameter { get; init; } = 0.04f;
+
+        /// <summary>
         /// Length the terminal bud is retargeted to when the flower opens.
         /// </summary>
         /// <remarks>
@@ -543,6 +558,7 @@ namespace Agro
             RequireAngleDegrees(PetalPitchVarianceDegrees, 90f, nameof(PetalPitchVarianceDegrees));
             RequireAngleDegrees(PetalRollVarianceDegrees, 90f, nameof(PetalRollVarianceDegrees));
             RequireProbability(PetalRimFraction, nameof(PetalRimFraction));
+            RequireNonNegative(CollisionAggregationDiameter, nameof(CollisionAggregationDiameter));
             RequireNonNegative(FlowerCentreLength, nameof(FlowerCentreLength));
             RequireNonNegative(FlowerCentreRadius, nameof(FlowerCentreRadius));
             RequireSrgb(FlowerCentreColor, nameof(FlowerCentreColor));
