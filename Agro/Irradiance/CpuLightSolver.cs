@@ -101,7 +101,7 @@ public sealed class CpuLightSolver
 
 	/// <summary>Hemisphere rays per sensor and step. Split between the two faces of a leaf.</summary>
 	public int DiffuseSamples { get; }
-	readonly string? ObstacleFilter;
+	readonly string? ObstacleRegex;
 	readonly int ObstacleSensorBudget;
 	readonly float CanopyDepth;
 	readonly float BandHeight;
@@ -133,17 +133,16 @@ public sealed class CpuLightSolver
 	public int ObstacleCandidates { get; private set; }
 	public int ObstacleMatches { get; private set; }
 	/// <summary>The requested filter, or null when none was.</summary>
-	public string? ObstacleFilterText => ObstacleFilter;
+	public string? ObstacleFilterText => ObstacleRegex;
 
 	/// <summary>Number of primitives in the traced scene after the last solve.</summary>
 	public int TracedPrimitives { get; private set; }
 
-	public CpuLightSolver(int diffuseSamples, string? obstacleFilter, int obstacleSensorBudget, float canopyDepth,
-						 float bandHeight)
+	public CpuLightSolver(int diffuseSamples, string? obstacleRegexFilter, int obstacleSensorBudget, float canopyDepth, float bandHeight)
 	{
 		//An even count keeps the two faces of a leaf equally sampled.
 		DiffuseSamples = Math.Max(2, diffuseSamples + (diffuseSamples & 1));
-		ObstacleFilter = string.IsNullOrWhiteSpace(obstacleFilter) ? null : obstacleFilter.Trim();
+		ObstacleRegex = string.IsNullOrWhiteSpace(obstacleRegexFilter) ? null : obstacleRegexFilter.Trim();
 		ObstacleSensorBudget = Math.Max(64, obstacleSensorBudget);
 		CanopyDepth = MathF.Max(0.05f, canopyDepth);
 		BandHeight = MathF.Max(0.05f, bandHeight);
@@ -151,7 +150,7 @@ public sealed class CpuLightSolver
 
 	/// <summary>True when a leaf area index measurement was requested, whether or not this solver
 	/// is also the one lighting the plants.</summary>
-	public bool MeasuresObstacles => ObstacleFilter != null;
+	public bool MeasuresObstacles => ObstacleRegex != null;
 
 	/// <summary>
 	/// Computes this step's irradiance for every leaf and petal, filling
@@ -505,12 +504,10 @@ public sealed class CpuLightSolver
 		}
 
 		var array = prims.ToArray();
-		if (ObstacleFilter != null)
+		if (ObstacleRegex != null)
 		{
 			ObstacleCandidates = obstacles.Count;
-			var meter = obstacles.Count > 0
-				? new ObstacleLightMeter(obstacles, array, ranges, ObstacleFilter, ObstacleSensorBudget, CanopyDepth, BandHeight)
-				: null;
+			var meter = obstacles.Count > 0 ? new ObstacleLightMeter(obstacles, array, ranges, ObstacleRegex, ObstacleSensorBudget, CanopyDepth, BandHeight) : null;
 			//A filter that matched nothing stays null, so callers can tell "no targets" from "no request".
 			Meter = meter?.Targets.Count > 0 ? meter : null;
 			ObstacleMatches = Meter?.Targets.Count ?? 0;
@@ -520,11 +517,11 @@ public sealed class CpuLightSolver
 			if (Meter == null)
 			{
 				var sample = string.Join(", ", obstacles.Take(6).Select(o => o.Name));
-				Console.WriteLine($"WARNING: LeafAreaIndexObstacles \"{ObstacleFilter}\" matched none of the "
+				Console.WriteLine($"WARNING: LeafAreaIndexObstacles \"{ObstacleRegex}\" matched none of the "
 					+ $"{obstacles.Count} obstacles, so nothing will be measured. Names look like: {sample}");
 			}
 			else
-				Console.WriteLine($"Leaf area index: \"{ObstacleFilter}\" matched {Meter.Targets.Count} of "
+				Console.WriteLine($"Leaf area index: \"{ObstacleRegex}\" matched {Meter.Targets.Count} of "
 					+ $"{obstacles.Count} obstacles, {Meter.SensorCount} measurement points.");
 		}
 

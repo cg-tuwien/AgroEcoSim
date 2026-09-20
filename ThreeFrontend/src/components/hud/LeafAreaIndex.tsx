@@ -9,7 +9,7 @@ import { IObstacleLight, IObstacleLightMeta, IObstacleLightSurface } from "../..
  * is measured until an obstacle name substring is given.
  */
 export function LeafAreaIndex() {
-    const obstaclesTip = "Case-insensitive substring of the obstacle names to measure, e.g. \"Wand\" for the walls of an \
+    const obstaclesTip = "Case-insensitive regex of the obstacle names to measure, e.g. \"Wand\" for the walls of an \
 imported building. Empty measures nothing. Requires the internal CPU light model - render mode 3, or 1 and 2 once they \
 fall back to it.";
     const sensorsTip = "Measurement points spread over the selected obstacles in proportion to area. Cost follows this \

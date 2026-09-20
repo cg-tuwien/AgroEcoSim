@@ -104,7 +104,7 @@ public record SimulationRequest
     public int? LightSamples { get; init; }
 
     /// <summary>
-    /// Case-insensitive substring of the obstacle names whose leaf area index and solar load should
+    /// Case-insensitive regex of the obstacle names whose leaf area index and solar load should
     /// be measured every simulation step, for example "Wand" to select the facades of an imported
     /// building. Nothing is measured when this is not set. Only effective with the internal light
     /// model (render mode 3, or 1 and 2 after a fallback).

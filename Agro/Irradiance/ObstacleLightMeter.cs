@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Numerics;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using AgentsSystem;
 
@@ -289,8 +290,7 @@ public sealed class ObstacleLightMeter
 	/// <param name="ranges">Primitive range of every obstacle inside <paramref name="prims"/>.</param>
 	/// <param name="sensorBudget">Target total number of sensors. A lower bound per band can push
 	/// the actual count above it when many bands are selected.</param>
-	public ObstacleLightMeter(IList<IObstacle> obstacles, RayPrimitive[] prims, (int First, int Count)[] ranges,
-							  string filter, int sensorBudget, float canopyDepth, float bandHeight)
+	public ObstacleLightMeter(IList<IObstacle> obstacles, RayPrimitive[] prims, (int First, int Count)[] ranges, string regexFilter, int sensorBudget, float canopyDepth, float bandHeight)
 	{
 		CanopyDepth_m = canopyDepth;
 		BandHeight_m = MathF.Max(0.05f, bandHeight);
@@ -299,58 +299,57 @@ public sealed class ObstacleLightMeter
 		var selected = new List<(int Index, string Name, float Area, float[] Edges, List<Vector3>[] Geometry, float[] Areas)>();
 		var totalArea = 0f;
 		for (int o = 0; o < obstacles.Count; ++o)
-		{
-			if (obstacles[o].Name.IndexOf(filter, StringComparison.OrdinalIgnoreCase) < 0)
-				continue;
-			var (first, count) = ranges[o];
-			if (count == 0)
-				continue;
-
-			var minY = float.MaxValue;
-			var maxY = float.MinValue;
-			var objectArea = 0f;
-			for (int i = first; i < first + count; ++i)
+			if (Regex.IsMatch(obstacles[0].Name, regexFilter, RegexOptions.IgnoreCase))
 			{
-				ref var prim = ref prims[i];
-				var b = prim.P + prim.U;
-				var c = prim.P + prim.V;
-				minY = MathF.Min(minY, MathF.Min(prim.P.Y, MathF.Min(b.Y, c.Y)));
-				maxY = MathF.Max(maxY, MathF.Max(prim.P.Y, MathF.Max(b.Y, c.Y)));
-				objectArea += 0.5f * Vector3.Cross(prim.U, prim.V).Length();
+				var (first, count) = ranges[o];
+				if (count == 0)
+					continue;
+
+				var minY = float.MaxValue;
+				var maxY = float.MinValue;
+				var objectArea = 0f;
+				for (int i = first; i < first + count; ++i)
+				{
+					ref var prim = ref prims[i];
+					var b = prim.P + prim.U;
+					var c = prim.P + prim.V;
+					minY = MathF.Min(minY, MathF.Min(prim.P.Y, MathF.Min(b.Y, c.Y)));
+					maxY = MathF.Max(maxY, MathF.Max(prim.P.Y, MathF.Max(b.Y, c.Y)));
+					objectArea += 0.5f * Vector3.Cross(prim.U, prim.V).Length();
+				}
+				if (objectArea <= 0f)
+					continue;
+
+				var height = MathF.Max(BandHeight_m, (maxY - minY) / MaxBandsPerTarget);
+				//Snap to a global grid so the same height reads as the same band across objects.
+				var gridStart = MathF.Floor(minY / height) * height;
+				var bandCount = Math.Max(1, (int)MathF.Ceiling((maxY - gridStart) / height));
+				var edges = new float[bandCount + 1];
+				for (int b = 0; b <= bandCount; ++b)
+					edges[b] = gridStart + b * height;
+
+				var geometry = new List<Vector3>[bandCount];
+				var areas = new float[bandCount];
+				for (int b = 0; b < bandCount; ++b)
+					geometry[b] = [];
+
+				for (int i = first; i < first + count; ++i)
+				{
+					ref var prim = ref prims[i];
+					var a = prim.P;
+					var b2 = prim.P + prim.U;
+					var c2 = prim.P + prim.V;
+					var loY = MathF.Min(a.Y, MathF.Min(b2.Y, c2.Y));
+					var hiY = MathF.Max(a.Y, MathF.Max(b2.Y, c2.Y));
+					var firstBand = Math.Clamp((int)MathF.Floor((loY - gridStart) / height), 0, bandCount - 1);
+					var lastBand = Math.Clamp((int)MathF.Floor((hiY - gridStart) / height), 0, bandCount - 1);
+					for (int b = firstBand; b <= lastBand; ++b)
+						areas[b] += ClipToBand(a, b2, c2, edges[b], edges[b + 1], geometry[b]);
+				}
+
+				selected.Add((o, obstacles[o].Name, objectArea, edges, geometry, areas));
+				totalArea += objectArea;
 			}
-			if (objectArea <= 0f)
-				continue;
-
-			var height = MathF.Max(BandHeight_m, (maxY - minY) / MaxBandsPerTarget);
-			//Snap to a global grid so the same height reads as the same band across objects.
-			var gridStart = MathF.Floor(minY / height) * height;
-			var bandCount = Math.Max(1, (int)MathF.Ceiling((maxY - gridStart) / height));
-			var edges = new float[bandCount + 1];
-			for (int b = 0; b <= bandCount; ++b)
-				edges[b] = gridStart + b * height;
-
-			var geometry = new List<Vector3>[bandCount];
-			var areas = new float[bandCount];
-			for (int b = 0; b < bandCount; ++b)
-				geometry[b] = [];
-
-			for (int i = first; i < first + count; ++i)
-			{
-				ref var prim = ref prims[i];
-				var a = prim.P;
-				var b2 = prim.P + prim.U;
-				var c2 = prim.P + prim.V;
-				var loY = MathF.Min(a.Y, MathF.Min(b2.Y, c2.Y));
-				var hiY = MathF.Max(a.Y, MathF.Max(b2.Y, c2.Y));
-				var firstBand = Math.Clamp((int)MathF.Floor((loY - gridStart) / height), 0, bandCount - 1);
-				var lastBand = Math.Clamp((int)MathF.Floor((hiY - gridStart) / height), 0, bandCount - 1);
-				for (int b = firstBand; b <= lastBand; ++b)
-					areas[b] += ClipToBand(a, b2, c2, edges[b], edges[b + 1], geometry[b]);
-			}
-
-			selected.Add((o, obstacles[o].Name, objectArea, edges, geometry, areas));
-			totalArea += objectArea;
-		}
 
 		//Pass two: sensor budgets and placement.
 		TargetArray = new Target[selected.Count];
