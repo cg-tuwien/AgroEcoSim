@@ -1,0 +1,398 @@
+using System.Numerics;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+using Agro.Collisions;
+
+namespace Agro;
+
+public enum OrganDeathReason : byte { Senescence, Resources }
+
+public partial class PlantSubFormation<T>
+{
+    internal sealed class RetryState
+    {
+        public float NextHour;
+        public int Failures;
+        public OrganPose LastPose;
+        public bool Attempted;
+    }
+
+    internal sealed class Development
+    {
+        public ulong Owner;
+        public AboveGroundAgent Before, After;
+        public AboveGroundAgent[] Children = [];
+        public ulong[] Parents = [];
+        public int[] LocalParents = [];
+        public ulong[] Retire = [];
+        public uint Created;
+        public float Energy, Water, EnergyFraction, WaterFraction;
+    }
+
+    readonly Dictionary<ulong, RetryState> GrowthRetries = [];
+    readonly Dictionary<ulong, Development> Developments = [];
+    readonly Dictionary<ulong, int> OrganIndices = [];
+    readonly List<(int Index, OrganDeathReason Reason)> DevelopmentDeaths = [];
+    bool RecordingDevelopment;
+    AboveGroundAgent TickPhysiology;
+    internal void MarkDevelopmentPhysiology(in AboveGroundAgent agent) => TickPhysiology = agent;
+    public long RejectedDevelopments { get; private set; }
+    public long AcceptedDevelopments { get; private set; }
+    public long NaturalDeaths { get; private set; }
+    public long ResourceDeaths { get; private set; }
+    public int PausedGrowthCount => GrowthRetries.Count;
+    public int PendingDevelopmentCount => Developments.Count;
+    internal ulong GetOrganId(int i) => Src()[i].StableId;
+    internal int FindOrgan(ulong id) => OrganIndices.TryGetValue(id, out var i) ? i : -1;
+
+    void RefreshOrganIndices()
+    {
+        OrganIndices.Clear();
+        var src = Src();
+        for (int i = 0; i < src.Length; ++i) OrganIndices.Add(src[i].StableId, i);
+        foreach (var id in GrowthRetries.Keys.Where(id => !OrganIndices.ContainsKey(id)).ToArray()) GrowthRetries.Remove(id);
+        foreach (var id in Developments.Keys.Where(id => !OrganIndices.ContainsKey(id)).ToArray()) Developments.Remove(id);
+    }
+
+    internal bool HasPendingDevelopment(int i) => i >= 0 && Developments.ContainsKey(Src()[i].StableId);
+
+    internal void WakeGrowth(int index = -1)
+    {
+        var hour = Plant.World.Timestep * (float)Plant.World.HoursPerTick;
+        if (index < 0)
+        {
+            foreach (var retry in GrowthRetries.Values) { retry.NextHour = hour; retry.Failures = 0; }
+            return;
+        }
+        for (var i = index; i >= 0; i = GetParent(i))
+            if (GrowthRetries.TryGetValue(GetOrganId(i), out var retry))
+            { retry.NextHour = hour; retry.Failures = 0; }
+    }
+
+    void PrepareGrowthAttempts(Span<T> agents)
+    {
+        if (!IsAboveGround) return;
+        var hour = Plant.World.Timestep * (float)Plant.World.HoursPerTick;
+        for (int i = 0; i < agents.Length; ++i)
+        {
+            ref var a = ref agents[i];
+            var suspended = false;
+            if (GrowthRetries.TryGetValue(a.StableId, out var retry))
+            {
+                retry.Attempted = hour >= retry.NextHour || Vector3.DistanceSquared(GetContactPose(i).Tip, retry.LastPose.Tip) >= 0.0004f;
+                suspended = !retry.Attempted;
+            }
+            a.GrowthBlocked = suspended || Developments.ContainsKey(a.StableId);
+        }
+    }
+
+    internal void CompleteGrowthAttempts()
+    {
+        foreach (var (id, retry) in GrowthRetries.ToArray())
+        {
+            if (!retry.Attempted || Developments.ContainsKey(id)) continue;
+            var i = FindOrgan(id);
+            if (i >= 0) SetObstruction(i, false);
+        }
+    }
+
+    void TickWithDevelopment(ref T agent, int index, uint timestep)
+    {
+        if (!IsAboveGround)
+        {
+            agent.Tick(this, index, timestep);
+            return;
+        }
+        if (!CollisionSettings.Enabled)
+        {
+            var length = agent.Length;
+            agent.Tick(this,index,timestep);
+            ApplyGrowthLight(index,ref Unsafe.As<T,AboveGroundAgent>(ref agent),length);
+            return;
+        }
+        var before = Unsafe.As<T, AboveGroundAgent>(ref agent);
+        TickPhysiology = before;
+        var first = Births.Count;
+        DevelopmentDeaths.Clear();
+        RecordingDevelopment = true;
+        try { agent.Tick(this, index, timestep); }
+        finally { RecordingDevelopment = false; }
+        ref var after = ref Unsafe.As<T, AboveGroundAgent>(ref agent);
+        if (Births.Count > first)
+        {
+            var retired=new HashSet<int>();
+            var retirementQueue=new Queue<int>(DevelopmentDeaths.Select(d=>d.Index));
+            while(retirementQueue.TryDequeue(out var retiring))
+                if(retired.Add(retiring)) foreach(var child in GetChildren(retiring)) retirementQueue.Enqueue(child);
+            var proposal = new Development { Owner = before.StableId, Before = before, After = after,
+                Created = timestep, Children = new AboveGroundAgent[Births.Count - first],
+                Parents = new ulong[Births.Count - first], LocalParents = new int[Births.Count - first],
+                Retire = retired.Order().Select(GetOrganId).ToArray() };
+            for (int j = 0; j < proposal.Children.Length; ++j)
+            {
+                var child = Births[first + j];
+                proposal.Children[j] = Unsafe.As<T, AboveGroundAgent>(ref child);
+                proposal.LocalParents[j] = child.Parent >= AgentCount + first ? child.Parent - AgentCount - first : -1;
+                proposal.Parents[j] = child.Parent >= 0 && child.Parent < AgentCount ? GetOrganId(child.Parent) : 0;
+                proposal.Energy += MathF.Max(0, child.Energy);
+                proposal.Water += MathF.Max(0, child.Water_g);
+            }
+            Births.RemoveRange(first, Births.Count - first);
+            proposal.EnergyFraction = Math.Clamp(proposal.Energy / MathF.Max(1e-20f, TickPhysiology.Energy), 0f, 1f);
+            proposal.WaterFraction = Math.Clamp(proposal.Water / MathF.Max(1e-20f, TickPhysiology.Water_g), 0f, 1f);
+            // Only developmental state is rolled back. Maintenance, photosynthesis and daily
+            // measurements already occurred and must not be charged again when the birth retries.
+            after = AboveGroundAgent.RetainPhysiology(before, after);
+            after.Energy = TickPhysiology.Energy;
+            after.Water_g = TickPhysiology.Water_g;
+            Developments.Add(proposal.Owner, proposal);
+        }
+        else
+            foreach (var death in DevelopmentDeaths) Death(death.Index, reason: death.Reason);
+
+        if (before.GrowthBlocked)
+        {
+            after.Length = before.Length;
+            after.GrowSuspendedRadius(Plant);
+        }
+        var delta = Quaternion.Normalize(after.Orientation * Quaternion.Conjugate(before.Orientation));
+        if (new Vector3(delta.X,delta.Y,delta.Z).LengthSquared() > 1e-16f)
+        {
+            SrcDst(out _,out var growing);
+            PropagateToSubtree(growing,index,delta);
+        }
+        ApplyGrowthLight(index, ref after, before.Length);
+    }
+
+    internal void ProcessDevelopments(CollisionWorld collisions)
+    {
+        if (!IsAboveGround || Developments.Count == 0) return;
+        var ag = (PlantSubFormation<AboveGroundAgent>)(object)this;
+        var hour = Plant.World.Timestep * (float)Plant.World.HoursPerTick;
+        // Dictionary slots are reused after removal and are not a developmental order.
+        // Stable ordering also preserves resource allocation and organ indices on resume.
+        foreach (var proposal in Developments.Values.OrderBy(p => p.Owner).ToArray())
+        {
+            var index = FindOrgan(proposal.Owner);
+            if (index < 0 || Deaths.Contains(index)) { Developments.Remove(proposal.Owner); continue; }
+            if (GrowthRetries.TryGetValue(proposal.Owner, out var retry) && hour < retry.NextHour && !retry.Attempted) continue;
+            GeometryState[]? supportFallback=null;
+            var supportAttempts=0;
+            var supportRoots=new HashSet<int>();
+        RetrySupportedDevelopment:
+            ref var current = ref Unsafe.As<T, AboveGroundAgent>(ref Src()[index]);
+            if (current.Energy <= 0f) continue;
+            // Proposals remember sampled orientations relative to the owner, not a stale world frame.
+            var carry = Quaternion.Normalize(current.Orientation * Quaternion.Conjugate(proposal.Before.Orientation));
+            var parent = AboveGroundAgent.RetainPhysiology(proposal.After, current);
+            parent.CensusUpdateParent(current.Parent);
+            parent.TransportDevelopment(carry);
+            parent.Radius = MathF.Max(parent.Radius, current.Radius);
+            if (Quaternion.Dot(proposal.Before.Orientation, proposal.After.Orientation) > 0.999999f)
+            {
+                parent.SetOrientation(current.Orientation);
+                parent.baseOrientation = current.baseOrientation;
+                parent.restOrientation = current.restOrientation;
+                parent.targetOrientation = current.targetOrientation;
+            }
+            var children = proposal.Children;
+            var poses = new OrganPose[children.Length];
+            var templates = new LaminaTemplate?[children.Length];
+            var parentPose = PoseFor(parent, GetBaseCenterWorld(index));
+            var oldPose = GetContactPose(index);
+            var changed = oldPose.MotionBound(parentPose) > 1e-7f;
+            var descendants = new List<int>();
+            var moving = new HashSet<ulong> { proposal.Owner };
+            if (changed)
+            {
+                descendants.AddRange(GetChildren(index));
+                for (int k = 0; k < descendants.Count; ++k)
+                { moving.Add(GetOrganId(descendants[k])); descendants.AddRange(GetChildren(descendants[k])); }
+            }
+            var delta = Quaternion.Normalize(parentPose.Rotation * Quaternion.Conjugate(oldPose.Rotation));
+            var valid = collisions.AcceptDevelopmentPose(ag, index, parentPose, ag.GetLaminaTemplate(index),
+                replacingOwner: true, moving: moving, previousPose: oldPose);
+            foreach (var descendant in descendants)
+            {
+                if (!valid) break;
+                var old = GetContactPose(descendant);
+                var moved = old with { Base = parentPose.Tip + Vector3.Transform(old.Base - oldPose.Tip, delta),
+                    Rotation = Quaternion.Normalize(delta * old.Rotation) };
+                valid = collisions.AcceptDevelopmentPose(ag, descendant, moved, ag.GetLaminaTemplate(descendant),
+                    moving: moving, previousPose: old);
+            }
+            var childCarry=carry;
+            var blockedPose=parentPose;
+            var blockedTemplate=ag.GetLaminaTemplate(index);
+            var blockedSupport=index;
+            bool ChildrenFit(Quaternion orientationCarry)
+            {
+                for (int j = 0; j < children.Length; ++j)
+                {
+                    var child = children[j];
+                    child.TransportDevelopment(orientationCarry);
+                    var p = proposal.LocalParents[j];
+                    var existing = p < 0 ? FindOrgan(proposal.Parents[j]) : -1;
+                    if (p >= j || (p < 0 && existing < 0 && proposal.Parents[j] != 0)) return false;
+                    var basis = p >= 0 ? poses[p].Tip : existing == index ? parentPose.Tip
+                        : existing >= 0 ? GetContactPose(existing).Tip : Plant.Position + FieldOrigin;
+                    poses[j] = PoseFor(child, basis);
+                    var slice = 0;
+                    var ancestor = p;
+                    var existingAncestor = existing;
+                    while (ancestor >= 0 && children[ancestor].Organ == OrganTypes.Leaf)
+                    {
+                        ++slice;
+                        existingAncestor = FindOrgan(proposal.Parents[ancestor]);
+                        ancestor = proposal.LocalParents[ancestor];
+                    }
+                    if (ancestor < 0)
+                        for (var n = existingAncestor; n >= 0 && GetOrgan(n) == OrganTypes.Leaf; n = GetParent(n)) ++slice;
+                    templates[j] = LaminaTemplates.For(Plant.Parameters, child.Organ, slice);
+                    blockedPose=poses[j];blockedTemplate=templates[j];blockedSupport=existing>=0?existing:index;
+                    if (!collisions.AcceptDevelopmentPose(ag, existing >= 0 ? existing : index, poses[j], templates[j], proposal.Retire,
+                        attachedToOwner: p < 0)) return false;
+                    for (int k = 0; k < j; ++k)
+                    {
+                        if (proposal.LocalParents[j] == k) continue;
+                        if (!CollisionWorld.AdmissibleBirthPair(poses[j], templates[j], poses[k], templates[k], basis)) return false;
+                    }
+                }
+                return true;
+            }
+            var parentFits=valid;
+            valid = valid && ChildrenFit(carry);
+            if (!valid && supportAttempts<4)
+            {
+                supportFallback ??= SaveContactTrial();
+                ++supportAttempts;
+                var root=blockedSupport;
+                for(var p=GetParent(root);p>=0 && !IsMechanicallyAnchored(p);p=GetParent(p)) root=p;
+                supportRoots.Add(root);
+                if(collisions.DeflectDevelopment(ag,blockedSupport,blockedPose,blockedTemplate,proposal.Retire))
+                    goto RetrySupportedDevelopment;
+                RestoreContactTrial(supportFallback);supportFallback=null;supportAttempts=4;
+                goto RetrySupportedDevelopment;
+            }
+            if (parentFits && !valid)
+            {
+                valid=false;
+                // Reuse the sampled organs and resource shares while testing finite alternative
+                // emergence directions. All siblings turn together, preserving authored angles.
+                var direction=Vector3.Transform(Vector3.UnitX,parent.Orientation);
+                var side=Vector3.Cross(direction,MathF.Abs(direction.Y)<.9f?Vector3.UnitY:Vector3.UnitZ);
+                side=Vector3.Normalize(side);
+                var across=Vector3.Normalize(Vector3.Cross(direction,side));
+                var cue=!IsFloralAxis(parent.Organ) && !children.Any(c=>IsFloralAxis(c.Organ))
+                    && TryGetGrowthLight(index,out var light,out _) ? light : direction;
+                var candidates=new List<(Quaternion Rotation,float Score)>();
+                foreach(var axis in new[]{side,across})
+                    foreach(var sign in new[]{-1f,1f})
+                        foreach(var fraction in new[]{.25f,.6f,1f})
+                        {
+                            var angle=CollisionSettings.MaxElasticBendRadians*fraction;
+                            var turn=Quaternion.CreateFromAxisAngle(axis,sign*angle);
+                            candidates.Add((Quaternion.Normalize(turn*carry),angle-.05f*Vector3.Dot(Vector3.Transform(direction,turn),cue)));
+                        }
+                foreach(var candidate in candidates.OrderBy(c=>c.Score))
+                    if (ChildrenFit(candidate.Rotation)) { childCarry=candidate.Rotation;valid=true;break; }
+            }
+            if(valid && supportFallback!=null && supportRoots.Any(root=>!collisions.GrowthTrialClear(Plant,root)))
+            {
+                RestoreContactTrial(supportFallback);supportFallback=null;supportAttempts=4;
+                goto RetrySupportedDevelopment;
+            }
+            if (!valid)
+            {
+                if(supportFallback!=null) RestoreContactTrial(supportFallback);
+                ++RejectedDevelopments;
+                SetObstruction(index, true);
+                continue;
+            }
+            // Resource distribution runs between the sampled decision and this commit. Preserve
+            // the sampled shares, not an obsolete absolute balance from before redistribution.
+            var energy = MathF.Min(MathF.Max(0, parent.Energy) * proposal.EnergyFraction, proposal.Energy);
+            var water = MathF.Min(MathF.Max(0, parent.Water_g) * proposal.WaterFraction, proposal.Water);
+            parent.Energy -= energy;
+            parent.Water_g -= water;
+            current = parent;
+            if (changed) PropagateToSubtree(Src(), index, delta);
+            var first = AgentCount + Births.Count;
+            for (int j = 0; j < children.Length; ++j)
+            {
+                var child = children[j];
+                child.Energy *= proposal.Energy > 0 ? energy / proposal.Energy : 0;
+                child.Water_g *= proposal.Water > 0 ? water / proposal.Water : 0;
+                child.TransportDevelopment(childCarry);
+                child.RebaseBirthTime(Plant.World.Timestep - proposal.Created);
+                child.CensusUpdateParent(proposal.LocalParents[j] >= 0 ? first + proposal.LocalParents[j] : FindOrgan(proposal.Parents[j]));
+                var born = Unsafe.As<AboveGroundAgent, T>(ref child);
+                Birth(born);
+            }
+            foreach (var retire in proposal.Retire)
+            {
+                var old = FindOrgan(retire);
+                if (old >= 0) Death(old);
+            }
+            Developments.Remove(proposal.Owner);
+            GrowthRetries.Remove(proposal.Owner);
+            ++AcceptedDevelopments;
+            Census();
+            collisions.RefreshPlantBounds(Plant);
+        }
+    }
+
+    internal static OrganPose PoseFor(in AboveGroundAgent a, Vector3 basis) => new(basis + a.BaseOffset,
+        a.Orientation, a.Length, a.Organ is OrganTypes.Leaf or OrganTypes.FlowerPadel ? a.Radius : 0,
+        a.Organ is OrganTypes.Leaf or OrganTypes.FlowerPadel ? AboveGroundAgent.LeafThickness * 0.5f
+            : a.Organ is OrganTypes.Bud or OrganTypes.FlowerBud or OrganTypes.FlowerBaseBud or OrganTypes.Fruit ? MathF.Max(a.Radius,a.Length) : a.Radius,
+        a.Organ is OrganTypes.Bud or OrganTypes.FlowerBud or OrganTypes.FlowerBaseBud or OrganTypes.Fruit);
+
+    void WriteGrowthState(BinaryWriter w)
+    {
+        w.Write(RejectedDevelopments); w.Write(AcceptedDevelopments); w.Write(NaturalDeaths); w.Write(ResourceDeaths);
+        w.Write(GrowthRetries.Count);
+        foreach (var (id, r) in GrowthRetries.OrderBy(x => x.Key))
+        { w.Write(id); w.Write(r.NextHour); w.Write(r.Failures); WriteValue(w, r.LastPose); }
+        w.Write(Developments.Count);
+        foreach (var p in Developments.Values.OrderBy(x => x.Owner))
+        {
+            w.Write(p.Owner); WriteValue(w, p.Before); WriteValue(w, p.After); w.Write(p.Created); w.Write(p.Energy); w.Write(p.Water);
+            w.Write(p.EnergyFraction); w.Write(p.WaterFraction);
+            w.Write(p.Children.Length);
+            for (int i = 0; i < p.Children.Length; ++i) { WriteValue(w, p.Children[i]); w.Write(p.Parents[i]); w.Write(p.LocalParents[i]); }
+            w.Write(p.Retire.Length); foreach (var id in p.Retire) w.Write(id);
+        }
+        WriteGuidanceState(w);
+    }
+
+    void ReadGrowthState(BinaryReader r)
+    {
+        RejectedDevelopments = r.ReadInt64(); AcceptedDevelopments = r.ReadInt64(); NaturalDeaths = r.ReadInt64(); ResourceDeaths = r.ReadInt64();
+        GrowthRetries.Clear(); Developments.Clear();
+        var count = r.ReadInt32();
+        for (int i = 0; i < count; ++i)
+            GrowthRetries.Add(r.ReadUInt64(), new RetryState { NextHour = r.ReadSingle(), Failures = r.ReadInt32(), LastPose = ReadValue<OrganPose>(r) });
+        count = r.ReadInt32();
+        for (int i = 0; i < count; ++i)
+        {
+            var p = new Development { Owner = r.ReadUInt64(), Before = ReadValue<AboveGroundAgent>(r), After = ReadValue<AboveGroundAgent>(r),
+                Created = r.ReadUInt32(), Energy = r.ReadSingle(), Water = r.ReadSingle(), EnergyFraction = r.ReadSingle(), WaterFraction = r.ReadSingle() };
+            var n = r.ReadInt32(); p.Children = new AboveGroundAgent[n]; p.Parents = new ulong[n]; p.LocalParents = new int[n];
+            for (int j = 0; j < n; ++j) { p.Children[j] = ReadValue<AboveGroundAgent>(r); p.Parents[j] = r.ReadUInt64(); p.LocalParents[j] = r.ReadInt32(); }
+            p.Retire = new ulong[r.ReadInt32()]; for (int j = 0; j < p.Retire.Length; ++j) p.Retire[j] = r.ReadUInt64();
+            Developments.Add(p.Owner, p);
+        }
+        ReadGuidanceState(r);
+        RefreshOrganIndices();
+    }
+
+    internal static void WriteValue<U>(BinaryWriter writer, U value) where U : struct
+        => writer.Write(MemoryMarshal.AsBytes(MemoryMarshal.CreateReadOnlySpan(ref value, 1)));
+    internal static U ReadValue<U>(BinaryReader reader) where U : struct
+    {
+        var bytes = reader.ReadBytes(Unsafe.SizeOf<U>());
+        if (bytes.Length != Unsafe.SizeOf<U>()) throw new EndOfStreamException("Incomplete growth state.");
+        return MemoryMarshal.Read<U>(bytes);
+    }
+}

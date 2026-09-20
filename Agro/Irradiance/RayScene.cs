@@ -104,6 +104,9 @@ public sealed class RayScene
 	RayPrimitive[] Prims = [];
 	BvhNode[] Nodes = [];
 	BvhItem[] Items = [];
+	// Static geometry is built once. Thereafter scratch contains vegetation only, with
+	// local payload indices; traversal adds the immutable primitive prefix at a leaf.
+	int BuildBase;
 
 	int StaticPrimCount;
 	int StaticNodeCount;
@@ -133,7 +136,9 @@ public sealed class RayScene
 	{
 		StaticPrimCount = count;
 		EnsurePrimCapacity(count);
-		Array.Copy(prims, PrimsBuild, count);
+		PrimsBuild = prims;
+		Items = new BvhItem[count];
+		BuildBase = 0;
 
 		if (count == 0)
 		{
@@ -146,6 +151,13 @@ public sealed class RayScene
 		FillItems(0, count);
 		StaticNodeCount = BvhBuilder.BuildParallel(Items, 0, count, Nodes, 0, budget, PrimitiveMaxLeaf, ParallelBuildThreshold);
 		CommitItems(0, count);
+		// Parallel builders reserve disjoint ranges. Reclaim the holes once for the immutable
+		// hierarchy; dynamic geometry starts immediately after its reachable nodes.
+		Nodes = BvhBuilder.Compact(Nodes);
+		StaticNodeCount = Nodes.Length;
+		BuildBase = count;
+		PrimsBuild = [];
+		Items = [];
 	}
 
 	/// <summary>
@@ -173,12 +185,18 @@ public sealed class RayScene
 		DynamicNodeBudget = BvhBuilder.NodeBudgetFor(DynamicPrimCount, ParallelBuildThreshold);
 
 		EnsurePrimCapacity(prim);
+		if (PrimsBuild.Length < DynamicPrimCount)
+		{
+			var capacity = Math.Max(DynamicPrimCount, PrimsBuild.Length + (PrimsBuild.Length >> 1) + 1024);
+			PrimsBuild = new RayPrimitive[capacity];
+			Items = new BvhItem[capacity];
+		}
 		EnsureNodeCapacity(StaticNodeCount + DynamicNodeBudget);
 	}
 
 	/// <summary>The writable primitive slice of one plant slot, to be filled before
 	/// <see cref="BuildPlants"/>.</summary>
-	public Span<RayPrimitive> PlantPrimitives(int plant) => PrimsBuild.AsSpan(PlantPrimFirst[plant], PlantPrimCount[plant]);
+	public Span<RayPrimitive> PlantPrimitives(int plant) => PrimsBuild.AsSpan(PlantPrimFirst[plant] - StaticPrimCount, PlantPrimCount[plant]);
 
 	/// <summary>Builds the vegetation hierarchy and the two-blob top level.</summary>
 	public void BuildPlants()
@@ -186,7 +204,7 @@ public sealed class RayScene
 		if (DynamicPrimCount > 0)
 		{
 			FillItemsParallel(StaticPrimCount, DynamicPrimCount);
-			BvhBuilder.BuildParallel(Items, StaticPrimCount, DynamicPrimCount, Nodes, StaticNodeCount,
+			BvhBuilder.BuildParallel(Items, 0, DynamicPrimCount, Nodes, StaticNodeCount,
 				DynamicNodeBudget, PrimitiveMaxLeaf, ParallelBuildThreshold);
 			CommitItemsParallel(StaticPrimCount, DynamicPrimCount);
 		}
@@ -227,8 +245,9 @@ public sealed class RayScene
 	{
 		for (int i = first; i < first + count; ++i)
 		{
-			Bounds(in PrimsBuild[i], out var min, out var max);
-			Items[i] = new BvhItem { Min = min, Max = max, Payload = i };
+			var local = i - BuildBase;
+			Bounds(in PrimsBuild[local], out var min, out var max);
+			Items[local] = new BvhItem { Min = min, Max = max, Payload = local };
 		}
 	}
 
@@ -247,7 +266,7 @@ public sealed class RayScene
 	void CommitItems(int first, int count)
 	{
 		for (int i = first; i < first + count; ++i)
-			Prims[i] = PrimsBuild[Items[i].Payload];
+			Prims[i] = PrimsBuild[Items[i - BuildBase].Payload];
 	}
 
 	void CommitItemsParallel(int first, int count)
@@ -264,23 +283,19 @@ public sealed class RayScene
 	{
 		if (Prims.Length >= count)
 			return;
-		var capacity = Math.Max(count, Prims.Length + (Prims.Length >> 1) + 1024);
-		//The static slice keeps its contents in both buffers; only the plant region beyond it is
-		//rewritten from scratch every step.
-		var grownBuild = new RayPrimitive[capacity];
-		Array.Copy(PrimsBuild, grownBuild, Math.Min(PrimsBuild.Length, StaticPrimCount));
-		PrimsBuild = grownBuild;
+		var dynamicCapacity = Math.Max(0, Prims.Length - StaticPrimCount);
+		var capacity = Math.Max(count, StaticPrimCount + dynamicCapacity + (dynamicCapacity >> 1) + 1024);
 		var grown = new RayPrimitive[capacity];
 		Array.Copy(Prims, grown, Math.Min(Prims.Length, StaticPrimCount));
 		Prims = grown;
-		Items = new BvhItem[capacity]; //pure scratch between a build and its CommitItems
 	}
 
 	void EnsureNodeCapacity(int count)
 	{
 		if (Nodes.Length >= count)
 			return;
-		var capacity = Math.Max(count, Nodes.Length + (Nodes.Length >> 1) + 1024);
+		var dynamicCapacity = Math.Max(0, Nodes.Length - StaticNodeCount);
+		var capacity = Math.Max(count, StaticNodeCount + dynamicCapacity + (dynamicCapacity >> 1) + 1024);
 		var grown = new BvhNode[capacity];
 		Array.Copy(Nodes, grown, Math.Min(Nodes.Length, StaticNodeCount));
 		Nodes = grown;
@@ -520,7 +535,7 @@ public sealed class RayScene
 				}
 				else
 					for (int i = 0; i < node.Count; ++i)
-						if (Intersect(in Prims[node.Left + i], origin, direction, tMin, tMax, out _))
+						if (Intersect(in Prims[node.Left + i + (entry < StaticNodeCount ? 0 : StaticPrimCount)], origin, direction, tMin, tMax, out _))
 							return true;
 			}
 		}
@@ -615,7 +630,7 @@ public sealed class RayScene
 				else
 					for (int i = 0; i < node.Count; ++i)
 					{
-						var index = node.Left + i;
+						var index = node.Left + i + (current < StaticNodeCount ? 0 : StaticPrimCount);
 						if (Intersect(in Prims[index], origin, direction, tMin, bestT, out var t) && t < bestT)
 						{
 							bestT = t;
@@ -701,7 +716,7 @@ public sealed class RayScene
 				else
 					for (int i = 0; i < node.Count; ++i)
 					{
-						var index = node.Left + i;
+						var index = node.Left + i + StaticPrimCount;
 						if ((Prims[index].Flags & FlagFoliage) != 0
 							&& Intersect(in Prims[index], origin, direction, tMin, tMax, out _))
 						{

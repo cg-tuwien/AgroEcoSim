@@ -84,16 +84,17 @@ public record SimulationRequest
     ///(default: true)
     ///</summary>
     ///<remarks>
-    ///Collisions with obstacles and with the soil are hard constraints and are always resolved; this
-    ///switch governs only the best-effort foliage work. Turning it off is a real trade. Measured on
-    ///the green facade at 1,882 plants over 120 days: with it on, 1.13% of organs end inside the soil
-    ///and 3.23% point downwards, at 68.5 ms per step; with it off, 0.95% and 0.64% at 37.5 ms. The
-    ///foliage pass costs about two thirds of the collision phase, and at that density it does not
-    ///reduce burial - that is the hard passes' work - while its response is what tips organs over.
-    ///It still reduces interpenetration between neighbours, which is what it is for.
+    ///Enables stem-stem, stem-leaf and leaf-leaf constraints, including swept motion and
+    ///same-crown contacts outside attachment neighbourhoods. Inadmissible growth is suspended
+    ///and retried without collision-driven death. Disabling this allows vegetation to intersect;
+    ///obstacle and soil constraints remain active. Collision state is saved only in live checkpoints.
     ///</remarks>
     ///<example>true</example>
     public bool? SoftCollisions { get; init; }
+
+    /// <summary>Steer developing vegetative tissue toward persistent diffuse-light openings.
+    /// Default true; constant-light mode 0 has no directional cue. Does not change photosynthetic irradiance.</summary>
+    public bool? GrowthLightGuidanceEnabled { get; init; }
 
     /// <summary>
     /// Hemisphere rays per sensor and simulation step for the internal CPU light model. Higher

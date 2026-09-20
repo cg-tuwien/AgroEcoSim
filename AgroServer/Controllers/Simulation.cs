@@ -275,20 +275,7 @@ public class SimulationController// : ControllerBase
     }
 
     static MeshData BuildLamina(LeafMorphology morphology)
-    {
-        var lod = RenderLeafLod.CoarseOutline;
-        if (morphology.TryGetDefaultLeafMesh(lod, out var mesh))
-            return mesh;
-
-        var generic = new LeafInstance()
-        {
-            Morphology = morphology,
-            Physiology = new()
-        };
-        generic.InitializeLeafletsIfNeeded();
-
-        return LeafMeshBuilder.Build(generic, lod);
-    }
+        => LaminaTemplates.Build(morphology);
 
     static IResult LaminaMesh(string species, bool petal)
     {

@@ -134,6 +134,7 @@ public class IrradianceClient
 		Client.DefaultRequestHeaders.Add("Lo", longitude.ToString(CultureInfo.InvariantCulture));
 		GlobalIllumination = mode != Mode.Constant;
 		SelectedMode = mode;
+		UseInternal = mode == Mode.Internal;
 		RequestedMode = mode.ToString();
 		SamplesPerPixel = spp.ToString();
 
@@ -227,7 +228,11 @@ public class IrradianceClient
 			DoInternalTick(agroWorld, timestep, formations, obstacles);
 		else
 			DoFallbackTick(agroWorld, timestep, formations);
+		Solver?.UpdateGrowthGuidance(agroWorld, timestep, formations, obstacles);
 	}
+
+	public bool TryGetGrowthLight(PlantSubFormation<AboveGroundAgent> formation, int organIndex,
+		out Vector3 direction, out float confidence) => formation.TryGetGrowthLight(organIndex, out direction, out confidence);
 
 	/// <summary>
 	/// Rebuilds the list of formations that carry no live above-ground plant: the soil, and any plant
@@ -995,7 +1000,7 @@ public class IrradianceClient
 
 	internal void ExportV7(IList<IFormation> formations, Stream binaryStream, ExportFlags flags)
 	{
-		using var writer = new BinaryWriter(binaryStream);
+		using var writer = new BinaryWriter(binaryStream, System.Text.Encoding.UTF8, leaveOpen: true);
 		writer.WriteU8(7);
 
 		var includeAnalytics = flags.HasFlag(ExportFlags.Analytics);
@@ -1044,10 +1049,9 @@ public class IrradianceClient
                             {
 								var ax = x * scale.X * 0.5f;
 								var ay = -z * scale.Z * 0.5f;
-								//The lamina mesh authors its relief in metres, unlike its X and Y which are
-								//normalized to the half length and half width, so this column is the plain
-								//unit blade normal. It is not a thickness.
-								var az = y;
+								// Relief is authored at the morphology's reference width and grows with
+								// the blade. Use the same transform as the collision templates.
+								var az = y * ag.GetLaminaTemplate(i)!.ReliefScale(scale.Z * .5f);
 								var c = center + ax;
 								writer.WriteM32(ax, ay, az, c);
 								if (includeAnalytics)
@@ -1222,22 +1226,16 @@ public class IrradianceClient
 	/// Exports are serialised on the simulation thread, so one buffer per client is enough.
 	/// Do NOT export from two threads against the same client.
 	/// </summary>
-	int ExportCapacity = 1 << 16;
+	readonly MemoryStream ExportBuffer = new(1 << 16);
 
     public byte[] ExportToStream(byte flags, IList<IFormation> formations, IList<IObstacle>? obstacles = null)
 	{
-		//Sized from the last frame. The stream itself cannot be reused - ExportV7 wraps it in a
-		//BinaryWriter that closes it - but the capacity carries over, and that is where the cost
-		//was: an unsized MemoryStream starts at 256 bytes and doubles, so a 20 MB frame meant
-		//about seventeen reallocations and some 40 MB of copying, every step, all of it on the
-		//large object heap.
-		using var stream = new MemoryStream(ExportCapacity);
+		var stream = ExportBuffer;
+		stream.Position = 0;
+		stream.SetLength(0);
 		ExportToStream((ExportFlags)flags, formations, obstacles, stream);
-		var bytes = stream.ToArray();
-		//An eighth of headroom, so a frame that grows a little every step does not reallocate
-		//every step. Never shrinks: a run's frames only get bigger.
-		if (bytes.Length > ExportCapacity) ExportCapacity = bytes.Length + (bytes.Length >> 3);
-		return bytes;
+		// The returned frame owns its bytes: the background writer may outlive the next export.
+		return stream.ToArray();
 	}
 
 	public void ExportToObjFile(string fileName, IList<IFormation> formations, IList<IObstacle>? obstacles)
@@ -1311,6 +1309,8 @@ public class IrradianceClient
 
 	internal void WriteState(BinaryWriter writer, IReadOnlyList<IFormation> formations)
 	{
+		writer.Write(UseInternal);
+		writer.Write(IsOnline);
 		writer.Write(IsNight);
 		writer.Write(Irradiances.Count);
 		foreach (var value in Irradiances) writer.Write(value);
@@ -1325,10 +1325,14 @@ public class IrradianceClient
 			}
 			else writer.Write(-1);
 		}
+		writer.Write(Solver != null);
+		Solver?.WriteState(writer);
 	}
 
 	internal void ReadState(BinaryReader reader, IReadOnlyList<IFormation> formations)
 	{
+		UseInternal = reader.ReadBoolean();
+		IsOnline = reader.ReadBoolean();
 		IsNight = reader.ReadBoolean();
 		var count = reader.ReadInt32();
 		Irradiances.Clear();
@@ -1343,6 +1347,11 @@ public class IrradianceClient
 			var offsets = new int[length];
 			for (int i = 0; i < length; ++i) offsets[i] = reader.ReadInt32();
 			IrradianceFormationOffsets.Add(plant.AG, offsets);
+		}
+		if(reader.ReadBoolean())
+		{
+			if(Solver==null) throw new InvalidDataException("Checkpoint CPU lighting state does not match the requested light model.");
+			Solver.ReadState(reader);
 		}
 	}
 

@@ -368,16 +368,12 @@ namespace Agro
         public float PetalRimFraction { get; init; } = 0.85f;
 
         /// <summary>
-        /// Head diameter at or below which the whole flower is one collision body instead of one
-        /// per petal.
+        /// Legacy flower-head aggregation threshold, retained for saved species settings.
         /// </summary>
         /// <remarks>
-        /// A flower of five petals costs seven organs, and each petal was a separate body in the
-        /// broad phase while producing no useful contact at all: every petal of a head hangs off
-        /// the same receptacle, so they share a base point exactly and the narrow phase rejects
-        /// each pair on that equality. Collapsing the head to its receptacle removes that work.
-        /// Above this size the petals are large enough to matter on their own - a sunflower is the
-        /// obvious case - and are kept as individual bodies.
+        /// The current foliage solver checks the displayed petal sheets individually. A large
+        /// receptacle bounding box alone cannot represent them in the narrow phase, so this
+        /// setting no longer removes petals from collision discovery.
         /// </remarks>
         /// <value>Metres. Must be non-negative; zero keeps every petal separate.</value>
         public float CollisionAggregationDiameter { get; init; } = 0.04f;

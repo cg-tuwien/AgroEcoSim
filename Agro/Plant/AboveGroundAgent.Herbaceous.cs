@@ -10,8 +10,7 @@ namespace Agro
             static bool IsFlowerOrgan(OrganTypes organ) => OrganTypes.FlowerBud <= organ && organ <= OrganTypes.FlowerBaseBud;
 
             /// <summary>
-            /// Consecutive blocked ticks after which a deflected rhizome apex gives up
-            /// and retires into a stem segment.
+            /// Local geometry attempts before the rhizome apex pauses until its next retry.
             /// </summary>
             const byte MaximumBlockedRhizomeAttempts = 3;
             public static void Tick(ref AboveGroundAgent agent, PlantSubFormation<AboveGroundAgent> formation, int agentID, uint timestep)
@@ -66,6 +65,7 @@ namespace Agro
                     }
                 }
 
+                formation.MarkDevelopmentPhysiology(agent);
                 switch (agent.Organ)
                 {
                     //leafs fall off with increasing age
@@ -73,7 +73,7 @@ namespace Agro
                     {
                         //Only the first segment of a petiole ages out. An inner segment renewing
                         //itself would replace one link of the chain and orphan everything past it.
-                        if (ageHours > species.LeafMaximumAgeHours
+                        if (!formation.HasPendingDevelopment(agentID) && ageHours > species.LeafMaximumAgeHours
                             && formation.GetOrgan(agent.Parent) != OrganTypes.Meristem
                             && formation.GetOrgan(agent.Parent) != OrganTypes.Petiole)
                         {
@@ -131,8 +131,8 @@ namespace Agro
                     return;
                 }
 
-                //Nothing between this organ and the seed may be stuck in an obstacle: see
-                //AboveGroundAgent.GrowthBlocked.
+                // Suspension is local to this organ; an obstructed sibling or supporting
+                // axis does not suppress an independently admissible growth increment.
                 if (agent.Energy > enoughEnergyState && !agent.IsRizome && !agent.GrowthBlocked)
                 {
                     //Growth and branching
@@ -333,18 +333,9 @@ namespace Agro
                                     wasMeristem = true;
                                     ContinueCrown(ref agent, formation, agentID, prevResources, prevProduction);
 
-                                    var parent = agent.Parent;
-                                    while (parent >= 0 && !formation.GetIsRizome(parent))
-                                    {
-                                        foreach (var child in formation.GetChildren(parent))
-                                        {
-                                            if (formation.GetOrgan(child).Equals(OrganTypes.Petiole))
-                                            {
-                                                ReorientPetiole(formation, child);
-                                            }
-                                        }
-                                        parent = formation.GetParent(parent);
-                                    }
+                                    // Existing petioles are moved by contact mechanics. Sending
+                                    // orientation messages here changed mature rest frames even
+                                    // when this continuation's geometry was later rejected.
                                 }
                             }
                             else
@@ -369,7 +360,7 @@ namespace Agro
                                         if (plant.RNG.NextFloatAccum(production, world.HoursPerTick))
                                         {
                                             Debug.WriteLine($"DEL LEAF {agentID} % {production} @ {timestep}");
-                                            formation.Death(agentID);
+                                            formation.Death(agentID, reason: OrganDeathReason.Resources);
                                         }
                                     }
                                 }
@@ -386,12 +377,12 @@ namespace Agro
                             {
                                 if (!agent.FlowerAgent.flowerBase)
                                 {
-                                    formation.Death(agentID);
+                                    formation.Death(agentID, reason: OrganDeathReason.Resources);
                                     //The whole petiole, not the segment this organ hangs off - Death
                                     //cascades to children, so killing the first segment takes the
                                     //rest of the chain with it. Killing the last one left the
                                     //earlier segments standing as a bare stub.
-                                    formation.Death(PetioleChainRoot(formation, agent.Parent));
+                                    formation.Death(PetioleChainRoot(formation, agent.Parent), reason: OrganDeathReason.Resources);
                                 }
                             }
                             break;
@@ -406,7 +397,7 @@ namespace Agro
                                 else
                                 {
 
-                                    formation.Death(agentID);
+                                    formation.Death(agentID, reason: OrganDeathReason.Resources);
                                 }
                             }
                             break;
@@ -437,10 +428,23 @@ namespace Agro
                         if (species.RetainDormantRhizomes || phase == SeasonalPhase.ResetPending)
                             agent.Energy = 0f;
                         else
-                            formation.Death(agentID);
+                            formation.Death(agentID, reason: OrganDeathReason.Resources);
                         return;
                     }
 
+                    if (agent.GrowthBlocked || agent.LoadLimited)
+                    {
+                        // Use the same resource-limited radial rate as an extending apex.
+                        // Suspended extension must not create free strengthening in dormancy.
+                        if (agent.Organ != OrganTypes.Bud && phase != SeasonalPhase.ResetPending)
+                        {
+                            var reserve = Math.Clamp(agent.Energy / Math.Max(1e-12f, agent.EnergyStorageCapacity()), 0f, 1f);
+                            var radial = 2e-5f * world.HoursPerTick * species.RhizomeGrowthRateScale
+                                * species.GetDominanceFactor(agent.DominanceLevel) * reserve * Math.Clamp(plant.WaterBalance, 0f, 1f);
+                            agent.Radius = Math.Max(agent.Radius, Math.Min(species.RhizomeSegmentRadius, agent.Radius + radial));
+                        }
+                        return;
+                    }
                     if (agent.Organ == OrganTypes.Bud)
                     {
                         TryActivateRhizomeBud(ref agent, plant, species, phase, ageHours);
@@ -541,7 +545,9 @@ namespace Agro
                                     if (agent.RhizomeDevelopment.BlockedAttempts >= MaximumBlockedRhizomeAttempts
                                         || !(species.RhizomeObstacleDeflectionAngle > 0f))
                                     {
-                                        agent.Organ = OrganTypes.Stem;
+                                        agent.RhizomeDevelopment.BlockedAttempts = 0;
+                                        agent.GrowthBlocked = true;
+                                        formation.SetObstruction(agentID, true);
                                         return;
                                     }
 
@@ -552,17 +558,15 @@ namespace Agro
                                     // just swing the apex back onto the heading that was already blocked.
                                     // Neighbouring axes turn opposite ways, as they do for axillary buds.
                                     var side = agent.RhizomeDevelopment.SegmentDepth % 2 == 0 ? 1f : -1f;
-                                    agent.SetStructuralOrientation(HorizontalRhizomeOrientation(
-                                        MathF.Atan2(direction.Z, direction.X)
-                                        + side * species.RhizomeObstacleDeflectionAngle
-                                        + plant.RNG.NextFloatVar(5f * MathF.PI / 180f)));
+                                    agent.SetOrientation(PlantSubFormation<AboveGroundAgent>.LimitJointBend(agent.baseOrientation,
+                                        TurnRhizome(agent.Orientation,side * species.RhizomeObstacleDeflectionAngle)));
                                     return;
                                 }
 
                                 agent.RhizomeDevelopment.BlockedAttempts = 0;
 
-                                if (plant.Soil.IntersectPoint(formation.GetBaseCenterWorld(agentID) + Vector3.Transform(Vector3.UnitX, formation.GetDirection(agentID)) * agent.Length + Vector3.Transform(Vector3.UnitX, agent.Orientation) * agent.LengthVar, plant.SoilIndex) < 0)
-                                    return;
+                                // Rhizomes may leave substrate. Geometry support and elastic
+                                // load limits, not virtual water-cell lookup, govern that growth.
 
                                 {
                                     var parentRadius = (agent.Parent >= 0 && !formation.GetIsRizome(agent.Parent)) ? formation.GetBaseRadius(agent.Parent) : float.MaxValue;
@@ -603,7 +607,7 @@ namespace Agro
             {
                 var plant = formation.Plant;
                 var species = plant.Parameters;
-                if (ageHours <= 24f || !species.CrownBudActivationPeriod.HasFlag(phase) ||
+                if (agent.GrowthBlocked || agent.LoadLimited || formation.IsLoadLimited(agent.Parent) || ageHours <= 24f || !species.CrownBudActivationPeriod.HasFlag(phase) ||
                     agent.Energy <= agent.EnoughEnergy())
                     return false;
 
@@ -643,17 +647,16 @@ namespace Agro
                 agent.WoodFactor = 0f;
                 agent.Radius = Math.Max(agent.Radius, species.CrownBudRadius);
 
-                // The short basal riser lifts the first compact leaf node above a
-                // surface-close rhizome. Subsequent crown internodes use NodeDistance.
-                // GetBaseCenter matches the frame the tree cache seeds roots with,
-                // which is plant.Position; GetBaseCenterWorld adds the soil field
-                // origin and made this subtraction mix two frames. The riser is also
-                // floored, because a herbaceous stem only ever grows in radius, so a
-                // zero-length riser would stay zero - and have no volume - forever.
-                var baseY = formation.GetBaseCenter(agentID).Y;
-                agent.Length = Math.Max(species.MinimumInternodeLength,
-                    Math.Max(species.CrownNodeHeightAboveSoil,
-                        plant.Position.Y - baseY + species.CrownNodeHeightAboveSoil));
+                // Rise from this bud, including a bud on a hanging span. The mother's
+                // seed elevation must not turn a lower crown into a metre-long riser.
+                var crownBase = formation.GetBaseCenterWorld(agentID);
+                var emergence = 0f;
+                var scene = plant.World.Collisions.StaticScene;
+                if (scene.InsideSoil(crownBase, 1f)
+                    && scene.ClosestSoilSurface(crownBase, crownBase + Vector3.UnitY * 0.1f,
+                        0.0001f, out var surface))
+                    emergence = Math.Max(0f, surface.Point.Y - crownBase.Y);
+                agent.Length = Math.Max(species.MinimumInternodeLength, emergence + species.CrownNodeHeightAboveSoil);
                 agent.LengthVar = agent.Length;
                 agent.Organ = OrganTypes.Stem;
                 agent.GrowthTimeVar = plant.World.HoursPerTick /
@@ -853,15 +856,11 @@ namespace Agro
 
             static Quaternion ApicalRhizomeContinuationOrientation(PlantFormation2 plant, AboveGroundAgent agent)
             {
-                var direction = Vector3.Transform(Vector3.UnitX, agent.Orientation);
-                var azimuth = MathF.Atan2(direction.Z, direction.X) + plant.RNG.NextFloatVar(10f * MathF.PI / 180f);
-                return HorizontalRhizomeOrientation(azimuth);
+                return TurnRhizome(agent.Orientation, plant.RNG.NextFloatVar(10f * MathF.PI / 180f));
             }
 
             static Quaternion AxillaryRhizomeBudOrientation(PlantFormation2 plant, AboveGroundAgent agent, int budIndex, int budCount)
             {
-                var direction = Vector3.Transform(Vector3.UnitX, agent.Orientation);
-                var azimuth = MathF.Atan2(direction.Z, direction.X);
                 var rank = budIndex / 2;
                 var rankCount = Math.Max(1, (budCount + 1) / 2);
                 var magnitude = rankCount == 1
@@ -870,12 +869,15 @@ namespace Agro
                 // A single axillary bud alternates sides at successive nodes instead of
                 // introducing a permanent clockwise branching bias.
                 var side = (budIndex + agent.RhizomeDevelopment.SegmentDepth) % 2 == 0 ? 1f : -1f;
-                return HorizontalRhizomeOrientation(azimuth + side * magnitude + plant.RNG.NextFloatVar(5f * MathF.PI / 180f));
+                return TurnRhizome(agent.Orientation, side * magnitude + plant.RNG.NextFloatVar(5f * MathF.PI / 180f));
             }
 
             // System.Numerics uses the right-hand convention: a positive rotation
             // around +Y turns +X toward -Z. Negate the geometric X/Z azimuth when
             // constructing its quaternion so successive segments keep their heading.
+            static Quaternion TurnRhizome(Quaternion orientation, float azimuth) =>
+                Quaternion.Normalize(Quaternion.CreateFromAxisAngle(Vector3.UnitY, -azimuth) * orientation);
+
             static Quaternion HorizontalRhizomeOrientation(float azimuth) =>
                 Quaternion.CreateFromAxisAngle(Vector3.UnitY, -azimuth);
 

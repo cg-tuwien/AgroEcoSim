@@ -38,6 +38,28 @@ public struct BvhItem
 /// </remarks>
 public struct BvhBuilder
 {
+	/// <summary>Remove unused parallel-build ranges without changing leaf or sibling order.</summary>
+	public static BvhNode[] Compact(BvhNode[] source)
+	{
+		if (source.Length == 0) return [];
+		var result = new List<BvhNode> { source[0] };
+		var queue = new Queue<(int Source, int Target)>();
+		queue.Enqueue((0, 0));
+		while (queue.Count > 0)
+		{
+			var (s, t) = queue.Dequeue();
+			var node = source[s];
+			if (node.Count == 0)
+			{
+				var next = result.Count;
+				result.Add(source[node.Left]); result.Add(source[node.Left + 1]);
+				queue.Enqueue((node.Left, next)); queue.Enqueue((node.Left + 1, next + 1));
+				node.Left = next;
+			}
+			result[t] = node;
+		}
+		return result.ToArray();
+	}
 	const MethodImplOptions AI = MethodImplOptions.AggressiveInlining;
 	const int Bins = 12;
 	const int MaxDepth = 48;

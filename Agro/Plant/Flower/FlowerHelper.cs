@@ -231,7 +231,8 @@ namespace Agro
                 {
 
                     grow(ref agent, agentID, formation);
-                    chaning(ref agent, agentID, formation, timestep);
+                    if (!agent.GrowthBlocked && !agent.LoadLimited)
+                        chaning(ref agent, agentID, formation, timestep);
                 }
                 else
                     receit(ref agent, agentID, formation);
@@ -253,9 +254,6 @@ namespace Agro
             /// </remarks>
             private Quaternion ScapeOrientation(Quaternion orientation)
             {
-                if (_settings.ScapeGravitropicSetPointAngle <= 0f)
-                    return PlantFormation2.AdjustUpBase(orientation, up: true);
-
                 var target = AboveGroundAgent.GravitropicSetPointOrientation(orientation,
                     _settings.ScapeGravitropicSetPointAngle);
                 return Quaternion.Slerp(orientation, target,
@@ -302,7 +300,7 @@ namespace Agro
                         formation.Plant,
                         agentID,
                         OrganTypes.FlowerMeristem,
-                        agent.RandomOrientation(formation.Plant, formation.Plant.Parameters, orientation),
+                        agent.RandomOrientation(formation.Plant, formation.Plant.Parameters, orientation, gravitropism: false),
                         0.1f * agent.Energy,
                         initialResources: formation.DailyResourceMax,
                         initialProduction: formation.DailyProductionMax,
@@ -370,9 +368,9 @@ namespace Agro
                                     _settings.FlowerLateralInclinationDegrees,
                                     _settings.FlowerLateralAzimuthOffsetDegrees);
 
-                                var flowerStem = new AboveGroundAgent(formation.Plant, agentID, OrganTypes.FlowerStem, agent.RandomOrientation(formation.Plant, formation.Plant.Parameters, or), 0.1f * agent.Energy, initialResources: formation.DailyResourceMax, initialProduction: formation.DailyProductionMax, flowerAgent: floweragent) { Water_g = 0.1f * agent.Water_g, LateralAngle = lateralPitch, DominanceLevel = agent.DominanceLevel, FlowerAgent = floweragent , Length = 0.005f/2f, Radius= 0.00025f };
+                                var flowerStem = new AboveGroundAgent(formation.Plant, agentID, OrganTypes.FlowerStem, agent.RandomOrientation(formation.Plant, formation.Plant.Parameters, or, gravitropism: false), 0.1f * agent.Energy, initialResources: formation.DailyResourceMax, initialProduction: formation.DailyProductionMax, flowerAgent: floweragent) { Water_g = 0.1f * agent.Water_g, LateralAngle = lateralPitch, DominanceLevel = agent.DominanceLevel, FlowerAgent = floweragent , Length = 0.005f/2f, Radius= 0.00025f };
                                 var meristem = formation.Birth(flowerStem);
-                                var flowerStem1 = new AboveGroundAgent(formation.Plant, meristem, OrganTypes.FlowerStem, agent.RandomOrientation(formation.Plant, formation.Plant.Parameters, or), 0.1f * agent.Energy, initialResources: formation.DailyResourceMax, initialProduction: formation.DailyProductionMax, flowerAgent: floweragent) { Water_g = 0.1f * agent.Water_g, LateralAngle = lateralPitch, DominanceLevel = agent.DominanceLevel, FlowerAgent = floweragent, Length = 0.005f / 2f, Radius = 0.00025f };
+                                var flowerStem1 = new AboveGroundAgent(formation.Plant, meristem, OrganTypes.FlowerStem, agent.RandomOrientation(formation.Plant, formation.Plant.Parameters, or, gravitropism: false), 0.1f * agent.Energy, initialResources: formation.DailyResourceMax, initialProduction: formation.DailyProductionMax, flowerAgent: floweragent) { Water_g = 0.1f * agent.Water_g, LateralAngle = lateralPitch, DominanceLevel = agent.DominanceLevel, FlowerAgent = floweragent, Length = 0.005f / 2f, Radius = 0.00025f };
                                 var meristem1 = formation.Birth(flowerStem1);
 
                                 agent.Energy *= 0.9f;
@@ -442,7 +440,7 @@ namespace Agro
                                 }
 
                                 var floweragent = new Flower() { BirthTime = agent.FlowerAgent.BirthTime, debth = debth + 1, FlowerStartTime = agent.FlowerAgent.FlowerStartTime };
-                                var meristem = formation.Birth(new(formation.Plant, agentID, OrganTypes.FlowerMeristem, agent.RandomOrientation(formation.Plant, formation.Plant.Parameters, orientation1), 0.1f * agent.Energy, initialResources: formation.DailyResourceMax, initialProduction: formation.DailyProductionMax, flowerAgent: floweragent) { Water_g = 0.1f * agent.Water_g, LateralAngle = lateralPitch, DominanceLevel = agent.DominanceLevel, FlowerAgent = floweragent });
+                                var meristem = formation.Birth(new(formation.Plant, agentID, OrganTypes.FlowerMeristem, agent.RandomOrientation(formation.Plant, formation.Plant.Parameters, orientation1, gravitropism: false), 0.1f * agent.Energy, initialResources: formation.DailyResourceMax, initialProduction: formation.DailyProductionMax, flowerAgent: floweragent) { Water_g = 0.1f * agent.Water_g, LateralAngle = lateralPitch, DominanceLevel = agent.DominanceLevel, FlowerAgent = floweragent });
                                 agent.Energy *= 0.9f;
                                 agent.Water_g *= 0.9f;
                             }

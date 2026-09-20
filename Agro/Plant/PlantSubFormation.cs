@@ -40,6 +40,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 	readonly HashSet<int> Deaths = [];
 	readonly HashSet<int> RemovedBirths = [];
 	int[] IndexMap = [];
+	ulong NextOrganId = 1;
 
 	readonly TreeCacheData TreeCache = new();
 
@@ -100,22 +101,26 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 
 	public int Birth(T agent)
 	{
+		if (agent.StableId == 0) agent.StableId = NextOrganId++;
 		Births.Add(agent);
 		return AgentCount + Births.Count - 1;
 	}
 
-	public List<int>? Death(int index)
+	public List<int>? Death(int index, bool force = false, OrganDeathReason reason = OrganDeathReason.Senescence)
 	{
+		if (index < 0 || index >= AgentCount) return null;
+		if (RecordingDevelopment) { DevelopmentDeaths.Add((index, reason)); return null; }
 		// Rhizomes are the persistent framework of the clonal Geraniums.  They
 		// may lose their aerial descendants during a resource shortage, but
 		// deleting one branch here recursively deletes every later crown and
 		// produces an implausible bare, collapsed plant.
-		if (IsAboveGround && Plant.Parameters.RetainDormantRhizomes && GetIsRizome(index))
+		if (!force && IsAboveGround && Plant.Parameters.RetainDormantRhizomes && GetIsRizome(index))
 			return null;
 
 		List<int> result = null;
 		if (Deaths.Add(index))
 		{
+			if (reason == OrganDeathReason.Resources) ++ResourceDeaths; else ++NaturalDeaths;
 			var buffer = new Queue<int>();
 			buffer.Enqueue(index);
 			while (buffer.Count > 0)
@@ -127,6 +132,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 					{
 						if (Deaths.Add(child))
 						{
+							if (reason == OrganDeathReason.Resources) ++ResourceDeaths; else ++NaturalDeaths;
 							result ??= [];
 							result.Add(child);
 							buffer.Enqueue(child);
@@ -162,6 +168,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 	/// <summary>Writes the live agents. See the note above on what is deliberately not written.</summary>
 	public void WriteState(BinaryWriter writer)
 	{
+		writer.Write(NextOrganId);
 		var live = Src();
 		writer.Write(live.Length);
 		writer.Write(MemoryMarshal.AsBytes(live));
@@ -191,6 +198,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 			var born = CollectionsMarshal.AsSpan(Births);
 			writer.Write(MemoryMarshal.AsBytes(born));
 		}
+		WriteGrowthState(writer);
 	}
 
 	/// <summary>
@@ -202,6 +210,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 	/// </summary>
 	public void ReadState(BinaryReader reader)
 	{
+		NextOrganId = reader.ReadUInt64();
 		var count = reader.ReadInt32();
 		if (count < 0) throw new InvalidDataException($"Negative agent count {count} in the checkpoint.");
 
@@ -253,6 +262,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 			bornBytes.AsSpan().CopyTo(MemoryMarshal.AsBytes(CollectionsMarshal.AsSpan(Births)));
 		}
 
+		ReadGrowthState(reader);
 		if (IsAboveGround)
 			BuildBvh();
 	}
@@ -262,6 +272,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 		if (Births.Count > 0 || Deaths.Count > 0)
 		{
 			var oldCount = AgentCount;
+			var geometryReindexed = Deaths.Count > 0;
 			RemovedBirths.Clear();
 			if (Deaths.Count > 0 && Births.Count > 0)
 			{
@@ -322,6 +333,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 			(ReadTMP ? AgentsTMP : Agents).AsSpan(0, Math.Max(oldCount, newCount)).Clear();
 			ReadTMP = !ReadTMP;
 			AgentCount = newCount;
+			ReindexGeometry(oldCount, newCount, geometryReindexed);
 			if (newCount < oldCount)
 				(ReadTMP ? AgentsTMP : Agents).AsSpan(newCount, oldCount - newCount).Clear();
 
@@ -336,6 +348,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 		else
 			TreeCache.UpdateBases(this);
 
+		RefreshOrganIndices();
 		if (IsAboveGround)
 			BuildBvh();
 		// The underground collision tree has no consumer at present. Reactivate
@@ -345,15 +358,17 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 
 	public void Tick(uint timestep)
 	{
+		CaptureGeometry();
 		SrcDst(out var src, out var dst);
 		src.CopyTo(dst);
+        PrepareGrowthAttempts(dst);
 		FloweringPhaseCached = false;
 		PhaseCacheTimestep = timestep;
 		CacheFloweringPhase = true;
 		try
 		{
 			for(int i = 0; i < dst.Length; ++i)
-				dst[i].Tick(this, i, timestep);
+				TickWithDevelopment(ref dst[i], i, timestep);
 		}
 		finally
 		{
@@ -548,18 +563,10 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 		return thickness * width * width * width / 12f;
 	}
 
-	internal void Gravity()
-	{
-		if (!IsAboveGround)
-            return;
-
-        var dst = Src(); //since Tick already swapped them
+    internal void RefreshMechanicalLoads()
+    {
+        var dst = Src();
         var count = dst.Length;
-
-
-
-        if (count == 0)
-            return;
         if (Weights.Count < count)
             Weights.AddRange(new float[count - Weights.Count]);
         if (WeightReoslveChildren.Count < count)
@@ -593,23 +600,29 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
                 var parent = GetParent(idx);
                 if (parent >= 0)
                 {
-                    //A supported organ's load is carried by the surface it rests on, not by its
-                    //ancestors - that is what a reaction force means. Without this the moment at
-                    //every node upstream of a grounded blade tip never collapses, so gravity keeps
-                    //driving it into the ground while the hard pass keeps pushing it back out.
-                    if (!dst[idx].GroundSupported)
-                    {
-                        Weights[parent] += Weights[idx];
-                        WeightedCentroids[parent] += WeightedCentroids[idx];
-                    }
+                    // A point contact cannot remove the whole descendant load. Keep it in
+                    // the moment sum; geometric reactions are applied by the contact solve.
+                    Weights[parent] += Weights[idx];
+                    WeightedCentroids[parent] += WeightedCentroids[idx];
                     if (--WeightReoslveChildren[parent] == 0)
                         internalNodesToProcess.Add(parent);
                 }
             }
             (leavesToProcess, internalNodesToProcess) = (internalNodesToProcess, leavesToProcess);
         }
+    }
 
+	internal void Gravity()
+	{
+		if (!IsAboveGround)
+            return;
 
+        var dst = Src(); //since Tick already swapped them
+        var count = dst.Length;
+        RefreshAnchors(Plant.World.Collisions.StaticScene);
+        if (count == 0)
+            return;
+        RefreshMechanicalLoads();
 
 		// Process nodes from roots to leaves, propagating rotations.  The response
 		// is specified per hour so changing the simulation timestep does not alter
@@ -634,7 +647,8 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 
 			var i = nodesToVisit.Dequeue();
 			ref var agent = ref dst[i];
-			if (GetIsRizome(i) || GetOrgan(i).Equals(OrganTypes.FlowerPadel))
+            agent.LoadLimited = false;
+			if ((GetIsRizome(i) && agent.SoilAnchored) || GetOrgan(i).Equals(OrganTypes.FlowerPadel))
 			{
 				foreach (var child in GetChildren(i))
 					nodesToVisit.Enqueue(child);
@@ -692,10 +706,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 			Quaternion rotation = Quaternion.Identity;
 			Quaternion appliedDelta = Quaternion.Identity;
 
-			//A supported organ rests on something; the surface takes the load and the cantilever is
-			//no longer loaded at all.
-			if (agent.GroundSupported)
-				totalWeight = 0f;
+			// Surface reactions are applied by the contact solve; all loads remain in the moment sum.
 
 			if (length > 1e-4f && radius > 0f && totalWeight > 0f)
 			{
@@ -711,7 +722,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 				//These get the real thing: the torque of the load they carry about their own base,
 				//resolved in their own frame. Everything below is the old scalar law, kept for the
 				//structural axes - see the remark on the two formulations further down.
-				if ((isBlade || isPetiole) && Collisions.CollisionSettings.VectorBending)
+				if ((isBlade || isPetiole || agent.IsRizome || IsFloralAxis(agent.Organ)) && Collisions.CollisionSettings.VectorBending)
 				{
 					//tau = r x F with F = (0, -W, 0), so |tau| = W * |horizontal offset to the load|
 					//and the axis falls out of the same cross product. This replaces BOTH the
@@ -754,7 +765,9 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 					}
 
 					var deltaThetaBlade = kappa.Length() * length;
-					if (deltaThetaBlade > 1e-7f)
+                    if (agent.IsRizome)
+                        agent.LoadLimited = !float.IsFinite(deltaThetaBlade) || deltaThetaBlade > Collisions.CollisionSettings.MaxElasticBendRadians;
+					if (deltaThetaBlade > 1e-7f && float.IsFinite(deltaThetaBlade))
 					{
 						var bladeAxis = kappa / kappa.Length();
 						//The equilibrium offset from the rest pose, not a per-step increment - the
@@ -772,6 +785,14 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 							appliedDelta = bladeOr * Quaternion.Inverse(agent.Orientation);
 							agent.SetOrientation(bladeOr);
 						}
+					}
+					else
+					{
+						// A released joint must relax even when its remaining load is axial or zero.
+						agent.targetOrientation = agent.baseOrientation;
+						var relaxed = Quaternion.Slerp(agent.Orientation, agent.baseOrientation, response);
+						appliedDelta = relaxed * Quaternion.Inverse(agent.Orientation);
+						agent.SetOrientation(relaxed);
 					}
 
 					PropagateToSubtree(dst, i, appliedDelta);
@@ -817,7 +838,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 
 				if (axis.LengthSquared() < 1e-8f)
 					axis = Vector3.Cross(baseDir, Vector3.UnitX);
-				float maxAllowedBend = MathF.PI - angleToDown;
+				float maxAllowedBend = MathF.Min(Collisions.CollisionSettings.MaxElasticBendRadians, MathF.PI - angleToDown);
 				float safeDelta = Math.Clamp(deltaTheta, 0f, maxAllowedBend);
 
 				var len = axis.Length();
@@ -844,8 +865,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 		refitAllBounds();
         //Foliage against foliage within one plant. Obstacles and soil are hard constraints and are
         //handled by the world collision phase regardless of this switch.
-        if (Collisions.CollisionSettings.Enabled && Plant.World.SoftCollisions)
-            collisionHandling();
+        // Dynamic contacts are resolved with static constraints by CollisionWorld, after Census.
     }
     /// <summary>
     /// Carries a rotation of one organ rigidly through everything beyond it.
@@ -871,6 +891,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
                 c.SetOrientation(Quaternion.Normalize(appliedDelta * c.Orientation));
                 c.baseOrientation = Quaternion.Normalize(appliedDelta * c.baseOrientation);
                 c.restOrientation = Quaternion.Normalize(appliedDelta * c.restOrientation);
+                c.targetOrientation = Quaternion.Normalize(appliedDelta * c.targetOrientation);
             }
         }
     }
@@ -893,7 +914,8 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
     internal bool IsCollisionEligiblePublic(int index) => IsCollisionEligible(index);
 
     bool IsCollisionEligible(int index) =>
-        !GetIsRizome(index) && GetOrgan(index) != OrganTypes.Leaf && GetLength(index) > 1e-3;
+        GetOrgan(index) != OrganTypes.Seed
+        && (GetLength(index) > 0f || GetBaseRadius(index) > 0f);
 
     /// <summary>
     /// Accepts a broad-phase pair for the narrow phase.
@@ -929,7 +951,8 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
         var tBroad = System.Diagnostics.Stopwatch.GetTimestamp();
         TicksEligibility += tBroad - tEligibility;
         OverlappingPairs.Clear();
-        CollisionBvh.GetOverlappingPairs(OverlappingPairs, InitialCollisionFilter, collisionsOnly: true);
+        CollisionBvh.GetOverlappingPairs(OverlappingPairs, InitialCollisionFilter, collisionsOnly: true,
+            maxPairs: Collisions.CollisionSettings.SoftCandidateBudget, traversalPhase: (uint)Plant.World.Timestep);
         var tNarrow = System.Diagnostics.Stopwatch.GetTimestamp();
         TicksBroad += tNarrow - tBroad;
         CollisionCandidatePairs += OverlappingPairs.Count;
@@ -937,6 +960,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
             break;
 
         var resolved = 0;
+        BeginContactSweep();
         foreach (var overlap in OverlappingPairs)
 		{
             if (resolved >= budget)
@@ -1007,18 +1031,11 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 
         TicksNarrow += System.Diagnostics.Stopwatch.GetTimestamp() - tNarrow;
 
+        var tRebase = System.Diagnostics.Stopwatch.GetTimestamp();
+        EndContactSweep(Collisions.CollisionSettings.MaxSoftCorrectionRadians);
+        TicksRebase += System.Diagnostics.Stopwatch.GetTimestamp() - tRebase;
         if (resolved == 0)
             break;
-
-        var tRebase = System.Diagnostics.Stopwatch.GetTimestamp();
-
-        //One rebase and one refit for the whole round, instead of one per contact. Later contacts
-        //in a round therefore read the positions the round started from - a Jacobi sweep. That is
-        //the trade that removes the cascade: the alternative walked every descendant of every
-        //moved organ and re-queried the hierarchy for each of them.
-        TreeCache.UpdateBases(this);
-        refitAllBounds();
-        TicksRebase += System.Diagnostics.Stopwatch.GetTimestamp() - tRebase;
         }
         }
         finally
@@ -1057,6 +1074,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
         {
             children.Enqueue(root);
             CollisionBvh.UpdateLeafBounds(root, CollisionBounds(root));
+            if (GetIsRizome(root)) RhizomeBvh.UpdateLeafBounds(root, ComputeBounds(root));
         }
         while (children.Count > 0)
         {
@@ -1065,9 +1083,11 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
             {
                 children.Enqueue(child);
                 CollisionBvh.UpdateLeafBounds(child, CollisionBounds(child));
+                if (GetIsRizome(child)) RhizomeBvh.UpdateLeafBounds(child, ComputeBounds(child));
             }
         }
         CollisionBvh.RefitUpdatedLeaves();
+        RhizomeBvh.RefitUpdatedLeaves();
     }
     /// <summary>
     /// Turns one organ about its base so that <paramref name="contact"/> moves
@@ -1121,32 +1141,9 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
     private static (Vector3 point1, Vector3 Point2, float distance) ClosestPointBetweenBranches(
         Vector3 base1, Vector3 dir1, float len1, Vector3 base2, Vector3 dir2, float len2)
     {
-        Vector3 u = dir1 * len1;
-        Vector3 v = dir2 * len2;
-
-        Vector3 w = base1 - base2;
-
-        float a = Vector3.Dot(u, u);
-        float b = Vector3.Dot(u, v);
-        float c = Vector3.Dot(v, v);
-        float d = Vector3.Dot(u, w);
-        float e = Vector3.Dot(v, w);
-        float denom = a * c - b * b;
-
-        float s = 0f, t = 0f;
-
-        if (denom > 1e-6f)
-        {
-            s = (b * e - c * d) / denom;
-            t = (a * e - b * d) / denom;
-        }
-        s = Math.Clamp(s, 0f, 1f);
-        t = Math.Clamp(t, 0f, 1f);
-        Vector3 cp1 = base1 + s * u;
-        Vector3 cp2 = base2 + t * v;
-        float distance = Vector3.Distance(cp1, cp2);
-
-        return (cp1, cp2, distance);
+        Collisions.StaticCollider.ClosestPointsBetweenSegments(base1, base1 + dir1 * len1,
+            base2, base2 + dir2 * len2, out var cp1, out var cp2, out var squared);
+        return (cp1, cp2, MathF.Sqrt(squared));
     }
     public Vector3 GetTipPosition(int index)
     {
@@ -1322,6 +1319,14 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 	/// </remarks>
 	internal void ApplyRotationDelta(int index, Quaternion delta, bool plastic)
 	{
+		if (BatchingContacts)
+		{
+			if (delta.W < 0f) delta = new(-delta.X, -delta.Y, -delta.Z, -delta.W);
+			var vector = new Vector3(delta.X, delta.Y, delta.Z);
+			var length = vector.Length();
+			if (length > 1e-8f) ContactTurns[index] += vector * (2f * MathF.Atan2(length, delta.W) / length);
+			return;
+		}
 		var dst = Src();
 		if (index < 0 || index >= dst.Length)
 			return;
@@ -1783,16 +1788,16 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 		: (AgentCount > index ? Agents[index].Orientation : Quaternion.Identity);
 
 	public OrganTypes GetOrgan(int index) => ReadTMP
-		? (AgentCount > index ? AgentsTMP[index].Organ : OrganTypes.Stem)
-		: (AgentCount > index ? Agents[index].Organ : OrganTypes.Stem);
+		? (index >= 0 && AgentCount > index ? AgentsTMP[index].Organ : OrganTypes.Stem)
+		: (index >= 0 && AgentCount > index ? Agents[index].Organ : OrganTypes.Stem);
 
 	public float GetWoodRatio(int index) => ReadTMP
 		? (AgentCount > index ? AgentsTMP[index].WoodRatio() : 0f)
 		: (AgentCount > index ? Agents[index].WoodRatio() : 0f);
 
     public bool GetIsRizome(int index) => ReadTMP
-           ? (AgentCount > index ? AgentsTMP[index].IsRizome : false)
-           : (AgentCount > index ? Agents[index].IsRizome : false);
+           ? (index >= 0 && AgentCount > index && AgentsTMP[index].IsRizome)
+           : (index >= 0 && AgentCount > index && Agents[index].IsRizome);
     public bool GetHasFlowerSupport(int index) => ReadTMP
        ? (AgentCount > index ? AgentsTMP[index].flowerSupport : false)
        : (AgentCount > index ? Agents[index].flowerSupport : false);
@@ -2008,54 +2013,44 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
             CollisionBvh.Clear();
             return;
         }
-        //Two hierarchies over disjoint organ sets, rather than one over every organ with a mask.
-        //The excluded organs are the problem: a leaf's bounds are inflated by its half WIDTH in
-        //all three axes, so the laminae - a quarter of all organs and never collision eligible -
-        //were the fattest boxes in the tree and inflated every ancestor of the ones that are.
+        // All physical organs participate in foliage contacts. The separate rhizome hierarchy
+        // also serves the existing developmental branching query; it is not an exclusion mask.
         var leaves = CollisionLeaves;
         var rhizomes = RhizomeLeaves;
         leaves.Clear();
         rhizomes.Clear();
 
         AggregatedPetals = 0;
-        var aggregated = MarkAggregatedFlowerHeads(dst.Length);
         for (int i = 0; i < dst.Length; ++i)
         {
             if (IsCollisionEligible(i))
             {
-                //A petal whose head is small enough is not a body of its own; its receptacle
-                //carries the whole head.
-                if (aggregated && AggregatedPetal[i])
-                {
-                    ++AggregatedPetals;
-                    continue;
-                }
+                // A broad receptacle box does not make its narrow-phase sphere represent
+                // the petals. Keep their actual sheets so aggregation cannot hide crossings.
                 leaves.Add((i, CollisionBounds(i)));
             }
-            else if (GetIsRizome(i))
+            if (GetIsRizome(i))
                 rhizomes.Add((i, ComputeBounds(i)));
         }
 
         CollisionBodies = leaves.Count;
         CollisionBvh.Build(CollectionsMarshal.AsSpan(leaves));
-        if (Collisions.CollisionSettings.PruneByCrown)
-            CollisionBvh.SetCrowns(PrunableCrown);
+        // Different leaves of the same crown can touch; crown-wide pruning is not valid.
         RhizomeBvh.Build(CollectionsMarshal.AsSpan(rhizomes));
     }
     //Temporal coherence for the static passes: an organ that was measured well clear of every
     //wall does not have to be measured again until it has moved far enough to matter. Indexed by
     //agent, so Census invalidates the lot whenever it reindexes.
     internal float[] StaticClearance = [];
-    internal Vector3[] ClearanceCentre = [];
-    internal float[] ClearanceExtent = [];
+    internal Collisions.OrganPose[] ClearancePose = [];
 
     internal void EnsureClearanceCapacity(int count)
     {
         if (StaticClearance.Length >= count)
             return;
-        Array.Resize(ref StaticClearance, count);
-        Array.Resize(ref ClearanceCentre, count);
-        Array.Resize(ref ClearanceExtent, count);
+        var capacity = Math.Max(count, Math.Max(16, StaticClearance.Length * 2));
+        Array.Resize(ref StaticClearance, capacity);
+        Array.Resize(ref ClearancePose, capacity);
     }
 
     /// <summary>Drops every cached clearance. Census moves agents between indices, so a cache keyed
@@ -2063,91 +2058,20 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
     internal void InvalidateStaticClearance() => Array.Clear(StaticClearance);
 
     /// <summary>
-    /// The bounds an organ occupies in the collision hierarchy.
+    /// The current and swept bounds an organ occupies in the collision hierarchy.
     /// </summary>
-    /// <remarks>
-    /// A receptacle whose petals were folded into it carries the whole head, so it must be bounded
-    /// by the head and not by itself. Every refit recomputes bounds from scratch, so returning
-    /// <see cref="ComputeBounds"/> here would shrink an aggregated head back to the receptacle on
-    /// the first refit and leave its petals - which were never inserted as bodies - represented by
-    /// nothing at all.
-    /// </remarks>
     Bvh.BoundingBox CollisionBounds(int index)
     {
         var bounds = ComputeBounds(index);
-        if (index >= HeadBoundsValid.Length || !HeadBoundsValid[index])
-            return bounds;
-
-        foreach (var child in GetChildren(index))
-            if (GetOrgan(child) == OrganTypes.FlowerPadel)
-                bounds = Bvh.BoundingBox.Merge(bounds, ComputeBounds(child));
+        if (index < PreviousGeometry.Length && PreviousGeometry[index].Exists)
+        {
+            var template = GetLaminaTemplate(index);
+            var previous = new Collisions.ContactShape(PreviousGeometry[index].Pose, template);
+            var current = new Collisions.ContactShape(GetContactPose(index), template);
+            var swept = previous.SweptBounds(current);
+            bounds = Bvh.BoundingBox.Merge(bounds, new(swept.Min - FieldOrigin, swept.Max - FieldOrigin));
+        }
         return bounds;
-    }
-
-    bool[] AggregatedPetal = [];
-    bool[] HeadBoundsValid = [];
-    Bvh.BoundingBox[] HeadBounds = [];
-
-    /// <summary>
-    /// Collapses each small flower head into a single body carried by its receptacle.
-    /// </summary>
-    /// <remarks>
-    /// Every petal of a head hangs off the same receptacle, so the tree cache gives them all the
-    /// same base point and the narrow phase rejects every petal pair on that exact equality - they
-    /// were costing broad-phase work and producing no contact at all. Above
-    /// <see cref="FlowerSettings.CollisionAggregationDiameter"/> the petals are big enough to be
-    /// worth resolving individually and are left alone.
-    ///
-    /// The head's size is the largest side of the box enclosing the receptacle and its petals.
-    /// </remarks>
-    /// <returns>False when nothing was aggregated, so the caller can skip the lookups.</returns>
-    bool MarkAggregatedFlowerHeads(int count)
-    {
-        var limit = Plant.Parameters.FlowerSettings.CollisionAggregationDiameter;
-        if (AggregatedPetal.Length < count)
-        {
-            Array.Resize(ref AggregatedPetal, count);
-            Array.Resize(ref HeadBoundsValid, count);
-            Array.Resize(ref HeadBounds, count);
-        }
-        Array.Clear(AggregatedPetal, 0, AggregatedPetal.Length);
-        Array.Clear(HeadBoundsValid, 0, HeadBoundsValid.Length);
-        if (limit <= 0f)
-            return false;
-
-        var any = false;
-        for (int i = 0; i < count; ++i)
-        {
-            if (GetOrgan(i) != OrganTypes.FlowerBud)
-                continue;
-
-            var children = GetChildren(i);
-            var petals = 0;
-            var bounds = ComputeBounds(i);
-            foreach (var child in children)
-                if (GetOrgan(child) == OrganTypes.FlowerPadel)
-                {
-                    bounds = Bvh.BoundingBox.Merge(bounds, ComputeBounds(child));
-                    ++petals;
-                }
-
-            if (petals == 0)
-                continue;
-
-            var extent = bounds.Max - bounds.Min;
-            if (MathF.Max(extent.X, MathF.Max(extent.Y, extent.Z)) > limit)
-                continue;
-
-            foreach (var child in children)
-                if (GetOrgan(child) == OrganTypes.FlowerPadel)
-                    AggregatedPetal[child] = true;
-
-            HeadBounds[i] = bounds;
-            HeadBoundsValid[i] = true;
-            any = true;
-        }
-
-        return any;
     }
 
     public Bvh.BoundingBox ComputeBoundsFromParameters(Vector3 baseCenter, Quaternion orientation, float length, float radius)
@@ -2194,6 +2118,11 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
             case OrganTypes.Leaf:
             case OrganTypes.FlowerPadel:
             {
+                if (GetLaminaTemplate(index) is { } template)
+                {
+                    var pose = GetContactPose(index) with { Base = baseCenter };
+                    return template.Bounds(pose);
+                }
                 //A flat rectangle: length along the organ axis, half width across it, and a
                 //thickness that is almost nothing along the blade normal.
                 var across = Vector3.Transform(Vector3.UnitZ, orientation) * radius;

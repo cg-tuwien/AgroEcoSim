@@ -13,6 +13,7 @@ namespace Agro;
 [StructLayout(LayoutKind.Auto)]
 public struct UnderGroundAgent : IPlantAgent
 {
+	public ulong StableId { get; set; }
 	const MethodImplOptions AI = MethodImplOptions.AggressiveInlining;
 	///////////////////////////
 	#region DATA
@@ -122,6 +123,10 @@ public struct UnderGroundAgent : IPlantAgent
     //Roots are inside the soil by definition, so nothing ever supports one against gravity and
     //nothing bends one plastically; these exist to satisfy IPlantAgent.
     public bool GroundSupported { get; set; }
+    public bool SoilAnchored { get; set; }
+    public bool LoadLimited { get; set; }
+    public float ObstructionHours { get; set; }
+    public void SetGeometry(float length, float radius) { Length = length; Radius = radius; }
     public float PlasticAngle { get; set; }
     public Quaternion targetOrientation { get; set; }
 

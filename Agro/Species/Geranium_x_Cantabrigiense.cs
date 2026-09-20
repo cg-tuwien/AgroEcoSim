@@ -169,10 +169,10 @@ public static class Geranium_x_Cantabrigiense
             // finish only a little above the surrounding leaves. Every base segment used
             // to be built with AdjustUpBase, which forces it straight up regardless of
             // the species - correct for a Bergenia scape, and the reason this one stuck
-            // out of the mat like a rod. A 40-degree set-point approached over two or
-            // three segments gives the spline the leaves already have.
+            // out of the mat like a rod. Preserve the initial emergence, then inherit
+            // each accepted tangent; contact and the offset bloom load supply bending.
             ScapeGravitropicSetPointAngle = 20f * MathF.PI / 180f,
-            ScapeGravitropism = 0.35f,
+            ScapeGravitropism = 0f, // Continuations follow the accepted tangent, including contact deflection.
             // Stem green, so the scape reads as the stem tissue it is. Before this every
             // floral organ was handed the leaf phenology on the wire and the viewport
             // then ignored it and greyed the scape towards wood.

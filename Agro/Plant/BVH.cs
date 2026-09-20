@@ -260,7 +260,8 @@ public class Bvh
     /// <summary>Append pairs to a caller-owned buffer. The eligibility mask only applies to
     /// collision queries; the full tree remains available for rhizome placement queries.</summary>
     public void GetOverlappingPairs(List<(int first, int second)> result,
-        Func<int, int, bool>? filter = null, bool collisionsOnly = false)
+        Func<int, int, bool>? filter = null, bool collisionsOnly = false, int maxPairs = int.MaxValue,
+        uint traversalPhase = 0)
     {
         if (IsEmpty)
             return;
@@ -279,10 +280,14 @@ public class Bvh
                 continue;
 
             pairStack.Push((n.Left, n.Right));
-            internalStack.Push(n.Left);
-            internalStack.Push(n.Right);
+            var reverse = traversalPhase != 0 && (((uint)idx * 2654435761u ^ traversalPhase * 2246822519u) & 4) != 0;
+            internalStack.Push(reverse ? n.Right : n.Left);
+            internalStack.Push(reverse ? n.Left : n.Right);
         }
-        while (pairStack.Count > 0)
+        var visited = 0;
+        // Bound rejected pairs too: capping only emitted contacts leaves a dense crown's
+        // quadratic search unbounded. Vary the traversal with the step to share the budget.
+        while (pairStack.Count > 0 && visited++ < maxPairs)
         {
             var (aIndex, bIndex) = pairStack.Pop();
             var a = nodes[aIndex];
@@ -309,6 +314,7 @@ public class Bvh
                 // Each leaf pair belongs to exactly one lowest common ancestor.
                 if (filter == null || filter(pair.Item1, pair.Item2))
                     result.Add((pair.Item1, pair.Item2));
+                if (result.Count >= maxPairs) return;
             }
             else if (aLeaf)
             {
@@ -477,11 +483,14 @@ public class Bvh
     /// buffer. The allocating overload above is called once per growing meristem per step, and
     /// used to allocate both the result list and its traversal stack every time.</summary>
     public void QueryOverlaps(in BoundingBox bounds, List<int> result)
+        => QueryOverlaps(bounds, result, traversalStack);
+
+    /// <summary>Read-only traversal with caller-owned scratch for shared immutable hierarchies.</summary>
+    public void QueryOverlaps(in BoundingBox bounds, List<int> result, Stack<int> stack)
     {
         if (IsEmpty)
             return;
 
-        var stack = traversalStack;
         stack.Clear();
         stack.Push(root);
 

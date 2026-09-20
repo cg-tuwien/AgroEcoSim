@@ -71,12 +71,35 @@ Useful regression scenarios:
 | Carex morrowii 'Variegata', 100 days, 1-hour ticks | Foliage and mass stability | No downward/inverted organs |
 | Carex morrowii 'Variegata', 100 days, 4-hour ticks | Timestep regression | No downward/inverted organs |
 | Carex morrowii 'Variegata', 450 days, 4-hour ticks | Active flowering culm | Culm remains upright; no inversions |
-| Geranium Macrorrhizum, 140 and 162 days, 4-hour ticks | Flower chain | Buds, then petals, are created |
+| Geranium Macrorrhizum, daily through 162 days, 4-hour ticks | Flower chain | Buds precede petals; follow the interval, since a final snapshot can miss a completed bloom |
 
 Longer probes can be costly. Start with one species and one deterministic seed;
 expand only after the targeted scenario behaves correctly.
 
 After dealing with a mismatch of simulated output versus botanical ground truth, add a new regression scenario (if not already present) to assure that the issue does not reappear.
+
+Collision and saved-run regression scenarios are documented in
+[`Agro/COLLISIONS.md`](Agro/COLLISIONS.md). In particular, preserve the translated
+tray/blade-edge sweep test, thin-lamina wall crossing, Bergenia scape under a
+ceiling, embedded versus loaded airborne rhizome, and nonlethal obstruction with
+daily retries (72 hours after three failed attempts) at both 1-hour and 4-hour ticks.
+Also test same-crown leaf contacts, leaf-edge escape, widening and swept crossings,
+retained developmental transactions, obstacle removal, and Geranium tangent inheritance.
+Check tiny curved leaves as well: mesh relief must scale with actual blade width in
+both collision templates and exported matrices, or seedling leaves are millimetres
+deep before they have expanded. Relative sibling sweeps must remove their common
+parent's elongation and rotation. Exercise four plants with independent contacting
+pairs to check deterministic parallel contact scheduling.
+Rollback of a support must preserve its descendants' independent growth and bends;
+ancestor thickening does not move a child's attachment and must not expand rollback.
+Final restoration must copy accepted frames exactly, including tiny support-frame
+changes: repeated quaternion normalization can push a tip outside the attachment
+exemption boundary and invalidate an otherwise admissible fallback.
+At coincident contacts, remembered sides take precedence over the organ-base fallback.
+Checkpoint contact tests must compare actual exported frames after resume, including
+organ removal/reindexing, warm versus rebuilt clearance caches, and directional-guidance refresh. Live checkpoint version 3
+stores stable organ IDs, pending development, retries, sparse contacts and guidance;
+older live checkpoints are rejected, while their saved playback remains readable.
 
 ## Key simulator invariants and traps
 

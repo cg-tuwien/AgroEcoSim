@@ -70,6 +70,34 @@ public sealed class CpuLightSolver
 	}
 
 	readonly RayScene Scene = new();
+	uint GuidanceSceneTimestep = uint.MaxValue;
+
+	// Previous-step foliage radiosity is temporal state, not reconstructible geometry.
+	// Without it a resumed CPU run agrees for one frame, then diverges at its first bounce.
+	internal void WriteState(BinaryWriter writer)
+	{
+		writer.Write(PlantRadiosity.Length);
+		for(int i=0;i<PlantRadiosity.Length;++i)
+		{ writer.Write(PlantRadiosity[i]); writer.Write(PlantRadiosityKnown[i]); }
+	}
+
+	internal void ReadState(BinaryReader reader)
+	{
+		var count=reader.ReadInt32();
+		EnsureSlots(count);
+		for(int i=0;i<count;++i)
+		{ PlantRadiosity[i]=reader.ReadSingle(); PlantRadiosityKnown[i]=reader.ReadBoolean(); }
+		GuidanceSceneTimestep=uint.MaxValue;
+	}
+
+	public void UpdateGrowthGuidance(AgroWorld world, uint timestep, IList<IFormation> formations, IList<IObstacle> obstacles)
+	{
+		if (!world.GrowthLightGuidanceEnabled || !formations.OfType<PlantFormation2>().Any(p => p.AG.NeedsGrowthGuidance())) return;
+		if (GuidanceSceneTimestep != timestep)
+			Run(world, timestep, formations, obstacles, null, null, gatherLeaves: false, guidanceOnly: true);
+		else
+			foreach (var plant in formations.OfType<PlantFormation2>()) plant.AG.RefreshGrowthGuidance(Scene);
+	}
 
 	/// <summary>Hemisphere rays per sensor and step. Split between the two faces of a leaf.</summary>
 	public int DiffuseSamples { get; }
@@ -82,6 +110,7 @@ public sealed class CpuLightSolver
 	int SunSubSteps;
 
 	bool StaticReady;
+	IObstacle[] GuidanceStaticObstacles = [];
 	int FirstPlantGroup;
 	float[] StaticAlbedo = [];
 	float[] StaticShading = [];
@@ -154,7 +183,7 @@ public sealed class CpuLightSolver
 	}
 
 	bool Run(AgroWorld world, uint timestep, IList<IFormation> formations, IList<IObstacle> obstacles,
-			 Dictionary<IFormation, int[]>? offsets, List<float>? irradiances, bool gatherLeaves)
+			 Dictionary<IFormation, int[]>? offsets, List<float>? irradiances, bool gatherLeaves, bool guidanceOnly = false)
 	{
 		offsets?.Clear();
 		irradiances?.Clear();
@@ -162,7 +191,7 @@ public sealed class CpuLightSolver
 		var diffuseDome = BuildDomes(world, timestep);
 		//Nothing to measure in the dark: the obstacle meter accumulates energies, so a step that
 		//carries none simply does not belong to any day.
-		if (!diffuseDome.IsLit)
+		if (!diffuseDome.IsLit && !guidanceOnly)
 			return false;
 
 		EnsureStatic(world, obstacles);
@@ -223,6 +252,12 @@ public sealed class CpuLightSolver
 
 		Scene.BuildPlants();
 		TracedPrimitives = Scene.PrimitiveCount;
+		GuidanceSceneTimestep = timestep;
+		if (guidanceOnly)
+		{
+			foreach (var plant in formations.OfType<PlantFormation2>()) plant.AG.RefreshGrowthGuidance(Scene);
+			return true;
+		}
 
 		//A plant that has never been measured still has to reflect something, or the first lit step
 		//would come out unnaturally dark. A canopy receives roughly 40% of the open sky on average.
@@ -433,9 +468,13 @@ public sealed class CpuLightSolver
 
 	void EnsureStatic(AgroWorld world, IList<IObstacle> obstacles)
 	{
-		if (StaticReady)
+		var unchanged = GuidanceStaticObstacles.Length == obstacles.Count;
+		for (int i = 0; unchanged && i < obstacles.Count; ++i)
+			unchanged = ReferenceEquals(GuidanceStaticObstacles[i], obstacles[i]);
+		if (StaticReady && unchanged)
 			return;
 		StaticReady = true;
+		GuidanceStaticObstacles = obstacles.ToArray();
 
 		FirstPlantGroup = 1 + obstacles.Count;
 		StaticAlbedo = new float[1 + obstacles.Count];
@@ -451,19 +490,18 @@ public sealed class CpuLightSolver
 		var prims = new List<RayPrimitive>();
 		var vertices = new List<Vector3>();
 		var indices = new List<int>();
-
-		world.Soil?.AppendSurfaceTriangles(vertices, indices);
-		AppendTriangles(prims, vertices, indices, 0, RayScene.FlagOneSided);
-
+		var groups = new List<Collisions.StaticSceneSource.Group>();
+		Collisions.StaticSceneSource.Collect(world.Soil,
+			obstacles as IReadOnlyList<IObstacle> ?? obstacles.ToArray(), vertices, indices, groups);
 		var ranges = new (int First, int Count)[obstacles.Count];
-		for (int o = 0; o < obstacles.Count; ++o)
+		var obstacleIndex = 0;
+		foreach (var group in groups)
 		{
-			vertices.Clear();
-			indices.Clear();
-			obstacles[o].AppendTriangles(vertices, indices);
 			var first = prims.Count;
-			AppendTriangles(prims, vertices, indices, 1 + o);
-			ranges[o] = (first, prims.Count - first);
+			var soil = group.Surface == Collisions.StaticSurface.Soil;
+			AppendTriangles(prims, vertices, indices, soil ? 0 : 1 + obstacleIndex,
+				soil ? RayScene.FlagOneSided : (byte)0, group.FirstTriangle, group.TriangleCount);
+			if (!soil) ranges[obstacleIndex++] = (first, prims.Count - first);
 		}
 
 		var array = prims.ToArray();
@@ -494,9 +532,10 @@ public sealed class CpuLightSolver
 		Scene.SetStatic(array, array.Length);
 	}
 
-	static void AppendTriangles(List<RayPrimitive> prims, List<Vector3> vertices, List<int> indices, int group, byte flags = 0)
+	static void AppendTriangles(List<RayPrimitive> prims, List<Vector3> vertices, List<int> indices,
+		int group, byte flags, int firstTriangle, int triangleCount)
 	{
-		for (int i = 0; i + 2 < indices.Count; i += 3)
+		for (int i = firstTriangle * 3; i < (firstTriangle + triangleCount) * 3; i += 3)
 		{
 			var a = vertices[indices[i]];
 			var u = vertices[indices[i + 1]] - a;

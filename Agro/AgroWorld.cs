@@ -94,9 +94,11 @@ public class AgroWorld : SimulationWorld
 	/// and soil collisions are hard constraints and are not governed by this. Per world rather than
 	/// a process-wide static, so two simulations running in one server cannot change each other's.</summary>
 	public readonly bool SoftCollisions = true;
+	public readonly bool GrowthLightGuidanceEnabled;
 
 	public AgroWorld(SimulationRequest? settings = null) : base()
 	{
+		Deterministic = settings?.Deterministic ?? false;
 		var ianaTimeZone = TimeZoneLookup.GetTimeZone(Latitude, Longitude).Result;
 		#if WINDOWS
 		TimeZone = TimeZoneInfo.FindSystemTimeZoneById(TimeZoneConverter.TZConvert.IanaToWindows(ianaTimeZone));
@@ -138,6 +140,7 @@ public class AgroWorld : SimulationWorld
 				InitialTime = new(settings.InitialDate.Value.Year, settings.InitialDate.Value.Month, settings.InitialDate.Value.Day, 0, 0, 0, DateTimeKind.Unspecified);
 		}
 
+		GrowthLightGuidanceEnabled = (settings?.GrowthLightGuidanceEnabled ?? true) && (settings?.RenderMode ?? 0) != 0;
 		Irradiance = new IrradianceClient(Latitude, Longitude, settings?.RenderMode ?? 0, settings?.SamplesPerPixel ?? 512,
 			settings?.LightSamples ?? 16, settings?.LeafAreaIndexObstacles, settings?.LeafAreaIndexSensors ?? 32768,
 			settings?.LeafAreaIndexDepth ?? 3f, settings?.LeafAreaIndexBandHeight ?? 0.5f);
@@ -532,7 +535,7 @@ public class AgroWorld : SimulationWorld
 	//normal way rather than an empty one.
 
 	/// <summary>The format this world writes and accepts. Bumped when the payload changes shape.</summary>
-	public const byte CheckpointVersion = 1;
+	public const byte CheckpointVersion = 3;
 
 	/// <summary>
 	/// Everything the next step depends on that the request does not determine.
@@ -569,6 +572,7 @@ public class AgroWorld : SimulationWorld
 
 		//Last, because it is keyed against the formations written above.
 		Irradiance.WriteState(writer, FormationList);
+		Collisions.WriteState(writer, FormationList);
 
 		return stream.ToArray();
 	}
@@ -610,6 +614,7 @@ public class AgroWorld : SimulationWorld
 		});
 
 		Irradiance.ReadState(reader, FormationList);
+		Collisions.ReadState(reader, FormationList);
 
 		if (stream.Position != stream.Length)
 			throw new InvalidDataException(
@@ -617,6 +622,9 @@ public class AgroWorld : SimulationWorld
 				$"formation was restored, so it does not describe this world.");
 
 		RestoreTimestep(timestep);
+		// Gravity runs before the first world callback. Restored rhizomes must see the
+		// same static anchors on that first step as an uninterrupted simulation.
+		Collisions.EnsureStatic(this);
 	}
 
 	/// <summary>

@@ -6,6 +6,7 @@ namespace Agro;
 
 public interface IPlantAgent : ITreeAgent
 {
+	ulong StableId { get; set; }
 	uint BirthTime { get; }
 	float Length { get; }
 
@@ -28,9 +29,13 @@ public interface IPlantAgent : ITreeAgent
 	/// <summary>Consecutive steps in unresolved contact with an obstacle.</summary>
 	ushort ObstructionSteps { get; set; }
 
-	/// <summary>True while a surface carries this organ's load, so its weight must not be
-	/// transported to its ancestors. See <see cref="AboveGroundAgent.GroundSupported"/>.</summary>
+	/// <summary>True while this organ contacts an upward-facing support surface. This does
+	/// not remove its entire descendant load from the bending calculation.</summary>
 	bool GroundSupported { get; set; }
+	bool SoilAnchored { get; set; }
+	bool LoadLimited { get; set; }
+	float ObstructionHours { get; set; }
+	void SetGeometry(float length, float radius);
 
 	/// <summary>Plastic rotation banked into the rest pose so far, in radians.
 	/// See <see cref="AboveGroundAgent.PlasticAngle"/>.</summary>

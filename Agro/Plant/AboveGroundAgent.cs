@@ -28,11 +28,12 @@ public enum RhizomeBudPosition : byte
 [StructLayout(LayoutKind.Auto)]
 public partial struct AboveGroundAgent : IPlantAgent
 {
+	public ulong StableId { get; set; }
 	const MethodImplOptions AI = MethodImplOptions.AggressiveInlining;
 	/// <summary>
 	/// Simulation step when the agent was created
 	/// </summary>
-	public uint BirthTime { get; private init; }
+	public uint BirthTime { get; private set; }
 	/// <summary>
 	/// Orientation with respect to the parent. If there is no parent, this is the initial orientation.
 	/// </summary>
@@ -409,43 +410,37 @@ public partial struct AboveGroundAgent : IPlantAgent
 	public bool flowerSupport { get; set; } = true;
 
 	/// <summary>
-	/// Set by the collision phase while this organ, or anything between it and the seed, is in
-	/// unresolved contact with an obstacle. Growth is suspended for as long as it is set.
+	/// This organ's inadmissible increment or pending development is waiting for its next
+	/// geometry retry. The flag is local and is not inherited by a whole branch.
 	/// </summary>
 	/// <remarks>
-	/// Tissue already grown can be deflected elastically, but tissue not yet grown should simply
-	/// not appear: pushing an organ out of a wall it is still actively growing into is a fight the
-	/// collision pass cannot win.
+	/// Photosynthesis, maintenance, normal senescence and independently admissible radial
+	/// growth continue. Contact may still deflect this organ through its support chain.
 	/// </remarks>
 	public bool GrowthBlocked { get; set; }
 
 	/// <summary>
-	/// Set by the collision phase while this organ is resting on a surface that carries its load.
+	/// Set by the collision phase while this organ touches an upward-facing support surface.
 	/// </summary>
 	/// <remarks>
-	/// A cantilever that has come to rest on the ground is no longer a cantilever: the surface
-	/// supplies a reaction, and the bending moment at every node upstream of the contact collapses.
-	/// Nothing modelled that, so a blade lying on the soil kept carrying its full subtree moment,
-	/// gravity kept driving it further in, and the hard pass kept shoving it back out - a fight that
-	/// never ends and that banks a quarter of every shove into the rest pose. Gravity reads this to
-	/// stop transporting a supported organ's weight to its ancestors.
+	/// A contact is unilateral: it does not anchor a rhizome or carry every descendant's
+	/// weight. Loads remain in the moment sum and contact reactions constrain the geometry.
 	/// </remarks>
 	public bool GroundSupported { get; set; }
+	/// <summary>Embedded substrate anchors a rhizome; mere tray contact does not.</summary>
+	public bool SoilAnchored { get; set; }
+	/// <summary>Unconstrained rod bending exceeds the numerical elastic limit.</summary>
+	public bool LoadLimited { get; set; }
+	public float ObstructionHours { get; set; }
+	public void SetGeometry(float length, float radius) { Length = length; Radius = radius; }
 
 	/// <summary>
-	/// Total plastic rotation this organ's rest pose has accumulated from contacts, in radians.
+	/// Legacy diagnostic retained for callers; the elastic contact solver does not accumulate
+	/// plastic rotations or modify the organ's own rest frame.
 	/// </summary>
-	/// <remarks>
-	/// The plastic share of a hard correction is written into <see cref="baseOrientation"/> with
-	/// nothing bounding the total, so an organ in sustained contact performs a random walk in SO(3)
-	/// - measured at roughly 0.06 deg a step for a blade merely touching down, which is 200 degrees
-	/// over a couple of seasons. Real tissue yields and then stops yielding; this is the bound.
-	/// </remarks>
 	public float PlasticAngle { get; set; }
 
-	/// <summary>Consecutive steps this organ has been in unresolved contact with an obstacle. Past
-	/// a limit its subtree is cut away, the same remedy the roots already apply when they leave the
-	/// soil volume.</summary>
+	/// <summary>Legacy counter retained for callers. Above-ground obstruction never cuts tissue.</summary>
 	public ushort ObstructionSteps { get; set; }
 
     #region Variances
@@ -789,6 +784,7 @@ public partial struct AboveGroundAgent : IPlantAgent
 			}
 		}
 
+		formation.MarkDevelopmentPhysiology(this);
 		switch(Organ)
 		{
 			//leafs fall off with increasing age
@@ -822,7 +818,7 @@ public partial struct AboveGroundAgent : IPlantAgent
 		}
 
 		//Growth
-		if (Energy > enoughEnergyState) //maybe make it a factor storedEnergy/lifeSupport so that it grows fast when it has full storage
+		if (Energy > enoughEnergyState && !GrowthBlocked)
 		{
 			//Monopodial branching, swaps a leaf to a twig
 			//TODO sympodial branching (one of the laterals becomes the main)
@@ -1219,12 +1215,13 @@ public partial struct AboveGroundAgent : IPlantAgent
         return orientation;
     }
 
-	public readonly Quaternion RandomOrientation(PlantFormation2 plant, SpeciesSettings species, Quaternion orientation)
+	public readonly Quaternion RandomOrientation(PlantFormation2 plant, SpeciesSettings species, Quaternion orientation, bool gravitropism = true)
 	{
 		var range = 0.2f * MathF.PI * (species.TwigsBendingByLevel * DominanceLevel - species.TwigsBendingApical);
 		var factor = species.TwigsBending * range;
 		var a = plant.RNG.NextFloatVar(factor);
 		orientation *= Quaternion.CreateFromAxisAngle(Vector3.UnitY, a);
+		if (!gravitropism || species.ShootsGravitaxis <= 0f) return orientation;
 		var y = Vector3.Transform(Vector3.UnitX, orientation).Y;
 
 		if (species.ShootsGravitropicSetPointAngle > 0f)

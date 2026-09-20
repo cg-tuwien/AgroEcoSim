@@ -129,7 +129,7 @@ public partial class PlantFormation2 : IPlantFormation
 	public void WriteState(BinaryWriter writer)
 	{
 		writer.Write(SeedAlive);
-		if (SeedAlive) writer.Write(MemoryMarshal.AsBytes(Seed.AsSpan(0, 1)));
+		if (SeedAlive) writer.Write(MemoryMarshal.AsBytes(SrcDst_Seed().Item1.AsSpan(0, 1)));
 		writer.Write(DeathSeed);
 
 		writer.Write(WaterBalancePrev);
@@ -150,6 +150,7 @@ public partial class PlantFormation2 : IPlantFormation
 
 	public void ReadState(BinaryReader reader)
 	{
+		ReadTMP = false;
 		var seedAlive = reader.ReadBoolean();
 		if (seedAlive)
 		{
@@ -230,7 +231,7 @@ public partial class PlantFormation2 : IPlantFormation
 					{
 						target -= agGathered[index].LifesupportEnergy;
 						removed.Add(index);
-						var deaths = AG.Death(index);
+						var deaths = AG.Death(index, reason: OrganDeathReason.Resources);
 						if (deaths != null)
 							foreach(var item in deaths)
 								if (!removed.Contains(item))
@@ -271,7 +272,7 @@ public partial class PlantFormation2 : IPlantFormation
 				}
 
 				foreach(var item in minList)
-					AG.Death(item);
+					AG.Death(item, reason: OrganDeathReason.Resources);
 
 				var weights = agGathered.Weights4EnergyDistributionByRequirement() + ugGathered.Weights4EnergyDistributionByRequirement();
 				var factor = (float)(energy / (weights >= zero ? weights : 1));
