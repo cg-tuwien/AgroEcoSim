@@ -1126,8 +1126,7 @@ class State {
         RenderMode: this.renderMode.value,
         SamplesPerPixel: this.samplesPerPixel.value,
 
-        LeafAreaIndexObstacles: this.leafAreaIndexObstacles.value.trim().length > 0
-            ? this.leafAreaIndexObstacles.value.trim() : null,
+        LeafAreaIndexObstacles: this.leafAreaIndexObstacles.value.trim().length > 0 ? this.leafAreaIndexObstacles.value.trim() : null,
         LeafAreaIndexSensors: Math.trunc(this.leafAreaIndexSensors.value),
         LeafAreaIndexDepth: this.leafAreaIndexDepth.value,
         LeafAreaIndexBandHeight: this.leafAreaIndexBandHeight.value,

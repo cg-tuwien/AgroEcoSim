@@ -123,9 +123,7 @@ public class IrradianceClient
 	ushort EnvMapX = 0;
 	string SamplesPerPixel;
 
-	public IrradianceClient(float latitude, float longitude, int _mode, ushort spp = 512,
-		int lightSamples = 16, string? leafAreaIndexObstacles = null, int leafAreaIndexSensors = 32768,
-		float leafAreaIndexDepth_m = 3f, float leafAreaIndexBandHeight_m = 0.5f)
+	public IrradianceClient(float latitude, float longitude, int _mode, ushort spp = 512, int lightSamples = 16, string? leafAreaIndexObstacles = null, int leafAreaIndexSensors = 32768, float leafAreaIndexDepth_m = 3f, float leafAreaIndexBandHeight_m = 0.5f)
 	{
 		var mode = (Mode)_mode;
 		var port = 9001 + Math.Clamp(_mode - 1, 0, 8);
@@ -142,8 +140,7 @@ public class IrradianceClient
 		//back to it as soon as their renderer fails to answer. Obstacle measurements are only ever
 		//requested explicitly, so nothing is spent on them otherwise.
 		if (GlobalIllumination)
-			Solver = new CpuLightSolver(lightSamples, leafAreaIndexObstacles, leafAreaIndexSensors,
-				leafAreaIndexDepth_m, leafAreaIndexBandHeight_m);
+			Solver = new CpuLightSolver(lightSamples, leafAreaIndexObstacles, leafAreaIndexSensors, leafAreaIndexDepth_m, leafAreaIndexBandHeight_m);
 	}
 
 	/// <summary>Per-obstacle leaf area index and solar load series, when they were requested.</summary>
