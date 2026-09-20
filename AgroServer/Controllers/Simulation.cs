@@ -18,8 +18,7 @@ public class SimulationController// : ControllerBase
         //
         //REST rather than hub methods, deliberately. The SignalR JSON protocol base64-encodes
         //every byte[], which is a third more bytes for nothing; these return the frame as it is
-        //stored. Frames are immutable once written, so the browser cache can hold the working
-        //set and the client need not manage one.
+        //stored. Cached frames must revalidate because checkpoint resume can replace a tail.
 
         api.MapGet("/run/{runId}", (string runId) =>
         {
@@ -31,10 +30,15 @@ public class SimulationController// : ControllerBase
         //whole of what the client needs eagerly - the clock, the frame maps and the export panel
         //all read `t` and nothing else - so a 1,440-step run costs it about 11 KB instead of
         //gigabytes.
-        api.MapGet("/run/{runId}/index", (string runId) =>
-            runStore.TryReadIndex(runId, out var bytes)
-                ? Results.Bytes(bytes, "application/octet-stream")
-                : Results.NotFound());
+        api.MapGet("/run/{runId}/index", (HttpContext http, string runId) =>
+        {
+            if (!runStore.TryReadIndexSnapshot(runId, out var bytes, out var revision, out var restart)) return Results.NotFound();
+            http.Response.Headers.CacheControl = "no-store";
+            http.Response.Headers["X-Agro-Frame-Revision"] = revision.ToString();
+            http.Response.Headers["X-Agro-Restart-Step"] = restart.ToString();
+            http.Response.Headers.AccessControlExposeHeaders = "X-Agro-Frame-Revision, X-Agro-Restart-Step";
+            return Results.Bytes(bytes, "application/octet-stream");
+        });
 
         api.MapGet("/run/{runId}/frame/{step:int}", (HttpContext http, string runId, int step) =>
         {
@@ -44,9 +48,19 @@ public class SimulationController// : ControllerBase
             //Stored deflated and served deflated: the browser inflates it natively, so neither
             //side spends anything on compression and the transfer is ~1.7x smaller.
             http.Response.Headers.ContentEncoding = "deflate";
-            //Frames never change once written.
-            http.Response.Headers.CacheControl = "public, max-age=31536000, immutable";
+            // Resume may replace a tail newer than its checkpoint.
+            http.Response.Headers.CacheControl = "no-cache";
             return Results.Bytes(deflated, "application/octet-stream");
+        });
+
+        // Archive download needs the stored zlib bytes themselves, without HTTP transparently
+        // inflating them. At most one frame is buffered by either endpoint.
+        api.MapGet("/run/{runId}/frame/{step:int}/packed", (HttpContext http, string runId, int step) =>
+        {
+            if (step < 0 || !runStore.TryReadFrameDeflated(runId, (uint)step, out var bytes))
+                return Results.NotFound();
+            http.Response.Headers.CacheControl = "no-store";
+            return Results.Bytes(bytes, "application/octet-stream");
         });
 
         //The complete leaf-area-index measurement, with every per-obstacle daily series present.
@@ -59,9 +73,16 @@ public class SimulationController// : ControllerBase
             if (!runStore.TryReadObstacleLight(runId, out var gzipped))
                 return Results.NotFound();
             http.Response.Headers.ContentEncoding = "gzip";
-            http.Response.Headers.CacheControl = "public, max-age=31536000, immutable";
+            http.Response.Headers.CacheControl = "no-cache";
             http.Response.Headers.ContentDisposition = $"attachment; filename=\"leafareaindex-{runId}.json\"";
             return Results.Bytes(gzipped, "application/json");
+        });
+
+        api.MapGet("/run/{runId}/obstaclelight/packed", (HttpContext http, string runId) =>
+        {
+            if (!runStore.TryReadObstacleLight(runId, out var bytes)) return Results.NotFound();
+            http.Response.Headers.CacheControl = "no-store";
+            return Results.Bytes(bytes, "application/gzip");
         });
 
         //The complete record per run, not a summary. What the panel has to show - length, plants,

@@ -91,6 +91,7 @@ public interface IRunStore
 
     /// <summary>One (step, storedBytes) pair per stored frame, in step order.</summary>
     bool TryReadIndex(string runId, out byte[] indexBytes);
+    bool TryReadIndexSnapshot(string runId, out byte[] indexBytes, out uint revision, out uint restartStep);
 
     /// <summary>The request this run was started from, as stored. The client forks from it.</summary>
     bool TryReadRequest(string runId, out byte[] utf8Json);
@@ -117,7 +118,8 @@ public interface IRunStore
     /// later reader - the panel, an adoption pass, a second resume - sees the horizon the run is
     /// actually working towards rather than the one it was first given.
     /// </summary>
-    void ResumeRun(string runId, uint totalSteps, int totalHours, string requestJson);
+    /// <returns>False when the run is still live, which is the one state a resume must not enter.</returns>
+    bool ResumeRun(string runId, uint checkpointStep, uint totalSteps, int totalHours, string requestJson);
 
     /// <summary>The serialized soil as gzipped bytes, for serving with Content-Encoding: gzip.</summary>
     bool TryReadTerrain(string runId, out byte[] gzipped);
@@ -251,6 +253,9 @@ public class RunRecord
     /// <summary>Everything else in the run directory: the request, the index, the terrain, the
     /// measurement. Tracked apart from the frames so the budget keeps meaning what it meant.</summary>
     public long AuxBytesOnDisk { get; set; }
+    /// <summary>Changes when resume replaces a tail beyond its checkpoint.</summary>
+    public uint FrameRevision { get; set; }
+    public uint FrameRestartStep { get; set; }
     /// <summary>Set when this run was continued or forked from another; null otherwise.</summary>
     public string? ParentRunId { get; set; }
     /// <summary>
@@ -322,6 +327,7 @@ sealed class RunWriter
     public uint StoredFrames;
     public uint LastStep;
     public long BytesOnDisk;
+    public uint AccountedIndexEntries;
     public DateTime LastMetadataFlush = DateTime.UtcNow;
 }
 
@@ -365,6 +371,33 @@ public class RunStore : IRunStore, IDisposable
     /// simulation waits, which is the correct failure.
     /// </summary>
     public int QueueDepth { get; set; } = 3;
+    /// <summary>Global raw-frame budget, including frames currently being compressed. A single
+    /// frame larger than the budget is allowed only while no other frame is pending.</summary>
+    public long PendingFrameByteBudget { get; set; } = 128L << 20;
+    readonly object PendingFramesLock = new();
+    long PendingFrameBytes;
+
+    bool ReserveFrameBytes(RunWriter writer, long bytes)
+    {
+        lock (PendingFramesLock)
+        {
+            while (!Stopping && !writer.Queue.IsAddingCompleted && PendingFrameBytes > 0
+                && bytes > PendingFrameByteBudget - PendingFrameBytes)
+                Monitor.Wait(PendingFramesLock, 250);
+            if (Stopping || writer.Queue.IsAddingCompleted) return false;
+            PendingFrameBytes += bytes;
+            return true;
+        }
+    }
+
+    void ReleaseFrameBytes(long bytes)
+    {
+        lock (PendingFramesLock)
+        {
+            PendingFrameBytes -= bytes;
+            Monitor.PulseAll(PendingFramesLock);
+        }
+    }
 
     /// <summary>How often the run's metadata record is brought up to date while it computes.</summary>
     static readonly TimeSpan MetadataInterval = TimeSpan.FromSeconds(2);
@@ -755,14 +788,18 @@ public class RunStore : IRunStore, IDisposable
     {
         if (Disabled || !IsSafeId(runId)) return;
         if (!Writers.TryGetValue(runId, out var writer)) return;
+        if (!ReserveFrameBytes(writer, scene.LongLength)) return;
+        var queued = false;
         try
         {
             //Blocks when the queue is full, which is the backpressure. Everything expensive -
             //the deflate above all - happens on the worker, so the simulation thread pays only
             //for handing over a reference.
             writer.Queue.Add((step, scene));
+            queued = true;
         }
         catch (InvalidOperationException) { /* the run finished; nothing more is accepted */ }
+        finally { if (!queued) ReleaseFrameBytes(scene.LongLength); }
     }
 
     public void WriteTerrain(string runId, byte[] serializedTerrain)
@@ -785,12 +822,14 @@ public class RunStore : IRunStore, IDisposable
     /// frames on disk: its writer continues an existing tally, and a fresh one would flush its own
     /// count over the top and report a forty-frame run as holding twenty.
     /// </summary>
-    void StartWriter(string runId, uint storedFrames = 0, long bytesOnDisk = 0)
+    void StartWriter(string runId, uint storedFrames = 0, long bytesOnDisk = 0, uint lastStep = 0)
     {
         var writer = new RunWriter
         {
             RunId = runId,
             StoredFrames = storedFrames,
+            LastStep = lastStep,
+            AccountedIndexEntries = storedFrames,
             BytesOnDisk = bytesOnDisk,
             Queue = new BlockingCollection<(uint, byte[])>(QueueDepth),
             //Opened ONCE for the run. Reopening it per frame was a file open, append and close on
@@ -809,12 +848,20 @@ public class RunStore : IRunStore, IDisposable
             {
                 try
                 {
-                    var deflated = Deflate(scene);
-                    File.WriteAllBytes(FramePath(writer.RunId, step), deflated);
+                    var path = FramePath(writer.RunId, step);
+                    var temporary = path + ".tmp";
+                    long storedBytes;
+                    using (var output = new FileStream(temporary, FileMode.Create, FileAccess.Write, FileShare.None))
+                    {
+                        using (var zlib = new ZLibStream(output, CompressionLevel.Fastest, leaveOpen: true))
+                            zlib.Write(scene);
+                        storedBytes = output.Length;
+                    }
+                    File.Move(temporary, path, overwrite: true);
 
                     Span<byte> entry = stackalloc byte[8];
                     BitConverter.TryWriteBytes(entry[..4], step);
-                    BitConverter.TryWriteBytes(entry[4..], (uint)deflated.Length);
+                    BitConverter.TryWriteBytes(entry[4..], checked((uint)storedBytes));
                     writer.Index.Write(entry);
                     //Flushed per frame so a reader - the client rebuilding its timeline while the
                     //run computes - sees entries for frames that are actually on disk, and never
@@ -826,7 +873,7 @@ public class RunStore : IRunStore, IDisposable
                     //storage it does not have.
                     ++writer.StoredFrames;
                     writer.LastStep = step + 1;
-                    writer.BytesOnDisk += deflated.Length;
+                    writer.BytesOnDisk += storedBytes;
 
                     //Metadata on a timer rather than per frame. It is only a progress figure, and
                     //LiteDB in Shared mode takes a cross-process mutex for each update - 0.7 ms a
@@ -838,11 +885,14 @@ public class RunStore : IRunStore, IDisposable
                 {
                     Console.Error.WriteLine($"RunStore: could not store frame {step} of {writer.RunId}: {e.Message}");
                 }
+                finally { ReleaseFrameBytes(scene.LongLength); }
             }
         }
         catch (Exception e) { Console.Error.WriteLine($"RunStore: writer for {writer.RunId} stopped: {e}"); }
         finally
         {
+            writer.Queue.CompleteAdding();
+            while (writer.Queue.TryTake(out var abandoned)) ReleaseFrameBytes(abandoned.Scene.LongLength);
             try { FlushMetadata(writer); } catch { /* best effort */ }
             try { writer.Index.Dispose(); } catch { /* best effort */ }
         }
@@ -858,8 +908,10 @@ public class RunStore : IRunStore, IDisposable
             run.StoredFrames = writer.StoredFrames;
             run.LastStep = writer.LastStep;
             run.BytesOnDisk = writer.BytesOnDisk;
+            run.AuxBytesOnDisk += (writer.StoredFrames - writer.AccountedIndexEntries) * 8L;
             run.UpdatedUtc = DateTime.UtcNow;
             Runs.Update(run);
+            writer.AccountedIndexEntries = writer.StoredFrames;
         }
     }
 
@@ -887,12 +939,10 @@ public class RunStore : IRunStore, IDisposable
         {
             //Drain before recording the outcome, so a completed run's metadata describes every
             //frame it actually stored rather than whatever the last periodic flush had seen.
-            uint indexEntries = 0;
             if (Writers.TryGetValue(runId, out var writer))
             {
                 writer.Queue.CompleteAdding();
                 var drained = writer.Worker?.Wait(TimeSpan.FromMinutes(2)) ?? true;
-                indexEntries = writer.StoredFrames;
                 //Deregistered only once the worker has actually stopped. It used to be removed
                 //BEFORE the wait, so a drain that timed out left a thread still appending frames
                 //and still holding the index handle - while the row said "complete" and the
@@ -920,7 +970,11 @@ public class RunStore : IRunStore, IDisposable
                 //Booked once, here, rather than eight bytes at a time from the writer thread: the
                 //index is the one file that grows with the run, and adding to the metadata row per
                 //frame is the cross-process mutex this store already refuses to take per frame.
-                run.AuxBytesOnDisk += indexEntries * 8L;
+                if (writer != null)
+                {
+                    run.AuxBytesOnDisk += (writer.StoredFrames - writer.AccountedIndexEntries) * 8L;
+                    writer.AccountedIndexEntries = writer.StoredFrames;
+                }
                 run.UpdatedUtc = DateTime.UtcNow;
                 Runs.Update(run);
             }
@@ -943,6 +997,21 @@ public class RunStore : IRunStore, IDisposable
 
     public bool TryReadIndex(string runId, out byte[] indexBytes) =>
         TryReadFile(runId, IndexPath, out indexBytes);
+
+    public bool TryReadIndexSnapshot(string runId, out byte[] indexBytes, out uint revision, out uint restartStep)
+    {
+        lock (MetadataLock)
+        {
+            revision = restartStep = 0;
+            if (!TryReadIndex(runId, out indexBytes)) return false;
+            var run = Runs.FindById(runId);
+            revision = run?.FrameRevision ?? 0;
+            restartStep = run?.FrameRestartStep ?? 0;
+            // The writer may be appending the last eight-byte entry during this read.
+            if (indexBytes.Length % 8 != 0) Array.Resize(ref indexBytes, indexBytes.Length / 8 * 8);
+            return true;
+        }
+    }
 
     public bool TryReadRequest(string runId, out byte[] utf8Json) =>
         TryReadFile(runId, RequestPath, out utf8Json);
@@ -1019,16 +1088,77 @@ public class RunStore : IRunStore, IDisposable
         }
     }
 
-    public void ResumeRun(string runId, uint totalSteps, int totalHours, string requestJson)
+    /// <summary>A checkpoint at N contains frames through N-1. Keep that prefix exactly once;
+    /// preserve any later files in a recovery directory before allowing their addresses to be
+    /// generated again. Index replacement is atomic and precedes moving the superseded files.</summary>
+    void ReconcileCheckpointHistory(RunRecord run, uint checkpointStep)
     {
-        if (Disabled || !IsSafeId(runId)) return;
+        var indexPath = IndexPath(run.Id);
+        var index = File.Exists(indexPath) ? File.ReadAllBytes(indexPath) : [];
+        if (index.Length % 8 != 0) throw new InvalidDataException("The frame index has a partial record.");
+        var prefix = new SortedDictionary<uint, uint>();
+        var tail = new List<string>();
+        for (int offset = 0; offset < index.Length; offset += 8)
+        {
+            var step = BitConverter.ToUInt32(index, offset);
+            if (step >= checkpointStep) continue;
+            var path = FramePath(run.Id, step);
+            if (!File.Exists(path)) path = LegacyFramePath(run.Id, step);
+            if (!File.Exists(path)) throw new InvalidDataException($"Missing frame {step} before the checkpoint.");
+            prefix[step] = checked((uint)new FileInfo(path).Length);
+        }
+        // Include orphaned tail files left by an interrupted index append or earlier resume.
+        foreach (var path in Directory.EnumerateFiles(FramesDir(run.Id)))
+            if ((Path.GetExtension(path) is ".g" or ".z")
+                && uint.TryParse(Path.GetFileNameWithoutExtension(path), out var step) && step >= checkpointStep)
+                tail.Add(path);
+        string? recovery = null;
+        if (tail.Count > 0 || prefix.Count * 8 != index.Length)
+        {
+            recovery = Path.Combine(RunDir(run.Id), "recovery-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(recovery);
+            File.WriteAllBytes(Path.Combine(recovery, "index.bin"), index);
+            File.Copy(RequestPath(run.Id), Path.Combine(recovery, "request.json"));
+        }
+        var temporary = indexPath + ".tmp";
+        using (var output = new BinaryWriter(File.Create(temporary)))
+            foreach (var (step, length) in prefix) { output.Write(step); output.Write(length); }
+        File.Move(temporary, indexPath, overwrite: true);
+        foreach (var path in tail) File.Move(path, Path.Combine(recovery!, Path.GetFileName(path)));
+        run.StoredFrames = checked((uint)prefix.Count);
+        run.LastStep = prefix.Count > 0 ? prefix.Last().Key + 1 : 0;
+        run.BytesOnDisk = prefix.Values.Sum(x => (long)x);
+        run.AuxBytesOnDisk = Directory.EnumerateFiles(RunDir(run.Id), "*", SearchOption.AllDirectories)
+            .Sum(path => new FileInfo(path).Length) - run.BytesOnDisk;
+    }
+
+    public bool ResumeRun(string runId, uint checkpointStep, uint totalSteps, int totalHours, string requestJson)
+    {
+        if (Disabled || !IsSafeId(runId)) return false;
         try
         {
-            File.WriteAllText(RequestPath(runId), requestJson);
             lock (MetadataLock)
             {
                 var run = Runs.FindById(runId);
-                if (run == null) return;
+                if (run == null) return false;
+
+                //The same test DeleteRun makes, for the same reason. A run whose writer is still
+                //draining has a thread appending frames and holding the index handle: starting a
+                //second writer on it leaves two workers writing the same frame paths and
+                //interleaving eight-byte index entries, after which the index no longer parses in
+                //step order. The status alone is not enough - a drain that timed out leaves the
+                //writer registered and the row already stamped.
+                if (Writers.ContainsKey(runId) || run.Status == "running") return false;
+
+                ReconcileCheckpointHistory(run, checkpointStep);
+                ++run.FrameRevision;
+                run.FrameRestartStep = checkpointStep;
+
+                //Written inside the lock, so a refusal cannot have already replaced the request of
+                //a run it then declines to reopen.
+                var oldRequestBytes = new FileInfo(RequestPath(runId)).Length;
+                File.WriteAllText(RequestPath(runId), requestJson);
+                run.AuxBytesOnDisk += new FileInfo(RequestPath(runId)).Length - oldRequestBytes;
                 run.Status = "running";
                 run.TotalSteps = totalSteps;
                 run.TotalHours = totalHours;
@@ -1036,10 +1166,15 @@ public class RunStore : IRunStore, IDisposable
                 Runs.Update(run);
                 //Seeded from what the run already holds, so the resumed writer adds to the tally
                 //rather than replacing it.
-                StartWriter(runId, run.StoredFrames, run.BytesOnDisk);
+                StartWriter(runId, run.StoredFrames, run.BytesOnDisk, run.LastStep);
+                return true;
             }
         }
-        catch (Exception e) { Console.Error.WriteLine($"RunStore: could not reopen {runId}: {e.Message}"); }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine($"RunStore: could not reopen {runId}: {e.Message}");
+            return false;
+        }
     }
 
     public bool HasCheckpoint(string runId) =>
@@ -1542,14 +1677,6 @@ public class RunStore : IRunStore, IDisposable
             return true;
         }
         catch { return false; }
-    }
-
-    static byte[] Deflate(byte[] raw)
-    {
-        using var output = new MemoryStream(raw.Length / 2 + 64);
-        using (var zlib = new ZLibStream(output, CompressionLevel.Fastest, leaveOpen: true))
-            zlib.Write(raw, 0, raw.Length);
-        return output.ToArray();
     }
 
     /// <summary>

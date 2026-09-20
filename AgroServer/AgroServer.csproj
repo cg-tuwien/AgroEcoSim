@@ -58,7 +58,7 @@
     image build is a single publish with no IDE and no second target framework beside it, so the
     contention this avoids does not arise there. It is the developer machine that has three writers.
   -->
-  <Target Name="GenerateSpeciesTypescript" AfterTargets="CoreCompile">
+  <Target Name="GenerateSpeciesTypescript" AfterTargets="CoreCompile" Condition="'$(SkipSpeciesGeneration)' != 'true'">
     <Message Importance="high" Text="Generating Species.generated.ts from SpeciesSettings.cs" />
 
     <Exec Command="dotnet run --framework $(TargetFramework) --artifacts-path &quot;$(MSBuildProjectDirectory)/../SchemeGenerator/artifacts&quot; --project &quot;$(MSBuildProjectDirectory)/../SchemeGenerator/SchemeGenerator.csproj&quot; -- &quot;$(MSBuildProjectDirectory)/../Agro/SpeciesSettings.cs&quot; &quot;$(MSBuildProjectDirectory)/../ThreeFrontend/src/helpers/Species.gen.ts&quot; &quot;$(MSBuildProjectDirectory)/../ThreeFrontend/src/components/hud/Species.gen.tsx&quot;" />

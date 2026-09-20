@@ -243,7 +243,22 @@ public class SimulationRunner : ISimulationRunner
         return runId;
     }
 
+    /// <summary>
+    /// Serialises resumes against each other.
+    ///
+    /// Building the world from a checkpoint takes seconds, and the liveness check has to still be
+    /// true when the run is finally registered. Without this, two tabs resuming the same run both
+    /// pass the check, both build a world, and the second RunState replaces the first - after which
+    /// nothing can abort the first loop and two writers share one index file.
+    /// </summary>
+    readonly object ResumeLock = new();
+
     public string? Resume(string runId, int totalHours, Hubs.ClientTerrain? terrain, string connectionId, out string reason)
+    {
+        lock (ResumeLock) return ResumeUnderLock(runId, totalHours, terrain, connectionId, out reason);
+    }
+
+    string? ResumeUnderLock(string runId, int totalHours, Hubs.ClientTerrain? terrain, string connectionId, out string reason)
     {
         reason = "";
         if (Runs.ContainsKey(runId)) { reason = "That run is already computing."; return null; }
@@ -293,8 +308,14 @@ public class SimulationRunner : ISimulationRunner
             return null;
         }
 
-        Store.ResumeRun(runId, totalSteps, extended.TotalHours ?? 0,
-            System.Text.Json.JsonSerializer.Serialize(extended, AppJsonSerializerContext.Default.SimulationRequest));
+        //The store has the last word on liveness: it knows about a writer that is still draining,
+        //which this class does not.
+        if (!Store.ResumeRun(runId, step, totalSteps, extended.TotalHours ?? 0,
+                System.Text.Json.JsonSerializer.Serialize(extended, AppJsonSerializerContext.Default.SimulationRequest)))
+        {
+            reason = "That run is still being written. Wait for it to settle and try again.";
+            return null;
+        }
 
         var run = new RunState { RunId = runId, ConnectionId = connectionId, StartStep = step };
         Pending[runId] = () => Loop(run, world, lazyPreviews, exportFlags, extended);

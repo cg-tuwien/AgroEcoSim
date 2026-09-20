@@ -1,3 +1,4 @@
+import { saveRunArchive, readRunArchive, localArchiveFrame } from "./helpers/RunArchive";
 import { batch, computed, effect, signal } from "@preact/signals";
 import { BackendURI } from "./config";
 import BinaryReader from "./helpers/BinaryReader";
@@ -560,15 +561,18 @@ export function upsertHistoryFrame(t: number, scene: Uint8Array): number {
 
     if (at >= 0) {
         const e = st.history[at];
-        //Already held: only the payload is news. Counting it twice is what makes the budget drift.
-        if (!e.s) { e.s = scene; e.plain = true; st.historySize.value += historyEntryBytes(scene); }
+        // A resumed checkpoint can replace this address. The arriving frame owns the slot.
+        st.historySize.value += historyEntryBytes(scene) - (e.s ? historyEntryBytes(e.s) : 0);
+        st.history[at] = { t, s: scene, plain: true };
+        dropCachedScene(at);
         return at;
     }
 
     const entry = { t, s: scene, plain: true };
     //`lo` is the sorted insertion point, and for a live run it is the end - which is the case
     //worth keeping cheap.
-    if (lo >= st.history.length) st.history.push(entry); else st.history.splice(lo, 0, entry);
+    if (lo >= st.history.length) st.history.push(entry);
+    else { st.history.splice(lo, 0, entry); clearSceneCache(); }
     st.historySize.value += historyEntryBytes(scene);
     return lo;
 }
@@ -698,13 +702,8 @@ export function decodeSavedHistory(saved: unknown): { t: number, s: Uint8Array |
 /**
  * What a history actually occupies, counted from the entries themselves.
  *
- * `save()` writes every frame RAW - it inflates the compressed ones and re-fetches the evicted
- * ones - but the `historySize` it records alongside them is the live figure, which counts those
- * same frames compressed or not at all. Trusting the recorded number after a load therefore
- * under-reports by the compression ratio plus the whole of every evicted frame: a session saved
- * with 96 of 160 frames evicted claims a few megabytes and loads hundreds. The HUD then lies and,
- * far worse, eviction measures against a total that is too small to ever cross the budget - which
- * is the exact failure Stage 1 existed to end. Counting is cheap and cannot drift, so count.
+ * Legacy JSON holds raw bytes; a binary archive leaves frames on disk until requested.
+ * Count the resident payloads rather than trusting a size recorded by a different storage mode.
  */
 export function measureHistoryBytes(history: { s: Uint8Array | undefined }[]): number {
     let total = 0;
@@ -1180,6 +1179,7 @@ class State {
             //the PREVIOUS run and stream its frames into this one's empty history.
             try { sessionStorage.removeItem('agro.runId'); } catch { /* private mode */ }
             this.history.length = 0;
+            this.archiveMeasurement = undefined;
             clearSceneCache();
             resetCompression();
             if (hubConnection.state !== SignalR.HubConnectionState.Connected)
@@ -1437,7 +1437,23 @@ class State {
         this.needsRender.value = true;
     };
 
+    archiveMeasurement: Blob | undefined;
+
     save = async () => {
+        try { await this.saveArchive(); }
+        catch (error) {
+            if (error instanceof DOMException && error.name === 'AbortError') return;
+            console.error('Could not save run:', error);
+            alert(`Could not save the complete run: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    };
+
+    private saveArchive = () => saveRunArchive(async () => {
+        const runId = this.runId.peek();
+        if (runId && await syncTimelineToIndex(runId, false) === 0 && this.history.length > 0)
+            throw new Error('Could not verify the saved run index. Please retry the save.');
+        if (runId !== this.runId.peek()) throw new Error('The selected run changed while saving. Please retry.');
+        const revision = frameRevisions.get(runId) ?? '0';
         const data = {
             hoursPerTick: this.hoursPerTick.peek(),
             totalHours: this.totalHours.peek(),
@@ -1495,27 +1511,31 @@ class State {
             fieldModelData: this.fieldModelData,
         };
 
-        //Assembled as Blob parts rather than one string.
-        //
-        //`JSON.stringify` of the whole session used to build a single contiguous JS string, which
-        //fails twice over on a long run: it needs the entire history live a second time, and V8
-        //caps a string at ~537 million characters, so any history past roughly 512 MB threw
-        //`RangeError: Invalid string length`. The user could not save the very session that was
-        //about to die. A Blob takes its parts separately and never materialises the whole.
-        const settings = JSON.stringify(data);
-        const parts: BlobPart[] = [settings.slice(0, -1), ',"history":['];
-        for (let i = 0; i < this.history.length; ++i) {
-            const e = this.history[i];
-            //Written raw, so the session format does not change and files saved before frames
-            //were compressed in memory still load. Frames outside the hot window have to be
-            //inflated on the way out, which is why save() is async.
-            const raw = await rawFrameBytes(e);
-            parts.push(`${i ? ',' : ''}{"t":${e.t},"s":"${arrayBufferToBase64(raw)}"}`);
-        }
-        parts.push(']}');
-
-        downloadBlob(new Blob(parts, { type: 'application/json' }), '', 'json');
-    }
+        // Snapshot the index; bytes are streamed one frame at a time, already compressed when
+        // the server or a local archive owns them.
+        const history = this.history.slice();
+        const savedMeasurement = this.archiveMeasurement;
+        const fullMeasurement = savedMeasurement
+            ? async () => savedMeasurement.stream()
+            : runId && this.obstacleLightMeta.peek()?.dailySeriesOmitted ? async () => {
+                const response = await fetch(`${location.protocol}//${BackendURI}/simulation/run/${runId}/obstaclelight/packed`);
+                if (!response.ok || !response.body) throw new Error('The full measurement could not be saved.');
+                return response.body;
+            } : undefined;
+        return { metadata: data, history, read: async e => {
+            const local = localArchiveFrame(e);
+            if (local) return local;
+            if (e.s) return { bytes: e.s, plain: e.plain };
+            if (!runId) throw new Error(`Frame ${e.t} has no stored source.`);
+            const response = await fetch(`${location.protocol}//${BackendURI}/simulation/run/${runId}/frame/${e.t}/packed`);
+            if (!response.ok) throw new Error(`Could not save frame ${e.t} (HTTP ${response.status}).`);
+            return { bytes: new Uint8Array(await response.arrayBuffer()), plain: false };
+        }, fullMeasurement, verify: runId ? async () => {
+            const response = await fetch(`${location.protocol}//${BackendURI}/simulation/run/${runId}/index`);
+            if (!response.ok || (response.headers?.get('X-Agro-Frame-Revision') ?? '0') !== revision)
+                throw new Error('The run was resumed or became unavailable during saving. Please retry.');
+        } : undefined };
+    });
 
     /**
      * Writes the leaf area index and solar load measurement to a JSON file.
@@ -1549,7 +1569,9 @@ class State {
         //budget exists to avoid - whereas this streams straight to disk and the browser never looks
         //inside it. The small file is the one a person opens; the large one is the one they load
         //into whatever actually does the analysis.
-        if (fullSeriesUrl) {
+        if (this.archiveMeasurement) {
+            downloadBlob(this.archiveMeasurement, '-leafareaindex-full', 'json.gz');
+        } else if (fullSeriesUrl) {
             try {
                 const res = await fetch(fullSeriesUrl);
                 if (res.ok)
@@ -1568,13 +1590,17 @@ class State {
         const input = document.createElement("input");
         input.style.setProperty("display", "none");
         input.type = "file";
-        input.accept = "text/json";
+        input.accept = ".agro,.json,application/json,application/octet-stream";
         document.body.appendChild(input);
         const self = this;
-        input.onchange = e => {
-            const target = (e.target as HTMLInputElement);
-            const reader = new FileReader();
-            reader.onload = function() {
+        input.onchange = async e => {
+            const target = e.target as HTMLInputElement;
+            const file = target.files?.[0];
+            if (!file) { input.remove(); return; }
+            try {
+                const archive = await readRunArchive(file);
+                this.archiveMeasurement = archive?.fullMeasurement;
+                const data = archive?.metadata ?? JSON.parse(await file.text());
                 const seeds = self.seeds.peek();
                 for(let i = seeds.length - 1; i >= 0; --i)
                     self.removeSeedAt(i);
@@ -1583,9 +1609,7 @@ class State {
                 for(let i = obstacles.length - 1; i >= 0; --i)
                     self.removeObstacleAt(i);
 
-                const text = reader.result?.toString() ?? "";
-                const data = JSON.parse(text);
-                self.history = decodeSavedHistory(data.history);
+                self.history = archive?.history ?? decodeSavedHistory(data.history);
                 clearSceneCache();
                 resetCompression();
                 //A loaded session arrives entirely raw and would otherwise stay that way: the
@@ -1697,8 +1721,10 @@ class State {
                 self.play(PlayState.SeekBackward);
 
                 input.remove();
-            };
-            reader.readAsText(target.files[0]);
+            } catch (error) {
+                console.error('Could not load simulation:', error);
+                alert(error instanceof Error ? error.message : String(error));
+            } finally { input.remove(); }
         };
         input.click();
     }
@@ -1975,6 +2001,7 @@ class State {
                 this.plants.value = [];
             });
             this.history.length = 0;
+            this.archiveMeasurement = undefined;
             clearSceneCache();
             resetCompression();
 
@@ -2195,6 +2222,7 @@ class State {
             //Better an empty viewport than a timeline that lies about what it can show.
             if (this.runId.peek() === run.id) {
                 this.history.length = 0;
+            this.archiveMeasurement = undefined;
                 clearSceneCache();
                 resetCompression();
                 batch(() => {
@@ -2587,7 +2615,7 @@ async function fetchFrame(step: number): Promise<Uint8Array> {
     const runId = st.runId.peek();
     if (!runId) return new Uint8Array(0);
     try {
-        const res = await fetch(`${location.protocol}//${BackendURI}/simulation/run/${runId}/frame/${step}`);
+        const res = await fetch(`${location.protocol}//${BackendURI}/simulation/run/${runId}/frame/${step}?format=2`);
         if (!res.ok) return new Uint8Array(0);
         return new Uint8Array(await res.arrayBuffer());
     } catch (err) {
@@ -2638,15 +2666,23 @@ export function decodeFrameIndex(buf: Uint8Array): number[] {
  *    that asked for them. Merging at the end is what makes the stored run and the visible run
  *    the same run.
  *
- * Payloads already resident are kept - they are the same bytes - and matched by step, not by
- * position, because the two sequences differ exactly in the positions.
+ * Resident payloads are matched by step. A changed checkpoint revision invalidates its tail.
  */
+const frameRevisions = new Map<string, string>();
 async function syncTimelineToIndex(runId: string, seekToEnd: boolean): Promise<number> {
     try {
         const res = await fetch(`${location.protocol}//${BackendURI}/simulation/run/${runId}/index`);
         if (!res.ok) return 0;
         const steps = decodeFrameIndex(new Uint8Array(await res.arrayBuffer()));
-        if (steps.length === 0) return 0;
+        if (st.runId.peek() !== runId) return 0;
+        const revision = res.headers?.get('X-Agro-Frame-Revision') ?? '0';
+        const replaced = frameRevisions.has(runId)
+            ? frameRevisions.get(runId) !== revision
+            : revision !== '0';
+        frameRevisions.set(runId, revision);
+        const restart = Number(res.headers?.get('X-Agro-Restart-Step') ?? 0);
+        if (steps.length === 0 && !replaced) return 0;
+        if (replaced) { clearSceneCache(); resetCompression(); }
 
         //A union keyed by step, not a positional zip and not a replacement.
         //
@@ -2656,9 +2692,9 @@ async function syncTimelineToIndex(runId: string, seekToEnd: boolean): Promise<n
         //with a frame stride the client is sent previews of steps that were never stored, and
         //those are real frames it already holds. Neither side is a superset of the other.
         const held = new Map<number, { t: number, s: Uint8Array | undefined, plain: boolean }>();
-        for (const e of st.history) if (e) held.set(e.t, e);
+        for (const e of st.history) if (e && (!replaced || e.t < restart)) held.set(e.t, e);
         for (const t of steps) if (!held.has(t)) held.set(t, { t, s: undefined, plain: true });
-        if (held.size === st.history.length) return st.history.length;
+        if (!replaced && held.size === st.history.length) return st.history.length;
 
         const atPointer = st.history[st.playPointer.peek()];
         //Remembered by step before the array is replaced: `lastReceivedIndex` is a position, and
@@ -2671,7 +2707,7 @@ async function syncTimelineToIndex(runId: string, seekToEnd: boolean): Promise<n
         lastReceivedIndex = receivedStep < 0 ? -1 : merged.findIndex(e => e.t === receivedStep);
         //Where the user was, by step rather than by position - the positions have just moved.
         const restoredPointer = seekToEnd || !atPointer
-            ? merged.length - 1
+            ? Math.max(0, merged.length - 1)
             : Math.max(0, merged.findIndex(e => e.t === atPointer.t));
 
         const pointerMoved = restoredPointer !== st.playPointer.peek();
@@ -2687,7 +2723,7 @@ async function syncTimelineToIndex(runId: string, seekToEnd: boolean): Promise<n
         //Only when the visible frame actually changed. This now runs repeatedly WHILE a run
         //streams, and redrawing the same frame every couple of seconds would fight the playback
         //machine for the renderer at exactly the scale where that is expensive.
-        if (pointerMoved) showSceneAt(restoredPointer);
+        if (pointerMoved || replaced) showSceneAt(restoredPointer);
         console.log(`Timeline synced to ${merged.length} stored frames of run ${runId}.`);
         return merged.length;
     } catch (err) {
@@ -2701,8 +2737,8 @@ async function syncTimelineToIndex(runId: string, seekToEnd: boolean): Promise<n
  *
  * Written for the animation exporter, where every frame used to be a network round trip that the
  * render had to wait for: fetch, inflate, decode, render, repeat, with nothing overlapping. The
- * frames are served `immutable`, so simply asking for one puts it in the browser's own cache and
- * the real read a moment later is a local hit - which means this needs no cache, no eviction and
+ * frames are cached with revalidation, so a later read can reuse them after checking for a
+ * resumed run's replacement tail - which means this needs no cache, no eviction and
  * no memory budget of its own. Deliberately fetching the BYTES and not decoding: a decoded scene
  * is thousands of objects and tens of megabytes, and buffering those ahead is what the frame
  * source has always been right to refuse.
@@ -2715,7 +2751,7 @@ export async function prefetchFrame(index: number): Promise<void> {
     const e = st.history[index];
     if (!e || e.s) return;
     try {
-        const res = await fetch(`${location.protocol}//${BackendURI}/simulation/run/${runId}/frame/${e.t}`);
+        const res = await fetch(`${location.protocol}//${BackendURI}/simulation/run/${runId}/frame/${e.t}?format=2`);
         //Drained rather than discarded: an unread body may never reach the cache.
         if (res.ok) await res.arrayBuffer();
     } catch { /* the real read will say so */ }
@@ -2728,7 +2764,11 @@ export async function prefetchFrame(index: number): Promise<void> {
  * save() and the .prim download both need the raw bytes and neither should have to know which.
  */
 async function rawFrameBytes(e: { t: number, s: Uint8Array | undefined, plain: boolean }): Promise<Uint8Array> {
-    if (!e.s) return fetchFrame(e.t);
+    if (!e.s) {
+        const local = localArchiveFrame(e);
+        if (local) { const frame = await local; return frame.plain ? frame.bytes : inflateBytes(frame.bytes); }
+        return fetchFrame(e.t);
+    }
     return e.plain ? e.s : inflateBytes(e.s);
 }
 
@@ -2761,10 +2801,10 @@ export async function sceneAt(index: number): Promise<PlantModel[]> {
  * requests, and without it the slowest could land last and leave the wrong frame showing.
  */
 function showSceneAt(index: number) {
+    const token = ++sceneRequestToken;
     const ready = sceneAtSync(index);
     if (ready) { st.scene.value = ready; return; }
 
-    const token = ++sceneRequestToken;
     void sceneAt(index).then(scene => {
         if (token === sceneRequestToken) st.scene.value = scene;
     });
@@ -2801,6 +2841,7 @@ function cacheScene(index: number, scene: PlantModel[]) {
     //A single frame larger than the whole budget is not worth evicting everything for.
     if (size > SCENE_CACHE_PRIMITIVES) return;
 
+    dropCachedScene(index);
     sceneCache.set(index, scene);
     sceneCachePrimitives += size;
 
@@ -2811,6 +2852,13 @@ function cacheScene(index: number, scene: PlantModel[]) {
         for (const plant of evicted) sceneCachePrimitives -= plant.primitives.length;
         sceneCache.delete(oldest.value);
     }
+}
+
+function dropCachedScene(index: number) {
+    const old = sceneCache.get(index);
+    if (!old) return;
+    for (const plant of old) sceneCachePrimitives -= plant.primitives.length;
+    sceneCache.delete(index);
 }
 
 /**
