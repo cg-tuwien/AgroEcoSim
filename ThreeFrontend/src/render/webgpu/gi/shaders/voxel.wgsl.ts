@@ -9,10 +9,16 @@
 /** Shared declarations: the grid, and the fixed-point encoding the atomics use. */
 export const VOXEL_COMMON = /* wgsl */`
 struct Grid {
-  //xyz: world-space minimum corner. w: cells per axis, as a float.
+  //xyz: world-space minimum corner. w: unused.
   origin : vec4f,
   //xyz: world units per cell. w: 1/cellVolume.
   cell   : vec4f,
+  //xyz: cells per axis, as floats. w: unused.
+  //
+  //Per axis, because the grid is no longer a cube: fitting a box around an imported building
+  //rather than cubing it is what makes a domain that covers one affordable. The cells stay
+  //cubic, only the counts differ.
+  dim    : vec4f,
 };
 
 //Atomics are integer-only, so area accumulates in fixed point. Areas here are square metres
@@ -25,13 +31,12 @@ fn cellOf(g : Grid, p : vec3f) -> vec3i {
 }
 
 fn insideGrid(g : Grid, c : vec3i) -> bool {
-  let d = i32(g.origin.w);
-  return all(c >= vec3i(0)) && all(c < vec3i(d));
+  return all(c >= vec3i(0)) && all(c < vec3i(g.dim.xyz));
 }
 
 fn cellIndex(g : Grid, c : vec3i) -> u32 {
-  let d = i32(g.origin.w);
-  return u32((c.z * d + c.y) * d + c.x);
+  let d = vec3i(g.dim.xyz);
+  return u32((c.z * d.y + c.y) * d.x + c.x);
 }
 `;
 
@@ -211,10 +216,10 @@ fn voxelSunlight(p : vec3f) -> f32 {
 
 @compute @workgroup_size(4, 4, 4)
 fn main(@builtin(global_invocation_id) gid : vec3u) {
-  let d = u32(grid.origin.w);
-  if (gid.x >= d || gid.y >= d || gid.z >= d) { return; }
+  let d = vec3u(grid.dim.xyz);
+  if (gid.x >= d.x || gid.y >= d.y || gid.z >= d.z) { return; }
 
-  let cell = (gid.z * d + gid.y) * d + gid.x;
+  let cell = (gid.z * d.y + gid.y) * d.x + gid.x;
   let base = cell * 4u;
   let area = f32(field[base]) / AREA_SCALE;
   if (area <= 0.0) {
@@ -262,16 +267,29 @@ fn main(@builtin(global_invocation_id) gid : vec3u) {
   let size = textureDimensions(dst);
   if (gid.x >= size.x || gid.y >= size.y || gid.z >= size.z) { return; }
 
+  //Divide by the number of texels that actually exist, not by 8.
+  //
+  //Once the grid stopped being a cube its axes stop halving at different levels: at 240x80x80
+  //the short axes reach 1 while the long one still has 2 to go, and from there the source is
+  //one texel thick. textureLoad returns zero out of bounds, so a fixed 0.125 would average in
+  //phantom empty cells and bias the coarse levels low - which is exactly the levels a far cone
+  //step reads, so a distant building would quietly thin out.
+  let srcSize = vec3i(textureDimensions(src, 0));
   let base = vec3i(gid) * 2;
   var sum = vec4f(0.0);
+  var n = 0.0;
   for (var z = 0; z < 2; z++) {
     for (var y = 0; y < 2; y++) {
       for (var x = 0; x < 2; x++) {
-        sum += textureLoad(src, base + vec3i(x, y, z), 0);
+        let at = base + vec3i(x, y, z);
+        if (all(at < srcSize)) {
+          sum += textureLoad(src, at, 0);
+          n += 1.0;
+        }
       }
     }
   }
-  textureStore(dst, vec3i(gid), sum * 0.125);
+  textureStore(dst, vec3i(gid), select(vec4f(0.0), sum / n, n > 0.0));
 }
 `;
 
@@ -328,8 +346,7 @@ const DIRS : array<vec3f, 6> = array<vec3f, 6>(
 
 fn gatherCone(origin : vec3f, dir : vec3f) -> vec3f {
   let cellSize = min(grid.cell.x, min(grid.cell.y, grid.cell.z));
-  let dim = grid.origin.w;
-  let extent = grid.cell.xyz * dim;
+  let extent = grid.cell.xyz * grid.dim.xyz;
   let lo = grid.origin.xyz;
 
   var radiance = vec3f(0.0);
@@ -361,10 +378,10 @@ fn main(@builtin(global_invocation_id) gid : vec3u) {
   if (gid.x >= occupiedCount[0] || gid.x >= arrayLength(&occupied)) { return; }
 
   let cell = occupied[gid.x];
-  let d = u32(grid.origin.w);
-  let x = cell % d;
-  let y = (cell / d) % d;
-  let z = cell / (d * d);
+  let d = vec3u(grid.dim.xyz);
+  let x = cell % d.x;
+  let y = (cell / d.x) % d.y;
+  let z = cell / (d.x * d.y);
 
   let base = cell * 4u;
   let area = f32(field[base]) / AREA_SCALE;

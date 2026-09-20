@@ -1153,6 +1153,138 @@ mip generation a plain arithmetic mean and makes double-sidedness free.
   reference cell by cell. Current agreement: 18333 occupied cells identical on both,
   3e-5 relative error on total area.
 
+## The GI grid must cover the SCENE, not the simulation field
+
+**An imported building was shadowed across a quarter of its width and flat-lit across the rest.**
+Two defects, both required; neither shows up alone.
+
+**1. The grid was fitted to the field.** `makeVoxelGrid` cubed
+`max(fieldSizeX, fieldSizeZ, height) * 1.04` around the field, and `appstate.fieldSizeX` comes
+from the request - never from an imported model. Saved facade runs use `FieldSize {X:10, D:4,
+Z:10}`, so the grid was a **10.4 m cube** while `fav11_complete_geometry_model_repaired_all_detected.obj`
+is **37.74 m wide** (978,191 vertices, 1,398,079 faces; X -0.45..37.29, and its OBJ Z becomes
+world Y so it stands 7.68 m tall). 10.4 / 37.74 = **27.6 %**, which is the fraction that was
+reported. Geometry outside is dropped by `insideGrid`, and a surface point outside leaves
+`traceSun` on its first probe and comes back fully lit.
+
+**2. `traceSun` reached 31 cells.** `dist` starts at `2c`; the step is `max(c, 0.1*dist)`, so 9
+iterations of one cell reach `10c` and the remaining 11 grow at 1.1x to `10c * 1.1^11 = 31.4c` -
+**2.55 m** at the old 8.125 cm cell. Running out of iterations is the loop's only wrong exit: it
+returns the transmittance so far, which for a ray that never reached the occluder is full sun.
+Now 64, which covers the `sqrt(3) * MAX_GRID_DIM = 887`-cell worst case (9 + ln(88.7)/ln(1.1) =
+56 steps). Both early exits are unchanged, so the typical count stays far below the cap.
+
+### The cube was the waste, not the extent
+
+`VoxelGrid.dim` is a `Vec3` now. The cells stay cubic - a cone steps in world units - but the
+counts do not have to match, and that is what makes covering a building affordable:
+
+| | before | after |
+| --- | --- | --- |
+| domain | 10.4 m cube | 39 x 13 x 13 m |
+| dims | 128^3 | 240 x 80 x 80 |
+| cell | 8.125 cm | 16.25 cm |
+| cells | 2,097,152 | **1,536,000 (73 %)** |
+
+A 39 m **cube** around a 7.7 m tall facade is 85 % empty sky; at a useful cell size it costs
+~300 MB. The fitted box costs less than the 10 m cube does today. `VOXEL_CELL_BUDGET` is set to
+exactly `128**3` so that is enforced rather than hoped for, and 16.25 cm is the finest cell that
+fits - 8.125 cm over this domain needs 12.3 M cells, six times the budget.
+
+### Why fitting to statics does not reintroduce the crawl
+
+`VoxelGrid.ts` argues at length that the grid must NOT follow the geometry, because a grid that
+followed the PLANTS would rescale as they grew and every cell would change meaning between
+timesteps. That still holds. `fitVoxelGrid` takes bounds from **statics only** - `giStaticDigest`
+walks the static list and skips `Hidden | ExcludeFromGI`, the same mask the inject kernel uses,
+so terrain cannot inflate the grid either. Two further properties make it stronger than "statics
+are rebuilt rarely":
+
+- the cell only ever **doubles**, so the coarse lattice is an exact nesting of the fine one;
+- the origin is **snapped to the base lattice**, so nudging an obstacle by less than a cell
+  produces a bit-identical grid.
+
+When the statics fit inside the field box `fitVoxelGrid` returns the base grid unchanged - which
+is every scene that does not import an oversized model.
+
+### Three things found on the way, all fixed here
+
+- **`ExcludeFromGI` on painted obstacles deleted the shadow.** `appendObstacles` set it on any
+  obstacle a data mapping painted, so ticking a mapping removed the building from the field
+  entirely *and* shrank the fitted domain back to the field box. The flag conflates "drawn unlit,
+  so it does not RECEIVE shading" with "does not CAST". A painted obstacle has black `color` and
+  black `emissive` on the INSTANCE - the ramp lives in the mesh's vertex colours, which the
+  inject kernel never reads - and the kernel injects `inst.color.rgb + inst.emissive.rgb`, so it
+  occludes correctly and bleeds exactly nothing.
+- **One big triangle taxed a whole mesh.** `batchesFor` derives the batch count from the bucket's
+  LARGEST triangle and applies it as the dispatch z for every triangle in it. A 100 m2 slab
+  inside a 1.4 M-triangle facade asks 948 batches: 1.3 billion invocations per rebuild, 99.9 % of
+  them returning immediately. `batchesForBucket` now bounds the product
+  (`SPLAT_INVOCATION_BUDGET`), and is shared by the kernel and the CPU reference so voxelcheck
+  cannot end up comparing two different algorithms. The terrain quad is two triangles and still
+  gets every batch it asks for.
+- **The two backends fitted different grids.** `makeVoxelGrid`'s `height` was `fieldSizeD + 6` on
+  WebGPU and bare `fieldSizeD` on WebGL. Invisible at the default 10x10 field, where both land on
+  10.4 m; below ~10 m they genuinely disagreed about what is dense, which is the one thing
+  sharing `core/VoxelGrid` is meant to make impossible. `GI_HEADROOM` is shared now.
+
+Also: the mip filter divides by the number of texels that **exist**, not by 8. A non-cubic grid's
+axes bottom out at different levels, `textureLoad` returns zero out of bounds, and a fixed 0.125
+would average in phantom empty cells - biasing exactly the coarse levels a far cone step reads.
+
+### What it does NOT do: the shadow is soft
+
+A single opaque plate filling a cell gives `sigma = 0.5*cell^2/cell^3`, so
+`exp(-sigma*cell) = exp(-0.5) = 0.61` - **39 % extinction per surface layer, independent of
+resolution.** Several tray surfaces stack to 0.22 then 0.06, which reads as a strong shadow
+against a sun ~6x the ambient, but dark rather than black. That is a property of applying a
+leaf-area-density model to solids, not of the grid. Making opaque obstacles opaque needs a
+per-instance extinction multiplier and is a separate change.
+
+### Measured
+
+`tools/visual/facadeshadow.mjs` imports the real facade through the app's own upload path, drives
+the sun directly, and reports the fraction of BUILDING pixels darkened in bands across the
+model's width. Band the IMAGE instead and the outer bands are pure sky, which reads as "the
+shadow does not reach the edges" - the exact conclusion the harness exists to test.
+
+It also drives the sun directly rather than through the checkbox: `resolveLighting` takes the sun
+from the simulated clock, and with no run loaded the playhead sits at timestep 0, local midnight.
+`shadows` resolves to FALSE however the box is ticked, and the first version of this harness
+reported `0/5` on a build where the shadow works.
+
+| band across the facade | before | after |
+| --- | --- | --- |
+| 0 | 44.2 % | 5.2 % |
+| 1 | 16.2 % | 33.7 % |
+| 2 | **0 %** | 54.5 % |
+| 3 | **0 %** | 37.1 % |
+| 4 | **0 %** | 35.1 % |
+
+Bands 2-4 were exactly zero, which is the defect stated as a number. Band 0 falling is the
+resolution trade: that strip was inside the 8.125 cm grid before and is 16.25 cm now, so
+tray-to-tray occlusion there is softer while the whole building gained a shadow. With a data
+mapping on (1,661 painted groups) the fitted domain stays 39 x 13 x 13 m, which is the probe that
+the facade is still in the GI set.
+
+**No-regression, before build against after build:** the fixture's default and sun-tier stills are
+**byte-identical PNGs on both backends**, and `voxelcheck.mjs` agrees to the last digit -
+2,097,152 cells at 8.13 cm, 82 occupied on GPU and CPU, `relError` 6.0354e-4, `worstCellDelta`
+1.4525e-4, identical before and after.
+
+**The voxelcheck figures quoted further up this file (18,333 occupied cells, 3e-5) are stale** -
+they predate terrain being excluded from the field. The current fixture gives 82 occupied cells
+and 6.0e-4, on both sides of this change.
+
+### WebGL: imported buildings never cast, and the budget is not why
+
+`ThreeRenderer.rebuildDensity` passes `this.plantInstances` **only** - `ThreeDensityField.build`
+says so itself: "Only plants are injected." So `DENSITY_TRIANGLE_BUDGET` is counted over the
+PLANT list; a 1.4 M-face facade never reaches it and is simply not a candidate. Raising the budget
+would achieve nothing. Giving WebGL building shadows means CPU-voxelising that mesh on the main
+thread per static rebuild, which is the stall the budget exists to prevent. `fitVoxelGrid` lives
+in `core/` so a future worker-based path can adopt it.
+
 ## Voxel cone tracing (Tier 3, WebGPU only)
 
 Five cones per pixel at half resolution, off the same depth+normal prepass GTAO uses, lit from

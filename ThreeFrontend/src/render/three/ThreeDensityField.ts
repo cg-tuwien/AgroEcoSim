@@ -100,6 +100,13 @@ export class ThreeDensityField {
      * Only plants are injected. Terrain and obstacles are the things being shaded, not the
      * canopy doing the shading, and a ground plane's worth of density at the bottom of the grid
      * would darken everything standing on it.
+     *
+     * The consequence, which is easy to mistake for a bug: **on this backend an imported
+     * building never casts a shadow at all**, whatever its size. The budget below is counted
+     * over the PLANT list, so a million-triangle facade does not trip it - it is simply not a
+     * candidate. The WebGPU path fits its grid to the statics and injects them on the GPU;
+     * doing the same here means CPU-voxelising that mesh on the main thread per static rebuild,
+     * which is the stall this budget exists to prevent.
      */
     build(list: InstanceList, fieldSizeX: number, fieldSizeZ: number, height: number) {
         this.grid = makeVoxelGrid(fieldSizeX, fieldSizeZ, height, DENSITY_DIM);
@@ -116,7 +123,7 @@ export class ThreeDensityField {
             if (!this.reportedBudget) {
                 this.reportedBudget = true;
                 console.warn(
-                    `Density field skipped: ${triangles} triangles exceeds the ${DENSITY_TRIANGLE_BUDGET} ` +
+                    `Density field skipped: ${triangles} PLANT triangles exceeds the ${DENSITY_TRIANGLE_BUDGET} ` +
                     `budget for CPU voxelisation. Volumetric shadows and occlusion are off for this scene ` +
                     `on the WebGL backend; the WebGPU backend voxelises on the GPU and has no such limit.`);
             }

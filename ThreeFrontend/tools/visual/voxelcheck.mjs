@@ -91,9 +91,14 @@ try {
     const top = [];
     for (let i = 0; i < gpu.length; ++i) if (gpu[i] > 0) top.push([i, gpu[i]]);
     top.sort((a,b) => b[1]-a[1]);
+    // Per axis: the grid is no longer a cube once it has been fitted around an import.
+    const cellOf = i => ({
+      x: i % grid.dim.x,
+      y: Math.floor(i / grid.dim.x) % grid.dim.y,
+      z: Math.floor(i / (grid.dim.x * grid.dim.y)),
+    });
     const describe = ([i, a]) => {
-      const d = grid.dim;
-      const x = i % d, y = Math.floor(i / d) % d, z = Math.floor(i / (d*d));
+      const { x, y, z } = cellOf(i);
       return { area: +a.toFixed(4),
                wx: +(grid.origin.x + (x+0.5)*grid.cell.x).toFixed(2),
                wy: +(grid.origin.y + (y+0.5)*grid.cell.y).toFixed(2),
@@ -102,8 +107,9 @@ try {
     return {
       kind: r.kind, cells: gpu.length, compacted: occupancy,
       cell: +grid.cell.x.toFixed(4),
+      dim: [grid.dim.x, grid.dim.y, grid.dim.z],
       topCells: top.slice(0, 8).map(describe),
-      aboveSoil: top.filter(([i]) => grid.origin.y + (Math.floor(i/grid.dim)%grid.dim + 0.5)*grid.cell.y > 0.02).length,
+      aboveSoil: top.filter(([i]) => grid.origin.y + (cellOf(i).y + 0.5)*grid.cell.y > 0.02).length,
       gpuTotal, cpuTotal,
       relError: cpuTotal > 0 ? Math.abs(gpuTotal - cpuTotal) / cpuTotal : null,
       occupiedGpu, occupiedCpu, bothOccupied,

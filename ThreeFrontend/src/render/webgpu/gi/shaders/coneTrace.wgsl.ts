@@ -14,10 +14,15 @@ struct Trace {
   //xy = the full-resolution size the gbuffer was rendered at. z = cone length in metres.
   //w = indirect intensity.
   settings   : vec4f,
-  //xyz: grid origin. w: cells per axis.
+  //xyz: grid origin. w: unused.
   gridOrigin : vec4f,
   //xyz: world units per cell. w: unused.
   gridCell   : vec4f,
+  //xyz: the grid's world extent. w: unused.
+  //
+  //Sent directly rather than as cells-per-axis, because the grid is no longer a cube and one
+  //number no longer describes all three axes. The trace only ever wants origin + extent.
+  gridExtent : vec4f,
   //xyz: direction TO the sun, world space. w: 1 when the sun should be traced at all.
   sunDir     : vec4f,
   //Camera world matrix, for taking the reconstructed view position back to world space.
@@ -58,8 +63,7 @@ fn viewPosFrom(uv : vec2f, dist : f32) -> vec3f {
 //The origin is expected to be lifted clear of the surface's own cell; see coneOrigin.
 fn traceCone(origin : vec3f, dir : vec3f, aperture : f32) -> vec4f {
   let cell = min(trace.gridCell.x, min(trace.gridCell.y, trace.gridCell.z));
-  let dim = trace.gridOrigin.w;
-  let extent = trace.gridCell.xyz * dim;
+  let extent = trace.gridExtent.xyz;
   let lo = trace.gridOrigin.xyz;
 
   var radiance = vec3f(0.0);
@@ -71,7 +75,7 @@ fn traceCone(origin : vec3f, dir : vec3f, aperture : f32) -> vec4f {
     if (dist >= maxDist || transmittance < 0.02) { break; }
 
     let diameter = max(cell, 2.0 * aperture * dist);
-    let mip = clamp(log2(diameter / cell), 0.0, 6.0);
+    let mip = clamp(log2(diameter / cell), 0.0, f32(textureNumLevels(field) - 1u));
     let p = origin + dir * dist;
 
     let uvw = (p - lo) / extent;
@@ -121,12 +125,12 @@ fn coneOrigin(world : vec3f, n : vec3f) -> vec3f {
  * It is also the same law the simulation's own light transport uses, so a shadow here means
  * what a shadow means to the model underneath.
  */
-fn traceSun(origin : vec3f, n : vec3f) -> f32 {
+fn traceSun(origin : vec3f) -> f32 {
   if (trace.sunDir.w < 0.5) { return 1.0; }
 
   let dir = trace.sunDir.xyz;
   let cellSize = min(trace.gridCell.x, min(trace.gridCell.y, trace.gridCell.z));
-  let extent = trace.gridCell.xyz * trace.gridOrigin.w;
+  let extent = trace.gridExtent.xyz;
   let lo = trace.gridOrigin.xyz;
 
   //Start two cells along the SUN DIRECTION, and only along it.
@@ -149,10 +153,23 @@ fn traceSun(origin : vec3f, n : vec3f) -> f32 {
   //hard line at this voxel resolution. The widening also hides the grid.
   let aperture = 0.05;
 
-  for (var i = 0; i < 20; i++) {
+  //Enough iterations to CROSS the grid, which 20 was not.
+  //
+  //The step is max(cellSize, 0.1*dist), so the march is 9 steps of one cell out to 10c and
+  //geometric at 1.1x after that: reach is 10c * 1.1^(N-9) CELLS - a function of the cell
+  //count, not of world size. At N = 20 that is 31.4 cells, which on the old 10.4 m cube was
+  //2.55 m. Nothing could shadow anything further away than that, and the loop's only wrong
+  //exit is this one: running out of iterations returns the transmittance so far, which for a
+  //ray that never reached the occluder is full sun.
+  //
+  //The largest diagonal the fitting rule can build is sqrt(3) * MAX_GRID_DIM = 887 cells,
+  //needing 9 + ln(88.7)/ln(1.1) = 56 steps. 64 covers it with headroom. The cost is bounded by
+  //the two early exits below - a ray leaving the grid or reaching 2 % transmittance stops -
+  //so the typical count stays far under the cap, and this is one cone per half-res pixel.
+  for (var i = 0; i < 64; i++) {
     if (transmittance < 0.02) { break; }
     let diameter = max(cellSize, 2.0 * aperture * dist);
-    let mip = clamp(log2(diameter / cellSize), 0.0, 6.0);
+    let mip = clamp(log2(diameter / cellSize), 0.0, f32(textureNumLevels(field) - 1u));
     let probe = origin + dir * dist;
     let uvw = (probe - lo) / extent;
     //Out of the grid means out of the canopy: nothing above, so full sun.
@@ -235,7 +252,7 @@ fn main(@builtin(global_invocation_id) gid : vec3u) {
   //already measures sky occlusion and does it at a finer scale than an 8 cm voxel can, so the
   //channel is better spent on the thing the voxels are uniquely good at: how much canopy lies
   //between this point and the sun.
-  let sunVis = traceSun(world, n);
+  let sunVis = traceSun(world);
   let bounce = radiance * trace.settings.w;
   //Fold the diffuse cones' own occlusion into the bounce rather than exporting it: it and the
   //screen-space AO measure the same quantity, and the composite already takes the darker.

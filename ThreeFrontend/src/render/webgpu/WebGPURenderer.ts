@@ -32,7 +32,7 @@ import { OcclusionTargets, Targets, SAMPLE_COUNT, DEPTH_CLEAR_VALUE, DEPTH_FORMA
 import { forceOpaque, reportOpaque, warnIfFlat } from '../offline/opaque';
 import { VoxelField } from './gi/VoxelField';
 import { VoxelDebug } from './gi/VoxelDebug';
-import { DEFAULT_VOXEL_DEBUG, GIFrameInputs, MAX_SAMPLE_BATCHES, SAMPLES_PER_INVOCATION, VoxelDebugOptions, scatterTriangleArea } from '../core/VoxelGrid';
+import { DEFAULT_VOXEL_DEBUG, GIFrameInputs, GridBounds, VoxelDebugOptions, batchesForBucket, cellCount, giStaticDigest, scatterTriangleArea } from '../core/VoxelGrid';
 import { GeometryAtlas } from './GeometryAtlas';
 import { obstacleMappingGeometry } from '../core/ObstacleMappingGeometry';
 import { InstanceBuffers, INSTANCE_FLOATS } from './InstanceBuffers';
@@ -145,7 +145,9 @@ export class WebGPURenderer implements IViewportRenderer {
     private traceBuffer: GPUBuffer | undefined;
     //projParams, settings, gridOrigin, gridCell, sunDir, then a 4x4 invView. The order
     //MUST match struct Trace; see FRAME_MEMBERS for what a mismatch costs.
-    private traceData = new Float32Array(4 * 5 + 16);
+    //projParams, settings, gridOrigin, gridCell, gridExtent, sunDir, then invView. The order
+    //MUST match `struct Trace`; see the FRAME_MEMBERS note for what a silent mismatch costs.
+    private traceData = new Float32Array(4 * 6 + 16);
     private traceBind: GPUBindGroup | undefined;
     private traceBoundView: GPUTextureView | undefined;
     private traceBoundGi: GPUTextureView | undefined;
@@ -619,7 +621,7 @@ export class WebGPURenderer implements IViewportRenderer {
         }
         if (!this.voxelsDirty) return;
 
-        this.voxels.setWorld(this.giInputs);
+        this.voxels.setWorld(this.giInputs, this.staticBounds);
         this.voxels.setBounces(this.lighting.bounces);
         const light = this.lighting;
         //The same values the frame uniform carries, so a voxel is lit by the hemisphere the
@@ -695,15 +697,19 @@ export class WebGPURenderer implements IViewportRenderer {
         //Indirect intensity, and the gate on the five diffuse cones: shadows alone want the
         //sun trace without paying for them.
         f[7] = this.lighting.voxelGI ? 1 : 0;
-        f[8] = grid.origin.x; f[9] = grid.origin.y; f[10] = grid.origin.z; f[11] = grid.dim;
+        f[8] = grid.origin.x; f[9] = grid.origin.y; f[10] = grid.origin.z; f[11] = 0;
         f[12] = grid.cell.x; f[13] = grid.cell.y; f[14] = grid.cell.z; f[15] = 0;
+        //World extent, sent directly rather than as cells-per-axis. The trace only ever wants
+        //origin + extent, and since the grid stopped being a cube one number no longer
+        //describes all three axes.
+        f[16] = grid.size.x; f[17] = grid.size.y; f[18] = grid.size.z; f[19] = 0;
         //Direction TO the sun, and whether it is worth tracing at all.
         const sun = this.lighting.sunDirection;
         const sunLit = this.lighting.shadows ? 1 : 0;
-        f[16] = sun.x; f[17] = sun.y; f[18] = sun.z; f[19] = sunLit;
+        f[20] = sun.x; f[21] = sun.y; f[22] = sun.z; f[23] = sunLit;
         //The gbuffer is in view space and the field is in world space; this takes it back.
         invertRigid(view, this.invViewScratch);
-        f.set(this.invViewScratch, 20);
+        f.set(this.invViewScratch, 24);
         this.gpu!.device.queue.writeBuffer(this.traceBuffer!, 0, f.buffer, 0, f.byteLength);
     }
 
@@ -758,7 +764,7 @@ export class WebGPURenderer implements IViewportRenderer {
     debugVoxelReference(): Float32Array | undefined {
         if (!this.voxels || !this.atlas) return undefined;
         const grid = this.voxels.grid;
-        const out = new Float32Array(grid.dim ** 3);
+        const out = new Float32Array(cellCount(grid));
         const tri = new Float32Array(9);
         const m = createMat4();
 
@@ -767,10 +773,9 @@ export class WebGPURenderer implements IViewportRenderer {
             const packed = set.packed;
             for (const bucket of set.buckets) {
                 //Mirrors VoxelField.batchesFor; the two must agree or the diff is meaningless.
-                const worldArea = this.atlas.maxTriangleArea(bucket.geom) * bucket.maxScale * bucket.maxScale;
-                const batches = Math.max(1, Math.min(MAX_SAMPLE_BATCHES,
-                    Math.ceil(Math.ceil((worldArea / cellArea) * 4) / SAMPLES_PER_INVOCATION)));
                 const triangles = Math.floor(bucket.slice.indexCount / 3);
+                const worldArea = this.atlas.maxTriangleArea(bucket.geom) * bucket.maxScale * bucket.maxScale;
+                const batches = batchesForBucket(worldArea, cellArea, triangles, bucket.instanceCount);
                 for (let n = 0; n < bucket.instanceCount; ++n) {
                     const base = (bucket.firstInstance + n) * INSTANCE_FLOATS;
                     //Flags live in the u32 lane after pickId; Hidden instances are skipped by
@@ -857,6 +862,14 @@ export class WebGPURenderer implements IViewportRenderer {
         console.info(`WebGPU viewport: ${mb} MB of render targets at ${this.targets.width}x${this.targets.height} (${why}).`);
     }
 
+    /**
+     * World bounds of the static geometry, and a signature of what produced them.
+     *
+     * The bounds set the GI domain; the signature is what keeps a hover from rebuilding it.
+     */
+    private staticBounds: GridBounds | undefined;
+    private staticSignature = 0;
+
     rebuildPlants(inputs: PlantFrameInputs) {
         if (!this.atlas) return;
         this.voxelsDirty = true;
@@ -872,14 +885,27 @@ export class WebGPURenderer implements IViewportRenderer {
      * the volatile plant buffer means a hover recolour does not re-upload the whole canopy.
      */
     private rebuildStatics() {
-        this.voxelsDirty = true;
-        if (!this.atlas) return;
+        if (!this.atlas) { this.voxelsDirty = true; return; }
         const list = this.staticList;
         list.reset();
 
         if (this.visibility.terrain) this.appendTerrain(list);
         if (this.visibility.seeds) this.appendSeeds(list);
         if (this.visibility.obstacles) this.appendObstacles(list);
+
+        //The field's domain now follows the statics, so their bounds have to be known here.
+        //
+        //Dirty the field only when the digest actually MOVED. This runs on every mouse move -
+        //picking flips an obstacle's hover state, which is part of the obstacle revision - and
+        //re-injecting a 1.4 M-triangle facade per mouse move is not affordable. It became
+        //affordable to notice only once painted obstacles stopped carrying ExcludeFromGI,
+        //which is what used to make those invocations exit immediately.
+        const digest = giStaticDigest(list);
+        if (digest.signature !== this.staticSignature) {
+            this.staticSignature = digest.signature;
+            this.staticBounds = digest.bounds;
+            this.voxelsDirty = true;
+        }
 
         this.statics.pack(list, this.atlas);
         this.renderOnce();
@@ -967,8 +993,15 @@ export class WebGPURenderer implements IViewportRenderer {
                 }
                 inst.color = { r: 0, g: 0, b: 0 };
                 inst.emissive = { r: 0, g: 0, b: 0 };
-                inst.flags = IFlags.DoubleSided | IFlags.FlatShaded
-                    | IFlags.VertexColorsEmissive | IFlags.ExcludeFromGI;
+                //NOT ExcludeFromGI. That flag conflates "drawn unlit, so it does not RECEIVE
+                //shading" with "does not CAST", and carrying it here meant switching an
+                //obstacle mapping on silently deleted the building's shadow - and shrank the
+                //fitted GI domain back to the field box with it. A painted obstacle has black
+                //color and black emissive on the INSTANCE (the ramp lives in the mesh's vertex
+                //colours, which the inject kernel never reads), and the kernel injects
+                //inst.color.rgb + inst.emissive.rgb - so it occludes correctly and bleeds
+                //exactly nothing, which is what an unlit readout surface should do.
+                inst.flags = IFlags.DoubleSided | IFlags.FlatShaded | IFlags.VertexColorsEmissive;
                 if (layout) {
                     const measuredCount = layout.mesh.indices.length - layout.contextCount;
                     if (layout.contextCount && measuredCount) {

@@ -8,7 +8,8 @@ import { CameraPose } from '../../IViewportRenderer';
 import { VoxelDebugOptions, VoxelGrid } from '../../core/VoxelGrid';
 import { VOXEL_DEBUG_WGSL } from './shaders/voxelDebug.wgsl';
 
-const FLOATS = 4 * 7;
+//origin, right, up, forward, gridOrigin, gridCell, gridExtent, options.
+const FLOATS = 4 * 8;
 
 export class VoxelDebug {
     private device: GPUDevice;
@@ -101,9 +102,11 @@ export class VoxelDebug {
         const u = scale(up, tanY);
         f[8] = u.x; f[9] = u.y; f[10] = u.z; f[11] = 0;
         f[12] = forward.x; f[13] = forward.y; f[14] = forward.z; f[15] = 0;
-        f[16] = grid.origin.x; f[17] = grid.origin.y; f[18] = grid.origin.z; f[19] = grid.dim;
+        f[16] = grid.origin.x; f[17] = grid.origin.y; f[18] = grid.origin.z; f[19] = 0;
         f[20] = grid.cell.x; f[21] = grid.cell.y; f[22] = grid.cell.z; f[23] = 0;
-        f[24] = options.mip; f[25] = options.gain; f[26] = options.albedo ? 1 : 0; f[27] = 0;
+        //World extent rather than cells per axis: the grid is no longer a cube.
+        f[24] = grid.size.x; f[25] = grid.size.y; f[26] = grid.size.z; f[27] = 0;
+        f[28] = options.mip; f[29] = options.gain; f[30] = options.albedo ? 1 : 0; f[31] = 0;
         this.device.queue.writeBuffer(this.uniform, 0, f.buffer, 0, f.byteLength);
 
         pass.setPipeline(this.pipeline(format, sampleCount, depthFormat));

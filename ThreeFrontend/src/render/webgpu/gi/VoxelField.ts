@@ -5,7 +5,7 @@
 //irradiance the simulation computes - it is a rendering approximation, and keeping it unable
 //to reach the simulation's state is cheaper than remembering not to.
 
-import { GIFrameInputs, MAX_SAMPLE_BATCHES, SAMPLES_PER_INVOCATION, VoxelGrid, cellVolume, makeVoxelGrid } from '../../core/VoxelGrid';
+import { GIFrameInputs, GridBounds, VoxelGrid, batchesForBucket, cellCount, cellVolume, fitVoxelGrid, makeVoxelGrid } from '../../core/VoxelGrid';
 import { GeometryAtlas } from '../GeometryAtlas';
 import { DrawBucket, InstanceBuffers } from '../InstanceBuffers';
 import { Mat4 } from '../../core/Mat4';
@@ -82,14 +82,25 @@ export class VoxelField {
     private lightData = new Float32Array(LIGHT_FLOATS);
     private boundShadow: GPUTextureView | undefined;
     private mipBinds: GPUBindGroup[] = [];
+    private reportedDispatchLimit = false;
+    /**
+     * Cells per axis the FIELD alone is divided into, before any refit.
+     *
+     * Kept apart from `grid.dim`, which the refit changes per axis: re-deriving the base from
+     * the current grid would let each refit compound on the last and ratchet the cell size.
+     */
+    private readonly baseDim: number;
 
     constructor(device: GPUDevice, dim = VOXEL_DIM_MEDIUM) {
         this.device = device;
+        this.baseDim = dim;
         this.grid = makeVoxelGrid(1, 1, 1, dim);
 
         this.gridBuffer = device.createBuffer({
             label: 'voxel-grid',
-            size: 32,
+            //origin+pad, cell+invVolume, dim+pad: 3 vec4f. The dims were packed into origin.w
+            //while the grid was a cube and one number described all three axes.
+            size: 48,
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
 
@@ -214,16 +225,18 @@ export class VoxelField {
         this.fieldBuffer?.destroy();
         this.fieldBuffer = this.device.createBuffer({
             label: 'voxel-field',
-            size: dim * dim * dim * CHANNELS * 4,
+            size: cellCount(this.grid) * CHANNELS * 4,
             usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
         });
 
         this.texture?.destroy();
-        this.mipCount = Math.floor(Math.log2(dim)) + 1;
+        //Levels until every axis has reached 1. A non-cubic grid halves each axis
+        //independently, so the count follows the LARGEST of them.
+        this.mipCount = Math.floor(Math.log2(Math.max(dim.x, dim.y, dim.z))) + 1;
         this.texture = this.device.createTexture({
             label: 'voxel-radiance',
             dimension: '3d',
-            size: { width: dim, height: dim, depthOrArrayLayers: dim },
+            size: { width: dim.x, height: dim.y, depthOrArrayLayers: dim.z },
             format: VOXEL_FORMAT,
             mipLevelCount: this.mipCount,
             //COPY_SRC so the second bounce can seed its destination with this one; the cells
@@ -254,7 +267,7 @@ export class VoxelField {
         this.occupiedBuffer?.destroy();
         this.occupiedBuffer = this.device.createBuffer({
             label: 'voxel-occupied',
-            size: dim * dim * dim * 4,
+            size: cellCount(this.grid) * 4,
             usage: GPUBufferUsage.STORAGE,
         });
         if (!this.countBuffer) {
@@ -291,7 +304,7 @@ export class VoxelField {
         this.bounceTexture = this.device.createTexture({
             label: 'voxel-radiance-bounce',
             dimension: '3d',
-            size: { width: dim, height: dim, depthOrArrayLayers: dim },
+            size: { width: dim.x, height: dim.y, depthOrArrayLayers: dim.z },
             format: VOXEL_FORMAT,
             mipLevelCount: this.mipCount,
             usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING
@@ -325,13 +338,35 @@ export class VoxelField {
         this.view = this.finalView();
     }
 
-    /** Refits the grid to the field. Cheap and idempotent when the field has not changed. */
-    setWorld(inputs: GIFrameInputs) {
-        const next = makeVoxelGrid(inputs.fieldSizeX, inputs.fieldSizeZ, inputs.height, this.grid.dim);
+    /**
+     * Refits the grid to the field and to the STATIC geometry. Idempotent when neither moved.
+     *
+     * `statics` is what makes an imported building castable: the field alone is a 10 m box and
+     * a facade is 37 m wide, so three quarters of it used to fall outside the grid and neither
+     * deposited density nor received a shadow. See fitVoxelGrid for why taking static bounds
+     * does not reintroduce the crawl that keeps PLANT bounds out of this.
+     */
+    setWorld(inputs: GIFrameInputs, statics?: GridBounds) {
+        const base = makeVoxelGrid(inputs.fieldSizeX, inputs.fieldSizeZ, inputs.height, this.baseDim);
+        const next = fitVoxelGrid(base, statics);
+        const resized = next.dim.x !== this.grid.dim.x
+            || next.dim.y !== this.grid.dim.y || next.dim.z !== this.grid.dim.z;
         this.grid = next;
-        const u = new Float32Array(8);
-        u[0] = next.origin.x; u[1] = next.origin.y; u[2] = next.origin.z; u[3] = next.dim;
+        //The textures and buffers are sized by the cell counts, so a refit that changed them
+        //has to reallocate before anything binds them. allocate() clears the bind groups it
+        //invalidates, and both the trace and the debug overlay rebind on texture identity.
+        if (resized) {
+            this.allocate();
+            console.info(
+                `Voxel grid refit: ${next.dim.x}x${next.dim.y}x${next.dim.z} cells at `
+                + `${next.cell.x.toFixed(4)} m over `
+                + `${next.size.x.toFixed(1)}x${next.size.y.toFixed(1)}x${next.size.z.toFixed(1)} m `
+                + `(${(cellCount(next) * (CHANNELS * 4 + 4) / 1e6).toFixed(1)} MB of buffers)`);
+        }
+        const u = new Float32Array(12);
+        u[0] = next.origin.x; u[1] = next.origin.y; u[2] = next.origin.z; u[3] = 0;
         u[4] = next.cell.x; u[5] = next.cell.y; u[6] = next.cell.z; u[7] = 1 / cellVolume(next);
+        u[8] = next.dim.x; u[9] = next.dim.y; u[10] = next.dim.z; u[11] = 0;
         this.device.queue.writeBuffer(this.gridBuffer, 0, u.buffer, 0, u.byteLength);
     }
 
@@ -365,8 +400,8 @@ export class VoxelField {
         const cellArea = this.grid.cell.x * this.grid.cell.z;
         //maxScale is a linear scale, so it squares into an area.
         const worldArea = atlas.maxTriangleArea(bucket.geom) * bucket.maxScale * bucket.maxScale;
-        const samples = Math.ceil((worldArea / cellArea) * 4);
-        return Math.max(1, Math.min(MAX_SAMPLE_BATCHES, Math.ceil(samples / SAMPLES_PER_INVOCATION)));
+        return batchesForBucket(worldArea, cellArea,
+                                Math.floor(bucket.slice.indexCount / 3), bucket.instanceCount);
     }
 
     /** Lighting applied to each cell during resolve. Mirrors FrameLighting, minus the tiers. */
@@ -453,7 +488,19 @@ export class VoxelField {
                 binds.set(d.set, bind);
             }
             const groupsX = Math.ceil(d.triangles / 64);
-            if (groupsX > maxPerDim || d.batches > maxPerDim) continue;
+            if (groupsX > maxPerDim || d.batches > maxPerDim) {
+                //A bucket over the dispatch limit used to vanish from the field with no log at
+                //all, so a model large enough to trip it simply stopped casting shadows and
+                //looked like a lighting bug. Say so once.
+                if (!this.reportedDispatchLimit) {
+                    this.reportedDispatchLimit = true;
+                    console.warn(
+                        `Voxel field: a bucket of ${d.triangles} triangles x ${d.batches} sample `
+                        + `batches exceeds the ${maxPerDim} workgroups-per-dimension limit and was `
+                        + `skipped. That geometry will not cast shadows or occlude.`);
+                }
+                continue;
+            }
             pass.setBindGroup(0, bind, [offsets[i]]);
             pass.dispatchWorkgroups(groupsX, d.instances, d.batches);
         }
@@ -479,8 +526,10 @@ export class VoxelField {
         const resolve = encoder.beginComputePass({ label: 'voxel-resolve' });
         resolve.setPipeline(this.resolvePipeline);
         resolve.setBindGroup(0, this.resolveBind!);
-        const groups = Math.ceil(this.grid.dim / 4);
-        resolve.dispatchWorkgroups(groups, groups, groups);
+        resolve.dispatchWorkgroups(
+            Math.ceil(this.grid.dim.x / 4),
+            Math.ceil(this.grid.dim.y / 4),
+            Math.ceil(this.grid.dim.z / 4));
         resolve.end();
 
         this.generateMips(encoder, this.mipBinds);
@@ -491,7 +540,7 @@ export class VoxelField {
             encoder.copyTextureToTexture(
                 { texture: this.texture, mipLevel: 0 },
                 { texture: this.bounceTexture, mipLevel: 0 },
-                { width: this.grid.dim, height: this.grid.dim, depthOrArrayLayers: this.grid.dim });
+                { width: this.grid.dim.x, height: this.grid.dim.y, depthOrArrayLayers: this.grid.dim.z });
 
             const args = encoder.beginComputePass({ label: 'voxel-bounce-args' });
             args.setPipeline(this.argsPipeline);
@@ -518,10 +567,14 @@ export class VoxelField {
         const mips = encoder.beginComputePass({ label: 'voxel-mip' });
         mips.setPipeline(this.mipPipeline);
         for (let m = 1; m < this.mipCount; ++m) {
-            const size = Math.max(1, this.grid.dim >> m);
-            const g = Math.ceil(size / 4);
+            //Each axis halves on its own and stops at 1, which is what a 3D texture's mip chain
+            //does for a non-cubic size. Deriving all three from one dim would over-dispatch the
+            //short axes and, worse, under-dispatch the long one.
             mips.setBindGroup(0, binds[m - 1]);
-            mips.dispatchWorkgroups(g, g, g);
+            mips.dispatchWorkgroups(
+                Math.ceil(Math.max(1, this.grid.dim.x >> m) / 4),
+                Math.ceil(Math.max(1, this.grid.dim.y >> m) / 4),
+                Math.ceil(Math.max(1, this.grid.dim.z >> m) / 4));
         }
         mips.end();
     }
@@ -579,8 +632,7 @@ export class VoxelField {
      * visual harness to call instead.
      */
     async readArea(): Promise<Float32Array> {
-        const dim = this.grid.dim;
-        const cells = dim * dim * dim;
+        const cells = cellCount(this.grid);
         const staging = this.device.createBuffer({
             size: cells * CHANNELS * 4,
             usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,

@@ -15,7 +15,7 @@ import { buildObstacleLightExport } from '../helpers/ObstacleLight';
 import { CameraPose, IViewportRenderer, activeRenderer, PlantFrameInputs, TerrainFrameInputs, SeedFrameInputs, ObstacleFrameInputs, VisibilityInputs } from './IViewportRenderer';
 import { VisualMappingOptions } from './core/PlantColors';
 import { resolveLighting } from './core/Lighting';
-import type { GIFrameInputs, VoxelDebugOptions } from './core/VoxelGrid';
+import { GI_HEADROOM, type GIFrameInputs, type VoxelDebugOptions } from './core/VoxelGrid';
 import { Geom, leafGeomKey } from './core/GeometryIds';
 import { registerGeometry } from './core/GeometryStore';
 import { ThreeRenderer } from './three/ThreeRenderer';
@@ -418,7 +418,7 @@ function voxelDebugRequest(): VoxelDebugRequest {
             fieldSizeX: appstate.fieldSizeX.value,
             fieldSizeZ: appstate.fieldSizeZ.value,
             //Headroom above the soil for the canopy to grow into.
-            height: appstate.fieldSizeD.value + 6,
+            height: appstate.fieldSizeD.value + GI_HEADROOM,
         },
     };
 }

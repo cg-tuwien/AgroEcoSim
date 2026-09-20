@@ -33,6 +33,7 @@ import { paletteColor } from '../core/SelectionPalette';
 import { Ray } from '../core/Ray';
 import { backgroundColor } from '../../helpers/Selection';
 import { FrameLighting, shadowBounds } from '../core/Lighting';
+import { GI_HEADROOM } from '../core/VoxelGrid';
 import { forceOpaque, reportOpaque, warnIfFlat } from '../offline/opaque';
 import { OfflineSizeError } from '../offline/types';
 
@@ -301,7 +302,12 @@ export class ThreeRenderer implements IViewportRenderer {
             this.plantInstances,
             appstate.fieldSizeX.peek(),
             appstate.fieldSizeZ.peek(),
-            appstate.fieldSizeD.peek());
+            //Soil depth PLUS the canopy headroom, matching what RendererHost passes the WebGPU
+            //field. This path passed the depth alone, so for any field under ~10 m the two
+            //backends fitted different grids and genuinely disagreed about what is dense - the
+            //one thing sharing core/VoxelGrid is supposed to make impossible. Invisible at the
+            //default 10x10 field, where both land on the same 10.4 m span.
+            appstate.fieldSizeD.peek() + GI_HEADROOM);
     }
 
     /** Whether the current lighting asks for anything the field provides. */

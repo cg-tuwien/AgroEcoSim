@@ -13,10 +13,12 @@ struct Debug {
   right   : vec4f,
   up      : vec4f,
   forward : vec4f,
-  //xyz: grid origin. w: cells per axis.
+  //xyz: grid origin. w: unused.
   origin  : vec4f,
   //xyz: world units per cell. w: unused.
   cell    : vec4f,
+  //xyz: the grid's world extent. w: unused. Sent directly because the grid is not a cube.
+  extent  : vec4f,
   //x: mip level, y: opacity gain, z: 1 = show albedo, 0 = show density as a ramp.
   params  : vec4f,
 };
@@ -62,7 +64,7 @@ fn fs(i : VSOut) -> @location(0) vec4f {
   let ro = dbg.eye.xyz;
 
   let lo = dbg.origin.xyz;
-  let hi = lo + dbg.cell.xyz * dbg.origin.w;
+  let hi = lo + dbg.extent.xyz;
   let hit = intersectBox(ro, rd, lo, hi);
   let tEnter = max(hit.x, 0.0);
   if (hit.y <= tEnter) { discard; }
@@ -78,7 +80,7 @@ fn fs(i : VSOut) -> @location(0) vec4f {
   for (var s = 0; s < count; s++) {
     let t = tEnter + (f32(s) + 0.5) * step;
     let p = ro + rd * t;
-    let uvw = (p - lo) / (dbg.cell.xyz * dbg.origin.w);
+    let uvw = (p - lo) / dbg.extent.xyz;
     let texel = textureSampleLevel(field, fieldSampler, uvw, mip);
 
     let sigma = texel.a * dbg.params.y;
