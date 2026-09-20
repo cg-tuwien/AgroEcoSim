@@ -123,6 +123,7 @@ export class WebGPURenderer implements IViewportRenderer {
         ambientOcclusion: false,
         voxelGI: false,
         bounces: 1,
+        leafTranslucency: 0,
         sunDirection: { x: 0, y: 1, z: 0 },
         sunColor: { r: 0, g: 0, b: 0 },
         shadows: false,
@@ -372,8 +373,12 @@ export class WebGPURenderer implements IViewportRenderer {
         //Black at Tier 0, which is what keeps the result identical to the WebGL renderer.
         f[64] = light.sunColor.r; f[65] = light.sunColor.g; f[66] = light.sunColor.b; f[67] = 1;
 
-        f[68] = light.shadows ? 1 : 0;
-        f[69] = 1 / (this.targets?.shadowSize ?? 4096);
+        //params.x: how much the brighter face of a lamina bleeds into the darker one. Zero
+        //unless the translucency switch is on, and the shader multiplies the whole term by it,
+        //so the default stays bit-identical. params.y is spare - both used to describe the
+        //shadow map, which neither backend has any more.
+        f[68] = light.leafTranslucency;
+        f[69] = 0;
         f[70] = light.ambientOcclusion ? 1 : 0;
         f[71] = (light.voxelGI || light.shadows) ? 1 : 0;
 

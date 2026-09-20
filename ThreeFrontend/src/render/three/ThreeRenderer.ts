@@ -403,6 +403,7 @@ export class ThreeRenderer implements IViewportRenderer {
         if (this.density) {
             this.density.setSunDirection(lighting.sunDirection);
             this.density.setStrengths(wantShadows ? 1 : 0, wantOcclusion ? 1 : 0);
+            this.density.setLeafTranslucency(lighting.leafTranslucency);
 
             //The field is built during a plant rebuild, so switching either term on between
             //timesteps would otherwise sample a field that was never filled - which is exactly

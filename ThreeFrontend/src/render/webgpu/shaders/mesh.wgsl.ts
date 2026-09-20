@@ -6,6 +6,17 @@
 //neither backticks nor ${ so composition is collision-free - the same approach three uses
 //for ShaderChunk.
 
+import { LEAF_ROUGHNESS, LEAF_TRANSMISSION, LEAF_WRAP } from '../../core/Lighting';
+
+/**
+ * A number as a WGSL f32 literal.
+ *
+ * String(1) is "1", which WGSL parses as an AbstractInt; four decimals always produces a
+ * float literal and never changes the value, since the printed digits round-trip to the same
+ * f32.
+ */
+const f32lit = (v: number) => v.toFixed(4);
+
 export const SHARED = /* wgsl */`
 struct Frame {
   viewProj  : mat4x4f,
@@ -25,7 +36,8 @@ struct Frame {
   //Already multiplied by intensity. Black at Tier 0, which is what makes the sun term
   //vanish rather than needing a separate shading path.
   sunColor  : vec4f,
-  //x: unused (the shadow map is gone; see sunVisibility), y: unused,
+  //x: leaf translucency, i.e. how much the brighter face of a lamina bleeds into the darker
+  //one. Zero unless the switch is on, and zero multiplies the whole term out. y: unused,
   //z: 1 when ambient occlusion is available, w: 1 when the cone trace ran.
   params    : vec4f,
   //xy: tan(fovY/2) scaled by aspect and 1, for rebuilding a view position from depth.
@@ -55,39 +67,48 @@ struct Instance {
   _pad1     : u32,
 };
 
-//Fraction of incident sunlight a leaf passes through to its shaded face. Foliage transmits
-//roughly this much in the visible band, and rather more in green; a single scalar keeps the
-//light filtered once by the leaf's own colour, which is close enough at this scale.
-const LEAF_TRANSMISSION : f32 = 0.4;
+//The three leaf constants live in core/Lighting so the WebGL backend shades a leaf the same
+//way this one does. See there for what each of them trades against the others.
+const LEAF_TRANSMISSION : f32 = ${f32lit(LEAF_TRANSMISSION)};
 
-//Wrap-around diffuse, the cheap stand-in for subsurface scattering in a thin translucent
-//surface. Light entering a leaf scatters inside it before leaving, so the falloff towards the
-//terminator is far softer than a bare cosine - and a bare cosine is what made a leaf's own
-//triangles read as separate facets, because near dot(n, L) == 0 the cosine changes fastest and
-//it goes to zero on BOTH sides, leaving a dark crease straight through the leaf.
-//
-//Wrapping shifts the falloff so nothing reaches zero at the terminator and the response to a
-//normal is compressed, which is exactly the visual difference between a leaf and a sheet of
-//metal. It is not a full SSS model - no thickness, no lateral bleed - but for something one
-//cell thick it is most of the effect.
-const LEAF_WRAP : f32 = 0.7;
+const LEAF_WRAP : f32 = ${f32lit(LEAF_WRAP)};
 
-//Oren-Nayar roughness, as sigma squared, for the leaf's reflection.
-//
-//A Lambertian surface is smooth at the microscopic scale, and a leaf is not: Geranium and
-//Heuchera carry fine hairs, which scatter light back towards the viewer and flatten the
-//falloff further. Oren-Nayar's qualitative effect - a surface that stays bright away from the
-//light rather than rolling off as a cosine - is what the eye reads as "matte and slightly
-//dusty" instead of "moulded plastic". The A/B form below is the cheap approximation, with the
-//view direction dropped: at this scale the difference is not worth the dot product.
-const LEAF_ROUGHNESS : f32 = 0.6;
+const LEAF_ROUGHNESS : f32 = ${f32lit(LEAF_ROUGHNESS)};
 
 const F_DOUBLE : u32 = 1u;
 const F_FLAT   : u32 = 2u;
 const F_VCOL   : u32 = 4u;
+//A thin translucent lamina - a leaf or a petal. NOT the same as F_DOUBLE, which also covers
+//terrain and obstacles: the leaf response below used to be selected on double-sidedness, so a
+//wall and the ground were shaded as foliage.
+const F_FOLIAGE : u32 = 256u;
 //Vertex colour as an unlit readout: straight into emissive, with no albedo. Obstacles coloured by
 //a measured value must not have it modulated by which way the wall faces.
 const F_VCOL_E : u32 = 64u;
+
+/**
+ * One face of a leaf's response to the sun, as a function of dot(n, L) for THAT face.
+ *
+ * Wrapped, so neither face collapses to zero at the terminator: a bare cosine reaches zero on
+ * BOTH sides there, which left a dark crease straight through any leaf whose triangles straddle
+ * it, and a cosine also changes fastest exactly there, which is what made a leaf's own facets
+ * glaring. Oren-Nayar on top of that, because a hairy leaf keeps more of its brightness as it
+ * turns away from the sun than a cosine allows. Plus the leaf's own transmission from the
+ * opposite face, which is why this is never zero.
+ *
+ * Call it with -raw to get the other face.
+ */
+fn leafSun(raw : f32) -> f32 {
+  let wrap = 1.0 + LEAF_WRAP;
+  let front = clamp((raw + LEAF_WRAP) / wrap, 0.0, 1.0);
+  let back = clamp((-raw + LEAF_WRAP) / wrap, 0.0, 1.0) * LEAF_TRANSMISSION;
+
+  let s2 = LEAF_ROUGHNESS * LEAF_ROUGHNESS;
+  let onA = 1.0 - 0.5 * s2 / (s2 + 0.33);
+  let onB = 0.45 * s2 / (s2 + 0.09);
+  let sinTheta = sqrt(clamp(1.0 - front * front, 0.0, 1.0));
+  return front * (onA + onB * sinTheta) + back;
+}
 
 @group(0) @binding(0) var<uniform> frame : Frame;
 @group(1) @binding(0) var<storage, read> instances : array<Instance>;
@@ -238,10 +259,16 @@ ${SHADOW_SAMPLING}
 @fragment
 fn fs(i : VSOut, @builtin(front_facing) frontFacing : bool) -> @location(0) vec4f {
   let n = shadingNormal(i, frontFacing);
+  let foliage = (i.flags & F_FOLIAGE) != 0u;
+  //How much the BRIGHTER face of this lamina bleeds into the darker one. Zero unless the
+  //surface is foliage AND the translucency switch is on - and every term the bleed adds is
+  //multiplied by it, so at zero the arithmetic below is exactly what it was before.
+  let t = select(0.0, frame.params.x, foliage);
+
   //getHemisphereLightIrradiance: mix(ground, sky, 0.5*dot(N,L)+0.5).
   let w = 0.5 * dot(n, frame.hemiDir.xyz) + 0.5;
   //Occlusion darkens the AMBIENT term only. Direct sunlight is already occluded by the
-  //shadow map, and multiplying it again would double-count and crush the lit side.
+  //density field, and multiplying it again would double-count and crush the lit side.
   //The cone trace's visibility and the screen-space AO measure the same thing at different
   //scales, so take the darker rather than multiplying: multiplying would count the contact
   //shadow twice wherever both see the same occluder.
@@ -249,37 +276,34 @@ fn fs(i : VSOut, @builtin(front_facing) frontFacing : bool) -> @location(0) vec4
   //Occlusion of the SKY comes from the screen-space pass, which resolves finer than an 8 cm
   //voxel can. The cone trace's alpha is the sun now, not the sky.
   let occlusion = ambientOcclusion(i.position.xy);
+
+  //THE TRANSLUCENCY TERM, half of it. n has already been turned towards the VIEWER, so for
+  //an underside hemiHere is the ground colour with none of the sky - and since the default
+  //lighting has no sun at all, that alone is why a canopy seen from below goes dark. Evaluating
+  //the same hemisphere with the normal reversed gives what the opposite face receives, and the
+  //brighter of the two bleeds through.
+  //
+  //The brighter face is never touched, so a sunlit canopy top renders exactly as it did and
+  //only the shaded side lifts.
+  let hemiHere = mix(frame.hemiGround.rgb, frame.hemiSky.rgb, w);
+  let hemiThere = mix(frame.hemiGround.rgb, frame.hemiSky.rgb, 1.0 - w);
+  let hemi = hemiHere + t * max(hemiThere - hemiHere, vec3f(0.0));
+
   //The hemisphere term is ATTENUATED by visibility and the bounce is ADDED, rather than the
   //trace replacing the ambient with its own estimate. With an empty grid visibility is 1 and
   //the bounce is 0, so this is bit-for-bit the tier below.
-  let irradiance = mix(frame.hemiGround.rgb, frame.hemiSky.rgb, w) * occlusion + indirect.rgb;
+  //
+  //The bounce is a screen-space lookup resolved from the single viewer-facing prepass normal,
+  //so there is no far-side value to bleed from; it is added once, outside the term. A
+  //two-sided bounce would mean a second set of cones for a contribution this small.
+  let irradiance = hemi * occlusion + indirect.rgb;
 
-  //A leaf REFLECTS from its sunlit face and TRANSMITS a fraction through to the shaded one.
-  //
-  //This used to be abs(dot(n, L)), which handed the shaded face the full sun as though it were
-  //reflecting - so every leaf in a canopy read the same brightness whichever way it faced, the
-  //crown looked flat, and indirect light had nothing to add because nothing was dark enough to
-  //notice a bounce. Real foliage passes something like a fifth to a quarter of what lands on
-  //it, and that asymmetry is most of what makes a canopy look like a canopy.
-  //
-  //Still never zero on the shaded side, so the reason abs() was there - a canopy going black
-  //in patches - does not come back.
+  //The other half, over the sun. Only foliage gets the wrapped two-face response at all -
+  //terrain, obstacles and stems are opaque and reflect from one side, and selecting this on
+  //double-sidedness is what used to shade a wall as a leaf.
   let raw = dot(n, frame.sunDirView.xyz);
-  //Wrapped on both faces, so neither the lit side nor the shaded one collapses to zero at the
-  //terminator and there is no crease where the two meet.
-  let wrap = 1.0 + LEAF_WRAP;
-  let front = clamp((raw + LEAF_WRAP) / wrap, 0.0, 1.0);
-  let back = clamp((-raw + LEAF_WRAP) / wrap, 0.0, 1.0) * LEAF_TRANSMISSION;
-
-  //Oren-Nayar retro-reflection on top of the wrapped diffuse: a hairy leaf keeps more of its
-  //brightness as it turns away from the sun than a cosine allows.
-  let s2 = LEAF_ROUGHNESS * LEAF_ROUGHNESS;
-  let onA = 1.0 - 0.5 * s2 / (s2 + 0.33);
-  let onB = 0.45 * s2 / (s2 + 0.09);
-  let sinTheta = sqrt(clamp(1.0 - front * front, 0.0, 1.0));
-  let leaf = front * (onA + onB * sinTheta) + back;
-
-  let ndl = select(max(raw, 0.0), leaf, (i.flags & F_DOUBLE) != 0u);
+  let ndlHere = select(max(raw, 0.0), leafSun(raw), foliage);
+  let ndl = ndlHere + t * max(leafSun(-raw) - ndlHere, 0.0);
   //sunColor is black at Tier 0, so this whole term disappears and the result is exactly the
   //hemisphere-only value the WebGL renderer produces.
   let sun = frame.sunColor.rgb * ndl * sunVisibility(indirect);

@@ -913,6 +913,10 @@ class State {
     lightOcclusion = signal(false);
     lightIndirect = signal(false);
     lightSecondBounce = signal(false);
+    //Leaves pass light through to their shaded face. Off by default because, unlike the other
+    //switches, the term it adds is live with no sun at all - it modulates the hemisphere
+    //ambient, which is the only light the viewport has until something else is ticked.
+    lightLeafTranslucency = signal(false);
     //Normal-offset shadow bias in shadow texels. Tunable because the right value depends on
     //the canopy: too little and a leaf shadows itself, too much and light leaks between
     //leaves that genuinely touch.
@@ -925,6 +929,7 @@ class State {
             occlusion: this.lightOcclusion.peek(),
             indirect: this.lightIndirect.peek(),
             secondBounce: this.lightSecondBounce.peek(),
+            leafTranslucency: this.lightLeafTranslucency.peek(),
             shadowBiasTexels: this.shadowBiasTexels.peek(),
         };
     }
@@ -1624,6 +1629,7 @@ class State {
                     self.lightOcclusion.value = lighting.occlusion;
                     self.lightIndirect.value = lighting.indirect;
                     self.lightSecondBounce.value = lighting.secondBounce;
+                    self.lightLeafTranslucency.value = lighting.leafTranslucency ?? false;
                     self.shadowBiasTexels.value = lighting.shadowBiasTexels ?? SHADOW_NORMAL_OFFSET_TEXELS;
                     self.viewportBackend.value = data.viewportBackend ?? "auto";
                     self.downloadRoots.value = data.downloadRoots;

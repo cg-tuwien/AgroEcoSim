@@ -112,8 +112,13 @@ try {
   }
 
   //Lighting is four independent checkboxes; the harness still speaks in tier numbers.
-  const tierSet = process.env.TIER === undefined || process.env.TIER === ''
-    ? 'default' : await ev(lightingScript(process.env.TIER, process.env.DAYLIGHT === '1'));
+  //TRANSLUCENCY alone still has to reach the checkboxes, so it counts as a request to set them
+  //even with no TIER: TIER unset means tier 0, not "leave the UI alone", once anything else is
+  //being asked for.
+  const noTier = process.env.TIER === undefined || process.env.TIER === '';
+  const tierSet = noTier && process.env.TRANSLUCENCY !== '1' && process.env.DAYLIGHT !== '1'
+    ? 'default'
+    : await ev(lightingScript(process.env.TIER, process.env.DAYLIGHT === '1', process.env.TRANSLUCENCY === '1'));
   cfg.tier = tierSet;
   await sleep(500);
   //What the renderer actually resolved, not just what the DOM says. A checkbox that was found

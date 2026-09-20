@@ -1030,14 +1030,16 @@ agree to 0.207 %.
 
 ## Viewport lighting: independent switches
 
-`LightingOptions` is four independent switches - shadows, occlusion, indirect, second bounce -
-not a ladder. The ladder was a convenient way to build the features up, but the terms are
+`LightingOptions` is five independent switches - shadows, occlusion, indirect, second bounce,
+leaf translucency - not a ladder. The ladder was a convenient way to build the features up, but the terms are
 genuinely independent: occlusion and indirect light attenuate the AMBIENT, so both are
 meaningful with no sun at all. Requiring shadows first described the implementation order, not
 the lighting. `lightingFromLegacyTier` migrates sessions saved under the old numbering.
 
-The harness still speaks in tier numbers; `lightingScript(tier)` in `cdp.mjs` translates one
-to the checkboxes, so every recorded measurement stays comparable.
+The harness still speaks in tier numbers; `lightingScript(tier, daylight, translucency)` in
+`cdp.mjs` translates one to the checkboxes, so every recorded measurement stays comparable.
+Translucency is NOT part of the ladder and defaults off there for exactly that reason;
+`still.mjs` drives it with `TRANSLUCENCY=1`.
 
 ## Viewport lighting tiers
 
@@ -2656,6 +2658,106 @@ are glossy where Geranium is not - and doing that properly means a specular term
 parameters travelling with the species from the server, which is a data-model change rather
 than a shader one.
 
+**They live in `core/Lighting.ts` now**, not in `mesh.wgsl.ts`, and both backends interpolate
+them into their own shader source (`${f32lit(...)}`, four decimals, because `String(1)` is an
+int literal in both WGSL and GLSL). The WebGL path grew the same `leafSun()` the WGSL one has,
+so a single edit can no longer move one backend without the other.
+
+## Leaf translucency: one term, evaluated on both faces
+
+**A canopy seen from below was nearly black, and the sun term was never going to fix it.**
+Measured on the fixture, looking up into the crown: leaf undersides rendered at RGB (23,74,21)
+at the default lighting and (1,3,0) with daylight and a sun. That is the complaint, quantified.
+
+The reason is not the sun. Both backends turn a double-sided surface's normal towards the
+VIEWER before shading it, so the hemisphere term - `mix(ground, sky, 0.5*dot(n, up) + 0.5)` -
+hands an underside the GROUND colour with none of the sky: `0.514` against `3.175`, a sixth of
+what its own topside receives. And the default lighting has **no sun at all**, so
+`LEAF_TRANSMISSION`, which only ever multiplied the direct sun and only on WebGPU, had nothing
+to act on. The term that needed to learn about translucency was the ambient one.
+
+The model is one function, applied per light, on both backends:
+
+```
+E = here + t * max(there - here, 0)
+```
+
+`here` is the light as the face being shaded receives it, `there` the same expression with the
+normal reversed. **The brighter face is never touched**, so a sunlit crown renders exactly as
+it did and only the shaded side lifts - verified, not assumed: at the default lighting not one
+pixel of either backend gets darker, on any camera.
+
+- Hemisphere: `getHemisphereLightIrradiance` evaluated at `n` and at `-n`. On WebGL it is
+  evaluated from the light rather than mirrored out of `irradiance`, which also carries the
+  ambient light and the light probe.
+- Sun: `leafSun(raw)` and `leafSun(-raw)`, the wrap + Oren-Nayar + transmission response.
+- Bounce: the cone trace is a screen-space lookup resolved from the single viewer-facing
+  prepass normal, so there is no far-side value to bleed from. It is added once, outside the
+  term. A two-sided bounce means a second set of cones for a contribution this small.
+
+`t` is zero unless the surface is foliage AND the switch is on, and every term it adds is
+multiplied by it, so off is bit-identical rather than merely close.
+
+### It is a switch, and it is off by default
+
+Unlike shadows, occlusion and indirect light, this term is **live with no sun**, because it
+modulates the hemisphere ambient - which is the only light the viewport has until something
+else is ticked. It therefore cannot be "a term that vanishes at Tier 0"; the only way to keep
+the historical look byte-identical was to make it opt-in. `resolveLighting` counts it in
+`anything` (or ticking it alone would do nothing) and forces it to zero under a data mapping,
+like every other term.
+
+It rides in `frame.params.x` on WebGPU. That slot and `params.y` described the shadow map,
+which neither backend has any more, and nothing read them - so the frame uniform did not have
+to grow, and neither packing trap applies.
+
+### `DoubleSided` is not `Foliage`
+
+`IFlags.DoubleSided` means "leaves, legacy disks, **terrain, obstacles**", and the leaf BSDF
+was selected on it - so a wall and the ground were already being shaded as foliage. Invisible
+while the leaf model only touched the sun, since the default has none; not invisible once the
+ambient learns to bleed, because a wall would glow from its shaded side.
+
+`IFlags.Foliage` (bit 256) is set in `BuildScene` on the `Primitives.Rectangle` case alone,
+which is where leaves and petals both arrive. Terrain and obstacles build their instances in
+the backends and never get it.
+
+**This changes existing output in exactly one place**, and it is the only such change:
+WebGPU at a sun tier, where terrain moves off the wrapped leaf response onto `max(dot, 0)` and
+goes from RGB (156,98,0) to (137,86,0). Measured: 63968 differing pixels, of which the terrain
+block alone is 63875. Foliage pixels are unchanged in count and in value.
+
+### What was measured
+
+Before/after builds of the same tree, `still.mjs`, 640x400 SSAA 2, the standard fixture.
+
+| | |
+| --- | --- |
+| Switch off, no sun, both backends, default and close-up cameras | **byte-identical PNGs** |
+| Switch off, sun, WebGL | byte-identical |
+| Switch off, sun, WebGPU | terrain only, see above |
+| Switch on, default lighting, looking up | WebGPU (23,74,21) -> (45,126,42); WebGL lifts the same 59.6k pixels |
+| Switch on, daylight + sun, looking up | WebGL (1,3,0) -> (10,74,7) |
+| Pixels darkened by the bleed, any camera, any backend | **0** |
+
+Roughly 23 % of the frame changes on a close-up from below, mean delta 31-44/255. Compare the
+4/255 that an earlier AO attempt moved and that nobody could see.
+
+**One caveat, and it is not the bleed.** On WebGL the switch also swaps `saturate(dot(n, L))`
+for `leafSun`, because that path never had a leaf sun response - which is the whole reason its
+undersides were worse than WebGPU's. The wrap compresses a fully sunlit face, so leaf TOPSIDES
+darken by up to 24/255 (mean 4.6) when the switch goes on there. That is the documented
+leaf-versus-sheet-metal trade arriving on WebGL, not a fault in the term, and it is what makes
+the two backends agree. WebGPU, which already had `leafSun`, darkens nothing.
+
+### The occlusion normal was never flipped
+
+Found while checking this. `vDensityNormal` is the un-flipped object normal, so on WebGL a
+leaf's UNDERSIDE was occlusion-tested against the hemisphere ABOVE it: it inherited its own
+topside's occlusion and went dark a second time, for a reason unrelated to where it actually
+sits in the canopy. It is flipped by `faceDirection` under `#ifdef DOUBLE_SIDED` now, the same
+condition three itself uses. Only visible with occlusion on.
+
 ## A bare cosine makes a leaf look like sheet metal
 
 Two successive versions of the leaf sun term were wrong in instructive ways.
@@ -2694,8 +2796,11 @@ lands on it. The shaded side is still never zero, so the reason `abs()` was ther
 going black in patches - does not come back.
 
 Tier 0 is unaffected: `sunColor` is black there, so the whole sun term vanishes regardless.
-This does widen the gap between the backends at the sun tiers, because three's double-sided
-lighting has no transmission term - parity is defined at Tier 0 and that still holds exactly.
+
+This used to widen the gap between the backends at the sun tiers, because three's double-sided
+lighting had no transmission term at all. **The translucency switch closes it** - see below -
+but only when it is on, because off has to stay byte-identical to what each backend rendered
+before, and what they rendered before was different.
 
 ## Never offset by a normal flipped with a sign test
 

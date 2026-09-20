@@ -16,6 +16,11 @@
 //a surface can never occlude itself, and the result is a smooth transmittance rather than a
 //binary test - which is also what foliage physically does, since leaves transmit light.
 
+import { LEAF_ROUGHNESS, LEAF_TRANSMISSION, LEAF_WRAP } from '../core/Lighting';
+
+/** A number as a GLSL float literal. String(1) is "1", which is an int in GLSL. */
+const f32lit = (v: number) => v.toFixed(4);
+
 /** Uniform declarations and the two lookups. Injected into the fragment shader's preamble. */
 export const DENSITY_FRAGMENT_HEAD = /* glsl */`
 uniform highp sampler3D uDensityTex;
@@ -25,8 +30,38 @@ uniform vec3 uDensitySunDir;
 uniform float uDensityCell;
 uniform float uDensitySun;
 uniform float uDensityAo;
+//How much the brighter face of a lamina bleeds into the darker one, and whether this material
+//is a lamina at all. Both are uniforms rather than defines: a define would recompile every
+//material in the scene when the user ticks a box, and an instance slot is pooled, so the mesh
+//that was a leaf last timestep can be a stem in this one.
+uniform float uLeafTranslucency;
+uniform float uLeafFoliage;
 varying vec3 vDensityWorld;
 varying vec3 vDensityNormal;
+
+//The leaf constants come from core/Lighting, so this backend and the WGSL one cannot drift.
+const float LEAF_WRAP = ${f32lit(LEAF_WRAP)};
+const float LEAF_TRANSMISSION = ${f32lit(LEAF_TRANSMISSION)};
+const float LEAF_ROUGHNESS = ${f32lit(LEAF_ROUGHNESS)};
+
+//One face of a leaf's response to the sun, as a function of dot(n, L) for THAT face. A literal
+//port of leafSun() in mesh.wgsl.ts; call it with -raw to get the other face.
+//
+//Wrapped, so neither face collapses to zero at the terminator - a bare cosine reaches zero on
+//BOTH sides there, leaving a dark crease straight through any leaf whose triangles straddle it.
+//Oren-Nayar on top, because a hairy leaf keeps more of its brightness as it turns away from the
+//sun than a cosine allows. Plus the leaf's own transmission from the opposite face.
+float leafSun(float raw) {
+    float wrap = 1.0 + LEAF_WRAP;
+    float front = clamp((raw + LEAF_WRAP) / wrap, 0.0, 1.0);
+    float back = clamp((-raw + LEAF_WRAP) / wrap, 0.0, 1.0) * LEAF_TRANSMISSION;
+
+    float s2 = LEAF_ROUGHNESS * LEAF_ROUGHNESS;
+    float onA = 1.0 - 0.5 * s2 / (s2 + 0.33);
+    float onB = 0.45 * s2 / (s2 + 0.09);
+    float sinTheta = sqrt(clamp(1.0 - front * front, 0.0, 1.0));
+    return front * (onA + onB * sinTheta) + back;
+}
 
 float densityAt(vec3 p) {
     vec3 uvw = (p - uDensityOrigin) * uDensityInvSize;
@@ -127,8 +162,58 @@ float densityOcclusion(vec3 p, vec3 n) {
  * so the default tier stays bit-identical to what it rendered before.
  */
 export const DENSITY_FRAGMENT_APPLY = /* glsl */`
+    //Leaf translucency: the brighter face of a lamina bleeds into the darker one, and the
+    //brighter face itself is never touched. uLeafFoliage restricts it to leaves and petals;
+    //uLeafTranslucency is zero unless the switch is on, and everything below is multiplied by
+    //it, so with the switch off this block adds exactly zero and the default look is unchanged.
+    //
+    //It covers the AMBIENT and not just the sun, which is the whole point. three lights a
+    //double-sided surface with the normal turned towards the VIEWER, so a leaf's underside gets
+    //the hemisphere's GROUND colour and none of its sky - about a sixth of what its own topside
+    //receives - and the default lighting has no sun at all for a transmission term to act on.
+    float uLeafOn = step(1e-6, uLeafTranslucency) * uLeafFoliage;
+    float uLeafT = uLeafTranslucency * uLeafFoliage;
+
+    #if ( NUM_HEMI_LIGHTS > 0 )
+        //Evaluated from the light itself rather than by mirroring irradiance, which also
+        //carries the ambient light and the light probe. Only the bleed is added.
+        vec3 hemiHere = getHemisphereLightIrradiance( hemisphereLights[ 0 ], geometry.normal );
+        vec3 hemiThere = getHemisphereLightIrradiance( hemisphereLights[ 0 ], -geometry.normal );
+        irradiance += uLeafT * max( hemiThere - hemiHere, vec3( 0.0 ) );
+    #endif
+
+    #if ( NUM_DIR_LIGHTS > 0 )
+        //ADDED to what RE_Direct already accumulated rather than replacing it: reusing three's
+        //own light colour and BRDF_Lambert is what makes the added term carry the same
+        //useLegacyLights PI factor, and with the switch off the difference is exactly zero, so
+        //nothing has to reproduce three's scaling to stay bit-identical.
+        //
+        //Unlike the WebGPU backend, this path has never had a leaf sun response at all - a
+        //back-lit leaf got saturate(dot(n, L)) == 0. The switch is therefore what converges the
+        //two backends, and off is what each of them rendered before.
+        float leafRaw = dot( normal, directionalLights[ 0 ].direction );
+        float leafBase = saturate( leafRaw );
+        float leafHere = mix( leafBase, leafSun( leafRaw ), uLeafOn );
+        float leafTerm = leafHere + uLeafT * max( leafSun( -leafRaw ) - leafHere, 0.0 );
+        reflectedLight.directDiffuse += ( leafTerm - leafBase )
+            * directionalLights[ 0 ].color * BRDF_Lambert( material.diffuseColor );
+    #endif
+
+    //Applied after the bleed, so light that reached this face through the leaf is shadowed and
+    //occluded like any other. The WebGPU backend multiplies both faces by the same visibility
+    //for the same reason.
     reflectedLight.directDiffuse *= densitySunTransmittance(vDensityWorld);
-    irradiance *= densityOcclusion(vDensityWorld, normalize(vDensityNormal));
+
+    //Flipped to the face being shaded. vDensityNormal is the un-flipped object normal, so a
+    //leaf's UNDERSIDE was being occlusion-tested against the hemisphere above it - it inherited
+    //its own topside's occlusion and went dark a second time, for a reason that had nothing to
+    //do with where it actually is in the canopy. three flips only under DOUBLE_SIDED, and so
+    //does this.
+    vec3 leafDensityNormal = normalize(vDensityNormal);
+    #ifdef DOUBLE_SIDED
+        leafDensityNormal *= faceDirection;
+    #endif
+    irradiance *= densityOcclusion(vDensityWorld, leafDensityNormal);
 `;
 
 export const DENSITY_VERTEX_HEAD = /* glsl */`

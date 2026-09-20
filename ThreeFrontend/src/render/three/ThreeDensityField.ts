@@ -63,6 +63,10 @@ export class ThreeDensityField {
         uDensityCell: { value: 1 },
         uDensitySun: { value: 0 },
         uDensityAo: { value: 0 },
+        //Shared by every patched material. Zero unless the translucency switch is on, and the
+        //injected code multiplies everything it adds by it, so at zero the default look is
+        //unchanged rather than merely close.
+        uLeafTranslucency: { value: 0 },
     };
 
     private area: Float32Array;
@@ -190,6 +194,11 @@ export class ThreeDensityField {
         this.uniforms.uDensityAo.value = ao;
     }
 
+    /** How much a lamina's brighter face bleeds into its darker one. Zero disables the term. */
+    setLeafTranslucency(amount: number) {
+        this.uniforms.uLeafTranslucency.value = amount;
+    }
+
     /**
      * Injects the field lookups into one of three's standard materials.
      *
@@ -202,8 +211,16 @@ export class ThreeDensityField {
      * three cannot hand a patched material a cached program compiled without the varyings.
      */
     patch(material: THREE.Material) {
+        //Per material, not shared: whether THIS surface is a lamina. It has to be a uniform
+        //rather than a define for the reason above, and it has to be reachable from outside
+        //onBeforeCompile because an instance slot is pooled - the mesh that was a leaf last
+        //timestep can be a stem in this one. See leafUniformOf.
+        const leafFoliage = { value: 0 };
+        material.userData.uLeafFoliage = leafFoliage;
+
         material.onBeforeCompile = shader => {
             Object.assign(shader.uniforms, this.uniforms);
+            shader.uniforms.uLeafFoliage = leafFoliage;
 
             shader.vertexShader = shader.vertexShader
                 .replace('#include <common>', `#include <common>\n${DENSITY_VERTEX_HEAD}`)

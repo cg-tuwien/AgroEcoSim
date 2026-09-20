@@ -44,6 +44,9 @@ export function Lighting() {
         {box('lightIndirect', appstate.lightIndirect,
             'indirect',
             'Cone-traced indirect light through a leaf-area-density field: canopy self-shading and colour bleed between leaves. Needs the WebGPU backend.')}
+        {box('lightLeafTranslucency', appstate.lightLeafTranslucency,
+            'translucency',
+            'Leaves pass light through to their shaded face, so a canopy seen from below glows instead of going dark. The brighter face of a leaf bleeds into the darker one and is itself left exactly as it was, so a sunlit crown is unchanged and only the undersides lift. Off by default: unlike the other switches this one is live with no sun at all, because it modulates the ambient sky.')}
         {box('lightSecondBounce', appstate.lightSecondBounce,
             '2 bounces',
             'A second indirect bounce, which lifts the interior of a dense canopy. Only applies with indirect light on.',

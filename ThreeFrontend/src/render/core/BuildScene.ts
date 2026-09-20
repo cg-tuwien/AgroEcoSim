@@ -82,7 +82,7 @@ export function buildPlants(out: InstanceList, inp: PlantBuildInputs) {
                     const laminaGeom = p.organ === Organs.FlowerPadel
                         ? petalGeomId
                         : inp.leafGeom(entity.species, p.laminaSlice);
-                    assign(inst, laminaGeom, c.color, c.emissive, IFlags.DoubleSided | hiddenFlag(p, inp), ref);
+                    assign(inst, laminaGeom, c.color, c.emissive, IFlags.DoubleSided | IFlags.Foliage | hiddenFlag(p, inp), ref);
                     break;
                 }
                 case Primitives.Cylinder: {

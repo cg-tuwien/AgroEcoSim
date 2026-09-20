@@ -258,6 +258,7 @@ export default function RendererHost() {
                 occlusion: appstate.lightOcclusion.value,
                 indirect: appstate.lightIndirect.value,
                 secondBounce: appstate.lightSecondBounce.value,
+                leafTranslucency: appstate.lightLeafTranslucency.value,
                 shadowBiasTexels: appstate.shadowBiasTexels.value,
             },
             appstate.visualMapping.value as VisualMappingOptions,

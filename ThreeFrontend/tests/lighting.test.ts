@@ -4,7 +4,7 @@
 //sun adds must be exactly zero at the parity tier, because that is what keeps the WebGL
 //viewport byte-identical to the pre-refactor renderer.
 
-import { HEMI_GROUND, HEMI_INTENSITY, HEMI_SKY, LIGHTING_OFF, LightingOptions, SHADOW_NORMAL_OFFSET_TEXELS, lightingFromLegacyTier, resolveLighting, shadowBounds, SUN_INTENSITY } from '../src/render/core/Lighting';
+import { HEMI_GROUND, HEMI_INTENSITY, HEMI_SKY, LEAF_TRANSLUCENCY, LIGHTING_OFF, LightingOptions, SHADOW_NORMAL_OFFSET_TEXELS, lightingFromLegacyTier, resolveLighting, shadowBounds, SUN_INTENSITY } from '../src/render/core/Lighting';
 import { VisualMappingOptions } from '../src/render/core/PlantColors';
 
 const NATURAL = VisualMappingOptions.Natural;
@@ -233,7 +233,7 @@ describe('the switches are independent', () => {
         expect(l).toEqual({
             shadowBiasTexels: SHADOW_NORMAL_OFFSET_TEXELS,
             ...legacyHemi,
-            ambientOcclusion: false, voxelGI: false, bounces: 1,
+            ambientOcclusion: false, voxelGI: false, bounces: 1, leafTranslucency: 0,
             sunDirection: { x: 0, y: 0, z: 0 }, sunColor: { r: 0, g: 0, b: 0 }, shadows: false,
         });
     });
@@ -242,11 +242,11 @@ describe('the switches are independent', () => {
 describe('legacy saved sessions', () => {
     //Sessions saved while lighting was a single number must not silently lose their setting.
     test.each([
-        [0, { daylight: false, shadows: false, occlusion: false, indirect: false, secondBounce: false, shadowBiasTexels: SHADOW_NORMAL_OFFSET_TEXELS }],
-        [1, { daylight: false, shadows: true, occlusion: false, indirect: false, secondBounce: false, shadowBiasTexels: SHADOW_NORMAL_OFFSET_TEXELS }],
-        [2, { daylight: false, shadows: true, occlusion: true, indirect: false, secondBounce: false, shadowBiasTexels: SHADOW_NORMAL_OFFSET_TEXELS }],
-        [3, { daylight: false, shadows: true, occlusion: true, indirect: true, secondBounce: false, shadowBiasTexels: SHADOW_NORMAL_OFFSET_TEXELS }],
-        [4, { daylight: false, shadows: true, occlusion: true, indirect: true, secondBounce: true, shadowBiasTexels: SHADOW_NORMAL_OFFSET_TEXELS }],
+        [0, { daylight: false, shadows: false, occlusion: false, indirect: false, secondBounce: false, leafTranslucency: false, shadowBiasTexels: SHADOW_NORMAL_OFFSET_TEXELS }],
+        [1, { daylight: false, shadows: true, occlusion: false, indirect: false, secondBounce: false, leafTranslucency: false, shadowBiasTexels: SHADOW_NORMAL_OFFSET_TEXELS }],
+        [2, { daylight: false, shadows: true, occlusion: true, indirect: false, secondBounce: false, leafTranslucency: false, shadowBiasTexels: SHADOW_NORMAL_OFFSET_TEXELS }],
+        [3, { daylight: false, shadows: true, occlusion: true, indirect: true, secondBounce: false, leafTranslucency: false, shadowBiasTexels: SHADOW_NORMAL_OFFSET_TEXELS }],
+        [4, { daylight: false, shadows: true, occlusion: true, indirect: true, secondBounce: true, leafTranslucency: false, shadowBiasTexels: SHADOW_NORMAL_OFFSET_TEXELS }],
     ])('tier %i maps to the switches it used to mean', (tier, expected) => {
         expect(lightingFromLegacyTier(tier as number)).toEqual(expected);
     });
@@ -295,5 +295,46 @@ describe('daylight moves energy from the ambient to the sun', () => {
         const l = midday(LIGHTING_OFF);
         expect(l.hemiSky).toEqual(legacyHemi.hemiSky);
         expect(l.hemiGround).toEqual(legacyHemi.hemiGround);
+    });
+});
+
+describe('leaf translucency', () => {
+    //The term that stops a canopy going dark when it is seen from below. It is the only
+    //lighting switch that is live with no sun at all - it modulates the hemisphere ambient,
+    //which is the only light the viewport has until something else is ticked - so "off is
+    //exactly zero" matters more here than for any of the others.
+    test('off is exactly zero, including alongside every other switch', () => {
+        expect(midday(LIGHTING_OFF).leafTranslucency).toBe(0);
+        expect(midday(ALL).leafTranslucency).toBe(0);
+        expect(midday(opts({ daylight: true, shadows: true })).leafTranslucency).toBe(0);
+    });
+
+    test('on, it is the shared constant both backends read', () => {
+        expect(midday(opts({ leafTranslucency: true })).leafTranslucency).toBe(LEAF_TRANSLUCENCY);
+    });
+
+    test('it counts as a lighting term on its own, with no sun and no other switch', () => {
+        //Not part of the ladder: ticking it alone must resolve to something, or the checkbox
+        //would appear dead. It still adds no sun.
+        const l = midday(opts({ leafTranslucency: true }));
+        expect(l.leafTranslucency).toBe(LEAF_TRANSLUCENCY);
+        expect(l.sunColor).toEqual({ r: 0, g: 0, b: 0 });
+        expect(l.shadows).toBe(false);
+        //and the ambient is still the historical one, since daylight is off
+        expect(l.hemiSky).toEqual(legacyHemi.hemiSky);
+        expect(l.hemiGround).toEqual(legacyHemi.hemiGround);
+    });
+
+    test('a data mapping forces it off', () => {
+        //Those mappings paint the value into emissive with a black albedo, so the term could
+        //not change a pixel - but it is forced here rather than left to that coincidence, the
+        //same way every other term is.
+        for (const mapping of [VisualMappingOptions.Irradiance, VisualMappingOptions.Water])
+            expect(midday(opts({ leafTranslucency: true, shadows: true }), mapping).leafTranslucency).toBe(0);
+    });
+
+    test('the legacy tiers never enable it', () => {
+        for (let tier = 0; tier <= 4; ++tier)
+            expect(lightingFromLegacyTier(tier).leafTranslucency).toBe(false);
     });
 });

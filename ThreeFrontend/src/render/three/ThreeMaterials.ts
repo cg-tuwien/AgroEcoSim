@@ -26,6 +26,13 @@ export function applyInstanceMaterial(
     material.color.setRGB(color.r, color.g, color.b);
     material.emissive.setRGB(emissive.r, emissive.g, emissive.b);
 
+    //Whether the leaf translucency term applies to this surface. Set every sync rather than
+    //only when a program flag changes, because meshes are pooled: the slot that held a leaf
+    //last timestep can hold a stem in this one. Undefined on WebGL1, where there is no
+    //sampler3D and ThreeDensityField never patched anything.
+    const foliage = material.userData.uLeafFoliage as { value: number } | undefined;
+    if (foliage) foliage.value = flags & IFlags.Foliage ? 1 : 0;
+
     const programFlags = IFlags.DoubleSided | IFlags.FlatShaded | IFlags.VertexColors;
     if ((flags & programFlags) !== (previousFlags & programFlags)) {
         material.side = flags & IFlags.DoubleSided ? THREE.DoubleSide : THREE.FrontSide;

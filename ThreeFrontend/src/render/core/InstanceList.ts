@@ -17,6 +17,17 @@ export const enum IFlags {
     None = 0,
     /** Render both faces. Leaves, legacy disks, terrain, obstacles. */
     DoubleSided = 1,
+    /**
+     * A thin translucent lamina: leaves and petals, and nothing else.
+     *
+     * Deliberately distinct from DoubleSided, which also covers terrain and obstacles. The
+     * leaf shading model - wrap-around diffuse, transmission to the shaded face, Oren-Nayar -
+     * used to be selected on double-sidedness, so a wall and the ground were shaded as leaves.
+     * That was invisible while the model only touched the SUN term, because the default
+     * lighting has no sun at all; it stops being invisible the moment the ambient term learns
+     * to bleed through a surface, since a wall would then glow from its shaded side.
+     */
+    Foliage = 256,
     /** Use the face normal rather than the interpolated vertex normal. Terrain, obstacles. */
     FlatShaded = 2,
     /** Take the albedo from the vertex colour attribute. Only the debug orientation box. */

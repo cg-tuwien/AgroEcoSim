@@ -59,6 +59,15 @@ export type LightingOptions = {
     /** A second bounce. Only meaningful together with `indirect`. */
     secondBounce: boolean;
     /**
+     * Leaves pass light through to their shaded face.
+     *
+     * Off by default, which is what keeps the historical look byte-identical: the term it adds
+     * is live at the DEFAULT setting, unlike shadows, occlusion and indirect light, because it
+     * modulates the hemisphere ambient and the hemisphere ambient is the only light the
+     * viewport has until one of the other switches is ticked.
+     */
+    leafTranslucency: boolean;
+    /**
      * Normal-offset shadow bias, in shadow texels. See SHADOW_NORMAL_OFFSET_TEXELS.
      *
      * Exposed rather than fixed because the right value depends on the canopy: too little and
@@ -70,6 +79,7 @@ export type LightingOptions = {
 
 export const LIGHTING_OFF: LightingOptions = {
     daylight: false, shadows: false, occlusion: false, indirect: false, secondBounce: false,
+    leafTranslucency: false,
     shadowBiasTexels: SHADOW_NORMAL_OFFSET_TEXELS,
 };
 
@@ -93,8 +103,10 @@ export function lightingFromLegacyTier(tier: number): LightingOptions {
         occlusion: tier >= 2,
         indirect: tier >= 3,
         secondBounce: tier >= 4,
-        //Legacy sessions predate the daylight model and expect the flat ambient.
+        //Legacy sessions predate the daylight model and the translucency term, and expect the
+        //flat ambient with opaque leaves.
         daylight: false,
+        leafTranslucency: false,
         shadowBiasTexels: SHADOW_NORMAL_OFFSET_TEXELS,
     };
 }
@@ -122,6 +134,48 @@ export const SUN_INTENSITY = 1.6;
  * domain is small and known is exactly why no cascade machinery is needed here.
  */
 export const SHADOW_SIZE = 4096;
+
+/**
+ * The leaf shading constants, shared by both backends so the two cannot drift.
+ *
+ * They are per-renderer, not per-species. Real foliage varies - Bergenia and Campanula are
+ * glossy where Geranium is not - and expressing that properly means a specular term and
+ * material parameters travelling with the species from the server, which is a data-model
+ * change rather than a shader one.
+ */
+
+/**
+ * Fraction of incident SUNLIGHT a leaf passes through to its shaded face. Foliage transmits
+ * roughly this much in the visible band, and rather more in green; a single scalar keeps the
+ * light filtered once by the leaf's own colour, which is close enough at this scale.
+ */
+export const LEAF_TRANSMISSION = 0.4;
+/**
+ * Wrap-around diffuse, the cheap stand-in for subsurface scattering in a thin translucent
+ * surface. Light entering a leaf scatters inside it before leaving, so the falloff towards the
+ * terminator is far softer than a bare cosine - and a bare cosine is what made a leaf's own
+ * triangles read as separate facets, because near dot(n, L) == 0 the cosine changes fastest
+ * and it goes to zero on BOTH sides, leaving a dark crease straight through the leaf.
+ */
+export const LEAF_WRAP = 0.7;
+/**
+ * Oren-Nayar roughness, as sigma, for the leaf's reflection. A Lambertian surface is smooth at
+ * the microscopic scale and a leaf is not: Geranium and Heuchera carry fine hairs, which
+ * scatter light back towards the viewer and flatten the falloff further.
+ */
+export const LEAF_ROUGHNESS = 0.6;
+/**
+ * How much of the BRIGHTER face's lighting bleeds through to the darker one.
+ *
+ * The same physical quantity as LEAF_TRANSMISSION, but applied to the whole irradiance rather
+ * than to the sun alone. LEAF_TRANSMISSION only ever reached the direct sun, and only on the
+ * WebGPU backend - which left the case that actually matters untouched, because the hemisphere
+ * term is evaluated with the normal turned towards the VIEWER, so an underside sees the ground
+ * colour and none of the sky. At the default lighting, where there is no sun at all, that is
+ * the entire model: an underside receives 16% of what its own topside receives, and a canopy
+ * seen from below goes dark.
+ */
+export const LEAF_TRANSLUCENCY = 0.4;
 
 
 export const SUN_COLOR = fromHex('#fff4e0');
@@ -161,6 +215,12 @@ export type FrameLighting = {
     sunDirection: Vec3;
     /** Already multiplied by intensity. Black when the tier or the sun altitude says so. */
     sunColor: RGB;
+    /**
+     * How much the brighter face of a lamina bleeds into the darker one: LEAF_TRANSLUCENCY, or
+     * ZERO when the switch is off or a data mapping is shown. Zero is what both backends
+     * multiply the whole term by, so the default stays bit-identical.
+     */
+    leafTranslucency: number;
     shadows: boolean;
 };
 
@@ -191,7 +251,8 @@ export function resolveLighting(
     //number read as two colours. That includes the daylight sky, so this drops to the exact
     //historical ambient rather than merely turning the sun off.
     const dataMapping = mapping !== VisualMappingOptions.Natural;
-    const anything = options.daylight || options.shadows || options.occlusion || options.indirect;
+    const anything = options.daylight || options.shadows || options.occlusion || options.indirect
+        || options.leafTranslucency;
 
     const legacySky: RGB = scaled(HEMI_SKY, HEMI_INTENSITY);
     const legacyGround: RGB = scaled(HEMI_GROUND, HEMI_INTENSITY);
@@ -200,7 +261,7 @@ export function resolveLighting(
         return {
             shadowBiasTexels: options.shadowBiasTexels,
             hemiSky: legacySky, hemiGround: legacyGround,
-            ambientOcclusion: false, voxelGI: false, bounces: 1,
+            ambientOcclusion: false, voxelGI: false, bounces: 1, leafTranslucency: 0,
             sunDirection: { x: 0, y: 0, z: 0 }, sunColor: BLACK, shadows: false,
         };
 
@@ -216,6 +277,7 @@ export function resolveLighting(
     const base = {
         shadowBiasTexels: options.shadowBiasTexels,
         hemiSky, hemiGround, ambientOcclusion, voxelGI, bounces,
+        leafTranslucency: options.leafTranslucency ? LEAF_TRANSLUCENCY : 0,
     };
 
     //Occlusion and indirect light attenuate the ambient, so they apply with no sun at all -
