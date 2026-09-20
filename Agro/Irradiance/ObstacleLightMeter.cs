@@ -57,6 +57,21 @@ public sealed class ObstacleLightMeter
 	/// hundreds of thin ones.</summary>
 	const int MaxBandsPerTarget = 64;
 
+	public const string OuterSide = "outer";
+	public const string InnerSide = "inner";
+	public const string EdgeSide = "edge";
+
+	/// <summary>A surface counts as facade-parallel when its normal is within 45 degrees of the
+	/// object's facade normal; the rest are rims and returns.</summary>
+	const float ParallelCosine = 0.707f;
+	/// <summary>Depth spread below which an object is a single sheet rather than a channel, so
+	/// there is no inner side to separate, in metres.</summary>
+	const float MinSideSeparation = 0.02f;
+	/// <summary>Escapes out of <see cref="ExposureRays"/> needed before a side counts as open, and
+	/// the margin by which an edge's two sides must differ before the better one is believed.</summary>
+	const int ExposureRays = 64;
+	const int EdgeMargin = 4;
+
 	static readonly string[] SectorNames = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
 	const int UpClass = 8;
 	const int DownClass = 9;
@@ -89,8 +104,23 @@ public sealed class ObstacleLightMeter
 		public float AzimuthDegrees => Azimuth(Normal);
 		/// <summary>Tilt from horizontal, degrees: 0 faces up, 90 is vertical.</summary>
 		public float TiltDegrees => Tilt(Normal);
-		/// <summary>Surface area of this orientation, m².</summary>
+		/// <summary>
+		/// Which side of the object this is: <c>outer</c> the facade face, <c>inner</c> a face set
+		/// back from it - the far wall of a trough, seen through its opening - or <c>edge</c> a rim
+		/// or return perpendicular to the facade.
+		/// </summary>
+		/// <remarks>
+		/// Compass orientation alone cannot separate these. A planting tray is a channel, so its
+		/// front panel and the trough wall behind it face the <em>same</em> way and differ only in
+		/// how far out they sit; merged into one reading they average a planted facade against a
+		/// surface that is mostly soil and shade.
+		/// </remarks>
+		public string Side { get; internal init; } = OuterSide;
+		/// <summary>Surface area of this orientation and side, m².</summary>
 		public float Area_m2 { get; internal set; }
+		/// <summary>How far this side sits out from the object's own facade plane, metres. Larger is
+		/// further from the building.</summary>
+		public float Depth_m { get; internal set; }
 		public Band[] Bands { get; internal set; } = [];
 		public List<ObstacleLightDay> Days { get; } = [];
 		public ObstacleLightSummary Summary { get; internal set; }
@@ -116,6 +146,14 @@ public sealed class ObstacleLightMeter
 		public Vector3 Centroid { get; internal set; }
 		public Vector3 BoundsMin { get; internal set; }
 		public Vector3 BoundsMax { get; internal set; }
+		/// <summary>Unit normal of the object's own facade plane, pointing away from the building.
+		/// Zero when the object is too compact for a plane to mean anything, in which case every
+		/// side falls back to the sky-access rule.</summary>
+		public Vector3 Outward { get; internal set; }
+		/// <summary>Area whose light-receiving side turned out to be enclosed by the building, m².
+		/// Reported rather than silently dropped: on a stacked tray system it is the measure of how
+		/// much of the geometry is interior and carries no reading.</summary>
+		public float EnclosedArea_m2 { get; internal set; }
 		/// <summary>Orientations present, the one carrying the most solar load first. That is the
 		/// facade the object is mostly about, which its area is not: a slab has two faces of
 		/// equal area and only one of them matters.</summary>
@@ -167,6 +205,8 @@ public sealed class ObstacleLightMeter
 	//Per sensor, fixed after Prepare.
 	readonly bool[] SensorExposed;
 	readonly float[] SensorArea;
+	/// <summary>Which side of its object each sensor is on: see <see cref="Surface.Side"/>.</summary>
+	readonly string[] SensorSide;
 
 	//Per sensor scratch, rewritten every step.
 	readonly float[] SensorBeamOpen;
@@ -203,6 +243,10 @@ public sealed class ObstacleLightMeter
 	/// <summary>Total area of every measured obstacle, and the part of it that carries readings.</summary>
 	public float SelectionArea_m2 { get; private set; }
 	public float SelectionExposedArea_m2 { get; private set; }
+	/// <summary>Area whose light-receiving side is enclosed by the building and therefore carries no
+	/// reading. On a stacked tray system this is the measure of how much of the imported geometry is
+	/// interior.</summary>
+	public float SelectionEnclosedArea_m2 { get; private set; }
 
 	static float Azimuth(Vector3 normal)
 	{
@@ -210,7 +254,10 @@ public sealed class ObstacleLightMeter
 		if (MathF.Sqrt(normal.X * normal.X + normal.Z * normal.Z) < 1e-4f)
 			return 0f;
 		var degrees = MathF.Atan2(normal.X, -normal.Z) * (180f / MathF.PI);
-		return degrees < 0f ? degrees + 360f : degrees;
+		if (degrees < 0f)
+			degrees += 360f;
+		//Due north comes out as a hair under zero and used to be reported as 360.
+		return degrees >= 359.9995f ? 0f : degrees;
 	}
 
 	static float Tilt(Vector3 normal) => MathF.Acos(Math.Clamp(normal.Y, -1f, 1f)) * (180f / MathF.PI);
@@ -378,6 +425,7 @@ public sealed class ObstacleLightMeter
 		Sensors = [.. sensors];
 		SensorArea = [.. sensorAreas];
 		SensorExposed = new bool[Sensors.Length];
+		SensorSide = new string[Sensors.Length];
 		SensorBeamOpen = new float[Sensors.Length];
 		SensorBeam = new float[Sensors.Length];
 		SensorDiffuseOpen = new float[Sensors.Length];
@@ -454,27 +502,11 @@ public sealed class ObstacleLightMeter
 			return;
 		Prepared = true;
 
-		//The winding of an imported mesh decides which way a triangle normal points, and it cannot
-		//be trusted: a solid may be wound inwards throughout, as Wall is. The outside is simply the
-		//side that can see more sky, which is scale-free - an earlier version probed a fixed half
-		//metre for geometry behind the surface, and on a six metre wall that left the top and the
-		//reveals pointing inwards, so they were dropped from the readings entirely.
-		const int skyRays = 32;
-		Parallel.ForEach(Partitioner.Create(0, Sensors.Length), range =>
-		{
-			for (int i = range.Item1; i < range.Item2; ++i)
-			{
-				var s = Sensors[i];
-				var front = SkyAccess(scene, s.Position, s.Normal, skyRays, (uint)i);
-				var back = SkyAccess(scene, s.Position, -s.Normal, skyRays, (uint)i);
-				if (back > front)
-				{
-					Sensors[i] = new Sensor(s.Position, -s.Normal);
-					front = back;
-				}
-				SensorExposed[i] = front >= MinSkyAccess * skyRays;
-			}
-		});
+		//The facade axis of each object is reliable; the sign of it is not, so it is settled per
+		//facade rather than per object - see FacadeSigns.
+		Parallel.For(0, TargetArray.Length, t => TargetArray[t].Outward = FacadeAxis(TargetArray[t]));
+		FacadeSigns(scene);
+		Parallel.For(0, TargetArray.Length, t => OrientSensors(scene, TargetArray[t]));
 
 		for (int t = 0; t < TargetArray.Length; ++t)
 			BuildPatches(TargetArray[t]);
@@ -483,7 +515,219 @@ public sealed class ObstacleLightMeter
 		{
 			SelectionArea_m2 += TargetArray[t].Area_m2;
 			SelectionExposedArea_m2 += TargetArray[t].ExposedArea_m2;
+			SelectionEnclosedArea_m2 += TargetArray[t].EnclosedArea_m2;
 		}
+	}
+
+	/// <summary>
+	/// Settles, for one object, which way each of its sensors faces and which side of the object it
+	/// belongs to.
+	/// </summary>
+	/// <remarks>
+	/// The winding of an imported mesh cannot be trusted - a solid may be wound inwards throughout -
+	/// so the light-receiving side has to be derived. An earlier version asked each sensor
+	/// individually which of its two sides saw more sky, and on this geometry that failed: the trays
+	/// of a facade system are stacked 0.25 m apart and are 0.259 m tall, so a rim sits in a slot
+	/// narrower than the question, both sides saw one or two rays out of thirty-two, and the answer
+	/// was noise. It labelled upward rims "down" and called every tray fully exposed.
+	///
+	/// So the object decides first, and the sensor second:
+	/// <list type="number">
+	/// <item>The facade plane comes from the object's own surface normals, as the dominant axis of
+	/// the area-weighted tensor sum of n (x) n. That product is sign-invariant, which is exactly
+	/// what is needed when the winding is meaningless.</item>
+	/// <item>Its sign - which way is out of the building - is a vote over every sensor of the object
+	/// at once, so hundreds of rays decide it instead of two.</item>
+	/// <item>Each facade-parallel sensor then faces away from the building, and is <c>outer</c> or
+	/// <c>inner</c> by how far out it sits. Only perpendicular rims fall back to comparing their two
+	/// sides, and only when one side wins by a clear margin.</item>
+	/// </list>
+	/// </remarks>
+	/// <summary>The unsigned facade axis of one object, from the area-weighted tensor sum of
+	/// n (x) n over its sensors. That product is sign-invariant, which is what is needed when the
+	/// mesh winding is meaningless.</summary>
+	Vector3 FacadeAxis(Target target)
+	{
+		var first = target.BandFirstSensor;
+		var count = target.BandSensorCount;
+		var xx = 0f; var yy = 0f; var zz = 0f; var xy = 0f; var xz = 0f; var yz = 0f;
+		for (int b = 0; b < count.Length; ++b)
+			for (int i = first[b]; i < first[b] + count[b]; ++i)
+			{
+				var n = Sensors[i].Normal;
+				var a = SensorArea[i];
+				xx += a * n.X * n.X; yy += a * n.Y * n.Y; zz += a * n.Z * n.Z;
+				xy += a * n.X * n.Y; xz += a * n.X * n.Z; yz += a * n.Y * n.Z;
+			}
+		return DominantAxis(xx, yy, zz, xy, xz, yz);
+	}
+
+	/// <summary>
+	/// Points every object's facade axis away from the building, deciding the sign once per facade
+	/// rather than once per object.
+	/// </summary>
+	/// <remarks>
+	/// A single object cannot answer this. Asked per tray, the vote put two neighbours in the same
+	/// row facing opposite ways, which swapped their inner and outer labels and made the enclosed
+	/// area jump from under one percent to twenty-eight between near-identical objects: a tray has
+	/// only a handful of sensors whose outward ray actually escapes, and the rest are ambiguous in a
+	/// stack this tight. Objects sharing a facade share an axis, though, so they are grouped by it
+	/// and the vote is taken over the whole group, where the outer panels that do escape carry it.
+	/// </remarks>
+	void FacadeSigns(RayScene scene)
+	{
+		const float parallelEnough = 0.94f; //within 20 degrees
+		var axes = new List<Vector3>();
+		var members = new List<List<int>>();
+
+		for (int t = 0; t < TargetArray.Length; ++t)
+		{
+			var axis = TargetArray[t].Outward;
+			if (axis.LengthSquared() <= 1e-12f)
+				continue;
+			var placed = false;
+			for (int g = 0; g < axes.Count; ++g)
+				if (MathF.Abs(Vector3.Dot(axis, axes[g])) >= parallelEnough)
+				{
+					members[g].Add(t);
+					placed = true;
+					break;
+				}
+			if (!placed)
+			{
+				axes.Add(axis);
+				members.Add([t]);
+			}
+		}
+
+		Parallel.For(0, axes.Count, g =>
+		{
+			var axis = axes[g];
+			var forward = 0;
+			var backward = 0;
+			foreach (var t in members[g])
+			{
+				var target = TargetArray[t];
+				//Align each member to the group before voting, or members wound the other way
+				//would cancel the very signal being counted.
+				var local = Vector3.Dot(target.Outward, axis) >= 0f ? axis : -axis;
+				var first = target.BandFirstSensor;
+				var count = target.BandSensorCount;
+				for (int b = 0; b < count.Length; ++b)
+					for (int i = first[b]; i < first[b] + count[b]; ++i)
+					{
+						var p = Sensors[i].Position;
+						if (!scene.AnyHit(p + local * Epsilon, local, Epsilon, FarDistance, RayScene.MaskStatic))
+							++forward;
+						if (!scene.AnyHit(p - local * Epsilon, -local, Epsilon, FarDistance, RayScene.MaskStatic))
+							++backward;
+					}
+			}
+
+			var outward = backward > forward ? -axis : axis;
+			foreach (var t in members[g])
+			{
+				var target = TargetArray[t];
+				target.Outward = Vector3.Dot(target.Outward, outward) >= 0f ? outward : -outward;
+			}
+		});
+	}
+
+	void OrientSensors(RayScene scene, Target target)
+	{
+		var first = target.BandFirstSensor;
+		var count = target.BandSensorCount;
+		var axis = target.Outward;
+		var hasPlane = axis.LengthSquared() > 1e-12f;
+
+		//3. Where the facade-parallel sensors sit along it, so outer and inner can be told apart.
+		var depthMin = float.MaxValue;
+		var depthMax = float.MinValue;
+		if (hasPlane)
+			for (int b = 0; b < count.Length; ++b)
+				for (int i = first[b]; i < first[b] + count[b]; ++i)
+					if (MathF.Abs(Vector3.Dot(Sensors[i].Normal, axis)) >= ParallelCosine)
+					{
+						var d = Vector3.Dot(Sensors[i].Position, axis);
+						depthMin = MathF.Min(depthMin, d);
+						depthMax = MathF.Max(depthMax, d);
+					}
+		var split = depthMax - depthMin >= MinSideSeparation ? 0.5f * (depthMin + depthMax) : float.MinValue;
+
+		var enclosed = 0f;
+		for (int b = 0; b < count.Length; ++b)
+			for (int i = first[b]; i < first[b] + count[b]; ++i)
+			{
+				var sensor = Sensors[i];
+				var parallel = hasPlane && MathF.Abs(Vector3.Dot(sensor.Normal, axis)) >= ParallelCosine;
+
+				if (parallel)
+				{
+					//Both the front panel and the trough wall behind it receive light on the side
+					//facing away from the building; only their depth distinguishes them. A face
+					//whose outward side is walled in - the room side of an exterior wall - fails
+					//the exposure test below and is reported as enclosed.
+					Sensors[i] = new Sensor(sensor.Position, axis);
+					SensorSide[i] = Vector3.Dot(sensor.Position, axis) > split ? OuterSide : InnerSide;
+					SensorExposed[i] = SkyAccess(scene, sensor.Position, axis, ExposureRays, (uint)i)
+						>= MinSkyAccess * ExposureRays;
+				}
+				else
+				{
+					//A rim or a return. Its two sides are genuinely different, so compare them - but
+					//only believe the winner when it wins clearly, or a slot decides it by noise.
+					var front = SkyAccess(scene, sensor.Position, sensor.Normal, ExposureRays, (uint)i);
+					var back = SkyAccess(scene, sensor.Position, -sensor.Normal, ExposureRays, (uint)i);
+					if (back > front + EdgeMargin)
+					{
+						Sensors[i] = new Sensor(sensor.Position, -sensor.Normal);
+						front = back;
+					}
+					SensorSide[i] = EdgeSide;
+					SensorExposed[i] = front >= MinSkyAccess * ExposureRays;
+				}
+
+				if (!SensorExposed[i])
+					enclosed += SensorArea[i];
+			}
+		target.EnclosedArea_m2 = enclosed;
+	}
+
+	/// <summary>
+	/// Dominant eigenvector of a symmetric 3x3 tensor, by power iteration from a fixed start so the
+	/// result is reproducible. Returns zero when no axis dominates, which is the honest answer for a
+	/// compact object that has no facade plane.
+	/// </summary>
+	static Vector3 DominantAxis(float xx, float yy, float zz, float xy, float xz, float yz)
+	{
+		var trace = xx + yy + zz;
+		if (trace <= 1e-9f)
+			return Vector3.Zero;
+
+		//Start along the largest diagonal entry: never orthogonal to the dominant eigenvector of a
+		//positive semi-definite tensor, so one start suffices.
+		var v = xx >= yy && xx >= zz ? Vector3.UnitX : (yy >= zz ? Vector3.UnitY : Vector3.UnitZ);
+		for (int k = 0; k < 64; ++k)
+		{
+			var next = new Vector3(
+				xx * v.X + xy * v.Y + xz * v.Z,
+				xy * v.X + yy * v.Y + yz * v.Z,
+				xz * v.X + yz * v.Y + zz * v.Z);
+			var length = next.Length();
+			if (length <= 1e-12f)
+				return Vector3.Zero;
+			next /= length;
+			var moved = (next - v).LengthSquared();
+			v = next;
+			if (moved < 1e-12f)
+				break;
+		}
+
+		//How much of the total area actually lies along it. A cube spreads evenly over three axes
+		//and has no facade; a panel or a channel concentrates on one.
+		var along = xx * v.X * v.X + yy * v.Y * v.Y + zz * v.Z * v.Z
+			+ 2f * (xy * v.X * v.Y + xz * v.X * v.Z + yz * v.Y * v.Z);
+		return along / trace >= 0.5f ? v : Vector3.Zero;
 	}
 
 	/// <summary>How many of <paramref name="rays"/> cosine-weighted directions around
@@ -508,10 +752,20 @@ public sealed class ObstacleLightMeter
 	void BuildPatches(Target target)
 	{
 		var bandCount = target.BandSensorCount.Length;
-		//[orientation class][band] -> sensor indices
-		var buckets = new List<int>[ClassCount][];
-		var classArea = new float[ClassCount];
-		var classNormal = new Vector3[ClassCount];
+		//[side][orientation class][band] -> sensor indices. Side is part of the key because
+		//compass orientation alone merges a tray's front panel with the trough wall behind it.
+		var sides = new[] { OuterSide, InnerSide, EdgeSide };
+		var buckets = new List<int>[sides.Length][][];
+		var classArea = new float[sides.Length][];
+		var classNormal = new Vector3[sides.Length][];
+		var classDepth = new float[sides.Length][];
+		for (int k = 0; k < sides.Length; ++k)
+		{
+			buckets[k] = new List<int>[ClassCount][];
+			classArea[k] = new float[ClassCount];
+			classNormal[k] = new Vector3[ClassCount];
+			classDepth[k] = new float[ClassCount];
+		}
 
 		var exposedArea = 0f;
 		var objectNormal = Vector3.Zero;
@@ -527,11 +781,16 @@ public sealed class ObstacleLightMeter
 				var area = SensorArea[i];
 				var normal = Sensors[i].Normal;
 				var cls = Classify(normal);
+				var side = Array.IndexOf(sides, SensorSide[i] ?? OuterSide);
+				if (side < 0)
+					side = 0;
 
-				buckets[cls] ??= new List<int>[bandCount];
-				(buckets[cls][b] ??= []).Add(i);
-				classArea[cls] += area;
-				classNormal[cls] += normal * area;
+				buckets[side][cls] ??= new List<int>[bandCount];
+				(buckets[side][cls][b] ??= []).Add(i);
+				classArea[side][cls] += area;
+				classNormal[side][cls] += normal * area;
+				classDepth[side][cls] += area * (target.Outward.LengthSquared() > 1e-12f
+					? Vector3.Dot(Sensors[i].Position, target.Outward) : 0f);
 
 				exposedArea += area;
 				objectNormal += normal * area;
@@ -543,20 +802,21 @@ public sealed class ObstacleLightMeter
 		target.Normal = objectNormal.LengthSquared() > 1e-12f ? Vector3.Normalize(objectNormal) : Vector3.UnitY;
 		target.Centroid = exposedArea > 0f ? centroid / exposedArea : (target.BoundsMin + target.BoundsMax) * 0.5f;
 
-		//Largest orientation first: that is the facade the object is mostly about.
-		var order = new List<int>(ClassCount);
-		for (int c = 0; c < ClassCount; ++c)
-			if (classArea[c] > 0f)
-				order.Add(c);
-		order.Sort((x, y) => classArea[y].CompareTo(classArea[x]));
+		//Largest first; Finish reorders by the solar load once the summaries exist.
+		var order = new List<(int Side, int Class)>(sides.Length * ClassCount);
+		for (int k = 0; k < sides.Length; ++k)
+			for (int c = 0; c < ClassCount; ++c)
+				if (classArea[k][c] > 0f)
+					order.Add((k, c));
+		order.Sort((x, y) => classArea[y.Side][y.Class].CompareTo(classArea[x.Side][x.Class]));
 
 		var surfaces = new List<Surface>(order.Count);
-		foreach (var c in order)
+		foreach (var (k, c) in order)
 		{
 			var bands = new List<Band>(bandCount);
 			for (int b = 0; b < bandCount; ++b)
 			{
-				var list = buckets[c][b];
+				var list = buckets[k][c][b];
 				if (list == null || list.Count == 0)
 					continue;
 				var area = 0f;
@@ -574,8 +834,11 @@ public sealed class ObstacleLightMeter
 			surfaces.Add(new Surface
 			{
 				Orientation = ClassName(c),
-				Normal = classNormal[c].LengthSquared() > 1e-12f ? Vector3.Normalize(classNormal[c]) : Vector3.UnitY,
-				Area_m2 = classArea[c],
+				Side = sides[k],
+				Normal = classNormal[k][c].LengthSquared() > 1e-12f
+					? Vector3.Normalize(classNormal[k][c]) : Vector3.UnitY,
+				Area_m2 = classArea[k][c],
+				Depth_m = classArea[k][c] > 0f ? classDepth[k][c] / classArea[k][c] : 0f,
 				Bands = [.. bands],
 			});
 		}
