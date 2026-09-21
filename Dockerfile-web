@@ -1,20 +1,41 @@
-FROM node:18-alpine AS build
+# Legacy build environment: migrate this separately after fixing dependencies.
+FROM node:24-alpine AS build
+
+WORKDIR /app
+
+COPY ThreeFrontend/ ./
+
+# package.json and package-lock.json must contain the compatible pins.
+RUN npm ci --include=dev
 
 ARG BACKEND
 
-WORKDIR app
-COPY ThreeFrontend/ .
+# Generate a valid TypeScript string literal, including proper escaping.
+RUN node -e 'require("node:fs").writeFileSync( \
+    "src/config.ts", \
+    "export const BackendURI = " + \
+    JSON.stringify(process.env.BACKEND || "") + ";\n" \
+    );'
 
-RUN echo "export const BackendURI = \"${BACKEND}\";" > src/config.ts
+# Use the locally installed CLI; preserve your existing OpenSSL workaround.
+RUN NODE_OPTIONS=--openssl-legacy-provider \
+    ./node_modules/.bin/preact build --no-prerender
 
-RUN npm install -g npm@next-9 && npm install && npm install @microsoft/signalr
-RUN npx cross-env NODE_OPTIONS=--openssl-legacy-provider preact build --no-prerender
 
-FROM node:18-alpine AS final
-EXPOSE 8080
+FROM node:24-alpine AS final
+
+ENV NODE_ENV=production
+
+# Install the server outside the directory containing public assets.
+RUN npm install --global --no-audit --no-fund sirv-cli@3.0.1 \
+    && npm cache clean --force
+
 WORKDIR /app
 
-COPY --from=build /app/build .
-RUN npm install -g npm@next-9 && npm install sirv-cli
+COPY --from=build /app/build/ ./
 
-ENTRYPOINT ["npx", "sirv", ".", " --cors", "--single", "--host"]
+USER node
+
+EXPOSE 8080
+
+ENTRYPOINT ["sirv", ".", "--cors", "--single", "--host", "0.0.0.0", "--port", "8080"]

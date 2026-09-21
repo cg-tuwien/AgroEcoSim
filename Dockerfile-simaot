@@ -1,5 +1,5 @@
 #https://varhowto.com/install-miniconda-ubuntu-20-04/
-FROM mcr.microsoft.com/dotnet/sdk:8.0-alpine AS publish
+FROM mcr.microsoft.com/dotnet/sdk:10.0-alpine-aot AS publish
 COPY . .
 #fix https://github.com/dotnet/dotnet-docker/issues/2470
 ENV COMPlus_EnableDiagnostics=0
@@ -12,12 +12,14 @@ ARG BACKEND
 #RUN dotnet restore --runtime alpine-x64
 #--disable-parallel
 
-RUN dotnet publish \
+#RUN apk update && apk add --no-cache ca-certificates && apk --no-cache add clang zlib-dev build-base
+
+RUN dotnet publish /AgroServer/AgroServer.csproj \
     --configuration Release \
     -p:Platform=x64 \
-    --framework=net8.0 \
+    --framework=net10.0 \
     --nologo \
-    --runtime linux-x64 \
+    --runtime linux-musl-x64 \
     -p:DebugType=None \
     -p:DebugSymbols=false \
     -p:PublishAot=true \

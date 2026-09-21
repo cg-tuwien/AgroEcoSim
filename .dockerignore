@@ -21,7 +21,6 @@ data_*/
 **/tsconfig.tsbuildinfo
 **/*.log
 /.idea/
-/package-lock.json
 /.yarn/*
 **/yarn.lock
 **/bin
@@ -38,14 +37,38 @@ data_*/
 
 /Screens/20*
 
-**/package-lock.json
 **/size-plugin.json
 
 # Build output published into the project tree, the species codegen's private build, and above all
 # the RUN STORE. `COPY . .` copies the build context into the image, and a single stored run is tens
 # of gigabytes of exported frames - publish_and_run.sh now puts the store at the repo root, so
 # without this a `docker build` would try to ship the entire simulation archive into the image.
-/runstore/
 AgroServer/publish/
 SchemeGenerator/artifacts/
+ThreeFrontend/build
 **/runstore/
+**/publish
+**/salvaged-run-requests
+**/example_photos
+**/debug_results
+**/canopy-validation
+**/agroeco-mts3
+
+**/obj
+**/bin
+**/Nooshin_Export
+
+/*.json
+/*.ps1
+**/*.gz
+/*.png
+**/*.xz
+/*.exe
+/*.old
+**/.agents
+**/.aider*
+**/.claude
+**/.idea
+**/.vscode
+**/.g
+**/.git
