@@ -42,6 +42,34 @@ public record SimulationRequest
     ///<example>0.5</example>
     public float? FieldResolution { get; init; }
     ///<summary>
+    ///Geographic latitude of the world origin, degrees north; negative is south. Drives the
+    ///solar position, and through it the shadows, the light the plants receive and the sky.
+    ///Must be between -90 and 90. (default: 48.208333, Vienna)
+    ///</summary>
+    ///<example>48.208333</example>
+    public float? Latitude { get; init; }
+    ///<summary>
+    ///Geographic longitude of the world origin, degrees east; negative is west. Sets solar
+    ///time, and the site's time zone is derived from it. Must be between -180 and 180.
+    ///(default: 16.3725, Vienna)
+    ///</summary>
+    ///<example>16.3725</example>
+    public float? Longitude { get; init; }
+    ///<summary>
+    ///Height of the world origin above sea level, in metres. A higher site has less atmosphere
+    ///above it, so the direct beam is stronger and the diffuse sky weaker. (default: 188)
+    ///</summary>
+    ///<example>188</example>
+    public float? Altitude { get; init; }
+    ///<summary>
+    ///Rotation of the scene about the up axis, in degrees. Zero means the scene's +X axis
+    ///points east, and an increasing value turns the scene clockwise seen from above. It
+    ///states how the scene's axes are oriented on the compass and rotates no geometry - the
+    ///only thing it moves is the sun. Wrapped into [0, 360). (default: 0)
+    ///</summary>
+    ///<example>0</example>
+    public float? Azimuth { get; init; }
+    ///<summary>
     ///Seed number that controls all pseudo-random decisions in the simulation. (default: 42)
     ///</summary>
     ///<example>42</example>
@@ -95,6 +123,11 @@ public record SimulationRequest
     /// <summary>Steer developing vegetative tissue toward persistent diffuse-light openings.
     /// Default true; constant-light mode 0 has no directional cue. Does not change photosynthetic irradiance.</summary>
     public bool? GrowthLightGuidanceEnabled { get; init; }
+
+    /// <summary>Maximum error in simplified collision geometry, in metres. Defaults to 0.0005
+    /// (0.5 mm); zero requests the displayed reference geometry. Must be finite and between
+    /// zero and 0.0005. This is a geometry error bound, not permitted penetration.</summary>
+    public float? CollisionGeometryToleranceM { get; init; }
 
     /// <summary>
     /// Hemisphere rays per sensor and simulation step for the internal CPU light model. Higher

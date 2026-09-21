@@ -118,7 +118,7 @@ try {
   const noTier = process.env.TIER === undefined || process.env.TIER === '';
   const tierSet = noTier && process.env.TRANSLUCENCY !== '1' && process.env.DAYLIGHT !== '1'
     ? 'default'
-    : await ev(lightingScript(process.env.TIER, process.env.DAYLIGHT === '1', process.env.TRANSLUCENCY === '1'));
+    : await ev(lightingScript(process.env.TIER, process.env.DAYLIGHT === '1', process.env.TRANSLUCENCY === '1', process.env.SKY === '1'));
   cfg.tier = tierSet;
   await sleep(500);
   //What the renderer actually resolved, not just what the DOM says. A checkbox that was found

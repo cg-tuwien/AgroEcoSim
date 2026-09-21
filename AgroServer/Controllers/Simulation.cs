@@ -9,6 +9,25 @@ namespace AgroServer.Controllers;
 
 public class SimulationController// : ControllerBase
 {
+    /// <summary>
+    /// Memoised answers for <c>GET /run/{id}/site</c>. A null value is a run that cannot be
+    /// described, remembered so a bad id is not rebuilt on every poll.
+    /// </summary>
+    /// <remarks>
+    /// The answer is a pure function of a run's stored request, and a run's request never
+    /// changes, so this can never go stale. Bounded by clearing wholesale rather than by an LRU:
+    /// entries are a few kilobytes, the bound only exists so a long-lived server cannot grow
+    /// without limit, and rebuilding a handful of them costs less than the bookkeeping would.
+    /// </remarks>
+    static readonly System.Collections.Concurrent.ConcurrentDictionary<string, RunSiteResponse?> SiteCache = new();
+    const int SiteCacheLimit = 256;
+
+    static void RememberSite(string runId, RunSiteResponse? site)
+    {
+        if (SiteCache.Count >= SiteCacheLimit) SiteCache.Clear();
+        SiteCache[runId] = site;
+    }
+
     [RequiresUnreferencedCode("SimulationController")]
     public static void Map(RouteGroupBuilder api, IConfiguration configuration, ISimulationUploadService uploadService, ITerrainBuffer terrainBuffer, ISeedsBuffer seedsBuffer, IRunStore runStore)
     {
@@ -100,6 +119,54 @@ public class SimulationController// : ControllerBase
             runStore.TryReadRequest(runId, out var bytes)
                 ? Results.Bytes(bytes, "application/json")
                 : Results.NotFound());
+
+        //Where a stored run is and what weather it ran under, for reopening or forking one.
+        //
+        //RECOMPUTED from the stored request rather than read from a file written at run time.
+        //Both halves are pure functions of the request - the zone is derived from the
+        //coordinates and the weather table is planned from the seed - so a file would be a
+        //second source of truth that could disagree with the run's own scenario, plus a format
+        //to version.
+        //
+        //Memoised per run because building the world is NOT free, whatever the scene size
+        //suggests: Init() walks every timestep of the run to build the daylight bitmap, and
+        //every AgroWorld also constructs an IrradianceClient, which allocates an HttpClient that
+        //nothing disposes. One per distinct run is a bounded cost; one per request, for a panel
+        //that refreshes, is not. The answer never changes for a run id, so caching it changes
+        //nothing a caller can observe.
+        api.MapGet("/run/{runId}/site", (string runId) =>
+        {
+            if (SiteCache.TryGetValue(runId, out var cached))
+                return cached == null ? Results.NotFound() : Results.Json(cached);
+
+            if (!runStore.TryReadRequest(runId, out var bytes)) return Results.NotFound();
+            SimulationRequest? request;
+            try { request = System.Text.Json.JsonSerializer.Deserialize(bytes, AppJsonSerializerContext.Default.SimulationRequest); }
+            catch (System.Text.Json.JsonException) { return Results.NotFound(); }
+            if (request == null) return Results.NotFound();
+
+            AgroWorld world;
+            //A stored request can carry coordinates this build rejects - a run that cannot be
+            //described, not a server error. Cached as a negative so a bad run is not rebuilt on
+            //every poll either.
+            try { world = new AgroWorld(request); }
+            catch (ArgumentOutOfRangeException) { RememberSite(runId, null); return Results.NotFound(); }
+
+            var coverage = world.SkyCoverageSeries();
+            var raw = new byte[coverage.Length * sizeof(float)];
+            Buffer.BlockCopy(coverage, 0, raw, 0, raw.Length);
+            var site = new RunSiteResponse
+            {
+                Latitude = world.Latitude,
+                Longitude = world.Longitude,
+                Altitude = world.Altitude,
+                Azimuth = world.Azimuth,
+                TimeZone = world.TimeZone.Id,
+                SkyCoverage = raw,
+            };
+            RememberSite(runId, site);
+            return Results.Json(site);
+        });
 
         //The soil as the socket delivers it at upload time, so a stored run can be DRAWN and not
         //just replayed. Without it a past run opens as plants floating in nothing: trays and

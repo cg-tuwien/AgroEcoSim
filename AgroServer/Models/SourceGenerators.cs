@@ -18,6 +18,7 @@ namespace AgroServer.Models;
 [JsonSerializable(typeof(ObstacleRequest))]
 [JsonSerializable(typeof(SimulationResponse))]
 [JsonSerializable(typeof(PreviewResponse))]
+[JsonSerializable(typeof(RunSiteResponse))]
 [JsonSerializable(typeof(PlantResponse))]
 [JsonSerializable(typeof(ObstacleLightResponse))]
 [JsonSerializable(typeof(ObstacleLightMetaResponse))]

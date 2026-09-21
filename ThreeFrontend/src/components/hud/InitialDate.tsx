@@ -12,7 +12,9 @@ export function InitialDate() {
     const snapped = snapHoursPerTick(requested);
 
     //Solar noon on the start date, as a quick sanity readout of what the date implies.
-    const noon = solarPosition(new Date(`${date}T11:00:00Z`));
+    //The site is a setting now, so read it rather than falling back to the defaults.
+    const noon = solarPosition(new Date(`${date}T11:00:00Z`),
+        appstate.latitude.value, appstate.longitude.value);
 
     return <div>
         <input type="date" name="initialDate" title={tooltip}

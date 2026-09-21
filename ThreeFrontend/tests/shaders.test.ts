@@ -4,11 +4,12 @@
 //cause. It has already happened once.
 
 import * as mesh from '../src/render/webgpu/shaders/mesh.wgsl';
+import * as sky from '../src/render/webgpu/shaders/sky.wgsl';
 import * as voxel from '../src/render/webgpu/gi/shaders/voxel.wgsl';
 import * as voxelDebug from '../src/render/webgpu/gi/shaders/voxelDebug.wgsl';
 import * as coneTrace from '../src/render/webgpu/gi/shaders/coneTrace.wgsl';
 
-const modules = { mesh, voxel, voxelDebug, coneTrace };
+const modules = { mesh, sky, voxel, voxelDebug, coneTrace };
 
 const shaders: [string, string][] = Object.entries(modules).flatMap(([name, m]) =>
     Object.entries(m)

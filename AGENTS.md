@@ -1010,10 +1010,20 @@ hand-rolled single-track EBML muxer (no dependency, per project constraint).
 ## Simulated time and the sun
 
 `src/helpers/Sun.ts` mirrors the server's clock so a shadow falls where the
-simulation thinks the sun is. Latitude 48.208333 and longitude 16.3725 are
-compile-time constants in `Agro/AgroWorld.cs`, mirrored as constants here.
+simulation thinks the sun is. Latitude, longitude, altitude and the scene's
+azimuth are **per-run request fields**, not constants - 48.208333 / 16.3725 /
+188 / 0 are only the defaults, named `LATITUDE`/`LONGITUDE`/`ALTITUDE`/`AZIMUTH`
+here and `AgroWorld.DefaultLatitude` and friends there. See "The site is a
+per-run setting" below; in particular the time zone can only come from the
+server, and assuming Vienna shifts the whole sky by its offset.
 
-Two traps, both encoded in `tests/sun.test.ts`:
+Three traps, all encoded in `tests/sun.test.ts` and `tests/skyDome.test.ts`:
+
+- **A tick is not represented by the instant it begins.** `CpuLightSolver`
+  samples `clamp(HoursPerTick, 1, 6)` sub-step MIDPOINTS and keeps the brightest,
+  scaled to the tick mean. `sampleTickDome`/`tickSunInstant` mirror that, and both
+  the sky and the shadows go through them. Using the tick boundary instead is half
+  an hour out at the default tick and shows a black sky over a daylit 24-hour step.
 
 - **`HoursPerTick` is snapped by the server**, and the request's value is not
   what runs: `5 -> 4`, `7 -> 6`, `9|10 -> 8`, `11 -> 12`, `13..18 -> 12`,
@@ -1059,10 +1069,67 @@ genuinely independent: occlusion and indirect light attenuate the AMBIENT, so bo
 meaningful with no sun at all. Requiring shadows first described the implementation order, not
 the lighting. `lightingFromLegacyTier` migrates sessions saved under the old numbering.
 
-The harness still speaks in tier numbers; `lightingScript(tier, daylight, translucency)` in
-`cdp.mjs` translates one to the checkboxes, so every recorded measurement stays comparable.
-Translucency is NOT part of the ladder and defaults off there for exactly that reason;
-`still.mjs` drives it with `TRANSLUCENCY=1`.
+The harness still speaks in tier numbers; `lightingScript(tier, daylight, translucency, sky)`
+in `cdp.mjs` translates one to the checkboxes, so every recorded measurement stays comparable.
+Translucency and sky are NOT part of the ladder and default off there for exactly that reason;
+`still.mjs` drives them with `TRANSLUCENCY=1` and `SKY=1`.
+
+The `sky` switch is the odd one out and deliberately NOT in `LightingOptions`: it replaces the
+background and adds no light, so it cannot move a lit pixel. `tests/lighting.test.ts` asserts
+the exact shape of `FrameLighting` at the parity setting as the definition of the historical
+look, and a background has no business in that object. It persists as its own `lightSky` key in
+the archive rather than inside `lighting`.
+
+## The sky background
+
+`src/render/core/SkyDome.ts` is a port of `Agro/Irradiance/SkyDome.cs` - the dome
+`CpuLightSolver` integrates - so the viewport background IS the sky the simulation is using,
+the way `helpers/Sun.ts` already mirrors the server's solar position. Keep the two
+line-comparable: same constant names, same order, same citations.
+
+- **One CPU cube, two backends.** `core/SkyTexture.ts` fills six RGBA8 faces; Three hands them
+  to a `CubeTexture` on `scene.background` and WebGPU samples the same bytes in `webgpu/Sky.ts`.
+  Writing the CIE formula twice, once in GLSL and once in WGSL, is the drift this avoids.
+- **Cube, not equirect.** An equirect `DataTexture` does reach three's directional background
+  path - `WebGLBackground` runs it through `cubemaps.get()` first - but that conversion is
+  cached in a `WeakMap` keyed on the texture instance with no version check, so faces refilled
+  in place would render the first sky forever.
+- **The faces are stored MIRRORED in X**, because `WebGLBackground` samples a non-render-target
+  `CubeTexture` with `flipEnvMap = -1`. The WGSL negates x for the same reason. In cube order
+  the faces hold the west, east, zenith, nadir, south and north sky. Getting this wrong makes
+  the sun rise in the west, which looks entirely normal until you check.
+- **`resolveSky` returns the SAME object every time**, with its face buffers rewritten in place.
+  Snapshot `revision` as a number; comparing references uploads once and then goes stale.
+- The refill costs ~1.6 ms per timestep at `SKY_FACE_SIZE` 128, measured in the real bundle. A
+  jest measurement of the same loop reads ~16 ms - that is ts-jest, not the code.
+- Night is genuinely black and heavy cloud genuinely grey. Both are the model being honest, and
+  both look like bugs if you do not know.
+
+## The site is a per-run setting
+
+Latitude, longitude, altitude and the scene's azimuth used to be `const` in `AgroWorld` and
+mirrored as constants in `helpers/Sun.ts`. They are now request fields edited on the Terrain
+tab, and the constants are only DEFAULTS.
+
+- In `AgroWorld`'s constructor the site must be assigned **before** the `TimeZoneLookup` call
+  and before `Init()`; both read it.
+- **Azimuth rotates the sun, not the geometry.** It states how the scene's axes sit on the
+  compass; the whole of the maths is subtracting it from the solar azimuth. Nothing in the
+  scene graph, the BVH or any export moves.
+- **The time zone can only come from the server.** It derives the zone from the coordinates
+  (GeoTimeZone) and no browser API does the same, so it is sent in the `RunSite` message and
+  recomputed for a stored run by `GET /simulation/run/{id}/site`. A client that guessed would
+  shift every sun position and the whole sky by the offset while still looking plausible.
+- The altitude feeds the station-pressure correction to the air mass. It is in BOTH `SkyDome.cs`
+  and the TS port; changing one alone silently breaks the mirror.
+
+## Weather reaches the client once, not per frame
+
+`AgroWorld.Init` plans the whole `Weather` table before step 0, so `SkyCoverageSeries()` is sent
+once in `RunSite` rather than added to the v7 frame. That matters: history entries rebuilt from
+the run index hold only `t`, and both the offline renderer and `FrameSource` derive everything
+from `t` plus run-level constants - a float inside the frame would be unreachable in exactly the
+cases that need it. It travels as raw little-endian float32, base64, the way `Scene` does.
 
 ## Viewport lighting tiers
 
@@ -3266,6 +3333,8 @@ left showing whatever was in the memory it lost, often other windows' pixels.
 | `src/render/core/PlantColors.ts` | per-organ colour; `VisualMappingOptions` lives here |
 | `src/render/core/PrimitiveTransform.ts` | the wire transform decode, incl. the post-scale half-length recentring |
 | `src/render/core/BuildScene.ts` | simulation data → neutral draw list |
+| `src/render/core/SkyDome.ts` | port of `Agro/Irradiance/SkyDome.cs`; keep the two diffable |
+| `src/render/core/SkyTexture.ts` | sky colour, exposure, and the six-face cube both backends sample |
 | `src/render/three/ThreeRenderer.ts` | the WebGL backend |
 | `src/render/offline/` | offscreen stills, frame loop, ZIP/WebM encoders |
 | `src/helpers/BinaryReader.ts` | v7 scene parser; must mirror `Agro/Organs.cs` |

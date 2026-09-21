@@ -16,7 +16,7 @@ import {
     obstacleValueOn, ObstacleMappingOptions, obstacleMappingSpec, stepDate,
 } from "./helpers/ObstacleLight";
 import { canDeflate, deflateBytes, inflateBytes } from "./helpers/deflate";
-import { DEFAULT_INITIAL_DATE } from "./helpers/Sun";
+import { ALTITUDE, AZIMUTH, DEFAULT_INITIAL_DATE, LATITUDE, LONGITUDE, SolarSite } from "./helpers/Sun";
 import { convertCoordsTo_RH_rightPX_upPY } from "./helpers/CoordinateSystem";
 import { LIGHTING_OFF, LightingOptions, SHADOW_NORMAL_OFFSET_TEXELS, lightingFromLegacyTier } from "./render/core/Lighting";
 import { Species } from "./helpers/Species";
@@ -181,6 +181,44 @@ hubConnection.on("runStarted", (runId: string) => {
     //run's stored frames become unreachable from the page that started them.
     try { sessionStorage.setItem('agro.runId', runId); } catch { /* private mode, not fatal */ }
 });
+
+/**
+ * Where the run is and what weather it will see, sent once just after `runStarted`.
+ *
+ * Both are run-level facts the viewport needs per TIMESTEP, which is exactly why they arrive
+ * this way instead of riding the frame format: the playhead can land on a step whose frame was
+ * evicted, and an offline export renders steps it never puts the playhead on at all.
+ *
+ * The time zone in particular can only come from here. The server derives it from the
+ * coordinates and no browser API does the same, so a client that guessed would shift every sun
+ * position, every shadow and the whole sky by the offset while still looking plausible.
+ */
+hubConnection.on("runSite", (site: ISimRunSite) => {
+    batch(() => {
+        st.latitude.value = site.latitude;
+        st.longitude.value = site.longitude;
+        st.altitude.value = site.altitude;
+        st.azimuth.value = site.azimuth;
+        st.siteTimeZone.value = site.timeZone || undefined;
+        st.weather.value = decodeSkyCoverage(site.skyCoverage);
+    });
+});
+
+/**
+ * Raw little-endian float32, one per timestep, base64 over the wire as the frames are.
+ *
+ * Copied into a fresh Float32Array rather than wrapped in place: base64ToArrayBuffer has no
+ * alignment guarantee, and a Float32Array view needs its offset to be a multiple of four.
+ */
+function decodeSkyCoverage(base64: string | undefined): Float32Array | undefined {
+    if (!base64) return undefined;
+    const bytes = base64ToArrayBuffer(base64);
+    const count = Math.floor(bytes.byteLength / 4);
+    if (count === 0) return undefined;
+    const out = new Float32Array(count);
+    new Uint8Array(out.buffer).set(bytes.subarray(0, count * 4));
+    return out;
+}
 
 hubConnection.on("preview", (result: ISimPreview) => {
     const binaryScene = base64ToArrayBuffer(result.scene);
@@ -464,6 +502,19 @@ interface ISimPreview
     scene: Uint8Array,
     renderer: string,
     step: number,
+}
+
+/** Mirrors AgroServer/Models/RunSiteResponse.cs. */
+interface ISimRunSite
+{
+    latitude: number,
+    longitude: number,
+    altitude: number,
+    azimuth: number,
+    /** IANA id of the zone the simulated clock runs on. */
+    timeZone: string,
+    /** Cloud cover per timestep, raw little-endian float32, base64 over the wire. */
+    skyCoverage: string,
 }
 
 interface ITrayModel
@@ -873,6 +924,35 @@ class State {
      */
     initialDate = signal(DEFAULT_INITIAL_DATE);
 
+    /**
+     * Where on Earth the world origin sits, and how the scene is turned on the compass.
+     *
+     * These drive the sun, and through it the shadows, the light the plants receive and the
+     * sky. Until now they were compile-time constants on both sides; they are settings, so a
+     * run can be sited somewhere other than Vienna.
+     */
+    latitude = signal(LATITUDE);
+    longitude = signal(LONGITUDE);
+    /** Metres above sea level. Thins the atmosphere the beam crosses; see SkyDome. */
+    altitude = signal(ALTITUDE);
+    /**
+     * Scene rotation about the up axis, degrees. 0 puts the scene's +X (its right vector) due
+     * east, and an increasing value turns it clockwise seen from above.
+     *
+     * It rotates the SUN, not the geometry: it states how the scene's axes are oriented on the
+     * compass, and nothing in the scene graph moves.
+     */
+    azimuth = signal(AZIMUTH);
+    /**
+     * The IANA zone the SERVER derived from the coordinates, once it has told us.
+     *
+     * Undefined until then, and the fallback is the default site's zone. No browser API maps
+     * coordinates to a zone, so this cannot be computed here - and guessing is not harmless:
+     * the wrong zone shifts every sun position and the whole sky by its offset while still
+     * looking completely plausible.
+     */
+    siteTimeZone = signal<string | undefined>(undefined);
+
     //SPECIES
     species = signal<Species[]>([Species.Default()]);
     behaviors = signal<string[]>([]);
@@ -920,6 +1000,38 @@ class State {
     //the canopy: too little and a leaf shadows itself, too much and light leaks between
     //leaves that genuinely touch.
     shadowBiasTexels = signal(SHADOW_NORMAL_OFFSET_TEXELS);
+    /**
+     * The physical sky dome as the viewport background, instead of the flat theme colour.
+     *
+     * Deliberately NOT part of lightingOptions(). It adds no light - it only replaces what is
+     * behind the scene - and LightingOptions feeds resolveLighting, whose result shape at the
+     * parity setting is an asserted contract. Keeping it out means no churn in that contract
+     * and no field resolveLighting has to be told to ignore.
+     */
+    lightSky = signal(false);
+    /**
+     * Cloud cover per timestep, 0 = clear .. 1 = fully overcast: the server's
+     * Weather[t].SkyCoverage, which is planned in full before step 0 and sent once for the run.
+     *
+     * Undefined for a run from a server that predates the field, or an archive saved before it.
+     * That is a documented fallback to a CLEAR sky, not an error - see skyCoverageAt.
+     */
+    weather = signal<Float32Array | undefined>(undefined);
+
+    /**
+     * The site, peeked. For the non-reactive callers - the mount catch-up and the offline
+     * renderer. Anything inside a signal effect must read the signals itself and pass them in,
+     * or the effect never re-runs when the site moves.
+     */
+    solarSite(): SolarSite {
+        return {
+            latitude: this.latitude.peek(),
+            longitude: this.longitude.peek(),
+            altitudeM: this.altitude.peek(),
+            azimuthDeg: this.azimuth.peek(),
+            timeZone: this.siteTimeZone.peek(),
+        };
+    }
 
     lightingOptions(): LightingOptions {
         return {
@@ -1118,6 +1230,10 @@ class State {
         FieldSize: { X: this.fieldSizeX.peek(), D: this.fieldSizeD.peek(), Z: this.fieldSizeZ.peek() },
         Seed: Math.trunc(this.randomize.peek() ? Math.random() * 4294967295 : this.initNumber.peek()),
         InitialDate: this.initialDate.peek(),
+        Latitude: this.latitude.peek(),
+        Longitude: this.longitude.peek(),
+        Altitude: this.altitude.peek(),
+        Azimuth: this.azimuth.peek(),
         Species: this.species.peek().map(s => s.serialize()),
 
         Plants: this.seeds.peek().map((p: Seed) => ({ S: p.species.peek(), P: { X: p.px.peek(), Y: p.py.peek(), Z: p.pz.peek() }, F: p.fieldIndex.peek() })),
@@ -1466,11 +1582,22 @@ class State {
             randomize: this.randomize.peek(),
             renderMode: this.renderMode.peek(),
             initialDate: this.initialDate.peek(),
+            latitude: this.latitude.peek(),
+            longitude: this.longitude.peek(),
+            altitude: this.altitude.peek(),
+            azimuth: this.azimuth.peek(),
+            siteTimeZone: this.siteTimeZone.peek(),
+            //The weather the run actually ran under, so a reloaded session previews the same sky
+            //rather than falling back to a clear one. A plain array: JSON has no typed arrays.
+            weather: this.weather.peek() ? Array.from(this.weather.peek()!) : undefined,
             leafAreaIndexObstacles: this.leafAreaIndexObstacles.peek(),
             leafAreaIndexSensors: this.leafAreaIndexSensors.peek(),
             leafAreaIndexDepth: this.leafAreaIndexDepth.peek(),
             leafAreaIndexBandHeight: this.leafAreaIndexBandHeight.peek(),
             lighting: this.lightingOptions(),
+            //Its own key rather than a member of `lighting`; see the signal's comment. Older
+            //sessions simply lack it and restore to the default.
+            lightSky: this.lightSky.peek(),
             viewportBackend: this.viewportBackend.peek(),
             downloadRoots: this.downloadRoots.peek(),
             exactPreview: this.exactPreview.peek(),
@@ -1634,6 +1761,14 @@ class State {
                     self.randomize.value = data.randomize;
                     self.renderMode.value = data.renderMode;
                     self.initialDate.value = data.initialDate ?? DEFAULT_INITIAL_DATE;
+                    //Sessions saved before the site was a setting were all at the default one.
+                    self.latitude.value = data.latitude ?? LATITUDE;
+                    self.longitude.value = data.longitude ?? LONGITUDE;
+                    self.altitude.value = data.altitude ?? ALTITUDE;
+                    self.azimuth.value = data.azimuth ?? AZIMUTH;
+                    self.siteTimeZone.value = data.siteTimeZone ?? undefined;
+                    self.weather.value = Array.isArray(data.weather)
+                        ? Float32Array.from(data.weather) : undefined;
                     //Sessions saved before the measurement existed carry none of these.
                     self.leafAreaIndexObstacles.value = data.leafAreaIndexObstacles ?? "";
                     self.leafAreaIndexSensors.value = data.leafAreaIndexSensors ?? 32768;
@@ -1654,6 +1789,9 @@ class State {
                     self.lightSecondBounce.value = lighting.secondBounce;
                     self.lightLeafTranslucency.value = lighting.leafTranslucency ?? false;
                     self.shadowBiasTexels.value = lighting.shadowBiasTexels ?? SHADOW_NORMAL_OFFSET_TEXELS;
+                    //Sessions saved before the sky existed - including every legacy tier one -
+                    //land on the default, which is off.
+                    self.lightSky.value = data.lightSky ?? false;
                     self.viewportBackend.value = data.viewportBackend ?? "auto";
                     self.downloadRoots.value = data.downloadRoots;
                     self.exactPreview.value = data.exactPreview;
@@ -2149,6 +2287,12 @@ class State {
             //`altitude <= 0` night check, so the shadow map is pointed in a direction made of NaN.
             this.initialDate.value = request.InitialDate
                 ? String(request.InitialDate).slice(0, 10) : DEFAULT_INITIAL_DATE;
+            //Defaults matched to Agro/AgroWorld.cs, so importing a request written before the
+            //site was settable reproduces the run it describes rather than the current form.
+            this.latitude.value = request.Latitude ?? LATITUDE;
+            this.longitude.value = request.Longitude ?? LONGITUDE;
+            this.altitude.value = request.Altitude ?? ALTITUDE;
+            this.azimuth.value = request.Azimuth ?? AZIMUTH;
             this.renderMode.value = request.RenderMode ?? 0;
             if (request.SamplesPerPixel) this.samplesPerPixel.value = request.SamplesPerPixel;
             this.deterministic.value = request.Deterministic ?? false;
@@ -2192,8 +2336,41 @@ class State {
                         new Float32Array(0), [])),
             ];
         });
+
+        //The zone the server derived from these coordinates, and the weather the run ran under.
+        //Neither is in the request: the zone comes from a coordinate lookup the browser has no
+        //equivalent for, and the weather is planned from the seed. Without them a reopened run at
+        //a moved site keeps the DEFAULT zone - shifting every sun position and the whole sky by
+        //the offset, while still looking entirely plausible - and previews a clear sky over steps
+        //the simulation ran under cloud.
+        await this.restoreStoredSite(runId);
         this.needsRender.value = true;
     }
+
+    /**
+     * The site and the weather of a stored run, recomputed server-side from its own request.
+     *
+     * Failure is warned about and swallowed rather than rethrown: the scenario is already
+     * restored and the run is perfectly openable. What is lost is the sky's fidelity, and both
+     * fallbacks - the default zone and a clear sky - are documented behaviour, not an error.
+     */
+    private restoreStoredSite = async (runId: string) => {
+        try {
+            const res = await fetch(`${location.protocol}//${BackendURI}/simulation/run/${runId}/site`);
+            if (!res.ok) return;
+            const site = await res.json();
+            batch(() => {
+                this.latitude.value = site.latitude ?? this.latitude.peek();
+                this.longitude.value = site.longitude ?? this.longitude.peek();
+                this.altitude.value = site.altitude ?? this.altitude.peek();
+                this.azimuth.value = site.azimuth ?? this.azimuth.peek();
+                this.siteTimeZone.value = site.timeZone || undefined;
+                this.weather.value = decodeSkyCoverage(site.skyCoverage);
+            });
+        } catch (err) {
+            console.warn(`Could not restore the site of run ${runId}:`, err);
+        }
+    };
 
     /**
      * Deletes a stored run, after asking.
@@ -2377,6 +2554,25 @@ class State {
 }
 
 const st = new State();
+/**
+ * The cloud cover to preview a timestep under.
+ *
+ * A free function taking the series rather than a method reading the signal, so a caller in a
+ * reactive effect can read `weather.value` itself and pass it in - a bare read for its
+ * subscription alone is deleted by terser, which is how a signal subscription silently dies in
+ * production only.
+ *
+ * No series means a CLEAR sky. The preview then shows the clear-sky dome for the instant, which
+ * differs from the simulation's on an overcast step; that is an honest limitation of an older
+ * run, not a failure.
+ */
+export function skyCoverageAt(series: Float32Array | undefined, timestep: number): number {
+    if (!series || series.length === 0) return 0;
+    const i = timestep < 0 ? 0 : timestep >= series.length ? series.length - 1 : timestep;
+    const v = series[i];
+    return v > 0 ? (v < 1 ? v : 1) : 0;
+}
+
 export default st;
 //A run this tab started may still be computing, or may have finished while the page was away.
 void recoverRun();

@@ -29,6 +29,8 @@ import { Vec3 } from '../core/Vec3';
 
 import { createGpuContext, GpuContext } from './Device';
 import { OcclusionTargets, Targets, SAMPLE_COUNT, DEPTH_CLEAR_VALUE, DEPTH_FORMAT } from './Targets';
+import { Sky } from './Sky';
+import type { SkyCube } from '../core/SkyTexture';
 import { forceOpaque, reportOpaque, warnIfFlat } from '../offline/opaque';
 import { VoxelField } from './gi/VoxelField';
 import { VoxelDebug } from './gi/VoxelDebug';
@@ -135,6 +137,14 @@ export class WebGPURenderer implements IViewportRenderer {
     //machine that never turns the overlay or a GI tier on.
     private voxels: VoxelField | undefined;
     private voxelDebug: VoxelDebug | undefined;
+    private sky: Sky | undefined;
+    /**
+     * The sky the background currently shows, or undefined for the flat clear colour.
+     *
+     * Public so the visual harness can read the dome back through the debug hook and check the
+     * pixels against the physics rather than against the previous screenshot.
+     */
+    skyCube: SkyCube | undefined;
     private voxelOptions: VoxelDebugOptions = DEFAULT_VOXEL_DEBUG;
     private showVoxels = false;
     private giInputs: GIFrameInputs = { fieldSizeX: 1, fieldSizeZ: 1, height: 1 };
@@ -263,6 +273,7 @@ export class WebGPURenderer implements IViewportRenderer {
         this.plants.destroy();
         this.statics.destroy();
         this.obstacleIndexVersions.clear();
+        this.sky?.dispose();
         this.frameBuffer?.destroy();
         this.aoBuffer?.destroy();
         this.traceBuffer?.destroy();
@@ -586,6 +597,11 @@ export class WebGPURenderer implements IViewportRenderer {
             },
         });
 
+        //First, so every depth-tested draw below covers it. The clear still happens and is
+        //still what shows when the sky is switched off.
+        this.drawSky(pass, this.gpu.format, SAMPLE_COUNT, DEPTH_FORMAT, this.camera.getPose(),
+                     this.targets.width / Math.max(1, this.targets.height));
+
         //The pass still runs with nothing to draw: that is what clears the canvas on the
         //first frame, before any geometry has been registered.
         if (this.atlas!.vertexBuffer && this.atlas!.indexBuffer) {
@@ -711,6 +727,26 @@ export class WebGPURenderer implements IViewportRenderer {
         invertRigid(view, this.invViewScratch);
         f.set(this.invViewScratch, 24);
         this.gpu!.device.queue.writeBuffer(this.traceBuffer!, 0, f.buffer, 0, f.byteLength);
+    }
+
+    /**
+     * The sky background changed. Background only - no light is added, which is why this is
+     * separate from setLighting.
+     */
+    setSky(cube: SkyCube | undefined) {
+        this.skyCube = cube;
+        this.renderOnce();
+    }
+
+    /**
+     * Constructed lazily inside the draw, as the voxel overlay is: it removes any ordering
+     * hazard around mount, and a viewport that never switches the sky on never allocates it.
+     */
+    private drawSky(pass: GPURenderPassEncoder, format: GPUTextureFormat, sampleCount: number,
+                    depthFormat: GPUTextureFormat, pose: CameraPose, aspect: number) {
+        if (!this.skyCube || !this.gpu) return;
+        this.sky ??= new Sky(this.gpu.device);
+        this.sky.draw(pass, format, sampleCount, depthFormat, this.skyCube, pose, aspect);
     }
 
     private drawVoxelOverlay(pass: GPURenderPassEncoder, format: GPUTextureFormat, sampleCount: number,
@@ -1347,6 +1383,10 @@ export class WebGPURenderer implements IViewportRenderer {
                     depthStoreOp: 'store',
                 },
             });
+
+            //`pose`, not this.camera.getPose(): by now the viewport camera has been restored,
+            //which is exactly the bug drawVoxelOverlay has a few lines below.
+            this.drawSky(pass, colorFormat, sampleCount, DEPTH_FORMAT, pose, aspect);
 
             if (this.atlas.vertexBuffer && this.atlas.indexBuffer) {
                 pass.setVertexBuffer(0, this.atlas.vertexBuffer);

@@ -134,11 +134,13 @@ export async function shutdown(browser) {
  * measurement is keyed on the old 0..4 ladder, so the translation lives here rather than being
  * copied into each script. Mirrors lightingFromLegacyTier in core/Lighting.ts.
  */
-export function lightingScript(tier, daylight = false, translucency = false) {
+export function lightingScript(tier, daylight = false, translucency = false, sky = false) {
   const t = Number(tier) || 0;
-  //Translucency is NOT part of the ladder and defaults off, so every recorded tier measurement
-  //stays comparable. Pass it explicitly to measure the term itself.
-  const want = { lightDaylight: !!daylight, lightShadows: t >= 1, lightOcclusion: t >= 2, lightIndirect: t >= 3, lightSecondBounce: t >= 4, lightLeafTranslucency: !!translucency };
+  //Translucency and sky are NOT part of the ladder and default off, so every recorded tier
+  //measurement stays comparable. Pass them explicitly to measure those terms.
+  //`sky` only changes the BACKGROUND - it adds no light - so it moves no lit pixel, which is
+  //why an existing baseline shot with it off remains valid for everything else.
+  const want = { lightDaylight: !!daylight, lightShadows: t >= 1, lightOcclusion: t >= 2, lightIndirect: t >= 3, lightSecondBounce: t >= 4, lightLeafTranslucency: !!translucency, lightSky: !!sky };
   return `(() => {
     const want = ${JSON.stringify(want)};
     const out = {};

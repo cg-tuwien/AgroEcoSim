@@ -6,9 +6,10 @@
 //export that quietly drove it would change the simulation's behaviour.
 
 import { signal } from '@preact/signals';
-import appstate, { PlayState, prefetchFrame, releaseHeldFrames, sceneAt } from '../../appstate';
+import appstate, { PlayState, prefetchFrame, releaseHeldFrames, sceneAt, skyCoverageAt } from '../../appstate';
 import { activeRenderer } from '../IViewportRenderer';
 import { FrameLighting, resolveLighting } from '../core/Lighting';
+import { resolveSky, type SkyCube } from '../core/SkyTexture';
 import { VisualMappingOptions } from '../core/PlantColors';
 import { downloadBlob } from '../../helpers/download';
 import { encodeImage } from './encode/PngWriter';
@@ -82,7 +83,27 @@ function lightingFor(historyIndex: number): FrameLighting {
         appstate.visualMapping.peek() as VisualMappingOptions,
         appstate.initialDate.peek(),
         appstate.timestepAt(historyIndex),
-        appstate.simHoursPerTick);
+        appstate.simHoursPerTick,
+        appstate.solarSite());
+}
+
+/**
+ * The sky an exported frame should be rendered with.
+ *
+ * Per frame, and for the same reason the lighting is: a video spanning months of simulated
+ * time must not be drawn against a single instant's sky, and an export must not inherit
+ * whatever the playhead happens to be sitting on.
+ */
+function skyFor(historyIndex: number): SkyCube | undefined {
+    const timestep = appstate.timestepAt(historyIndex);
+    return resolveSky(
+        appstate.lightSky.peek(),
+        appstate.visualMapping.peek() as VisualMappingOptions,
+        appstate.initialDate.peek(),
+        timestep,
+        appstate.simHoursPerTick,
+        skyCoverageAt(appstate.weather.peek(), timestep),
+        appstate.solarSite());
 }
 
 /**
@@ -112,6 +133,7 @@ export async function renderStill(): Promise<void> {
         //A still shows the current frame, so the current playhead is the right clock - but
         //resolve it here rather than trusting whatever the viewport last happened to be told.
         renderer.setLighting?.(lightingFor(appstate.playPointer.peek()));
+        renderer.setSky?.(skyFor(appstate.playPointer.peek()));
         const px = await renderer.renderToPixels(q.width, q.height, q.ssaa, q.msaa, path.poseAt(0, 1));
 
         progress.value = { state: 'running', done: 1, total: 1, msPerFrame: performance.now() - started, phase: 'encode' };
@@ -285,6 +307,7 @@ export async function renderAnimation(): Promise<void> {
                 appstate.scene.value = scene;
                 //The sun belongs to the frame being rendered, not to where the playhead is.
                 renderer.setLighting?.(lightingFor(map[i].historyIndex));
+                renderer.setSky?.(skyFor(map[i].historyIndex));
                 lastPixels = await renderer.renderToPixels!(width, height, ssaa, msaa, path.poseAt(i, map.length));
             }
 
@@ -320,6 +343,7 @@ export async function renderAnimation(): Promise<void> {
         //has been advancing frame by frame.
         appstate.scene.value = await sceneAt(restorePointer);
         renderer.setLighting?.(lightingFor(restorePointer));
+        renderer.setSky?.(skyFor(restorePointer));
         appstate.needsRender.value = true;
     }
 }

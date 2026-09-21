@@ -53,6 +53,9 @@ public readonly struct SkyDome
 	/// to 0.2 in the shortwave; see e.g. Oke, Boundary Layer Climates.</summary>
 	public const float GroundAlbedo = 0.2f;
 
+	/// <summary>Scale height of the standard atmosphere's pressure profile, in metres.</summary>
+	public const float PressureScaleHeightMetres = 8435f;
+
 	//CIE general sky, standard clear (type 12): gradation a = -1, b = -0.32; indicatrix c = 10, d = -3, e = 0.45.
 	const float ClearB = -0.32f;
 	const float ClearC = 10f;
@@ -160,7 +163,14 @@ public readonly struct SkyDome
 	/// <param name="latitude">Degrees north.</param>
 	/// <param name="longitude">Degrees east.</param>
 	/// <param name="skyCoverage">Cloud cover, 0 = clear .. 1 = fully overcast.</param>
-	public static SkyDome Sample(DateTime utc, float latitude, float longitude, float skyCoverage)
+	/// <param name="worldAzimuthDegrees">Rotation of the scene about the up axis, degrees: 0 puts
+	/// the scene's +X axis due east, and an increasing value turns it clockwise seen from above.
+	/// Only the sun DIRECTION depends on it - it states how the scene's axes are oriented on the
+	/// compass and rotates no geometry.</param>
+	/// <param name="altitudeMetres">Height of the site above sea level, which thins the
+	/// atmosphere the beam crosses.</param>
+	public static SkyDome Sample(DateTime utc, float latitude, float longitude, float skyCoverage,
+		float worldAzimuthDegrees = 0f, float altitudeMetres = 0f)
 	{
 		var solar = new SolarTimes(utc, 0, latitude, longitude);
 		var elevation = (float)solar.SolarElevation.Radians;
@@ -169,7 +179,9 @@ public readonly struct SkyDome
 			return new SkyDome(Vector3.UnitY, 0f, 0f, 0f, 0f, 0f);
 
 		//North is -Z and east is +X. SolarAzimuth is measured clockwise from north (NOAA).
-		var azimuth = (float)solar.SolarAzimuth.Radians;
+		//The scene's own rotation is subtracted from it: turning the scene clockwise on the
+		//compass moves the sun the other way round it, which is the whole of the azimuth maths.
+		var azimuth = (float)solar.SolarAzimuth.Radians - worldAzimuthDegrees * MathF.PI / 180f;
 		var horizontal = MathF.Cos(elevation);
 		var sunDirection = new Vector3(horizontal * MathF.Sin(azimuth), sinElevation, -horizontal * MathF.Cos(azimuth));
 
@@ -177,9 +189,14 @@ public readonly struct SkyDome
 		var dayAngle = 2f * MathF.PI * (utc.DayOfYear - 1) / 365f;
 		var extraterrestrial = 1361f * (1f + 0.033f * MathF.Cos(dayAngle));
 
-		//Kasten & Young relative optical air mass.
+		//Kasten & Young relative optical air mass, scaled to the station pressure. The relative
+		//form assumes sea level; the absolute one multiplies it by p/p0, and the standard
+		//atmosphere gives exp(-altitude / 8435 m). That is what makes a mountain site's beam
+		//stronger and its sky deeper. Mirrored in ThreeFrontend/src/render/core/SkyDome.ts.
 		var elevationDegrees = elevation * (180f / MathF.PI);
 		var airMass = 1f / (sinElevation + 0.50572f * MathF.Pow(elevationDegrees + 6.07995f, -1.6364f));
+		if (altitudeMetres != 0f)
+			airMass *= MathF.Exp(-altitudeMetres / PressureScaleHeightMetres);
 
 		var beamTransmittance = MathF.Pow(0.7f, MathF.Pow(airMass, 0.678f));
 		var diffuseTransmittance = MathF.Max(0f, 0.271f - 0.294f * beamTransmittance);

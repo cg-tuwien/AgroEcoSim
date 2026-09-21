@@ -5,6 +5,7 @@ import { HoursPerTick } from './hud/HoursPerTick';
 import { InitialDate } from './hud/InitialDate';
 import { TotalHours } from './hud/TotalHours';
 import { FieldResolution } from './hud/FieldResolution';
+import { SiteLocation } from './hud/SiteLocation';
 import { FieldSizeX } from './hud/FieldCellsX';
 import { FieldSizeZ } from './hud/FieldCellsZ';
 import { FieldSizeD } from './hud/FieldCellsD';
@@ -80,6 +81,7 @@ const App = () => {
 				<Seeds/>
 			</div>
 			<div role="tabpanel" id="tab-terrain" aria-selected={appstate.activeTab.value.endsWith("tab-terrain")}>
+				<SiteLocation/>
 				<FieldResolution/>
 				<FieldSizeX/>
 				<FieldSizeZ/>

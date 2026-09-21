@@ -33,6 +33,7 @@ import { paletteColor } from '../core/SelectionPalette';
 import { Ray } from '../core/Ray';
 import { backgroundColor } from '../../helpers/Selection';
 import { FrameLighting, shadowBounds } from '../core/Lighting';
+import type { SkyCube } from '../core/SkyTexture';
 import { GI_HEADROOM } from '../core/VoxelGrid';
 import { forceOpaque, reportOpaque, warnIfFlat } from '../offline/opaque';
 import { OfflineSizeError } from '../offline/types';
@@ -41,6 +42,7 @@ import { toBufferGeometry } from './ThreeGeometry';
 import { toThreeColor } from './ThreeColor';
 import { applyInstanceMaterial, newInstanceMaterial } from './ThreeMaterials';
 import { ThreeDensityField } from './ThreeDensityField';
+import { ThreeSky } from './ThreeSky';
 import '../core/StaticGeometry';   // side effect: fills the static geometry table
 
 /** Per-mesh bookkeeping that has nowhere else to live. */
@@ -75,6 +77,14 @@ export class ThreeRenderer implements IViewportRenderer {
     private gizmoTarget: BaseRequestObject | undefined;
 
     private sun: THREE.DirectionalLight | undefined;
+    private skyView = new ThreeSky();
+    /**
+     * The sky the background currently shows, or undefined for the flat theme colour.
+     *
+     * Public so the visual harness can read the dome back through the debug hook and check the
+     * pixels against the physics rather than against the previous screenshot.
+     */
+    skyCube: SkyCube | undefined;
     private plantInstances = new InstanceList();
     private scratch: Mat4 = createMat4();
     private raycaster = new THREE.Raycaster();
@@ -173,6 +183,7 @@ export class ThreeRenderer implements IViewportRenderer {
         this.gizmo?.detach();
         this.gizmo?.dispose();
 
+        this.skyView.dispose();
         this.disposeGroup(this.objPlants);
         this.disposeGroup(this.objSeeds);
         this.disposeGroup(this.objObstacles);
@@ -371,6 +382,18 @@ export class ThreeRenderer implements IViewportRenderer {
      * shadow-mapped against itself at any bias - so both backends now shade a canopy the same
      * way, by integrating extinction rather than comparing depths.
      */
+    /**
+     * Swap the flat background for the sky dome, or back.
+     *
+     * Only the background changes - no light is added, which is why this is separate from
+     * setLighting and why the two switches in the HUD are independent.
+     */
+    setSky(cube: SkyCube | undefined) {
+        this.skyCube = cube;
+        this.scene.background = this.skyView.update(cube) ?? backgroundColor;
+        this.renderOnce();
+    }
+
     setLighting(lighting: FrameLighting) {
         if (!this.sun || !this.renderer) return;
 

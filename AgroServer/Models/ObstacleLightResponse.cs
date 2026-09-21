@@ -15,6 +15,15 @@ public class ObstacleLightMetaResponse
     public string Renderer { get; set; }
     public float Latitude { get; set; }
     public float Longitude { get; set; }
+    /// <summary>Metres above sea level; it scales the direct beam the surfaces received.</summary>
+    public float Altitude { get; set; }
+    /// <summary>
+    /// Rotation of the scene about the up axis, degrees. Recorded because it moves every sun
+    /// position relative to the measured surfaces: two documents from the same model at
+    /// different azimuths carry substantially different beam hours, and without this field
+    /// nothing in either file says which orientation it describes.
+    /// </summary>
+    public float Azimuth { get; set; }
     ///<summary>IANA time zone the daily dates are in.</summary>
     public string TimeZone { get; set; }
     ///<summary>First simulated day, local.</summary>
@@ -53,8 +62,10 @@ public class ObstacleLightMetaResponse
     {
         Filter = world.ObstacleLightSelection.Filter,
         Renderer = world.RendererName,
-        Latitude = AgroWorld.Latitude,
-        Longitude = AgroWorld.Longitude,
+        Latitude = world.Latitude,
+        Longitude = world.Longitude,
+        Altitude = world.Altitude,
+        Azimuth = world.Azimuth,
         TimeZone = world.TimeZone.Id,
         InitialDate = world.InitialTime.ToString("yyyy-MM-dd"),
         HoursPerTick = world.HoursPerTick,

@@ -10,11 +10,13 @@ import { useEffect, useRef } from 'preact/compat';
 import { useSignalEffect } from '@preact/signals';
 
 import BinaryReader from '../helpers/BinaryReader';
-import appstate, { PlayState, clearSceneCache, sceneAt } from '../appstate';
+import appstate, { PlayState, clearSceneCache, sceneAt, skyCoverageAt } from '../appstate';
 import { buildObstacleLightExport } from '../helpers/ObstacleLight';
 import { CameraPose, IViewportRenderer, activeRenderer, PlantFrameInputs, TerrainFrameInputs, SeedFrameInputs, ObstacleFrameInputs, VisibilityInputs } from './IViewportRenderer';
 import { VisualMappingOptions } from './core/PlantColors';
 import { resolveLighting } from './core/Lighting';
+import { resolveSky, type SkyCube } from './core/SkyTexture';
+import type { SolarSite } from '../helpers/Sun';
 import { GI_HEADROOM, type GIFrameInputs, type VoxelDebugOptions } from './core/VoxelGrid';
 import { Geom, leafGeomKey } from './core/GeometryIds';
 import { registerGeometry } from './core/GeometryStore';
@@ -72,7 +74,7 @@ export default function RendererHost() {
     //The most recent inputs each effect computed. Two jobs: it pins the signal reads ahead of
     //the guard (see the note on visibilityInputs), and it gives the mount path the current
     //state to catch up on without recomputing it from peeks.
-    const latest = useRef<{ visibility?: VisibilityInputs; voxels?: VoxelDebugRequest }>({});
+    const latest = useRef<{ visibility?: VisibilityInputs; voxels?: VoxelDebugRequest; sky?: SkyCube }>({});
     const carriedPose = useRef<CameraPose | undefined>(undefined);
     //Read through .value so the component re-renders - and the mount effect re-runs - when
     //either changes.
@@ -178,7 +180,9 @@ export default function RendererHost() {
                 appstate.initialDate.peek(),
                 appstate.currentTimestep(),
                 appstate.simHoursPerTick,
+                appstate.solarSite(),
             ));
+            renderer.setSky?.(latest.current.sky ?? skyRequest());
             const voxels = latest.current.voxels ?? voxelDebugRequest();
             renderer.setVoxelDebug?.(voxels.show, voxels.options, voxels.inputs);
             renderer.refreshVisibility(latest.current.visibility ?? visibilityInputs());
@@ -267,8 +271,17 @@ export default function RendererHost() {
             //currentTimestep() separately: a discarded comma operand is dead code to terser.
             appstate.timestepAt(appstate.playPointer.value),
             appstate.simHoursPerTick,
+            siteInputs(),
         );
         rendererRef.current?.setLighting?.(lighting);
+    });
+
+    useSignalEffect(() => {
+        //Assigned as well as passed, for the same reason the rebuilds are: a value consumed
+        //only inside an optional call the minifier can prove is a no-op on the first run is a
+        //value it may sink, taking the signal subscription with it.
+        const sky = latest.current.sky = skyRequest();
+        rendererRef.current?.setSky?.(sky);
     });
 
     useSignalEffect(() => {
@@ -405,6 +418,40 @@ function visibilityInputs(): VisibilityInputs {
 }
 
 type VoxelDebugRequest = { show: boolean; options: VoxelDebugOptions; inputs: GIFrameInputs };
+
+/**
+ * The sky background for the current playhead. Twin of the lighting effect above it.
+ *
+ * Every signal is read through `.value` and passed as an ARGUMENT - never read for its
+ * subscription alone, which terser deletes as an unused expression, killing the effect in
+ * production builds only.
+ */
+function skyRequest(): SkyCube | undefined {
+    const timestep = appstate.timestepAt(appstate.playPointer.value);
+    return resolveSky(
+        appstate.lightSky.value,
+        appstate.visualMapping.value as VisualMappingOptions,
+        appstate.initialDate.value,
+        timestep,
+        appstate.simHoursPerTick,
+        skyCoverageAt(appstate.weather.value, timestep),
+        siteInputs(),
+    );
+}
+
+/**
+ * Where the run is, read reactively. Both sun-driven effects use it, so moving the site
+ * updates the shadows and the sky together rather than one at a time.
+ */
+function siteInputs(): SolarSite {
+    return {
+        latitude: appstate.latitude.value,
+        longitude: appstate.longitude.value,
+        altitudeM: appstate.altitude.value,
+        azimuthDeg: appstate.azimuth.value,
+        timeZone: appstate.siteTimeZone.value,
+    };
+}
 
 function voxelDebugRequest(): VoxelDebugRequest {
     return {

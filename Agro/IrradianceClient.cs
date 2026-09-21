@@ -123,13 +123,19 @@ public class IrradianceClient
 	ushort EnvMapX = 0;
 	string SamplesPerPixel;
 
-	public IrradianceClient(float latitude, float longitude, int _mode, ushort spp = 512, int lightSamples = 16, string? leafAreaIndexObstacles = null, int leafAreaIndexSensors = 32768, float leafAreaIndexDepth_m = 3f, float leafAreaIndexBandHeight_m = 0.5f)
+	public IrradianceClient(float latitude, float longitude, int _mode, ushort spp = 512, int lightSamples = 16, string? leafAreaIndexObstacles = null, int leafAreaIndexSensors = 32768, float leafAreaIndexDepth_m = 3f, float leafAreaIndexBandHeight_m = 0.5f, float azimuth = 0f, float altitude = 0f)
 	{
 		var mode = (Mode)_mode;
 		var port = 9001 + Math.Clamp(_mode - 1, 0, 8);
 		Client = new() { BaseAddress = new Uri($"http://localhost:{port}"), Timeout = TimeSpan.FromHours(1) };
 		Client.DefaultRequestHeaders.Add("La", latitude.ToString(CultureInfo.InvariantCulture));
 		Client.DefaultRequestHeaders.Add("Lo", longitude.ToString(CultureInfo.InvariantCulture));
+		//The external renderers compute the sun themselves, from these headers plus the per-tick
+		//Ti/TiE - so the scene's rotation has to travel too, or modes 1 and 2 light the scene
+		//with a sun the CPU solver, the growth guidance and the viewport all disagree with.
+		//`Al` is sent for completeness; their sky model is at sea level and ignores it today.
+		Client.DefaultRequestHeaders.Add("Az", azimuth.ToString(CultureInfo.InvariantCulture));
+		Client.DefaultRequestHeaders.Add("Al", altitude.ToString(CultureInfo.InvariantCulture));
 		GlobalIllumination = mode != Mode.Constant;
 		SelectedMode = mode;
 		UseInternal = mode == Mode.Internal;

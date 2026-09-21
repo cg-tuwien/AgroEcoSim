@@ -45,6 +45,15 @@ public interface ISimulationRunner
     void Begin(string runId);
 
     /// <summary>
+    /// Where a created-but-not-yet-begun run is, and the weather it will see. Null if unknown.
+    ///
+    /// Captured at Create/Resume because that is the only moment the built world is in hand, and
+    /// read by the hub after it has joined the caller's group - the same create-join-begin order
+    /// everything else on this path follows.
+    /// </summary>
+    Models.RunSiteResponse? SiteOf(string runId);
+
+    /// <summary>
     /// Discards a run created by <see cref="Create"/> that will never be begun.
     ///
     /// Create and Begin are separate so the caller can join the run's group in between, which
@@ -83,6 +92,8 @@ class RunState
     public volatile string ConnectionId = "";
     /// <summary>When the last client detached, or null while one is attached.</summary>
     public DateTime? UnwatchedSince;
+    /// <summary>The site and weather, captured while the built world was in hand.</summary>
+    public Models.RunSiteResponse? Site;
 }
 
 public class SimulationRunner : ISimulationRunner
@@ -236,7 +247,7 @@ public class SimulationRunner : ISimulationRunner
             }
         }
 
-        var run = new RunState { RunId = runId, ConnectionId = connectionId };
+        var run = new RunState { RunId = runId, ConnectionId = connectionId, Site = SiteOf(world) };
         Pending[runId] = () => Loop(run, world, lazyPreviews, exportFlags, request);
         Runs[runId] = run;
         ConnectionToRun[connectionId] = runId;
@@ -317,12 +328,35 @@ public class SimulationRunner : ISimulationRunner
             return null;
         }
 
-        var run = new RunState { RunId = runId, ConnectionId = connectionId, StartStep = step };
+        var run = new RunState { RunId = runId, ConnectionId = connectionId, StartStep = step, Site = SiteOf(world) };
         Pending[runId] = () => Loop(run, world, lazyPreviews, exportFlags, extended);
         Runs[runId] = run;
         ConnectionToRun[connectionId] = runId;
         Console.WriteLine($"Run {runId} resumed at step {step} of a new total {totalSteps}.");
         return runId;
+    }
+
+    public Models.RunSiteResponse? SiteOf(string runId) =>
+        Runs.TryGetValue(runId, out var run) ? run.Site : null;
+
+    /// <summary>Reads the site and the whole weather series off a freshly built world.</summary>
+    static Models.RunSiteResponse SiteOf(AgroWorld world)
+    {
+        var coverage = world.SkyCoverageSeries();
+        //Raw little-endian float32, the way PreviewResponse.Scene travels. Every platform this
+        //runs on and every browser that reads it back into a Float32Array is little-endian; the
+        //frame format already relies on the same thing.
+        var bytes = new byte[coverage.Length * sizeof(float)];
+        Buffer.BlockCopy(coverage, 0, bytes, 0, bytes.Length);
+        return new Models.RunSiteResponse
+        {
+            Latitude = world.Latitude,
+            Longitude = world.Longitude,
+            Altitude = world.Altitude,
+            Azimuth = world.Azimuth,
+            TimeZone = world.TimeZone.Id,
+            SkyCoverage = bytes,
+        };
     }
 
     public void Begin(string runId)

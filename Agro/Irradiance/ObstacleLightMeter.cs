@@ -101,8 +101,14 @@ public sealed class ObstacleLightMeter
 		public string Orientation { get; internal init; } = string.Empty;
 		/// <summary>Area-weighted mean outward normal.</summary>
 		public Vector3 Normal { get; internal set; }
-		/// <summary>Compass bearing it faces, degrees clockwise from north. Zero when horizontal.</summary>
-		public float AzimuthDegrees => Azimuth(Normal);
+		/// <summary>
+		/// Compass bearing it faces, degrees clockwise from TRUE north. Zero when horizontal.
+		///
+		/// Stored rather than derived from <see cref="Normal"/> on read, because the normal is in
+		/// SCENE space and the scene may be rotated on the compass: the conversion needs
+		/// <see cref="AgroWorld.Azimuth"/>, which a nested class cannot reach.
+		/// </summary>
+		public float AzimuthDegrees { get; internal init; }
 		/// <summary>Tilt from horizontal, degrees: 0 faces up, 90 is vertical.</summary>
 		public float TiltDegrees => Tilt(Normal);
 		/// <summary>
@@ -249,12 +255,25 @@ public sealed class ObstacleLightMeter
 	/// interior.</summary>
 	public float SelectionEnclosedArea_m2 { get; private set; }
 
-	static float Azimuth(Vector3 normal)
+	/// <summary>
+	/// The TRUE compass bearing of a scene-space normal, degrees clockwise from north.
+	/// </summary>
+	/// <remarks>
+	/// In scene space -Z is north and +X is east only when the scene is not rotated. Once
+	/// <see cref="AgroWorld.Azimuth"/> is non-zero the scene's axes sit somewhere else on the
+	/// compass, so the world rotation is ADDED back here - the mirror of
+	/// <see cref="SkyDome.Sample"/> subtracting it from the sun.
+	///
+	/// Without this a facade study run at an azimuth reports every wall under the orientation it
+	/// would have had unrotated, while the sun it was actually lit by came from somewhere else -
+	/// so the exported document's own "S" and "N" groupings contradict its irradiance numbers.
+	/// </remarks>
+	float Azimuth(Vector3 normal)
 	{
-		//North is -Z and east is +X, the convention the whole light model uses.
 		if (MathF.Sqrt(normal.X * normal.X + normal.Z * normal.Z) < 1e-4f)
 			return 0f;
-		var degrees = MathF.Atan2(normal.X, -normal.Z) * (180f / MathF.PI);
+		var degrees = MathF.Atan2(normal.X, -normal.Z) * (180f / MathF.PI) + WorldAzimuthDegrees;
+		degrees %= 360f;
 		if (degrees < 0f)
 			degrees += 360f;
 		//Due north comes out as a hair under zero and used to be reported as 360.
@@ -263,7 +282,7 @@ public sealed class ObstacleLightMeter
 
 	static float Tilt(Vector3 normal) => MathF.Acos(Math.Clamp(normal.Y, -1f, 1f)) * (180f / MathF.PI);
 
-	static int Classify(Vector3 normal)
+	int Classify(Vector3 normal)
 	{
 		if (normal.Y >= HorizontalCosine)
 			return UpClass;
@@ -290,8 +309,15 @@ public sealed class ObstacleLightMeter
 	/// <param name="ranges">Primitive range of every obstacle inside <paramref name="prims"/>.</param>
 	/// <param name="sensorBudget">Target total number of sensors. A lower bound per band can push
 	/// the actual count above it when many bands are selected.</param>
-	public ObstacleLightMeter(IList<IObstacle> obstacles, RayPrimitive[] prims, (int First, int Count)[] ranges, string regexFilter, int sensorBudget, float canopyDepth, float bandHeight)
+	/// <summary>
+	/// Rotation of the scene about the up axis, degrees, so scene-space normals can be reported
+	/// as true compass bearings. See <see cref="Azimuth"/>.
+	/// </summary>
+	readonly float WorldAzimuthDegrees;
+
+	public ObstacleLightMeter(IList<IObstacle> obstacles, RayPrimitive[] prims, (int First, int Count)[] ranges, string regexFilter, int sensorBudget, float canopyDepth, float bandHeight, float worldAzimuthDegrees = 0f)
 	{
+		WorldAzimuthDegrees = worldAzimuthDegrees;
 		CanopyDepth_m = canopyDepth;
 		BandHeight_m = MathF.Max(0.05f, bandHeight);
 
@@ -836,6 +862,8 @@ public sealed class ObstacleLightMeter
 				Side = sides[k],
 				Normal = classNormal[k][c].LengthSquared() > 1e-12f
 					? Vector3.Normalize(classNormal[k][c]) : Vector3.UnitY,
+				AzimuthDegrees = Azimuth(classNormal[k][c].LengthSquared() > 1e-12f
+					? Vector3.Normalize(classNormal[k][c]) : Vector3.UnitY),
 				Area_m2 = classArea[k][c],
 				Depth_m = classArea[k][c] > 0f ? classDepth[k][c] / classArea[k][c] : 0f,
 				Bands = [.. bands],

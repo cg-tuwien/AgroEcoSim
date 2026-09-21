@@ -92,11 +92,51 @@ public sealed class CpuLightSolver
 
 	public void UpdateGrowthGuidance(AgroWorld world, uint timestep, IList<IFormation> formations, IList<IObstacle> obstacles)
 	{
-		if (!world.GrowthLightGuidanceEnabled || !formations.OfType<PlantFormation2>().Any(p => p.AG.NeedsGrowthGuidance())) return;
+		if (!world.GrowthLightGuidanceEnabled) return;
+		GuidancePlants.Clear();
+		var due = false;
+		GuidanceOrganCount = 0;
+		for (int i = 0; i < formations.Count; ++i)
+			if (formations[i] is PlantFormation2 plant)
+			{
+				GuidancePlants.Add(plant.AG);
+				GuidanceOrganCount += plant.AG.Count;
+				if (!due) due = plant.AG.NeedsGrowthGuidance();
+			}
+		if (!due) return;
 		if (GuidanceSceneTimestep != timestep)
 			Run(world, timestep, formations, obstacles, null, null, gatherLeaves: false, guidanceOnly: true);
 		else
-			foreach (var plant in formations.OfType<PlantFormation2>()) plant.AG.RefreshGrowthGuidance(Scene);
+			RefreshGrowthGuidance();
+	}
+
+	readonly List<PlantSubFormation<AboveGroundAgent>> GuidancePlants = [];
+	int GuidanceOrganCount;
+	/// <summary>Stopwatch ticks for geometry preparation and BVH construction.</summary>
+	public long SceneBuildTicks { get; private set; }
+	/// <summary>Stopwatch ticks for leaf irradiance gathering.</summary>
+	public long LeafGatherTicks { get; private set; }
+	/// <summary>Stopwatch ticks for directional growth probes.</summary>
+	public long GuidanceTicks { get; private set; }
+
+	void RefreshGrowthGuidance()
+	{
+		var started = System.Diagnostics.Stopwatch.GetTimestamp();
+		try
+		{
+		// A plant's ray sums and history stay on one worker, so their arithmetic order
+		// remains unchanged. Small scenes avoid partitioning and scheduling overhead.
+		if (GuidancePlants.Count < 4 || GuidanceOrganCount < 2048 || Environment.ProcessorCount == 1)
+		{
+			foreach (var plant in GuidancePlants) plant.RefreshGrowthGuidance(Scene);
+			return;
+		}
+		Parallel.ForEach(Partitioner.Create(0, GuidancePlants.Count, Math.Max(1, GuidancePlants.Count / (Environment.ProcessorCount * 2))), range =>
+		{
+			for (int i = range.Item1; i < range.Item2; ++i) GuidancePlants[i].RefreshGrowthGuidance(Scene);
+		});
+		}
+		finally { GuidanceTicks += System.Diagnostics.Stopwatch.GetTimestamp() - started; }
 	}
 
 	/// <summary>Hemisphere rays per sensor and step. Split between the two faces of a leaf.</summary>
@@ -194,6 +234,7 @@ public sealed class CpuLightSolver
 			return false;
 
 		EnsureStatic(world, obstacles);
+		var buildStarted = System.Diagnostics.Stopwatch.GetTimestamp();
 
 		var slots = formations.Count;
 		EnsureSlots(slots);
@@ -250,11 +291,12 @@ public sealed class CpuLightSolver
 					offsets[((PlantFormation2)formations[i]).AG] = organs;
 
 		Scene.BuildPlants();
+		SceneBuildTicks += System.Diagnostics.Stopwatch.GetTimestamp() - buildStarted;
 		TracedPrimitives = Scene.PrimitiveCount;
 		GuidanceSceneTimestep = timestep;
 		if (guidanceOnly)
 		{
-			foreach (var plant in formations.OfType<PlantFormation2>()) plant.AG.RefreshGrowthGuidance(Scene);
+			RefreshGrowthGuidance();
 			return true;
 		}
 
@@ -270,6 +312,7 @@ public sealed class CpuLightSolver
 
 		if (SensorTotal > 0 && gatherLeaves)
 		{
+			var gatherStarted = System.Diagnostics.Stopwatch.GetTimestamp();
 			var suns = SunDomes;
 			var sunCount = SunSubSteps;
 			var samples = DiffuseSamples;
@@ -295,6 +338,7 @@ public sealed class CpuLightSolver
 				PlantRadiosity[i] = FoliageAlbedo * (float)(sum / count) / (hoursPerTick * MathF.PI);
 				PlantRadiosityKnown[i] = true;
 			});
+			LeafGatherTicks += System.Diagnostics.Stopwatch.GetTimestamp() - gatherStarted;
 		}
 
 		if (Meter != null)
@@ -454,7 +498,7 @@ public sealed class CpuLightSolver
 		var meanGlobal = 0.0;
 		for (int s = 0; s < subSteps; ++s)
 		{
-			SunDomes[s] = SkyDome.Sample(start.AddHours((s + 0.5) * span), AgroWorld.Latitude, AgroWorld.Longitude, coverage);
+			SunDomes[s] = SkyDome.Sample(start.AddHours((s + 0.5) * span), world.Latitude, world.Longitude, coverage, world.Azimuth, world.Altitude);
 			meanGlobal += SunDomes[s].GlobalHorizontal;
 			if (SunDomes[s].GlobalHorizontal > SunDomes[brightest].GlobalHorizontal)
 				brightest = s;
@@ -507,7 +551,7 @@ public sealed class CpuLightSolver
 		if (ObstacleRegex != null)
 		{
 			ObstacleCandidates = obstacles.Count;
-			var meter = obstacles.Count > 0 ? new ObstacleLightMeter(obstacles, array, ranges, ObstacleRegex, ObstacleSensorBudget, CanopyDepth, BandHeight) : null;
+			var meter = obstacles.Count > 0 ? new ObstacleLightMeter(obstacles, array, ranges, ObstacleRegex, ObstacleSensorBudget, CanopyDepth, BandHeight, world.Azimuth) : null;
 			//A filter that matched nothing stays null, so callers can tell "no targets" from "no request".
 			Meter = meter?.Targets.Count > 0 ? meter : null;
 			ObstacleMatches = Meter?.Targets.Count ?? 0;

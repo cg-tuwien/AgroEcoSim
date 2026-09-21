@@ -14,6 +14,7 @@ import type { Vec3 } from './core/Vec3';
 import type { PlantModel } from '../helpers/Scene';
 import type { VisualMappingOptions } from './core/PlantColors';
 import type { FrameLighting } from './core/Lighting';
+import type { SkyCube } from './core/SkyTexture';
 import type { GIFrameInputs, VoxelDebugOptions } from './core/VoxelGrid';
 
 /** A camera state that can be snapshotted, transferred between backends, or scripted. */
@@ -121,6 +122,17 @@ export interface IViewportRenderer {
      * Optional: a backend that only implements the parity tier simply does not offer it.
      */
     setLighting?(lighting: FrameLighting): void;
+
+    /**
+     * The sky background changed: a new dome, or undefined for the flat theme colour.
+     *
+     * Deliberately NOT part of setLighting. FrameLighting's exact shape at the parity setting
+     * is asserted in tests/lighting.test.ts as the definition of the historical look, and a
+     * background is not a term in how geometry is lit - it must not be able to move a lit
+     * pixel. Optional for the same reason the others are: a backend that cannot draw it simply
+     * does not offer it, and keeps clearing to the flat colour.
+     */
+    setSky?(cube: SkyCube | undefined): void;
 
     /**
      * Show or hide the leaf-area-density debug overlay.

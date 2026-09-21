@@ -69,7 +69,7 @@ try {
   //Lighting affects the per-step cost on the WebGL backend, which rebuilds its density field
   //whenever the plants change, so the tier has to be part of the measurement.
   if (process.env.TIER !== undefined && process.env.TIER !== '') {
-    await ev(lightingScript(process.env.TIER, process.env.DAYLIGHT === '1'));
+    await ev(lightingScript(process.env.TIER, process.env.DAYLIGHT === '1', false, process.env.SKY === '1'));
     await sleep(2500);
   }
 

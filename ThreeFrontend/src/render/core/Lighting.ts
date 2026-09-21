@@ -5,7 +5,8 @@
 
 import { RGB, fromHex } from './Color';
 import { Vec3 } from './Vec3';
-import { solarPosition, timeOfTimestep } from '../../helpers/Sun';
+import { DEFAULT_SOLAR_SITE, SolarSite, directionFrom, snapHoursPerTick, solarPosition, timeOfTimestep } from '../../helpers/Sun';
+import { tickSunInstant } from './SkyDome';
 import { VisualMappingOptions } from './PlantColors';
 
 /**
@@ -246,6 +247,7 @@ export function resolveLighting(
     initialDate: string,
     timestep: number,
     hoursPerTick: number,
+    site: SolarSite = DEFAULT_SOLAR_SITE,
 ): FrameLighting {
     //Data ramps are quantitative readouts painted into emissive; lighting them would make one
     //number read as two colours. That includes the daylight sky, so this drops to the exact
@@ -285,8 +287,13 @@ export function resolveLighting(
     if (!options.shadows)
         return { ...base, sunDirection: { x: 0, y: 1, z: 0 }, sunColor: BLACK, shadows: false };
 
-    const when = timeOfTimestep(initialDate, timestep, hoursPerTick);
-    const sun = solarPosition(when);
+    //The instant the SOLVER represents this tick by, not the instant the tick begins - the two
+    //are half an hour apart at the default tick and a whole half-day apart at a 24-hour one.
+    //Shared with the sky so a shadow and the bright side of the dome cannot disagree.
+    const when = tickSunInstant(
+        timeOfTimestep(initialDate, timestep, hoursPerTick, site.timeZone),
+        snapHoursPerTick(hoursPerTick), site.latitude, site.longitude);
+    const sun = solarPosition(when, site.latitude, site.longitude);
 
     //Occlusion still applies at night: it darkens the ambient term, which is the only light
     //there is once the sun is down.
@@ -299,7 +306,10 @@ export function resolveLighting(
 
     return {
         ...base,
-        sunDirection: sun.direction,
+        //The world azimuth is subtracted from the solar azimuth: it says how the scene's axes
+        //are oriented on the compass, so rotating the scene clockwise moves the sun the other
+        //way round it. Nothing in the scene graph moves. See helpers/Sun.directionFrom.
+        sunDirection: directionFrom(sun.altitude, sun.azimuth - site.azimuthDeg),
         sunColor: { r: SUN_COLOR.r * scale, g: SUN_COLOR.g * scale, b: SUN_COLOR.b * scale },
         shadows: true,
     };

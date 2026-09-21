@@ -2,15 +2,67 @@
 //
 //This mirrors the server's notion of time so that a shadow in the viewport falls where the
 //simulation believes the sun is. Every constant here has a counterpart in
-//Agro/AgroWorld.cs; the pointers are given so the two can be checked against each other.
+//Agro/AgroWorld.cs. Cross-references name the C# MEMBER, not a line number: a line number is
+//wrong the first time either file gains a comment, and a pointer that has been wrong once stops
+//being checked at all.
 
-/** Agro/AgroWorld.cs:66. A compile-time constant server-side, so a constant here too. */
+//The site. These are DEFAULTS, not the values in use: latitude, longitude, altitude and the
+//scene's azimuth are per-run settings the Terrain tab edits and the request carries. They
+//remain named here because they are still what a run that says nothing gets, and because
+//tests/sun.test.ts checks the solar geometry against published figures for this site.
+
+/** Mirrors AgroWorld.DefaultLatitude. */
 export const LATITUDE = 48.208333;
-/** Agro/AgroWorld.cs:67. */
+/** Mirrors AgroWorld.DefaultLongitude. */
 export const LONGITUDE = 16.3725;
+/** Metres above sea level. Mirrors AgroWorld.DefaultAltitude. */
+export const ALTITUDE = 188;
+/**
+ * Rotation of the scene about the up axis, in degrees.
+ *
+ * Zero means the scene's +X - its right vector - points east, and an increasing value turns it
+ * clockwise seen from above. It describes how the scene's axes are oriented on the compass and
+ * rotates NOTHING in the scene graph; the only thing that moves is the sun. See directionFrom.
+ */
+export const AZIMUTH = 0;
 
 /**
- * Agro/AgroWorld.cs:86 — the default when the request carries no InitialDate.
+ * The site's time zone when the server has not said what it used.
+ *
+ * The server derives the zone from the coordinates (GeoTimeZone, in the AgroWorld ctor) and
+ * there is no browser API that does the same, so a moved site MUST take the zone from run
+ * metadata rather than guess: getting it wrong shifts every sun position, every shadow and the
+ * whole sky by the offset, while still looking entirely plausible. This is only the fallback
+ * for a run that carries no zone.
+ */
+export const DEFAULT_TIME_ZONE = 'Europe/Vienna';
+
+/**
+ * Everything about WHERE a run is that the sun and the sky depend on.
+ *
+ * One type rather than four loose numbers passed in four different orders: latitude and
+ * longitude are trivially transposable, and the azimuth's sign is invisible until a shadow
+ * points the wrong way.
+ */
+export type SolarSite = {
+    /** Degrees north; negative is south. */
+    latitude: number;
+    /** Degrees east; negative is west. */
+    longitude: number;
+    /** Metres above sea level. */
+    altitudeM: number;
+    /** Scene rotation about the up axis; see AZIMUTH. */
+    azimuthDeg: number;
+    /** The zone the SERVER derived from the coordinates, or undefined for DEFAULT_TIME_ZONE. */
+    timeZone?: string;
+};
+
+export const DEFAULT_SOLAR_SITE: SolarSite = {
+    latitude: LATITUDE, longitude: LONGITUDE, altitudeM: ALTITUDE, azimuthDeg: AZIMUTH,
+};
+
+/**
+ * Mirrors AgroWorld.InitialTime — the default when the request carries no InitialDate.
  *
  * Worth knowing: 1 February at 48°N is a very low sun, so a scene lit with the default date
  * looks far more raking than most people expect.
@@ -47,8 +99,9 @@ export function snapHoursPerTick(requested: number): number {
  * Mirrors AgroWorld.GetTime: the initial date is a LOCAL wall-clock midnight at the site,
  * converted to UTC, then advanced by whole ticks.
  */
-export function timeOfTimestep(initialDate: string, timestep: number, hoursPerTick: number): Date {
-    const startUtc = localMidnightToUtc(initialDate);
+export function timeOfTimestep(initialDate: string, timestep: number, hoursPerTick: number,
+                               timeZone = DEFAULT_TIME_ZONE): Date {
+    const startUtc = localMidnightToUtc(initialDate, timeZone);
     return new Date(startUtc.getTime() + timestep * snapHoursPerTick(hoursPerTick) * 3600_000);
 }
 
@@ -59,7 +112,7 @@ export function timeOfTimestep(initialDate: string, timestep: number, hoursPerTi
  * name is resolved through Intl, which every supported browser has. Falling back to UTC on
  * failure shifts the sun by the zone offset rather than producing nonsense.
  */
-export function localMidnightToUtc(initialDate: string, timeZone = 'Europe/Vienna'): Date {
+export function localMidnightToUtc(initialDate: string, timeZone = DEFAULT_TIME_ZONE): Date {
     const [y, m, d] = initialDate.split('-').map(Number);
     const naive = Date.UTC(y, (m ?? 1) - 1, d ?? 1, 0, 0, 0);
 

@@ -15,6 +15,9 @@ public static class EditorHubClientExtensions
     public static Task RunStarted(this IClientProxy client, string runId)
         => client.SendAsync(nameof(IEditorHub.RunStarted), runId);
 
+    public static Task RunSite(this IClientProxy client, RunSiteResponse site)
+        => client.SendAsync(nameof(IEditorHub.RunSite), site);
+
     public static Task Progress(this IClientProxy client, uint step, uint length)
         => client.SendAsync(nameof(IEditorHub.Progress), step, length);
 

@@ -19,6 +19,14 @@ public interface IEditorHub
     /// reattach to the run after a reload.
     /// </summary>
     Task RunStarted(string runId);
+    /// <summary>
+    /// Where the run is and what weather it will see, sent once just after
+    /// <see cref="RunStarted"/>.
+    ///
+    /// Separate from RunStarted rather than folded into it so an older client, which knows only
+    /// the runId, keeps working: an unhandled SignalR message is simply ignored.
+    /// </summary>
+    Task RunSite(RunSiteResponse site);
     Task Progress(uint step, uint length);
     Task Result(SimulationResponse response);
     Task Preview(PreviewResponse response);
@@ -105,6 +113,18 @@ public class SimulationHub : Hub
     }
 
     /// <summary>
+    /// Sends the run's site and weather, if the runner captured them.
+    ///
+    /// Always AFTER the group join and RunStarted: the client keys it by the run it has just
+    /// been told about, and a site message for a run it does not know yet has nowhere to go.
+    /// </summary>
+    Task SendRunSite(string runId)
+    {
+        var site = Runner.SiteOf(runId);
+        return site == null ? Task.CompletedTask : Clients.Caller.RunSite(site);
+    }
+
+    /// <summary>
     /// Rebuilds the terrain of a stored run, so it can be continued or forked without the user
     /// uploading its model again.
     ///
@@ -165,6 +185,10 @@ public class SimulationHub : Hub
             {
                 await Groups.AddToGroupAsync(Context.ConnectionId, resumed);
                 await Clients.Caller.RunStarted(resumed);
+                //Resent on resume, not just on a fresh run: the weather table is deliberately
+                //not checkpointed (it is rebuilt from the seed on restore), so the resumed world
+                //is the authority on it and the client has no other way to learn it.
+                await SendRunSite(resumed);
             }
             catch { Runner.Cancel(resumed); throw; }
             Runner.Begin(resumed);
@@ -195,6 +219,7 @@ public class SimulationHub : Hub
         {
             await Groups.AddToGroupAsync(Context.ConnectionId, runId);
             await Clients.Caller.RunStarted(runId);
+            await SendRunSite(runId);
         }
         catch
         {

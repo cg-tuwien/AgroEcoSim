@@ -63,9 +63,28 @@ public class AgroWorld : SimulationWorld
 	/// </summary>
 	public readonly float FieldResolution = 0.5f;
 
-	public const float Latitude = 48.208333f;
-	public const float Longitude = 16.3725f;
-	public const float Altitude = 188f; //meters above sea level
+	/// <summary>Default site: Vienna. These are what a request that says nothing gets.</summary>
+	public const float DefaultLatitude = 48.208333f;
+	public const float DefaultLongitude = 16.3725f;
+	public const float DefaultAltitude = 188f; //meters above sea level
+
+	/// <summary>Geographic latitude of the world origin, degrees north.</summary>
+	public readonly float Latitude = DefaultLatitude;
+	/// <summary>Geographic longitude of the world origin, degrees east.</summary>
+	public readonly float Longitude = DefaultLongitude;
+	/// <summary>Height of the world origin above sea level, in metres.</summary>
+	public readonly float Altitude = DefaultAltitude;
+	/// <summary>
+	/// Rotation of the scene about the up axis, in degrees. Zero puts the scene's +X axis due
+	/// east; an increasing value turns the scene clockwise seen from above.
+	/// </summary>
+	/// <remarks>
+	/// It rotates the SUN, not the geometry: the whole of the maths is subtracting it from the
+	/// solar azimuth before the direction vector is built (see <see cref="SkyDome"/>), and
+	/// nothing in the scene, the BVH or any export moves. The frontend mirrors this in
+	/// ThreeFrontend/src/helpers/Sun.ts.
+	/// </remarks>
+	public readonly float Azimuth = 0f;
 
 	public readonly TimeZoneInfo TimeZone = TimeZoneInfo.Local;
 
@@ -95,10 +114,44 @@ public class AgroWorld : SimulationWorld
 	/// a process-wide static, so two simulations running in one server cannot change each other's.</summary>
 	public readonly bool SoftCollisions = true;
 	public readonly bool GrowthLightGuidanceEnabled;
+	public readonly float CollisionGeometryToleranceM;
+	/// <summary>Operational backend preference. Auto stays on CPU until the CUDA prototype
+	/// has demonstrated its end-to-end performance gate on the deployment hardware.</summary>
+	public readonly Collisions.CollisionComputeBackend CollisionBackend;
 
 	public AgroWorld(SimulationRequest? settings = null) : base()
 	{
+		CollisionGeometryToleranceM = settings?.CollisionGeometryToleranceM ?? .0005f;
+		if (!float.IsFinite(CollisionGeometryToleranceM) || CollisionGeometryToleranceM < 0f || CollisionGeometryToleranceM > .0005f)
+			throw new ArgumentOutOfRangeException(nameof(SimulationRequest.CollisionGeometryToleranceM),
+				"Collision geometry tolerance must be finite and between 0 and 0.0005 metres.");
+		CollisionBackend = global::Agro.Collisions.CudaCollisionBackend.RequestedBackend();
 		Deterministic = settings?.Deterministic ?? false;
+
+		//The site has to be settled BEFORE the time-zone lookup below and before Init(), both of
+		//which read it: the zone is derived from the coordinates, and Init() builds the daylight
+		//bitmap from the latitude. Assigning it further down with the rest of the settings would
+		//leave the clock on the default site while everything else moved.
+		Latitude = settings?.Latitude ?? DefaultLatitude;
+		Longitude = settings?.Longitude ?? DefaultLongitude;
+		Altitude = settings?.Altitude ?? DefaultAltitude;
+		//Validated rather than clamped, following CollisionGeometryToleranceM above: an
+		//out-of-range coordinate makes the zone lookup return nonsense and the solar position
+		//NaN, and a NaN sun is a run that quietly produces no light rather than an error.
+		if (!float.IsFinite(Latitude) || Latitude < -90f || Latitude > 90f)
+			throw new ArgumentOutOfRangeException(nameof(SimulationRequest.Latitude),
+				"Latitude must be finite and between -90 and 90 degrees.");
+		if (!float.IsFinite(Longitude) || Longitude < -180f || Longitude > 180f)
+			throw new ArgumentOutOfRangeException(nameof(SimulationRequest.Longitude),
+				"Longitude must be finite and between -180 and 180 degrees.");
+		if (!float.IsFinite(Altitude))
+			throw new ArgumentOutOfRangeException(nameof(SimulationRequest.Altitude),
+				"Altitude must be finite.");
+		//Wrapped rather than rejected: a rotation is periodic, so 370 degrees is a legitimate
+		//way to say 10 and refusing it would be pedantry.
+		var azimuth = settings?.Azimuth ?? 0f;
+		Azimuth = float.IsFinite(azimuth) ? ((azimuth % 360f) + 360f) % 360f : 0f;
+
 		var ianaTimeZone = TimeZoneLookup.GetTimeZone(Latitude, Longitude).Result;
 		#if WINDOWS
 		TimeZone = TimeZoneInfo.FindSystemTimeZoneById(TimeZoneConverter.TZConvert.IanaToWindows(ianaTimeZone));
@@ -143,7 +196,19 @@ public class AgroWorld : SimulationWorld
 		GrowthLightGuidanceEnabled = (settings?.GrowthLightGuidanceEnabled ?? true) && (settings?.RenderMode ?? 0) != 0;
 		Irradiance = new IrradianceClient(Latitude, Longitude, settings?.RenderMode ?? 0, settings?.SamplesPerPixel ?? 512,
 			settings?.LightSamples ?? 16, settings?.LeafAreaIndexObstacles, settings?.LeafAreaIndexSensors ?? 32768,
-			settings?.LeafAreaIndexDepth ?? 3f, settings?.LeafAreaIndexBandHeight ?? 0.5f);
+			settings?.LeafAreaIndexDepth ?? 3f, settings?.LeafAreaIndexBandHeight ?? 0.5f, Azimuth, Altitude);
+
+		//The external renderers live in their own repository (agroeco-mts3) and compute the sun
+		//from the La/Lo headers and the tick time. Az is now sent alongside, but until their
+		//sun is corrected by it they will light the scene as if the scene were not rotated -
+		//while the CPU solver, the growth guidance and the viewport all use the rotated sun.
+		//Said out loud rather than refused: the combination becomes correct the moment the
+		//renderer reads the header, and refusing it would block that.
+		if (Azimuth != 0f && ((settings?.RenderMode ?? 0) == 1 || (settings?.RenderMode ?? 0) == 2))
+			Console.WriteLine($"WARNING: Azimuth is {Azimuth} deg but RenderMode is " +
+				$"{settings?.RenderMode}. The external renderer computes its own sun and will " +
+				"ignore the rotation unless it reads the Az header, so its irradiance will not " +
+				"match the internal solver's.");
 
 		Init();
 	}
@@ -281,6 +346,25 @@ public class AgroWorld : SimulationWorld
 	/// </summary>
 	internal float GetTemperature(uint timestep) => 20;
 	internal float GetAmbientLight(uint timestep) => 1f - Weather[timestep].SkyCoverage;
+
+	/// <summary>
+	/// Cloud cover for every timestep of the run, 0 = clear .. 1 = fully overcast.
+	/// </summary>
+	/// <remarks>
+	/// The whole series, not a per-step lookup, because the whole series exists before step 0
+	/// does: <see cref="Init"/> plans it month by month at construction. Sending it once lets the
+	/// viewport preview the sky of any step the playhead lands on - including steps whose frames
+	/// were evicted and steps an offline export renders without ever touching the playhead -
+	/// without adding anything to the per-frame format.
+	/// </remarks>
+	public float[] SkyCoverageSeries()
+	{
+		if (Weather == null) return [];
+		var result = new float[Weather.Length];
+		for (int i = 0; i < Weather.Length; ++i)
+			result[i] = Weather[i].SkyCoverage;
+		return result;
+	}
 	internal bool GetDaylight(uint timestep) => Daylight?.Get((int)timestep) ?? true;
 
 	internal Pcg RNG = new(42);

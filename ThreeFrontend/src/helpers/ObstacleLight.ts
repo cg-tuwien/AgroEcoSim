@@ -87,6 +87,10 @@ export interface IObstacleLightMeta {
     renderer: string;
     latitude: number;
     longitude: number;
+    /** Metres above sea level. Absent on documents exported before the site was a setting. */
+    altitude?: number;
+    /** Scene rotation about the up axis, degrees. Absent on older documents. */
+    azimuth?: number;
     timeZone: string;
     initialDate: string;
     hoursPerTick: number;

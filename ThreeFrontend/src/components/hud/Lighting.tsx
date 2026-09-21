@@ -47,6 +47,9 @@ export function Lighting() {
         {box('lightLeafTranslucency', appstate.lightLeafTranslucency,
             'translucency',
             'Leaves pass light through to their shaded face, so a canopy seen from below glows instead of going dark. The brighter face of a leaf bleeds into the darker one and is itself left exactly as it was, so a sunlit crown is unchanged and only the undersides lift. Off by default: unlike the other switches this one is live with no sun at all, because it modulates the ambient sky.')}
+        {box('lightSky', appstate.lightSky,
+            'sky',
+            'Replaces the flat background with the sky the simulation integrates: the CIE general sky, scaled to the clear-sky irradiance for this site, date and time of day, and flattened by the cloud cover of the current step. Background only \u2014 it adds no light to the scene, so pair it with daylight. At night it is genuinely black and under heavy cloud genuinely grey, because that is what the sun is doing.')}
         {box('lightSecondBounce', appstate.lightSecondBounce,
             '2 bounces',
             'A second indirect bounce, which lifts the interior of a dense canopy. Only applies with indirect light on.',
