@@ -1,5 +1,5 @@
 using System.Numerics;
-using System.Collections.Concurrent;
+using System.Diagnostics;
 using AgentsSystem;
 
 namespace Agro.Collisions;
@@ -8,8 +8,6 @@ public sealed partial class CollisionWorld
 {
     readonly record struct ContactKey(PlantFormation2 A, ulong OrganA, PlantFormation2 B, ulong OrganB);
     readonly record struct RememberedContact(Vector3 Normal, int FeatureA, int FeatureB);
-    readonly ConcurrentDictionary<ContactKey, RememberedContact> PersistentContacts = new();
-    readonly ConcurrentDictionary<ContactKey, byte> SeenContacts = new();
     readonly record struct PairQueryKey(ulong A, PlantFormation2 B, ulong OrganB, bool Previous);
     readonly record struct PairQuery(ContactShape A, ContactShape B, OrganPose Junction, float Search, FoliageContact Hit, bool WholeBody);
     struct PairCacheEntry { public bool Used; public PairQueryKey Key; public PairQuery Query; }
@@ -24,20 +22,15 @@ public sealed partial class CollisionWorld
         }
     }
     readonly Dictionary<PlantFormation2,PairCache> PairQueries = [];
-    [ThreadStatic] static List<(int, int)>? OwnPairsBuffer;
-    [ThreadStatic] static List<int>? CrossPairHits;
-    [ThreadStatic] static List<int>? CrossReachHits;
     readonly Dictionary<PlantFormation2,HashSet<int>> CrossStages = [];
-    readonly List<List<(PlantFormation2 A,PlantFormation2 B)>> CrossBatches = [];
     readonly List<int> PairHits = [];
     readonly Bvh PlantBounds = new();
     readonly List<(int, Bvh.BoundingBox)> PlantLeaves = [];
     readonly List<int> TrialPlants = [];
     readonly List<int> TrialOrgans = [];
     readonly Dictionary<PlantFormation2, HashSet<int>> UnresolvedPlants = [];
-    readonly ConcurrentDictionary<(PlantFormation2, int), Vector3> RejectionNormals = new();
     public long RejectedMotions { get; private set; }
-    public int ActiveFoliageContacts => PersistentContacts.Count;
+    public int ActiveFoliageContacts => Work.Values.Sum(w => w.Contacts.Count);
     /// <summary>Contacts already present in the preceding geometry that could not be repaired.
     /// New movement is restored before this diagnostic is incremented.</summary>
     public int UnresolvedFoliageContacts { get; private set; }
@@ -65,86 +58,143 @@ public sealed partial class CollisionWorld
 
     bool VisitPairs(List<PlantFormation2> plants, bool correct, bool swept)
     {
-        int ownFound = 0;
+        var broadStart = Stopwatch.GetTimestamp();
         RefreshNeighbours(plants);
-        foreach(var plant in plants) if(!PairQueries.ContainsKey(plant)) PairQueries.Add(plant,new());
-        void VisitOwn(PlantFormation2 plant)
+        RefreshSchedule();
+        foreach (var plant in plants) Work[plant].Capture();
+        BroadPhaseTicks += Stopwatch.GetTimestamp() - broadStart;
+        long discovery = 0, queries = 0;
+        void PrepareOwn(PlantFormation2 plant)
         {
             var ag = plant.AG;
-            var pairs = OwnPairsBuffer ??= [];
-            pairs.Clear();
-            ag.CollisionBvh.GetOverlappingPairs(pairs, (a, b) => !Connected(ag, a, b), collisionsOnly: false);
-            PairQueries[plant].Reserve(pairs.Count);
-            var contact = false;
-            foreach (var (a, b) in pairs) contact |= VisitPair(plant, a, plant, b, correct, swept);
-            if (contact) Interlocked.Exchange(ref ownFound, 1);
-        }
-        // Within-plant constraints write only that plant. Finish them all before the ordered
-        // cross-plant pass; the resulting poses are independent of task scheduling.
-        if (plants.Count < 2) foreach (var plant in plants) VisitOwn(plant);
-        else Parallel.ForEach(plants, VisitOwn);
-        var found = ownFound != 0;
-        if (!CollisionSettings.InterPlantPass) return found;
-        foreach(var plant in plants)
-        {
-            if(!CrossStages.TryGetValue(plant,out var stages)) CrossStages.Add(plant,stages=[]);
-            stages.Clear();
-        }
-        foreach(var batch in CrossBatches) batch.Clear();
-        foreach(var pair in Neighbours)
-        {
-            var a=CrossStages[pair.A];var b=CrossStages[pair.B];var stage=0;
-            while(a.Contains(stage)||b.Contains(stage)) ++stage;
-            while(CrossBatches.Count<=stage) CrossBatches.Add([]);
-            CrossBatches[stage].Add(pair);a.Add(stage);b.Add(stage);
-        }
-        int crossFound=0;
-        void VisitCross((PlantFormation2 A,PlantFormation2 B) pair)
-        {
-            var (pa,pb)=pair;
-            var a = pa.AG; var b = pb.AG;
-            var reachHits=CrossReachHits??=[];var pairHits=CrossPairHits??=[];
-            a.TryGetWorldBounds(out var al, out var ah); b.TryGetWorldBounds(out var bl, out var bh);
-            reachHits.Clear(); a.QueryWorldBounds(Vector3.Max(al, bl), Vector3.Min(ah, bh), reachHits);
-            var contact=false;
-            foreach (var i in reachHits)
+            var work = Work[plant]; var pairs = work.OwnPairs;
+            var start = Stopwatch.GetTimestamp();
+            if (work.OwnRevision != ag.CollisionGeometryRevision)
             {
-                var current = Shape(a, i); var bounds = Previous(a, i, current).SweptBounds(current);
-                pairHits.Clear(); b.QueryWorldBounds(bounds.Min, bounds.Max, pairHits);
-                foreach (var j in pairHits) contact |= VisitPair(pa, i, pb, j, correct, swept);
+                pairs.Clear();
+                ag.CollisionBvh.GetOverlappingPairs(pairs, collisionsOnly: false);
+                var retained = 0;
+                for (int k = 0; k < pairs.Count; ++k)
+                {
+                    var (a, b) = pairs[k];
+                    if (Connected(ag, a, b)) continue;
+                    pairs[retained++] = ag.GetOrganId(a) > ag.GetOrganId(b) ? (b, a) : (a, b);
+                }
+                pairs.RemoveRange(retained, pairs.Count - retained);
+                pairs.Sort(work.PairOrder);
+                work.OwnRevision = ag.CollisionGeometryRevision;
             }
-            if(contact) Interlocked.Exchange(ref crossFound,1);
+            PairQueries[plant].Reserve(pairs.Count); work.ReserveEvaluations(pairs.Count);
+            Interlocked.Add(ref discovery, Stopwatch.GetTimestamp() - start);
         }
-        // Greedy edge colouring of the ordered neighbour graph: no two jobs in a batch
-        // write the same plant. Every plant receives corrections in a fixed batch order,
-        // independent of worker scheduling. Geometry is applied only after all batches.
-        foreach(var batch in CrossBatches)
-            if(batch.Count<2) foreach(var pair in batch) VisitCross(pair);
-            else Parallel.ForEach(batch,VisitCross);
-        return found || crossFound!=0;
+        // The CPU subdivision budget is part of the current acceptance policy. A
+        // stronger device sweep certificate could release a tip that CPU conservatively
+        // suspends. Keep those decisions on CPU; offload endpoint correction checks.
+        var devicePhase = CudaAvailable && !swept;
+        void VisitOwn(PlantFormation2 plant)
+        {
+            if (!devicePhase) PrepareOwn(plant);
+            var work = Work[plant]; var pairs = work.OwnPairs;
+            var afterDiscovery = Stopwatch.GetTimestamp();
+            work.Found = false;
+            MeasureJob(work, () =>
+            {
+                for (int k = 0; k < pairs.Count; ++k)
+                {
+                    if (devicePhase && CudaAvailable && work.Certified.Length > k && work.Certified[k]) { ++work.Candidates; continue; }
+                    var (a, b) = pairs[k];
+                    work.Found |= VisitPair(plant, a, plant, b, correct, swept);
+                }
+            });
+            // One reduction per job, rather than one contended atomic per candidate.
+            Interlocked.Add(ref queries, Stopwatch.GetTimestamp() - afterDiscovery);
+        }
+        if (devicePhase)
+        {
+            RunJobs(plants, plants.Sum(p => (long)p.AG.Count), PrepareOwn);
+            CertifyOwnBatch(plants, swept);
+        }
+        RunJobs(plants, plants.Sum(p => (long)p.AG.Count), VisitOwn);
+        var found = plants.Any(p => Work[p].Found);
+        void PrepareCross(CrossWork job)
+        {
+            var pa = job.A.Plant; var pb = job.B.Plant;
+            var a = pa.AG; var b = pb.AG;
+            var start = Stopwatch.GetTimestamp();
+            if (job.RevisionA != a.CollisionGeometryRevision || job.RevisionB != b.CollisionGeometryRevision)
+            {
+                job.Pairs.Clear();
+                a.CollisionBvh.GetOverlappingPairs(b.CollisionBvh, a.FieldOrigin, b.FieldOrigin, job.Pairs);
+                job.Pairs.Sort(job.PairOrder);
+                job.RevisionA = a.CollisionGeometryRevision; job.RevisionB = b.CollisionGeometryRevision;
+            }
+            Interlocked.Add(ref discovery, Stopwatch.GetTimestamp() - start);
+        }
+        void VisitCross(CrossWork job)
+        {
+            var pa = job.A.Plant; var pb = job.B.Plant;
+            var afterDiscovery = Stopwatch.GetTimestamp();
+            job.Found = false;
+            MeasureJob(job.A, () =>
+            {
+                for (int k = 0; k < job.Pairs.Count; ++k)
+                {
+                    if (!swept && CudaAvailable && job.Certified.Length > k && job.Certified[k]) { ++job.A.Candidates; continue; }
+                    var (i, j) = job.Pairs[k];
+                    job.Found |= VisitPair(pa, i, pb, j, correct, swept);
+                }
+            });
+            Interlocked.Add(ref queries, Stopwatch.GetTimestamp() - afterDiscovery);
+        }
+        if (CollisionSettings.InterPlantPass)
+            foreach (var batch in ScheduledBatches)
+            {
+                RunJobs(batch, batch.Sum(j => (long)j.A.Plant.AG.Count + j.B.Plant.AG.Count), PrepareCross);
+                CertifyCrossBatch(batch, swept);
+                RunJobs(batch, batch.Sum(j => (long)Math.Max(j.Pairs.Count, j.A.Plant.AG.Count + j.B.Plant.AG.Count)), VisitCross);
+                foreach (var job in batch) found |= job.Found;
+            }
+        PairDiscoveryTicks += discovery; PairQueryTicks += queries;
+        return found;
     }
 
     bool VisitPair(PlantFormation2 pa, int i, PlantFormation2 pb, int j, bool correct, bool swept)
     {
         var a = pa.AG; var b = pb.AG;
         if (!a.IsCollisionEligiblePublic(i) || !b.IsCollisionEligiblePublic(j)) return false;
-        Interlocked.Increment(ref InterPlantCandidates);
+        var work = Work[pa]; ++work.Candidates;
         var sa = Shape(a, i); var sb = Shape(b, j);
         var oldA = Previous(a, i, sa); var oldB = Previous(b, j, sb);
         var reach = sa.Pose.Radius + sb.Pose.Radius;
         var stop = pa == pb ? CommonAncestor(a, i, j) : -1;
         var started = TraceSlowPairs ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
-        var hit = CachedPairDistance(pa,i,pb,j,stop,sa,sb,reach+FoliageGeometry.Skin,false);
         var key = new ContactKey(pa, a.GetOrganId(i), pb, b.GetOrganId(j));
+        var evaluationKey = new EvaluationKey(key.OrganA, pb, key.OrganB);
+        ref var evaluated = ref work.Evaluations[evaluationKey.GetHashCode() & (work.Evaluations.Length - 1)];
+        var versionA = work.Geometry[i].Revision; var versionB = Work[pb].Geometry[j].Revision;
+        var commonVersion = stop < 0 ? 0 : work.Geometry[stop].Revision;
+        var commonId = stop < 0 ? 0UL : a.GetOrganId(stop);
+        FoliageContact hit; bool crossing;
+        if (evaluated.Used && evaluated.Key == evaluationKey && evaluated.Swept == swept
+            && evaluated.A == versionA && evaluated.B == versionB && evaluated.Common == commonVersion && evaluated.CommonId == commonId)
+        {
+            hit = evaluated.Hit; crossing = evaluated.Crossing; ++work.Reused;
+        }
+        else
+        {
+            hit = CachedPairDistance(pa,i,pb,j,stop,sa,sb,reach+FoliageGeometry.Skin,false);
+            var oldReach = oldA.Pose.Radius + oldB.Pose.Radius;
+            var oldContact = swept ? oldA==sa && oldB==sb ? hit
+                : CachedPairDistance(pa,i,pb,j,stop,oldA,oldB,oldReach+FoliageGeometry.Skin,true) : default;
+            var initialOverlap = swept && oldContact.Distance < oldReach - FoliageGeometry.Skin;
+            var movement = oldA.MotionBound(sa)+oldB.MotionBound(sb);
+            var sweptReach = MathF.Max(oldA.Pose.Radius,sa.Pose.Radius)+MathF.Max(oldB.Pose.Radius,sb.Pose.Radius);
+            var separatedPath = stop<0 && oldContact.Distance >= sweptReach+movement+FoliageGeometry.Skin;
+            crossing = swept && !initialOverlap && !separatedPath && !RelativeSweepClear(a, stop, oldA, sa, oldB, sb);
+            evaluated = new() { Used = true, Key = evaluationKey, Swept = swept, A = versionA, B = versionB,
+                Common = commonVersion, CommonId = commonId, Hit = hit, Crossing = crossing };
+        }
         var touching = hit.Distance < reach + FoliageGeometry.Skin;
-        var oldReach = oldA.Pose.Radius + oldB.Pose.Radius;
-        var oldContact = swept ? oldA==sa && oldB==sb ? hit
-            : CachedPairDistance(pa,i,pb,j,stop,oldA,oldB,oldReach+FoliageGeometry.Skin,true) : default;
-        var initialOverlap = swept && oldContact.Distance < oldReach - FoliageGeometry.Skin;
-        var movement = oldA.MotionBound(sa)+oldB.MotionBound(sb);
-        var sweptReach = MathF.Max(oldA.Pose.Radius,sa.Pose.Radius)+MathF.Max(oldB.Pose.Radius,sb.Pose.Radius);
-        var separatedPath = stop<0 && oldContact.Distance >= sweptReach+movement+FoliageGeometry.Skin;
-        var crossing = swept && !initialOverlap && !separatedPath && !RelativeSweepClear(a, stop, oldA, sa, oldB, sb);
         if (TraceSlowPairs)
         {
             var ms=(System.Diagnostics.Stopwatch.GetTimestamp()-started)*1000.0/System.Diagnostics.Stopwatch.Frequency;
@@ -152,21 +202,20 @@ public sealed partial class CollisionWorld
         }
         if (!touching && !crossing) return false;
         var normal = ContactNormal(hit, oldA.Pose.Base - oldB.Pose.Base,
-            PersistentContacts.TryGetValue(key, out var memory) ? memory.Normal : null);
+            work.Contacts.TryGetValue(key, out var memory) ? memory.Value.Normal : null);
         if (touching)
         {
-            SeenContacts.TryAdd(key, 0);
-            PersistentContacts[key] = new(normal, hit.FeatureA, hit.FeatureB);
+            work.Contacts[key] = new(new(normal, hit.FeatureA, hit.FeatureB), ContactEpoch);
         }
         var penetration = hit.Distance < reach - FoliageGeometry.Skin;
         if (!penetration && !crossing) return false;
         if (TraceContacts && InterPlantCandidates < 2000)
-            Console.WriteLine($"CONTACT t={pa.World.Timestep} {i}:{a.GetOrgan(i)} p={a.GetParent(i)} L={sa.Pose.Length} / {j}:{b.GetOrgan(j)} p={b.GetParent(j)} L={sb.Pose.Length} d={hit.Distance} oldD={oldContact.Distance} reach={reach} swept={crossing} motion={movement} oldA={oldA.Pose} A={sa.Pose} oldB={oldB.Pose} B={sb.Pose}");
+            Console.WriteLine($"CONTACT t={pa.World.Timestep} {i}:{a.GetOrgan(i)} / {j}:{b.GetOrgan(j)} d={hit.Distance} reach={reach} swept={crossing}");
         if (!correct)
         {
             var rootA = RejectionRoot(a, i, stop); var rootB = RejectionRoot(b, j, stop);
             Reject(pa, rootA); Reject(pb, rootB);
-            RejectionNormals.TryAdd((pa, rootA), normal); RejectionNormals.TryAdd((pb, rootB), -normal);
+            Work[pa].Normals.TryAdd(rootA, normal); Work[pb].Normals.TryAdd(rootB, -normal);
             return true;
         }
         var depth = MathF.Max(FoliageGeometry.Skin, reach - hit.Distance + FoliageGeometry.Skin);
@@ -185,7 +234,7 @@ public sealed partial class CollisionWorld
             a.QueueContactCorrection(i, hit.A, normal, depth * 0.5f, stop);
             b.QueueContactCorrection(j, hit.B, -normal, depth * 0.5f, stop);
         }
-        Interlocked.Increment(ref InterPlantContacts);
+        ++work.ContactsCount;
         return true;
     }
 
@@ -213,7 +262,7 @@ public sealed partial class CollisionWorld
         var cache=PairQueries[pa].Entries;
         var key=new PairQueryKey(ag.GetOrganId(i),pb,pb.AG.GetOrganId(j),previous);
         ref var entry=ref cache[key.GetHashCode() & (cache.Length-1)];
-        var query=entry.Query;
+        ref readonly var query=ref entry.Query;
         if(entry.Used && entry.Key==key && query.A==a && query.B==b
             && query.Junction==junction && query.Search==search)
             return Result(query.Hit);
@@ -232,7 +281,7 @@ public sealed partial class CollisionWorld
         }
         var whole=common<0 || !NearAttachment(a,b,junction.Tip,
             MathF.Max(.002f,2f*junction.Radius+a.Pose.Radius+b.Pose.Radius));
-        var hit=whole ? FoliageGeometry.Distance(a,b,search+(common<0?.005f:0f))
+        var hit=whole ? DetailedDistance(a,b,search+(common<0?.005f:0f),pa.World.CollisionGeometryToleranceM,Work[pa])
             : LocalPairDistance(a,b,search,junction,true);
         // Bounded, direct-mapped storage survives worker migration. Evict one entry on a
         // hash collision, not every cached pair when a crowded crown exceeds the capacity.
@@ -338,10 +387,12 @@ public sealed partial class CollisionWorld
             var a = Shape(ag, i); var oldA = Previous(ag, i, a);
             var bounds = oldA.SweptBounds(a);
             TrialPlants.Clear(); PlantBounds.QueryOverlaps(bounds, TrialPlants);
+            TrialPlants.Sort();
             foreach (var pi in TrialPlants)
             {
                 var other = ActivePlants[pi].AG;
                 TrialOrgans.Clear(); other.QueryWorldBounds(bounds.Min, bounds.Max, TrialOrgans);
+                TrialOrgans.Sort(Work[other.Plant].OrganOrder);
                 foreach (var j in TrialOrgans)
                 {
                     if (!other.IsCollisionEligiblePublic(j) || other == ag && (i == j || Connected(ag, i, j))) continue;
@@ -362,8 +413,8 @@ public sealed partial class CollisionWorld
 
     internal void RefreshPlantBounds(PlantFormation2 plant)
     {
-        if (plant.AG.TryGetWorldBounds(out var lo,out var hi))
-            PlantBounds.RefitLeaf(ActivePlants.IndexOf(plant),new(lo,hi));
+        if (PlantIndices.TryGetValue(plant, out var index) && plant.AG.TryGetWorldBounds(out var lo,out var hi))
+            PlantBounds.RefitLeaf(index,new(lo,hi));
     }
 
     // A newly developing organ is not in the live graph yet. Its contact load still acts
@@ -377,10 +428,14 @@ public sealed partial class CollisionWorld
         var hit=CollisionSettings.ObstaclePass && Static.ShapeContact(shape,ag.GetContactPose(support).Tip,
             StaticSurface.Obstacle,out point,out normal,out depth);
         if (!hit && ag.Plant.World.SoftCollisions)
-            foreach(var plant in ActivePlants)
+        {
+            TrialPlants.Clear(); PlantBounds.QueryOverlaps(shape.Bounds, TrialPlants); TrialPlants.Sort();
+            foreach(var pi in TrialPlants)
             {
+                var plant = ActivePlants[pi];
                 var other=plant.AG;
                 PairHits.Clear();other.QueryWorldBounds(shape.Bounds.Min,shape.Bounds.Max,PairHits);
+                PairHits.Sort(Work[plant].OrganOrder);
                 foreach(var j in PairHits)
                 {
                     if(other==ag && (j==support || retired.Contains(other.GetOrganId(j)))) continue;
@@ -393,6 +448,7 @@ public sealed partial class CollisionWorld
                 }
                 if(hit) break;
             }
+        }
         if(!hit) return false;
         ag.BeginContactSweep();
         var queued=ag.QueueContactCorrection(support,point,normal,depth+CollisionSettings.ContactTolerance);
@@ -410,17 +466,16 @@ public sealed partial class CollisionWorld
 
     void Reject(PlantFormation2 plant, int organ)
     {
-        HashSet<int> rejected;
-        lock (UnresolvedPlants)
-            if (!UnresolvedPlants.TryGetValue(plant, out rejected!)) UnresolvedPlants.Add(plant, rejected = []);
-        rejected.Add(organ);
+        Work[plant].Rejected.Add(organ);
     }
 
     void ResolveVegetation(List<PlantFormation2> plants)
     {
-        SeenContacts.Clear();
+        ++ContactEpoch;
+        LastCorrectionRounds = LastValidationRounds = LastFallbackRounds = 0;
         for (int round = 0; round < CollisionSettings.HardRounds; ++round)
         {
+            ++LastCorrectionRounds;
             foreach (var p in plants) p.AG.BeginContactSweep();
             var contact = VisitPairs(plants, correct: true, swept: false);
             var moved = false;
@@ -433,18 +488,18 @@ public sealed partial class CollisionWorld
         ExpandRejection = false;
         for (int pass = 0; pass < 8; ++pass)
         {
+            ++LastValidationRounds;
             ExpandRejection = pass > 0;
-            UnresolvedPlants.Clear();
-            RejectionNormals.Clear();
+            ClearRejections();
             if (!VisitPairs(plants, correct: false, swept: true)) break;
             foreach (var plant in plants)
             {
-                if (!UnresolvedPlants.TryGetValue(plant, out var rejected)) continue;
+                if (!UnresolvedPlants.TryGetValue(plant, out var rejected) || rejected.Count == 0) continue;
                 foreach (var i in rejected.ToArray())
                 {
                     if (pass == 0)
                     {
-                        RejectionNormals.TryGetValue((plant, i), out var normal);
+                        Work[plant].Normals.TryGetValue(i, out var normal);
                         bool Accept() => GrowthTrialClear(plant, i);
                         if (plant.AG.TryRedirectGrowth(i, normal, Accept)) { rejected.Remove(i); continue; }
                         if (plant.AG.TryShortenGrowth(i, Accept)) rejected.Remove(i);
@@ -462,16 +517,17 @@ public sealed partial class CollisionWorld
         var restoredComponents=new HashSet<(PlantFormation2,ulong)>();
         for (int pass=0, limit=plants.Sum(p=>p.AG.Count)+1; pass<limit; ++pass)
         {
-            UnresolvedPlants.Clear(); RejectionNormals.Clear();
+            ++LastFallbackRounds;
+            ClearRejections();
             VisitPairs(plants,correct:false,swept:true);
             foreach (var plant in plants)
                 for (int i=0; i<plant.AG.Count; ++i)
                     if (!StaticAdmissible(plant,i)) Reject(plant,i);
-            if (UnresolvedPlants.Count==0) break;
+            if (!HasRejections) break;
             var changed = false;
             foreach (var plant in plants)
             {
-                if (!UnresolvedPlants.TryGetValue(plant,out var rejected)) continue;
+                if (!UnresolvedPlants.TryGetValue(plant,out var rejected) || rejected.Count == 0) continue;
                 // Revert the contacting increments as well as their moving supports.
                 // Keeping only the farthest support can leave the leaf's own growth
                 // penetrating after the support returns to its previous orientation.
@@ -490,7 +546,7 @@ public sealed partial class CollisionWorld
             {
                 // These are candidates from BEFORE the last restoration. Revalidating
                 // after it avoids reporting a repaired contact as an unresolved one.
-                UnresolvedPlants.Clear(); RejectionNormals.Clear();
+                ClearRejections();
                 VisitPairs(plants, correct:false, swept:true);
                 UnresolvedFoliageContacts=UnresolvedPlants.Sum(p=>p.Value.Count);
                 break;
@@ -498,12 +554,18 @@ public sealed partial class CollisionWorld
         }
         if (restoredComponents.Count>0)
             foreach (var plant in plants) RefreshContactLoads(plant);
-        foreach (var key in PersistentContacts.Keys.Where(k => !SeenContacts.ContainsKey(k)).ToArray())
+        foreach (var work in Work.Values)
         {
-            PersistentContacts.TryRemove(key, out _);
-            var a = key.A.AG.FindOrgan(key.OrganA); var b = key.B.AG.FindOrgan(key.OrganB);
-            if (a >= 0) key.A.AG.WakeGrowth(a);
-            if (b >= 0) key.B.AG.WakeGrowth(b);
+            work.Expired.Clear();
+            foreach (var (key, memory) in work.Contacts)
+                if (memory.Seen != ContactEpoch) work.Expired.Add(key);
+            foreach (var key in work.Expired)
+            {
+                work.Contacts.Remove(key);
+                var a = key.A.AG.FindOrgan(key.OrganA); var b = key.B.AG.FindOrgan(key.OrganB);
+                if (a >= 0) key.A.AG.WakeGrowth(a);
+                if (b >= 0) key.B.AG.WakeGrowth(b);
+            }
         }
     }
 
@@ -523,11 +585,14 @@ public sealed partial class CollisionWorld
             && Static.ShapeContact(shape, trusted, StaticSurface.Soil, out _, out _, out _)) return false;
         if (!ag.Plant.World.SoftCollisions) return true;
         var bounds = from.SweptBounds(shape);
-        foreach (var plant in ActivePlants)
+        TrialPlants.Clear(); PlantBounds.QueryOverlaps(bounds, TrialPlants); TrialPlants.Sort();
+        foreach (var pi in TrialPlants)
         {
+            var plant = ActivePlants[pi];
             var other = plant.AG;
             if (!other.TryGetWorldBounds(out var lo, out var hi) || !bounds.Intersects(new(lo, hi))) continue;
             PairHits.Clear(); other.QueryWorldBounds(bounds.Min, bounds.Max, PairHits);
+            PairHits.Sort(Work[plant].OrganOrder);
             foreach (var j in PairHits)
             {
                 if (other == ag)
@@ -565,24 +630,31 @@ public sealed partial class CollisionWorld
     internal void WriteState(BinaryWriter writer, IReadOnlyList<IFormation> formations)
     {
         var indices = formations.Select((f, i) => (f, i)).ToDictionary(x => x.f, x => x.i);
-        var contacts = PersistentContacts.OrderBy(x => indices[x.Key.A]).ThenBy(x => x.Key.OrganA)
+        var contacts = Work.Values.SelectMany(w => w.Contacts).OrderBy(x => indices[x.Key.A]).ThenBy(x => x.Key.OrganA)
             .ThenBy(x => indices[x.Key.B]).ThenBy(x => x.Key.OrganB).ToArray();
         writer.Write(contacts.Length);
         foreach (var (key, value) in contacts)
         {
             writer.Write(indices[key.A]); writer.Write(key.OrganA); writer.Write(indices[key.B]); writer.Write(key.OrganB);
-            PlantSubFormation<AboveGroundAgent>.WriteValue(writer, value);
+            // Keep the v3 payload byte layout; visit epochs are reconstructible.
+            PlantSubFormation<AboveGroundAgent>.WriteValue(writer, value.Value);
         }
         writer.Write(RejectedMotions);
     }
     internal void ReadState(BinaryReader reader, IReadOnlyList<IFormation> formations)
     {
-        PersistentContacts.Clear(); var count = reader.ReadInt32();
+        Work.Clear(); PairQueries.Clear(); CrossWorkByPair.Clear(); ScheduledBatches.Clear();
+        PreviousNeighbours.Clear(); PlantIndices.Clear(); UnresolvedPlants.Clear();
+        CrossStages.Clear(); ScheduledPairs.Clear(); RetiredPairs.Clear();
+        DeviceGroups.Clear(); DeviceCopies.Clear();
+        ScheduleInvalidated = PlantMembershipChanged = true;
+        ContactEpoch = 0; var count = reader.ReadInt32();
         for (int i = 0; i < count; ++i)
         {
             var key = new ContactKey((PlantFormation2)formations[reader.ReadInt32()], reader.ReadUInt64(),
                 (PlantFormation2)formations[reader.ReadInt32()], reader.ReadUInt64());
-            PersistentContacts.TryAdd(key, PlantSubFormation<AboveGroundAgent>.ReadValue<RememberedContact>(reader));
+            if (!Work.TryGetValue(key.A, out var work)) Work.Add(key.A, work = new(key.A));
+            work.Contacts.TryAdd(key, new(PlantSubFormation<AboveGroundAgent>.ReadValue<RememberedContact>(reader), -1));
         }
         RejectedMotions = reader.ReadInt64();
     }

@@ -32,7 +32,7 @@ public class Bvh
         }
     }
 
-    readonly struct Node
+    internal readonly struct Node
     {
         public readonly BoundingBox Bounds;
         public readonly int Left;
@@ -62,17 +62,26 @@ public class Bvh
 
     int root = -1;
     readonly List<Node> nodes = new();
+    internal int Root => root;
+    internal ReadOnlySpan<Node> Nodes => CollectionsMarshal.AsSpan(nodes);
     readonly Dictionary<int, int> leafLookup = new();
     (int agentIndex, BoundingBox bounds)[] buildItems = [];
+    (int agentIndex, BoundingBox bounds)[] partitionItems = [];
+    double buildQuality;
     bool[] pendingRefit = [];
     readonly Stack<int> traversalStack = new();
     readonly Stack<(int a, int b)> pairStack = new();
     static readonly Comparison<(int agentIndex, BoundingBox bounds)>[] AxisComparisons =
     [
-        (a, b) => a.bounds.Center.X.CompareTo(b.bounds.Center.X),
-        (a, b) => a.bounds.Center.Y.CompareTo(b.bounds.Center.Y),
-        (a, b) => a.bounds.Center.Z.CompareTo(b.bounds.Center.Z),
+        (a, b) => Compare(a, b, 0),
+        (a, b) => Compare(a, b, 1),
+        (a, b) => Compare(a, b, 2),
     ];
+    static int Compare((int agentIndex, BoundingBox bounds) a, (int agentIndex, BoundingBox bounds) b, int axis)
+    {
+        var order = a.bounds.Center[axis].CompareTo(b.bounds.Center[axis]);
+        return order != 0 ? order : a.agentIndex.CompareTo(b.agentIndex);
+    }
 
     public bool IsEmpty => root < 0;
 
@@ -93,14 +102,44 @@ public class Bvh
         if (leaves.IsEmpty)
             return;
         if (buildItems.Length < leaves.Length)
+        {
             Array.Resize(ref buildItems, Math.Max(leaves.Length, Math.Max(8, buildItems.Length + buildItems.Length / 2)));
+            Array.Resize(ref partitionItems, buildItems.Length);
+        }
         var items = buildItems.AsSpan(0, leaves.Length);
         leaves.CopyTo(items);
-        // Preserve the existing sort and traversal order: collision response is iterative.
-        // Span slices eliminate recursive list copies and per-node comparer closures.
+        // Stable binned partitions avoid sorting every recursive subtree (N log squared N).
+        // Consumers that accumulate responses order their leaf pairs independently of topology.
         root = BuildRecursive(items, -1);
         if (pendingRefit.Length < nodes.Count)
             Array.Resize(ref pendingRefit, Math.Max(nodes.Count, pendingRefit.Length + pendingRefit.Length / 2));
+        buildQuality = Quality();
+    }
+
+    /// <summary>Refit unchanged membership, rebuilding only when the normalized internal area
+    /// has grown by more than 50 percent. Scratch and tree topology remain reconstructible.</summary>
+    public bool TryRefit(ReadOnlySpan<(int agentIndex, BoundingBox bounds)> leaves)
+    {
+        if (leaves.Length != leafLookup.Count) return false;
+        foreach (var leaf in leaves)
+            if (!leafLookup.ContainsKey(leaf.agentIndex)) return false;
+        foreach (var leaf in leaves) UpdateLeafBounds(leaf.agentIndex, leaf.bounds);
+        RefitUpdatedLeaves();
+        return IsEmpty || Quality() <= Math.Max(1e-12, buildQuality) * 1.5;
+    }
+
+    double Quality()
+    {
+        if (IsEmpty) return 0;
+        double area = 0;
+        foreach (var node in nodes) if (!node.IsLeaf) area += SurfaceArea(node.Bounds);
+        return area / Math.Max(1e-20, SurfaceArea(nodes[root].Bounds));
+    }
+
+    static float SurfaceArea(BoundingBox bounds)
+    {
+        var e = Vector3.Max(Vector3.Zero, bounds.Max - bounds.Min);
+        return e.X * e.Y + e.X * e.Z + e.Y * e.Z;
     }
 
     int BuildRecursive(Span<(int agentIndex, BoundingBox bounds)> leaves, int parent)
@@ -114,10 +153,7 @@ public class Bvh
             return index;
         }
 
-        int axis = ChooseSplitAxis(leaves);
-        leaves.Sort(AxisComparisons[axis]);
-
-        int mid = leaves.Length / 2;
+        int mid = Partition(leaves);
 
         var nodeIndex = nodes.Count;
         nodes.Add(default);
@@ -128,6 +164,82 @@ public class Bvh
         var merged = BoundingBox.Merge(nodes[left].Bounds, nodes[right].Bounds);
         nodes[nodeIndex] = new Node(merged, left, right, parent, -1);
         return nodeIndex;
+    }
+
+    struct Bin
+    {
+        public int Count;
+        public BoundingBox Bounds;
+        public void Add(BoundingBox bounds)
+        {
+            Bounds = Count++ == 0 ? bounds : BoundingBox.Merge(Bounds, bounds);
+        }
+    }
+
+    int Partition(Span<(int agentIndex, BoundingBox bounds)> leaves)
+    {
+        if (leaves.Length <= 8)
+        {
+            leaves.Sort(AxisComparisons[ChooseSplitAxis(leaves)]);
+            return leaves.Length / 2;
+        }
+        const int binCount = 16;
+        var lo = new Vector3(float.PositiveInfinity);
+        var hi = new Vector3(float.NegativeInfinity);
+        foreach (var leaf in leaves)
+        {
+            lo = Vector3.Min(lo, leaf.bounds.Center);
+            hi = Vector3.Max(hi, leaf.bounds.Center);
+        }
+        Span<Bin> bins = stackalloc Bin[binCount];
+        Span<float> rightCost = stackalloc float[binCount];
+        var bestCost = float.PositiveInfinity;
+        var bestAxis = -1; var bestSplit = 0; var bestCount = 0;
+        var minChild = Math.Max(1, leaves.Length / 8);
+        for (int axis = 0; axis < 3; ++axis)
+        {
+            if (!(hi[axis] > lo[axis])) continue;
+            bins.Clear();
+            var scale = binCount / (hi[axis] - lo[axis]);
+            foreach (var leaf in leaves)
+                bins[Math.Clamp((int)((leaf.bounds.Center[axis] - lo[axis]) * scale), 0, binCount - 1)].Add(leaf.bounds);
+            var right = new Bin();
+            for (int b = binCount - 1; b > 0; --b)
+            {
+                if (bins[b].Count > 0)
+                {
+                    right.Bounds = right.Count == 0 ? bins[b].Bounds : BoundingBox.Merge(right.Bounds, bins[b].Bounds);
+                    right.Count += bins[b].Count;
+                }
+                rightCost[b] = SurfaceArea(right.Bounds) * right.Count;
+            }
+            var left = new Bin();
+            for (int b = 0; b < binCount - 1; ++b)
+            {
+                if (bins[b].Count > 0)
+                {
+                    left.Bounds = left.Count == 0 ? bins[b].Bounds : BoundingBox.Merge(left.Bounds, bins[b].Bounds);
+                    left.Count += bins[b].Count;
+                }
+                if (left.Count < minChild || leaves.Length - left.Count < minChild) continue;
+                var cost = SurfaceArea(left.Bounds) * left.Count + rightCost[b + 1];
+                if (cost >= bestCost) continue;
+                bestCost = cost; bestAxis = axis; bestSplit = b; bestCount = left.Count;
+            }
+        }
+        // Coincident centres have no useful spatial split; input order gives a deterministic,
+        // balanced tree without sorting equal keys at every level.
+        if (bestAxis < 0) return leaves.Length / 2;
+        var factor = binCount / (hi[bestAxis] - lo[bestAxis]);
+        var first = 0; var second = bestCount;
+        var scratch = partitionItems.AsSpan(0, leaves.Length);
+        foreach (var leaf in leaves)
+        {
+            var bin = Math.Clamp((int)((leaf.bounds.Center[bestAxis] - lo[bestAxis]) * factor), 0, binCount - 1);
+            scratch[bin <= bestSplit ? first++ : second++] = leaf;
+        }
+        scratch.CopyTo(leaves);
+        return bestCount;
     }
 
     static int ChooseSplitAxis(ReadOnlySpan<(int agentIndex, BoundingBox bounds)> leaves)
@@ -255,6 +367,30 @@ public class Bvh
         var result = new List<(int, int)>();
         GetOverlappingPairs(result);
         return result;
+    }
+
+    /// <summary>Traverse two hierarchies together rather than querying the second tree from
+    /// every leaf of the first. Offsets put their local bounds in the same coordinate frame.</summary>
+    public void GetOverlappingPairs(Bvh other, Vector3 thisOffset, Vector3 otherOffset,
+        List<(int first, int second)> result)
+    {
+        if (IsEmpty || other.IsEmpty) return;
+        pairStack.Clear(); pairStack.Push((root, other.root));
+        var offset = otherOffset - thisOffset;
+        while (pairStack.Count > 0)
+        {
+            var (ia, ib) = pairStack.Pop();
+            var a = nodes[ia]; var b = other.nodes[ib];
+            var roundoff = (Vector3.Max(Vector3.Abs(b.Bounds.Min), Vector3.Abs(b.Bounds.Max))
+                + Vector3.Abs(otherOffset) + Vector3.Abs(thisOffset)) * 2e-7f + new Vector3(1e-8f);
+            var otherBounds = new BoundingBox(b.Bounds.Min + offset - roundoff, b.Bounds.Max + offset + roundoff);
+            if (!a.Bounds.Intersects(otherBounds)) continue;
+            if (a.IsLeaf && b.IsLeaf) { result.Add((a.AgentIndex, b.AgentIndex)); continue; }
+            if (b.IsLeaf || !a.IsLeaf && SurfaceArea(a.Bounds) >= SurfaceArea(b.Bounds))
+            { pairStack.Push((a.Left, ib)); pairStack.Push((a.Right, ib)); }
+            else
+            { pairStack.Push((ia, b.Left)); pairStack.Push((ia, b.Right)); }
+        }
     }
 
     /// <summary>Append pairs to a caller-owned buffer. The eligibility mask only applies to

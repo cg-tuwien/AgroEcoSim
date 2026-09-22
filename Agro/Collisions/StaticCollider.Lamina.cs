@@ -29,7 +29,8 @@ public sealed partial class StaticCollider
                 foreach (var triangle in candidates)
                 {
                     shape.Lamina.Triangle(shape.Pose, triangle, out var a, out var b, out var c);
-                    var distance = FoliageGeometry.TriangleDistance(a, b, c, p, q, r, out var onLeaf, out var onSurface);
+                    var distance = FoliageGeometry.TriangleDistance(a, b, c, p, q, r, out var onLeaf, out var onSurface,
+                        shape.Pose.Radius + FoliageGeometry.Skin);
                     if (distance >= shape.Pose.Radius - FoliageGeometry.Skin) continue;
                     var n = N[t];
                     if (surface == StaticSurface.Obstacle && Vector3.Dot(trusted - p, n) < 0) n = -n;
@@ -72,6 +73,7 @@ public sealed partial class StaticCollider
 
     bool SweepLaminaTriangle(in ContactShape from, in ContactShape to, int t, Vector3 normal, int depth, ref int intervals)
     {
+        ++FoliageGeometry.IntervalCount;
         if (--intervals < 0) return false;
         var radius = MathF.Max(from.Pose.Radius, to.Pose.Radius);
         var gap = MathF.Min(Vector3.Dot(from.Support(normal) - A[t], normal), Vector3.Dot(to.Support(normal) - A[t], normal));
@@ -85,7 +87,8 @@ public sealed partial class StaticCollider
         foreach (var triangle in candidates)
         {
             mid.Lamina.Triangle(mid.Pose, triangle, out var a, out var b, out var c);
-            distance = MathF.Min(distance, FoliageGeometry.TriangleDistance(a, b, c, p, q, r, out _, out _));
+            distance = MathF.Min(distance, FoliageGeometry.TriangleDistance(a, b, c, p, q, r, out _, out _,
+                MathF.Min(distance, radius + motion + FoliageGeometry.Skin)));
         }
         if (distance >= radius + motion + FoliageGeometry.Skin) return true;
         if (distance < radius - FoliageGeometry.Skin) return false;

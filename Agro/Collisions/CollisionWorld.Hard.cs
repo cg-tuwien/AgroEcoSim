@@ -84,12 +84,46 @@ public sealed partial class CollisionWorld
         ag.RefreshAnchors(Static);
     }
 
+    struct StaticEvaluation
+    {
+        public bool Used, Admissible, Rhizome, ParentRhizome, ObstaclePass, SoilPass;
+        public int Parent;
+        public long Scene;
+        public ulong Id;
+        public ContactShape Shape, Previous;
+        public Vector3 Trusted;
+    }
+
     bool StaticAdmissible(PlantFormation2 plant, int i)
     {
         var ag = plant.AG; var shape = Shape(ag, i);
         if (!Eligible(ag, i)) return true;
         var trusted = TrustedPoint(plant, i);
         var previous = Previous(ag, i, shape);
+        var work = Work[plant];
+        if (work.StaticEvaluations.Length < ag.Count)
+            Array.Resize(ref work.StaticEvaluations, Math.Max(ag.Count, work.StaticEvaluations.Length * 3 / 2 + 8));
+        ref var cached = ref work.StaticEvaluations[i];
+        var parent = ag.GetParent(i); var rhizome = ag.GetIsRizome(i);
+        var parentRhizome = parent >= 0 && ag.GetIsRizome(parent);
+        var id = ag.GetOrganId(i);
+        if (cached.Used && cached.Scene == StaticRevision && cached.Id == id
+            && cached.ObstaclePass == CollisionSettings.ObstaclePass && cached.SoilPass == CollisionSettings.SoilPass
+            && cached.Shape == shape && cached.Previous == previous && cached.Trusted == trusted
+            && cached.Parent == parent && cached.Rhizome == rhizome && cached.ParentRhizome == parentRhizome)
+        { ++work.StaticReused; return cached.Admissible; }
+        var admissible = StaticAdmissibleUncached(plant, i, shape, previous, trusted);
+        cached = new() { Used = true, Scene = StaticRevision, Id = id, Shape = shape,
+            Previous = previous, Trusted = trusted, Parent = parent, Rhizome = rhizome,
+            ParentRhizome = parentRhizome, Admissible = admissible,
+            ObstaclePass = CollisionSettings.ObstaclePass, SoilPass = CollisionSettings.SoilPass };
+        return admissible;
+    }
+
+    bool StaticAdmissibleUncached(PlantFormation2 plant, int i, in ContactShape shape,
+        in ContactShape previous, Vector3 trusted)
+    {
+        var ag = plant.AG;
         if (CollisionSettings.ObstaclePass && !ClearOfObstacles(ag, i, shape.Pose)
             && (Static.ShapeContact(shape, trusted, StaticSurface.Obstacle, out _, out _, out _)
                 || !Static.ShapeSweepClear(previous, shape, StaticSurface.Obstacle))) return false;
@@ -129,9 +163,9 @@ public sealed partial class CollisionWorld
         var travel = Travel(ag.ClearancePose[i], pose);
         if (previous.Exists) travel = MathF.Max(travel, Travel(ag.ClearancePose[i], previous.Pose));
         if (ag.StaticClearance[i] > travel + CollisionSettings.ContactTolerance)
-        { System.Threading.Interlocked.Increment(ref ClearanceSkips); return true; }
+        { ++Work[ag.Plant].Skips; return true; }
         if (travel < 1e-12f && ag.StaticClearance[i] <= CollisionSettings.ContactTolerance) return false;
-        System.Threading.Interlocked.Increment(ref StaticQueries);
+        ++Work[ag.Plant].Queries;
         var deviation = template == null ? 0f : template.WideReach * pose.Width + template.ReliefAt(pose)
             + MathF.Max(0f, template.LongReach - 1f) * pose.Length;
         var probe = deviation + pose.Radius + CollisionSettings.ClearanceProbeDistance;
@@ -146,8 +180,8 @@ public sealed partial class CollisionWorld
     {
         if (!Static.ShapeContact(Shape(ag, i), trusted, surface, out var point, out var normal, out var depth)) return;
         if (!ag.QueueContactCorrection(i, point, normal, depth + CollisionSettings.ContactTolerance)) return;
-        if (surface == StaticSurface.Obstacle) System.Threading.Interlocked.Increment(ref ObstacleContacts);
-        else System.Threading.Interlocked.Increment(ref SoilContacts);
+        if (surface == StaticSurface.Obstacle) ++Work[ag.Plant].Obstacle;
+        else ++Work[ag.Plant].Soil;
     }
 
     void RecordSupport(PlantSubFormation<AboveGroundAgent> ag, int i, StaticSurface surface)

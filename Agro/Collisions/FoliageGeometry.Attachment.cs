@@ -1,4 +1,5 @@
 using System.Numerics;
+using System.Runtime.InteropServices;
 
 namespace Agro.Collisions;
 
@@ -13,6 +14,13 @@ internal static partial class FoliageGeometry
     [ThreadStatic] static List<int>? AttachmentCandidates;
     [ThreadStatic] static List<int>? AttachmentSweepA;
     [ThreadStatic] static List<int>? AttachmentSweepB;
+    [ThreadStatic] static Bvh? AttachmentPartsBvh;
+    [ThreadStatic] static List<(int, Bvh.BoundingBox)>? AttachmentPartBounds;
+    [ThreadStatic] static List<int>? AttachmentPartHits;
+    [ThreadStatic] static List<(int A, int B)>? AttachmentTemplatePairs;
+    [ThreadStatic] static List<(int A, int B)>? AttachmentFragmentPairs;
+    [ThreadStatic] static (int First, int End)[]? AttachmentRangesA;
+    [ThreadStatic] static (int First, int End)[]? AttachmentRangesB;
 
     // Subtract a small attachment box from BOTH bodies. Merely ignoring their nearest
     // contact at the node also ignored any second crossing farther along the same leaf.
@@ -25,20 +33,68 @@ internal static partial class FoliageGeometry
         var aa = OutsideA ??= []; var bb = OutsideB ??= [];
         Parts(a, attachment, radius, aa, Pad(b.Bounds,search));
         Parts(b, attachment, radius, bb, Pad(a.Bounds,search));
-        var best = new FoliageContact(a.Pose.Base, b.Pose.Base, Vector3.UnitY, search, -1, -1);
-        foreach (var x in aa)
+        var dual = a.Lamina != null && b.Lamina != null && a.Feature < 0 && b.Feature < 0
+            && (long)aa.Count * bb.Count >= 1024;
+        if (dual)
         {
-            var box = Pad(x.Box, search);
-            foreach (var y in bb)
+            var templates = AttachmentTemplatePairs ??= [];
+            a.Lamina!.QueryPairs(a.Pose, b.Lamina!, b.Pose, search, templates);
+            FillRanges(aa, a.Lamina.Indices.Length / 3, ref AttachmentRangesA);
+            FillRanges(bb, b.Lamina!.Indices.Length / 3, ref AttachmentRangesB);
+            var fragments = AttachmentFragmentPairs ??= []; fragments.Clear();
+            foreach (var (fa, fb) in templates)
             {
+                var ra = AttachmentRangesA![fa]; var rb = AttachmentRangesB![fb];
+                for (int i = ra.First; i < ra.End; ++i)
+                    for (int j = rb.First; j < rb.End; ++j) fragments.Add((i, j));
+            }
+            fragments.Sort(static (x,y) => x.A != y.A ? x.A.CompareTo(y.A) : x.B.CompareTo(y.B));
+        }
+        var indexed = !dual && bb.Count >= 32 && (long)aa.Count * bb.Count >= 1024;
+        var hits = AttachmentPartHits ??= [];
+        if (indexed)
+        {
+            var leaves = AttachmentPartBounds ??= [];
+            leaves.Clear();
+            for (int i = 0; i < bb.Count; ++i) leaves.Add((i, bb[i].Box));
+            (AttachmentPartsBvh ??= new()).Build(leaves);
+        }
+        var best = new FoliageContact(a.Pose.Base, b.Pose.Base, Vector3.UnitY, search, -1, -1);
+        var fragmentCursor = 0;
+        for (int first = 0; first < aa.Count; ++first)
+        {
+            ref readonly var x = ref CollectionsMarshal.AsSpan(aa)[first];
+            var box = Pad(x.Box, search);
+            if (dual)
+            {
+                hits.Clear();
+                var fragments = AttachmentFragmentPairs!;
+                while (fragmentCursor < fragments.Count && fragments[fragmentCursor].A == first)
+                    hits.Add(fragments[fragmentCursor++].B);
+            }
+            else if (indexed)
+            {
+                hits.Clear(); AttachmentPartsBvh!.QueryOverlaps(box, hits);
+                // Keep the exact existing first-contact/tie behavior independent of tree layout.
+                hits.Sort();
+            }
+            for (int part = 0, count = indexed || dual ? hits.Count : bb.Count; part < count; ++part)
+            {
+                ref readonly var y = ref CollectionsMarshal.AsSpan(bb)[indexed || dual ? hits[part] : part];
                 if (!box.Intersects(y.Box)) continue;
                 Vector3 onA, onB; float distance;
                 if (x.Triangle && y.Triangle)
-                    distance = TriangleDistance(x.A, x.B, x.C, y.A, y.B, y.C, out onA, out onB);
+                    distance = TriangleDistance(x.A, x.B, x.C, y.A, y.B, y.C, out onA, out onB,best.Distance);
                 else if (x.Triangle)
+                {
+                    ++TriangleCount;
                     distance = StaticCollider.SegmentTriangleDistance(y.A, y.B, x.A, x.B-x.A, x.C-x.A, out onA, out onB);
+                }
                 else if (y.Triangle)
+                {
+                    ++TriangleCount;
                     distance = StaticCollider.SegmentTriangleDistance(x.A, x.B, y.A, y.B-y.A, y.C-y.A, out onB, out onA);
+                }
                 else
                 {
                     StaticCollider.ClosestPointsBetweenSegments(x.A, x.B, y.A, y.B, out onA, out onB, out var d2);
@@ -57,6 +113,18 @@ internal static partial class FoliageGeometry
         return best;
     }
 
+    static void FillRanges(List<Part> parts, int features, ref (int First, int End)[]? ranges)
+    {
+        if (ranges == null || ranges.Length < features) ranges = new (int, int)[features];
+        else Array.Clear(ranges, 0, features);
+        for (int first = 0; first < parts.Count;)
+        {
+            var feature = parts[first].Feature; var end = first + 1;
+            while (end < parts.Count && parts[end].Feature == feature) ++end;
+            ranges[feature] = (first, end); first = end;
+        }
+    }
+
     static bool AttachmentSweepUncached(in ContactShape a0, in ContactShape a1,
         in ContactShape b0, in ContactShape b1, Vector3 attachment0, Vector3 attachment1, float radius)
     {
@@ -68,14 +136,11 @@ internal static partial class FoliageGeometry
         // Endpoints are checked independently. Below a quarter skin, the whole path stays
         // within the same contact tolerance; do not exhaust a triangle budget on roundoff.
         if (movement < Skin * .25f) return true;
+        if (SweptPlanesSeparate(a0,a1,b0,b1)) return true;
         var reach=MathF.Max(a0.Pose.Radius,a1.Pose.Radius)+MathF.Max(b0.Pose.Radius,b1.Pose.Radius);
         var gap=OutsideAttachment(a0,b0,reach+movement+Skin,attachment0,
             radius-movement-Vector3.Distance(attachment0,attachment1)).Distance;
         if (gap>=reach+movement-Skin) return true;
-        if (a0.Lamina != null && (SeparatingPlane(a0,a1,b0,b1,Vector3.Transform(Vector3.UnitY,a0.Pose.Rotation))
-            || SeparatingPlane(a0,a1,b0,b1,Vector3.Transform(Vector3.UnitY,a1.Pose.Rotation)))) return true;
-        if (b0.Lamina != null && (SeparatingPlane(a0,a1,b0,b1,Vector3.Transform(Vector3.UnitY,b0.Pose.Rotation))
-            || SeparatingPlane(a0,a1,b0,b1,Vector3.Transform(Vector3.UnitY,b1.Pose.Rotation)))) return true;
         // Split sheets before temporal subdivision: a small triangle's motion bound is
         // much tighter than that of the complete blade, especially near an attachment.
         var budget = 256;
@@ -107,6 +172,7 @@ internal static partial class FoliageGeometry
     static bool AttachmentInterval(in ContactShape a0, in ContactShape a1, in ContactShape b0, in ContactShape b1,
         Vector3 p0, Vector3 p1, float radius, ref int budget)
     {
+        ++IntervalCount;
         if (--budget < 0) return false;
         // If either whole body remains inside the moving attachment neighbourhood,
         // its outside portion is empty throughout the interval. This proof is especially

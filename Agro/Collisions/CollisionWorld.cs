@@ -26,6 +26,7 @@ public sealed partial class CollisionWorld
 {
 	readonly StaticCollider Static = new();
 	bool StaticReady;
+    long StaticRevision;
 	IObstacle[] StaticObstacles = [];
 	static readonly bool TraceTiming = Environment.GetEnvironmentVariable("AGRO_COLLISION_TIMING") != null;
 
@@ -58,33 +59,48 @@ public sealed partial class CollisionWorld
 			return;
 
 		EnsureStatic((AgroWorld)world);
+        InitializeBackend((AgroWorld)world);
 
 
 
 		var t0 = System.Diagnostics.Stopwatch.GetTimestamp();
-		var previousIntervals = FoliageGeometry.IntervalCount; var previousTriangles = FoliageGeometry.TriangleCount;
+		var previousIntervals = SweepIntervals; var previousTriangles = TriangleTests;
+        PhaseThread = Environment.CurrentManagedThreadId;
+        AttributedMainIntervals = AttributedMainTriangles = 0;
+        var mainIntervals = FoliageGeometry.IntervalCount;
+        var mainTriangles = FoliageGeometry.TriangleCount;
 		var plants = ActivePlants;
 		plants.Clear();
 		for (int i = 0; i < formations.Count; ++i)
 			if (formations[i] is PlantFormation2 p && p.AG.Count > 0)
 				plants.Add(p);
 
+        PrepareWork(plants);
+
         ResolveHardPlants(plants);
 
         var afterHard = TraceTiming ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
         if (((AgroWorld)world).SoftCollisions) ResolveVegetation(plants);
         var afterFoliage = TraceTiming ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
+        // Soft collisions can be disabled, but development still calls through the same
+        // hierarchy APIs. Keep the plant lookup ready in either mode.
+        if (!((AgroWorld)world).SoftCollisions) RefreshNeighbours(plants);
         foreach (var plant in plants)
         {
             plant.AG.ProcessDevelopments(this);
             plant.AG.SealNewGeometry();
             plant.AG.CompleteGrowthAttempts();
         }
+        FlushCounters();
+        // Include serial development/rollback trials as well as worker jobs. A job can
+        // run on this thread too, so remove its already-reduced counts before adding.
+        SweepIntervals += FoliageGeometry.IntervalCount - mainIntervals - AttributedMainIntervals;
+        TriangleTests += FoliageGeometry.TriangleCount - mainTriangles - AttributedMainTriangles;
 
         if (TraceTiming)
         {
             var scale = 1000.0 / System.Diagnostics.Stopwatch.Frequency;
-            Console.WriteLine($"CONTACT_TIMING step={timestep} hardMs={(afterHard-t0)*scale:F2} foliageMs={(afterFoliage-afterHard)*scale:F2} birthMs={(System.Diagnostics.Stopwatch.GetTimestamp()-afterFoliage)*scale:F2} plants={plants.Count} organs={plants.Sum(p=>p.AG.Count)} intervals={FoliageGeometry.IntervalCount-previousIntervals} triangles={FoliageGeometry.TriangleCount-previousTriangles}");
+            Console.WriteLine($"CONTACT_TIMING step={timestep} hardMs={(afterHard-t0)*scale:F2} foliageMs={(afterFoliage-afterHard)*scale:F2} birthMs={(System.Diagnostics.Stopwatch.GetTimestamp()-afterFoliage)*scale:F2} plants={plants.Count} organs={plants.Sum(p=>p.AG.Count)} intervals={SweepIntervals-previousIntervals} triangles={TriangleTests-previousTriangles} correctionRounds={LastCorrectionRounds} validationRounds={LastValidationRounds} fallbackRounds={LastFallbackRounds}");
         }
 
 		Ticks += System.Diagnostics.Stopwatch.GetTimestamp() - t0;
@@ -92,8 +108,7 @@ public sealed partial class CollisionWorld
 
     void ResolveHardPlants(List<PlantFormation2> plants)
     {
-        if (plants.Count < 2) foreach (var plant in plants) ResolveHard(plant);
-        else Parallel.ForEach(plants, ResolveHard);
+        RunJobs(plants, plants.Sum(p => (long)p.AG.Count), plant => MeasureJob(Work[plant], () => ResolveHard(plant)));
     }
 
 	internal void EnsureStatic(AgroWorld world)
@@ -108,6 +123,7 @@ public sealed partial class CollisionWorld
 			StaticObstacles = world.ObstacleList.ToArray();
 			var started = System.Diagnostics.Stopwatch.GetTimestamp();
 			Static.Build(world);
+            ++StaticRevision;
 			if (wasReady)
 				foreach (var plant in world.FormationList.OfType<PlantFormation2>())
 				{ plant.AG.InvalidateStaticClearance(); plant.AG.WakeGrowth(); }
@@ -121,40 +137,22 @@ public sealed partial class CollisionWorld
 	}
 
 	readonly List<(PlantFormation2 A, PlantFormation2 B)> Neighbours = [];
-	(int Index, Vector3 Min, Vector3 Max)[] SweepBoxes = [];
-	static readonly Comparer<(int Index, Vector3 Min, Vector3 Max)> SweepOrder =
-		Comparer<(int Index, Vector3 Min, Vector3 Max)>.Create(
-			(x, y) => x.Min.X != y.Min.X ? x.Min.X.CompareTo(y.Min.X) : x.Index.CompareTo(y.Index));
-
-	/// <summary>Pairs of plants whose canopy boxes overlap, by a sweep along X.</summary>
+	/// <summary>Pairs of plants whose swept canopy bounds overlap, in canonical order.</summary>
 	void RefreshNeighbours(List<PlantFormation2> plants)
 	{
 		Neighbours.Clear();
 		PlantLeaves.Clear();
-		if (SweepBoxes.Length < plants.Count)
-			Array.Resize(ref SweepBoxes, Math.Max(plants.Count, SweepBoxes.Length + SweepBoxes.Length / 2 + 8));
-		var boxes = SweepBoxes;
-		var live = 0;
 		for (int i = 0; i < plants.Count; ++i)
 			if (plants[i].AG.TryGetWorldBounds(out var min, out var max))
 			{
-				boxes[live++] = (i, min, max);
 				PlantLeaves.Add((i, new(min, max)));
 			}
-		PlantBounds.Build(PlantLeaves);
-
-		Array.Sort(boxes, 0, live, SweepOrder);
-
-		for (int i = 0; i < live; ++i)
-			for (int j = i + 1; j < live && boxes[j].Min.X <= boxes[i].Max.X; ++j)
-			{
-				if (boxes[i].Min.Y > boxes[j].Max.Y || boxes[i].Max.Y < boxes[j].Min.Y
-					|| boxes[i].Min.Z > boxes[j].Max.Z || boxes[i].Max.Z < boxes[j].Min.Z)
-					continue;
-				var a = boxes[i].Index;
-				var b = boxes[j].Index;
-				Neighbours.Add(a < b ? (plants[a], plants[b]) : (plants[b], plants[a]));
-			}
+        var leaves = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(PlantLeaves);
+        if (PlantMembershipChanged || !PlantBounds.TryRefit(leaves)) PlantBounds.Build(PlantLeaves);
+        PlantMembershipChanged = false;
+        PlantPairs.Clear(); PlantBounds.GetOverlappingPairs(PlantPairs);
+        PlantPairs.Sort(static (a, b) => a.Item1 != b.Item1 ? a.Item1.CompareTo(b.Item1) : a.Item2.CompareTo(b.Item2));
+        foreach (var (a, b) in PlantPairs) Neighbours.Add((plants[a], plants[b]));
 
 		NeighbourPairs = Neighbours.Count;
 	}

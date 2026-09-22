@@ -38,12 +38,13 @@ public static class LaminaTemplates
         var mesh = Build(morphology);
         var result = new LaminaTemplate[count];
         for (int i = 0; i < count; ++i)
-            result[i] = new(LaminaMeshSlicer.Slice(mesh, i, count), morphology.Dimensions.MaxWidthM * .5f);
+            result[i] = new(LaminaMeshSlicer.Slice(mesh, i, count), morphology.Dimensions.MaxWidthM * .5f,
+                !petals && count == 1, morphology.Dimensions.LengthM);
         return result;
     }
 }
 
-public sealed class LaminaTemplate
+public sealed partial class LaminaTemplate
 {
     public readonly Vector3[] Vertices;
     public readonly int[] Indices;
@@ -52,11 +53,19 @@ public sealed class LaminaTemplate
     readonly Vector3 Min, Max, Centre, Extent;
     public readonly float LongReach, WideReach, ReliefReach;
     readonly float ReferenceHalfWidth;
+    readonly float[] SupportX, SupportY, SupportZ;
+    internal Vector3 TemplateCentre => Centre;
+    internal Vector3 TemplateExtent => Extent;
+    internal float TemplateReferenceHalfWidth => ReferenceHalfWidth;
 
-    public LaminaTemplate(MeshData mesh, float referenceHalfWidth = 0)
+    public LaminaTemplate(MeshData mesh, float referenceHalfWidth = 0,
+        bool allowCollisionApproximation = false, float referenceLength = 0)
     {
         ReferenceHalfWidth = referenceHalfWidth;
         Vertices = mesh.Positions.ToArray(); Indices = mesh.Indices.ToArray();
+        SupportX = new float[Vertices.Length]; SupportY = new float[Vertices.Length]; SupportZ = new float[Vertices.Length];
+        for (int i = 0; i < Vertices.Length; ++i)
+        { SupportX[i] = Vertices[i].X + 1f; SupportY[i] = Vertices[i].Z; SupportZ[i] = -Vertices[i].Y; }
         Min = Vertices.Length == 0 ? Vector3.Zero : Vertices.Aggregate(Vector3.Min);
         Max = Vertices.Length == 0 ? Vector3.Zero : Vertices.Aggregate(Vector3.Max);
         Centre=(Min+Max)*.5f; Extent=(Max-Min)*.5f;
@@ -70,6 +79,8 @@ public sealed class LaminaTemplate
             bounds[i] = (i, new(Vector3.Min(a, Vector3.Min(b, c)), Vector3.Max(a, Vector3.Max(b, c))));
         }
         Triangles.Build(bounds);
+        if (allowCollisionApproximation && referenceHalfWidth > 0 && referenceLength > 0)
+            CollisionLevels = new(() => BuildCollisionLevels(referenceLength), LazyThreadSafetyMode.ExecutionAndPublication);
     }
 
     // Relief is authored in metres at the morphology's reference width. It must grow
@@ -82,7 +93,13 @@ public sealed class LaminaTemplate
         new Vector3((v.X + 1f) * pose.Length * 0.5f, v.Z * ReliefScale(pose.Width), -v.Y * pose.Width), pose.Rotation);
 
     public void Triangle(in OrganPose pose, int triangle, out Vector3 a, out Vector3 b, out Vector3 c)
-    { a = Transform(pose, Vertices[Indices[triangle * 3]]); b = Transform(pose, Vertices[Indices[triangle * 3 + 1]]); c = Transform(pose, Vertices[Indices[triangle * 3 + 2]]); }
+    {
+        // Three direct vector transforms are cheaper than hashing a full OrganPose
+        // at every subdivided contact feature (including alternating leaf poses).
+        a = Transform(pose, Vertices[Indices[triangle * 3]]);
+        b = Transform(pose, Vertices[Indices[triangle * 3 + 1]]);
+        c = Transform(pose, Vertices[Indices[triangle * 3 + 2]]);
+    }
 
     public Bvh.BoundingBox Bounds(in OrganPose pose)
     {
@@ -116,20 +133,27 @@ public sealed class LaminaTemplate
 
     public void Query(in OrganPose pose, Bvh.BoundingBox world, List<int> hits)
     {
-        var low = new Vector3(float.PositiveInfinity); var high = new Vector3(float.NegativeInfinity);
         var inverse = Quaternion.Conjugate(pose.Rotation);
-        for (int i = 0; i < 8; ++i)
-        {
-            var v = Vector3.Transform(new Vector3((i & 1) == 0 ? world.Min.X : world.Max.X,
-                (i & 2) == 0 ? world.Min.Y : world.Max.Y, (i & 4) == 0 ? world.Min.Z : world.Max.Z) - pose.Base, inverse);
-            v = new(v.X * 2f / MathF.Max(1e-12f, pose.Length) - 1f, -v.Z / MathF.Max(1e-12f, pose.Width),
-                v.Y / MathF.Max(1e-12f, ReliefScale(pose.Width)));
-            low = Vector3.Min(low, v); high = Vector3.Max(high, v);
-        }
+        var length = MathF.Max(1e-12f, pose.Length);
+        var width = MathF.Max(1e-12f, pose.Width);
+        var relief = MathF.Max(1e-12f, ReliefScale(pose.Width));
+        // The inverse of a box needs one centre transform and |R| times its extents,
+        // rather than eight quaternion transforms per triangle query. Round outward
+        // before scaling, particularly for tiny blades at large facade coordinates.
+        var centre = Vector3.Transform((world.Min + world.Max) * .5f - pose.Base, inverse);
+        var padding = (Vector3.Max(Vector3.Abs(world.Min), Vector3.Abs(world.Max))
+            + Vector3.Abs(pose.Base)) * 4e-7f + new Vector3(1e-8f);
+        var extent = RotatedExtent((world.Max - world.Min) * .5f + padding, inverse);
+        var lo = centre - extent; var hi = centre + extent;
+        var low = new Vector3(lo.X * 2f / length - 1f, -hi.Z / width, lo.Y / relief);
+        var high = new Vector3(hi.X * 2f / length - 1f, -lo.Z / width, hi.Y / relief);
         hits.Clear();
         // Immutable templates are shared; scratch belongs to the worker so thousands of
         // plants can query the same species without serializing every triangle lookup.
         Triangles.QueryOverlaps(new(low, high), hits, QueryStack ??= new());
+        // A hierarchy rebuild/refit must not change the first penetrating feature used by
+        // the response or the finite continuous-query budget.
+        hits.Sort();
     }
 
     public float MotionBound(in OrganPose a, in OrganPose b)

@@ -102,6 +102,8 @@ public interface IRunStore
     /// Only the latest is kept: a checkpoint is a place to carry on from, not a history - the
     /// history is the frames. It is overwritten in place, so it costs its own size once however
     /// long the run turns out to be.
+    /// For an active run, the caller transfers ownership of the snapshot to the bounded
+    /// writer. CompleteRun drains both frames and checkpoints before returning.
     /// </summary>
     void WriteCheckpoint(string runId, uint step, byte[] state);
 
@@ -320,7 +322,7 @@ public class RunRecord
 sealed class RunWriter
 {
     public required string RunId { get; init; }
-    public required BlockingCollection<(uint Step, byte[] Scene)> Queue { get; init; }
+    public required BlockingCollection<(uint Step, byte[] Scene, bool Checkpoint)> Queue { get; init; }
     public required FileStream Index { get; init; }
     public Task? Worker;
     /// <summary>Written by the worker thread only, read for the periodic metadata flush.</summary>
@@ -372,7 +374,7 @@ public class RunStore : IRunStore, IDisposable
     /// </summary>
     public int QueueDepth { get; set; } = 3;
     /// <summary>Global raw-frame budget, including frames currently being compressed. A single
-    /// frame larger than the budget is allowed only while no other frame is pending.</summary>
+    /// frame or checkpoint larger than the budget is allowed only while no other snapshot is pending.</summary>
     public long PendingFrameByteBudget { get; set; } = 128L << 20;
     readonly object PendingFramesLock = new();
     long PendingFrameBytes;
@@ -795,7 +797,7 @@ public class RunStore : IRunStore, IDisposable
             //Blocks when the queue is full, which is the backpressure. Everything expensive -
             //the deflate above all - happens on the worker, so the simulation thread pays only
             //for handing over a reference.
-            writer.Queue.Add((step, scene));
+            writer.Queue.Add((step, scene, false));
             queued = true;
         }
         catch (InvalidOperationException) { /* the run finished; nothing more is accepted */ }
@@ -831,7 +833,7 @@ public class RunStore : IRunStore, IDisposable
             LastStep = lastStep,
             AccountedIndexEntries = storedFrames,
             BytesOnDisk = bytesOnDisk,
-            Queue = new BlockingCollection<(uint, byte[])>(QueueDepth),
+            Queue = new BlockingCollection<(uint, byte[], bool)>(QueueDepth),
             //Opened ONCE for the run. Reopening it per frame was a file open, append and close on
             //the simulation thread for eight bytes.
             Index = new FileStream(IndexPath(runId), FileMode.Append, FileAccess.Write, FileShare.Read),
@@ -844,10 +846,15 @@ public class RunStore : IRunStore, IDisposable
     {
         try
         {
-            foreach (var (step, scene) in writer.Queue.GetConsumingEnumerable())
+            foreach (var (step, scene, checkpoint) in writer.Queue.GetConsumingEnumerable())
             {
                 try
                 {
+                    if (checkpoint)
+                    {
+                        WriteCheckpointCore(writer.RunId, step, scene);
+                        continue; // finally still releases the owned snapshot's byte reservation.
+                    }
                     var path = FramePath(writer.RunId, step);
                     var temporary = path + ".tmp";
                     long storedBytes;
@@ -942,16 +949,12 @@ public class RunStore : IRunStore, IDisposable
             if (Writers.TryGetValue(runId, out var writer))
             {
                 writer.Queue.CompleteAdding();
-                var drained = writer.Worker?.Wait(TimeSpan.FromMinutes(2)) ?? true;
-                //Deregistered only once the worker has actually stopped. It used to be removed
-                //BEFORE the wait, so a drain that timed out left a thread still appending frames
-                //and still holding the index handle - while the row said "complete" and the
-                //dictionary said there was no writer, which is exactly the pair of conditions
-                //eviction looks for before deleting a run's directory.
-                if (drained) Writers.TryRemove(runId, out _);
-                else Console.Error.WriteLine(
-                    $"RunStore: the writer for {runId} did not drain within two minutes. The run stays " +
-                    $"pinned against eviction until this process exits; its frames are still being written.");
+                // The final checkpoint shares the bounded writer. Completion must not
+                // publish a resumable run before that snapshot has reached disk.
+                writer.Worker?.GetAwaiter().GetResult();
+                // Deregister only after the index and final checkpoint are closed. Until
+                // then the live writer also protects the run against eviction.
+                Writers.TryRemove(runId, out _);
             }
 
             //Taken AFTER the writer has drained, never across the wait: the writer's own final
@@ -1035,6 +1038,19 @@ public class RunStore : IRunStore, IDisposable
     public void WriteCheckpoint(string runId, uint step, byte[] state)
     {
         if (Disabled || !IsSafeId(runId) || state == null || state.Length == 0) return;
+        if (!Writers.TryGetValue(runId, out var writer))
+        { WriteCheckpointCore(runId, step, state); return; }
+        // SerializeState runs between ticks and returns an owned snapshot. Only its
+        // compression and file I/O move to the writer; it never reads the live world.
+        if (!ReserveFrameBytes(writer, state.LongLength)) return;
+        var queued = false;
+        try { writer.Queue.Add((step, state, true)); queued = true; }
+        catch (InvalidOperationException) { /* completion stopped accepting snapshots */ }
+        finally { if (!queued) ReleaseFrameBytes(state.LongLength); }
+    }
+
+    void WriteCheckpointCore(string runId, uint step, byte[] state)
+    {
         try
         {
             //Written beside and moved into place. A checkpoint truncated by a crash is worse than

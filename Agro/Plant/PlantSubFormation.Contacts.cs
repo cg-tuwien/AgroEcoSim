@@ -9,18 +9,46 @@ public partial class PlantSubFormation<T>
         Quaternion RestOrientation, Quaternion TargetOrientation, float Radius, bool Exists);
 
     internal GeometryState[] PreviousGeometry = [];
+    LaminaTemplate?[] LaminaCache = [];
+    OrganTypes[] LaminaKinds = [];
+    bool[] LaminaKnown = [];
+
+    void InvalidateLaminaCache() => Array.Clear(LaminaKnown);
+
     internal LaminaTemplate? GetLaminaTemplate(int index)
     {
+        var organ = GetOrgan(index);
+        if (organ is not (OrganTypes.Leaf or OrganTypes.FlowerPadel)) return null;
+        if (index >= LaminaCache.Length)
+        {
+            var capacity = Math.Max(AgentCount, Math.Max(16, LaminaCache.Length * 2));
+            Array.Resize(ref LaminaCache, capacity);
+            Array.Resize(ref LaminaKinds, capacity);
+            Array.Resize(ref LaminaKnown, capacity);
+        }
+        if (LaminaKnown[index] && LaminaKinds[index] == organ) return LaminaCache[index];
         var slice = 0;
-        if (GetOrgan(index) == OrganTypes.Leaf)
+        if (organ == OrganTypes.Leaf)
             for (var p = GetParent(index); p >= 0 && GetOrgan(p) == OrganTypes.Leaf; p = GetParent(p)) ++slice;
-        return LaminaTemplates.For(Plant.Parameters, GetOrgan(index), slice);
+        LaminaKinds[index] = organ;
+        LaminaKnown[index] = true;
+        return LaminaCache[index] = LaminaTemplates.For(Plant.Parameters, organ, slice);
     }
     Vector3[] ContactTurns = [];
     Quaternion[] TransportedTurns = [];
     bool BatchingContacts;
     Vector3[] SupportMoments = [];
     readonly HashSet<int> RejectedBranches = [];
+    GeometryState[] ContactTrialStates = [], RedirectTrialStates = [];
+    readonly List<int> RedirectTrialOrgans = [];
+    readonly List<int> ContactMovedRoots = [];
+    readonly List<Vector3> RedirectCandidates = new(6);
+    readonly Comparison<Vector3> RedirectComparison;
+    Vector3 RedirectDirection, RedirectLight;
+
+    int CompareRedirectCandidates(Vector3 a, Vector3 b)
+        => (Vector3.Dot(b, RedirectDirection) + 0.25f * Vector3.Dot(b, RedirectLight))
+            .CompareTo(Vector3.Dot(a, RedirectDirection) + 0.25f * Vector3.Dot(a, RedirectLight));
 
     internal OrganPose GetContactPose(int index)
     {
@@ -82,12 +110,28 @@ public partial class PlantSubFormation<T>
         queue.Clear();
         foreach (var root in GetRoots()) queue.Enqueue(root);
         var moved = false;
+        ContactMovedRoots.Clear();
+        var cosineLimit = MathF.Cos(CollisionSettings.MaxElasticBendRadians * .5f);
         while (queue.Count > 0)
         {
             var i = queue.Dequeue();
             var parent = src[i].Parent;
             var carry = parent >= 0 ? TransportedTurns[parent] : Quaternion.Identity;
             var turn = ContactTurns[i];
+            if (turn == Vector3.Zero && carry == Quaternion.Identity)
+            {
+                // No load correction and no parent transport: a joint safely inside
+                // its limit is an exact no-op. Re-normalizing such frames every solver
+                // pass created tiny artificial motions and invalidated clearance caches.
+                var basis = src[i].baseOrientation; var orientation = src[i].Orientation;
+                var norm = MathF.Sqrt(basis.LengthSquared() * orientation.LengthSquared());
+                if (norm > 0 && MathF.Abs(Quaternion.Dot(basis, orientation)) > (cosineLimit + 1e-6f) * norm)
+                {
+                    TransportedTurns[i] = Quaternion.Identity;
+                    foreach (var child in GetChildren(i)) queue.Enqueue(child);
+                    continue;
+                }
+            }
             var angle = turn.Length();
             var own = angle > 1e-8f ? Quaternion.CreateFromAxisAngle(turn / angle, MathF.Min(angle, maxAngle)) : Quaternion.Identity;
             var transportedBase = Quaternion.Normalize(carry * src[i].baseOrientation);
@@ -103,11 +147,14 @@ public partial class PlantSubFormation<T>
                 src[i].baseOrientation = Quaternion.Normalize(carry * src[i].baseOrientation);
                 src[i].restOrientation = Quaternion.Normalize(carry * src[i].restOrientation);
                 src[i].targetOrientation = Quaternion.Normalize(carry * src[i].targetOrientation);
+                if (carry == Quaternion.Identity) ContactMovedRoots.Add(i);
                 moved = true;
             }
+            else TransportedTurns[i] = Quaternion.Identity;
             foreach (var child in GetChildren(i)) queue.Enqueue(child);
         }
-        if (moved) RebaseAndRefit();
+        if (moved)
+            foreach (var root in ContactMovedRoots) RebaseAndRefit(root);
         return moved;
     }
 
@@ -266,7 +313,11 @@ public partial class PlantSubFormation<T>
 
     internal GeometryState[] SaveContactTrial()
     {
-        var live=Src(); var saved=new GeometryState[Count];
+        // Development retries are sequential within one plant. Their fallback remains
+        // live until that proposal commits or is restored; redirection has separate scratch.
+        if (ContactTrialStates.Length < Count)
+            Array.Resize(ref ContactTrialStates, Math.Max(Count, ContactTrialStates.Length * 3 / 2 + 8));
+        var live=Src(); var saved=ContactTrialStates;
         for(int i=0;i<Count;++i)
             saved[i]=new(GetContactPose(i),live[i].baseOrientation,live[i].restOrientation,
                 live[i].targetOrientation,live[i].Radius,true);
@@ -276,7 +327,9 @@ public partial class PlantSubFormation<T>
     internal void RestoreContactTrial(GeometryState[] saved)
     {
         var live=Src();
-        for(int i=0;i<saved.Length;++i)
+        // A trial cannot commit births before restoration. Capacity may exceed the
+        // live count after an earlier proposal grew or compacted the plant.
+        for(int i=0;i<Count;++i)
         {
             var state=saved[i];
             live[i].SetGeometry(state.Pose.Length,state.Radius);
@@ -315,18 +368,18 @@ public partial class PlantSubFormation<T>
         var src = Src(); var length = src[index].Length; var radius = src[index].Radius;
         if (length <= old.Pose.Length && radius <= old.Radius) return false;
         src[index].SetGeometry(MathF.Min(length, old.Pose.Length), MathF.Min(radius, old.Radius));
-        RebaseAndRefit();
-        if (!admissible()) { src[index].SetGeometry(length, radius); RebaseAndRefit(); return false; }
+        RebaseAndRefit(index);
+        if (!admissible()) { src[index].SetGeometry(length, radius); RebaseAndRefit(index); return false; }
         float lo = 0, hi = 1;
         for (int step = 0; step < 8; ++step)
         {
             var mid = (lo + hi) * 0.5f;
             src[index].SetGeometry(old.Pose.Length + (length - old.Pose.Length) * mid, old.Radius + (radius - old.Radius) * mid);
-            RebaseAndRefit();
+            RebaseAndRefit(index);
             if (admissible()) lo = mid; else hi = mid;
         }
         src[index].SetGeometry(old.Pose.Length + (length - old.Pose.Length) * lo, old.Radius + (radius - old.Radius) * lo);
-        RebaseAndRefit();
+        RebaseAndRefit(index);
         // Extension and radial strengthening are independent proposals. Contact at the tip
         // must not discard admissible thickening (nor a width limit discard safe extension).
         var acceptedLength=src[index].Length;
@@ -340,17 +393,17 @@ public partial class PlantSubFormation<T>
             if(to<=from) return;
             var live=Src();float lower=from,upper=to;
             live[index].SetGeometry(longitudinal?to:fixedSize,longitudinal?fixedSize:to);
-            RebaseAndRefit();
+            RebaseAndRefit(index);
             if(admissible()) return;
             for(int n=0;n<8;++n)
             {
                 var mid=(lower+upper)*.5f;
                 live[index].SetGeometry(longitudinal?mid:fixedSize,longitudinal?fixedSize:mid);
-                RebaseAndRefit();
+                RebaseAndRefit(index);
                 if(admissible()) lower=mid; else upper=mid;
             }
             live[index].SetGeometry(longitudinal?lower:fixedSize,longitudinal?fixedSize:lower);
-            RebaseAndRefit();
+            RebaseAndRefit(index);
         }
     }
 
@@ -365,15 +418,23 @@ public partial class PlantSubFormation<T>
         if (tangent.LengthSquared() < 1e-8f) tangent = light - normal * Vector3.Dot(light, normal);
         if (tangent.LengthSquared() < 1e-8f) tangent = Vector3.Cross(normal, MathF.Abs(normal.Y) < 0.9f ? Vector3.UnitY : Vector3.UnitX);
         tangent = Vector3.Normalize(tangent);
-        var candidates = new List<Vector3>(6);
-        foreach (var sign in new[] { 1f, -1f })
-            foreach (var angle in new[] { 0f, -MathF.PI / 6f, MathF.PI / 6f })
+        var candidates = RedirectCandidates;
+        candidates.Clear();
+        for (int signIndex = 0; signIndex < 2; ++signIndex)
+            for (int angleIndex = 0; angleIndex < 3; ++angleIndex)
+            {
+                var sign = signIndex == 0 ? 1f : -1f;
+                var angle = angleIndex == 0 ? 0f : angleIndex == 1 ? -MathF.PI / 6f : MathF.PI / 6f;
                 candidates.Add(Vector3.Normalize(Vector3.Transform(tangent * sign, Quaternion.CreateFromAxisAngle(normal, angle)) + normal * 0.05f));
-        candidates.Sort((a, b) => (Vector3.Dot(b, direction) + 0.25f * Vector3.Dot(b, light))
-            .CompareTo(Vector3.Dot(a, direction) + 0.25f * Vector3.Dot(a, light)));
-        var affected = new List<int> { index };
+            }
+        RedirectDirection = direction; RedirectLight = light;
+        candidates.Sort(RedirectComparison);
+        var affected = RedirectTrialOrgans;
+        affected.Clear(); affected.Add(index);
         for (int j = 0; j < affected.Count; ++j) affected.AddRange(GetChildren(affected[j]));
-        var saved = new GeometryState[affected.Count];
+        if (RedirectTrialStates.Length < affected.Count)
+            Array.Resize(ref RedirectTrialStates, Math.Max(affected.Count, Math.Max(16, RedirectTrialStates.Length * 2)));
+        var saved = RedirectTrialStates;
         for (int j = 0; j < affected.Count; ++j)
         {
             var i = affected[j];
@@ -390,10 +451,10 @@ public partial class PlantSubFormation<T>
             var delta = Quaternion.Normalize(orientation * Quaternion.Conjugate(src[index].Orientation));
             src[index].SetOrientation(orientation);
             PropagateToSubtree(src, index, delta);
-            RebaseAndRefit();
+            RebaseAndRefit(index);
             if (admissible()) return true;
         }
-        RestoreTrial(); RebaseAndRefit(); return false;
+        RestoreTrial(); RebaseAndRefit(index); return false;
 
         void RestoreTrial()
         {

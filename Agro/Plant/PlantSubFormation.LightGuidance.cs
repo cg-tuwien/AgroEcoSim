@@ -11,6 +11,7 @@ public partial class PlantSubFormation<T>
         public float OpenWeight, LastHour;
     }
     readonly Dictionary<ulong, GrowthLight> GrowthLights = [];
+    readonly List<ulong> RemovedGuidanceIds = [];
     static readonly Vector3[] GrowthRayDirections = MakeGrowthDirections();
     public long GrowthGuidanceRays { get; private set; }
 
@@ -34,7 +35,10 @@ public partial class PlantSubFormation<T>
         if (GetIsRizome(i)) return false;
         var organ = GetOrgan(i);
         if (organ == OrganTypes.Meristem) return true;
-        return organ == OrganTypes.Stem && GetChildren(i).Any(j => GetOrgan(j) == OrganTypes.Petiole);
+        if (organ != OrganTypes.Stem) return false;
+        foreach (var child in GetChildren(i))
+            if (GetOrgan(child) == OrganTypes.Petiole) return true;
+        return false;
     }
 
     bool GuidanceDue(int i, float hour) => !GrowthLights.TryGetValue(GetOrganId(i), out var light)
@@ -52,7 +56,9 @@ public partial class PlantSubFormation<T>
     {
         if (!Plant.World.GrowthLightGuidanceEnabled) return;
         var hour = Plant.World.Timestep * (float)Plant.World.HoursPerTick;
-        foreach (var id in GrowthLights.Keys.Where(id => FindOrgan(id) < 0).ToArray()) GrowthLights.Remove(id);
+        RemovedGuidanceIds.Clear();
+        foreach (var id in GrowthLights.Keys) if (FindOrgan(id) < 0) RemovedGuidanceIds.Add(id);
+        foreach (var id in RemovedGuidanceIds) GrowthLights.Remove(id);
         for (int i = 0; i < Count; ++i)
         {
             if (!IsGuidanceApex(i) || !GuidanceDue(i, hour)) continue;

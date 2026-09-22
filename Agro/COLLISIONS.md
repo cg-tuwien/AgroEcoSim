@@ -1,5 +1,9 @@
 # Collision response and canopy recovery
 
+CPU hierarchy/cache changes, conservative collision geometry, optional CUDA,
+operational controls and performance regression scenarios are documented in
+[COLLISION_PERFORMANCE.md](COLLISION_PERFORMANCE.md).
+
 ## Growth and survival
 
 Collision handling does not call above-ground organ death. A failed increment

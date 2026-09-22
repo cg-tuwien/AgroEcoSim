@@ -43,6 +43,10 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 	ulong NextOrganId = 1;
 
 	readonly TreeCacheData TreeCache = new();
+	// Derived cache generations; deliberately excluded from live checkpoints.
+	internal long TopologyRevision { get; private set; }
+	internal long CollisionGeometryRevision { get; private set; }
+	bool HeightDirty;
 
     public Bvh CollisionBvh { get; set; } = new();
 
@@ -58,12 +62,20 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 		CollisionEligibility = IsCollisionEligible;
 		PrunableCrown = TreeCache.PrunableCrown;
 		InitialCollisionFilter = InitialPairFilter;
+		RedirectComparison = CompareRedirectCandidates;
 	}
 
 	internal float DailyResourceMax { get; private set; }
 	public float DailyProductionMax { get; private set; }
 	internal float DailyEfficiencyMax { get; private set; }
-	internal float Height => TreeCache.Height;
+	internal float Height
+	{
+		get
+		{
+			if (HeightDirty) { TreeCache.UpdateHeight(this); HeightDirty = false; }
+			return TreeCache.Height;
+		}
+	}
 	readonly bool IsAboveGround;
 	const float HeightEpsilon = 1e-6f;
 
@@ -237,6 +249,10 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 			TreeCache.AddChild(live[i].Parent, i);
 		TreeCache.FinishUpdate(this);
 		TreeCache.UpdateBases(this);
+		HeightDirty = false;
+		++TopologyRevision;
+		++CollisionGeometryRevision;
+		InvalidateLaminaCache();
 
 		DailyResourceMax = reader.ReadSingle();
 		DailyProductionMax = reader.ReadSingle();
@@ -343,12 +359,15 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 				TreeCache.AddChild(dst[i].Parent, i);
 			TreeCache.FinishUpdate(this);
 			TreeCache.UpdateBases(this);
+			++TopologyRevision;
+			InvalidateLaminaCache();
+			RefreshOrganIndices();
 			Births.Clear();
 		}
 		else
 			TreeCache.UpdateBases(this);
 
-		RefreshOrganIndices();
+		HeightDirty = false;
 		if (IsAboveGround)
 			BuildBvh();
 		// The underground collision tree has no consumer at present. Reactivate
@@ -489,6 +508,8 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 	//parallel tick does not contend on them.
 	/// <summary>Stopwatch ticks spent in the collision pass.</summary>
 	public long CollisionTicks;
+	/// <summary>Stopwatch ticks spent in gravity, for phase-level performance probes.</summary>
+	public long GravityTicks;
 	/// <summary>Candidate pairs the broad phase produced.</summary>
 	public long CollisionCandidatePairs;
 	/// <summary>Pairs that survived the narrow phase and were actually resolved.</summary>
@@ -616,6 +637,9 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 	{
 		if (!IsAboveGround)
             return;
+		var started = Stopwatch.GetTimestamp();
+		try
+		{
 
         var dst = Src(); //since Tick already swapped them
         var count = dst.Length;
@@ -862,10 +886,13 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
             }
         }
 		TreeCache.UpdateBases(this);
+		HeightDirty = false;
 		refitAllBounds();
         //Foliage against foliage within one plant. Obstacles and soil are hard constraints and are
         //handled by the world collision phase regardless of this switch.
         // Dynamic contacts are resolved with static constraints by CollisionWorld, after Census.
+		}
+		finally { GravityTicks += Stopwatch.GetTimestamp() - started; }
     }
     /// <summary>
     /// Carries a rotation of one organ rigidly through everything beyond it.
@@ -1047,10 +1074,12 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 	/// included: a resolved contact rotates it, so its own bounds are stale too.</summary>
 	private void refitChildrens(int i)
 	{
+		++CollisionGeometryRevision;
         var children = CollisionChildren;
         children.Clear();
 		children.Enqueue(i);
         CollisionBvh.UpdateLeafBounds(i, CollisionBounds(i));
+		if (GetIsRizome(i)) RhizomeBvh.UpdateLeafBounds(i, ComputeBounds(i));
         while (children.Count > 0)
         {
 			var index = children.Dequeue();
@@ -1058,16 +1087,19 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
             {
                 children.Enqueue(child);
                 CollisionBvh.UpdateLeafBounds(child, CollisionBounds(child));
+				if (GetIsRizome(child)) RhizomeBvh.UpdateLeafBounds(child, ComputeBounds(child));
             }
 
         }
         CollisionBvh.RefitUpdatedLeaves();
+		RhizomeBvh.RefitUpdatedLeaves();
     }
 
 	/// <summary>Refits every organ. The previous whole-tree refit passed index 0, which skipped
 	/// agent 0's own bounds and any subtree under a second root.</summary>
 	private void refitAllBounds()
 	{
+		++CollisionGeometryRevision;
         var children = CollisionChildren;
         children.Clear();
         foreach (var root in GetRoots())
@@ -1292,7 +1324,17 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 	internal void RebaseAndRefit()
 	{
 		TreeCache.UpdateBases(this);
+		HeightDirty = false;
 		refitAllBounds();
+	}
+
+	// A trial changes one support component. Recompute its descendants using the
+	// same arithmetic as a whole-plant rebase; defer the unrelated height scan.
+	void RebaseAndRefit(int root)
+	{
+		TreeCache.UpdateBases(this, root);
+		HeightDirty = true;
+		refitChildrens(root);
 	}
 
 	/// <summary>
@@ -1583,6 +1625,8 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 			BranchDist = branchDist;
 		}
 	}
+	readonly List<PathData> AuxinPath = [];
+	readonly List<(int, float)> AuxinFrontA = [], AuxinFrontB = [];
 
 	internal void Hormones(bool isAG)
 	{
@@ -1590,7 +1634,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 		if (isAG)
 		{
 			var dst = Src();
-			var path = new List<PathData>();
+			var path = AuxinPath;
 			for(int i = 0; i < dst.Length; ++i)
 			{
 				var isMeristem = dst[i].Organ == OrganTypes.Meristem;
@@ -1609,8 +1653,10 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 		path.Clear();
 
 		var auxinsReach = Plant.Parameters.AuxinsReach;
-		var bufferSrc = new List<(int, float)>();
-		var bufferDst = new List<(int, float)>();
+		var bufferSrc = AuxinFrontA;
+		var bufferDst = AuxinFrontB;
+		bufferSrc.Clear();
+		bufferDst.Clear();
 
 		{
 			var p = GetParent(initNode);
@@ -2007,10 +2053,12 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 
 	public void BuildBvh()
 	{
+		++CollisionGeometryRevision;
         var dst = Src();
         if (dst.Length == 0)
         {
             CollisionBvh.Clear();
+			RhizomeBvh.Clear();
             return;
         }
         // All physical organs participate in foliage contacts. The separate rhizome hierarchy
@@ -2034,9 +2082,11 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
         }
 
         CollisionBodies = leaves.Count;
-        CollisionBvh.Build(CollectionsMarshal.AsSpan(leaves));
+        if (!CollisionBvh.TryRefit(CollectionsMarshal.AsSpan(leaves)))
+            CollisionBvh.Build(CollectionsMarshal.AsSpan(leaves));
         // Different leaves of the same crown can touch; crown-wide pruning is not valid.
-        RhizomeBvh.Build(CollectionsMarshal.AsSpan(rhizomes));
+        if (!RhizomeBvh.TryRefit(CollectionsMarshal.AsSpan(rhizomes)))
+            RhizomeBvh.Build(CollectionsMarshal.AsSpan(rhizomes));
     }
     //Temporal coherence for the static passes: an organ that was measured well clear of every
     //wall does not have to be measured again until it has moved far enough to matter. Indexed by

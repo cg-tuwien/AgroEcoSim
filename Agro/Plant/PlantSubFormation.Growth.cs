@@ -33,6 +33,13 @@ public partial class PlantSubFormation<T>
     readonly Dictionary<ulong, Development> Developments = [];
     readonly Dictionary<ulong, int> OrganIndices = [];
     readonly List<(int Index, OrganDeathReason Reason)> DevelopmentDeaths = [];
+    readonly List<ulong> RemovedGrowthIds = [], CompletedGrowthIds = [];
+    readonly List<Development> DevelopmentOrder = [];
+    readonly List<int> DevelopmentDescendants = [];
+    readonly HashSet<ulong> DevelopmentMoving = [];
+    readonly HashSet<int> DevelopmentSupportRoots = [];
+    OrganPose[] DevelopmentPoses = [];
+    LaminaTemplate?[] DevelopmentTemplates = [];
     bool RecordingDevelopment;
     AboveGroundAgent TickPhysiology;
     internal void MarkDevelopmentPhysiology(in AboveGroundAgent agent) => TickPhysiology = agent;
@@ -50,8 +57,14 @@ public partial class PlantSubFormation<T>
         OrganIndices.Clear();
         var src = Src();
         for (int i = 0; i < src.Length; ++i) OrganIndices.Add(src[i].StableId, i);
-        foreach (var id in GrowthRetries.Keys.Where(id => !OrganIndices.ContainsKey(id)).ToArray()) GrowthRetries.Remove(id);
-        foreach (var id in Developments.Keys.Where(id => !OrganIndices.ContainsKey(id)).ToArray()) Developments.Remove(id);
+        RemovedGrowthIds.Clear();
+        foreach (var id in GrowthRetries.Keys)
+            if (!OrganIndices.ContainsKey(id)) RemovedGrowthIds.Add(id);
+        foreach (var id in RemovedGrowthIds) GrowthRetries.Remove(id);
+        RemovedGrowthIds.Clear();
+        foreach (var id in Developments.Keys)
+            if (!OrganIndices.ContainsKey(id)) RemovedGrowthIds.Add(id);
+        foreach (var id in RemovedGrowthIds) Developments.Remove(id);
     }
 
     internal bool HasPendingDevelopment(int i) => i >= 0 && Developments.ContainsKey(Src()[i].StableId);
@@ -88,9 +101,14 @@ public partial class PlantSubFormation<T>
 
     internal void CompleteGrowthAttempts()
     {
-        foreach (var (id, retry) in GrowthRetries.ToArray())
+        CompletedGrowthIds.Clear();
+        foreach (var (id, retry) in GrowthRetries)
         {
             if (!retry.Attempted || Developments.ContainsKey(id)) continue;
+            CompletedGrowthIds.Add(id);
+        }
+        foreach (var id in CompletedGrowthIds)
+        {
             var i = FindOrgan(id);
             if (i >= 0) SetObstruction(i, false);
         }
@@ -171,14 +189,18 @@ public partial class PlantSubFormation<T>
         var hour = Plant.World.Timestep * (float)Plant.World.HoursPerTick;
         // Dictionary slots are reused after removal and are not a developmental order.
         // Stable ordering also preserves resource allocation and organ indices on resume.
-        foreach (var proposal in Developments.Values.OrderBy(p => p.Owner).ToArray())
+        DevelopmentOrder.Clear();
+        DevelopmentOrder.AddRange(Developments.Values);
+        DevelopmentOrder.Sort(static (a, b) => a.Owner.CompareTo(b.Owner));
+        foreach (var proposal in DevelopmentOrder)
         {
             var index = FindOrgan(proposal.Owner);
             if (index < 0 || Deaths.Contains(index)) { Developments.Remove(proposal.Owner); continue; }
             if (GrowthRetries.TryGetValue(proposal.Owner, out var retry) && hour < retry.NextHour && !retry.Attempted) continue;
             GeometryState[]? supportFallback=null;
             var supportAttempts=0;
-            var supportRoots=new HashSet<int>();
+            var supportRoots=DevelopmentSupportRoots;
+            supportRoots.Clear();
         RetrySupportedDevelopment:
             ref var current = ref Unsafe.As<T, AboveGroundAgent>(ref Src()[index]);
             if (current.Energy <= 0f) continue;
@@ -196,13 +218,21 @@ public partial class PlantSubFormation<T>
                 parent.targetOrientation = current.targetOrientation;
             }
             var children = proposal.Children;
-            var poses = new OrganPose[children.Length];
-            var templates = new LaminaTemplate?[children.Length];
+            if (DevelopmentPoses.Length < children.Length)
+            {
+                var capacity = Math.Max(children.Length, Math.Max(8, DevelopmentPoses.Length * 2));
+                Array.Resize(ref DevelopmentPoses, capacity);
+                Array.Resize(ref DevelopmentTemplates, capacity);
+            }
+            var poses = DevelopmentPoses;
+            var templates = DevelopmentTemplates;
             var parentPose = PoseFor(parent, GetBaseCenterWorld(index));
             var oldPose = GetContactPose(index);
             var changed = oldPose.MotionBound(parentPose) > 1e-7f;
-            var descendants = new List<int>();
-            var moving = new HashSet<ulong> { proposal.Owner };
+            var descendants = DevelopmentDescendants;
+            descendants.Clear();
+            var moving = DevelopmentMoving;
+            moving.Clear(); moving.Add(proposal.Owner);
             if (changed)
             {
                 descendants.AddRange(GetChildren(index));

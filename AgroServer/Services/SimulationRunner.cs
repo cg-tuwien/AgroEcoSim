@@ -179,6 +179,9 @@ public class SimulationRunner : ISimulationRunner
 
         var world = Initialize.World(request, terrain?.Terrain);
         world.Deterministic = request.Deterministic ?? false;
+        // Persist the resolved numerical tolerance so a later replay does not inherit
+        // a different default from the server version installed at that time.
+        request = request with { CollisionGeometryToleranceM = world.CollisionGeometryToleranceM };
 
         //Counted off the BUILT WORLD, not off the request, because for an imported facade the two
         //are not the same measurement. The request carries a single 'mesh' obstacle standing for

@@ -38,15 +38,7 @@ internal readonly record struct ContactShape(OrganPose Pose, LaminaTemplate? Lam
             var result = Vector3.Dot(a, direction) < Vector3.Dot(b, direction) ? a : b;
             return Vector3.Dot(result, direction) < Vector3.Dot(c, direction) ? result : c;
         }
-        var point = Vector3.Zero; var best = float.PositiveInfinity;
-        var localDirection = Vector3.Transform(direction, Quaternion.Conjugate(Pose.Rotation));
-        foreach (var vertex in Lamina.Vertices)
-        {
-            var v = new Vector3((vertex.X + 1f) * Pose.Length * 0.5f, vertex.Z * Lamina.ReliefScale(Pose.Width), -vertex.Y * Pose.Width);
-            var dot = Vector3.Dot(v, localDirection);
-            if (dot < best) { best = dot; point = v; }
-        }
-        return Pose.Base + Vector3.Transform(point, Pose.Rotation);
+        return Lamina.Support(Pose, direction);
     }
     public float ArcBound(in ContactShape other)
     {
@@ -93,11 +85,27 @@ internal static partial class FoliageGeometry
     [ThreadStatic] static List<int>? TrianglesB;
     [ThreadStatic] static List<int>? SweepTriangles;
     [ThreadStatic] static List<int>? SweepFirstTriangles;
+    [ThreadStatic] static List<(int A, int B)>? TemplatePairs;
+    [ThreadStatic] static Vector3[]? TransformedA;
+    [ThreadStatic] static Vector3[]? TransformedB;
     static Bvh.BoundingBox Pad(Bvh.BoundingBox b, float p) => new(b.Min - new Vector3(p), b.Max + new Vector3(p));
     static Bvh.BoundingBox Bounds(Vector3 a, Vector3 b, Vector3 c) => new(Vector3.Min(a, Vector3.Min(b, c)), Vector3.Max(a, Vector3.Max(b, c)));
 
     static FoliageContact DistanceUncached(in ContactShape a, in ContactShape b, float search)
     {
+        if (a.Feature >= 0 && b.Feature >= 0 && a.Lamina != null && b.Lamina != null)
+        {
+            // Temporal subdivision asks about individual triangle features millions of
+            // times. Prune their current boxes before distance arithmetic, and avoid
+            // constructing single-item query lists for this direct narrow-phase case.
+            a.Lamina.Triangle(a.Pose, a.Feature, out var p, out var q, out var r);
+            b.Lamina.Triangle(b.Pose, b.Feature, out var x, out var y, out var z);
+            if (!Bounds(p,q,r).Intersects(Pad(Bounds(x,y,z), search)))
+                return new(a.Pose.Base,b.Pose.Base,Vector3.UnitY,search,-1,-1);
+            var d = TriangleDistance(p,q,r,x,y,z,out var onA,out var onB,search);
+            return d < search ? Make(onA,onB,x,y,z,d,a.Feature,b.Feature)
+                : new(a.Pose.Base,b.Pose.Base,Vector3.UnitY,search,-1,-1);
+        }
         if(a.Feature<0 && b.Feature<0 && BoundsSeparate(a,b,search))
             return new(a.Pose.Base,b.Pose.Base,Vector3.UnitY,search,-1,-1);
         if(a.Feature<0 && b.Feature<0 && a.Lamina!=null && b.Lamina!=null
@@ -126,8 +134,31 @@ internal static partial class FoliageGeometry
             foreach (var j in hitsB)
             {
                 b.Lamina.Triangle(b.Pose, j, out var p, out var q, out var r);
+                ++TriangleCount;
                 var d = StaticCollider.SegmentTriangleDistance(a.Pose.Base, a.Pose.Tip, p, q - p, r - p, out var onB, out var onA);
                 if (d < best.Distance) best = Make(onA, onB, p, q, r, d, -1, j);
+                if (d <= 1e-9f || d < a.Pose.Radius + b.Pose.Radius - Skin) return best;
+            }
+            return best;
+        }
+        if (a.Feature < 0 && b.Feature < 0)
+        {
+            var pairs = TemplatePairs ??= [];
+            a.Lamina.QueryPairs(a.Pose, b.Lamina, b.Pose, search, pairs);
+            // In a dense query the same vertex belongs to many candidate facet pairs.
+            // Transform once for this query; no pose hashing occurs in the inner loop.
+            // Sparse queries keep direct transforms so preparing an entire mesh cannot
+            // cost more than the triangle work it replaces.
+            var va = pairs.Count * 3 > a.Lamina.Vertices.Length
+                ? TransformVertices(a, ref TransformedA) : ReadOnlySpan<Vector3>.Empty;
+            var vb = pairs.Count * 3 > b.Lamina.Vertices.Length
+                ? TransformVertices(b, ref TransformedB) : ReadOnlySpan<Vector3>.Empty;
+            foreach (var (i, j) in pairs)
+            {
+                Triangle(a, i, va, out var p, out var q, out var r);
+                Triangle(b, j, vb, out var x, out var y, out var z);
+                var d = TriangleDistance(p, q, r, x, y, z, out var onA, out var onB,best.Distance);
+                if (d < best.Distance) best = Make(onA, onB, x, y, z, d, i, j);
                 if (d <= 1e-9f || d < a.Pose.Radius + b.Pose.Radius - Skin) return best;
             }
             return best;
@@ -143,12 +174,28 @@ internal static partial class FoliageGeometry
             foreach (var j in hitsB)
             {
                 b.Lamina.Triangle(b.Pose, j, out var x, out var y, out var z);
-                var d = TriangleDistance(p, q, r, x, y, z, out var onA, out var onB);
+                var d = TriangleDistance(p, q, r, x, y, z, out var onA, out var onB,best.Distance);
                 if (d < best.Distance) best = Make(onA, onB, x, y, z, d, i, j);
                 if (d <= 1e-9f || d < a.Pose.Radius + b.Pose.Radius - Skin) return best;
             }
         }
         return best;
+    }
+
+    static ReadOnlySpan<Vector3> TransformVertices(in ContactShape shape, ref Vector3[]? buffer)
+    {
+        var vertices = shape.Lamina!.Vertices;
+        if (buffer == null || buffer.Length < vertices.Length) buffer = new Vector3[vertices.Length];
+        for (int i = 0; i < vertices.Length; ++i) buffer[i] = shape.Lamina.Transform(shape.Pose, vertices[i]);
+        return buffer.AsSpan(0, vertices.Length);
+    }
+
+    static void Triangle(in ContactShape shape, int feature, ReadOnlySpan<Vector3> vertices,
+        out Vector3 a, out Vector3 b, out Vector3 c)
+    {
+        if (vertices.IsEmpty) { shape.Lamina!.Triangle(shape.Pose,feature,out a,out b,out c); return; }
+        var indices = shape.Lamina!.Indices;
+        a = vertices[indices[feature*3]]; b = vertices[indices[feature*3+1]]; c = vertices[indices[feature*3+2]];
     }
 
     static bool BoundsSeparate(in ContactShape a, in ContactShape b, float clearance)
@@ -215,28 +262,67 @@ internal static partial class FoliageGeometry
         return new(a, b, normal.LengthSquared() > 1e-20f ? Vector3.Normalize(normal) : Vector3.UnitY, distance, fa, fb);
     }
 
-    internal static float TriangleDistance(Vector3 a, Vector3 b, Vector3 c, Vector3 p, Vector3 q, Vector3 r, out Vector3 onA, out Vector3 onB)
+    internal static float TriangleDistance(Vector3 a, Vector3 b, Vector3 c, Vector3 p, Vector3 q, Vector3 r,
+        out Vector3 onA, out Vector3 onB, float search = float.PositiveInfinity)
     {
         ++TriangleCount;
-        var best = float.PositiveInfinity; onA = a; onB = p;
-        Edge(a, b, p, q, r, false, ref best, ref onA, ref onB);
-        if (best == 0) return 0;
-        Edge(b, c, p, q, r, false, ref best, ref onA, ref onB);
-        if (best == 0) return 0;
-        Edge(c, a, p, q, r, false, ref best, ref onA, ref onB);
-        if (best == 0) return 0;
-        Edge(p, q, a, b, c, true, ref best, ref onA, ref onB);
-        if (best == 0) return 0;
-        Edge(q, r, a, b, c, true, ref best, ref onA, ref onB);
-        if (best == 0) return 0;
-        Edge(r, p, a, b, c, true, ref best, ref onA, ref onB);
-        return best;
+        var ab = b - a; var ac = c - a; var pq = q - p; var pr = r - p;
+        var na = Vector3.Cross(ab, ac); var nb = Vector3.Cross(pq, pr);
+        // Most candidate facets are on separate planes even when their boxes overlap.
+        // A projection lower bound avoids the 6 vertex/face and 9 edge/edge distances.
+        // Returning the search ceiling cannot replace a closer feature or create contact.
+        if (float.IsFinite(search) && (PlaneSeparates(na,ab,ac,p-a,q-a,r-a,search)
+            || PlaneSeparates(nb,pq,pr,a-p,b-p,c-p,search)))
+        { onA = a; onB = p; return search; }
+        if (Pierces(a,b,p,pq,pr,nb,out var hit) || Pierces(b,c,p,pq,pr,nb,out hit)
+            || Pierces(c,a,p,pq,pr,nb,out hit) || Pierces(p,q,a,ab,ac,na,out hit)
+            || Pierces(q,r,a,ab,ac,na,out hit) || Pierces(r,p,a,ab,ac,na,out hit))
+        { onA = onB = hit; return 0; }
+        // Six segment/triangle calls repeated every vertex/face and edge/edge
+        // distance twice, with six square roots. Evaluate each feature once instead.
+        Span<Vector3> aa = stackalloc Vector3[3] { a, b, c };
+        Span<Vector3> bb = stackalloc Vector3[3] { p, q, r };
+        float best = float.PositiveInfinity; onA = a; onB = p;
+        for (int i = 0; i < 3; ++i)
+        {
+            Consider(aa[i], StaticCollider.ClosestPointOnTriangle(aa[i], p, pq, pr), ref best, ref onA, ref onB);
+            Consider(StaticCollider.ClosestPointOnTriangle(bb[i], a, ab, ac), bb[i], ref best, ref onA, ref onB);
+            for (int j = 0; j < 3; ++j)
+            {
+                StaticCollider.ClosestPointsBetweenSegments(aa[i], aa[(i+1)%3], bb[j], bb[(j+1)%3], out var x, out var y, out var d2);
+                if (d2 < best) { best = d2; onA = x; onB = y; }
+            }
+        }
+        return MathF.Sqrt(best);
     }
-    static void Edge(Vector3 a, Vector3 b, Vector3 p, Vector3 q, Vector3 r, bool reverse, ref float best, ref Vector3 onA, ref Vector3 onB)
+    static bool PlaneSeparates(Vector3 normal, Vector3 ab, Vector3 ac, Vector3 p, Vector3 q, Vector3 r, float search)
     {
-        var d = StaticCollider.SegmentTriangleDistance(a, b, p, q - p, r - p, out var tri, out var edge);
-        if (d >= best) return;
-        best = d; onA = reverse ? tri : edge; onB = reverse ? edge : tri;
+        var size = normal.LengthSquared();
+        if (size < 1e-30f) return false;
+        var b = Vector3.Dot(normal, ab); var c = Vector3.Dot(normal, ac);
+        var x = Vector3.Dot(normal, p); var y = Vector3.Dot(normal, q); var z = Vector3.Dot(normal, r);
+        var lowA = MathF.Min(0,MathF.Min(b,c)); var highA = MathF.Max(0,MathF.Max(b,c));
+        var lowB = MathF.Min(x,MathF.Min(y,z)); var highB = MathF.Max(x,MathF.Max(y,z));
+        var gap = MathF.Max(lowA-highB,lowB-highA);
+        var padded = search + Skin * .01f;
+        return gap > 0 && gap * gap > padded * padded * size;
+    }
+    static void Consider(Vector3 a, Vector3 b, ref float best, ref Vector3 onA, ref Vector3 onB)
+    {
+        var d2 = Vector3.DistanceSquared(a,b);
+        if (d2 < best) { best = d2; onA = a; onB = b; }
+    }
+    static bool Pierces(Vector3 start, Vector3 end, Vector3 a, Vector3 ab, Vector3 ac, Vector3 normal, out Vector3 hit)
+    {
+        hit = default;
+        var direction = end - start;
+        if (direction.LengthSquared() <= 1e-16f) return false;
+        var denominator = Vector3.Dot(normal, direction);
+        if (MathF.Abs(denominator) <= 1e-20f) return false;
+        var t = Vector3.Dot(normal, a-start) / denominator;
+        if (t < 0 || t > 1) return false;
+        hit = start + direction*t;
+        return Vector3.DistanceSquared(hit, StaticCollider.ClosestPointOnTriangle(hit,a,ab,ac)) <= 1e-12f;
     }
 
     static bool SweepUncached(in ContactShape fromA, in ContactShape toA, in ContactShape fromB, in ContactShape toB, int depth = 0)
@@ -252,6 +338,9 @@ internal static partial class FoliageGeometry
         if (!fromA.SweptBounds(toA).Intersects(fromB.SweptBounds(toB))) return true;
         if (depth == 0 && (fromA.Feature < 0 || fromB.Feature < 0))
         {
+            // A whole-sheet plane certificate is much cheaper than the triangle distance
+            // queried below. It bounds the entire path, including curvature and rotation.
+            if (SweptPlanesSeparate(fromA,toA,fromB,toB)) return true;
             // Certify small whole-organ motion before splitting a lamina into triangles.
             // Daily growth usually moves only a fraction of the gap to its neighbours;
             // a distance bound proves all vertex/face and edge/edge paths at once.
@@ -260,12 +349,6 @@ internal static partial class FoliageGeometry
                 + MathF.Max(fromB.Pose.Radius, toB.Pose.Radius);
             var separation = Distance(fromA, fromB, padding + movement + Skin).Distance;
             if (separation >= padding + movement - Skin) return true;
-            // Most overlapping canopy boxes belong to sheets on distinct planes. Certify
-            // those whole bodies before descending into their displayed triangulations.
-            if (fromA.Lamina != null && (SeparatingPlane(fromA, toA, fromB, toB, Vector3.Transform(Vector3.UnitY, fromA.Pose.Rotation))
-                || SeparatingPlane(fromA, toA, fromB, toB, Vector3.Transform(Vector3.UnitY, toA.Pose.Rotation)))) return true;
-            if (fromB.Lamina != null && (SeparatingPlane(fromA, toA, fromB, toB, Vector3.Transform(Vector3.UnitY, fromB.Pose.Rotation))
-                || SeparatingPlane(fromA, toA, fromB, toB, Vector3.Transform(Vector3.UnitY, toB.Pose.Rotation)))) return true;
         }
         if (fromA.Lamina != null && fromA.Feature < 0)
         {
@@ -302,6 +385,14 @@ internal static partial class FoliageGeometry
         if (depth >= 16) return false; // Uncertified motion is never accepted on budget exhaustion.
         return SweepInterval(fromA, midA, fromB, midB, depth + 1, ref intervals)
             && SweepInterval(midA, toA, midB, toB, depth + 1, ref intervals);
+    }
+
+    static bool SweptPlanesSeparate(in ContactShape a0, in ContactShape a1, in ContactShape b0, in ContactShape b1)
+    {
+        if (a0.Lamina != null && (SeparatingPlane(a0,a1,b0,b1,Vector3.Transform(Vector3.UnitY,a0.Pose.Rotation))
+            || a0.Pose.Rotation != a1.Pose.Rotation && SeparatingPlane(a0,a1,b0,b1,Vector3.Transform(Vector3.UnitY,a1.Pose.Rotation)))) return true;
+        return b0.Lamina != null && (SeparatingPlane(a0,a1,b0,b1,Vector3.Transform(Vector3.UnitY,b0.Pose.Rotation))
+            || b0.Pose.Rotation != b1.Pose.Rotation && SeparatingPlane(a0,a1,b0,b1,Vector3.Transform(Vector3.UnitY,b1.Pose.Rotation)));
     }
 
     static bool SeparatingPlane(in ContactShape a0, in ContactShape a1, in ContactShape b0, in ContactShape b1, Vector3 normal)

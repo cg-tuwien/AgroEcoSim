@@ -239,7 +239,7 @@ internal class TreeCacheData
 		}
 	}
 
-	private void UpdateHeight<T>(PlantSubFormation<T> formation) where T : struct, IPlantAgent
+	internal void UpdateHeight<T>(PlantSubFormation<T> formation) where T : struct, IPlantAgent
 	{
 		Height = 0f;
 		var groundHeight = formation.Plant.Position.Y;

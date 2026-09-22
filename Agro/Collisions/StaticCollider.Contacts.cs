@@ -68,6 +68,7 @@ public sealed partial class StaticCollider
 
     bool SweepTriangle(in OrganPose from, in OrganPose to, int triangle, Vector3 normal, int depth, ref int intervals)
     {
+        ++FoliageGeometry.IntervalCount;
         if (--intervals < 0) return false;
         var point = A[triangle];
         var margin = MathF.Max(SurfaceRadius(from, normal), SurfaceRadius(to, normal))
