@@ -17,6 +17,38 @@ public class ImportedObjDataV2
     public Dictionary<string, (List<Vector3i> Triangles, List<int[]> Polygons)> Faces { get; set; }
 }
 
+///<summary>
+///Which way the loaded terrain model faces, which the scene azimuth has to compensate for.
+///</summary>
+///<remarks>
+///The basic azimuth assumes a model facing BACKWARD - -Z, i.e. north - so that case alone needs
+///no compensation. Most models face forward, which is half a turn away. The ORDER is the wire
+///format: the index is what the request and the site response carry, and
+///ThreeFrontend/src/helpers/Sun.ts mirrors it in AZIMUTH_OFFSETS. Inserting a member in the
+///middle silently re-points every stored run.
+///</remarks>
+public enum TerrainOrientation : byte { Forward, Right, Backward, Left }
+
+public static class TerrainOrientationExtensions
+{
+    ///<summary>
+    ///Degrees to add to the base azimuth. Mirrors AZIMUTH_OFFSETS in helpers/Sun.ts.
+    ///</summary>
+    ///<remarks>
+    ///A switch rather than an array lookup because the value arrives over JSON: System.Text.Json
+    ///casts an out-of-range number straight into a byte-backed enum without complaining, so an
+    ///index would throw on a request a newer client wrote and this build does not understand.
+    ///</remarks>
+    public static float OffsetDegrees(this TerrainOrientation orientation) => orientation switch
+    {
+        TerrainOrientation.Right => 90f,
+        TerrainOrientation.Backward => 0f,
+        TerrainOrientation.Left => -90f,
+        //Forward, and anything this build does not know.
+        _ => 180f,
+    };
+}
+
 //A record rather than a class purely for `with`: resuming a run needs the SAME request with one
 //field changed, and a hand-written copy constructor would silently drop the next field somebody
 //adds. Every property is still `init`, so nothing else about how it is used changes.
@@ -62,13 +94,20 @@ public record SimulationRequest
     ///<example>188</example>
     public float? Altitude { get; init; }
     ///<summary>
-    ///Rotation of the scene about the up axis, in degrees. Zero means the scene's +X axis
-    ///points east, and an increasing value turns the scene clockwise seen from above. It
-    ///states how the scene's axes are oriented on the compass and rotates no geometry - the
-    ///only thing it moves is the sun. Wrapped into [0, 360). (default: 0)
+    ///Rotation of the scene about the up axis before the terrain's own facing is accounted for,
+    ///in degrees. Zero means the scene's +X axis points east, and an increasing value turns the
+    ///scene clockwise seen from above. It rotates no geometry - the only thing it moves is the
+    ///sun. Wrapped into [0, 360). (default: 0)
     ///</summary>
     ///<example>0</example>
-    public float? Azimuth { get; init; }
+    public float? AzimuthBase { get; init; }
+    ///<summary>
+    ///Which way the loaded terrain model faces; its compensation is added to
+    ///<see cref="AzimuthBase"/> to give the azimuth the sun is actually computed against.
+    ///(default: Forward)
+    ///</summary>
+    ///<example>0</example>
+    public TerrainOrientation? AzimuthOffset { get; init; }
     ///<summary>
     ///Seed number that controls all pseudo-random decisions in the simulation. (default: 42)
     ///</summary>

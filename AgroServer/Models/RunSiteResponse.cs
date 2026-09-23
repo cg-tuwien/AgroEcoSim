@@ -19,7 +19,10 @@ public class RunSiteResponse
     public float Latitude { get; set; }
     public float Longitude { get; set; }
     public float Altitude { get; set; }
-    public float Azimuth { get; set; }
+    /// <summary>Scene rotation on the compass, before the terrain's own facing.</summary>
+    public float AzimuthBase { get; set; }
+    /// <summary>Which way the terrain model faces; see <see cref="Agro.TerrainOrientation"/>.</summary>
+    public Agro.TerrainOrientation AzimuthOffset { get; set; }
     /// <summary>IANA id of the zone the simulated clock runs on.</summary>
     public string TimeZone { get; set; } = "";
     /// <summary>

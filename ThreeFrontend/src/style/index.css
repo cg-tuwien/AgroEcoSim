@@ -52,6 +52,10 @@ body {
 	width: 5em;
 }
 
+#hud input[type="date"] {
+	width: 8em;
+}
+
 #hud input[type="range"] {
 	width: 16vw;
 }
@@ -178,3 +182,4 @@ ul.scrollable-listing {
 	font-size: 90%;
 	word-break: break-all;
 }
+

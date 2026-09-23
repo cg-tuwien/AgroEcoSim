@@ -90,8 +90,8 @@ public enum Mode : byte
 	Constant,
 	Mitsuba,
 	Tamashii,
-	/// <summary>The built in CPU tracer of <see cref="CpuLightSolver"/>. Also used automatically
-	/// whenever Mitsuba or Tamashii fails to answer.</summary>
+	/// <summary>The built in CPU tracer of <see cref="CpuLightSolver"/>.
+	/// Also used automatically whenever Mitsuba or Tamashii fails to answer.</summary>
 	Internal,
 }
 

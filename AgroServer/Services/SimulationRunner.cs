@@ -356,7 +356,8 @@ public class SimulationRunner : ISimulationRunner
             Latitude = world.Latitude,
             Longitude = world.Longitude,
             Altitude = world.Altitude,
-            Azimuth = world.Azimuth,
+            AzimuthBase = world.AzimuthBase,
+            AzimuthOffset = world.AzimuthOffset,
             TimeZone = world.TimeZone.Id,
             SkyCoverage = bytes,
         };

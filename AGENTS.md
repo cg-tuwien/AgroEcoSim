@@ -1116,6 +1116,16 @@ tab, and the constants are only DEFAULTS.
 - **Azimuth rotates the sun, not the geometry.** It states how the scene's axes sit on the
   compass; the whole of the maths is subtracting it from the solar azimuth. Nothing in the
   scene graph, the BVH or any export moves.
+- **Azimuth is two request fields, not one.** `AzimuthBase` is where the SITE sits on the
+  compass; `AzimuthOffset` (a `TerrainOrientation`: Forward, Right, Backward, Left) is which way
+  the loaded terrain MODEL faces, since the basic azimuth assumes a model facing Backward (-Z,
+  i.e. north) and most models are exported facing Forward instead. `AgroWorld` sums them into the
+  one `Azimuth` every solver reads, so nothing downstream of the constructor changed.
+  `TerrainOrientation`'s member order is the wire format - it is what the request and the site
+  response carry as a plain number - and it is mirrored by `AZIMUTH_OFFSETS` in
+  `ThreeFrontend/src/helpers/Sun.ts`; inserting a member in the middle re-points every stored run.
+  The default is Forward, so a run stored before this split re-opens at an effective 180° rather
+  than 0°.
 - **The time zone can only come from the server.** It derives the zone from the coordinates
   (GeoTimeZone) and no browser API does the same, so it is sent in the `RunSite` message and
   recomputed for a stored run by `GET /simulation/run/{id}/site`. A client that guessed would

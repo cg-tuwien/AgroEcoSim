@@ -16,7 +16,7 @@ import {
     obstacleValueOn, ObstacleMappingOptions, obstacleMappingSpec, stepDate,
 } from "./helpers/ObstacleLight";
 import { canDeflate, deflateBytes, inflateBytes } from "./helpers/deflate";
-import { ALTITUDE, AZIMUTH, DEFAULT_INITIAL_DATE, LATITUDE, LONGITUDE, SolarSite } from "./helpers/Sun";
+import { ALTITUDE, AZIMUTH, AZIMUTH_OFFSETS, DEFAULT_INITIAL_DATE, LATITUDE, LONGITUDE, SolarSite } from "./helpers/Sun";
 import { convertCoordsTo_RH_rightPX_upPY } from "./helpers/CoordinateSystem";
 import { LIGHTING_OFF, LightingOptions, SHADOW_NORMAL_OFFSET_TEXELS, lightingFromLegacyTier } from "./render/core/Lighting";
 import { Species } from "./helpers/Species";
@@ -198,7 +198,8 @@ hubConnection.on("runSite", (site: ISimRunSite) => {
         st.latitude.value = site.latitude;
         st.longitude.value = site.longitude;
         st.altitude.value = site.altitude;
-        st.azimuth.value = site.azimuth;
+        st.azimuthBase.value = site.azimuthBase ?? st.azimuthBase.peek();
+        st.azimuthOffset.value = site.azimuthOffset ?? st.azimuthOffset.peek();
         st.siteTimeZone.value = site.timeZone || undefined;
         st.weather.value = decodeSkyCoverage(site.skyCoverage);
     });
@@ -510,11 +511,10 @@ interface ISimRunSite
     latitude: number,
     longitude: number,
     altitude: number,
-    azimuth: number,
-    /** IANA id of the zone the simulated clock runs on. */
-    timeZone: string,
-    /** Cloud cover per timestep, raw little-endian float32, base64 over the wire. */
-    skyCoverage: string,
+    azimuthBase: number,
+    azimuthOffset: number,
+    timeZone: string, // IANA id of the zone the simulated clock runs on.
+    skyCoverage: string, // Cloud cover per timestep, raw little-endian float32, base64 over the wire.
 }
 
 interface ITrayModel
@@ -840,7 +840,7 @@ class State {
     terrainTimestamp = signal(Date.now());
     initNumber = signal(42);
     randomize = signal(false);
-    renderMode = signal(1); //1 is Mitsuba
+    renderMode = signal(3); //3 is Internal CPU
 
     /**
      * Substring that selects which obstacles get a leaf area index and a solar load, e.g. "Wand"
@@ -936,13 +936,28 @@ class State {
     /** Metres above sea level. Thins the atmosphere the beam crosses; see SkyDome. */
     altitude = signal(ALTITUDE);
     /**
-     * Scene rotation about the up axis, degrees. 0 puts the scene's +X (its right vector) due
-     * east, and an increasing value turns it clockwise seen from above.
+     * Scene rotation about the up axis before the terrain's own facing is accounted for,
+     * degrees. 0 puts the scene's +X (its right vector) due east once the terrain's own
+     * compensation is added, and an increasing value turns it clockwise seen from above.
      *
      * It rotates the SUN, not the geometry: it states how the scene's axes are oriented on the
      * compass, and nothing in the scene graph moves.
      */
-    azimuth = signal(AZIMUTH);
+    azimuthBase = signal(AZIMUTH);
+    /**
+     * Which way the loaded terrain model faces, as an index into AZIMUTH_OFFSETS. Backward
+     * (-Z) is the basic case and needs no compensation; Forward (+Z), the usual case, needs
+     * half a turn - see AZIMUTH_OFFSETS for the rest.
+     */
+    azimuthOffset = signal(0);
+    /**
+     * The azimuth the sun is actually computed against: azimuthBase plus the compensation for
+     * azimuthOffset, wrapped into [0, 360). This is what every renderer reads.
+     */
+    azimuth = computed(() => {
+        const offset = AZIMUTH_OFFSETS[this.azimuthOffset.value] ?? AZIMUTH_OFFSETS[0];
+        return ((this.azimuthBase.value + offset.degrees) % 360 + 360) % 360;
+    });
     /**
      * The IANA zone the SERVER derived from the coordinates, once it has told us.
      *
@@ -1233,7 +1248,8 @@ class State {
         Latitude: this.latitude.peek(),
         Longitude: this.longitude.peek(),
         Altitude: this.altitude.peek(),
-        Azimuth: this.azimuth.peek(),
+        AzimuthBase: this.azimuthBase.peek(),
+        AzimuthOffset: this.azimuthOffset.peek(),
         Species: this.species.peek().map(s => s.serialize()),
 
         Plants: this.seeds.peek().map((p: Seed) => ({ S: p.species.peek(), P: { X: p.px.peek(), Y: p.py.peek(), Z: p.pz.peek() }, F: p.fieldIndex.peek() })),
@@ -1585,7 +1601,8 @@ class State {
             latitude: this.latitude.peek(),
             longitude: this.longitude.peek(),
             altitude: this.altitude.peek(),
-            azimuth: this.azimuth.peek(),
+            azimuthBase: this.azimuthBase.peek(),
+            azimuthOffset: this.azimuthOffset.peek(),
             siteTimeZone: this.siteTimeZone.peek(),
             //The weather the run actually ran under, so a reloaded session previews the same sky
             //rather than falling back to a clear one. A plain array: JSON has no typed arrays.
@@ -1765,7 +1782,8 @@ class State {
                     self.latitude.value = data.latitude ?? LATITUDE;
                     self.longitude.value = data.longitude ?? LONGITUDE;
                     self.altitude.value = data.altitude ?? ALTITUDE;
-                    self.azimuth.value = data.azimuth ?? AZIMUTH;
+                    self.azimuthBase.value = data.azimuthBase ?? AZIMUTH;
+                    self.azimuthOffset.value = data.azimuthOffset ?? 0;
                     self.siteTimeZone.value = data.siteTimeZone ?? undefined;
                     self.weather.value = Array.isArray(data.weather)
                         ? Float32Array.from(data.weather) : undefined;
@@ -2258,7 +2276,7 @@ class State {
         await speciesReady;
         const res = await fetch(`${location.protocol}//${BackendURI}/simulation/run/${runId}/request`);
         if (!res.ok) throw new Error(`the stored request is missing (HTTP ${res.status})`);
-        const request = await res.json();
+        const response = await res.json();
 
         //Replaced wholesale rather than removed one at a time. `removeSeedAt` copies the whole
         //array and writes the signal for EACH removal, so clearing a 4,134-plant stand that way is
@@ -2267,17 +2285,17 @@ class State {
         const meshObstacles = this.obstacles.peek().filter(x => x.type.peek() === 'mesh');
 
         batch(() => {
-            this.hoursPerTick.value = request.HoursPerTick ?? 1;
-            this.totalHours.value = request.TotalHours ?? 744;
-            this.fieldResolution.value = request.FieldResolution ?? 0.5;
-            if (request.FieldSize) {
-                this.fieldSizeX.value = request.FieldSize.X;
-                this.fieldSizeD.value = request.FieldSize.D;
-                this.fieldSizeZ.value = request.FieldSize.Z;
+            this.hoursPerTick.value = response.HoursPerTick ?? 1;
+            this.totalHours.value = response.TotalHours ?? 744;
+            this.fieldResolution.value = response.FieldResolution ?? 0.5;
+            if (response.FieldSize) {
+                this.fieldSizeX.value = response.FieldSize.X;
+                this.fieldSizeD.value = response.FieldSize.D;
+                this.fieldSizeZ.value = response.FieldSize.Z;
             }
             //`randomize` off, because the stored seed is the point: a run reopened to be forked
             //should start from the number that produced it, not from a fresh random one.
-            this.initNumber.value = Number(request.Seed ?? 42);
+            this.initNumber.value = Number(response.Seed ?? 42);
             this.randomize.value = false;
             //A CALENDAR DAY, not an instant. The request stores a C# DateTime, so this arrives as
             //"2026-02-01T00:00:00", while everything downstream treats initialDate as YYYY-MM-DD:
@@ -2285,41 +2303,42 @@ class State {
             //`split('-').map(Number)` and gets NaN for the day, and `new Date(`${date}T11:00:00Z`)`
             //becomes an Invalid Date - which propagates as a NaN sun altitude that never trips the
             //`altitude <= 0` night check, so the shadow map is pointed in a direction made of NaN.
-            this.initialDate.value = request.InitialDate
-                ? String(request.InitialDate).slice(0, 10) : DEFAULT_INITIAL_DATE;
+            this.initialDate.value = response.InitialDate
+                ? String(response.InitialDate).slice(0, 10) : DEFAULT_INITIAL_DATE;
             //Defaults matched to Agro/AgroWorld.cs, so importing a request written before the
             //site was settable reproduces the run it describes rather than the current form.
-            this.latitude.value = request.Latitude ?? LATITUDE;
-            this.longitude.value = request.Longitude ?? LONGITUDE;
-            this.altitude.value = request.Altitude ?? ALTITUDE;
-            this.azimuth.value = request.Azimuth ?? AZIMUTH;
-            this.renderMode.value = request.RenderMode ?? 0;
-            if (request.SamplesPerPixel) this.samplesPerPixel.value = request.SamplesPerPixel;
-            this.deterministic.value = request.Deterministic ?? false;
-            this.exactPreview.value = request.ExactPreview ?? false;
-            this.downloadRoots.value = request.DownloadRoots ?? false;
+            this.latitude.value = response.Latitude ?? LATITUDE;
+            this.longitude.value = response.Longitude ?? LONGITUDE;
+            this.altitude.value = response.Altitude ?? ALTITUDE;
+            this.azimuthBase.value = response.AzimuthBase ?? AZIMUTH;
+            this.azimuthOffset.value = response.AzimuthOffset ?? 0;
+            this.renderMode.value = response.RenderMode ?? 0;
+            if (response.SamplesPerPixel) this.samplesPerPixel.value = response.SamplesPerPixel;
+            this.deterministic.value = response.Deterministic ?? false;
+            this.exactPreview.value = response.ExactPreview ?? false;
+            this.downloadRoots.value = response.DownloadRoots ?? false;
 
-            this.leafAreaIndexObstacles.value = request.LeafAreaIndexObstacles ?? '';
-            this.leafAreaIndexSensors.value = request.LeafAreaIndexSensors ?? 32768;
-            this.leafAreaIndexDepth.value = request.LeafAreaIndexDepth ?? 3;
-            this.leafAreaIndexBandHeight.value = request.LeafAreaIndexBandHeight ?? 0.5;
+            this.leafAreaIndexObstacles.value = response.LeafAreaIndexObstacles ?? '';
+            this.leafAreaIndexSensors.value = response.LeafAreaIndexSensors ?? 32768;
+            this.leafAreaIndexDepth.value = response.LeafAreaIndexDepth ?? 3;
+            this.leafAreaIndexBandHeight.value = response.LeafAreaIndexBandHeight ?? 0.5;
 
-            this.fieldModelPath.value = request.FieldModelPath ?? '';
-            this.fieldItemRegex.value = request.FieldItemRegex ?? 'erde';
-            this.fieldItemRegexMaterial.value = request.FieldItemRegexMaterial ?? false;
+            this.fieldModelPath.value = response.FieldModelPath ?? '';
+            this.fieldItemRegex.value = response.FieldItemRegex ?? 'erde';
+            this.fieldItemRegexMaterial.value = response.FieldItemRegexMaterial ?? false;
             //The OBJ itself is on the SERVER, not here. Nothing in this tab can re-upload it, and
             //nothing needs to: a run started from here names the stored run instead.
             this.fieldModelData = undefined;
 
-            if (Array.isArray(request.Species) && request.Species.length > 0)
+            if (Array.isArray(response.Species) && response.Species.length > 0)
                 this.species.value = adoptSpeciesGeometry(
-                    request.Species.map((x: any) => new Species().load(camelizeTopLevel(x))),
+                    response.Species.map((x: any) => new Species().load(camelizeTopLevel(x))),
                     this.species.peek());
 
             //Unconditional, so a run with no seeds clears the previous scenario's rather than
             //inheriting them - the panel would then show plants this run never had.
-            this.seeds.value = Array.isArray(request.Plants)
-                ? request.Plants.map((p: any) =>
+            this.seeds.value = Array.isArray(response.Plants)
+                ? response.Plants.map((p: any) =>
                     new Seed(p.S ?? '', p.P?.X ?? 0, p.P?.Y ?? 0, p.P?.Z ?? 0, p.F ?? 0, false))
                 : [];
 
@@ -2329,7 +2348,7 @@ class State {
             //the real one.
             this.obstacles.value = [
                 ...meshObstacles,
-                ...(Array.isArray(request.Obstacles) ? request.Obstacles : [])
+                ...(Array.isArray(response.Obstacles) ? response.Obstacles : [])
                     .filter((o: any) => o.T === 'wall' || o.T === 'umbrella')
                     .map((o: any) => new Obstacle(o.T, o.P?.X ?? 0, o.P?.Y ?? 0, o.P?.Z ?? 0,
                         0, o.O ?? 0, (o.T === 'umbrella' ? o.R : o.L) ?? 0, o.H ?? 0, o.D ?? 0,
@@ -2363,7 +2382,8 @@ class State {
                 this.latitude.value = site.latitude ?? this.latitude.peek();
                 this.longitude.value = site.longitude ?? this.longitude.peek();
                 this.altitude.value = site.altitude ?? this.altitude.peek();
-                this.azimuth.value = site.azimuth ?? this.azimuth.peek();
+                this.azimuthBase.value = site.azimuthBase ?? this.azimuthBase.peek();
+                this.azimuthOffset.value = site.azimuthOffset ?? this.azimuthOffset.peek();
                 this.siteTimeZone.value = site.timeZone || undefined;
                 this.weather.value = decodeSkyCoverage(site.skyCoverage);
             });

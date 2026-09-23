@@ -17,6 +17,22 @@ export const LATITUDE = 48.208333;
 export const LONGITUDE = 16.3725;
 /** Metres above sea level. Mirrors AgroWorld.DefaultAltitude. */
 export const ALTITUDE = 188;
+
+/**
+ * Which way the loaded terrain model faces, and the azimuth compensation each facing needs.
+ *
+ * The basic azimuth assumes a model facing BACKWARD - -Z, i.e. north - so that case alone needs
+ * no compensation; most models face forward, half a turn away. The ORDER is the wire format: the
+ * index is what the request and the site response carry, so it must stay locked to
+ * Agro.TerrainOrientation in Agro/RequestModels/SimulationRequest.cs.
+ */
+export const AZIMUTH_OFFSETS = [
+    { label: 'Forward', degrees: 180 },
+    { label: 'Right', degrees: 90 },
+    { label: 'Backward', degrees: 0 },
+    { label: 'Left', degrees: -90 },
+] as const;
+
 /**
  * Rotation of the scene about the up axis, in degrees.
  *

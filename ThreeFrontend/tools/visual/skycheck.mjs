@@ -74,7 +74,9 @@ try {
     a.lightSky.value = ${SKY};
     ${LAT !== undefined ? `a.latitude.value = ${+LAT};` : ''}
     ${LON !== undefined ? `a.longitude.value = ${+LON};` : ''}
-    ${AZ !== undefined ? `a.azimuth.value = ${+AZ};` : ''}
+    //--az means "put the EFFECTIVE azimuth at N": write the base and pin the orientation to
+    //Backward (index 2 in AZIMUTH_OFFSETS), the zero-offset case, so the base is the whole story.
+    ${AZ !== undefined ? `a.azimuthBase.value = ${+AZ}; a.azimuthOffset.value = 2;` : ''}
     ${ALT !== undefined ? `a.altitude.value = ${+ALT};` : ''}
     return 1; })()`);
 

@@ -67,6 +67,9 @@ public class AgroWorld : SimulationWorld
 	public const float DefaultLatitude = 48.208333f;
 	public const float DefaultLongitude = 16.3725f;
 	public const float DefaultAltitude = 188f; //meters above sea level
+	public const float DefaultAzimuthBase = 0f;
+	/// <summary>Most terrain models are exported facing forward, not backward (north).</summary>
+	public const TerrainOrientation DefaultAzimuthOffset = TerrainOrientation.Forward;
 
 	/// <summary>Geographic latitude of the world origin, degrees north.</summary>
 	public readonly float Latitude = DefaultLatitude;
@@ -75,8 +78,16 @@ public class AgroWorld : SimulationWorld
 	/// <summary>Height of the world origin above sea level, in metres.</summary>
 	public readonly float Altitude = DefaultAltitude;
 	/// <summary>
-	/// Rotation of the scene about the up axis, in degrees. Zero puts the scene's +X axis due
-	/// east; an increasing value turns the scene clockwise seen from above.
+	/// Rotation of the scene about the up axis before the terrain's own facing is accounted for,
+	/// in degrees. Zero puts the scene's +X axis due east; an increasing value turns the scene
+	/// clockwise seen from above.
+	/// </summary>
+	public readonly float AzimuthBase = DefaultAzimuthBase;
+	/// <summary>Which way the loaded terrain model faces. See <see cref="TerrainOrientation"/>.</summary>
+	public readonly TerrainOrientation AzimuthOffset = DefaultAzimuthOffset;
+	/// <summary>
+	/// The azimuth the sun is actually computed against: <see cref="AzimuthBase"/> plus the
+	/// compensation for <see cref="AzimuthOffset"/>, wrapped into [0, 360).
 	/// </summary>
 	/// <remarks>
 	/// It rotates the SUN, not the geometry: the whole of the maths is subtracting it from the
@@ -84,7 +95,7 @@ public class AgroWorld : SimulationWorld
 	/// nothing in the scene, the BVH or any export moves. The frontend mirrors this in
 	/// ThreeFrontend/src/helpers/Sun.ts.
 	/// </remarks>
-	public readonly float Azimuth = 0f;
+	public readonly float Azimuth;
 
 	public readonly TimeZoneInfo TimeZone = TimeZoneInfo.Local;
 
@@ -149,8 +160,12 @@ public class AgroWorld : SimulationWorld
 				"Altitude must be finite.");
 		//Wrapped rather than rejected: a rotation is periodic, so 370 degrees is a legitimate
 		//way to say 10 and refusing it would be pedantry.
-		var azimuth = settings?.Azimuth ?? 0f;
-		Azimuth = float.IsFinite(azimuth) ? ((azimuth % 360f) + 360f) % 360f : 0f;
+		var azimuthBase = settings?.AzimuthBase ?? DefaultAzimuthBase;
+		AzimuthBase = float.IsFinite(azimuthBase) ? ((azimuthBase % 360f) + 360f) % 360f : DefaultAzimuthBase;
+		AzimuthOffset = settings?.AzimuthOffset ?? DefaultAzimuthOffset;
+		//The terrain's own facing is part of where the sun is, not part of where the site is, so
+		//it is folded in here once rather than at each of the four places that read Azimuth.
+		Azimuth = ((AzimuthBase + AzimuthOffset.OffsetDegrees()) % 360f + 360f) % 360f;
 
 		var ianaTimeZone = TimeZoneLookup.GetTimeZone(Latitude, Longitude).Result;
 		#if WINDOWS

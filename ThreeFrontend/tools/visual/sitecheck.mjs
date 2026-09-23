@@ -4,16 +4,17 @@
 // time zone the server derived from the coordinates, and the cloud cover it planned. Both are
 // things the browser cannot compute for itself, so this is the only way to know they arrived.
 //
-// It also drives the four Terrain-tab inputs through the DOM, so the controls themselves are
+// It also drives the five Terrain-tab controls through the DOM, so the controls themselves are
 // exercised rather than the signals behind them.
 //
-// env: TOTAL_HOURS, TICK, LAT, LON, ALT, AZ
+// env: TOTAL_HOURS, TICK, LAT, LON, ALT, AZ, AZ_OFFSET (0=Forward 1=Right 2=Backward 3=Left)
 import { launch, newPage, collectDiagnostics, sleep, shutdown } from './cdp.mjs';
 
 const url = process.argv[2];
 const TOTAL_HOURS = +(process.env.TOTAL_HOURS || 72);
 const TICK = +(process.env.TICK || 1);
-const LAT = process.env.LAT, LON = process.env.LON, ALT = process.env.ALT, AZ = process.env.AZ;
+const LAT = process.env.LAT, LON = process.env.LON, ALT = process.env.ALT, AZ = process.env.AZ,
+      AZ_OFFSET = process.env.AZ_OFFSET;
 
 const browser = await launch(+(process.env.CDP_PORT || 24100));
 let page;
@@ -51,6 +52,8 @@ try {
       if (!el) return 'missing'; el.value = String(v); fire(el); return 'ok'; };
     const setCheck = (name, v) => { const el = document.querySelector('input[name=' + name + ']');
       if (!el) return 'missing'; if (el.checked !== v) { el.checked = v; fire(el); } return 'ok'; };
+    const setSelect = (name, v) => { const el = document.querySelector('select[name=' + name + ']');
+      if (!el) return 'missing'; el.value = String(v); fire(el); return 'ok'; };
     const out = {};
     window.__appstate.activeTab.value = 'tab-terrain';
     return Promise.resolve().then(() => new Promise(r => setTimeout(r, 400))).then(() => {
@@ -58,9 +61,13 @@ try {
       ${LON !== undefined ? `out.lon = setNum('siteLongitude', ${+LON});` : ''}
       ${ALT !== undefined ? `out.alt = setNum('siteAltitude', ${+ALT});` : ''}
       ${AZ !== undefined ? `out.az = setNum('siteAzimuth', ${+AZ});` : ''}
+      ${AZ_OFFSET !== undefined ? `out.azOffset = setSelect('siteAzimuthOffset', ${+AZ_OFFSET});` : ''}
       out.sky = setCheck('lightSky', true);
+      //Base and orientation are what was SET; the effective azimuth is base plus the terrain's
+      //compensation - reading all three is what catches the two disagreeing.
       out.read = { lat: window.__appstate.latitude.value, lon: window.__appstate.longitude.value,
-                   alt: window.__appstate.altitude.value, az: window.__appstate.azimuth.value };
+                   alt: window.__appstate.altitude.value, azBase: window.__appstate.azimuthBase.value,
+                   azOffset: window.__appstate.azimuthOffset.value, az: window.__appstate.azimuth.value };
       return out;
     });
   })()`);
@@ -90,7 +97,8 @@ try {
                weatherLength: w ? w.length : 0,
                weatherMin: w ? Math.min(...w) : null, weatherMax: w ? Math.max(...w) : null,
                weatherMean: w ? (w.reduce((s,v) => s+v, 0) / w.length) : null,
-               lat: a.latitude.value, lon: a.longitude.value, alt: a.altitude.value, az: a.azimuth.value,
+               lat: a.latitude.value, lon: a.longitude.value, alt: a.altitude.value,
+               azBase: a.azimuthBase.value, azOffset: a.azimuthOffset.value, az: a.azimuth.value,
                historyCount: a.historyCount.value }; })()`);
     if (site.weatherLength > 0 && site.historyCount > 2) break;
   }

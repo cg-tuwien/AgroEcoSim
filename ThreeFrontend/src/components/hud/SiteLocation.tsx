@@ -1,6 +1,7 @@
 import { h, Fragment } from "preact";
 import appstate from "../../appstate";
-import { DEFAULT_TIME_ZONE, LATITUDE, LONGITUDE, solarPosition } from "../../helpers/Sun";
+import { AZIMUTH_OFFSETS, DEFAULT_TIME_ZONE, LATITUDE, LONGITUDE, solarPosition } from "../../helpers/Sun";
+import type { Signal } from "@preact/signals";
 
 /**
  * Where on Earth the world origin sits, and how the scene is turned on the compass.
@@ -17,6 +18,8 @@ import { DEFAULT_TIME_ZONE, LATITUDE, LONGITUDE, solarPosition } from "../../hel
 export function SiteLocation() {
     const lat = appstate.latitude.value;
     const lon = appstate.longitude.value;
+    //The EFFECTIVE azimuth, base plus the terrain's own facing: this is what the sun is actually
+    //placed against, so it is what the "+X points ..." readout below has to agree with.
     const az = appstate.azimuth.value;
 
     const latTip = "Geographic latitude of the world origin, degrees north. Drives the sun, and "
@@ -25,9 +28,12 @@ export function SiteLocation() {
         + "the server derives the site's time zone from it. Negative is west.";
     const altTip = "Height of the world origin above sea level, in metres. A higher site has "
         + "less atmosphere above it, so the direct beam is stronger and the sky deeper.";
-    const azTip = "Rotation of the scene about the up axis, in degrees. At 0 the scene's right "
-        + "(+X) axis points east; increasing it turns the scene clockwise seen from above. It "
-        + "rotates the SUN relative to the scene - no geometry moves.";
+    const azTip = "Rotation of the scene about the up axis, in degrees, before the terrain's own "
+        + "facing is accounted for below. Increasing it turns the scene clockwise seen from "
+        + "above. It rotates the SUN relative to the scene - no geometry moves.";
+    const orientationTip = "Which way the loaded terrain model faces. The basic azimuth assumes "
+        + "a model facing Backward (-Z, i.e. north), so that is the setting that needs no "
+        + "compensation; most models face Forward instead, which is half a turn away.";
 
     //Midday at the site, as a quick sanity readout: a transposed latitude sign shows up here
     //before it shows up as a shadow pointing the wrong way.
@@ -39,21 +45,20 @@ export function SiteLocation() {
     const moved = lat !== LATITUDE || lon !== LONGITUDE;
     const zone = appstate.siteTimeZone.value;
 
-    const num = (name: string, label: string, hint: string, signal: { value: number },
-                 min: number, max: number, step: number, wrap = false) =>
+    const num = (name: string, label: string, hint: string, data: Signal<number>, min: number, max: number, step: number, wrap = false) =>
         <div>
             <input type="number" min={min} max={max} step={step} name={name} title={hint}
-                value={signal.value}
+                value={data.value}
                 onChange={e => {
                     const v = parseFloat(e.currentTarget.value);
-                    if (!Number.isFinite(v)) { e.currentTarget.value = String(signal.value); return; }
+                    if (!Number.isFinite(v)) { e.currentTarget.value = String(data.value); return; }
                     //Clamped, not merely advisory: solarPosition returns NaN outside these
                     //ranges rather than throwing, and a NaN sun direction renders as a scene
                     //with no sun and nothing at all to point at the cause.
-                    signal.value = wrap
+                    data.value = wrap
                         ? ((v % max) + max) % max
                         : Math.min(max, Math.max(min, v));
-                    e.currentTarget.value = String(signal.value);
+                    e.currentTarget.value = String(data.value);
                 }} />
             <label for={name} title={hint}>{label}</label>
         </div>;
@@ -62,11 +67,18 @@ export function SiteLocation() {
         {num('siteLatitude', 'Latitude (°N)', latTip, appstate.latitude, -90, 90, 0.001)}
         {num('siteLongitude', 'Longitude (°E)', lonTip, appstate.longitude, -180, 180, 0.001)}
         {num('siteAltitude', 'Altitude (m)', altTip, appstate.altitude, -500, 9000, 10)}
+        {num('siteAzimuth', 'Scene azimuth (°)', azTip, appstate.azimuthBase, 0, 360, 5, true)}
         <div>
-            {num('siteAzimuth', 'Scene azimuth (°)', azTip, appstate.azimuth, 0, 360, 5, true)}
-            <label class="unit" title={azTip}>(+X points {compass})</label>
+            <select name="siteAzimuthOffset" title={orientationTip}
+                value={appstate.azimuthOffset.value}
+                onChange={e => appstate.azimuthOffset.value = Number(e.currentTarget.value)}>
+                {AZIMUTH_OFFSETS.map((o, i) => <option key={o.label} value={i}>{o.label}</option>)}
+            </select>
+            <label for="siteAzimuthOffset" title={orientationTip}>Terrain faces</label>
         </div>
         <div>
+            <h5>Info:</h5>
+            <label class="unit" title={azTip}>(+X points {compass})</label>
             <label class="unit">
                 (midday sun {Number.isFinite(noon.altitude) ? noon.altitude.toFixed(0) : '?'}
                 &deg; above the horizon
