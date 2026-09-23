@@ -1,36 +1,25 @@
-# Legacy build environment: migrate this separately after fixing dependencies.
 FROM node:24-alpine AS build
-
-WORKDIR /app
-
-COPY ThreeFrontend/ ./
-
-# package.json and package-lock.json must contain the compatible pins.
-RUN npm ci --include=dev
 
 ARG BACKEND
 
-# Generate a valid TypeScript string literal, including proper escaping.
-RUN node -e 'require("node:fs").writeFileSync( \
-    "src/config.ts", \
-    "export const BackendURI = " + \
-    JSON.stringify(process.env.BACKEND || "") + ";\n" \
-    );'
+WORKDIR /app
 
-# Use the locally installed CLI; preserve your existing OpenSSL workaround.
-RUN NODE_OPTIONS=--openssl-legacy-provider \
-    ./node_modules/.bin/preact build --no-prerender
+COPY ThreeFrontend/package.json ThreeFrontend/package-lock.json ./
+
+RUN npm ci --include=dev
+
+COPY ThreeFrontend/ ./
+
+RUN echo "export const BackendURI = \"${BACKEND}\";" > src/config.ts
+
+RUN NODE_OPTIONS=--openssl-legacy-provider NODE_ENV=production ./node_modules/.bin/preact build --no-prerender
 
 
 FROM node:24-alpine AS final
 
-ENV NODE_ENV=production
-
-# Install the server outside the directory containing public assets.
-RUN npm install --global --no-audit --no-fund sirv-cli@3.0.1 \
-    && npm cache clean --force
-
 WORKDIR /app
+
+RUN npm install --global --no-audit --no-fund sirv-cli@3.0.1
 
 COPY --from=build /app/build/ ./
 

@@ -7,11 +7,13 @@ services:
       #unreachable from the host no matter what the server was doing.
       - "7215:7215"
     restart: on-failure
+    group_add:
+      - "1001"
     volumes:
       #Stored simulation runs. Without this the frames live in the container's writable layer:
       #lost on every restart, and unbounded against the host disk rather than against the store's
       #own retention budget.
-      - runstore:/data
+      - runstore:/data/AgroEcoStorage
     environment:
       #Total bytes of stored runs to keep before whole runs are evicted, oldest first. 1 TiB.
       #
@@ -41,11 +43,11 @@ services:
       #refers to it, so this must comfortably exceed the time between picking a file and pressing
       #Simulate. A 15 minute floor applies regardless.
       #- AGRO_RunStoreModelGraceHours=6
-  mitsuba:
-   image: agroecorender
-   expose:
-     - "9001"
-   restart: on-failure
+  # mitsuba:
+  #  image: agroecorender
+  #  expose:
+  #    - "9001"
+  #  restart: on-failure
   web:
     image: agroecoweb
     ports:

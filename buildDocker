@@ -11,14 +11,16 @@ docker stop $(docker ps -qa)
 #docker rmi -f $(docker images -qa); docker volume rm $(docker volume ls -q)
 #docker system prune -f
 
-docker build --rm -f "Dockerfile-render" -t agroecorender "."
+#docker build --rm -f "Dockerfile-render" -t agroecorender "."
 docker build --rm -f "Dockerfile-simaot" -t agroecosim "."
 docker build --rm -f "Dockerfile-web" -t agroecoweb "." --build-arg BACKEND=$1
-docker save agroecorender | gzip > agroecoRender.tar.gz
+#docker save agroecorender | gzip > agroecoRender.tar.gz
 docker save agroecosim | gzip > agroecoSim.tar.gz
 docker save agroecoweb | gzip > agroecoWeb.tar.gz
 
 NOW=$(date +"%Y%m%d_%H%M%S")
-zip -r "AgroEcoSim-${NOW}.zip" agroecoRender.tar.gz agroecoSim.tar.gz agroecoWeb.tar.gz tamashii.tar.gz deployDocker docker-compose.yml #\
+#zip -r "AgroEcoSim-${NOW}.zip" agroecoRender.tar.gz agroecoSim.tar.gz agroecoWeb.tar.gz tamashii.tar.gz deployDocker docker-compose.yml #\
     #Dockerfile-render \
     #agroeco-mts3/binary_loader.py agroeco-mts3/batch-sensor.py agroeco-mts3/render-server.py agroeco-mts3/RendererMts3.py
+
+zip -r "AgroEcoSim-${NOW}.zip" agroecoSim.tar.gz agroecoWeb.tar.gz deployDocker docker-compose.yml #\
