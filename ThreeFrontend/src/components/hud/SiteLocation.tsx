@@ -74,16 +74,14 @@ export function SiteLocation() {
                 onChange={e => appstate.azimuthOffset.value = Number(e.currentTarget.value)}>
                 {AZIMUTH_OFFSETS.map((o, i) => <option key={o.label} value={i}>{o.label}</option>)}
             </select>
-            <label for="siteAzimuthOffset" title={orientationTip}>Terrain faces</label>
+            <label for="siteAzimuthOffset" title={orientationTip}>Terrain orientation</label>
         </div>
         <div>
-            <h5>Info:</h5>
-            <label class="unit" title={azTip}>(+X points {compass})</label>
-            <label class="unit">
-                (midday sun {Number.isFinite(noon.altitude) ? noon.altitude.toFixed(0) : '?'}
+            <div>Info: +X points {compass},
+                midday sun {Number.isFinite(noon.altitude) ? noon.altitude.toFixed(0) : '?'}
                 &deg; above the horizon
-                {moved && !zone ? `, clock still on ${DEFAULT_TIME_ZONE}` : zone ? `, ${zone}` : ''})
-            </label>
+                {moved && !zone ? `, clock still on ${DEFAULT_TIME_ZONE}` : zone ? `, ${zone}` : ''}
+            </div>
         </div>
     </>;
 }
