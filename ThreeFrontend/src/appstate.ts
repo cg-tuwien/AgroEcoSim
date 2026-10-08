@@ -1208,6 +1208,13 @@ class State {
      * so a branched scenario could never be compared against the run it came from.
      */
     deterministic = signal(false);
+    /**
+     * Which contact engine the server runs: 0 the certified engine (growth is certified
+     * non-penetrating and suspended otherwise), 1 the soft single-pass engine (contacts bend and
+     * fold but never block growth). Mirrors `ContactEngineKind` on the server; the two are meant
+     * to be compared on the same request. See Agro/SOFT_CONTACTS.md.
+     */
+    contactEngine = signal(0);
     /** Frames whose payload has been dropped and would have to be re-fetched. */
     evictedFrames = signal(0);
 
@@ -1267,6 +1274,7 @@ class State {
 
         FieldItemRegex: this.fieldItemRegex.value,
         Deterministic: this.deterministic.value,
+        ContactEngine: this.contactEngine.value,
         FieldItemRegexMaterial: this.fieldItemRegexMaterial.value,
         FieldModelPath: this.fieldModelPath.value,
         //Lineage, and where to get the terrain from when this tab has not uploaded one. Null
@@ -2315,6 +2323,7 @@ class State {
             this.renderMode.value = response.RenderMode ?? 0;
             if (response.SamplesPerPixel) this.samplesPerPixel.value = response.SamplesPerPixel;
             this.deterministic.value = response.Deterministic ?? false;
+            this.contactEngine.value = response.ContactEngine ?? 0;
             this.exactPreview.value = response.ExactPreview ?? false;
             this.downloadRoots.value = response.DownloadRoots ?? false;
 

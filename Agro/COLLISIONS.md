@@ -2,7 +2,10 @@
 
 CPU hierarchy/cache changes, conservative collision geometry, optional CUDA,
 operational controls and performance regression scenarios are documented in
-[COLLISION_PERFORMANCE.md](COLLISION_PERFORMANCE.md).
+[COLLISION_PERFORMANCE.md](COLLISION_PERFORMANCE.md). This document describes the
+**certified** engine. A second, single-pass engine that never suspends growth is selectable
+per run with `SimulationRequest.ContactEngine = Soft`; see [SOFT_CONTACTS.md](SOFT_CONTACTS.md).
+Nothing below changes under that switch except that none of it runs.
 
 ## Growth and survival
 

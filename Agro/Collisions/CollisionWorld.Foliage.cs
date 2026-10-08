@@ -6,7 +6,7 @@ namespace Agro.Collisions;
 
 public sealed partial class CollisionWorld
 {
-    readonly record struct ContactKey(PlantFormation2 A, ulong OrganA, PlantFormation2 B, ulong OrganB);
+    internal readonly record struct ContactKey(PlantFormation2 A, ulong OrganA, PlantFormation2 B, ulong OrganB);
     readonly record struct RememberedContact(Vector3 Normal, int FeatureA, int FeatureB);
     // Dual contact reactions are rebuilt from the unloaded equilibrium each tick.
     // Retaining them during relaxation permits negative increments to release an
@@ -55,7 +55,7 @@ public sealed partial class CollisionWorld
             if(job.Elastic!=null)foreach(var (key,c) in job.Elastic)
                 if(c.Force>0)yield return (PlantIndices[key.A],key.OrganA,PlantIndices[key.B],key.OrganB,"foliage",c.Force);
     }
-    static void UniquePairs(List<(int, int)> pairs)
+    internal static void UniquePairs(List<(int, int)> pairs)
     {
         var retained=0;
         for(var i=0;i<pairs.Count;++i)
@@ -121,14 +121,14 @@ public sealed partial class CollisionWorld
     static readonly bool TraceContacts = Environment.GetEnvironmentVariable("AGRO_TRACE_CONTACTS") != null;
     static readonly bool TraceSlowPairs = Environment.GetEnvironmentVariable("AGRO_TRACE_SLOW_PAIRS") != null;
 
-    static ContactShape Shape(PlantSubFormation<AboveGroundAgent> ag, int i) => new(ag.GetContactPose(i), ag.GetLaminaTemplate(i));
-    static ContactShape Previous(PlantSubFormation<AboveGroundAgent> ag, int i, ContactShape current)
+    internal static ContactShape Shape(PlantSubFormation<AboveGroundAgent> ag, int i) => new(ag.GetContactPose(i), ag.GetLaminaTemplate(i));
+    internal static ContactShape Previous(PlantSubFormation<AboveGroundAgent> ag, int i, ContactShape current)
         => i < ag.PreviousGeometry.Length && ag.PreviousGeometry[i].Exists ? current with { Pose = ag.PreviousGeometry[i].Pose } : current;
 
-    static bool Connected(PlantSubFormation<AboveGroundAgent> ag, int a, int b)
+    internal static bool Connected(PlantSubFormation<AboveGroundAgent> ag, int a, int b)
         => ag.GetParent(a) == b || ag.GetParent(b) == a;
 
-    static int CommonAncestor(PlantSubFormation<AboveGroundAgent> ag, int a, int b)
+    internal static int CommonAncestor(PlantSubFormation<AboveGroundAgent> ag, int a, int b)
     {
         var da = ag.GetAbsDepth(a); var db = ag.GetAbsDepth(b);
         while (a >= 0 && b >= 0 && a != b)
@@ -1005,8 +1005,12 @@ public sealed partial class CollisionWorld
                 new(b with {Length=0,Width=0,Radius=0},tb),new(b,tb),attachment,attachment,radius);
     }
 
-    internal void WriteState(BinaryWriter writer, IReadOnlyList<IFormation> formations)
+    internal void WriteState(BinaryWriter writer, IReadOnlyList<IFormation> formations, ContactEngineKind engine)
     {
+        // V33: one tag byte, then the payload of whichever engine ran. The certified payload
+        // below is unchanged from V32.
+        writer.Write((byte)engine);
+        if (engine == ContactEngineKind.Soft) { (Soft ??= new(this)).WriteState(writer, formations); return; }
         var indices = formations.Select((f, i) => (f, i)).ToDictionary(x => x.f, x => x.i);
         var contacts = Work.Values.SelectMany(w => w.Contacts).OrderBy(x => indices[x.Key.A]).ThenBy(x => x.Key.OrganA)
             .ThenBy(x => indices[x.Key.B]).ThenBy(x => x.Key.OrganB).ToArray();
@@ -1019,8 +1023,13 @@ public sealed partial class CollisionWorld
         }
         writer.Write(RejectedMotions);
     }
-    internal void ReadState(BinaryReader reader, IReadOnlyList<IFormation> formations)
+    internal void ReadState(BinaryReader reader, IReadOnlyList<IFormation> formations, ContactEngineKind engine)
     {
+        var saved = (ContactEngineKind)reader.ReadByte();
+        if (saved != engine)
+            throw new InvalidDataException($"This checkpoint was written by the {saved} contact engine and the request selects {engine}. "
+                + "Contact state is engine-specific; resume with the engine that wrote it.");
+        if (engine == ContactEngineKind.Soft) { (Soft ??= new(this)).ReadState(reader, formations); return; }
         LastTrialFailure = null;
         Work.Clear(); PairQueries.Clear(); CrossWorkByPair.Clear(); ScheduledBatches.Clear();
         PreviousNeighbours.Clear(); PlantIndices.Clear(); UnresolvedPlants.Clear();

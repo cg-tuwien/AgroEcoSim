@@ -313,6 +313,15 @@ public partial struct AboveGroundAgent : IPlantAgent
 		return result < 1f ? result : 1f;
 	}
 
+	/// <summary>
+	/// Whether this organ has lived twice its nominal growth duration. A floral segment or bud
+	/// that a solid obstacle keeps from reaching its target length still differentiates: the
+	/// inflorescence continues from the compressed internode instead of waiting for a length it
+	/// can never reach. Vegetative organs have no nominal duration and are never overdue.
+	/// </summary>
+	[M(AI)]public readonly bool ElongationOverdue(uint timestep)
+		=> GrowthTimeVar > 0f && (timestep - BirthTime) * GrowthTimeVar >= 2f;
+
 	public float Stress { get; private set; } = 0f;
 
 	/// <summary>

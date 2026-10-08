@@ -78,6 +78,17 @@ expand only after the targeted scenario behaves correctly.
 
 After dealing with a mismatch of simulated output versus botanical ground truth, add a new regression scenario (if not already present) to assure that the issue does not reappear.
 
+There are **two contact engines**, selected per run by `SimulationRequest.ContactEngine`
+(`Certified`, the default, or `Soft`; `AGRO_CONTACT_ENGINE` applies when the request omits
+it). The certified engine certifies every growth increment along its swept path and suspends
+what it cannot certify; it is what the regression list below describes. The soft engine
+(`Agro/Collisions/Soft/`, [`Agro/SOFT_CONTACTS.md`](Agro/SOFT_CONTACTS.md)) resolves contacts
+in one pass per tick through the same joint compliance and never suspends growth, defers a
+birth or rolls anything back. Keep both runnable: the point of the switch is to compare them on
+the same request. Under the soft engine the archived Bergenia blooms in both springs and a
+755-day run takes under a minute; under the certified one it never bloomed. Live checkpoint 33
+tags the engine and a checkpoint resumes only under the engine that wrote it.
+
 Collision and saved-run regression scenarios are documented in
 [`Agro/COLLISIONS.md`](Agro/COLLISIONS.md). In particular, preserve the translated
 tray/blade-edge sweep test, thin-lamina wall crossing, Bergenia scape under a
@@ -343,10 +354,10 @@ Measured on Heuchera at day 730: stem `dirY` median **-0.29**, and the **median 
 4.2 cm below the soil surface** with the 10th percentile at -14.4 cm. Half the foliage
 was buried. Geranium macrorrhizum reached -12.8 cm at the 10th percentile.
 
-`LimitBendToSoilSurface` now shrinks a bend that would push an organ's tip below
-`Plant.Position.Y` (eight bisection steps, and only for organs that would break the
-surface). It is a floor, not a fix for the missing restoring term - bounding the chain
-with `CrownMaximumNodes` is what actually keeps a crown upright.
+The soil floor is the collision engine's soil pass (`SoilEligible` plus the soil push in
+`CollisionWorld.Hard.cs`; the older `LimitBendToSoilSurface` bisection no longer exists). It
+is a floor, not a fix for the missing restoring term - bounding the chain with
+`CrownMaximumNodes` is what actually keeps a crown upright.
 
 ### 3. Every shoot was steered upright, whatever the species wanted
 

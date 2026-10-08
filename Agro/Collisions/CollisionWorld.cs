@@ -25,6 +25,10 @@ namespace Agro.Collisions;
 public sealed partial class CollisionWorld
 {
 	readonly StaticCollider Static = new();
+	/// <summary>The single-pass engine, created on first use when the request selects it.</summary>
+	internal SoftContactEngine? Soft;
+	/// <summary>The soft engine's diagnostics, for probes; null until the first soft tick.</summary>
+	public SoftContactEngine? SoftEngine => Soft;
 	bool StaticReady;
     long StaticRevision;
 	IObstacle[] StaticObstacles = [];
@@ -70,6 +74,13 @@ public sealed partial class CollisionWorld
         }
 
 		EnsureStatic((AgroWorld)world);
+        // The soft engine is a separate implementation behind the request switch. Everything
+        // below this line is the certified engine, which it leaves untouched.
+        if (((AgroWorld)world).ContactEngine == ContactEngineKind.Soft)
+        {
+            (Soft ??= new(this)).Tick((AgroWorld)world, timestep, formations);
+            return;
+        }
         InitializeBackend((AgroWorld)world);
 
 
@@ -158,9 +169,9 @@ public sealed partial class CollisionWorld
 		}
 	}
 
-	readonly List<(PlantFormation2 A, PlantFormation2 B)> Neighbours = [];
+	internal readonly List<(PlantFormation2 A, PlantFormation2 B)> Neighbours = [];
 	/// <summary>Pairs of plants whose swept canopy bounds overlap, in canonical order.</summary>
-	void RefreshNeighbours(List<PlantFormation2> plants)
+	internal void RefreshNeighbours(List<PlantFormation2> plants)
 	{
 		Neighbours.Clear();
 		PlantLeaves.Clear();

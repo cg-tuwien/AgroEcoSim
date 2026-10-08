@@ -13,6 +13,7 @@ import { InitNumber } from './hud/InitNumber';
 import { PickedDetails } from './viewport/PickedDetails';
 import { Randomize } from './hud/Randomize';
 import { Deterministic } from './hud/Deterministic';
+import { ContactEngine } from './hud/ContactEngine';
 import { Seeds } from './hud/Seeds';
 import RendererHost from '../render/RendererHost';
 import { ProgressBar } from './hud/ProgressBar';
@@ -70,6 +71,7 @@ const App = () => {
 				<TotalHours/>
 				<Randomize/>
 				<Deterministic/>
+				<ContactEngine/>
 				<InitNumber/>
 				<Renderer/>
 				<SamplesPerPixel/>

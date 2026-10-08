@@ -127,7 +127,9 @@ namespace Agro
                             var sizeLimit = new Vector2(agent.GetLengthVar(), MathF.Min(agent.GetRadiusVar(), parentRadius));
                             var growth = sizeLimit * agent.GrowthTimeVar;
                             var resultingSize = Vector2.Min(currentSize + growth, sizeLimit);
-                            growth = resultingSize - currentSize;
+                            // A parent thinner than this meristem already is must not shrink it
+                            // every tick; the stem and bud branches clamp the same way.
+                            growth = Vector2.Max(resultingSize - currentSize, Vector2.Zero);
                             agent.Length += growth.X;
                             agent.Radius += growth.Y;
                         } break;
@@ -346,7 +348,8 @@ namespace Agro
 
             private void chaning(ref AboveGroundAgent agent, int agentID, PlantSubFormation<AboveGroundAgent> formation, uint timestep)
             {
-                if ((agent.Organ.Equals(OrganTypes.FlowerMeristem) || agent.Organ.Equals(OrganTypes.FlowerBaseBud)) && agent.Length >= agent.GetLengthVar())
+                if ((agent.Organ.Equals(OrganTypes.FlowerMeristem) || agent.Organ.Equals(OrganTypes.FlowerBaseBud))
+                    && (agent.Length >= agent.GetLengthVar() || agent.ElongationOverdue(timestep)))
                 {
                     agent.Organ = OrganTypes.FlowerStem;
                     if (agent.FlowerAgent.flowerBase)
@@ -482,7 +485,8 @@ namespace Agro
 
                     }
                 }
-                if (agent.Organ == OrganTypes.FlowerBud &&  agent.Length >= agent.GetLengthVar() && formation.GetChildren(agentID).Count() <= 0)
+                if (agent.Organ == OrganTypes.FlowerBud && (agent.Length >= agent.GetLengthVar() || agent.ElongationOverdue(timestep))
+                    && formation.GetChildren(agentID).Count() <= 0)
                 {
 
                     int petalCount = _settings.PetalCount;

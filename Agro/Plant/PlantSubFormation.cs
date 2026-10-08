@@ -662,7 +662,11 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
         RefreshAnchors(Plant.World.Collisions.StaticScene);
         if (count == 0)
             return;
-        ResetElasticDeformation();
+        // The certified engine rebuilds every elastic fold from the unloaded shape each tick
+        // and relies on its correction rounds to find it again. The soft engine applies one
+        // capped increment per tick, so its folds must persist and relax like contact turns.
+        var persistentDeformation = HasContactDeformation && Plant.World.ContactEngine == ContactEngineKind.Soft;
+        if (!persistentDeformation) ResetElasticDeformation();
         RefreshMechanicalLoads();
 
 		// Process nodes from roots to leaves, propagating rotations.  The response
@@ -670,7 +674,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 		// how quickly an organ approaches its elastic equilibrium.
 		float tickSpeed = MathF.Max(0f, Plant.World.HoursPerTick);
 		const float responsePerHour = 0.05f;
-		float response = HasContactDeformation ? 1f : 1f - MathF.Pow(1f - responsePerHour, tickSpeed);
+		float response = HasContactDeformation && !persistentDeformation ? 1f : 1f - MathF.Pow(1f - responsePerHour, tickSpeed);
 		//Bending used to be clamped here so no tip could drop below the flat plane
 		//Plant.Position.Y - which is the SEED, a few centimetres under the surface. It kept a long
 		//chain of segments from pointing straight down and burying its own leaves, and it also made
@@ -902,9 +906,11 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
                 // A tiny or unloaded joint has no gravitational moment, but must
                 // still release a previous elastic contact turn. Keep its unloaded
                 // frame exactly, without repeatedly normalizing an unchanged frame.
-                var released=agent.baseOrientation;
+                var released=persistentDeformation
+                    ? Quaternion.Normalize(Quaternion.Slerp(agent.Orientation,agent.baseOrientation,response))
+                    : agent.baseOrientation;
                 appliedDelta=Quaternion.Normalize(released*Quaternion.Conjugate(agent.Orientation));
-                agent.targetOrientation=released;
+                agent.targetOrientation=agent.baseOrientation;
                 agent.SetOrientation(released);
                 PropagateToSubtree(dst,i,appliedDelta);
             }
@@ -913,7 +919,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
                 nodesToVisit.Enqueue(child);
             }
         }
-        GravityDeformation();
+        GravityDeformation(persistentDeformation ? response : 1f);
 		TreeCache.UpdateBases(this);
 		HeightDirty = false;
 		refitAllBounds();

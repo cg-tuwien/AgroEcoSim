@@ -116,7 +116,7 @@ internal static partial class FoliageGeometry
     static Bvh.BoundingBox Pad(Bvh.BoundingBox b, float p) => new(b.Min - new Vector3(p), b.Max + new Vector3(p));
     static Bvh.BoundingBox Bounds(Vector3 a, Vector3 b, Vector3 c) => new(Vector3.Min(a, Vector3.Min(b, c)), Vector3.Max(a, Vector3.Max(b, c)));
 
-    static FoliageContact DistanceUncached(in ContactShape a, in ContactShape b, float search)
+    internal static FoliageContact DistanceUncached(in ContactShape a, in ContactShape b, float search)
     {
         if (a.Lamina == null && a.Pose.CurvedRod)
         {

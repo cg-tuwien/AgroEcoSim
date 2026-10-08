@@ -16,7 +16,7 @@ public sealed partial class CollisionWorld
     readonly HashSet<(PlantFormation2, PlantFormation2)> ScheduledPairs = [];
     readonly List<(PlantFormation2, PlantFormation2)> RetiredPairs = [];
     long ContactEpoch;
-    bool PlantMembershipChanged;
+    internal bool PlantMembershipChanged;
     bool ScheduleInvalidated;
 
     readonly record struct ContactMemory(RememberedContact Value, long Seen);
@@ -126,7 +126,7 @@ public sealed partial class CollisionWorld
     static readonly ParallelOptions[] Workers = Enumerable.Range(1, WorkerLimit)
         .Select(n => new ParallelOptions { MaxDegreeOfParallelism = n }).ToArray();
     const int MinimumParallelWork = 256;
-    static void RunJobs<T>(List<T> jobs, long work, Action<T> action)
+    internal static void RunJobs<T>(List<T> jobs, long work, Action<T> action)
     {
         var concurrency = (int)Math.Min(WorkerLimit, Math.Max(1, (work + MinimumParallelWork - 1) / MinimumParallelWork));
         if (jobs.Count < 2 || concurrency == 1)

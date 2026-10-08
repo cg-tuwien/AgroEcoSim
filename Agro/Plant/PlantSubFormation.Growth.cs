@@ -173,12 +173,22 @@ public partial class PlantSubFormation<T>
         var before = Unsafe.As<T, AboveGroundAgent>(ref agent);
         TickPhysiology = before;
         var first = Births.Count;
-        DevelopmentDeaths.Clear();
-        RecordingDevelopment = true;
-        try { agent.Tick(this, index, timestep); }
-        finally { RecordingDevelopment = false; }
+        // The certified engine admits every birth geometrically, so births are staged as a
+        // transaction and deaths are retired with it. The soft engine never rejects geometry:
+        // its births go straight to Census and deaths apply as they are requested.
+        var staging = Plant.World.StagesDevelopment;
+        if (staging)
+        {
+            DevelopmentDeaths.Clear();
+            RecordingDevelopment = true;
+            try { agent.Tick(this, index, timestep); }
+            finally { RecordingDevelopment = false; }
+        }
+        else agent.Tick(this, index, timestep);
         ref var after = ref Unsafe.As<T, AboveGroundAgent>(ref agent);
-        if (Births.Count > first)
+        if (!staging)
+            ChargeBirths(ref after, first);
+        else if (Births.Count > first)
         {
             var retired=new HashSet<int>();
             var retirementQueue=new Queue<int>(DevelopmentDeaths.Select(d=>d.Index));
@@ -223,6 +233,23 @@ public partial class PlantSubFormation<T>
             PropagateToSubtree(growing,index,delta);
         }
         ApplyGrowthLight(index, ref after, before.Length);
+    }
+
+    /// <summary>
+    /// Construction cost of births committed directly (soft contact engine). The certified
+    /// engine charges the same cost when it admits the staged transaction.
+    /// </summary>
+    void ChargeBirths(ref AboveGroundAgent parent, int first)
+    {
+        if (Plant.Parameters.ConstructionEnergyPerDryGram <= 0f || Births.Count <= first) return;
+        var cost = 0f;
+        for (int j = first; j < Births.Count; ++j)
+        {
+            var child = Births[j];
+            ref var born = ref Unsafe.As<T, AboveGroundAgent>(ref child);
+            cost += ConstructionBudget.Cost(born.Volume(), Plant.Parameters, born.WoodRatio());
+        }
+        parent.Energy -= cost;
     }
 
     internal void ProcessDevelopments(CollisionWorld collisions)

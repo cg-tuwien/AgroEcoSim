@@ -6,7 +6,7 @@ public sealed partial class StaticCollider
 {
     [ThreadStatic] static List<int>? LaminaCandidates;
 
-    bool ShapeContactUncached(in ContactShape shape, Vector3 trusted, StaticSurface surface,
+    internal bool ShapeContactUncached(in ContactShape shape, Vector3 trusted, StaticSurface surface,
         out Vector3 point, out Vector3 normal, out float depth)
     {
         if (shape.Lamina == null)

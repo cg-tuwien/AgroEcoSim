@@ -29,6 +29,13 @@ public class ImportedObjDataV2
 ///</remarks>
 public enum TerrainOrientation : byte { Forward, Right, Backward, Left }
 
+///<summary>
+///Contact engines, see <see cref="SimulationRequest.ContactEngine"/>. Byte-backed like
+///<see cref="TerrainOrientation"/> because the value travels as a plain number in requests,
+///stored runs and live checkpoints; append new members, never reorder.
+///</summary>
+public enum ContactEngineKind : byte { Certified = 0, Soft = 1 }
+
 public static class TerrainOrientationExtensions
 {
     ///<summary>
@@ -158,6 +165,22 @@ public record SimulationRequest
     ///</remarks>
     ///<example>true</example>
     public bool? SoftCollisions { get; init; }
+
+    ///<summary>
+    ///Which contact engine resolves foliage and solid contacts. (default: Certified)
+    ///</summary>
+    ///<remarks>
+    ///<c>Certified</c> is the existing engine: every growth increment is certified
+    ///non-penetrating along its swept path, uncertified increments are rolled back and
+    ///retried later, and births are staged until their geometry is admitted.
+    ///<c>Soft</c> is the single-pass engine: contacts bend petioles and stems and fold
+    ///leaves through the same joint compliance, but never suspend growth, never defer a
+    ///birth and never roll anything back; residual overlap is reported instead. The
+    ///environment variable <c>AGRO_CONTACT_ENGINE</c> applies when the request omits this.
+    ///Live checkpoints record the engine and refuse to resume under the other one.
+    ///</remarks>
+    ///<example>0</example>
+    public ContactEngineKind? ContactEngine { get; init; }
 
     /// <summary>Steer developing vegetative tissue toward persistent diffuse-light openings.
     /// Default true; constant-light mode 0 has no directional cue. Does not change photosynthetic irradiance.</summary>

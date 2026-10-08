@@ -763,9 +763,12 @@ public partial class PlantSubFormation<T>
         return limit;
     }
 
-    internal bool QueueContactCorrection(int index, Vector3 contact, Vector3 normal, float depth, int stop = -1)
+    /// <param name="maxDisplacement">Soft contact engine only: largest motion of the witness that
+    /// any one joint's turn may cause this tick, metres. The certified engine leaves it infinite.</param>
+    internal bool QueueContactCorrection(int index, Vector3 contact, Vector3 normal, float depth, int stop = -1,
+        float maxDisplacement = float.PositiveInfinity)
     {
-        if(depth<0)return QueueContactCorrection(index,contact,-normal,-depth,stop);
+        if(depth<0)return QueueContactCorrection(index,contact,-normal,-depth,stop,maxDisplacement);
         var src = Src();
         var total = ContactMobility(index, contact, normal, stop);
         // Existing graph segments supply the degrees of freedom. Walk to a rooted anchor;
@@ -775,7 +778,8 @@ public partial class PlantSubFormation<T>
             var lambda = depth / total;
             for (var n = index; n >= 0 && n != stop && !src[n].SoilAnchored; n = src[n].Parent)
             {
-                var cross = Vector3.Cross(contact - GetBaseCenterWorld(n) - src[n].BaseOffset, normal);
+                var lever = contact - GetBaseCenterWorld(n) - src[n].BaseOffset;
+                var cross = Vector3.Cross(lever, normal);
                 var gain = cross.Length();
                 QueueShapeCorrection(n, index, contact, normal, (float)lambda);
                 if (gain <= 1e-8f) continue;
@@ -783,7 +787,10 @@ public partial class PlantSubFormation<T>
                 if (AvailableCompliance(n,axis) <= 0) continue;
                 var response = ComplianceVector(n,cross) * (float)lambda;
                 var angle = response.Length();
-                if (angle > CollisionSettings.MaxCorrectionRadians) response *= CollisionSettings.MaxCorrectionRadians/angle;
+                // A turn of θ about this joint moves the witness by at most θ·|lever|.
+                var cap = CollisionSettings.MaxCorrectionRadians;
+                if (maxDisplacement < float.PositiveInfinity) cap = MathF.Min(cap, maxDisplacement / MathF.Max(lever.Length(), 1e-6f));
+                if (angle > cap) response *= cap/angle;
                 ContactTurns[n] += response;
             }
             return true;
@@ -803,8 +810,24 @@ public partial class PlantSubFormation<T>
             if (mobility > bestMobility) { best = n; bestMobility = mobility; bestAxis = axis; bestAngle = angle; }
         }
         if (best < 0) return false;
-        ContactTurns[best] += bestAxis * MathF.Min(bestAngle, CollisionSettings.MaxCorrectionRadians);
+        var axialCap = CollisionSettings.MaxCorrectionRadians;
+        if (maxDisplacement < float.PositiveInfinity)
+            axialCap = MathF.Min(axialCap, maxDisplacement / MathF.Max((contact - GetBaseCenterWorld(best) - src[best].BaseOffset).Length(), 1e-6f));
+        ContactTurns[best] += bestAxis * MathF.Min(bestAngle, axialCap);
         return true;
+    }
+
+    /// <summary>
+    /// Soft contact engine: shortens this tick's elongation to the free gap in front of a solid.
+    /// Only the length changes; descendants are transported and the hierarchy refitted. It is the
+    /// one place where that engine takes growth away, and only ever down to last tick's length.
+    /// </summary>
+    internal void ClipLength(int index, float length)
+    {
+        var src = Src();
+        if (length >= src[index].Length) return;
+        src[index].SetGeometry(length, src[index].Radius);
+        RebaseAndRefit(index);
     }
 
     internal void RecordSupportReaction(int index, Vector3 point, Vector3 normal)

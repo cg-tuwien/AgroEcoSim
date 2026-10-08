@@ -45,6 +45,27 @@ public static class CollisionSettings
     public static bool DistributeBladeContacts { get; set; } = true;
     public static int ContactsPerPlantPerRound { get; set; } = 4096;
 
+    // Soft contact engine (SimulationRequest.ContactEngine = Soft). None of these are read by
+    // the certified engine, so flipping them cannot change a certified run.
+    /// <summary>Target separation beyond the physical radii, metres. Foliage settles about this far
+    /// apart, and it must exceed the largest relative approach two organs can make in one tick
+    /// (sub-millimetre at 4 h), so every approaching pair is remembered before it can cross.</summary>
+    public static float FoliageSkin { get; set; } = FloatFromEnv("AGRO_FoliageSkinMm", 1f, .1f, 5f) * .001f;
+    /// <summary>Fraction of the measured overlap removed per tick. Below one damps Jacobi overshoot
+    /// when several contacts load one joint; the remainder is handled next tick.</summary>
+    public static float ContactRelaxation { get; set; } = FloatFromEnv("AGRO_ContactRelaxation", .7f, .2f, 1f);
+    /// <summary>Largest witness displacement one tick's foliage correction may cause at a joint,
+    /// metres. Keeps a remembered pair from being carried through a thin sheet in one tick; zero disables.</summary>
+    public static float MaxCorrectionDisplacement { get; set; } = FloatFromEnv("AGRO_MaxCorrectionDisplacementMm", 1f, 0f, 50f) * .001f;
+    /// <summary>Residual overlap beyond which a foliage pair is counted as a deep penetration, metres. Diagnostic only.</summary>
+    public static float DeepPenetrationThreshold { get; set; } = FloatFromEnv("AGRO_DeepPenetrationMm", 5f, .1f, 100f) * .001f;
+    /// <summary>Ticks a contact memory outlives its last touch before the remembered side is forgotten.</summary>
+    public static int ContactMemoryGraceEpochs { get; set; } = IntFromEnv("AGRO_ContactMemoryGrace", 1, 0, 8);
+    /// <summary>Push rounds against obstacles and soil per tick in the soft engine.</summary>
+    public static int SoftHardPushRounds { get; set; } = IntFromEnv("AGRO_SoftHardPushRounds", 4, 1, 16);
+    /// <summary>Clip this tick's elongation of an organ still inside a solid after the pushes.</summary>
+    public static bool SolidElongationClip { get; set; } = Environment.GetEnvironmentVariable("AGRO_NoSolidElongationClip") == null;
+
     static int IntFromEnv(string name, int fallback, int min, int max)
         => int.TryParse(Environment.GetEnvironmentVariable(name), out var value) && value >= min && value <= max ? value : fallback;
     static float FloatFromEnv(string name, float fallback, float min, float max)

@@ -69,7 +69,7 @@ public sealed partial class CollisionWorld
         RefreshContactLoads(plant);
     }
 
-    void RefreshContactLoads(PlantFormation2 plant)
+    internal void RefreshContactLoads(PlantFormation2 plant)
     {
         var ag = plant.AG;
         ag.ClearSupport();
@@ -135,10 +135,10 @@ public sealed partial class CollisionWorld
                 && (Static.InsideSoil(previous.Pose.Base, 1f) || Static.ShapeSweepClear(previous, shape, StaticSurface.Soil)));
     }
 
-    static bool Eligible(PlantSubFormation<AboveGroundAgent> ag, int i)
+    internal static bool Eligible(PlantSubFormation<AboveGroundAgent> ag, int i)
         => ag.GetOrgan(i) != OrganTypes.Seed && (ag.GetLength(i) > 0f || ag.GetBaseRadius(i) > 0f);
 
-    bool SoilEligible(PlantSubFormation<AboveGroundAgent> ag, int i, in OrganPose pose)
+    internal bool SoilEligible(PlantSubFormation<AboveGroundAgent> ag, int i, in OrganPose pose)
     {
         if (ag.GetIsRizome(i)) return false;
         var previous = ag.PreviousGeometry[i];
@@ -148,7 +148,7 @@ public sealed partial class CollisionWorld
         return !((parent < 0 || ag.GetIsRizome(parent)) && Static.InsideSoil(pose.Base, 1f));
     }
 
-    static Vector3 TrustedPoint(PlantFormation2 plant, int i)
+    internal static Vector3 TrustedPoint(PlantFormation2 plant, int i)
     {
         var ag = plant.AG;
         var previous = ag.PreviousGeometry[i];
@@ -216,7 +216,7 @@ public sealed partial class CollisionWorld
         else ++Work[ag.Plant].Soil;
     }
 
-    void RecordSupport(PlantSubFormation<AboveGroundAgent> ag, int i, StaticSurface surface)
+    internal void RecordSupport(PlantSubFormation<AboveGroundAgent> ag, int i, StaticSurface surface)
     {
         var pose = ag.GetContactPose(i);
         var lamina = ag.GetLaminaTemplate(i);

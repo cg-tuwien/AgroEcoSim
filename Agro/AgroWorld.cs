@@ -126,9 +126,27 @@ public class AgroWorld : SimulationWorld
 	public readonly bool SoftCollisions = true;
 	public readonly bool GrowthLightGuidanceEnabled;
 	public readonly float CollisionGeometryToleranceM;
+	/// <summary>Which contact engine runs: the certified one in <see cref="Collisions.CollisionWorld"/>
+	/// or the single-pass <see cref="Collisions.SoftContactEngine"/>. Fixed for the run and
+	/// recorded in live checkpoints.</summary>
+	public readonly ContactEngineKind ContactEngine;
+	/// <summary>
+	/// Whether births are staged as developmental transactions that the certified engine admits
+	/// geometrically. The soft engine never rejects geometry, so its births go straight to Census;
+	/// with collisions disabled staging only survives for the opt-in construction budget.
+	/// </summary>
+	public bool StagesDevelopment => !(global::Agro.Collisions.CollisionSettings.Enabled && ContactEngine == ContactEngineKind.Soft);
 	/// <summary>Operational backend preference. Auto stays on CPU until the CUDA prototype
 	/// has demonstrated its end-to-end performance gate on the deployment hardware.</summary>
 	public readonly Collisions.CollisionComputeBackend CollisionBackend;
+
+	/// <summary><c>AGRO_CONTACT_ENGINE=Certified|Soft</c> (or 0|1) applies only when the request omits the field.</summary>
+	static ContactEngineKind ContactEngineFromEnvironment()
+	{
+		var value = Environment.GetEnvironmentVariable("AGRO_CONTACT_ENGINE");
+		return !string.IsNullOrWhiteSpace(value) && Enum.TryParse<ContactEngineKind>(value.Trim(), ignoreCase: true, out var engine)
+			&& Enum.IsDefined(engine) ? engine : ContactEngineKind.Certified;
+	}
 
 	public AgroWorld(SimulationRequest? settings = null) : base()
 	{
@@ -137,6 +155,7 @@ public class AgroWorld : SimulationWorld
 			throw new ArgumentOutOfRangeException(nameof(SimulationRequest.CollisionGeometryToleranceM),
 				"Collision geometry tolerance must be finite and between 0 and 0.0005 metres.");
 		CollisionBackend = global::Agro.Collisions.CudaCollisionBackend.RequestedBackend();
+		ContactEngine = settings?.ContactEngine ?? ContactEngineFromEnvironment();
 		Deterministic = settings?.Deterministic ?? false;
 
 		//The site has to be settled BEFORE the time-zone lookup below and before Init(), both of
@@ -753,7 +772,10 @@ public class AgroWorld : SimulationWorld
     // exact accepted interpolation endpoints. V32 clips attached rod pairs in
     // double parameter ranges and uses matching exemption-containment predicates.
     // Contact/retry decisions can change; payload layout and playback are unchanged.
-	public const byte CheckpointVersion = 32;
+    // V33 writes one contact-engine tag byte ahead of the collision payload. The certified
+    // engine's payload after that byte is unchanged; the soft engine stores its sparse
+    // contact memories instead. A checkpoint resumes only under the engine that wrote it.
+	public const byte CheckpointVersion = 33;
 
 	/// <summary>
 	/// Everything the next step depends on that the request does not determine.
@@ -791,7 +813,7 @@ public class AgroWorld : SimulationWorld
 
 		//Last, because it is keyed against the formations written above.
 		Irradiance.WriteState(writer, FormationList);
-		Collisions.WriteState(writer, FormationList);
+		Collisions.WriteState(writer, FormationList, ContactEngine);
 
 		return stream.ToArray();
 	}
@@ -838,7 +860,7 @@ public class AgroWorld : SimulationWorld
 		});
 
 		Irradiance.ReadState(reader, FormationList);
-		Collisions.ReadState(reader, FormationList);
+		Collisions.ReadState(reader, FormationList, ContactEngine);
 
 		if (stream.Position != stream.Length)
 			throw new InvalidDataException(

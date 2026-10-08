@@ -103,7 +103,10 @@ public partial class PlantSubFormation<T>
         return internalAngle>available ? q*(available/internalAngle) : q;
     }
 
-    void GravityDeformation()
+    /// <param name="relaxation">Fraction of the way from the current shape to the unloaded
+    /// equilibrium taken this tick. One rebuilds the free shape outright (certified engine);
+    /// the soft engine passes its per-tick response so contact folds persist and relax.</param>
+    void GravityDeformation(float relaxation = 1f)
     {
         if(!HasContactDeformation)return;
         var started=System.Diagnostics.Stopwatch.GetTimestamp();
@@ -147,6 +150,12 @@ public partial class PlantSubFormation<T>
                 if(!blade.DeformationAdmissible(pose,q))q=Vector4.Zero;
             }
             state.Free=q;state.FreeLength=pose.Length;state.FreeWidth=pose.Width;state.FreeKnown=true;
+            if(relaxation<1f)
+            {
+                q=LimitedShape(i,Vector4.Lerp(state.Angles,q,relaxation));
+                if(GetLaminaTemplate(i) is { } shell)
+                    for(var attempt=0;attempt<16 && !shell.DeformationAdmissible(pose,q);++attempt)q=Vector4.Lerp(state.Free,q,.5f);
+            }
             var before=AttachmentRotation(pose);
             SetDeformation(i,q);
             var after=AttachmentRotation(GetContactPose(i));

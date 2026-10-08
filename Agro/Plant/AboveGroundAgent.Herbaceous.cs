@@ -279,10 +279,13 @@ namespace Agro
                                     // to reject the scape in the same birth transaction, even when
                                     // the scape itself had room. The pending flag is structural state:
                                     // it survives a retained placement and checkpoint continuation.
-                                    // A full crown cannot hand over; excluding this committing apex
-                                    // matters because the formation still holds its old Meristem type.
+                                    // Excluding this committing apex matters because the formation
+                                    // still holds its old Meristem type. A crown already at its node
+                                    // cap hands over anyway: without a successor apex it could never
+                                    // commit again, and a Bergenia fills its ten nodes before its
+                                    // second spring. The cost is one node per flowering year beyond
+                                    // the cap until basal node abscission exists.
                                     agent.FloralHandoverPending = species.ContinueCrownAfterFlowerCommitment
-                                        && CrownAxisHasRoom(formation, agentID, species)
                                         && !HasVegetativeApex(formation, agentID, agentID);
                                 }
                                 else if (!agent.GrowthBlocked
@@ -567,8 +570,7 @@ namespace Agro
                 if (agent.FloralHandoverPending && !wasMeristem && agent.Organ == OrganTypes.Stem
                     && !formation.HasPendingDevelopment(agentID))
                 {
-                    if (!CrownAxisHasRoom(formation, agentID, species)
-                        || HasVegetativeApex(formation, agentID, agentID))
+                    if (HasVegetativeApex(formation, agentID, agentID))
                         agent.FloralHandoverPending = false;
                     else if (agent.Energy > enoughEnergyState)
                     {
