@@ -1,0 +1,45 @@
+Species lookup: Bergenia Cordifolia, BudLength: 0.009
+PlantFormation2 ctor: Bergenia Cordifolia, BudLength: 0.009
+SpeciesSettings.Init called on Bergenia Cordifolia, BudLength: 0.009
+PlantFormation2 after Init: Bergenia Cordifolia, BudLength: 0.009
+Species lookup: Carex morrowii 'Variegata', BudLength: 0.004
+PlantFormation2 ctor: Carex morrowii 'Variegata', BudLength: 0.004
+SpeciesSettings.Init called on Carex morrowii 'Variegata', BudLength: 0.004
+PlantFormation2 after Init: Carex morrowii 'Variegata', BudLength: 0.004
+Species lookup: Bergenia Cordifolia, BudLength: 0.009
+PlantFormation2 ctor: Bergenia Cordifolia, BudLength: 0.009
+SpeciesSettings.Init called on Bergenia Cordifolia, BudLength: 0.009
+PlantFormation2 after Init: Bergenia Cordifolia, BudLength: 0.009
+Species lookup: Carex morrowii 'Variegata', BudLength: 0.004
+PlantFormation2 ctor: Carex morrowii 'Variegata', BudLength: 0.004
+SpeciesSettings.Init called on Carex morrowii 'Variegata', BudLength: 0.004
+PlantFormation2 after Init: Carex morrowii 'Variegata', BudLength: 0.004
+Collision scene: 4 triangles (2 soil, 2 obstacle) in 11 ms, open soil surface (regular fields use their finite footprint)
+Species lookup: Bergenia Cordifolia, BudLength: 0.009
+PlantFormation2 ctor: Bergenia Cordifolia, BudLength: 0.009
+SpeciesSettings.Init called on Bergenia Cordifolia, BudLength: 0.009
+PlantFormation2 after Init: Bergenia Cordifolia, BudLength: 0.009
+Species lookup: Carex morrowii 'Variegata', BudLength: 0.004
+PlantFormation2 ctor: Carex morrowii 'Variegata', BudLength: 0.004
+SpeciesSettings.Init called on Carex morrowii 'Variegata', BudLength: 0.004
+PlantFormation2 after Init: Carex morrowii 'Variegata', BudLength: 0.004
+Species lookup: Bergenia Cordifolia, BudLength: 0.009
+PlantFormation2 ctor: Bergenia Cordifolia, BudLength: 0.009
+SpeciesSettings.Init called on Bergenia Cordifolia, BudLength: 0.009
+PlantFormation2 after Init: Bergenia Cordifolia, BudLength: 0.009
+Species lookup: Carex morrowii 'Variegata', BudLength: 0.004
+PlantFormation2 ctor: Carex morrowii 'Variegata', BudLength: 0.004
+SpeciesSettings.Init called on Carex morrowii 'Variegata', BudLength: 0.004
+PlantFormation2 after Init: Carex morrowii 'Variegata', BudLength: 0.004
+Collision scene: 4 triangles (2 soil, 2 obstacle) in 0 ms, open soil surface (regular fields use their finite footprint)
+Initial checkpoint equal=True
+DENSE step=150 contacts=2636 foliage=13 unresolved=0
+DENSE step=180 contacts=3949 foliage=26 unresolved=0
+DENSE step=210 contacts=6173 foliage=23 unresolved=0
+DENSE step=240 contacts=9396 foliage=32 unresolved=0
+Collision scene: 2 triangles (2 soil, 0 obstacle) in 0 ms, open soil surface (regular fields use their finite footprint)
+Collision scene: 2 triangles (2 soil, 0 obstacle) in 0 ms, open soil surface (regular fields use their finite footprint)
+DENSE step=270 contacts=9396 foliage=46 unresolved=0
+DENSE step=300 contacts=9396 foliage=81 unresolved=0
+DENSE step=330 contacts=9396 foliage=97 unresolved=0
+PASS 210 dense resumed exports through organ reindexing, tray removal and guidance refresh; rejectedBirths=105 rays=59840

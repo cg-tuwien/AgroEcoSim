@@ -1,0 +1,155 @@
+--- starting-dirty-v28/Agro/AgroWorld.cs
++++ selected-v30/Agro/AgroWorld.cs
+@@ -746,7 +746,10 @@
+     // Retry ordering/precision changes can alter continuation; playback is unchanged.
+     // V28 solves shared angular limits in the coupled tangent and adds a bounded
+     // direct solve for poorly conditioned contact sets. Payload layout is unchanged.
+-	public const byte CheckpointVersion = 28;
++    // V30 aligns interval distance proofs with the existing clearance tolerance
++    // and removes unchecked tiny-motion acceptance, including at attachments.
++    // Certification decisions can alter continuation; payload/playback are unchanged.
++	public const byte CheckpointVersion = 30;
+ 
+ 	/// <summary>
+ 	/// Everything the next step depends on that the request does not determine.
+--- starting-dirty-v28/Agro/Collisions/FoliageGeometry.cs
++++ selected-v30/Agro/Collisions/FoliageGeometry.cs
+@@ -385,6 +385,13 @@
+         return SweepInterval(fromA, toA, fromB, toB, depth, ref intervals);
+     }
+ 
++    // Distance is 1-Lipschitz under the combined material-point motion bound.
++    // Use the same finite-thickness tolerance as endpoint admission; an extra
++    // positive skin here unnecessarily subdivides admissible persistent contacts.
++    // Keep a positive core separation even for proxies thinner than the skin.
++    static bool DistanceBoundsMotion(float distance, float reach, float motion)
++        => distance >= MathF.Max(reach - Skin, 1e-9f) + motion;
++
+     static MotionResult SweepInterval(in ContactShape fromA, in ContactShape toA, in ContactShape fromB, in ContactShape toB, int depth, ref int intervals)
+     {
+         ++IntervalCount;
+@@ -411,7 +418,7 @@
+             var padding = MathF.Max(fromA.Pose.Radius, toA.Pose.Radius)
+                 + MathF.Max(fromB.Pose.Radius, toB.Pose.Radius);
+             var separation = Distance(fromA, fromB, padding + movement + Skin);
+-            if (separation.Distance >= padding + movement - Skin) return MotionResult.Clear;
++            if (DistanceBoundsMotion(separation.Distance, padding, movement)) return MotionResult.Clear;
+             // Radius interpolates linearly. A separating plane can therefore
+             // certify simultaneous thickening and separation without treating
+             // the final radius as present throughout the interval.
+@@ -446,7 +453,7 @@
+         var reach = MathF.Max(fromA.Pose.Radius, toA.Pose.Radius) + MathF.Max(fromB.Pose.Radius, toB.Pose.Radius);
+         var motion = MathF.Max(fromA.MotionBound(midA), midA.MotionBound(toA)) + MathF.Max(fromB.MotionBound(midB), midB.MotionBound(toB));
+         var hit = Distance(midA, midB, reach + motion + Skin);
+-        if (hit.Distance >= reach + motion + Skin * 0.5f) return MotionResult.Clear;
++        if (DistanceBoundsMotion(hit.Distance, reach, motion)) return MotionResult.Clear;
+         // Maximum endpoint thickness bounds separation over the interval. It
+         // cannot establish a midpoint collision: growing tissue is thinner there.
+         // Otherwise simultaneous thickening and separation can be rejected even
+@@ -462,7 +469,8 @@
+         var clearance0 = gap0 - fromA.Pose.Radius - fromB.Pose.Radius;
+         var clearance1 = gap1 - toA.Pose.Radius - toB.Pose.Radius;
+         if (MathF.Min(clearance0, clearance1) - fromA.ArcBound(toA) - fromB.ArcBound(toB) >= -Skin) return MotionResult.Clear;
+-        if (motion < Skin * 0.25f) return hit.Distance >= reach - Skin ? MotionResult.Clear : MotionResult.Uncertified;
++        // A clear midpoint alone cannot certify even a tiny moving interval.
++        // Subdivide it under the same query budget until a full-path bound holds.
+         if (depth >= 16) return MotionResult.Uncertified;
+         var left = SweepInterval(fromA, midA, fromB, midB, depth + 1, ref intervals);
+         return left == MotionResult.Clear ? SweepInterval(midA, toA, midB, toB, depth + 1, ref intervals) : left;
+--- starting-dirty-v28/Agro/Collisions/FoliageGeometry.Attachment.cs
++++ selected-v30/Agro/Collisions/FoliageGeometry.Attachment.cs
+@@ -133,14 +133,11 @@
+         var high=Vector3.Min(attachment0,attachment1)+new Vector3(radius);
+         if (AttachmentContained(low,high,a0,a1) || AttachmentContained(low,high,b0,b1)) return MotionResult.Clear;
+         var movement=a0.MotionBound(a1)+b0.MotionBound(b1);
+-        // Endpoints are checked independently. Below a quarter skin, the whole path stays
+-        // within the same contact tolerance; do not exhaust a triangle budget on roundoff.
+-        if (movement < Skin * .25f) return MotionResult.Clear;
+         if (SweptPlanesSeparate(a0,a1,b0,b1)) return MotionResult.Clear;
+         var reach=MathF.Max(a0.Pose.Radius,a1.Pose.Radius)+MathF.Max(b0.Pose.Radius,b1.Pose.Radius);
+         var gap=OutsideAttachment(a0,b0,reach+movement+Skin,attachment0,
+             radius-movement-Vector3.Distance(attachment0,attachment1)).Distance;
+-        if (gap>=reach+movement-Skin) return MotionResult.Clear;
++        if (DistanceBoundsMotion(gap,reach,movement)) return MotionResult.Clear;
+         // Split sheets before temporal subdivision: a small triangle's motion bound is
+         // much tighter than that of the complete blade, especially near an attachment.
+         var budget = 256;
+@@ -198,8 +195,10 @@
+         // Erode the excluded region by the entire motion bound. A contact leaving the
+         // attachment during this interval must therefore participate in the distance proof.
+         var hit = OutsideAttachment(am, bm, reach+motion+Skin, pm, radius-motion-Vector3.Distance(p0,pm));
+-        if (hit.Distance >= reach+motion+Skin*.5f) return MotionResult.Clear;
+-        if (motion < Skin*.25f) return hit.Distance >= reach-Skin ? MotionResult.Clear : MotionResult.Uncertified;
++        if (DistanceBoundsMotion(hit.Distance, reach, motion)) return MotionResult.Clear;
++        // The eroded attachment region and full motion bound are required even
++        // below the skin; a clear midpoint does not certify its endpoints/path.
++        // Continue bounded subdivision rather than treating small motion as clear.
+         // Use actual midpoint thickness to identify penetration; the larger
+         // endpoint thickness remains the conservative separation-proof bound.
+         var midpointReach = am.Pose.Radius + bm.Pose.Radius;
+--- starting-dirty-v28/Agro/Collisions/CollisionWorld.Continuation.cs
++++ selected-v30/Agro/Collisions/CollisionWorld.Continuation.cs
+@@ -11,6 +11,9 @@
+     bool ContinuingGrowth;
+     bool CollectingContinuationContacts;
+     const int MaximumContinuationContacts = 16, MaximumContinuationJoints = 256;
++    // Preserve the existing separation target. The smaller-gap experiment failed
++    // the seasonal gate and substantially increased V1 certification cost.
++    const float ContinuationReactionGap = FoliageGeometry.Skin;
+     readonly record struct ContinuationWitness(ContactKey Key, int I, int J, bool Reaction);
+     readonly record struct ContinuationJoint(PlantFormation2 Plant, int Index);
+     readonly record struct ContinuationGradient(int Row, int Joint, Vector3 Torque, Vector3 Turn, Vector4 Shape, Vector4 Fold);
+@@ -236,7 +239,11 @@
+             var hit = PairDistance(a, common, sa, sb, reach + FoliageGeometry.Skin);
+             if (TraceContacts)
+                 Console.WriteLine($"CONTINUATION_CONTACT t={pa.World.Timestep} ids={failure.IdA}/{failure.IdB} gapUm={(hit.Distance-reach)*1e6f:R}");
+-            if (hit.Distance >= reach - FoliageGeometry.Skin) return false;
++            if (hit.Distance >= reach - FoliageGeometry.Skin)
++            {
++                if (TraceContacts) Console.WriteLine($"CONTINUATION_FAILURE motionCertificate ids={failure.IdA}/{failure.IdB} witnesses={ContinuationWitnesses.Count}");
++                return false;
++            }
+             var first = a == b ? failure.IdA < failure.IdB : PlantIndices[pa] < PlantIndices[pb];
+             var key = first ? new ContactKey(pa, failure.IdA, pb, failure.IdB)
+                 : new ContactKey(pb, failure.IdB, pa, failure.IdA);
+@@ -271,12 +278,16 @@
+                 ? ownFirst ? memory.Value.Normal : -memory.Value.Normal : null;
+             var normal = ContactNormal(hit, a.PreviousGeometry[i].Pose.Base - b.PreviousGeometry[j].Pose.Base,
+                 remembered);
+-            var depth = reach - hit.Distance + FoliageGeometry.Skin;
++            var depth = reach - hit.Distance + ContinuationReactionGap;
+             var ma = a.ContactMobility(i, hit.A, normal, common);
+             var mb = b.ContactMobility(j, hit.B, -normal, common);
+             var shared = a.SharedShapeMobility(common, i, hit.A, j, hit.B, normal);
+             var total = ma + mb + shared;
+-            if (total <= 1e-20 || !double.IsFinite(total)) return false;
++            if (total <= 1e-20 || !double.IsFinite(total))
++            {
++                if (TraceContacts) Console.WriteLine($"CONTINUATION_FAILURE mobility ids={failure.IdA}/{failure.IdB} a={ma:R} b={mb:R} shared={shared:R} witnesses={ContinuationWitnesses.Count}");
++                return false;
++            }
+             a.BeginContactSweep();
+             if (a != b) b.BeginContactSweep();
+             if (ma > 0) a.QueueContactCorrection(i, hit.A, normal, (float)(depth * ma / total), common);
+@@ -333,7 +344,7 @@
+                 var normal = ContactNormal(hit, a.PreviousGeometry[w.I].Pose.Base - b.PreviousGeometry[w.J].Pose.Base, remembered);
+                 // Negative depths preserve a previously cleared contact as an inequality:
+                 // another correction must not spend more than its available clearance.
+-                ContinuationDepth[row] = reach - hit.Distance + (w.Reaction ? FoliageGeometry.Skin : -FoliageGeometry.Skin);
++                ContinuationDepth[row] = reach - hit.Distance + (w.Reaction ? ContinuationReactionGap : -FoliageGeometry.Skin);
+                 if (!AppendChain(a, w.I, hit.A, normal, common, row)
+                     || !AppendChain(b, w.J, hit.B, -normal, common, row)) return false;
+                 if (common >= 0 && !Append(a, common, row, a.CommonContactGradient(common, w.I, hit.A, w.J, hit.B, normal))) return false;
+@@ -486,7 +497,11 @@
+             if (c > 0) break;
+             ++at;
+         }
+-        if (ContinuationWitnesses.Count == MaximumContinuationContacts) return false;
++        if (ContinuationWitnesses.Count == MaximumContinuationContacts)
++        {
++            if (TraceContacts) Console.WriteLine($"CONTINUATION_FAILURE witnessBudget ids={w.Key.OrganA}/{w.Key.OrganB} reaction={reaction}");
++            return false;
++        }
+         ContinuationWitnesses.Insert(at, w);
+         return true;
+     }

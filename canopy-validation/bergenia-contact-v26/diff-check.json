@@ -1,0 +1,20 @@
+{
+  "checks": [
+    {
+      "name": "scoped tracked diff",
+      "exit": 0,
+      "output": ""
+    },
+    {
+      "name": "untracked continuation diff",
+      "exit": 1,
+      "output": ""
+    },
+    {
+      "name": "untracked calibration diff",
+      "exit": 1,
+      "output": ""
+    }
+  ],
+  "newLineWhitespaceIssues": []
+}

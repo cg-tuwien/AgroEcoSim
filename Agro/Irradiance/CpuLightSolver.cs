@@ -60,7 +60,7 @@ public sealed class CpuLightSolver
 	{
 		public readonly Vector3 P;
 		public readonly Vector3 U;
-		public readonly Vector3 V;
+        public readonly Vector3 V;
 		public LeafSensor(Vector3 p, Vector3 u, Vector3 v)
 		{
 			P = p;
@@ -69,6 +69,12 @@ public sealed class CpuLightSolver
 		}
 	}
 
+    readonly record struct FoldedLeafSensor(LaminaTemplate? Template,Collisions.OrganPose Pose,float Area);
+    // Only opted-in formations allocate deformation sensors. Ordinary leaves retain
+    // their original compact P/U/V record and existing gather path.
+    Dictionary<int,FoldedLeafSensor[]>? FoldedSensors;
+    int SensorSlots;
+
 	readonly RayScene Scene = new();
 	uint GuidanceSceneTimestep = uint.MaxValue;
 
@@ -76,8 +82,11 @@ public sealed class CpuLightSolver
 	// Without it a resumed CPU run agrees for one frame, then diverges at its first bounce.
 	internal void WriteState(BinaryWriter writer)
 	{
-		writer.Write(PlantRadiosity.Length);
-		for(int i=0;i<PlantRadiosity.Length;++i)
+		// Capacity depends on the world's history, not on its accepted light state.
+		var count = PlantRadiosity.Length;
+		while (count > 0 && !PlantRadiosityKnown[count - 1] && PlantRadiosity[count - 1] == 0f) --count;
+		writer.Write(count);
+		for(int i=0;i<count;++i)
 		{ writer.Write(PlantRadiosity[i]); writer.Write(PlantRadiosityKnown[i]); }
 	}
 
@@ -85,6 +94,9 @@ public sealed class CpuLightSolver
 	{
 		var count=reader.ReadInt32();
 		EnsureSlots(count);
+		// Rewinding must discard future radiosity while retaining aligned scratch capacity.
+		Array.Clear(PlantRadiosity);
+		Array.Clear(PlantRadiosityKnown);
 		for(int i=0;i<count;++i)
 		{ PlantRadiosity[i]=reader.ReadSingle(); PlantRadiosityKnown[i]=reader.ReadBoolean(); }
 		GuidanceSceneTimestep=uint.MaxValue;
@@ -147,6 +159,9 @@ public sealed class CpuLightSolver
 	readonly float BandHeight;
 
 	SkyDome[] SunDomes = [];
+	AgroWorld? SkyWorld;
+	uint SkyTimestep;
+	SkyInterval IntegratedSky;
 	int SunSubSteps;
 
 	bool StaticReady;
@@ -251,18 +266,29 @@ public sealed class CpuLightSolver
 			for (int k = 0; k < count; ++k)
 				switch (Classify(ag.GetOrgan(k)))
 				{
-					case PrimitiveClass.Lamina: ++prims; ++sensors; break;
-					case PrimitiveClass.Cylinder: case PrimitiveClass.Sphere: ++prims; break;
+					case PrimitiveClass.Lamina:
+                        prims += ag.HasContactDeformation && ag.GetOrgan(k)==OrganTypes.Leaf ? ag.GetLaminaTemplate(k)!.Indices.Length/3 : 1;
+                        ++sensors; break;
+					case PrimitiveClass.Cylinder: prims += ag.GetContactPose(k).CurvedRod ? 5 : 1; break;
+                    case PrimitiveClass.Sphere: ++prims; break;
 				}
 			PrimCounts[i] = prims;
 			SensorCounts[i] = sensors;
 		});
 
+        SensorSlots=slots;
 		SensorTotal = 0;
 		for (int i = 0; i < slots; ++i)
 		{
 			SensorFirst[i] = SensorTotal;
 			SensorTotal += SensorCounts[i];
+            if(formations[i] is PlantFormation2 plant && plant.AG.HasContactDeformation)
+            {
+                var buffers=FoldedSensors ??= [];
+                if(!buffers.TryGetValue(i,out var buffer) || buffer.Length<SensorCounts[i])
+                    buffers[i]=new FoldedLeafSensor[Math.Max(SensorCounts[i],buffer?.Length*3/2 ?? 8)];
+            }
+            else FoldedSensors?.Remove(i);
 		}
 
 		if (Sensors.Length < SensorTotal)
@@ -281,7 +307,9 @@ public sealed class CpuLightSolver
 			var ag = ((PlantFormation2)formations[i]).AG;
 			var organs = GetOffsetBuffer(i, ag.Count);
 			organs.AsSpan(ag.Count).Fill(-1);
-			FillPlant(ag, FirstPlantGroup + i, Scene.PlantPrimitives(i), organs.AsSpan(0, ag.Count), SensorFirst[i]);
+            FoldedLeafSensor[]? folded=null;
+            FoldedSensors?.TryGetValue(i,out folded);
+			FillPlant(ag, FirstPlantGroup + i, Scene.PlantPrimitives(i), organs.AsSpan(0, ag.Count), SensorFirst[i],folded);
 			OffsetArrays[i] = organs;
 		});
 
@@ -351,10 +379,21 @@ public sealed class CpuLightSolver
 		return true;
 	}
 
-	float GatherSensor(int sensorIndex, uint timestep, in SkyDome diffuse, SkyDome[] suns, int sunCount,
+	float GatherSensor(int sensorIndex, uint timestep, in SkyInterval diffuse, SkyDome[] suns, int sunCount,
 					   in SurfaceRadianceModel model, int samples)
 	{
 		var sensor = Sensors[sensorIndex];
+        if(FoldedSensors is {Count:>0})
+        {
+            var first=0;var last=SensorSlots;
+            while(first<last){var mid=(first+last)/2;if(SensorFirst[mid]<=sensorIndex)first=mid+1;else last=mid;}
+            var slot=first-1;
+            if(slot>=0 && FoldedSensors.TryGetValue(slot,out var folded))
+            {
+                ref readonly var shape=ref folded[sensorIndex-SensorFirst[slot]];
+                if(shape.Template!=null)return GatherFoldedSensor(shape,sensorIndex,timestep,diffuse,suns,sunCount,model,samples);
+            }
+        }
 		var normal = Vector3.Normalize(Vector3.Cross(sensor.U, sensor.V));
 		var key = RaySampling.Hash((uint)sensorIndex, timestep, 0x2545f491u);
 
@@ -404,6 +443,41 @@ public sealed class CpuLightSolver
 		return beam + diffuseTotal;
 	}
 
+    float GatherFoldedSensor(in FoldedLeafSensor sensor,int sensorIndex,uint timestep,in SkyInterval diffuse,SkyDome[] suns,int sunCount,
+        in SurfaceRadianceModel model,int samples)
+    {
+        var key=RaySampling.Hash((uint)sensorIndex,timestep,0x2545f491u);
+        var beam=0f;
+        for(var k=0;k<sunCount;++k)
+        {
+            ref readonly var sun=ref suns[k];if(sun.DirectNormal<=0)continue;
+            RaySampling.Sample2D(k,sunCount,key^0x51ed2701u,out var a,out var b);
+            sensor.Template!.SampleSurface(sensor.Pose,a,b,sensor.Area,out var point,out var normal,out var weight);
+            var cosine=Vector3.Dot(normal,sun.SunDirection);var face=cosine>=0?normal:-normal;
+            if(!Scene.AnyHit(point+face*Epsilon,sun.SunDirection,Epsilon,FarDistance,RayScene.MaskAll))
+                beam+=sun.DirectNormal*MathF.Abs(cosine)*weight;
+        }
+        if(sunCount>0)beam/=sunCount;
+        var half=samples>>1;var total=0f;
+        for(var face=0;face<2;++face)
+        {
+            var faceKey=key^(face==0?0x9e3779b1u:0x85ebca77u);var sum=0f;
+            for(var j=0;j<half;++j)
+            {
+                RaySampling.Sample2D(j,half,faceKey^0x27d4eb2du,out var a,out var b);
+                sensor.Template!.SampleSurface(sensor.Pose,a,b,sensor.Area,out var point,out var normal,out var weight);
+                if(face!=0)normal=-normal;
+                RaySampling.OrthonormalBasis(normal,out var tangent,out var bitangent);
+                RaySampling.Sample2D(j,half,faceKey,out var u1,out var u2);
+                var direction=RaySampling.CosineHemisphere(normal,tangent,bitangent,u1,u2);
+                sum+=weight*(Scene.ClosestHit(point+normal*Epsilon,direction,Epsilon,FarDistance,RayScene.MaskAll,out var hit)
+                    ?model.Radiance(in hit,in diffuse):diffuse.Radiance(direction));
+            }
+            total+=MathF.PI*sum/half;
+        }
+        return beam+total;
+    }
+
 	static PrimitiveClass Classify(OrganTypes organ) => organ switch
 	{
 		OrganTypes.Leaf or OrganTypes.FlowerPadel => PrimitiveClass.Lamina,
@@ -415,7 +489,7 @@ public sealed class CpuLightSolver
 	};
 
 	void FillPlant(PlantSubFormation<AboveGroundAgent> ag, int group, Span<RayPrimitive> destination,
-				   Span<int> organOffsets, int sensorFirst)
+				   Span<int> organOffsets, int sensorFirst,FoldedLeafSensor[]? folded)
 	{
 		var count = ag.Count;
 		int prim = 0, sensor = 0;
@@ -439,6 +513,20 @@ public sealed class CpuLightSolver
 			{
 				case PrimitiveClass.Lamina:
 				{
+                    if(ag.HasContactDeformation && organ==OrganTypes.Leaf)
+                    {
+                        var template=ag.GetLaminaTemplate(i)!;var pose=ag.GetContactPose(i);var area=0f;
+                        for(var triangle=0;triangle<template.Indices.Length/3;++triangle)
+                        {
+                            template.Triangle(pose,triangle,out var a,out var b,out var c);
+                            area+=Vector3.Cross(b-a,c-a).Length()*.5f;
+                            destination[prim++]=new RayPrimitive {P=a,U=b-a,V=c-a,Group=group,Kind=RayPrimitiveKind.Triangle,
+                                Flags=(byte)(RayScene.FlagPlant|RayScene.FlagFoliage)};
+                        }
+                        var foldedIndex=sensorFirst+sensor++;organOffsets[i]=foldedIndex;
+                        folded![foldedIndex-sensorFirst]=new(template,pose,area);
+                        break;
+                    }
 					var across = Vector3.Transform(Vector3.UnitZ, orientation);
 					var u = axis * length;
 					var v = across * -MathF.Max(scale.Z, MinExtent);
@@ -455,9 +543,20 @@ public sealed class CpuLightSolver
 					var index = sensorFirst + sensor++;
 					organOffsets[i] = index;
 					Sensors[index] = new LeafSensor(center, u, v);
+                    if(folded!=null)folded[index-sensorFirst]=default;
 					break;
 				}
-				case PrimitiveClass.Cylinder:
+                case PrimitiveClass.Cylinder:
+                    var rodPose=ag.GetContactPose(i);
+                    if(rodPose.CurvedRod)
+                    {
+                        for(var span=0;span<3;++span)
+                        { var rod=rodPose.RodSpan(span); destination[prim++]=new RayPrimitive {P=rod.Base,U=rod.Tip-rod.Base,
+                            R=rod.Radius,Group=group,Kind=RayPrimitiveKind.Cylinder,Flags=RayScene.FlagPlant}; }
+                        for(var node=1;node<3;++node)destination[prim++]=new RayPrimitive {P=rodPose.RodNode(node),R=rodPose.Radius,
+                            Group=group,Kind=RayPrimitiveKind.Sphere,Flags=RayScene.FlagPlant};
+                        break;
+                    }
 					destination[prim++] = new RayPrimitive
 					{
 						P = center,
@@ -482,31 +581,27 @@ public sealed class CpuLightSolver
 		}
 	}
 
-	SkyDome BuildDomes(AgroWorld world, uint timestep)
+	SkyInterval BuildDomes(AgroWorld world, uint timestep)
 	{
-		//Six sub-steps cover a whole day tick at four hour resolution and cost one shadow ray each.
-		var subSteps = Math.Clamp((int)world.HoursPerTick, 1, 6);
-		if (SunDomes.Length < subSteps)
-			SunDomes = new SkyDome[subSteps];
-		SunSubSteps = subSteps;
-
-		var coverage = 1f - world.GetAmbientLight(timestep);
-		var start = world.GetTime(timestep);
-		var span = world.HoursPerTick / (double)subSteps;
-
-		var brightest = 0;
-		var meanGlobal = 0.0;
-		for (int s = 0; s < subSteps; ++s)
-		{
-			SunDomes[s] = SkyDome.Sample(start.AddHours((s + 0.5) * span), world.Latitude, world.Longitude, coverage, world.Azimuth, world.Altitude);
-			meanGlobal += SunDomes[s].GlobalHorizontal;
-			if (SunDomes[s].GlobalHorizontal > SunDomes[brightest].GlobalHorizontal)
-				brightest = s;
-		}
-		meanGlobal /= subSteps;
-
-		var reference = SunDomes[brightest];
-		return reference.IsLit ? reference.Scaled((float)(meanGlobal / reference.GlobalHorizontal)) : reference;
+        // Growth guidance and illumination can query the same tick. Solar position
+        // and weather are world/tick data: build their quadrature only once.
+        if (ReferenceEquals(SkyWorld, world) && SkyTimestep == timestep) return IntegratedSky;
+        // Fixed 10-minute midpoint quadrature: a four-hour tick and four one-hour
+        // ticks use the same solar positions (for the same weather/geometry).
+        // Includes dark samples so sunrise/sunset energy is not overcounted.
+        var subSteps = SkyInterval.SampleCount(world.HoursPerTick);
+        if (SunDomes.Length < subSteps) SunDomes = new SkyDome[subSteps];
+        SunSubSteps = subSteps;
+        var coverage = 1f - world.GetAmbientLight(timestep);
+        var start = world.GetTime(timestep);
+        var span = world.HoursPerTick / (double)subSteps;
+        for (int s = 0; s < subSteps; ++s)
+            SunDomes[s] = SkyDome.Sample(start.AddHours((s + .5) * span), world.Latitude,
+                world.Longitude, coverage, world.Azimuth, world.Altitude);
+        IntegratedSky = new SkyInterval(SunDomes, subSteps);
+        SkyWorld = world;
+        SkyTimestep = timestep;
+        return IntegratedSky;
 	}
 
 	void EnsureStatic(AgroWorld world, IList<IObstacle> obstacles)

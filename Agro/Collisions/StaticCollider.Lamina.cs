@@ -9,7 +9,15 @@ public sealed partial class StaticCollider
     bool ShapeContactUncached(in ContactShape shape, Vector3 trusted, StaticSurface surface,
         out Vector3 point, out Vector3 normal, out float depth)
     {
-        if (shape.Lamina == null) return Contact(shape.Pose, trusted, surface, out point, out normal, out depth, out _);
+        if (shape.Lamina == null)
+        {
+            if (!shape.Pose.CurvedRod) return Contact(shape.Pose, trusted, surface, out point, out normal, out depth, out _);
+            point=normal=default; depth=0;
+            for(var span=0;span<3;++span)
+                if(Contact(shape.Pose.RodSpan(span),trusted,surface,out var p,out var n,out var d,out _) && d>depth)
+                { point=p; normal=n; depth=d; }
+            return depth>FoliageGeometry.Skin;
+        }
         point = normal = default; depth = 0;
         if (NodeCount == 0) return false;
         var bounds = shape.Bounds;
@@ -50,7 +58,7 @@ public sealed partial class StaticCollider
 
     bool ShapeSweepClearUncached(in ContactShape from, in ContactShape to, StaticSurface surface)
     {
-        if (from.Lamina == null) return SweepClear(from.Pose, to.Pose, surface);
+        if (from.Lamina == null && !from.Pose.CurvedRod && !to.Pose.CurvedRod) return SweepClear(from.Pose, to.Pose, surface);
         if (NodeCount == 0 || from.MotionBound(to) < FoliageGeometry.Skin * 0.25f) return true;
         var bounds = from.SweptBounds(to);
         var stack = NodeStack ??= new int[128]; int count = 0; stack[count++] = 0;
@@ -83,12 +91,23 @@ public sealed partial class StaticCollider
         var distance = float.PositiveInfinity;
         var candidates = LaminaCandidates ??= [];
         var p = A[t]; var q = p + U[t]; var r = p + V[t]; var pad = new Vector3(radius + motion + FoliageGeometry.Skin);
-        mid.Lamina!.Query(mid.Pose, new(Vector3.Min(p, Vector3.Min(q, r)) - pad, Vector3.Max(p, Vector3.Max(q, r)) + pad), candidates);
-        foreach (var triangle in candidates)
+        if(mid.Lamina == null)
         {
-            mid.Lamina.Triangle(mid.Pose, triangle, out var a, out var b, out var c);
-            distance = MathF.Min(distance, FoliageGeometry.TriangleDistance(a, b, c, p, q, r, out _, out _,
-                MathF.Min(distance, radius + motion + FoliageGeometry.Skin)));
+            for(var span=0;span<3;++span)
+            {
+                var rod=mid.Pose.RodSpan(span);
+                distance=MathF.Min(distance,SegmentTriangleDistance(rod.Base,rod.Tip,p,q-p,r-p,out _,out _));
+            }
+        }
+        else
+        {
+            mid.Lamina.Query(mid.Pose, new(Vector3.Min(p, Vector3.Min(q, r)) - pad, Vector3.Max(p, Vector3.Max(q, r)) + pad), candidates);
+            foreach (var triangle in candidates)
+            {
+                mid.Lamina.Triangle(mid.Pose, triangle, out var a, out var b, out var c);
+                distance = MathF.Min(distance, FoliageGeometry.TriangleDistance(a, b, c, p, q, r, out _, out _,
+                    MathF.Min(distance, radius + motion + FoliageGeometry.Skin)));
+            }
         }
         if (distance >= radius + motion + FoliageGeometry.Skin) return true;
         if (distance < radius - FoliageGeometry.Skin) return false;

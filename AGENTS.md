@@ -97,8 +97,10 @@ changes: repeated quaternion normalization can push a tip outside the attachment
 exemption boundary and invalidate an otherwise admissible fallback.
 At coincident contacts, remembered sides take precedence over the organ-base fallback.
 Checkpoint contact tests must compare actual exported frames after resume, including
-organ removal/reindexing, warm versus rebuilt clearance caches, and directional-guidance refresh. Live checkpoint version 3
-stores stable organ IDs, pending development, retries, sparse contacts and guidance;
+organ removal/reindexing, warm versus rebuilt clearance caches, and directional-guidance refresh. Live checkpoint version 6
+stores stable organ IDs, pending development, retries, sparse contacts and guidance,
+and requires corrected leaf-width geometry and unmodified request coefficients
+(see `Agro/LEAF_DIMENSIONS.md` and `Agro/BERGENIA_CALIBRATION.md`);
 older live checkpoints are rejected, while their saved playback remains readable.
 
 ## Key simulator invariants and traps
@@ -3356,3 +3358,12 @@ for stems and roots**. Buds (`Primitives.Sphere`) are disabled everywhere.
 `greenColors` is seeded (`core/Palette.ts`). It was previously shuffled with
 `Math.random()` at module load, which made leaf colours differ on every reload
 and screenshot comparison impossible. Keep it deterministic.
+
+### Experimental contact deformation
+
+`ContactDeformationMode.BroadLeafV1` remains opt-in until the release gates in
+`Agro/CONTACT_DEFORMATION.md` pass. V8 records contain immutable mesh/profile assets;
+v6 live checkpoints validate their identities and retain deformation coordinates.
+Keep V7 playback and legacy mesh endpoints unchanged. Test actual folded geometry
+in collision, CPU light, both renderers, picking and downloads. Do not enable
+Bergenia by default or retune its biological rates to hide a failed mechanics gate.

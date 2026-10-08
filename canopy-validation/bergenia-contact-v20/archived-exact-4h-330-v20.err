@@ -1,0 +1,3 @@
+CHECKPOINT /tmp/gf-fresh-season/archived-exact-4h-day240-v20.bin bytes=51878174
+CHECKPOINT /tmp/gf-fresh-season/archived-exact-4h-day330-v20.bin bytes=51891150
+DONE mode=archived-exact tick=4 firstPetalDay=-1 elapsed=00:36:24.2837232 everLeaves=20 ever50=6 ever90=4

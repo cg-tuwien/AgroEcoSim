@@ -1,0 +1,13 @@
+CASE flat-crossing result=Intersecting minSampledGapUm=-399.99998989515007 expectClear=False
+CASE persistent-slide result=Clear minSampledGapUm=-8.99998121894896 expectClear=True
+CASE tiny-motion-invalid-start result=Intersecting minSampledGapUm=-11.00008375942707 expectClear=False
+CASE attachment-tiny-invalid-start result=Intersecting minSampledGapUm=-11.00008375942707 expectClear=False
+CASE attachment-root-tiny-invalid-start result=Intersecting minSampledGapUm=-11.00008375942707 expectClear=False
+CASE edge-wall-crossing result=Intersecting minSampledGapUm=-399.99998989515007 expectClear=False
+CASE widening result=Intersecting minSampledGapUm=-599.9999702908099 expectClear=False
+CASE rotation-arc result=Intersecting minSampledGapUm=-2199.998125433922 expectClear=False
+CASE tiny-curved-blade result=Clear minSampledGapUm=298.99997753091156 expectClear=True
+CASE basal-lobes-wall result=Intersecting minSampledGapUm=-399.99998989515007 expectClear=False
+CASE folded-surface-separation result=Clear minSampledGapUm=58800.000697374344 expectClear=True
+BOUNDS testedMaterialPoints=190080 largestSampledExcessUm=0 version=30
+TIGHT_INCLUSION representable=304/324 positiveRejected=145/145 positiveClear=0 uncertified=0 negativeClear=126 negativeRefused=33 offsetPerBodyUm=20 rationalToFloat=True

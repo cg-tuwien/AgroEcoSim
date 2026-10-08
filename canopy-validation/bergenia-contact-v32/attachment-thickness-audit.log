@@ -1,0 +1,22 @@
+Species lookup: Bergenia Cordifolia, BudLength: 0.009
+PlantFormation2 ctor: Bergenia Cordifolia, BudLength: 0.009
+SpeciesSettings.Init called on Bergenia Cordifolia, BudLength: 0.009
+PlantFormation2 after Init: Bergenia Cordifolia, BudLength: 0.009
+Collision scene: 2 triangles (2 soil, 0 obstacle) in 7 ms, open soil surface (regular fields use their finite footprint)
+MATURE version=32 sourceVersion=32 tick=4 day=240 clearStart=True scape=46
+SEAM_PAIR a=23:Petiole b=47:FlowerMeristem common=21 junctionRadiusMm=5
+SEAM deltaUm=0 lengthMm=7.4057317 gapUm=10.0000761449337 attachmentRadiusMm=16.787107 centerLineTipOutsideUm=-0.6221234798431396 rodRadiusMm=5.259694
+SEAM deltaUm=0.10000000116860974 lengthMm=7.405832 gapUm=10.0000761449337 attachmentRadiusMm=16.787107 centerLineTipOutsideUm=-0.5308538675308228 rodRadiusMm=5.259694
+SEAM deltaUm=0.20000000233721948 lengthMm=7.4059315 gapUm=10.0000761449337 attachmentRadiusMm=16.787107 centerLineTipOutsideUm=-0.4377216100692749 rodRadiusMm=5.259694
+SEAM deltaUm=0.40000000467443897 lengthMm=7.4061317 gapUm=10.0000761449337 attachmentRadiusMm=16.787107 centerLineTipOutsideUm=-0.25331974029541016 rodRadiusMm=5.259694
+SEAM deltaUm=0.6000000212225132 lengthMm=7.4063315 gapUm=10.0000761449337 attachmentRadiusMm=16.787107 centerLineTipOutsideUm=-0.06705522537231445 rodRadiusMm=5.259694
+SEAM deltaUm=0.8000000093488779 lengthMm=7.406532 gapUm=-1945.7093439996243 attachmentRadiusMm=16.787107 centerLineTipOutsideUm=0.11734664440155029 rodRadiusMm=5.259694
+SEAM deltaUm=0.9999999974752427 lengthMm=7.4067316 gapUm=-1945.77407091856 attachmentRadiusMm=16.787107 centerLineTipOutsideUm=0.30174851417541504 rodRadiusMm=5.259694
+SEAM deltaUm=1.9999999949504854 lengthMm=7.407732 gapUm=-1946.0986368358135 attachmentRadiusMm=16.787107 centerLineTipOutsideUm=1.2274831533432007 rodRadiusMm=5.259694
+SEAM deltaUm=3.999999989900971 lengthMm=7.409732 gapUm=-1946.746837347746 attachmentRadiusMm=16.787107 centerLineTipOutsideUm=3.077089786529541 rodRadiusMm=5.259694
+SEAM deltaUm=7.999999979801942 lengthMm=7.413732 gapUm=-1948.0418413877487 attachmentRadiusMm=16.787107 centerLineTipOutsideUm=6.778165698051453 rodRadiusMm=5.259694
+SEAM deltaUm=15.999999959603883 lengthMm=7.421732 gapUm=-1950.6225362420082 attachmentRadiusMm=16.787107 centerLineTipOutsideUm=14.180317521095276 rodRadiusMm=5.259694
+SEAM deltaUm=31.999999919207767 lengthMm=7.4377317 gapUm=-1955.7476043701172 attachmentRadiusMm=16.787107 centerLineTipOutsideUm=28.98275852203369 rodRadiusMm=5.259694
+SEAM deltaUm=63.99999983841553 lengthMm=7.469732 gapUm=-1965.8557139337063 attachmentRadiusMm=16.787107 centerLineTipOutsideUm=58.591365814208984 rodRadiusMm=5.259694
+SEAM deltaUm=125.00000593718141 lengthMm=7.5307317 gapUm=-1984.5925271511078 attachmentRadiusMm=16.787107 centerLineTipOutsideUm=115.02765119075775 rodRadiusMm=5.259694
+SEAM deltaUm=250.00001187436283 lengthMm=7.6557317 gapUm=-2020.778600126505 attachmentRadiusMm=16.787107 centerLineTipOutsideUm=230.67928850650787 rodRadiusMm=5.259694

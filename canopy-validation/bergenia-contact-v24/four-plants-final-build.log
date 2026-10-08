@@ -1,0 +1,13 @@
+  Utils -> /home/ubuntu/GreenFDT/Utils/bin/Debug/net8.0/Utils.dll
+  AgentsSystem -> /home/ubuntu/GreenFDT/AgentsSystem/bin/Debug/net8.0/AgentsSystem.dll
+  Agro -> /home/ubuntu/GreenFDT/Agro/bin/Debug/net8.0/Agro.dll
+/tmp/gf-crown-v23/four-plants/Program.cs(37,491): warning CS8604: Possible null reference argument for parameter 'source' in 'byte[] SHA256.HashData(byte[] source)'. [/tmp/gf-crown-v23/four-plants/Probe.csproj]
+  Probe -> /tmp/gf-crown-v23/four-plants/bin/Debug/net8.0/Probe.dll
+
+Build succeeded.
+
+/tmp/gf-crown-v23/four-plants/Program.cs(37,491): warning CS8604: Possible null reference argument for parameter 'source' in 'byte[] SHA256.HashData(byte[] source)'. [/tmp/gf-crown-v23/four-plants/Probe.csproj]
+    1 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:02.84

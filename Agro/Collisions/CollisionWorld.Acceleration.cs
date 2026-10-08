@@ -79,7 +79,8 @@ public sealed partial class CollisionWorld
                     ref readonly var a = ref group.A.Geometry[i]; ref readonly var b = ref group.B.Geometry[j];
                     // A full-body separation is sufficient even at an attachment; no
                     // attachment-clipped geometry or feature identifiers go to the GPU.
-                    DevicePairs[used+k] = new(a.Previous, a.Current, b.Previous, b.Current, swept, !a.Eligible || !b.Eligible);
+                    DevicePairs[used+k] = new(a.Previous, a.Current, b.Previous, b.Current, swept, !a.Eligible || !b.Eligible || a.Previous.Pose.Deformation != Vector4.Zero || a.Current.Pose.Deformation != Vector4.Zero
+                        || b.Previous.Pose.Deformation != Vector4.Zero || b.Current.Pose.Deformation != Vector4.Zero);
                 }
                 DeviceCopies.Add((group.Results, offset, used, count));
                 used += count; offset += count;

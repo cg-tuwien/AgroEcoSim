@@ -1,0 +1,9 @@
+Species lookup: Carex morrowii 'Variegata', BudLength: 0.004
+PlantFormation2 ctor: Carex morrowii 'Variegata', BudLength: 0.004
+SpeciesSettings.Init called on Carex morrowii 'Variegata', BudLength: 0.004
+PlantFormation2 after Init: Carex morrowii 'Variegata', BudLength: 0.004
+Collision scene: 2 triangles (2 soil, 0 obstacle) in 0 ms, open soil surface (regular fields use their finite footprint)
+CAREX version=28 day=50 tick=4 render=3 AG=23 UG=35 down=0 inverted=0 scapeDown=0 finite=True maxUnresolved=0 water=0.7170514123281464 energy=1.4786884894128889 elapsedSec=0.45 counts=Bud:3;Stem:1;Leaf:16;Petiole:2;Meristem:1 downByType= frameSha256=8D5B4A83D3345A42E24BD26905EE16A79A1A15F9082FF6E564463159523ED106 frameBytes=10099
+CAREX version=28 day=100 tick=4 render=3 AG=375 UG=57 down=23 inverted=0 scapeDown=0 finite=True maxUnresolved=0 water=3.298040226761259 energy=9.50466821495894 elapsedSec=30.50 counts=Bud:35;Stem:43;Leaf:256;Petiole:32;Meristem:9 downByType=Bud:23 frameSha256=9F6120A98A09D3710813E95AFFAA8D02EADF615179F524DB325EB105C3854763 frameBytes=39155
+CAREX version=28 day=150 tick=4 render=3 AG=1088 UG=93 down=31 inverted=0 scapeDown=0 finite=True maxUnresolved=0 water=11.526355078357312 energy=56.68244602037148 elapsedSec=378.19 counts=Bud:41;Stem:94;Leaf:832;Petiole:104;Meristem:17 downByType=Bud:28;Leaf:3 frameSha256=4A0DB2A9D4C18A57839C9DE890DB4F59DD7BBD588456C42BD15E616137D598A0 frameBytes=100526
+CAREX version=28 day=200 tick=4 render=3 AG=1937 UG=118 down=36 inverted=0 scapeDown=0 finite=True maxUnresolved=0 water=20.568038132858497 energy=166.05774558043788 elapsedSec=1451.07 counts=Bud:31;Stem:147;Leaf:1536;Petiole:192;Meristem:31 downByType=Bud:25;Stem:1;Leaf:9;Meristem:1 frameSha256=4A6441B86B59508EF8F65B0FB736387C66C7A5A91FEEDD379831685B6CA154D5 frameBytes=174401

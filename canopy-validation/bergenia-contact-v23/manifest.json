@@ -1,0 +1,23 @@
+{
+  "retainedCheckpointVersion": 23,
+  "sourceSha256": {
+    "Agro/AgroWorld.cs": "a1d3c3345003e8acb30f193b52f165ee4796b5f8a6e76d93e0fd90de4514b1dc",
+    "Agro/Collisions/CollisionWorld.Foliage.cs": "1ea29e6e80c4efae4fabc7d010a6a7b34d844e40819decfa9b94e67b4fe0f784",
+    "Agro/Collisions/FoliageGeometry.cs": "295c9a3e8d25c3512b85d9d6f6cd5d25b203ca79e39d322f3290c362b89d23f6"
+  },
+  "finalBiologicalStateEqualsOrderOnly": {
+    "1h": true,
+    "4h": true
+  },
+  "rejectedExperiments": [
+    "feature-bound cache",
+    "deeper and paired swept CCD traversal"
+  ],
+  "temporaryPrivateCheckpointLabel": 24,
+  "scopedBuilds": {
+    "core": "passed with 298 existing warnings and zero errors",
+    "NativeAOTServer": "passed with existing trim and AOT warnings",
+    "playback": "five suites and 34 tests passed"
+  },
+  "perLeafAddedPersistentBytes": 0
+}

@@ -1,0 +1,175 @@
+{
+  "checkpointVersion": 24,
+  "mode": "None primary comparison; V2 experimental",
+  "release": "biological acceptance failed; no deployment",
+  "request": {
+    "path": "/tmp/gf-soil-budget/bergenia-sep755.json",
+    "bytes": 237110,
+    "sha256": "74450989e51855e23248d35cdb410224a999a61c27029666dddfa312e43ff1fe"
+  },
+  "sources": {
+    "Agro/AgroWorld.cs": {
+      "path": "/home/ubuntu/GreenFDT/Agro/AgroWorld.cs",
+      "bytes": 38629,
+      "sha256": "67318918bb50af54ffe3a1bd30a264d05e9c4c3c91c294e7a1fd9ebe001a7583"
+    },
+    "Agro/Collisions/CollisionWorld.Foliage.cs": {
+      "path": "/home/ubuntu/GreenFDT/Agro/Collisions/CollisionWorld.Foliage.cs",
+      "bytes": 57784,
+      "sha256": "260a3c17d9395f8bc7060bf3c7f78bb7beb3387f20239c5a6c95401c66ce8420"
+    },
+    "Agro/Collisions/FoliageGeometry.cs": {
+      "path": "/home/ubuntu/GreenFDT/Agro/Collisions/FoliageGeometry.cs",
+      "bytes": 28891,
+      "sha256": "aec2668d98dda9e16b884b995bf1b1e533ea9a4a4170345d0578186e02225a84"
+    },
+    "Agro/Collisions/FoliageGeometry.Attachment.cs": {
+      "path": "/home/ubuntu/GreenFDT/Agro/Collisions/FoliageGeometry.Attachment.cs",
+      "bytes": 19053,
+      "sha256": "9906185c6f53c11d66a3153726ca95fb4b2cbc9b86063cb0ef29dcabd0a3fbc7"
+    },
+    "Agro/Collisions/FoliageGeometry.Memoization.cs": {
+      "path": "/home/ubuntu/GreenFDT/Agro/Collisions/FoliageGeometry.Memoization.cs",
+      "bytes": 4751,
+      "sha256": "13175b421b3f646210af555b589c08723ccebb6ade8682d437f57edcd89e31de"
+    }
+  },
+  "baselineSources": {
+    "Agro/AgroWorld.cs": {
+      "path": "/tmp/gf-crown-retry/baseline/AgroWorld.cs",
+      "bytes": 38305,
+      "sha256": "a1d3c3345003e8acb30f193b52f165ee4796b5f8a6e76d93e0fd90de4514b1dc"
+    },
+    "Agro/Collisions/CollisionWorld.Foliage.cs": {
+      "path": "/tmp/gf-crown-retry/baseline/CollisionWorld.Foliage.cs",
+      "bytes": 57097,
+      "sha256": "1ea29e6e80c4efae4fabc7d010a6a7b34d844e40819decfa9b94e67b4fe0f784"
+    },
+    "Agro/Collisions/FoliageGeometry.cs": {
+      "path": "/tmp/gf-crown-retry/baseline/FoliageGeometry.cs",
+      "bytes": 28112,
+      "sha256": "295c9a3e8d25c3512b85d9d6f6cd5d25b203ca79e39d322f3290c362b89d23f6"
+    },
+    "Agro/Collisions/FoliageGeometry.Attachment.cs": {
+      "path": "/tmp/gf-crown-retry/baseline/FoliageGeometry.Attachment.cs",
+      "bytes": 18724,
+      "sha256": "1a4d4639d00b47eaf4cc5a36d894b1808fb91fead4b29935c5f6eed26b970f94"
+    },
+    "Agro/Collisions/FoliageGeometry.Memoization.cs": {
+      "path": "/tmp/gf-crown-retry/baseline/FoliageGeometry.Memoization.cs",
+      "bytes": 4046,
+      "sha256": "45ec3a2aa40dc262281d44d32d91fc8733ea1320bc455eff39db1439d0629729"
+    }
+  },
+  "diagnosticHarnesses": {
+    "mechanical": {
+      "path": "/tmp/gf-scape-evasion/Program.cs",
+      "bytes": 15186,
+      "sha256": "625c4d634b346a79f9ef80b654389bbde7e5f60a92f9f4b4ade6be6f34ea2b3a"
+    },
+    "ccd": {
+      "path": "/tmp/gf-radius-ccd/Program.cs",
+      "bytes": 16509,
+      "sha256": "aa32db83568ec7d5f7086fa7df4b0c844c7bedcf5ef87e7bed2c32c4d02ef70e"
+    },
+    "four-plants": {
+      "path": "/tmp/gf-crown-v23/four-plants/Program.cs",
+      "bytes": 2331,
+      "sha256": "048889e27faa79cb887041022b19fffc5c7001a456f2b8a098577b074a46cc90"
+    },
+    "growth": {
+      "path": "/tmp/gf-evasion-native-run/Program.cs",
+      "bytes": 7830,
+      "sha256": "86ff23b5e9bbd24a908db0c29eeaded5d4e74066406f614b0aa012de7592162e"
+    },
+    "checkpoint": {
+      "path": "/tmp/gf-v22-checkpoint/Program.cs",
+      "bytes": 2903,
+      "sha256": "7b5815653bb2d34cf0a33f6740549122c8a5fa3ad79ebae844deb43c10c68ab1"
+    },
+    "performance": {
+      "path": "/tmp/gf-evasion-perf/corrected/Program.cs",
+      "bytes": 2224,
+      "sha256": "2acd018a6ee98ed4aaea45c2bd1e377e2a2921ffebbcb604cc4910c47716c036"
+    }
+  },
+  "binaries": {
+    "perf-v21": {
+      "path": "/tmp/gf-evasion-perf/baseline/publish/Perf",
+      "bytes": 17789984,
+      "sha256": "587006f40171f5b0c860ee5d58f4cd58f06913a954176d4ec5a503725da19797"
+    },
+    "perf-v23": {
+      "path": "/tmp/gf-crown-v23/perf-pruning-native/Perf",
+      "bytes": 17794080,
+      "sha256": "46396a78c0e6e87afc6b9f23de9a8f5dfebcb02259872ff286b9290b22955d41"
+    },
+    "perf-v24": {
+      "path": "/tmp/gf-crown-retry/perf-strict-native/Perf",
+      "bytes": 17794080,
+      "sha256": "036bd1d89f4b17b40ba7168ea5ccf024ae187d32fef7cfd3c770230b685ee7d6"
+    },
+    "growth-v23": {
+      "path": "/tmp/gf-crown-v23/growth-pruning-native/Probe",
+      "bytes": 17860240,
+      "sha256": "75a724aeb5170833f9372569b9ce848d818c474074d8d2e83a0cf7fe5fbc5c9b"
+    },
+    "growth-v24": {
+      "path": "/tmp/gf-crown-retry/growth-native/Probe",
+      "bytes": 17860240,
+      "sha256": "81fe180fb3d2c3f59b5e34a35b40bcdc75e8c1cf64a0703cb5e9d4b3be63d0b2"
+    },
+    "checkpoint-v24": {
+      "path": "/tmp/gf-crown-retry/checkpoint-native/Probe",
+      "bytes": 17798176,
+      "sha256": "b919dbf9d10d89e2d16d806c7920d85476e09df373e3235521ea81f41c73903b"
+    },
+    "server-v24": {
+      "path": "/tmp/gf-crown-retry/server-native/AgroServer",
+      "bytes": 78841136,
+      "sha256": "72d4ab5e263c1fe31430e0166672fbcd97f1cad327d2066f0e7f147ab1c415b6"
+    }
+  },
+  "states": {
+    "crown-narrow-1h-day331-v24.bin": {
+      "path": "/tmp/gf-scape-recovery/production/crown-narrow-1h-day331-v24.bin",
+      "bytes": 51899578,
+      "sha256": "e908e10035b6706ff397b11a7ef34fc5f91c22e3c149b0005aad047d02839fcf"
+    },
+    "crown-narrow-control-1h-day331-v23.bin": {
+      "path": "/tmp/gf-scape-recovery/production/crown-narrow-control-1h-day331-v23.bin",
+      "bytes": 51899578,
+      "sha256": "ae34df5ee401805ca9b8dc9b897159cbd5cd71f156d0e0e092679c53a9533ef8"
+    },
+    "crown-narrow-4h-day296-v24.bin": {
+      "path": "/tmp/gf-scape-recovery/production/crown-narrow-4h-day296-v24.bin",
+      "bytes": 51884814,
+      "sha256": "53c856d391e858298e361dfeab654cde0fa4360d4567af22a1945b7cbb02ed6c"
+    },
+    "crown-narrow-control-4h-day296-v23.bin": {
+      "path": "/tmp/gf-scape-recovery/production/crown-narrow-control-4h-day296-v23.bin",
+      "bytes": 51884814,
+      "sha256": "af06fc91af746cec0ae43ab28aaea7494023d4680d8fa88d536c3b96a10d485a"
+    },
+    "control-1h-day275-v21.bin": {
+      "path": "/tmp/gf-scape-recovery/production/control-1h-day275-v21.bin",
+      "bytes": 51892726,
+      "sha256": "ebc6fce1e03de8ba5a9a4738077c4e323e5a834be1793e4a7ab4b0ef64377683"
+    },
+    "fresh-4h-day240-v21.bin": {
+      "path": "/tmp/gf-scape-recovery/production/fresh-4h-day240-v21.bin",
+      "bytes": 51875394,
+      "sha256": "3492b826f6f65d105e624457fea974a28802ff88e4c4deba0b93459cd59201a7"
+    },
+    "crown-pruning-1h-day303-v23.bin": {
+      "path": "/tmp/gf-scape-recovery/production/crown-pruning-1h-day303-v23.bin",
+      "bytes": 51896194,
+      "sha256": "3f1ff89ea52e2a9139058498b359746f7d80705b5e1b93fef35cefa0c9e6d658"
+    },
+    "crown-pruning-4h-day268-v23.bin": {
+      "path": "/tmp/gf-scape-recovery/production/crown-pruning-4h-day268-v23.bin",
+      "bytes": 51879854,
+      "sha256": "13e4cc8141407dbefc15e708eeba63e2de11ddb6a1bd7f30a57f8da2dfd0cc7a"
+    }
+  }
+}

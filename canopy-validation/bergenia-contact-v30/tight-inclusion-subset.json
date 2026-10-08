@@ -1,0 +1,26 @@
+[
+  {
+    "file": "edge-edge-data_0_1.csv",
+    "all": 20,
+    "representable": 0,
+    "positive": 0
+  },
+  {
+    "file": "edge-edge-data_0_0.csv",
+    "all": 54,
+    "representable": 54,
+    "positive": 21
+  },
+  {
+    "file": "vertex-face-data_0_1.csv",
+    "all": 125,
+    "representable": 125,
+    "positive": 89
+  },
+  {
+    "file": "vertex-face-data_0_0.csv",
+    "all": 125,
+    "representable": 125,
+    "positive": 35
+  }
+]

@@ -1,0 +1,16 @@
+Species lookup: Bergenia Cordifolia, BudLength: 0.009
+PlantFormation2 ctor: Bergenia Cordifolia, BudLength: 0.009
+SpeciesSettings.Init called on Bergenia Cordifolia, BudLength: 0.009
+PlantFormation2 after Init: Bergenia Cordifolia, BudLength: 0.009
+DIAGNOSTIC ONLY: same-layout v23 under v25; manually imposed frozen growth, no biology claim.
+Collision scene: 2 triangles (2 soil, 0 obstacle) in 0 ms, open soil surface (regular fields use their finite footprint)
+rep,organs,totalMs,allocBytes,intervals,triangles,unresolved,acceptedLengthUm,acceptedRadiusUm,trials,waypoints,corrections
+0,52,286.746,943744,62046,515476,0,71.35467603802681,0,28,5,124
+1,52,288.338,943744,62046,515476,0,71.35467603802681,0,28,5,124
+2,52,286.377,943744,62046,515476,0,71.35467603802681,0,28,5,124
+3,52,285.758,943744,62046,515476,0,71.35467603802681,0,28,5,124
+4,52,286.134,943744,62046,515476,0,71.35467603802681,0,28,5,124
+5,52,285.669,943744,62046,515476,0,71.35467603802681,0,28,5,124
+6,52,285.765,943744,62046,515476,0,71.35467603802681,0,28,5,124
+7,52,284.675,943744,62046,515476,0,71.35467603802681,0,28,5,124
+8,52,284.599,943744,62046,515476,0,71.35467603802681,0,28,5,124

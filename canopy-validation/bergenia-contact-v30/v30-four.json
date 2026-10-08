@@ -1,0 +1,34 @@
+[
+  {
+    "tick": 1,
+    "workers": 1,
+    "exit": 0,
+    "result": [
+      "FOUR tick=1 workers=1 pairCount=2 checks=81 contactVisits=925 finite=True unresolved=0 clear=True stateSha256=D7DDD3A68D6BC314CA8851A2D88BF1EAB45671598C5DE7EDE3005D888DAEEA48 frameSha256=151C175C310ABEAA5F474E14201C50BC461F7D909964117C35503312732D823D"
+    ]
+  },
+  {
+    "tick": 1,
+    "workers": 4,
+    "exit": 0,
+    "result": [
+      "FOUR tick=1 workers=4 pairCount=2 checks=81 contactVisits=925 finite=True unresolved=0 clear=True stateSha256=D7DDD3A68D6BC314CA8851A2D88BF1EAB45671598C5DE7EDE3005D888DAEEA48 frameSha256=151C175C310ABEAA5F474E14201C50BC461F7D909964117C35503312732D823D"
+    ]
+  },
+  {
+    "tick": 4,
+    "workers": 1,
+    "exit": 0,
+    "result": [
+      "FOUR tick=4 workers=1 pairCount=2 checks=66 contactVisits=57 finite=True unresolved=0 clear=True stateSha256=D4D31A94F4BD93432F785E973CDEAA3AEC73CF03E380C5F1E4C42906D3712E6A frameSha256=F4B58DE04DC500CC720B0B1007769036B318D25D0CE5156B1447A3E57A25DB8C"
+    ]
+  },
+  {
+    "tick": 4,
+    "workers": 4,
+    "exit": 0,
+    "result": [
+      "FOUR tick=4 workers=4 pairCount=2 checks=66 contactVisits=57 finite=True unresolved=0 clear=True stateSha256=D4D31A94F4BD93432F785E973CDEAA3AEC73CF03E380C5F1E4C42906D3712E6A frameSha256=F4B58DE04DC500CC720B0B1007769036B318D25D0CE5156B1447A3E57A25DB8C"
+    ]
+  }
+]

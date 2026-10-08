@@ -1,0 +1,630 @@
+--- a/Agro/AgroWorld.cs
++++ b/Agro/AgroWorld.cs
+@@ -744,7 +744,9 @@
+     // unilateral tangent constraints. Accepted geometry and retries can differ.
+     // V27 adds certified staged evasion and clearance guards to experimental V1.
+     // Retry ordering/precision changes can alter continuation; playback is unchanged.
+-	public const byte CheckpointVersion = 27;
++    // V28 solves shared angular limits in the coupled tangent and adds a bounded
++    // direct solve for poorly conditioned contact sets. Payload layout is unchanged.
++	public const byte CheckpointVersion = 28;
+ 
+ 	/// <summary>
+ 	/// Everything the next step depends on that the request does not determine.
+--- a/Agro/Plant/PlantSubFormation.Contacts.cs
++++ b/Agro/Plant/PlantSubFormation.Contacts.cs
+@@ -2,6 +2,15 @@
+ using Agro.Collisions;
+ 
+ namespace Agro;
++
++internal readonly record struct ContactAngularCompliance(Vector3 First, Vector3 Second, double AlongFirst, double AlongSecond)
++{
++    static double Dot(Vector3 a, Vector3 b) => (double)a.X * b.X + (double)a.Y * b.Y + (double)a.Z * b.Z;
++    internal double Bilinear(Vector3 a, Vector3 b)
++        => AlongFirst * Dot(a, First) * Dot(b, First) + AlongSecond * Dot(a, Second) * Dot(b, Second);
++    internal Vector3 Response(Vector3 torque)
++        => First * (float)(AlongFirst * Dot(torque, First)) + Second * (float)(AlongSecond * Dot(torque, Second));
++}
+ 
+ public partial class PlantSubFormation<T>
+ {
+@@ -671,14 +680,51 @@
+     // Tangent of the same compliance operator used by QueueContactCorrection.
+     // Kept separate from geometry trials so several contact rows can share a joint.
+     internal (Vector3 Torque, Vector3 Turn, Vector4 Shape, Vector4 Fold) ContactGradient(
+-        int joint, int contacted, Vector3 point, Vector3 normal)
++        int joint, int contacted, Vector3 point, Vector3 normal, bool coupledLimits = false)
+     {
+         var torque = Vector3.Cross(point - GetBaseCenterWorld(joint) - Src()[joint].BaseOffset, normal);
++        // Coupled contacts solve the joint's unilateral angular limit as one
++        // constraint. Removing compliance separately for each force direction
++        // produces a nonsymmetric matrix when contacts share a saturated joint.
+         var gain = torque.Length();
+-        var turn = gain > 1e-8f && ContactTurnAvailable(joint, torque / gain)
++        // V1's assembler applies one cached material tensor per shared joint.
++        // Keep the inexpensive directional response for the rigid retry path.
++        var turn = !coupledLimits && gain > 1e-8f && ContactTurnAvailable(joint, torque / gain)
+             ? ComplianceVector(joint, torque) : Vector3.Zero;
++        if (coupledLimits && gain <= 1e-8f) torque = Vector3.Zero;
+         var shape = Deformable(joint) ? ShapeGradient(joint, contacted, point, normal) : Vector4.Zero;
+         return (torque, turn, shape, Deformable(joint) ? ShapeResponse(joint, shape) : Vector4.Zero);
++    }
++
++    internal ContactAngularCompliance CoupledAngularCompliance(int joint)
++    {
++        ref var a = ref Src()[joint];
++        var first = Vector3.Normalize(Vector3.Transform(Vector3.UnitZ, a.Orientation));
++        var second = Vector3.Normalize(Vector3.Cross(first, Vector3.Transform(Vector3.UnitX, a.Orientation)));
++        var alongFirst = (double)ContactCompliance(joint, first);
++        var alongSecond = a.Organ is OrganTypes.Leaf or OrganTypes.FlowerPadel
++            ? (double)ContactCompliance(joint, second) : alongFirst;
++        // The scalar beam coefficients are unchanged. Double spectral products
++        // keep reciprocal terms consistent, especially when a limit removes an
++        // entire direction and its remaining compliance is nearly zero.
++        return new(first, second, alongFirst, alongSecond);
++    }
++
++    internal bool ContactBendConstraint(int joint, out Vector3 normal, out double allowance)
++    {
++        ref var a = ref Src()[joint];
++        var delta = Quaternion.Normalize(a.Orientation * Quaternion.Conjugate(a.baseOrientation));
++        if (delta.W < 0) delta = new(-delta.X, -delta.Y, -delta.Z, -delta.W);
++        var bend = new Vector3(delta.X, delta.Y, delta.Z);
++        var sine = bend.Length();
++        var angle = 2f * MathF.Atan2(sine, delta.W);
++        allowance = Math.Max(0, ContactBendLimit(joint) - angle);
++        normal = Vector3.Zero;
++        // Inside the limit the existing finite-step clamp remains authoritative.
++        // Only near-saturated joints need an additional tangent constraint.
++        if (sine <= 1e-8f || allowance > 1e-5) return false;
++        normal = bend / sine;
++        return true;
+     }
+ 
+     internal (Vector3 Torque, Vector3 Turn, Vector4 Shape, Vector4 Fold) CommonContactGradient(
+--- a/Agro/Collisions/CollisionWorld.Continuation.cs
++++ b/Agro/Collisions/CollisionWorld.Continuation.cs
+@@ -16,6 +16,7 @@
+     readonly record struct ContinuationGradient(int Row, int Joint, Vector3 Torque, Vector3 Turn, Vector4 Shape, Vector4 Fold);
+     readonly List<ContinuationWitness> ContinuationWitnesses = new(MaximumContinuationContacts);
+     readonly List<ContinuationJoint> ContinuationJoints = [];
++    readonly List<ContactAngularCompliance> ContinuationCompliance = [];
+     readonly Dictionary<ContinuationJoint, int> ContinuationJointIndices = [];
+     readonly List<ContinuationGradient> ContinuationGradients = [];
+     ushort[] ContinuationSlots = [];
+@@ -306,7 +307,7 @@
+             }
+             Array.Fill(ContinuationSlots, ushort.MaxValue);
+             Array.Clear(ContinuationMatrix); Array.Clear(ContinuationForces);
+-            ContinuationJoints.Clear(); ContinuationJointIndices.Clear(); ContinuationGradients.Clear();
++            ContinuationJoints.Clear(); ContinuationCompliance.Clear(); ContinuationJointIndices.Clear(); ContinuationGradients.Clear();
+             var rows = ContinuationWitnesses.Count;
+             LastContinuationContactRows = rows;
+             LastContinuationDualResidualMetres = double.NaN;
+@@ -344,8 +345,9 @@
+                     if (slot == ushort.MaxValue) continue;
+                     var other = ContinuationGradients[slot];
+                     ContinuationMatrix[g.Row * MaximumContinuationContacts + column]
+-                        += (double)g.Torque.X * other.Turn.X + (double)g.Torque.Y * other.Turn.Y
+-                            + (double)g.Torque.Z * other.Turn.Z + (double)g.Shape.X * other.Fold.X
++                        += (guardedPaths ? ContinuationCompliance[g.Joint].Bilinear(g.Torque, other.Torque)
++                            : (double)g.Torque.X * other.Turn.X + (double)g.Torque.Y * other.Turn.Y + (double)g.Torque.Z * other.Turn.Z)
++                            + (double)g.Shape.X * other.Fold.X
+                             + (double)g.Shape.Y * other.Fold.Y + (double)g.Shape.Z * other.Fold.Z
+                             + (double)g.Shape.W * other.Fold.W;
+                 }
+@@ -381,37 +383,12 @@
+                     }
+                 }
+             }
+-            for (var sweep = 0; sweep < 64; ++sweep)
+-            {
+-                var maximumChange = 0d;
+-                for (var row = 0; row < rows; ++row)
+-                {
+-                    if (!ContinuationEnabled[row]) continue;
+-                    var predicted = 0d;
+-                    for (var column = 0; column < rows; ++column)
+-                        if (ContinuationEnabled[column])
+-                            predicted += ContinuationMatrix[row * MaximumContinuationContacts + column] * ContinuationForces[column];
+-                    var diagonal = ContinuationMatrix[row * MaximumContinuationContacts + row];
+-                    if (diagonal <= 1e-20) continue; // immobile, already-satisfied guard
+-                    var force = Math.Max(0, ContinuationForces[row] + (ContinuationDepth[row] - predicted) / diagonal);
+-                    if (!double.IsFinite(force) || force > float.MaxValue) return false;
+-                    maximumChange = Math.Max(maximumChange, Math.Abs(force - ContinuationForces[row]) * Math.Sqrt(diagonal));
+-                    ContinuationForces[row] = force;
+-                }
+-                if (maximumChange < 1e-8) break;
+-            }
+-            var residual = 0d;
+-            for (var row = 0; row < rows; ++row)
+-            {
+-                if (!ContinuationEnabled[row]) continue;
+-                var gap = -ContinuationDepth[row];
+-                for (var column = 0; column < rows; ++column)
+-                    if (ContinuationEnabled[column])
+-                        gap += ContinuationMatrix[row * MaximumContinuationContacts + column] * ContinuationForces[column];
+-                residual = Math.Max(residual, ContinuationForces[row] > 0 ? Math.Abs(gap) : Math.Max(0, -gap));
+-            }
++            ContinuationBendLimits.Clear();
++            LastContinuationActiveBendLimits = 0;
++            var solved = guardedPaths ? SolveContinuationBendLimits(rows, out var residual)
++                : SolveContinuationContacts(rows, out residual, allowDirect: false);
++            if (!solved) return false;
+             LastContinuationDualResidualMetres = residual;
+-            if (!double.IsFinite(residual)) return false;
+             if (guardedPaths && residual > 1e-8) return false; // exhausted tangent budget, not confinement
+             // Bound the complete tangent direction with one scalar. Clipping each
+             // joint separately changes the compliance-weighted direction and can
+@@ -433,6 +410,7 @@
+                     ContinuationTurns[g.Joint] += g.Turn * force;
+                     ContinuationFolds[g.Joint] += g.Fold * force;
+                 }
++                AccumulateContinuationBendReactions(ContinuationTurns);
+                 for (var joint = 0; joint < ContinuationJoints.Count; ++joint)
+                 {
+                     var turn = ContinuationTurns[joint].Length();
+@@ -449,6 +427,7 @@
+                 if (ContinuationForces[g.Row] > 0)
+                     ContinuationJoints[g.Joint].Plant.AG.QueueCoupledContactResponse(ContinuationJoints[g.Joint].Index,
+                         g.Turn, g.Fold, (float)ContinuationForces[g.Row] * stepScale);
++            QueueContinuationBendReactions(stepScale);
+             var moved = false;
+             foreach (var p in ContinuationPlants)
+             {
+@@ -462,7 +441,7 @@
+         bool AppendChain(PlantSubFormation<AboveGroundAgent> other, int body, Vector3 point, Vector3 normal, int stop, int row)
+         {
+             for (var joint = body; joint >= 0 && joint != stop && !other.IsMechanicallyAnchored(joint); joint = other.GetParent(joint))
+-                if (!Append(other, joint, row, other.ContactGradient(joint, body, point, normal))) return false;
++                if (!Append(other, joint, row, other.ContactGradient(joint, body, point, normal, coupledLimits: guardedPaths))) return false;
+             return true;
+         }
+ 
+@@ -476,7 +455,9 @@
+                 if (ContinuationJoints.Count == MaximumContinuationJoints) return false;
+                 joint = ContinuationJoints.Count;
+                 ContinuationJoints.Add(key); ContinuationJointIndices.Add(key, joint);
+-            }
++                if (guardedPaths) ContinuationCompliance.Add(other.CoupledAngularCompliance(index));
++            }
++            if (guardedPaths) gradient.Turn = ContinuationCompliance[joint].Response(gradient.Torque);
+             // At most 16 * 256 gradients; the sentinel is outside this bounded range.
+             ContinuationSlots[joint * MaximumContinuationContacts + row] = (ushort)ContinuationGradients.Count;
+             ContinuationGradients.Add(new(row, joint, gradient.Torque, gradient.Turn, gradient.Shape, gradient.Fold));
+--- a/Agro/Collisions/CollisionWorld.Foliage.cs
++++ b/Agro/Collisions/CollisionWorld.Foliage.cs
+@@ -754,6 +754,7 @@
+         LastContinuationEvasionStages = 0;
+         LastContinuationContactRows = 0;
+         LastContinuationDualResidualMetres = double.NaN;
++        LastContinuationActiveBendLimits = LastContinuationDirectSolves = 0;
+         ExtendedRelaxation=false;
+         var rounds=plants.Any(p=>p.AG.HasContactDeformation)?16:CollisionSettings.HardRounds;
+         for (int round = 0; round < rounds; ++round)
+--- a/Agro/Collisions/FoliageGeometry.Memoization.cs
++++ b/Agro/Collisions/FoliageGeometry.Memoization.cs
+@@ -13,29 +13,50 @@
+     [ThreadStatic] static FixedMemo<DistanceQuery,FoliageContact>? DistanceMemo;
+     [ThreadStatic] static FixedMemo<MotionQuery,MotionResult>? MotionMemo;
+ 
+-    // Two-way bounded storage evicts one result instead of clearing a whole worker's
+-    // useful stationary-contact history when a crowded canopy crosses the old limit.
++    // Four-way LRU sets retain the same bounded entry count. A two-way set could
++    // repeatedly evict an expensive stationary query when several nearby poses
++    // hashed into it, making identical contact populations vary sharply in cost.
+     sealed class FixedMemo<TKey,TValue> where TKey : struct, IEquatable<TKey>
+     {
++        const int Ways = 4;
+         struct Entry { public bool Used; public TKey Key; public TValue Value; }
+         readonly Entry[] entries;
+         readonly byte[] victim;
+-        public FixedMemo(int capacity) { entries = new Entry[capacity]; victim = new byte[capacity / 2]; }
+-        int Bucket(in TKey key) => (key.GetHashCode() & (victim.Length - 1)) * 2;
++        public FixedMemo(int capacity)
++        {
++            entries = new Entry[capacity]; victim = new byte[capacity / Ways];
++            // Two bits per way, ordered from most to least recently used.
++            Array.Fill(victim, (byte)0xe4); // 0, 1, 2, 3
++        }
++        int Bucket(in TKey key) => (key.GetHashCode() & (victim.Length - 1)) * Ways;
++        void Touch(int index, int slot)
++        {
++            var order = victim[index / Ways];
++            var promoted = (byte)slot; var shift = 2;
++            for (var position = 0; position < Ways; ++position)
++            {
++                var previous = (order >> (2 * position)) & 3;
++                if (previous == slot) continue;
++                promoted |= (byte)(previous << shift); shift += 2;
++            }
++            victim[index / Ways] = promoted;
++        }
+         public bool TryGetValue(in TKey key, out TValue value)
+         {
+             var index = Bucket(key);
+-            for (int i = index; i < index + 2; ++i)
++            for (int i = index; i < index + Ways; ++i)
+                 if (entries[i].Used && entries[i].Key.Equals(key))
+-                { value = entries[i].Value; victim[index / 2] = (byte)(1 - (i - index)); return true; }
++                { value = entries[i].Value; Touch(index, i - index); return true; }
+             value = default!; return false;
+         }
+         public void Store(in TKey key, TValue value)
+         {
+             var index = Bucket(key);
+-            var slot = !entries[index].Used ? index : !entries[index + 1].Used ? index + 1 : index + victim[index / 2];
++            var slot = index + (victim[index / Ways] >> 6);
++            for (var i = index; i < index + Ways; ++i)
++                if (!entries[i].Used) { slot = i; break; }
+             entries[slot] = new() { Used = true, Key = key, Value = value };
+-            victim[index / 2] = (byte)(1 - (slot - index));
++            Touch(index, slot - index);
+         }
+     }
+ 
+--- a/Agro/COLLISIONS.md
++++ b/Agro/COLLISIONS.md
+@@ -1185,3 +1185,37 @@
+ V1 leaf removal/reindexing and cache rebuilding. v27 rejects older live checkpoints
+ while retaining playback. The four-hour seasonal crown and richer V1 performance
+ gate remain unresolved; keep Bergenia's default mode at 0.
++
++## v28: coupled angular limits and bounded query retention
++
++Experimental mode-1 floral continuation now uses one reciprocal angular
++compliance tensor per shared joint. A saturated joint's angular inequality is
++solved against the aggregate contact load: it can still yield sideways or move
++inward. Removing its response independently for each contact direction produced
++an asymmetric tangent matrix. The rigid mode-0 response and its work budget remain
++unchanged. A scaled direct working-set fallback handles small ill-conditioned
++mode-1 contact systems; rank deficiency and exhausted budgets remain numerical
++failures, subject to the existing full motion certificates.
++
++Retain these additional regressions:
++
++| Fixture | Required result |
++| --- | --- |
++| Two contact loads on a joint at its angular limit | Reciprocal tangent, no outward excess, retained lateral response; forces agree with an independent constrained solve. |
++| Aggregate load reverses inward | Angular reaction releases and the joint moves inward. |
++| Angular limit removes the only admissible response | Numerical rejection; no enormous force inferred from cancellation noise. |
++| Nearly parallel contact rows, off-diagonal correlation 0.999999 | Direct fallback reaches the analytic nonnegative force solution and <=1e-8 m residual. |
++| Four-way query memo, same bounded entry counts | Same certified poses as the previous memo, matching frozen 1 h/4 h poses and byte-identical checkpoint continuation through release/removal/cache rebuilding. |
++| Four plants in two independent neighbouring pairs, twelve ambient days | At 1 h/4 h, configured worker limits of one and four give identical accepted states/exports, finite resources and zero unresolved contacts; all final organ clearance queries pass. This does not measure multicore scaling. |
++
++The distance/motion memo retains 4096/2048 entries per initialized worker with
++four-way LRU sets. Keys and cached collision results are unchanged. This reduces
++repeated expensive queries in the measured common-support fixture without
++increasing entry storage. It does not certify zero allocations or full-scene
++performance. No new accepted per-leaf fields were added.
++
++Live checkpoint v28 rejects older live states because the experimental acceptance
++path changed; payload and saved playback formats are unchanged. The four-hour
++seasonal scape still stalls, and V1 remains experimental. Mechanical evidence,
++storage accounting and matched timings are recorded in
++[`bergenia-contact-v28`](../canopy-validation/bergenia-contact-v28/README.md).
+--- a/Agro/BERGENIA_CALIBRATION.md
++++ b/Agro/BERGENIA_CALIBRATION.md
+@@ -812,3 +812,27 @@
+ Source changes, research scope, checkpoint v27 compatibility, mechanical fixtures
+ and timing/measurement limits are recorded in
+ [`bergenia-contact-v27`](../canopy-validation/bergenia-contact-v27/README.md).
++
++## v28: reciprocal V1 contact response
++
++Mode-1 floral continuation now treats a saturated support's bend limit as a
++constraint on the combined load, retaining lateral yield and allowing inward
++release. Existing tissue coefficients, mature dimensions, the 84-day growth
++setting, crown probabilities and clonal settings are unchanged. Mode 0 remains
++the default and retains its previous mechanical response.
++
++The final CPU-light, seed-42 continuations from day 282 to day 285 match v27
++byte for byte apart from the checkpoint header. At day 285 the 1 h case has eight
++leaves reaching both 50% intrinsic dimensions and three reaching both 90%; the
++4 h case has four and two. Each has twenty whole leaves. The one-hour flower
++retires during this interval in both versions; the four-hour scape is still
++blocked at approximately 0.403 mm length and 1.243 mm radius. These short
++continuations do not establish seasonal V1 acceptance or density improvement.
++
++Frozen angular/contact fixtures pass at both tick sizes, including release and
++impossible confinement. The bounded query memo improves the common-support
++retry's consistency and median time, while the V1 retry retains substantial
++between-process variation. Full performance and biological gates remain open.
++Checkpoint v28 rejects older live states and preserves their playback. Results,
++measurement definitions and remaining tasks are in
++[`bergenia-contact-v28`](../canopy-validation/bergenia-contact-v28/README.md).
+--- /dev/null
++++ b/Agro/Collisions/CollisionWorld.ContinuationLimits.cs
+@@ -0,0 +1,291 @@
++using System.Numerics;
++
++namespace Agro.Collisions;
++
++public sealed partial class CollisionWorld
++{
++    struct ContinuationBendLimit
++    {
++        public int Joint;
++        public Vector3 Normal, Response;
++        public double Allowance, Compliance, Force;
++        public bool Active;
++    }
++
++    // Bounded worker scratch for this continuation component, never per-leaf state.
++    readonly List<ContinuationBendLimit> ContinuationBendLimits = new(8);
++    double[] ContinuationLimitCoefficients = [], ContinuationRawMatrix = [], ContinuationRawDepth = [];
++    public int LastContinuationActiveBendLimits { get; private set; }
++    public int LastContinuationDirectSolves { get; private set; }
++
++    bool SolveContinuationBendLimits(int rows, out double residual)
++    {
++        residual = double.NaN;
++        LastContinuationActiveBendLimits = 0;
++        ContinuationBendLimits.Clear();
++        for (var j = 0; j < ContinuationJoints.Count; ++j)
++        {
++            var joint = ContinuationJoints[j];
++            if (!joint.Plant.AG.ContactBendConstraint(joint.Index, out var normal, out var allowance)) continue;
++            var tensor = ContinuationCompliance[j];
++            var response = tensor.Response(normal);
++            var compliance = tensor.Bilinear(normal, normal);
++            if (!(compliance > 1e-20) || !double.IsFinite(compliance)) continue;
++            ContinuationBendLimits.Add(new()
++            { Joint = j, Normal = normal, Response = response, Allowance = allowance, Compliance = compliance });
++        }
++        if (ContinuationBendLimits.Count == 0) return SolveContinuationContacts(rows, out residual);
++        if (ContinuationRawMatrix.Length == 0)
++        {
++            ContinuationRawMatrix = new double[MaximumContinuationContacts * MaximumContinuationContacts];
++            ContinuationRawDepth = new double[MaximumContinuationContacts];
++        }
++        var required = ContinuationBendLimits.Count * MaximumContinuationContacts;
++        if (ContinuationLimitCoefficients.Length < required)
++            Array.Resize(ref ContinuationLimitCoefficients,
++                Math.Min(MaximumContinuationJoints * MaximumContinuationContacts,
++                    Math.Max(required, ContinuationLimitCoefficients.Length * 2)));
++        Array.Copy(ContinuationMatrix, ContinuationRawMatrix, ContinuationMatrix.Length);
++        Array.Copy(ContinuationDepth, ContinuationRawDepth, rows);
++        Array.Clear(ContinuationLimitCoefficients, 0, required);
++        for (var b = 0; b < ContinuationBendLimits.Count; ++b)
++        {
++            var bound = ContinuationBendLimits[b];
++            foreach (var g in ContinuationGradients)
++                if (g.Joint == bound.Joint)
++                    ContinuationLimitCoefficients[b * MaximumContinuationContacts + g.Row]
++                        = ContinuationCompliance[bound.Joint].Bilinear(g.Torque, bound.Normal);
++        }
++
++        // Active angular inequalities share the same elastic metric as contacts.
++        // Eliminating their reactions gives C - Cn(n'C n)^-1 n'C, a symmetric
++        // positive-semidefinite response. An inward aggregate load releases the
++        // bound; it is not a permanent pin or a change to tissue stiffness.
++        for (var update = 0; update < 8; ++update)
++        {
++            Array.Copy(ContinuationRawMatrix, ContinuationMatrix, ContinuationMatrix.Length);
++            Array.Copy(ContinuationRawDepth, ContinuationDepth, rows);
++            Array.Clear(ContinuationForces);
++            LastContinuationActiveBendLimits = 0;
++            for (var b = 0; b < ContinuationBendLimits.Count; ++b)
++            {
++                var bound = ContinuationBendLimits[b];
++                if (!bound.Active) continue;
++                ++LastContinuationActiveBendLimits;
++                var offset = b * MaximumContinuationContacts;
++                for (var row = 0; row < rows; ++row)
++                {
++                    var gain = ContinuationLimitCoefficients[offset + row] / bound.Compliance;
++                    ContinuationDepth[row] -= gain * bound.Allowance;
++                    for (var column = 0; column < rows; ++column)
++                        ContinuationMatrix[row * MaximumContinuationContacts + column]
++                            -= gain * ContinuationLimitCoefficients[offset + column];
++                }
++            }
++            for (var row = 0; row < rows; ++row)
++            {
++                var diagonal = row * MaximumContinuationContacts + row;
++                if (ContinuationMatrix[diagonal] <= ContinuationRawMatrix[diagonal] * 1e-12)
++                {
++                    // A direction removed by the bound can leave subtraction
++                    // noise. Never turn that noise into enormous reaction forces.
++                    if (ContinuationEnabled[row] && ContinuationDepth[row] > 0) return false;
++                    ContinuationMatrix[diagonal] = 0;
++                }
++            }
++            if (!SolveContinuationContacts(rows, out residual) || residual > 1e-8)
++            {
++                if (TraceContacts) Console.WriteLine($"CONTINUATION_LIMIT tangentBudget residualMetres={residual:R} active={LastContinuationActiveBendLimits} rows={rows}");
++                return false;
++            }
++            var add = -1; var release = -1;
++            var outward = 1e-8; var inward = -1e-8; // angular residuals, radians
++            for (var b = 0; b < ContinuationBendLimits.Count; ++b)
++            {
++                var bound = ContinuationBendLimits[b];
++                var excess = -bound.Allowance;
++                for (var row = 0; row < rows; ++row)
++                    excess += ContinuationLimitCoefficients[b * MaximumContinuationContacts + row] * ContinuationForces[row];
++                if (!double.IsFinite(excess)) return false;
++                bound.Force = bound.Active ? excess / bound.Compliance : 0;
++                ContinuationBendLimits[b] = bound;
++                if (bound.Active && excess < inward) { inward = excess; release = b; }
++                if (!bound.Active && excess > outward) { outward = excess; add = b; }
++            }
++            var change = release >= 0 ? release : add;
++            if (change < 0) return true;
++            var changed = ContinuationBendLimits[change];
++            changed.Active = release < 0;
++            ContinuationBendLimits[change] = changed;
++        }
++        // This is an exhausted tangent work budget, not physical confinement.
++        return false;
++    }
++
++    bool SolveContinuationContacts(int rows, out double residual, bool allowDirect = true)
++    {
++        residual = double.NaN;
++        for (var row = 0; row < rows; ++row)
++            if (ContinuationEnabled[row])
++            {
++                var diagonal = ContinuationMatrix[row * MaximumContinuationContacts + row];
++                if (!double.IsFinite(diagonal) || diagonal < 0 || diagonal <= 1e-20 && ContinuationDepth[row] > 0) return false;
++            }
++        for (var sweep = 0; sweep < 64; ++sweep)
++        {
++            var maximumChange = 0d;
++            for (var row = 0; row < rows; ++row)
++            {
++                if (!ContinuationEnabled[row]) continue;
++                var predicted = 0d;
++                for (var column = 0; column < rows; ++column)
++                    if (ContinuationEnabled[column])
++                        predicted += ContinuationMatrix[row * MaximumContinuationContacts + column] * ContinuationForces[column];
++                var diagonal = ContinuationMatrix[row * MaximumContinuationContacts + row];
++                if (diagonal <= 1e-20) continue;
++                var force = Math.Max(0, ContinuationForces[row] + (ContinuationDepth[row] - predicted) / diagonal);
++                if (!double.IsFinite(force) || force > float.MaxValue) return false;
++                maximumChange = Math.Max(maximumChange, Math.Abs(force - ContinuationForces[row]) * Math.Sqrt(diagonal));
++                ContinuationForces[row] = force;
++            }
++            if (maximumChange < 1e-8) break;
++        }
++        residual = ContinuationContactResidual(rows);
++        if (!double.IsFinite(residual)) return false;
++        if (!allowDirect) return true;
++        if (residual <= 1e-8) return true;
++        // Small, strongly coupled sets can converge slowly under coordinate
++        // relaxation. A diagonally scaled direct working-set solve resolves
++        // them without relaxing material or clearance constraints.
++        return SolveContinuationWorkingSet(rows, out residual);
++    }
++
++    double ContinuationContactResidual(int rows)
++    {
++        var residual = 0d;
++        for (var row = 0; row < rows; ++row)
++        {
++            if (!ContinuationEnabled[row]) continue;
++            var gap = -ContinuationDepth[row];
++            for (var column = 0; column < rows; ++column)
++                if (ContinuationEnabled[column])
++                    gap += ContinuationMatrix[row * MaximumContinuationContacts + column] * ContinuationForces[column];
++            residual = Math.Max(residual, ContinuationForces[row] > 0 ? Math.Abs(gap) : Math.Max(0, -gap));
++        }
++        return residual;
++    }
++
++    bool SolveContinuationWorkingSet(int rows, out double residual)
++    {
++        ++LastContinuationDirectSolves;
++        Span<bool> active = stackalloc bool[MaximumContinuationContacts];
++        Span<int> selected = stackalloc int[MaximumContinuationContacts];
++        Span<double> candidate = stackalloc double[MaximumContinuationContacts];
++        Span<double> diagonal = stackalloc double[MaximumContinuationContacts];
++        Span<double> augmented = stackalloc double[MaximumContinuationContacts * (MaximumContinuationContacts + 1)];
++        active.Clear();
++        Array.Clear(ContinuationForces);
++        for (var row = 0; row < rows; ++row)
++            diagonal[row] = Math.Sqrt(Math.Max(0, ContinuationMatrix[row * MaximumContinuationContacts + row]));
++        residual = double.NaN;
++        for (var iteration = 0; iteration < 64; ++iteration)
++        {
++            var enter = -1; var maximum = 0d;
++            for (var row = 0; row < rows; ++row)
++            {
++                if (active[row] || !ContinuationEnabled[row] || diagonal[row] == 0) continue;
++                var deficit = ContinuationDepth[row];
++                for (var column = 0; column < rows; ++column)
++                    deficit -= ContinuationMatrix[row * MaximumContinuationContacts + column] * ContinuationForces[column];
++                if (deficit > 1e-8 && deficit / diagonal[row] > maximum)
++                { maximum = deficit / diagonal[row]; enter = row; }
++            }
++            if (enter < 0)
++            {
++                residual = ContinuationContactResidual(rows);
++                return double.IsFinite(residual) && residual <= 1e-8;
++            }
++            active[enter] = true;
++            var resolved = false;
++            for (var inner = 0; inner < 2 * rows; ++inner)
++            {
++                var count = 0;
++                for (var row = 0; row < rows; ++row) if (active[row]) selected[count++] = row;
++                var stride = count + 1;
++                for (var x = 0; x < count; ++x)
++                {
++                    var row = selected[x];
++                    for (var y = 0; y < count; ++y)
++                    {
++                        var column = selected[y];
++                        augmented[x * stride + y] = ContinuationMatrix[row * MaximumContinuationContacts + column]
++                            / (diagonal[row] * diagonal[column]);
++                    }
++                    augmented[x * stride + count] = ContinuationDepth[row] / diagonal[row];
++                }
++                for (var x = 0; x < count; ++x)
++                {
++                    var pivot = x;
++                    for (var y = x + 1; y < count; ++y)
++                        if (Math.Abs(augmented[y * stride + x]) > Math.Abs(augmented[pivot * stride + x])) pivot = y;
++                    // Numerical rank deficiency is unresolved, never repaired by
++                    // adding fictitious compliance or loosening a contact.
++                    if (!(Math.Abs(augmented[pivot * stride + x]) > 1e-12)) return false;
++                    if (pivot != x)
++                        for (var y = x; y <= count; ++y)
++                            (augmented[x * stride + y], augmented[pivot * stride + y])
++                                = (augmented[pivot * stride + y], augmented[x * stride + y]);
++                    var divisor = augmented[x * stride + x];
++                    for (var y = x; y <= count; ++y) augmented[x * stride + y] /= divisor;
++                    for (var z = 0; z < count; ++z)
++                        if (z != x)
++                        {
++                            var factor = augmented[z * stride + x];
++                            for (var y = x; y <= count; ++y) augmented[z * stride + y] -= factor * augmented[x * stride + y];
++                        }
++                }
++                candidate.Clear();
++                var alpha = 1d; var leave = -1;
++                for (var x = 0; x < count; ++x)
++                {
++                    var row = selected[x];
++                    var force = augmented[x * stride + count] / diagonal[row];
++                    if (!double.IsFinite(force) || Math.Abs(force) > float.MaxValue) return false;
++                    candidate[row] = force;
++                    if (force > 0) continue;
++                    var previous = ContinuationForces[row];
++                    var fraction = previous > force ? previous / (previous - force) : 0;
++                    if (fraction <= alpha) { alpha = fraction; leave = row; }
++                }
++                if (leave < 0)
++                {
++                    for (var row = 0; row < rows; ++row) ContinuationForces[row] = candidate[row];
++                    resolved = true; break;
++                }
++                for (var row = 0; row < rows; ++row)
++                    ContinuationForces[row] = Math.Max(0, ContinuationForces[row] + alpha * (candidate[row] - ContinuationForces[row]));
++                ContinuationForces[leave] = 0; active[leave] = false;
++            }
++            if (!resolved) return false;
++        }
++        return false;
++    }
++
++    void AccumulateContinuationBendReactions(Vector3[] turns)
++    {
++        foreach (var bound in ContinuationBendLimits)
++            if (bound.Active) turns[bound.Joint] -= bound.Response * (float)bound.Force;
++    }
++
++    void QueueContinuationBendReactions(float scale)
++    {
++        foreach (var bound in ContinuationBendLimits)
++            if (bound.Active && bound.Force != 0)
++            {
++                var joint = ContinuationJoints[bound.Joint];
++                joint.Plant.AG.QueueCoupledContactResponse(joint.Index,
++                    -bound.Response, Vector4.Zero, (float)bound.Force * scale);
++            }
++    }
++
++}

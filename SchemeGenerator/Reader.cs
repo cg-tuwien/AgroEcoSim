@@ -248,7 +248,7 @@ public static partial class Reader
             "byte" => true,
             "bool" => true,
             "string" => true,
-            "Behavior" => true,
+            "Behavior" or nameof(ContactDeformationMode) => true,
             nameof(SeasonalPhase) => true,
             _ => false
         };
@@ -299,7 +299,7 @@ public static partial class Reader
             "float" or "double" or "long" or "int" or "short" or "sbyte" or "ulong" or "uint" or "ushort" or "byte" => "number",
             "bool" => "boolean",
             "string" => "string",
-            "Behavior" or nameof(SeasonalPhase)  => "number",
+            "Behavior" or nameof(SeasonalPhase) or nameof(ContactDeformationMode) => "number",
             _ => "any"
         };
     }
@@ -319,6 +319,9 @@ public static partial class Reader
 
         if (expr.StartsWith("\""))
             return expr;
+
+        if (expr.StartsWith(nameof(ContactDeformationMode)+".") && Enum.TryParse<ContactDeformationMode>(expr[(nameof(ContactDeformationMode).Length+1)..],out var deformation))
+            return ((byte)deformation).ToString(System.Globalization.CultureInfo.InvariantCulture);
 
         if (expr.StartsWith(nameof(Behavior)))
         {
@@ -467,6 +470,13 @@ public static partial class Reader
 
             if (member.IsAngleInRadians)
                 sb.AppendLine($"        this.{member.TsName}.value = s.{savedName} * RadToDeg;");
+            else if (member.CSharpType == nameof(ContactDeformationMode))
+                sb.AppendLine($"        this.{member.TsName}.value = s.{savedName} ?? 0;");
+            else if (member.CSharpName is nameof(SpeciesSettings.LeafMembraneElasticModulus)
+                or nameof(SpeciesSettings.LeafBendingElasticModulus) or nameof(SpeciesSettings.LeafMechanicalThickness))
+                sb.AppendLine($"        this.{member.TsName}.value = s.{savedName} ?? 0;");
+            else if (member.CSharpName == nameof(SpeciesSettings.LeafPoissonRatio))
+                sb.AppendLine($"        this.{member.TsName}.value = s.{savedName} ?? 0.3;");
             else
                 sb.AppendLine($"        this.{member.TsName}.value = s.{savedName};");
         }
@@ -526,6 +536,14 @@ public static partial class Reader
     {
         var name = member.CSharpName;
 
+        // These are material parameters, not the dimensionless Bending controls.
+        if (name is nameof(SpeciesSettings.LeafMembraneElasticModulus) or nameof(SpeciesSettings.LeafBendingElasticModulus))
+            return ("0", null, "100000");
+        if (name == nameof(SpeciesSettings.LeafMechanicalThickness))
+            return ("0", null, "0.00001");
+        if (name == nameof(SpeciesSettings.LeafPoissonRatio))
+            return ("-0.999", "0.499", "0.01");
+
         if (name.Contains("Probability", StringComparison.Ordinal))
             return ("0", "1", "0.0001");
 
@@ -537,6 +555,9 @@ public static partial class Reader
 
         if (name == nameof(SpeciesSettings.PetioleSegmentCount))
             return ("1", null, "1");
+
+        if (member.CSharpType == "ContactDeformationMode")
+            return ("0", "1", "1");
 
         if (member.CSharpType is "int" or "byte")
             return ("0", null, "1");
@@ -658,6 +679,7 @@ public static partial class Reader
             "string" => StringFieldTag,
             "bool" => BoolFieldTag,
             nameof(SeasonalPhase) => StringFlagsTag,
+            nameof(ContactDeformationMode) => IntFieldTag,
             _ => throw new Exception("Unknown field type.")
         };
 

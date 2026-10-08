@@ -9,6 +9,7 @@
 //state playback does not allocate.
 
 import { RGB } from './Color';
+import { Fold } from './ContactDeformation';
 import { Geom } from './GeometryIds';
 import { Mat4, createMat4 } from './Mat4';
 import { DataRef } from './Picking';
@@ -75,6 +76,7 @@ export type Instance = {
     ref: DataRef | undefined; // what a pick on this instance resolves to
     /** Optional index range within geom; shares its vertices and GPU allocation. */
     indexRange?: { first: number; count: number };
+    fold?: Fold;
 };
 
 function blankInstance(): Instance {
@@ -110,6 +112,7 @@ export class InstanceList {
             this.items.push(blankInstance());
         const inst = this.items[this.count++];
         inst.indexRange = undefined;
+        inst.fold = undefined;
         return inst;
     }
 

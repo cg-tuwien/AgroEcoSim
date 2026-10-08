@@ -1,0 +1,223 @@
+{
+  "definition": "Each process restores identical geometry before each tick; three warmups and fifteen measured ticks, excluding restore. Four independent processes per stage/tick size. Main before/after are v22/v23 without experimental bound cache.",
+  "results": {
+    "before-1h": {
+      "medianOfProcessMediansMs": 344.1995,
+      "processMedianRangeMs": [
+        327.387,
+        346.949
+      ],
+      "medianOfProcessP95Ms": 364.0185,
+      "processes": [
+        {
+          "file": "perf-before-1h.log",
+          "medianMs": 343.527,
+          "p95Ms": 374.68,
+          "intervalsMedian": 90009,
+          "trianglesMedian": 671041,
+          "allocationMedianBytes": 997472,
+          "sceneHashes": [
+            "630D63BF6F10D185"
+          ]
+        },
+        {
+          "file": "perf-clean-before-2-1h.log",
+          "medianMs": 346.949,
+          "p95Ms": 359.174,
+          "intervalsMedian": 91986,
+          "trianglesMedian": 676799,
+          "allocationMedianBytes": 997736,
+          "sceneHashes": [
+            "630D63BF6F10D185"
+          ]
+        },
+        {
+          "file": "perf-clean-before-3-1h.log",
+          "medianMs": 344.872,
+          "p95Ms": 368.863,
+          "intervalsMedian": 91599,
+          "trianglesMedian": 677781,
+          "allocationMedianBytes": 998120,
+          "sceneHashes": [
+            "630D63BF6F10D185"
+          ]
+        },
+        {
+          "file": "perf-clean-before-4-1h.log",
+          "medianMs": 327.387,
+          "p95Ms": 350.875,
+          "intervalsMedian": 91396,
+          "trianglesMedian": 631941,
+          "allocationMedianBytes": 997416,
+          "sceneHashes": [
+            "630D63BF6F10D185"
+          ]
+        }
+      ]
+    },
+    "after-1h": {
+      "medianOfProcessMediansMs": 334.163,
+      "processMedianRangeMs": [
+        333.032,
+        342.91
+      ],
+      "medianOfProcessP95Ms": 370.87149999999997,
+      "processes": [
+        {
+          "file": "perf-after-1h.log",
+          "medianMs": 333.814,
+          "p95Ms": 359.731,
+          "intervalsMedian": 90285,
+          "trianglesMedian": 590393,
+          "allocationMedianBytes": 995336,
+          "sceneHashes": [
+            "630D63BF6F10D185"
+          ]
+        },
+        {
+          "file": "perf-clean-after-2-1h.log",
+          "medianMs": 333.032,
+          "p95Ms": 384.006,
+          "intervalsMedian": 92092,
+          "trianglesMedian": 588771,
+          "allocationMedianBytes": 998480,
+          "sceneHashes": [
+            "630D63BF6F10D185"
+          ]
+        },
+        {
+          "file": "perf-clean-after-3-1h.log",
+          "medianMs": 342.91,
+          "p95Ms": 359.394,
+          "intervalsMedian": 91343,
+          "trianglesMedian": 603909,
+          "allocationMedianBytes": 999344,
+          "sceneHashes": [
+            "630D63BF6F10D185"
+          ]
+        },
+        {
+          "file": "perf-clean-after-4-1h.log",
+          "medianMs": 334.512,
+          "p95Ms": 382.012,
+          "intervalsMedian": 88987,
+          "trianglesMedian": 574760,
+          "allocationMedianBytes": 995496,
+          "sceneHashes": [
+            "630D63BF6F10D185"
+          ]
+        }
+      ],
+      "changePercentVsV22": -2.915896159058917
+    },
+    "before-4h": {
+      "medianOfProcessMediansMs": 82.6015,
+      "processMedianRangeMs": [
+        79.175,
+        88.358
+      ],
+      "medianOfProcessP95Ms": 96.1115,
+      "processes": [
+        {
+          "file": "perf-before-4h.log",
+          "medianMs": 80.956,
+          "p95Ms": 103.755,
+          "intervalsMedian": 15454,
+          "trianglesMedian": 100609,
+          "allocationMedianBytes": 861152,
+          "sceneHashes": [
+            "EE66A01BC8D5C53E"
+          ]
+        },
+        {
+          "file": "perf-clean-before-2-4h.log",
+          "medianMs": 84.247,
+          "p95Ms": 92.627,
+          "intervalsMedian": 16682,
+          "trianglesMedian": 102634,
+          "allocationMedianBytes": 863968,
+          "sceneHashes": [
+            "EE66A01BC8D5C53E"
+          ]
+        },
+        {
+          "file": "perf-clean-before-3-4h.log",
+          "medianMs": 79.175,
+          "p95Ms": 84.903,
+          "intervalsMedian": 16509,
+          "trianglesMedian": 83968,
+          "allocationMedianBytes": 862384,
+          "sceneHashes": [
+            "EE66A01BC8D5C53E"
+          ]
+        },
+        {
+          "file": "perf-clean-before-4-4h.log",
+          "medianMs": 88.358,
+          "p95Ms": 99.596,
+          "intervalsMedian": 18750,
+          "trianglesMedian": 103898,
+          "allocationMedianBytes": 867680,
+          "sceneHashes": [
+            "EE66A01BC8D5C53E"
+          ]
+        }
+      ]
+    },
+    "after-4h": {
+      "medianOfProcessMediansMs": 85.75200000000001,
+      "processMedianRangeMs": [
+        81.313,
+        89.631
+      ],
+      "medianOfProcessP95Ms": 105.669,
+      "processes": [
+        {
+          "file": "perf-after-4h.log",
+          "medianMs": 83.345,
+          "p95Ms": 107.945,
+          "intervalsMedian": 17074,
+          "trianglesMedian": 95000,
+          "allocationMedianBytes": 864320,
+          "sceneHashes": [
+            "EE66A01BC8D5C53E"
+          ]
+        },
+        {
+          "file": "perf-clean-after-2-4h.log",
+          "medianMs": 89.631,
+          "p95Ms": 112.367,
+          "intervalsMedian": 19682,
+          "trianglesMedian": 109425,
+          "allocationMedianBytes": 866240,
+          "sceneHashes": [
+            "EE66A01BC8D5C53E"
+          ]
+        },
+        {
+          "file": "perf-clean-after-3-4h.log",
+          "medianMs": 81.313,
+          "p95Ms": 95.053,
+          "intervalsMedian": 17281,
+          "trianglesMedian": 99149,
+          "allocationMedianBytes": 863984,
+          "sceneHashes": [
+            "EE66A01BC8D5C53E"
+          ]
+        },
+        {
+          "file": "perf-clean-after-4-4h.log",
+          "medianMs": 88.159,
+          "p95Ms": 103.393,
+          "intervalsMedian": 17632,
+          "trianglesMedian": 96867,
+          "allocationMedianBytes": 863456,
+          "sceneHashes": [
+            "EE66A01BC8D5C53E"
+          ]
+        }
+      ],
+      "changePercentVsV22": 3.81409538567703
+    }
+  }
+}

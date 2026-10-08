@@ -1,0 +1,558 @@
+--- a/Agro/AgroWorld.cs
++++ b/Agro/AgroWorld.cs
+@@ -742,7 +742,9 @@
+     // Only certified prefixes are retained. Payload layout and playback are unchanged.
+     // V26 retains multiple continuation witnesses and solves their coupled
+     // unilateral tangent constraints. Accepted geometry and retries can differ.
+-	public const byte CheckpointVersion = 26;
++    // V27 adds certified staged evasion and clearance guards to experimental V1.
++    // Retry ordering/precision changes can alter continuation; playback is unchanged.
++	public const byte CheckpointVersion = 27;
+ 
+ 	/// <summary>
+ 	/// Everything the next step depends on that the request does not determine.
+--- a/Agro/BERGENIA_CALIBRATION.md
++++ b/Agro/BERGENIA_CALIBRATION.md
+@@ -793,3 +793,22 @@
+ deformation mode is enabled by default. Evidence and botanical measurement
+ definitions are in
+ [`bergenia-contact-v26`](../canopy-validation/bergenia-contact-v26/README.md).
++
++## v27: retry cost and experimental staged evasion
++
++The rigid shared-support fixture's retry median drops from about 7.17 to 2.07 ms
++in the current serial NativeAOT control, without additional retained growth.
++Single-contact and rigid radial cost remains approximately unchanged. The richer
++mode-1 retry completes the synthetic 9 mm scape-radius target instead of retaining
++7.42 mm, but costs about 4.4 times its v26 control. That performance gate fails.
++No dimensions, moduli, growth durations, probabilities, resources or clonal-spread
++settings were changed. Bergenia remains mode 0 by default.
++
++Rigid continuation retains one open flower, eight half-expanded and three
++90%-expanded leaves at 1 h through day 282. At 4 h it still has no petals, four
++half-expanded and two 90%-expanded leaves. Resources remain finite and accepted
++contacts resolve. These are continuations, not new whole-season validation or
++measured leaf-expansion durations. The balcony cultivar comparison remains separate.
++Source changes, research scope, checkpoint v27 compatibility, mechanical fixtures
++and timing/measurement limits are recorded in
++[`bergenia-contact-v27`](../canopy-validation/bergenia-contact-v27/README.md).
+--- a/Agro/COLLISIONS.md
++++ b/Agro/COLLISIONS.md
+@@ -1171,3 +1171,17 @@
+ gate is not established, and biological/default-enablement acceptance remains incomplete. Evidence,
+ the probe reporting correction and bounded scratch accounting are in
+ [`bergenia-contact-v26`](../canopy-validation/bergenia-contact-v26/README.md).
++
++## v27: query hints and staged V1 evasion
++
++See [`bergenia-contact-v27`](../canopy-validation/bergenia-contact-v27/README.md)
++for source-scoped evidence. Retain the two-neighbour radial, common-support,
++single-witness, ceiling and confining-wall fixtures at 1 h and 4 h. V1 must
++certify both evasion and growth legs, retain its intrinsic dimensions and strain
++limits, and restore staged bends on a failed development transaction. Optional
++clearance guards can leave an invalid local tangent, never the final certificate.
++Check a remembered foliage failure followed by a solid failure: it must not
++produce a phantom reaction. Compare exported frames and checkpoint bytes through
++V1 leaf removal/reindexing and cache rebuilding. v27 rejects older live checkpoints
++while retaining playback. The four-hour seasonal crown and richer V1 performance
++gate remain unresolved; keep Bergenia's default mode at 0.
+--- a/Agro/Collisions/CollisionWorld.Continuation.cs
++++ b/Agro/Collisions/CollisionWorld.Continuation.cs
+@@ -5,11 +5,13 @@
+ public sealed partial class CollisionWorld
+ {
+     readonly record struct ContinuationPlant(PlantFormation2 Plant,
+-        PlantSubFormation<AboveGroundAgent>.GeometryState[] Original);
++        PlantSubFormation<AboveGroundAgent>.GeometryState[] Original,
++        PlantSubFormation<AboveGroundAgent>.GeometryState[] RetryStart);
+     readonly List<ContinuationPlant> ContinuationPlants = [];
+     bool ContinuingGrowth;
++    bool CollectingContinuationContacts;
+     const int MaximumContinuationContacts = 16, MaximumContinuationJoints = 256;
+-    readonly record struct ContinuationWitness(ContactKey Key, int I, int J);
++    readonly record struct ContinuationWitness(ContactKey Key, int I, int J, bool Reaction);
+     readonly record struct ContinuationJoint(PlantFormation2 Plant, int Index);
+     readonly record struct ContinuationGradient(int Row, int Joint, Vector3 Torque, Vector3 Turn, Vector4 Shape, Vector4 Fold);
+     readonly List<ContinuationWitness> ContinuationWitnesses = new(MaximumContinuationContacts);
+@@ -18,12 +20,21 @@
+     readonly List<ContinuationGradient> ContinuationGradients = [];
+     ushort[] ContinuationSlots = [];
+     double[] ContinuationMatrix = [], ContinuationDepth = [], ContinuationForces = [];
++    Vector3[] ContinuationTurns = [];
++    Vector4[] ContinuationFolds = [];
++    bool[] ContinuationEnabled = [];
++    /// <summary>Rows assembled for the last continuation tangent, including optional guards.</summary>
++    public int LastContinuationContactRows { get; private set; }
++    /// <summary>Last tangent complementarity residual, metres; NaN when no valid tangent was solved.</summary>
++    public double LastContinuationDualResidualMetres { get; private set; } = double.NaN;
+ 
+     /// <summary>Certified mechanical recovery work in the last tick, separate from biological time.</summary>
+     public int LastContinuationTrials { get; private set; }
+     public int LastContinuationSteps { get; private set; }
+     public int LastContinuationCorrections { get; private set; }
+     public int LastContinuationCoupledSets { get; private set; }
++    /// <summary>Certified evasion legs attempted this tick, including subsequently rolled-back trials.</summary>
++    public int LastContinuationEvasionStages { get; private set; }
+ 
+     // Only sampled, already-existing floral axes enter this bounded recovery path.
+     // It neither samples biology again nor commits births. The previous geometry
+@@ -35,6 +46,9 @@
+             || !ag.PreviousGeometry[index].Exists) return false;
+         var initialLength = ag.GetLength(index);
+         var initialRadius = ag.GetBaseRadius(index);
++        // The richer path remains with the explicitly experimental V1 profile.
++        // Its seasonal and end-to-end performance gates have not passed.
++        var guardedPaths = plant.Parameters.ContactDeformationMode == ContactDeformationMode.BroadLeafV1;
+         if (length <= initialLength + 1e-7f && radius <= initialRadius + 1e-7f) return false;
+ 
+         ContinuationPlants.Clear();
+@@ -53,6 +67,7 @@
+         finally
+         {
+             ContinuingGrowth = false;
++            CollectingContinuationContacts = false;
+             RestoreWaypoint();
+             foreach (var participant in ContinuationPlants)
+             {
+@@ -75,7 +90,8 @@
+             foreach (var existing in ContinuationPlants)
+                 if (existing.Plant == participant) return;
+             var other = participant.AG;
+-            ContinuationPlants.Add(new(participant, other.PreviousGeometry));
++            var backup = guardedPaths ? other.SaveContactTrial() : other.SaveContinuationGeometry();
++            ContinuationPlants.Add(new(participant, other.PreviousGeometry, backup));
+             other.PreviousGeometry = other.SaveContinuationGeometry();
+             other.RebaseAndRefit();
+             RefreshPlantBounds(participant);
+@@ -102,6 +118,8 @@
+             {
+                 ++LastContinuationTrials;
+                 RestoreWaypoint();
++                if (guardedPaths)
++                    foreach (var participant in ContinuationPlants) participant.Plant.AG.SaveContactTrial();
+                 ContinuationWitnesses.Clear();
+                 var next = MathF.Min(1f, fraction + step);
+                 var size = start + (target - start) * next;
+@@ -109,9 +127,17 @@
+                     longitudinal ? fixedSize : size);
+                 RefreshPlantBounds(plant);
+                 var clear = CertifyStep();
+-                for (var round = 0; !clear && round < 8; ++round)
+-                {
+-                    if (!YieldAtFailure()) break;
++                for (var round = 0; !clear && round < (guardedPaths && ContinuationWitnesses.Count > 1 ? 16 : 8); ++round)
++                {
++                    if (!YieldAtFailure())
++                    {
++                        // A clear endpoint may still cross foliage on the direct
++                        // growth/bend path. Certify evasion before development;
++                        // endpoint clearance alone never authorizes either leg.
++                        if (!guardedPaths || !StageEvasion()) break;
++                        clear = CertifyStep();
++                        continue;
++                    }
+                     ++LastContinuationCorrections;
+                     clear = CertifyStep();
+                 }
+@@ -126,7 +152,7 @@
+                     {
+                         var other = participant.Plant.AG;
+                         for (var i = 0; i < other.Count; ++i)
+-                            if (other.GetContactPose(i) != other.PreviousGeometry[i].Pose)
++                            if (other.GetContactPose(i) != participant.RetryStart[i].Pose)
+                                 other.WakeGrowth(i);
+                         other.SaveContinuationGeometry();
+                         other.RebaseAndRefit();
+@@ -136,6 +162,11 @@
+                 }
+                 else
+                 {
++                    // Staged evasion belongs to this development transaction.
++                    // Failed growth cannot leave an artificial permanent bend.
++                    if (guardedPaths)
++                        foreach (var participant in ContinuationPlants)
++                            Array.Copy(participant.RetryStart, participant.Plant.AG.PreviousGeometry, participant.Plant.AG.Count);
+                     step *= .5f;
+                     if ((target - start) * step <= 1e-7f) break;
+                 }
+@@ -143,8 +174,35 @@
+             RestoreWaypoint();
+         }
+ 
++        bool StageEvasion()
++        {
++            var proposedLength = ag.GetLength(index); var proposedRadius = ag.GetBaseRadius(index);
++            var waypoint = ag.PreviousGeometry[index];
++            ag.SetContinuationDimensions(index, waypoint.Pose.Length, waypoint.Radius);
++            RefreshPlantBounds(plant);
++            var moved = false;
++            foreach (var participant in ContinuationPlants)
++                for (var i = 0; i < participant.Plant.AG.Count; ++i)
++                    moved |= participant.Plant.AG.GetContactPose(i) != participant.Plant.AG.PreviousGeometry[i].Pose;
++            var clear = moved && CertifyStep();
++            if (clear)
++            {
++                foreach (var participant in ContinuationPlants)
++                {
++                    participant.Plant.AG.SaveContinuationGeometry();
++                    participant.Plant.AG.RebaseAndRefit();
++                    RefreshPlantBounds(participant.Plant);
++                }
++                ++LastContinuationEvasionStages;
++            }
++            ag.SetContinuationDimensions(index, proposedLength, proposedRadius);
++            RefreshPlantBounds(plant);
++            return clear;
++        }
++
+         bool CertifyStep()
+         {
++            var hint = LastTrialFailure;
+             LastTrialFailure = null;
+             foreach (var participant in ContinuationPlants)
+             {
+@@ -156,9 +214,11 @@
+                     // pose comparison; ancestor thickening is not transport.
+                     if (!other.IsCollisionEligiblePublic(i)
+                         || other.GetContactPose(i) == other.PreviousGeometry[i].Pose) continue;
++                    LastTrialFailure = hint;
+                     if (!GrowthTrialClear(participant.Plant, i, radiusOnly: true)) return false;
+                 }
+             }
++            LastTrialFailure = null;
+             return true;
+         }
+ 
+@@ -177,27 +237,34 @@
+                 Console.WriteLine($"CONTINUATION_CONTACT t={pa.World.Timestep} ids={failure.IdA}/{failure.IdB} gapUm={(hit.Distance-reach)*1e6f:R}");
+             if (hit.Distance >= reach - FoliageGeometry.Skin) return false;
+             var first = a == b ? failure.IdA < failure.IdB : PlantIndices[pa] < PlantIndices[pb];
+-            var witness = first ? new ContinuationWitness(new(pa, failure.IdA, pb, failure.IdB), i, j)
+-                : new ContinuationWitness(new(pb, failure.IdB, pa, failure.IdA), j, i);
+-            var known = false;
+-            foreach (var existing in ContinuationWitnesses) known |= existing.Key == witness.Key;
+-            if (!known)
+-            {
+-                if (ContinuationWitnesses.Count == MaximumContinuationContacts) return false;
+-                // Stable ordering also makes the small dual solve independent of which
+-                // changed body discovers a pair first.
+-                var at = 0;
+-                while (at < ContinuationWitnesses.Count && CompareWitness(ContinuationWitnesses[at], witness) < 0) ++at;
+-                ContinuationWitnesses.Insert(at, witness);
+-            }
+-            if (ContinuationWitnesses.Count > 1 && YieldTogether(witness.Key, hit, first)) return true;
++            var key = first ? new ContactKey(pa, failure.IdA, pb, failure.IdB)
++                : new ContactKey(pb, failure.IdB, pa, failure.IdA);
++            var discoverGuards = true;
++            foreach (var old in ContinuationWitnesses)
++                if (old.Key == key && old.Reaction) discoverGuards = false;
++            if (!RememberContinuationContact(pa, i, pb, j, reaction: true)) return false;
+             AddPlant(pa); AddPlant(pb);
++            if (guardedPaths && discoverGuards)
++            {
++                CollectingContinuationContacts = true;
++                try
++                {
++                    // Discover touching neighbours before a correction closes their
++                    // gaps. These are inequalities, not extra applied loads. Queries
++                    // use current geometry, never a cached clearance or contact list.
++                    foreach (var participant in ContinuationPlants)
++                        for (var body = 0; body < participant.Plant.AG.Count; ++body)
++                            if (participant.Plant.AG.IsCollisionEligiblePublic(body)
++                                && participant.Plant.AG.GetContactPose(body) != participant.Plant.AG.PreviousGeometry[body].Pose)
++                                GrowthTrialClear(participant.Plant, body, radiusOnly: true);
++                }
++                finally { CollectingContinuationContacts = false; }
++            }
++            if (ContinuationWitnesses.Count > 1 && YieldTogether(key, hit, first)) return true;
+             // Main-pass memories use stable-ID/plant order. A trial can discover
+             // the reverse direction; retain the remembered side and reverse its
+             // normal rather than silently falling back to the organ bases.
+             var ownFirst = a == b ? failure.IdA < failure.IdB : PlantIndices[pa] < PlantIndices[pb];
+-            var key = ownFirst ? new ContactKey(pa, failure.IdA, pb, failure.IdB)
+-                : new ContactKey(pb, failure.IdB, pa, failure.IdA);
+             var memoryWork = Work[ownFirst ? pa : pb];
+             Vector3? remembered = memoryWork.Contacts.TryGetValue(key, out var memory)
+                 ? ownFirst ? memory.Value.Normal : -memory.Value.Normal : null;
+@@ -225,14 +292,6 @@
+             return moved;
+         }
+ 
+-        int CompareWitness(ContinuationWitness x, ContinuationWitness y)
+-        {
+-            var c = PlantIndices[x.Key.A].CompareTo(PlantIndices[y.Key.A]);
+-            if (c == 0) c = x.Key.OrganA.CompareTo(y.Key.OrganA);
+-            if (c == 0) c = PlantIndices[x.Key.B].CompareTo(PlantIndices[y.Key.B]);
+-            return c == 0 ? x.Key.OrganB.CompareTo(y.Key.OrganB) : c;
+-        }
+-
+         bool YieldTogether(ContactKey latest, FoliageContact endpoint, bool canonicalEndpoint)
+         {
+             // A bounded unilateral tangent solve. Full nonlinear endpoint and swept
+@@ -243,11 +302,15 @@
+                 ContinuationMatrix = new double[MaximumContinuationContacts * MaximumContinuationContacts];
+                 ContinuationDepth = new double[MaximumContinuationContacts];
+                 ContinuationForces = new double[MaximumContinuationContacts];
++                ContinuationEnabled = new bool[MaximumContinuationContacts];
+             }
+             Array.Fill(ContinuationSlots, ushort.MaxValue);
+             Array.Clear(ContinuationMatrix); Array.Clear(ContinuationForces);
+             ContinuationJoints.Clear(); ContinuationJointIndices.Clear(); ContinuationGradients.Clear();
+             var rows = ContinuationWitnesses.Count;
++            LastContinuationContactRows = rows;
++            LastContinuationDualResidualMetres = double.NaN;
++            Array.Fill(ContinuationEnabled, true);
+             for (var row = 0; row < rows; ++row)
+             {
+                 var w = ContinuationWitnesses[row]; var a = w.Key.A.AG; var b = w.Key.B.AG;
+@@ -269,7 +332,7 @@
+                 var normal = ContactNormal(hit, a.PreviousGeometry[w.I].Pose.Base - b.PreviousGeometry[w.J].Pose.Base, remembered);
+                 // Negative depths preserve a previously cleared contact as an inequality:
+                 // another correction must not spend more than its available clearance.
+-                ContinuationDepth[row] = reach - hit.Distance + FoliageGeometry.Skin;
++                ContinuationDepth[row] = reach - hit.Distance + (w.Reaction ? FoliageGeometry.Skin : -FoliageGeometry.Skin);
+                 if (!AppendChain(a, w.I, hit.A, normal, common, row)
+                     || !AppendChain(b, w.J, hit.B, -normal, common, row)) return false;
+                 if (common >= 0 && !Append(a, common, row, a.CommonContactGradient(common, w.I, hit.A, w.J, hit.B, normal))) return false;
+@@ -281,7 +344,10 @@
+                     if (slot == ushort.MaxValue) continue;
+                     var other = ContinuationGradients[slot];
+                     ContinuationMatrix[g.Row * MaximumContinuationContacts + column]
+-                        += (double)Vector3.Dot(g.Torque, other.Turn) + Vector4.Dot(g.Shape, other.Fold);
++                        += (double)g.Torque.X * other.Turn.X + (double)g.Torque.Y * other.Turn.Y
++                            + (double)g.Torque.Z * other.Turn.Z + (double)g.Shape.X * other.Fold.X
++                            + (double)g.Shape.Y * other.Fold.Y + (double)g.Shape.Z * other.Fold.Z
++                            + (double)g.Shape.W * other.Fold.W;
+                 }
+             // Directional bend/strain limits can make the local tangent nonsymmetric.
+             // Preserve the old bounded response in that case instead of silently
+@@ -289,14 +355,30 @@
+             for (var row = 0; row < rows; ++row)
+             {
+                 var diagonal = ContinuationMatrix[row * MaximumContinuationContacts + row];
+-                if (!(diagonal > 1e-20) || !double.IsFinite(diagonal)) return false;
++                if (!double.IsFinite(diagonal) || diagonal < 0 || diagonal <= 1e-20 && ContinuationDepth[row] > 0)
++                {
++                    if (!ContinuationWitnesses[row].Reaction) { ContinuationEnabled[row] = false; continue; }
++                    if (TraceContacts) Console.WriteLine($"CONTINUATION_TANGENT blockedRow={row} diagonal={diagonal:R} depth={ContinuationDepth[row]:R}");
++                    return false;
++                }
+                 for (var column = 0; column < row; ++column)
+                 {
+                     var x = ContinuationMatrix[row * MaximumContinuationContacts + column];
+                     var y = ContinuationMatrix[column * MaximumContinuationContacts + row];
++                    if (!ContinuationEnabled[column]) continue;
+                     var scale = Math.Sqrt(diagonal * ContinuationMatrix[column * MaximumContinuationContacts + column]);
+                     if (!double.IsFinite(x + y) || Math.Abs(x - y) > 1e-5 * scale
+-                        || Math.Abs(x) > scale * (1 + 1e-5)) return false;
++                        || Math.Abs(x) > scale * (1 + 1e-5))
++                    {
++                        // A saturated joint gives a one-sided response, not a
++                        // symmetric material tensor. Do not invent compliance to
++                        // fit it. Optional clearance guards can leave this tangent
++                        // solve; the nonlinear motion certificate still checks them.
++                        if (!ContinuationWitnesses[row].Reaction) { ContinuationEnabled[row] = false; break; }
++                        if (!ContinuationWitnesses[column].Reaction) { ContinuationEnabled[column] = false; continue; }
++                        if (TraceContacts) Console.WriteLine($"CONTINUATION_TANGENT invalidRows={row}/{column} x={x:R} y={y:R} scale={scale:R}");
++                        return false;
++                    }
+                 }
+             }
+             for (var sweep = 0; sweep < 64; ++sweep)
+@@ -304,10 +386,13 @@
+                 var maximumChange = 0d;
+                 for (var row = 0; row < rows; ++row)
+                 {
++                    if (!ContinuationEnabled[row]) continue;
+                     var predicted = 0d;
+                     for (var column = 0; column < rows; ++column)
+-                        predicted += ContinuationMatrix[row * MaximumContinuationContacts + column] * ContinuationForces[column];
++                        if (ContinuationEnabled[column])
++                            predicted += ContinuationMatrix[row * MaximumContinuationContacts + column] * ContinuationForces[column];
+                     var diagonal = ContinuationMatrix[row * MaximumContinuationContacts + row];
++                    if (diagonal <= 1e-20) continue; // immobile, already-satisfied guard
+                     var force = Math.Max(0, ContinuationForces[row] + (ContinuationDepth[row] - predicted) / diagonal);
+                     if (!double.IsFinite(force) || force > float.MaxValue) return false;
+                     maximumChange = Math.Max(maximumChange, Math.Abs(force - ContinuationForces[row]) * Math.Sqrt(diagonal));
+@@ -315,14 +400,59 @@
+                 }
+                 if (maximumChange < 1e-8) break;
+             }
++            var residual = 0d;
++            for (var row = 0; row < rows; ++row)
++            {
++                if (!ContinuationEnabled[row]) continue;
++                var gap = -ContinuationDepth[row];
++                for (var column = 0; column < rows; ++column)
++                    if (ContinuationEnabled[column])
++                        gap += ContinuationMatrix[row * MaximumContinuationContacts + column] * ContinuationForces[column];
++                residual = Math.Max(residual, ContinuationForces[row] > 0 ? Math.Abs(gap) : Math.Max(0, -gap));
++            }
++            LastContinuationDualResidualMetres = residual;
++            if (!double.IsFinite(residual)) return false;
++            if (guardedPaths && residual > 1e-8) return false; // exhausted tangent budget, not confinement
++            // Bound the complete tangent direction with one scalar. Clipping each
++            // joint separately changes the compliance-weighted direction and can
++            // drive a previously satisfied contact back into penetration.
++            var limit = MathF.Min(CollisionSettings.MaxCorrectionRadians, MathF.PI / 1800f);
++            var stepScale = 1f;
++            if (guardedPaths)
++            {
++                if (ContinuationTurns.Length == 0)
++                {
++                    ContinuationTurns = new Vector3[MaximumContinuationJoints];
++                    ContinuationFolds = new Vector4[MaximumContinuationJoints];
++                }
++                Array.Clear(ContinuationTurns); Array.Clear(ContinuationFolds);
++                foreach (var g in ContinuationGradients)
++                {
++                    var force = (float)ContinuationForces[g.Row];
++                    if (force == 0) continue;
++                    ContinuationTurns[g.Joint] += g.Turn * force;
++                    ContinuationFolds[g.Joint] += g.Fold * force;
++                }
++                for (var joint = 0; joint < ContinuationJoints.Count; ++joint)
++                {
++                    var turn = ContinuationTurns[joint].Length();
++                    var fold = Vector4.Abs(ContinuationFolds[joint]);
++                    var maximumFold = MathF.Max(MathF.Max(fold.X, fold.Y), MathF.Max(fold.Z, fold.W));
++                    if (turn > limit) stepScale = MathF.Min(stepScale, limit / turn);
++                    if (maximumFold > CollisionSettings.MaxCorrectionRadians)
++                        stepScale = MathF.Min(stepScale, CollisionSettings.MaxCorrectionRadians / maximumFold);
++                }
++            }
++            if (!(stepScale > 0) || !float.IsFinite(stepScale)) return false;
+             foreach (var p in ContinuationPlants) p.Plant.AG.BeginContactSweep();
+             foreach (var g in ContinuationGradients)
+-                ContinuationJoints[g.Joint].Plant.AG.QueueCoupledContactResponse(ContinuationJoints[g.Joint].Index,
+-                    g.Turn, g.Fold, (float)ContinuationForces[g.Row]);
++                if (ContinuationForces[g.Row] > 0)
++                    ContinuationJoints[g.Joint].Plant.AG.QueueCoupledContactResponse(ContinuationJoints[g.Joint].Index,
++                        g.Turn, g.Fold, (float)ContinuationForces[g.Row] * stepScale);
+             var moved = false;
+             foreach (var p in ContinuationPlants)
+             {
+-                moved |= p.Plant.AG.EndContactSweep(MathF.Min(CollisionSettings.MaxCorrectionRadians, MathF.PI / 1800f));
++                moved |= p.Plant.AG.EndContactSweep(limit);
+                 RefreshPlantBounds(p.Plant);
+             }
+             ++LastContinuationCoupledSets;
+@@ -353,4 +483,30 @@
+             return true;
+         }
+     }
++
++    bool RememberContinuationContact(PlantFormation2 pa, int i, PlantFormation2 pb, int j, bool reaction)
++    {
++        var first = pa == pb ? pa.AG.GetOrganId(i) < pb.AG.GetOrganId(j) : PlantIndices[pa] < PlantIndices[pb];
++        var w = first ? new ContinuationWitness(new(pa, pa.AG.GetOrganId(i), pb, pb.AG.GetOrganId(j)), i, j, reaction)
++            : new ContinuationWitness(new(pb, pb.AG.GetOrganId(j), pa, pa.AG.GetOrganId(i)), j, i, reaction);
++        var at = 0;
++        while (at < ContinuationWitnesses.Count)
++        {
++            var old = ContinuationWitnesses[at];
++            if (old.Key == w.Key)
++            {
++                if (reaction && !old.Reaction) ContinuationWitnesses[at] = old with { Reaction = true };
++                return true;
++            }
++            var c = PlantIndices[old.Key.A].CompareTo(PlantIndices[w.Key.A]);
++            if (c == 0) c = old.Key.OrganA.CompareTo(w.Key.OrganA);
++            if (c == 0) c = PlantIndices[old.Key.B].CompareTo(PlantIndices[w.Key.B]);
++            if (c == 0) c = old.Key.OrganB.CompareTo(w.Key.OrganB);
++            if (c > 0) break;
++            ++at;
++        }
++        if (ContinuationWitnesses.Count == MaximumContinuationContacts) return false;
++        ContinuationWitnesses.Insert(at, w);
++        return true;
++    }
+ }
+--- a/Agro/Collisions/CollisionWorld.Foliage.cs
++++ b/Agro/Collisions/CollisionWorld.Foliage.cs
+@@ -547,6 +547,8 @@
+ 
+     internal bool GrowthTrialClear(PlantFormation2 plant, int root, bool radiusOnly = false)
+     {
++        var hint = LastTrialFailure;
++        LastTrialFailure = null; // a solid failure must not inherit an old foliage reaction
+         var ag = plant.AG; var affected = TrialAffected;
+         affected.Clear(); affected.Add(root);
+         // An earlier development can add organs after this tick's hard pass sized its
+@@ -575,7 +577,7 @@
+                 // Reorder only candidates already returned by the normal broad phase.
+                 // The complete certificate is unchanged; a remembered failure is never
+                 // itself a reason to reject a new geometry.
+-                if (LastTrialFailure is { } failed && failed.A == plant && failed.I == i
++                if (hint is { } failed && failed.A == plant && failed.I == i
+                     && failed.IdA == ag.GetOrganId(i) && failed.B == other.Plant
+                     && failed.J < other.Count && failed.IdB == other.GetOrganId(failed.J))
+                 {
+@@ -585,6 +587,13 @@
+                 foreach (var j in TrialOrgans)
+                 {
+                     if (!other.IsCollisionEligiblePublic(j) || other == ag && (i == j || Connected(ag, i, j))) continue;
++                    // Continuation certifies every changed body once. A pair of
++                    // changed bodies therefore needs only its canonical visit;
++                    // stationary neighbours still receive the complete check here.
++                    if (ContinuingGrowth && radiusOnly && other.HasContinuationWaypoint
++                        && (pi < PlantIndices[plant] || pi == PlantIndices[plant] && j < i)
++                        && j < other.PreviousGeometry.Length && other.PreviousGeometry[j].Exists
++                        && other.GetContactPose(j) != other.PreviousGeometry[j].Pose) continue;
+                     var b = Shape(other, j);
+                     // Continuation starts after the original motion is certified.
+                     // Unchanged neighbours stay at that accepted endpoint. Replaying
+@@ -606,6 +615,12 @@
+                     var second = ownFirst ? b : a; var secondOld = ownFirst ? oldB : oldA;
+                     var firstAG = ownFirst ? ag : other;
+                     var hit = PairDistance(firstAG,common,first,second,reach + FoliageGeometry.Skin);
++                    if (CollectingContinuationContacts)
++                    {
++                        if (hit.Distance < reach + FoliageGeometry.Skin)
++                            RememberContinuationContact(plant, i, other.Plant, j, hit.Distance < reach - FoliageGeometry.Skin);
++                        continue;
++                    }
+                     if (hit.Distance < reach - FoliageGeometry.Skin)
+                     { LastTrialFailure = (plant, i, ag.GetOrganId(i), other.Plant, j, other.GetOrganId(j)); return false; }
+                     var oldReach = oldA.Pose.Radius + oldB.Pose.Radius;
+@@ -736,6 +751,9 @@
+         LastCorrectionRounds = LastValidationRounds = LastFallbackRounds = 0;
+         LastContinuationTrials = LastContinuationSteps = LastContinuationCorrections = 0;
+         LastContinuationCoupledSets = 0;
++        LastContinuationEvasionStages = 0;
++        LastContinuationContactRows = 0;
++        LastContinuationDualResidualMetres = double.NaN;
+         ExtendedRelaxation=false;
+         var rounds=plants.Any(p=>p.AG.HasContactDeformation)?16:CollisionSettings.HardRounds;
+         for (int round = 0; round < rounds; ++round)
+--- a/Agro/Plant/PlantSubFormation.Contacts.cs
++++ b/Agro/Plant/PlantSubFormation.Contacts.cs
+@@ -642,14 +642,17 @@
+     }
+ 
+     float AvailableCompliance(int index, Vector3 axis)
++        => ContactTurnAvailable(index, axis) ? ContactCompliance(index, axis) : 0;
++
++    bool ContactTurnAvailable(int index, Vector3 axis)
+     {
+         ref var a = ref Src()[index];
+         var delta = Quaternion.Normalize(a.Orientation * Quaternion.Conjugate(a.baseOrientation));
+         if (delta.W < 0) delta = new(-delta.X, -delta.Y, -delta.Z, -delta.W);
+         var bend = new Vector3(delta.X, delta.Y, delta.Z);
+         if (2f * MathF.Atan2(bend.Length(), delta.W) >= ContactBendLimit(index) - 1e-5f
+-            && Vector3.Dot(bend, axis) > 0) return 0;
+-        return ContactCompliance(index, axis);
++            && Vector3.Dot(bend, axis) > 0) return false;
++        return true;
+     }
+ 
+     internal double ContactMobility(int index, Vector3 contact, Vector3 normal, int stop = -1)
+@@ -672,7 +675,7 @@
+     {
+         var torque = Vector3.Cross(point - GetBaseCenterWorld(joint) - Src()[joint].BaseOffset, normal);
+         var gain = torque.Length();
+-        var turn = gain > 1e-8f && AvailableCompliance(joint, torque / gain) > 0
++        var turn = gain > 1e-8f && ContactTurnAvailable(joint, torque / gain)
+             ? ComplianceVector(joint, torque) : Vector3.Zero;
+         var shape = Deformable(joint) ? ShapeGradient(joint, contacted, point, normal) : Vector4.Zero;
+         return (torque, turn, shape, Deformable(joint) ? ShapeResponse(joint, shape) : Vector4.Zero);

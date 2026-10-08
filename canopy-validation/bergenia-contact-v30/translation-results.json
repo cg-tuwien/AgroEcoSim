@@ -1,0 +1,72 @@
+[
+  {
+    "case": "single",
+    "translated": false,
+    "exit": 0,
+    "lines": [
+      "RESULT h=4 accepted=True length=0.02996875 radius=0.0012 movedNeighbour=True clear=True trials=16 steps=6 corrections=104 coupledSets=0 stages=0 counts=3/4 ms=6.0603"
+    ]
+  },
+  {
+    "case": "single",
+    "translated": true,
+    "exit": 0,
+    "lines": [
+      "RESULT h=4 accepted=True length=0.02996875 radius=0.0012 movedNeighbour=True clear=True trials=16 steps=6 corrections=104 coupledSets=0 stages=0 counts=3/4 ms=1.5778"
+    ]
+  },
+  {
+    "case": "radial",
+    "translated": false,
+    "exit": 0,
+    "lines": [
+      "RESULT h=4 accepted=True length=0.012 radius=0.0052218754 movedNeighbour=True clear=True trials=16 steps=6 corrections=113 coupledSets=28 stages=0 counts=3/4/4 ms=10.0147",
+      "QP_REFERENCE rows=2 enabled=2 lambdaError=1.3342025238522598E-12 residualMetres=2.0501096802035814E-13"
+    ]
+  },
+  {
+    "case": "radial",
+    "translated": true,
+    "exit": 0,
+    "lines": [
+      "RESULT h=4 accepted=True length=0.012 radius=0.0052218754 movedNeighbour=True clear=True trials=16 steps=6 corrections=113 coupledSets=28 stages=0 counts=3/4/4 ms=7.989",
+      "QP_REFERENCE rows=2 enabled=2 lambdaError=1.3295637309759627E-12 residualMetres=2.04332783044326E-13"
+    ]
+  },
+  {
+    "case": "radial same-crown",
+    "translated": false,
+    "exit": 0,
+    "lines": [
+      "RESULT h=4 accepted=True length=0.03 radius=0.0048562502 movedNeighbour=True clear=True trials=16 steps=6 corrections=104 coupledSets=17 stages=0 counts=9 ms=28.1907",
+      "QP_REFERENCE rows=2 enabled=2 lambdaError=2.2228262118320977E-18 residualMetres=4.317485750832779E-19"
+    ]
+  },
+  {
+    "case": "radial same-crown",
+    "translated": true,
+    "exit": 0,
+    "lines": [
+      "RESULT h=4 accepted=True length=0.03 radius=0.0048562502 movedNeighbour=True clear=True trials=16 steps=6 corrections=104 coupledSets=17 stages=0 counts=9 ms=26.1664",
+      "QP_REFERENCE rows=2 enabled=2 lambdaError=1.73726457481857E-18 residualMetres=3.374367503624319E-19"
+    ]
+  },
+  {
+    "case": "radial v1",
+    "translated": false,
+    "exit": 0,
+    "lines": [
+      "RESULT h=4 accepted=True length=0.012 radius=0.009 movedNeighbour=True clear=True trials=12 steps=6 corrections=171 coupledSets=171 stages=3 counts=3/4/4 ms=157.0515",
+      "QP_REFERENCE rows=4 enabled=4 lambdaError=1.4170892628827605E-09 residualMetres=1.8114455682322E-10"
+    ]
+  },
+  {
+    "case": "radial v1",
+    "translated": true,
+    "exit": 0,
+    "lines": [
+      "RESULT h=4 accepted=True length=0.012 radius=0.009 movedNeighbour=True clear=True trials=12 steps=6 corrections=171 coupledSets=171 stages=3 counts=3/4/4 ms=153.5042",
+      "QP_REFERENCE rows=4 enabled=4 lambdaError=1.7728018890123681E-09 residualMetres=2.2348424156429077E-10"
+    ]
+  }
+]

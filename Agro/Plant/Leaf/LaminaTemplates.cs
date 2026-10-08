@@ -7,16 +7,35 @@ namespace Agro;
 /// <summary>The same immutable, coarse-outline templates used by playback and contact geometry.</summary>
 public static class LaminaTemplates
 {
-    static readonly ConditionalWeakTable<LeafMorphology, MeshData> Meshes = new();
+    sealed record CachedMesh(MeshData Mesh, float WidthScale);
+    static readonly ConditionalWeakTable<LeafMorphology, CachedMesh> Meshes = new();
     static readonly ConditionalWeakTable<SpeciesSettings, LaminaTemplate[]> Leaves = new();
     static readonly ConditionalWeakTable<SpeciesSettings, LaminaTemplate[]> Petals = new();
 
-    public static MeshData Build(LeafMorphology morphology) => Meshes.GetValue(morphology, m =>
+    // Serve the authored vertices unchanged: recorded V7 matrices already encode their scale.
+    public static MeshData Build(LeafMorphology morphology) => GetMesh(morphology).Mesh;
+
+    static CachedMesh GetMesh(LeafMorphology morphology) => Meshes.GetValue(morphology, static m =>
     {
-        if (m.TryGetDefaultLeafMesh(RenderLeafLod.CoarseOutline, out var authored)) return authored;
-        var leaf = new LeafInstance { Morphology = m, Physiology = new() };
-        leaf.InitializeLeafletsIfNeeded();
-        return LeafMeshBuilder.Build(leaf, RenderLeafLod.CoarseOutline);
+        if (!m.TryGetDefaultLeafMesh(RenderLeafLod.CoarseOutline, out var mesh))
+        {
+            var leaf = new LeafInstance { Morphology = m, Physiology = new() };
+            leaf.InitializeLeafletsIfNeeded();
+            mesh = LeafMeshBuilder.Build(leaf, RenderLeafLod.CoarseOutline);
+        }
+        // Radius is half the full blade width. Authored silhouettes need not span [-1, 1]:
+        // Geranium spans 3.53, making a nominal 7 cm blade 12.4 cm wide without this correction.
+        // Measure the WHOLE blade once, so a tapered slice keeps its share of that width.
+        var min = float.PositiveInfinity;
+        var max = float.NegativeInfinity;
+        foreach (var vertex in mesh.Positions)
+        {
+            min = MathF.Min(min, vertex.Y);
+            max = MathF.Max(max, vertex.Y);
+        }
+        var width = max - min;
+        var correction = width > 1e-12f && float.IsFinite(width) ? 2f / width : 1f;
+        return new(mesh, correction);
     });
 
     public static LaminaTemplate? For(SpeciesSettings species, OrganTypes organ, int slice = 0)
@@ -35,19 +54,27 @@ public static class LaminaTemplates
     {
         var count = petals ? 1 : Math.Max(1, species.LeafSegmentCount);
         var morphology = petals ? species.FlowerSettings.PetalMorphology : species.LeafMorphology;
-        var mesh = Build(morphology);
+        var cached = GetMesh(morphology);
+        var mesh = !petals && species.ContactDeformationMode == ContactDeformationMode.BroadLeafV1
+            ? ContactDeformationBinding.For(morphology) : cached.Mesh;
         var result = new LaminaTemplate[count];
         for (int i = 0; i < count; ++i)
+        {
             result[i] = new(LaminaMeshSlicer.Slice(mesh, i, count), morphology.Dimensions.MaxWidthM * .5f,
-                !petals && count == 1, morphology.Dimensions.LengthM);
+                !petals && count == 1, morphology.Dimensions.LengthM, petals ? 1f : cached.WidthScale);
+            if (!petals && species.ContactDeformationMode == ContactDeformationMode.BroadLeafV1) result[i].BindConnectedSeams();
+        }
         return result;
     }
 }
 
 public sealed partial class LaminaTemplate
 {
+    // Collision vertices carry the transverse correction; the served mesh does not.
     public readonly Vector3[] Vertices;
     public readonly int[] Indices;
+    /// <summary>Correction applied to the authored mesh's transverse axis in new exports.</summary>
+    public readonly float WidthScale;
     readonly Bvh Triangles = new();
     [ThreadStatic] static Stack<int>? QueryStack;
     readonly Vector3 Min, Max, Centre, Extent;
@@ -59,10 +86,15 @@ public sealed partial class LaminaTemplate
     internal float TemplateReferenceHalfWidth => ReferenceHalfWidth;
 
     public LaminaTemplate(MeshData mesh, float referenceHalfWidth = 0,
-        bool allowCollisionApproximation = false, float referenceLength = 0)
+        bool allowCollisionApproximation = false, float referenceLength = 0, float widthScale = 1f)
     {
         ReferenceHalfWidth = referenceHalfWidth;
+        WidthScale = widthScale;
         Vertices = mesh.Positions.ToArray(); Indices = mesh.Indices.ToArray();
+        for (int i = 0; i < Vertices.Length; ++i)
+            Vertices[i].Y *= widthScale;
+        // Do not recenter asymmetric outlines, move the petiole junction, or rescale relief.
+        // Bounds, support points, BVHs and simplified collision levels all use these copies.
         SupportX = new float[Vertices.Length]; SupportY = new float[Vertices.Length]; SupportZ = new float[Vertices.Length];
         for (int i = 0; i < Vertices.Length; ++i)
         { SupportX[i] = Vertices[i].X + 1f; SupportY[i] = Vertices[i].Z; SupportZ[i] = -Vertices[i].Y; }
@@ -79,6 +111,7 @@ public sealed partial class LaminaTemplate
             bounds[i] = (i, new(Vector3.Min(a, Vector3.Min(b, c)), Vector3.Max(a, Vector3.Max(b, c))));
         }
         Triangles.Build(bounds);
+        BuildDeformationBinding();
         if (allowCollisionApproximation && referenceHalfWidth > 0 && referenceLength > 0)
             CollisionLevels = new(() => BuildCollisionLevels(referenceLength), LazyThreadSafetyMode.ExecutionAndPublication);
     }
@@ -89,25 +122,46 @@ public sealed partial class LaminaTemplate
     internal float ReliefAt(in OrganPose pose) => ReliefReach * ReliefScale(pose.Width);
     internal float ReliefChange(in OrganPose a, in OrganPose b)
         => ReliefReach * MathF.Abs(ReliefScale(a.Width) - ReliefScale(b.Width));
+    public Vector3 LocalPoint(in OrganPose pose, Vector3 v) =>
+        new((v.X + 1f) * pose.Length * .5f, v.Z * ReliefScale(pose.Width), -v.Y * pose.Width);
+
     public Vector3 Transform(in OrganPose pose, Vector3 v) => pose.Base + Vector3.Transform(
-        new Vector3((v.X + 1f) * pose.Length * 0.5f, v.Z * ReliefScale(pose.Width), -v.Y * pose.Width), pose.Rotation);
+        pose.Deformation == Vector4.Zero ? LocalPoint(pose,v) : ContactDeformation.BladePoint(LocalPoint(pose, v), pose.Length,
+            pose.Deformation, MidribHeight(v.X) * ReliefScale(pose.Width)), pose.Rotation);
+
+    public Vector3 TransformVertex(in OrganPose pose,int vertex) => pose.Base + Vector3.Transform(
+        pose.Deformation == Vector4.Zero ? LocalPoint(pose,Vertices[vertex]) : ContactDeformation.BladePoint(LocalPoint(pose,Vertices[vertex]),
+            pose.Length,pose.Deformation,HingeHeights[vertex]*ReliefScale(pose.Width)),pose.Rotation);
+
+    internal float DeformationReach(in OrganPose pose) => ContactDeformation.MotionBound(
+        LongReach * pose.Length, WideReach * pose.Width + ReliefAt(pose), Vector4.Zero, pose.Deformation);
+
 
     public void Triangle(in OrganPose pose, int triangle, out Vector3 a, out Vector3 b, out Vector3 c)
     {
         // Three direct vector transforms are cheaper than hashing a full OrganPose
         // at every subdivided contact feature (including alternating leaf poses).
-        a = Transform(pose, Vertices[Indices[triangle * 3]]);
-        b = Transform(pose, Vertices[Indices[triangle * 3 + 1]]);
-        c = Transform(pose, Vertices[Indices[triangle * 3 + 2]]);
+        if (pose.Deformation != Vector4.Zero)
+        {
+            var cached = DeformedVertices(pose);
+            a = CachedVertex(cached, Indices[triangle * 3]);
+            b = CachedVertex(cached, Indices[triangle * 3 + 1]);
+            c = CachedVertex(cached, Indices[triangle * 3 + 2]);
+            return;
+        }
+        a = TransformVertex(pose, Indices[triangle * 3]);
+        b = TransformVertex(pose, Indices[triangle * 3 + 1]);
+        c = TransformVertex(pose, Indices[triangle * 3 + 2]);
     }
 
     public Bvh.BoundingBox Bounds(in OrganPose pose)
     {
-        var centre=Transform(pose,Centre);
+        var rest = pose with { Deformation = default };
+        var centre=Transform(rest,Centre);
         var extent=RotatedExtent(new(Extent.X*pose.Length*.5f,Extent.Z*ReliefScale(pose.Width),Extent.Y*pose.Width),pose.Rotation);
         // Round outward as well as adding physical thickness: at facade coordinates the
         // centre/extent form can round differently from transforming individual vertices.
-        extent+=new Vector3(pose.Radius)+Vector3.Abs(centre)*2e-7f+new Vector3(1e-8f);
+        extent+=new Vector3(pose.Radius + DeformationReach(pose))+Vector3.Abs(centre)*2e-7f+new Vector3(1e-8f);
         return new(centre-extent,centre+extent);
     }
 
@@ -128,11 +182,14 @@ public sealed partial class LaminaTemplate
             +local.Y*centre.Z*ReliefScale(pose.Width)-local.Z*centre.Y*pose.Width;
         var radius=MathF.Abs(local.X)*extent.X*pose.Length*.5f+MathF.Abs(local.Y)*extent.Z*ReliefScale(pose.Width)
             +MathF.Abs(local.Z)*extent.Y*pose.Width;
+        radius += DeformationReach(pose);
         low=mid-radius;high=mid+radius;
     }
 
     public void Query(in OrganPose pose, Bvh.BoundingBox world, List<int> hits)
     {
+        var deformationPad = new Vector3(DeformationReach(pose));
+        world = new(world.Min - deformationPad, world.Max + deformationPad);
         var inverse = Quaternion.Conjugate(pose.Rotation);
         var length = MathF.Max(1e-12f, pose.Length);
         var width = MathF.Max(1e-12f, pose.Width);
@@ -163,6 +220,8 @@ public sealed partial class LaminaTemplate
         return Vector3.Distance(a.Base, b.Base) + LongReach * MathF.Abs(a.Length - b.Length)
             + WideReach * MathF.Abs(a.Width - b.Width) + ReliefChange(a,b) + MathF.Abs(a.Radius - b.Radius)
             + angle * (LongReach * MathF.Max(a.Length, b.Length) + WideReach * MathF.Max(a.Width, b.Width)
-                + MathF.Max(ReliefAt(a),ReliefAt(b)));
+                + MathF.Max(ReliefAt(a),ReliefAt(b)))
+            + ContactDeformation.MotionBound(LongReach * MathF.Max(a.Length, b.Length),
+                WideReach * MathF.Max(a.Width, b.Width) + MathF.Max(ReliefAt(a), ReliefAt(b)), a.Deformation, b.Deformation);
     }
 }

@@ -1,0 +1,3 @@
+RANGES version=32 cases=6028 errors=0 maxErrorNm=5.7245874707234634E-08 maxUlps=0 worst=near-parallel-cross-0.1-100
+EXEMPTION translatedOutsideActualBox result=Intersecting expected=Intersecting
+KERNEL calls=1000000 nsPerCall=32.9889 allocatedBytes=0 guard=526.7705566482456

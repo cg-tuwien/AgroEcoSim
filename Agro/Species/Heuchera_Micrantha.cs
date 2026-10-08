@@ -38,6 +38,8 @@ public static class Heuchera_Micrantha_Palace_Purple
         LeafPitch = 35 * (MathF.PI / 180f),
 
         LeafGrowthTime = 24f * 10f * 2f,
+        // Provisional CPU-light calibration; see LIGHT_GROWTH_CALIBRATION.md.
+        LeafExpansionRateScale = 2f,
         LeafGrowthTimeVar = 24f * 4f,
         LeafMaximumAgeHours = 24 * 200,
 

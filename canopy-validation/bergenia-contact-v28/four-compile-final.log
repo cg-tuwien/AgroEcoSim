@@ -1,0 +1,21 @@
+/tmp/gf-contact-v28/four/Probe.csproj : warning NU1900: Error occurred while getting package vulnerability data: Unable to load the service index for source https://api.nuget.org/v3/index.json.
+/home/ubuntu/GreenFDT/Agro/Agro.csproj : warning NU1900: Error occurred while getting package vulnerability data: Unable to load the service index for source https://api.nuget.org/v3/index.json. [TargetFramework=net8.0]
+/home/ubuntu/GreenFDT/AgentsSystem/AgentsSystem.csproj : warning NU1900: Error occurred while getting package vulnerability data: Unable to load the service index for source https://api.nuget.org/v3/index.json. [TargetFramework=net8.0]
+/home/ubuntu/GreenFDT/Utils/Utils.csproj : warning NU1900: Error occurred while getting package vulnerability data: Unable to load the service index for source https://api.nuget.org/v3/index.json. [TargetFramework=net8.0]
+  Utils -> /home/ubuntu/GreenFDT/Utils/bin/Release/net8.0/Utils.dll
+  AgentsSystem -> /home/ubuntu/GreenFDT/AgentsSystem/bin/Release/net8.0/AgentsSystem.dll
+  Agro -> /home/ubuntu/GreenFDT/Agro/bin/Release/net8.0/Agro.dll
+/tmp/gf-contact-v28/four/Program.cs(28,345): warning CS8604: Possible null reference argument for parameter 'source' in 'byte[] SHA256.HashData(byte[] source)'. [/tmp/gf-contact-v28/four/Probe.csproj]
+  Probe -> /tmp/gf-contact-v28/four/bin/Release/net8.0/Probe.dll
+
+Build succeeded.
+
+/tmp/gf-contact-v28/four/Probe.csproj : warning NU1900: Error occurred while getting package vulnerability data: Unable to load the service index for source https://api.nuget.org/v3/index.json.
+/home/ubuntu/GreenFDT/Agro/Agro.csproj : warning NU1900: Error occurred while getting package vulnerability data: Unable to load the service index for source https://api.nuget.org/v3/index.json. [TargetFramework=net8.0]
+/home/ubuntu/GreenFDT/AgentsSystem/AgentsSystem.csproj : warning NU1900: Error occurred while getting package vulnerability data: Unable to load the service index for source https://api.nuget.org/v3/index.json. [TargetFramework=net8.0]
+/home/ubuntu/GreenFDT/Utils/Utils.csproj : warning NU1900: Error occurred while getting package vulnerability data: Unable to load the service index for source https://api.nuget.org/v3/index.json. [TargetFramework=net8.0]
+/tmp/gf-contact-v28/four/Program.cs(28,345): warning CS8604: Possible null reference argument for parameter 'source' in 'byte[] SHA256.HashData(byte[] source)'. [/tmp/gf-contact-v28/four/Probe.csproj]
+    5 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:02.72

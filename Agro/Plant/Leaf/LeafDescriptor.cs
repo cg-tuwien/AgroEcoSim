@@ -54,7 +54,9 @@ public sealed record LeafMorphology
     //Direct mesh. Lamina template consumed by IrradianceClient.ExportV7:
     //X runs along the leaf, -1 at the petiole junction and +1 at the tip, and blade tissue may
     //extend behind -1 where the base is cordate or reniform; Y runs across the width in the same
-    //units, normalized to the half width; Z is relief out of the blade, in metres at
+    //units. Authored transverse spans are normalized at runtime to the full physical width
+    //without changing the served mesh (so recorded playback stays unchanged).
+    //Z is relief out of the blade, in metres at
     //Dimensions.MaxWidthM. Export scales that relief with the actual developing blade width.
     public List<Vector3> LowResVertices { get; init; } = null;
     public List<Vector3> HighResVertices { get; init; } = null;

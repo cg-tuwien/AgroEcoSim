@@ -43,6 +43,7 @@ import { toThreeColor } from './ThreeColor';
 import { applyInstanceMaterial, newInstanceMaterial } from './ThreeMaterials';
 import { ThreeDensityField } from './ThreeDensityField';
 import { ThreeSky } from './ThreeSky';
+import { bindFold, disposeFold, cloneFoldedScene } from './ThreeContactDeformation';
 import '../core/StaticGeometry';   // side effect: fills the static geometry table
 
 /** Per-mesh bookkeeping that has nowhere else to live. */
@@ -353,6 +354,7 @@ export class ThreeRenderer implements IViewportRenderer {
 
             applyInstanceMaterial(mesh.material as THREE.MeshStandardMaterial, inst.color, inst.emissive, inst.flags, ud.flags);
 
+            bindFold(mesh, inst.fold);
             mesh.matrix.fromArray(inst.model);
             mesh.matrixWorldNeedsUpdate = true;
             mesh.visible = (inst.flags & IFlags.Hidden) === 0;
@@ -366,6 +368,7 @@ export class ThreeRenderer implements IViewportRenderer {
         if (children.length > list.count) {
             const removed = children.splice(list.count, children.length - list.count);
             removed.forEach(m => {
+                disposeFold(m);
                 const mat = m.material;
                 if (Array.isArray(mat)) mat.forEach(x => x.dispose());
                 else mat?.dispose();
@@ -818,10 +821,11 @@ export class ThreeRenderer implements IViewportRenderer {
         //Dynamically imported so the exporter is not in the main bundle; webpack 4 supports
         //this and emits a separate chunk.
         import('three/examples/jsm/exporters/GLTFExporter').then(({ GLTFExporter }) => {
+            const baked = cloneFoldedScene(this.scene);
             new GLTFExporter().parse(
-                this.scene,
-                gltf => save(JSON.stringify(gltf)),
-                error => console.error('glTF export failed', error),
+                baked.scene,
+                gltf => { baked.dispose(); save(JSON.stringify(gltf)); },
+                error => { baked.dispose(); console.error('glTF export failed', error); },
                 {},
             );
         });

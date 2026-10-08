@@ -887,6 +887,11 @@ public sealed class ObstacleLightMeter
 	public void Measure(RayScene scene, in SkyDome diffuse, SkyDome[] suns, int sunCount,
 						in SurfaceRadianceModel model, int diffuseSamples, float hoursPerTick,
 						DateTime localStepTime, float[] staticShading)
+        => Measure(scene, new SkyInterval(diffuse), suns, sunCount, model, diffuseSamples, hoursPerTick, localStepTime, staticShading);
+
+	public void Measure(RayScene scene, in SkyInterval diffuse, SkyDome[] suns, int sunCount,
+						in SurfaceRadianceModel model, int diffuseSamples, float hoursPerTick,
+						DateTime localStepTime, float[] staticShading)
 	{
 		if (Sensors.Length == 0)
 			return;

@@ -1,3 +1,4 @@
+import { FOLD_WGSL } from '../../core/ContactDeformation';
 //WGSL for the main scene pass and the picking pass.
 //
 //Shipped as a template literal because preact.config.js is entirely commented out, so there
@@ -52,6 +53,8 @@ struct Frame {
 
 };
 
+${FOLD_WGSL}
+
 struct Instance {
   model     : mat4x4f,
   //Cofactor of the model's upper 3x3, i.e. the inverse-transpose up to a scale factor that
@@ -65,6 +68,8 @@ struct Instance {
   flags     : u32,
   _pad0     : u32,
   _pad1     : u32,
+  fold      : vec4f,
+  foldScale : vec4f,
 };
 
 //The three leaf constants live in core/Lighting so the WebGL backend shades a leaf the same
@@ -139,7 +144,7 @@ fn vs(
   //one bind group serve every bucket.
   let inst = instances[ii];
 
-  let world = inst.model * vec4f(pos, 1.0);
+  let world = inst.model * vec4f(foldLeaf(pos, uv.x, inst.fold, inst.foldScale.xyz), 1.0);
   let viewPos4 = frame.view * world;
 
   //three computes normalMatrix as (V*M)^-T. V is rigid here, so V^-T == mat3(V) and the

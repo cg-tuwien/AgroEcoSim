@@ -1,0 +1,669 @@
+{
+  "checkpointVersion": 26,
+  "requestSha256": "74450989e51855e23248d35cdb410224a999a61c27029666dddfa312e43ff1fe",
+  "scope": "Bounded tangent continuation; not BAC V2, full equilibrium, or biological/default release",
+  "fixtures": {
+    "radial_1h": {
+      "RESULT": {
+        "h": 1,
+        "accepted": true,
+        "length": 0.012,
+        "radius": 0.0052218754,
+        "movedNeighbour": true,
+        "clear": true,
+        "trials": 16,
+        "steps": 6,
+        "corrections": 113,
+        "coupledSets": 28,
+        "counts": "3/4/4",
+        "ms": 9.6676
+      },
+      "QP_REFERENCE": {
+        "determinant": 0.014762572002148526,
+        "symmetryError": 4.656612873077393e-10,
+        "lambdaError": 1.334202679706322e-12,
+        "force0": 2.3364089835111442e-05,
+        "force1": 0.0004743517436012696
+      },
+      "POSE_SHA256": "B15FBDD5329A876CB3419D43BA5EACA5BCA4E4F24C2F2572414F3973813A332B",
+      "CHECKPOINT": {
+        "immediateState": true,
+        "immediateFrame": true,
+        "continued": true,
+        "continuedFrame": true,
+        "unresolved": "0/0"
+      }
+    },
+    "radial_4h": {
+      "RESULT": {
+        "h": 4,
+        "accepted": true,
+        "length": 0.012,
+        "radius": 0.0052218754,
+        "movedNeighbour": true,
+        "clear": true,
+        "trials": 16,
+        "steps": 6,
+        "corrections": 113,
+        "coupledSets": 28,
+        "counts": "3/4/4",
+        "ms": 10.4292
+      },
+      "QP_REFERENCE": {
+        "determinant": 0.014762572002148526,
+        "symmetryError": 4.656612873077393e-10,
+        "lambdaError": 1.334202679706322e-12,
+        "force0": 2.3364089835111442e-05,
+        "force1": 0.0004743517436012696
+      },
+      "POSE_SHA256": "B15FBDD5329A876CB3419D43BA5EACA5BCA4E4F24C2F2572414F3973813A332B",
+      "CHECKPOINT": {
+        "immediateState": true,
+        "immediateFrame": true,
+        "continued": true,
+        "continuedFrame": true,
+        "unresolved": "0/0"
+      }
+    },
+    "common_1h": {
+      "RESULT": {
+        "h": 1,
+        "accepted": true,
+        "length": 0.03,
+        "radius": 0.0048562502,
+        "movedNeighbour": true,
+        "clear": true,
+        "trials": 16,
+        "steps": 6,
+        "corrections": 107,
+        "coupledSets": 21,
+        "counts": 9,
+        "ms": 86.6136
+      },
+      "COMMON_PARENT": {
+        "fixed": true
+      },
+      "QP_REFERENCE": {
+        "determinant": 0.025356997421254232,
+        "symmetryError": 0,
+        "lambdaError": 2.5842975220728703e-18,
+        "force0": 7.511381690512072e-07,
+        "force1": 0.0005598183071001212
+      },
+      "POSE_SHA256": "CDAA77A9DE801213490DBD2A34092DE7328A466B574728781D8A9E96DA9B0463",
+      "CHECKPOINT": {
+        "immediateState": true,
+        "immediateFrame": true,
+        "continued": true,
+        "continuedFrame": true,
+        "unresolved": "0/0"
+      }
+    },
+    "common_4h": {
+      "RESULT": {
+        "h": 4,
+        "accepted": true,
+        "length": 0.03,
+        "radius": 0.0048562502,
+        "movedNeighbour": true,
+        "clear": true,
+        "trials": 16,
+        "steps": 6,
+        "corrections": 107,
+        "coupledSets": 21,
+        "counts": 9,
+        "ms": 88.116
+      },
+      "COMMON_PARENT": {
+        "fixed": true
+      },
+      "QP_REFERENCE": {
+        "determinant": 0.025356997421254232,
+        "symmetryError": 0,
+        "lambdaError": 2.5842975220728703e-18,
+        "force0": 7.511381690512072e-07,
+        "force1": 0.0005598183071001212
+      },
+      "POSE_SHA256": "CDAA77A9DE801213490DBD2A34092DE7328A466B574728781D8A9E96DA9B0463",
+      "CHECKPOINT": {
+        "immediateState": true,
+        "immediateFrame": true,
+        "continued": true,
+        "continuedFrame": true,
+        "unresolved": "0/0"
+      }
+    },
+    "v1_1h": {
+      "RESULT": {
+        "h": 1,
+        "accepted": true,
+        "length": 0.012,
+        "radius": 0.0074156253,
+        "movedNeighbour": true,
+        "clear": true,
+        "trials": 16,
+        "steps": 6,
+        "corrections": 92,
+        "coupledSets": 36,
+        "counts": "3/4/4",
+        "ms": 83.2026
+      },
+      "QP_REFERENCE": {
+        "determinant": 0.0019154927913021939,
+        "symmetryError": 4.657181307266001e-10,
+        "lambdaError": 1.1391036692457585e-10,
+        "force0": 0.000553464644779789,
+        "force1": 0.011628670259713052
+      },
+      "POSE_SHA256": "D8902435E973320DC3F5FEF2A98E93BF5B08F5062586552CCCF1098D8C65D372",
+      "CHECKPOINT": {
+        "immediateState": true,
+        "immediateFrame": true,
+        "continued": true,
+        "continuedFrame": true,
+        "unresolved": "0/0"
+      }
+    },
+    "v1_4h": {
+      "RESULT": {
+        "h": 4,
+        "accepted": true,
+        "length": 0.012,
+        "radius": 0.0074156253,
+        "movedNeighbour": true,
+        "clear": true,
+        "trials": 16,
+        "steps": 6,
+        "corrections": 92,
+        "coupledSets": 36,
+        "counts": "3/4/4",
+        "ms": 76.1369
+      },
+      "QP_REFERENCE": {
+        "determinant": 0.0019154927913021939,
+        "symmetryError": 4.657181307266001e-10,
+        "lambdaError": 1.1391036692457585e-10,
+        "force0": 0.000553464644779789,
+        "force1": 0.011628670259713052
+      },
+      "POSE_SHA256": "D8902435E973320DC3F5FEF2A98E93BF5B08F5062586552CCCF1098D8C65D372",
+      "CHECKPOINT": {
+        "immediateState": true,
+        "immediateFrame": true,
+        "continued": true,
+        "continuedFrame": true,
+        "unresolved": "0/0"
+      }
+    },
+    "walls_1h": {
+      "RESULT": {
+        "h": 1,
+        "accepted": false,
+        "length": 0.012,
+        "radius": 0.0012,
+        "movedNeighbour": false,
+        "clear": true,
+        "trials": 16,
+        "steps": 0,
+        "corrections": 0,
+        "coupledSets": 0,
+        "counts": "3/4/4",
+        "ms": 1.1964
+      },
+      "POSE_SHA256": "2E61B045147EB527BF031F35285392130072D27D794DD3A342CA87BE7D11B850",
+      "REJECTED_STATE": {
+        "identical": true
+      }
+    },
+    "walls_4h": {
+      "RESULT": {
+        "h": 4,
+        "accepted": false,
+        "length": 0.012,
+        "radius": 0.0012,
+        "movedNeighbour": false,
+        "clear": true,
+        "trials": 16,
+        "steps": 0,
+        "corrections": 0,
+        "coupledSets": 0,
+        "counts": "3/4/4",
+        "ms": 1.399
+      },
+      "POSE_SHA256": "2E61B045147EB527BF031F35285392130072D27D794DD3A342CA87BE7D11B850",
+      "REJECTED_STATE": {
+        "identical": true
+      }
+    },
+    "ceiling_1h": {
+      "RESULT": {
+        "h": 1,
+        "accepted": false,
+        "length": 0.012,
+        "radius": 0.0012,
+        "movedNeighbour": false,
+        "clear": true,
+        "trials": 16,
+        "steps": 0,
+        "corrections": 0,
+        "coupledSets": 0,
+        "counts": "3/4",
+        "ms": 0.1033
+      },
+      "POSE_SHA256": "1BB78D13218E293CB477FD2F2554B5070B388E967EE3903554FFD864C36A9A33",
+      "REJECTED_STATE": {
+        "identical": true
+      }
+    },
+    "ceiling_4h": {
+      "RESULT": {
+        "h": 4,
+        "accepted": false,
+        "length": 0.012,
+        "radius": 0.0012,
+        "movedNeighbour": false,
+        "clear": true,
+        "trials": 16,
+        "steps": 0,
+        "corrections": 0,
+        "coupledSets": 0,
+        "counts": "3/4",
+        "ms": 0.1096
+      },
+      "POSE_SHA256": "1BB78D13218E293CB477FD2F2554B5070B388E967EE3903554FFD864C36A9A33",
+      "REJECTED_STATE": {
+        "identical": true
+      }
+    }
+  },
+  "biologicalSnapshots": {
+    "corrected-final-1h-275.log": {
+      "counts": {
+        "h": 1,
+        "day": 275,
+        "leaves": 20,
+        "half": 8,
+        "ninety": 3,
+        "petals": 5,
+        "maxLengthMm": 250.9903,
+        "maxWidthMm": 196.68527,
+        "finite": true,
+        "down": 32,
+        "inverted": 12
+      },
+      "directions": [
+        "DIRECTION FlowerBud count=21 down=13 inverted=5",
+        "DIRECTION FlowerPadel count=5 down=3 inverted=0",
+        "DIRECTION FlowerPedicel count=21 down=14 inverted=5",
+        "DIRECTION FlowerStem(base) count=25 down=0 inverted=0",
+        "DIRECTION FlowerStem(branch) count=7 down=2 inverted=2",
+        "DIRECTION Leaf count=20 down=0 inverted=0",
+        "DIRECTION Petiole count=20 down=0 inverted=0",
+        "DIRECTION Stem count=10 down=0 inverted=0"
+      ]
+    },
+    "corrected-baseline-1h-275.log": {
+      "counts": {
+        "h": 1,
+        "day": 275,
+        "leaves": 20,
+        "half": 6,
+        "ninety": 3,
+        "petals": 0,
+        "maxLengthMm": 250.9903,
+        "maxWidthMm": 196.68527,
+        "finite": true,
+        "down": 0,
+        "inverted": 0
+      },
+      "directions": []
+    },
+    "corrected-candidate-4h-330.log": {
+      "counts": {
+        "h": 4,
+        "day": 330,
+        "leaves": 20,
+        "half": 4,
+        "ninety": 2,
+        "petals": 0,
+        "maxLengthMm": 246.16866,
+        "maxWidthMm": 203.43144,
+        "finite": true,
+        "down": 0,
+        "inverted": 0
+      },
+      "directions": []
+    },
+    "corrected-baseline-4h-330.log": {
+      "counts": {
+        "h": 4,
+        "day": 330,
+        "leaves": 20,
+        "half": 4,
+        "ninety": 2,
+        "petals": 0,
+        "maxLengthMm": 246.16866,
+        "maxWidthMm": 203.43144,
+        "finite": true,
+        "down": 0,
+        "inverted": 0
+      },
+      "directions": []
+    }
+  },
+  "invalidDiagnostics": [
+    "Development-run half/ninety columns and leaf threshold CSVs divided by variation offsets rather than full targets. Do not use those threshold histories."
+  ],
+  "performance": {
+    "scope": "Warm fixed-proposal retry kernel, ten warmups, 35 samples per process; final optimization runs 3-5, serial after builds/growth finished; not end-to-end scene gates",
+    "cases": {
+      "normal": {
+        "v25": {
+          "runs": [
+            {
+              "samples": 35,
+              "medianMs": 0.6224,
+              "p95Ms": 0.6642,
+              "medianAllocatedBytes": 10984,
+              "p95AllocatedBytes": 10984,
+              "mode": "None",
+              "log": "benchmark-v25-normal-3.log"
+            },
+            {
+              "samples": 35,
+              "medianMs": 0.6416,
+              "p95Ms": 0.6551,
+              "medianAllocatedBytes": 10984,
+              "p95AllocatedBytes": 10984,
+              "mode": "None",
+              "log": "benchmark-v25-normal-4.log"
+            },
+            {
+              "samples": 35,
+              "medianMs": 0.6569,
+              "p95Ms": 0.7098,
+              "medianAllocatedBytes": 10984,
+              "p95AllocatedBytes": 10984,
+              "mode": "None",
+              "log": "benchmark-v25-normal-5.log"
+            }
+          ],
+          "medianOfProcessMediansMs": 0.6416,
+          "medianOfProcessP95Ms": 0.6642
+        },
+        "v26": {
+          "runs": [
+            {
+              "samples": 35,
+              "medianMs": 0.6548,
+              "p95Ms": 0.69,
+              "medianAllocatedBytes": 10984,
+              "p95AllocatedBytes": 10984,
+              "mode": "None",
+              "log": "benchmark-v26-normal-3.log"
+            },
+            {
+              "samples": 35,
+              "medianMs": 0.6549,
+              "p95Ms": 0.6778,
+              "medianAllocatedBytes": 10984,
+              "p95AllocatedBytes": 10984,
+              "mode": "None",
+              "log": "benchmark-v26-normal-4.log"
+            },
+            {
+              "samples": 35,
+              "medianMs": 0.6629,
+              "p95Ms": 0.6799,
+              "medianAllocatedBytes": 10984,
+              "p95AllocatedBytes": 10984,
+              "mode": "None",
+              "log": "benchmark-v26-normal-5.log"
+            }
+          ],
+          "medianOfProcessMediansMs": 0.6549,
+          "medianOfProcessP95Ms": 0.6799
+        },
+        "medianRatio": 1.0207294264339153,
+        "p95Ratio": 1.023637458596808
+      },
+      "radial": {
+        "v25": {
+          "runs": [
+            {
+              "samples": 35,
+              "medianMs": 0.8675,
+              "p95Ms": 0.8839,
+              "medianAllocatedBytes": 12040,
+              "p95AllocatedBytes": 12040,
+              "mode": "None",
+              "log": "benchmark-v25-radial-3.log"
+            },
+            {
+              "samples": 35,
+              "medianMs": 0.8572,
+              "p95Ms": 0.8763,
+              "medianAllocatedBytes": 11896,
+              "p95AllocatedBytes": 11896,
+              "mode": "None",
+              "log": "benchmark-v25-radial-4.log"
+            },
+            {
+              "samples": 35,
+              "medianMs": 0.8523,
+              "p95Ms": 0.9508,
+              "medianAllocatedBytes": 11896,
+              "p95AllocatedBytes": 11896,
+              "mode": "None",
+              "log": "benchmark-v25-radial-5.log"
+            }
+          ],
+          "medianOfProcessMediansMs": 0.8572,
+          "medianOfProcessP95Ms": 0.8839
+        },
+        "v26": {
+          "runs": [
+            {
+              "samples": 35,
+              "medianMs": 0.9882,
+              "p95Ms": 1.0452,
+              "medianAllocatedBytes": 12232,
+              "p95AllocatedBytes": 12232,
+              "mode": "None",
+              "log": "benchmark-v26-radial-3.log"
+            },
+            {
+              "samples": 35,
+              "medianMs": 0.9489,
+              "p95Ms": 0.9567,
+              "medianAllocatedBytes": 12232,
+              "p95AllocatedBytes": 12232,
+              "mode": "None",
+              "log": "benchmark-v26-radial-4.log"
+            },
+            {
+              "samples": 35,
+              "medianMs": 0.9511,
+              "p95Ms": 0.988,
+              "medianAllocatedBytes": 12232,
+              "p95AllocatedBytes": 12232,
+              "mode": "None",
+              "log": "benchmark-v26-radial-5.log"
+            }
+          ],
+          "medianOfProcessMediansMs": 0.9511,
+          "medianOfProcessP95Ms": 0.988
+        },
+        "medianRatio": 1.1095426971535232,
+        "p95Ratio": 1.1177735037900214
+      },
+      "common": {
+        "v25": {
+          "runs": [
+            {
+              "samples": 35,
+              "medianMs": 5.189,
+              "p95Ms": 5.2214,
+              "medianAllocatedBytes": 760,
+              "p95AllocatedBytes": 760,
+              "mode": "None",
+              "log": "benchmark-v25-common-3.log"
+            },
+            {
+              "samples": 35,
+              "medianMs": 5.5365,
+              "p95Ms": 5.6673,
+              "medianAllocatedBytes": 808,
+              "p95AllocatedBytes": 808,
+              "mode": "None",
+              "log": "benchmark-v25-common-4.log"
+            },
+            {
+              "samples": 35,
+              "medianMs": 6.4295,
+              "p95Ms": 6.4688,
+              "medianAllocatedBytes": 1048,
+              "p95AllocatedBytes": 1048,
+              "mode": "None",
+              "log": "benchmark-v25-common-5.log"
+            }
+          ],
+          "medianOfProcessMediansMs": 5.5365,
+          "medianOfProcessP95Ms": 5.6673
+        },
+        "v26": {
+          "runs": [
+            {
+              "samples": 35,
+              "medianMs": 8.3759,
+              "p95Ms": 8.5748,
+              "medianAllocatedBytes": 1336,
+              "p95AllocatedBytes": 1336,
+              "mode": "None",
+              "log": "benchmark-v26-common-3.log"
+            },
+            {
+              "samples": 35,
+              "medianMs": 8.2909,
+              "p95Ms": 10.8383,
+              "medianAllocatedBytes": 1480,
+              "p95AllocatedBytes": 1480,
+              "mode": "None",
+              "log": "benchmark-v26-common-4.log"
+            },
+            {
+              "samples": 35,
+              "medianMs": 8.342,
+              "p95Ms": 8.4159,
+              "medianAllocatedBytes": 1672,
+              "p95AllocatedBytes": 1672,
+              "mode": "None",
+              "log": "benchmark-v26-common-5.log"
+            }
+          ],
+          "medianOfProcessMediansMs": 8.342,
+          "medianOfProcessP95Ms": 8.5748
+        },
+        "medianRatio": 1.5067280773051568,
+        "p95Ratio": 1.5130308965468564
+      },
+      "v1": {
+        "v25": {
+          "runs": [
+            {
+              "samples": 35,
+              "medianMs": 9.2961,
+              "p95Ms": 9.3491,
+              "medianAllocatedBytes": 11992,
+              "p95AllocatedBytes": 11992,
+              "mode": "BroadLeafV1",
+              "log": "benchmark-v25-v1-3.log"
+            },
+            {
+              "samples": 35,
+              "medianMs": 10.0418,
+              "p95Ms": 10.1487,
+              "medianAllocatedBytes": 12280,
+              "p95AllocatedBytes": 12280,
+              "mode": "BroadLeafV1",
+              "log": "benchmark-v25-v1-4.log"
+            },
+            {
+              "samples": 35,
+              "medianMs": 13.9094,
+              "p95Ms": 14.229,
+              "medianAllocatedBytes": 11992,
+              "p95AllocatedBytes": 11992,
+              "mode": "BroadLeafV1",
+              "log": "benchmark-v25-v1-5.log"
+            }
+          ],
+          "medianOfProcessMediansMs": 10.0418,
+          "medianOfProcessP95Ms": 10.1487
+        },
+        "v26": {
+          "runs": [
+            {
+              "samples": 35,
+              "medianMs": 4.8394,
+              "p95Ms": 4.9547,
+              "medianAllocatedBytes": 10696,
+              "p95AllocatedBytes": 10696,
+              "mode": "BroadLeafV1",
+              "log": "benchmark-v26-v1-3.log"
+            },
+            {
+              "samples": 35,
+              "medianMs": 6.9771,
+              "p95Ms": 7.0343,
+              "medianAllocatedBytes": 10840,
+              "p95AllocatedBytes": 10840,
+              "mode": "BroadLeafV1",
+              "log": "benchmark-v26-v1-4.log"
+            },
+            {
+              "samples": 35,
+              "medianMs": 7.1466,
+              "p95Ms": 7.1757,
+              "medianAllocatedBytes": 11080,
+              "p95AllocatedBytes": 11080,
+              "mode": "BroadLeafV1",
+              "log": "benchmark-v26-v1-5.log"
+            }
+          ],
+          "medianOfProcessMediansMs": 6.9771,
+          "medianOfProcessP95Ms": 7.0343
+        },
+        "medianRatio": 0.6948057121233245,
+        "p95Ratio": 0.6931232571659425
+      }
+    },
+    "zeroPerContactAllocationsEstablished": false
+  },
+  "storage": {
+    "newPersistentLeafFields": 0,
+    "slotsPayloadBytes": 8192,
+    "matrixPayloadBytes": 2048,
+    "dualVectorsPayloadBytes": 256,
+    "gradientSizeBytes": 64,
+    "maxGradients": 4096,
+    "fixtureJointCount": 8,
+    "fixtureGradientCapacity": 16,
+    "oldContinuationGeometryStateBytes": 116
+  },
+  "gates": {
+    "isolatedGeometry": true,
+    "checkpointAndPlayback": true,
+    "correctExpansionTimes": false,
+    "floweringBothTickSizes": false,
+    "doubledDevelopedLeafDensityBothTickSizes": false,
+    "performanceAllScenes": false,
+    "V2DefaultEnabled": false
+  },
+  "checkpointChecks": {
+    "optimized-checkpoint-4h-mature.log": "CHECKPOINT version=26 tick=4 immediateState=True immediateFrame=True continuedState=True continuedFrame=True finite=True maxUnresolved=0 oldV25Rejected=True",
+    "optimized-checkpoint-1h-mature.log": "CHECKPOINT version=26 tick=1 immediateState=True immediateFrame=True continuedState=True continuedFrame=True finite=True maxUnresolved=0 oldV25Rejected=True",
+    "optimized-checkpoint-4h-fresh.log": "CHECKPOINT version=26 tick=4 immediateState=True immediateFrame=True continuedState=True continuedFrame=True finite=True maxUnresolved=0 oldV25Rejected=True",
+    "optimized-checkpoint-1h-fresh.log": "CHECKPOINT version=26 tick=1 immediateState=True immediateFrame=True continuedState=True continuedFrame=True finite=True maxUnresolved=0 oldV25Rejected=True"
+  }
+}

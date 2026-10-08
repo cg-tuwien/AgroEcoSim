@@ -1,0 +1,16 @@
+  Utils -> /home/ubuntu/GreenFDT/Utils/bin/Debug/net8.0/Utils.dll
+  AgentsSystem -> /home/ubuntu/GreenFDT/AgentsSystem/bin/Debug/net8.0/AgentsSystem.dll
+  Agro -> /home/ubuntu/GreenFDT/Agro/bin/Debug/net8.0/Agro.dll
+  FacadeJsonImport -> /home/ubuntu/GreenFDT/FacadeJsonImport/bin/Debug/net8.0/FacadeJsonImport.dll
+  AgroServer -> /home/ubuntu/GreenFDT/AgroServer/bin/Debug/net8.0/AgroServer.dll
+  Utils -> /home/ubuntu/GreenFDT/Utils/bin/Debug/net10.0/Utils.dll
+  AgentsSystem -> /home/ubuntu/GreenFDT/AgentsSystem/bin/Debug/net10.0/AgentsSystem.dll
+  Agro -> /home/ubuntu/GreenFDT/Agro/bin/Debug/net10.0/Agro.dll
+  FacadeJsonImport -> /home/ubuntu/GreenFDT/FacadeJsonImport/bin/Debug/net10.0/FacadeJsonImport.dll
+  AgroServer -> /home/ubuntu/GreenFDT/AgroServer/bin/Debug/net10.0/AgroServer.dll
+
+Build succeeded.
+    0 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:01.91

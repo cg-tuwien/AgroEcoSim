@@ -1,0 +1,138 @@
+[
+  {
+    "tick": 1,
+    "case": "limit-fixture",
+    "exit": 0,
+    "result": [
+      "ANGULAR case=outward solved=True referenceFeasible=True active=1 residualMetres=0 turnNormal=5.960464477539063E-08 turnTangent=0.01999994053819143 relativeForceError=1.59774675634878E-18",
+      "ANGULAR case=inward solved=True referenceFeasible=True active=0 residualMetres=4.030738033871531E-21 turnNormal=-0.005000000819563866 turnTangent=0.01500000103320935 relativeForceError=1.0225548088652434E-16",
+      "ANGULAR case=impossible solved=False referenceFeasible=False active=1 residualMetres=0 turnNormal=0 turnTangent=0 relativeForceError=NaN",
+      "DIRECT conditioned solved=True force0=0 force1=0.000101 residualMetres=0 directCount=1"
+    ]
+  },
+  {
+    "tick": 1,
+    "case": "",
+    "exit": 0,
+    "result": [
+      "RESULT h=1 accepted=True length=0.02996875 radius=0.0012 movedNeighbour=True clear=True trials=16 steps=6 corrections=104 coupledSets=0 stages=0 counts=3/4 ms=38.7426"
+    ]
+  },
+  {
+    "tick": 1,
+    "case": "radial",
+    "exit": 0,
+    "result": [
+      "RESULT h=1 accepted=True length=0.012 radius=0.0052218754 movedNeighbour=True clear=True trials=16 steps=6 corrections=113 coupledSets=28 stages=0 counts=3/4/4 ms=55.9136"
+    ]
+  },
+  {
+    "tick": 1,
+    "case": "radial same-crown",
+    "exit": 0,
+    "result": [
+      "RESULT h=1 accepted=True length=0.03 radius=0.0048562502 movedNeighbour=True clear=True trials=16 steps=6 corrections=104 coupledSets=17 stages=0 counts=9 ms=129.3948"
+    ]
+  },
+  {
+    "tick": 1,
+    "case": "radial v1",
+    "exit": 0,
+    "result": [
+      "RESULT h=1 accepted=True length=0.012 radius=0.009 movedNeighbour=True clear=True trials=12 steps=6 corrections=171 coupledSets=171 stages=3 counts=3/4/4 ms=482.2961"
+    ]
+  },
+  {
+    "tick": 1,
+    "case": "ceiling stale-hint",
+    "exit": 0,
+    "result": [
+      "RESULT h=1 accepted=False length=0.012 radius=0.0012 movedNeighbour=False clear=True trials=16 steps=0 corrections=0 coupledSets=0 stages=0 counts=3/4 ms=7.8438"
+    ]
+  },
+  {
+    "tick": 1,
+    "case": "radial walls",
+    "exit": 0,
+    "result": [
+      "RESULT h=1 accepted=False length=0.012 radius=0.0012 movedNeighbour=False clear=True trials=16 steps=0 corrections=0 coupledSets=0 stages=0 counts=3/4/4 ms=10.9745"
+    ]
+  },
+  {
+    "tick": 1,
+    "case": "radial v1 checkpoint",
+    "exit": 0,
+    "result": [
+      "RESULT h=1 accepted=True length=0.012 radius=0.009 movedNeighbour=True clear=True trials=12 steps=6 corrections=171 coupledSets=171 stages=3 counts=3/4/4 ms=499.4804",
+      "CHECKPOINT immediateState=True immediateFrame=True continued=True continuedFrame=True unresolved=0/0"
+    ]
+  },
+  {
+    "tick": 4,
+    "case": "limit-fixture",
+    "exit": 0,
+    "result": [
+      "ANGULAR case=outward solved=True referenceFeasible=True active=1 residualMetres=0 turnNormal=5.960464477539063E-08 turnTangent=0.01999994053819143 relativeForceError=1.59774675634878E-18",
+      "ANGULAR case=inward solved=True referenceFeasible=True active=0 residualMetres=4.030738033871531E-21 turnNormal=-0.005000000819563866 turnTangent=0.01500000103320935 relativeForceError=1.0225548088652434E-16",
+      "ANGULAR case=impossible solved=False referenceFeasible=False active=1 residualMetres=0 turnNormal=0 turnTangent=0 relativeForceError=NaN",
+      "DIRECT conditioned solved=True force0=0 force1=0.000101 residualMetres=0 directCount=1"
+    ]
+  },
+  {
+    "tick": 4,
+    "case": "",
+    "exit": 0,
+    "result": [
+      "RESULT h=4 accepted=True length=0.02996875 radius=0.0012 movedNeighbour=True clear=True trials=16 steps=6 corrections=104 coupledSets=0 stages=0 counts=3/4 ms=33.1728"
+    ]
+  },
+  {
+    "tick": 4,
+    "case": "radial",
+    "exit": 0,
+    "result": [
+      "RESULT h=4 accepted=True length=0.012 radius=0.0052218754 movedNeighbour=True clear=True trials=16 steps=6 corrections=113 coupledSets=28 stages=0 counts=3/4/4 ms=57.3622"
+    ]
+  },
+  {
+    "tick": 4,
+    "case": "radial same-crown",
+    "exit": 0,
+    "result": [
+      "RESULT h=4 accepted=True length=0.03 radius=0.0048562502 movedNeighbour=True clear=True trials=16 steps=6 corrections=104 coupledSets=17 stages=0 counts=9 ms=134.6345"
+    ]
+  },
+  {
+    "tick": 4,
+    "case": "radial v1",
+    "exit": 0,
+    "result": [
+      "RESULT h=4 accepted=True length=0.012 radius=0.009 movedNeighbour=True clear=True trials=12 steps=6 corrections=171 coupledSets=171 stages=3 counts=3/4/4 ms=527.9441"
+    ]
+  },
+  {
+    "tick": 4,
+    "case": "ceiling stale-hint",
+    "exit": 0,
+    "result": [
+      "RESULT h=4 accepted=False length=0.012 radius=0.0012 movedNeighbour=False clear=True trials=16 steps=0 corrections=0 coupledSets=0 stages=0 counts=3/4 ms=4.8739"
+    ]
+  },
+  {
+    "tick": 4,
+    "case": "radial walls",
+    "exit": 0,
+    "result": [
+      "RESULT h=4 accepted=False length=0.012 radius=0.0012 movedNeighbour=False clear=True trials=16 steps=0 corrections=0 coupledSets=0 stages=0 counts=3/4/4 ms=11.1136"
+    ]
+  },
+  {
+    "tick": 4,
+    "case": "radial v1 checkpoint",
+    "exit": 0,
+    "result": [
+      "RESULT h=4 accepted=True length=0.012 radius=0.009 movedNeighbour=True clear=True trials=12 steps=6 corrections=171 coupledSets=171 stages=3 counts=3/4/4 ms=476.6483",
+      "CHECKPOINT immediateState=True immediateFrame=True continued=True continuedFrame=True unresolved=0/0"
+    ]
+  }
+]

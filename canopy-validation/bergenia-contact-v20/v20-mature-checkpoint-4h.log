@@ -1,0 +1,23 @@
+Species lookup: Bergenia Cordifolia, BudLength: 0.009
+PlantFormation2 ctor: Bergenia Cordifolia, BudLength: 0.009
+SpeciesSettings.Init called on Bergenia Cordifolia, BudLength: 0.009
+PlantFormation2 after Init: Bergenia Cordifolia, BudLength: 0.009
+Collision scene: 2 triangles (2 soil, 0 obstacle) in 6 ms, open soil surface (regular fields use their finite footprint)
+tick=4 version=20 exactRequest=3 sourceBytes=51878174 immediateSourceEqual=True
+splitStateBytes=51878530 splitFrameBytes=9645 splitStateHash=B36A1E9BFFF4D967 splitFrameHash=4574AF019ADAF7F1
+Species lookup: Bergenia Cordifolia, BudLength: 0.009
+PlantFormation2 ctor: Bergenia Cordifolia, BudLength: 0.009
+SpeciesSettings.Init called on Bergenia Cordifolia, BudLength: 0.009
+PlantFormation2 after Init: Bergenia Cordifolia, BudLength: 0.009
+Collision scene: 2 triangles (2 soil, 0 obstacle) in 0 ms, open soil surface (regular fields use their finite footprint)
+splitImmediateStateEqual=True splitImmediateFrameEqual=True
+finalStateEqual=True finalFrameEqual=True stateBytes=51878686/51878686 frameBytes=9645/9645 stateHash=A8CB474980369AD2/A8CB474980369AD2 frameHash=0AEC353EF26372FD/0AEC353EF26372FD maxUnresolved=0 finite=True
+straight hour=5764 ag=51 leaves=20 petals=0 blocked=46 pending=1 unresolved=0 water=297.74153265 energy=546.84615480
+straight hour=5768 ag=51 leaves=20 petals=0 blocked=46 pending=1 unresolved=0 water=300.01392528 energy=546.84607707
+straight hour=5772 ag=51 leaves=20 petals=0 blocked=46 pending=1 unresolved=0 water=301.45576888 energy=547.49462192
+resumed hour=5776 ag=51 leaves=20 petals=0 blocked=46 pending=1 unresolved=0 water=300.78739444 energy=550.25833184
+resumed hour=5780 ag=51 leaves=20 petals=0 blocked=46 pending=1 unresolved=0 water=301.43341649 energy=553.19379582
+resumed hour=5784 ag=51 leaves=20 petals=0 blocked=46 pending=1 unresolved=0 water=303.98724476 energy=554.83300721
+straight hour=5776 ag=51 leaves=20 petals=0 blocked=46 pending=1 unresolved=0 water=300.78739444 energy=550.25833184
+straight hour=5780 ag=51 leaves=20 petals=0 blocked=46 pending=1 unresolved=0 water=301.43341649 energy=553.19379582
+straight hour=5784 ag=51 leaves=20 petals=0 blocked=46 pending=1 unresolved=0 water=303.98724476 energy=554.83300721

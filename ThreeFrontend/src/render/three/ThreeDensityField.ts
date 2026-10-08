@@ -14,6 +14,7 @@
 import * as THREE from 'three';
 import { InstanceList, IFlags } from '../core/InstanceList';
 import { getGeometry } from '../core/GeometryStore';
+import { Fold, deformLeaf } from '../core/ContactDeformation';
 import { VoxelGrid, extinctionFromArea, makeVoxelGrid, scatterTriangleArea } from '../core/VoxelGrid';
 import { Vec3 } from '../core/Vec3';
 import {
@@ -153,9 +154,9 @@ export class ThreeDensityField {
             const idx = mesh.indices;
 
             for (let t = 0; t < idx.length; t += 3) {
-                transformInto(m, p, idx[t] * 3, a);
-                transformInto(m, p, idx[t + 1] * 3, b);
-                transformInto(m, p, idx[t + 2] * 3, c);
+                transformInto(m, p, idx[t] * 3, a, inst.fold, mesh.uvs?.[idx[t] * 2] ?? 0);
+                transformInto(m, p, idx[t + 1] * 3, b, inst.fold, mesh.uvs?.[idx[t + 1] * 2] ?? 0);
+                transformInto(m, p, idx[t + 2] * 3, c, inst.fold, mesh.uvs?.[idx[t + 2] * 2] ?? 0);
                 //One sample batch: an organ is smaller than a cell, so a single splat per
                 //triangle already lands in the right place. Only the terrain quad, which is not
                 //injected here, ever needed more.
@@ -248,8 +249,9 @@ export class ThreeDensityField {
 }
 
 /** Transforms one vertex by a column-major 4x4 into `out`. */
-function transformInto(m: Float32Array, p: Float32Array, at: number, out: Vec3) {
-    const x = p[at], y = p[at + 1], z = p[at + 2];
+function transformInto(m: Float32Array, p: Float32Array, at: number, out: Vec3, fold?: Fold, hinge = 0) {
+    let x = p[at], y = p[at + 1], z = p[at + 2];
+    if (fold) { deformLeaf(out, x, y, z, hinge, fold.angles, fold.scale); x = out.x; y = out.y; z = out.z; }
     out.x = m[0] * x + m[4] * y + m[8] * z + m[12];
     out.y = m[1] * x + m[5] * y + m[9] * z + m[13];
     out.z = m[2] * x + m[6] * y + m[10] * z + m[14];

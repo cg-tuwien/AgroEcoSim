@@ -1,0 +1,73 @@
+{
+  "checkpointVersion": 21,
+  "request": "archived-request.json",
+  "scenario": "e9bd78f470cd4e36bc6b715c50319d44",
+  "seed": 42,
+  "lightMode": 3,
+  "deformationMode": 0,
+  "unchangedBiology": [
+    "organ dimensions",
+    "84-day nominal leaf expansion",
+    "crown probabilities",
+    "disabled clonal spread",
+    "leaf lifespan"
+  ],
+  "provenance": {
+    "fresh4h": "Fresh exact 755-day request. No checkpoint promotion.",
+    "controlled1h": "Historical v20 day-240 same-layout state; private byte-array header changed only after asserting normal v20 restore rejection. Diagnostic only, not supported migration.",
+    "controlled4h": "Historical v20 day-330 state promoted only inside temporary diagnostic harness as above."
+  },
+  "seasonalResults": {
+    "fresh4h": {
+      "firstDay": 0,
+      "lastDay": 755,
+      "finalLeaves": 20,
+      "finalHalf": 1,
+      "finalNinety": 1,
+      "sampledMaxHalf": 5,
+      "sampledMaxNinety": 4,
+      "petalsObserved": 0,
+      "dailyResourcesFinite": true,
+      "timeSeconds": 1108.9
+    },
+    "controlled1h": {
+      "firstDay": 240,
+      "lastDay": 275,
+      "finalLeaves": 20,
+      "finalHalf": 4,
+      "finalNinety": 2,
+      "sampledMaxHalf": 4,
+      "sampledMaxNinety": 2,
+      "petalsObserved": 0,
+      "dailyResourcesFinite": true,
+      "timeSeconds": 258.8
+    },
+    "controlled4h": {
+      "firstDay": 330,
+      "lastDay": 620,
+      "finalLeaves": 20,
+      "finalHalf": 11,
+      "finalNinety": 10,
+      "sampledMaxHalf": 11,
+      "sampledMaxNinety": 10,
+      "petalsObserved": 0,
+      "dailyResourcesFinite": true,
+      "timeSeconds": 593.3
+    }
+  },
+  "mechanicalAcceptance": "Targeted CCD thickness and relative-sweep fixtures pass; full crown evasion remains unproved.",
+  "biologicalAcceptance": "Failed: flowering absent; fresh four-hour developed-leaf counts worse than v20. No fresh full v21 one-hour season.",
+  "nativeCheckpoints": "Six fixtures pass: early fresh and mature continuation at 1h/4h, plus removal/reindexing. State and frame bytes identical; finite resources; zero reported unresolved contacts per checked tick; original v20 live states rejected.",
+  "builds": {
+    "core": "dotnet build Agro/Agro.csproj --no-restore -m:1 -v:minimal; success; initial full compile had existing warnings, final incremental build zero warnings/errors.",
+    "server": "Isolated net10 linux-x64 NativeAOT publish succeeded with existing trim/AOT warnings. /tmp/gf-aot-v21-final/AgroServer is ELF; installed server unchanged.",
+    "diff": "Scoped git diff --check passes."
+  },
+  "performance": "See radius-perf-summary.json: 15 serial same-start one-tick samples after 3 warmups, restore excluded; only two CCD thickness files differ. Concurrent seasonal work limits timing precision. No settled-scene, multicore, per-contact-allocation or 790-plant acceptance claim.",
+  "botany": {
+    "RotblumMorphology": "https://www.rhs.org.uk/plants/72444/bergenia-rotblum/details",
+    "contactInhibitedMaplePrimordia": "https://bsapubs.onlinelibrary.wiley.com/doi/10.3732/ajb.1100325",
+    "inflorescenceMechanicsAndPerturbation": "https://pmc.ncbi.nlm.nih.gov/articles/PMC3025729/",
+    "status": "Cross-species mechanics/growth evidence does not provide Rotblum stiffness coefficients."
+  }
+}

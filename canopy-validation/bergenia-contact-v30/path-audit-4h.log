@@ -1,0 +1,139 @@
+Species lookup: Bergenia Cordifolia, BudLength: 0.009
+PlantFormation2 ctor: Bergenia Cordifolia, BudLength: 0.009
+SpeciesSettings.Init called on Bergenia Cordifolia, BudLength: 0.009
+PlantFormation2 after Init: Bergenia Cordifolia, BudLength: 0.009
+Collision scene: 2 triangles (2 soil, 0 obstacle) in 0 ms, open soil surface (regular fields use their finite footprint)
+BASELINE clear=True count=52 scape=46 base=<5.005875, 0.02843029, 4.9963613> direction=<-0.20411077, 0.97798705, 0.043364048> lmm=5.181651 rmm=3.6753511
+ONE_AXIS lengthAxis=True staticClear=True growthClear=False failure=(Agro.PlantFormation2, 46, 47, Agro.PlantFormation2, 4, 5)
+ONE_AXIS lengthAxis=False staticClear=True growthClear=False failure=(Agro.PlantFormation2, 46, 47, Agro.PlantFormation2, 4, 5)
+CONTINUATION_CONTACT t=1440 ids=47/5 gapUm=-34.633556
+PATH_AUDIT result=Intersecting junction=True common=1 radiusMm=13.151793 motionUm=126.02734 gap0Um=-9.999844 gap1Um=9.996584 sampleMinUm=-9.999844 rods=False/False
+CONTINUATION_CONTACT t=1440 ids=5/28 gapUm=9.996584
+CONTINUATION_FAILURE motionCertificate ids=5/28 witnesses=1
+CONTINUATION t=1440 id=47 lengthAxis=True trial=0 from=0 to=1 clear=False failure=5/28
+CONTINUATION_CONTACT t=1440 ids=47/5 gapUm=-23.43487
+PATH_AUDIT result=Intersecting junction=True common=1 radiusMm=13.151793 motionUm=102.162315 gap0Um=-9.999844 gap1Um=6.5232162 sampleMinUm=-9.999844 rods=False/False
+CONTINUATION_CONTACT t=1440 ids=5/28 gapUm=6.5232162
+CONTINUATION_FAILURE motionCertificate ids=5/28 witnesses=1
+CONTINUATION t=1440 id=47 lengthAxis=True trial=1 from=0 to=0.5 clear=False failure=5/28
+CONTINUATION_CONTACT t=1440 ids=47/5 gapUm=-16.99524
+PATH_AUDIT result=Intersecting junction=True common=1 radiusMm=13.151793 motionUm=83.36198 gap0Um=-9.999844 gap1Um=3.599329 sampleMinUm=-9.999844 rods=False/False
+CONTINUATION_CONTACT t=1440 ids=5/28 gapUm=3.599329
+CONTINUATION_FAILURE motionCertificate ids=5/28 witnesses=1
+CONTINUATION t=1440 id=47 lengthAxis=True trial=2 from=0 to=0.25 clear=False failure=5/28
+CONTINUATION_CONTACT t=1440 ids=47/5 gapUm=-13.5647135
+PATH_AUDIT result=Intersecting junction=True common=1 radiusMm=13.151793 motionUm=73.16558 gap0Um=-9.999844 gap1Um=1.9914005 sampleMinUm=-9.999844 rods=False/False
+CONTINUATION_CONTACT t=1440 ids=5/28 gapUm=1.9914005
+CONTINUATION_FAILURE motionCertificate ids=5/28 witnesses=1
+CONTINUATION t=1440 id=47 lengthAxis=True trial=3 from=0 to=0.125 clear=False failure=5/28
+CONTINUATION_CONTACT t=1440 ids=47/5 gapUm=-11.801254
+PATH_AUDIT result=Intersecting junction=True common=1 radiusMm=13.151793 motionUm=67.8755 gap0Um=-9.999844 gap1Um=1.1515803 sampleMinUm=-9.999844 rods=False/False
+CONTINUATION_CONTACT t=1440 ids=5/28 gapUm=1.1515803
+CONTINUATION_FAILURE motionCertificate ids=5/28 witnesses=1
+CONTINUATION t=1440 id=47 lengthAxis=True trial=4 from=0 to=0.0625 clear=False failure=5/28
+CONTINUATION_CONTACT t=1440 ids=47/5 gapUm=-10.900665
+PATH_AUDIT result=Intersecting junction=True common=1 radiusMm=13.151793 motionUm=65.15311 gap0Um=-9.999844 gap1Um=0.71595424 sampleMinUm=-9.999844 rods=False/False
+CONTINUATION_CONTACT t=1440 ids=5/28 gapUm=0.71595424
+CONTINUATION_FAILURE motionCertificate ids=5/28 witnesses=1
+CONTINUATION t=1440 id=47 lengthAxis=True trial=5 from=0 to=0.03125 clear=False failure=5/28
+CONTINUATION_CONTACT t=1440 ids=47/5 gapUm=-10.438263
+PATH_AUDIT result=Intersecting junction=True common=1 radiusMm=13.151793 motionUm=63.758293 gap0Um=-9.999844 gap1Um=0.49220398 sampleMinUm=-9.999844 rods=False/False
+CONTINUATION_CONTACT t=1440 ids=5/28 gapUm=0.49220398
+CONTINUATION_FAILURE motionCertificate ids=5/28 witnesses=1
+CONTINUATION t=1440 id=47 lengthAxis=True trial=6 from=0 to=0.015625 clear=False failure=5/28
+CONTINUATION_CONTACT t=1440 ids=47/5 gapUm=-10.217074
+PATH_AUDIT result=Intersecting junction=True common=1 radiusMm=13.151793 motionUm=63.089645 gap0Um=-9.999844 gap1Um=0.3874302 sampleMinUm=-9.999844 rods=False/False
+CONTINUATION_CONTACT t=1440 ids=5/28 gapUm=0.3874302
+CONTINUATION_FAILURE motionCertificate ids=5/28 witnesses=1
+CONTINUATION t=1440 id=47 lengthAxis=True trial=7 from=0 to=0.0078125 clear=False failure=5/28
+CONTINUATION_CONTACT t=1440 ids=47/5 gapUm=-10.11882
+PATH_AUDIT result=Intersecting junction=True common=1 radiusMm=13.151793 motionUm=62.794594 gap0Um=-9.999844 gap1Um=0.33969992 sampleMinUm=-9.999844 rods=False/False
+CONTINUATION_CONTACT t=1440 ids=5/28 gapUm=0.33969992
+CONTINUATION_FAILURE motionCertificate ids=5/28 witnesses=1
+CONTINUATION t=1440 id=47 lengthAxis=True trial=8 from=0 to=0.00390625 clear=False failure=5/28
+CONTINUATION_CONTACT t=1440 ids=47/5 gapUm=-10.058284
+PATH_AUDIT result=Intersecting junction=True common=1 radiusMm=13.151793 motionUm=62.61198 gap0Um=-9.999844 gap1Um=0.30756927 sampleMinUm=-9.999844 rods=False/False
+CONTINUATION_CONTACT t=1440 ids=5/28 gapUm=0.30756927
+CONTINUATION_FAILURE motionCertificate ids=5/28 witnesses=1
+CONTINUATION t=1440 id=47 lengthAxis=True trial=9 from=0 to=0.001953125 clear=False failure=5/28
+CONTINUATION_CONTACT t=1440 ids=47/5 gapUm=-10.018237
+PATH_AUDIT result=Intersecting junction=True common=1 radiusMm=13.151793 motionUm=62.487465 gap0Um=-9.999844 gap1Um=0.287313 sampleMinUm=-9.999844 rods=False/False
+CONTINUATION_CONTACT t=1440 ids=5/28 gapUm=0.287313
+CONTINUATION_FAILURE motionCertificate ids=5/28 witnesses=1
+CONTINUATION t=1440 id=47 lengthAxis=True trial=10 from=0 to=0.0009765625 clear=False failure=5/28
+CONTINUATION_CONTACT t=1440 ids=47/5 gapUm=-10.011718
+PATH_AUDIT result=Intersecting junction=True common=1 radiusMm=13.151793 motionUm=62.46921 gap0Um=-9.999844 gap1Um=0.28591603 sampleMinUm=-9.999844 rods=False/False
+CONTINUATION_CONTACT t=1440 ids=5/28 gapUm=0.28591603
+CONTINUATION_FAILURE motionCertificate ids=5/28 witnesses=1
+CONTINUATION t=1440 id=47 lengthAxis=True trial=11 from=0 to=0.00048828125 clear=False failure=5/28
+CONTINUATION_CONTACT t=1440 ids=47/5 gapUm=-10.003336
+PATH_AUDIT result=Intersecting junction=True common=1 radiusMm=13.151793 motionUm=62.442734 gap0Um=-9.999844 gap1Um=0.28125942 sampleMinUm=-9.999844 rods=False/False
+CONTINUATION_CONTACT t=1440 ids=5/28 gapUm=0.28125942
+CONTINUATION_FAILURE motionCertificate ids=5/28 witnesses=1
+CONTINUATION t=1440 id=47 lengthAxis=True trial=12 from=0 to=0.00024414062 clear=False failure=5/28
+CONTINUATION_CONTACT t=1440 ids=47/5 gapUm=-10.001939
+PATH_AUDIT result=Intersecting junction=True common=1 radiusMm=13.151793 motionUm=62.439526 gap0Um=-9.999844 gap1Um=0.28079376 sampleMinUm=-9.999844 rods=False/False
+CONTINUATION_CONTACT t=1440 ids=5/28 gapUm=0.28079376
+CONTINUATION_FAILURE motionCertificate ids=5/28 witnesses=1
+CONTINUATION t=1440 id=47 lengthAxis=True trial=13 from=0 to=0.00012207031 clear=False failure=5/28
+CONTINUATION_CONTACT t=1440 ids=47/5 gapUm=-259.9857
+PATH_AUDIT result=Intersecting junction=True common=1 radiusMm=13.151793 motionUm=127.28843 gap0Um=-9.999844 gap1Um=10.000076 sampleMinUm=-9.999844 rods=False/False
+CONTINUATION_CONTACT t=1440 ids=5/28 gapUm=10.000076
+CONTINUATION_FAILURE motionCertificate ids=5/28 witnesses=1
+CONTINUATION t=1440 id=47 lengthAxis=False trial=0 from=0 to=1 clear=False failure=5/28
+CONTINUATION_CONTACT t=1440 ids=47/5 gapUm=-134.98636
+PATH_AUDIT result=Intersecting junction=True common=1 radiusMm=13.151793 motionUm=126.85217 gap0Um=-9.999844 gap1Um=10.000076 sampleMinUm=-9.999844 rods=False/False
+CONTINUATION_CONTACT t=1440 ids=5/28 gapUm=10.000076
+CONTINUATION_FAILURE motionCertificate ids=5/28 witnesses=1
+CONTINUATION t=1440 id=47 lengthAxis=False trial=1 from=0 to=0.5 clear=False failure=5/28
+CONTINUATION_CONTACT t=1440 ids=47/5 gapUm=-72.48624
+PATH_AUDIT result=Intersecting junction=True common=1 radiusMm=13.151793 motionUm=126.63484 gap0Um=-9.999844 gap1Um=10.000076 sampleMinUm=-9.999844 rods=False/False
+CONTINUATION_CONTACT t=1440 ids=5/28 gapUm=10.000076
+CONTINUATION_FAILURE motionCertificate ids=5/28 witnesses=1
+CONTINUATION t=1440 id=47 lengthAxis=False trial=2 from=0 to=0.25 clear=False failure=5/28
+CONTINUATION_CONTACT t=1440 ids=47/5 gapUm=-41.236168
+PATH_AUDIT result=Intersecting junction=True common=1 radiusMm=13.151793 motionUm=126.06091 gap0Um=-9.999844 gap1Um=10.000076 sampleMinUm=-9.999844 rods=False/False
+CONTINUATION_CONTACT t=1440 ids=5/28 gapUm=10.000076
+CONTINUATION_FAILURE motionCertificate ids=5/28 witnesses=1
+CONTINUATION t=1440 id=47 lengthAxis=False trial=3 from=0 to=0.125 clear=False failure=5/28
+CONTINUATION_CONTACT t=1440 ids=47/5 gapUm=-25.610905
+PATH_AUDIT result=Intersecting junction=True common=1 radiusMm=13.151793 motionUm=111.17269 gap0Um=-9.999844 gap1Um=8.3339405 sampleMinUm=-9.999844 rods=False/False
+CONTINUATION_CONTACT t=1440 ids=5/28 gapUm=8.3339405
+CONTINUATION_FAILURE motionCertificate ids=5/28 witnesses=1
+CONTINUATION t=1440 id=47 lengthAxis=False trial=4 from=0 to=0.0625 clear=False failure=5/28
+CONTINUATION_CONTACT t=1440 ids=47/5 gapUm=-17.798506
+PATH_AUDIT result=Intersecting junction=True common=1 radiusMm=13.151793 motionUm=86.781364 gap0Um=-9.999844 gap1Um=4.2931643 sampleMinUm=-9.999844 rods=False/False
+CONTINUATION_CONTACT t=1440 ids=5/28 gapUm=4.2931643
+CONTINUATION_FAILURE motionCertificate ids=5/28 witnesses=1
+CONTINUATION t=1440 id=47 lengthAxis=False trial=5 from=0 to=0.03125 clear=False failure=5/28
+CONTINUATION_CONTACT t=1440 ids=47/5 gapUm=-13.892074
+PATH_AUDIT result=Intersecting junction=True common=1 radiusMm=13.151793 motionUm=74.578766 gap0Um=-9.999844 gap1Um=2.2784808 sampleMinUm=-9.999844 rods=False/False
+CONTINUATION_CONTACT t=1440 ids=5/28 gapUm=2.2784808
+CONTINUATION_FAILURE motionCertificate ids=5/28 witnesses=1
+CONTINUATION t=1440 id=47 lengthAxis=False trial=6 from=0 to=0.015625 clear=False failure=5/28
+CONTINUATION_CONTACT t=1440 ids=47/5 gapUm=-11.93909
+PATH_AUDIT result=Intersecting junction=True common=1 radiusMm=13.151793 motionUm=68.48366 gap0Um=-9.999844 gap1Um=1.278473 sampleMinUm=-9.999844 rods=False/False
+CONTINUATION_CONTACT t=1440 ids=5/28 gapUm=1.278473
+CONTINUATION_FAILURE motionCertificate ids=5/28 witnesses=1
+CONTINUATION t=1440 id=47 lengthAxis=False trial=7 from=0 to=0.0078125 clear=False failure=5/28
+CONTINUATION_CONTACT t=1440 ids=47/5 gapUm=-10.962598
+PATH_AUDIT result=Intersecting junction=True common=1 radiusMm=13.151793 motionUm=65.43404 gap0Um=-9.999844 gap1Um=0.77299774 sampleMinUm=-9.999844 rods=False/False
+CONTINUATION_CONTACT t=1440 ids=5/28 gapUm=0.77299774
+CONTINUATION_FAILURE motionCertificate ids=5/28 witnesses=1
+CONTINUATION t=1440 id=47 lengthAxis=False trial=8 from=0 to=0.00390625 clear=False failure=5/28
+CONTINUATION_CONTACT t=1440 ids=47/5 gapUm=-10.474119
+PATH_AUDIT result=Intersecting junction=True common=1 radiusMm=13.151793 motionUm=63.91314 gap0Um=-9.999844 gap1Um=0.5241018 sampleMinUm=-9.999844 rods=False/False
+CONTINUATION_CONTACT t=1440 ids=5/28 gapUm=0.5241018
+CONTINUATION_FAILURE motionCertificate ids=5/28 witnesses=1
+CONTINUATION t=1440 id=47 lengthAxis=False trial=9 from=0 to=0.001953125 clear=False failure=5/28
+CONTINUATION_CONTACT t=1440 ids=47/5 gapUm=-10.230113
+PATH_AUDIT result=Intersecting junction=True common=1 radiusMm=13.151793 motionUm=63.14952 gap0Um=-9.999844 gap1Um=0.39744192 sampleMinUm=-9.999844 rods=False/False
+CONTINUATION_CONTACT t=1440 ids=5/28 gapUm=0.39744192
+CONTINUATION_FAILURE motionCertificate ids=5/28 witnesses=1
+CONTINUATION t=1440 id=47 lengthAxis=False trial=10 from=0 to=0.0009765625 clear=False failure=5/28
+CONTINUATION_CONTACT t=1440 ids=47/5 gapUm=-10.108109
+PATH_AUDIT result=Intersecting junction=True common=1 radiusMm=13.151793 motionUm=62.77064 gap0Um=-9.999844 gap1Um=0.3350433 sampleMinUm=-9.999844 rods=False/False
+CONTINUATION_CONTACT t=1440 ids=5/28 gapUm=0.3350433
+CONTINUATION_FAILURE motionCertificate ids=5/28 witnesses=1
+CONTINUATION t=1440 id=47 lengthAxis=False trial=11 from=0 to=0.00048828125 clear=False failure=5/28
+MATURE h=4 accepted=False gainedLengthUm=0 gainedRadiusUm=0 trials=26 steps=0 corrections=26 coupledSets=0 stages=0 clear=True

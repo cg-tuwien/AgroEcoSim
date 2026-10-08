@@ -1,0 +1,13 @@
+Species lookup: Bergenia Cordifolia, BudLength: 0.009
+PlantFormation2 ctor: Bergenia Cordifolia, BudLength: 0.009
+SpeciesSettings.Init called on Bergenia Cordifolia, BudLength: 0.009
+PlantFormation2 after Init: Bergenia Cordifolia, BudLength: 0.009
+Species lookup: Bergenia Cordifolia, BudLength: 0.009
+PlantFormation2 ctor: Bergenia Cordifolia, BudLength: 0.009
+SpeciesSettings.Init called on Bergenia Cordifolia, BudLength: 0.009
+PlantFormation2 after Init: Bergenia Cordifolia, BudLength: 0.009
+Collision scene: 2 triangles (2 soil, 0 obstacle) in 7 ms, open soil surface (regular fields use their finite footprint)
+BASE clear=True scape=OrganPose { Base = <0.36499998, 0.049999997, 0.5>, Rotation = {X:0 Y:0 Z:0.70710677 W:0.70710677}, Length = 0.012, Width = 0, Radius = 0.0012, Rounded = False, Deformation = <0, 0, 0, 0>, Tip = <0.36499998, 0.061999995, 0.5>, CurvedRod = False, Across = <0, 0, 0> } leaf=OrganPose { Base = <0.385, 0.074999996, 0.5>, Rotation = {X:0 Y:1 Z:0 W:-4.371139E-08}, Length = 0.04, Width = 0.02, Radius = 5E-05, Rounded = False, Deformation = <0, 0, 0, 0>, Tip = <0.345, 0.074999996, 0.5>, CurvedRod = False, Across = <-1.7484555E-09, 0, -0.02> }
+RESULT h=4 accepted=True length=0.02996875 movedNeighbour=True clear=True trials=16 steps=6 corrections=104 counts=3/4
+NEIGHBOUR from=OrganPose { Base = <0.385, 0.074999996, 0.5>, Rotation = {X:0 Y:1 Z:0 W:-4.371139E-08}, Length = 0.04, Width = 0.02, Radius = 5E-05, Rounded = False, Deformation = <0, 0, 0, 0>, Tip = <0.345, 0.074999996, 0.5>, CurvedRod = False, Across = <-1.7484555E-09, 0, -0.02> } to=OrganPose { Base = <0.3851272, 0.0769993, 0.49957383>, Rotation = {X:0.016998837 Y:0.9998499 Z:-0.00013708162 W:0.0033548714}, Length = 0.04, Width = 0.02, Radius = 5E-05, Rounded = False, Deformation = <0, 0, 0, 0>, Tip = <0.34515122, 0.07835896, 0.49930528>, CurvedRod = False, Across = <0.0001340815, -7.7636005E-06, -0.01999955> }
+POSE_SHA256 0B66C7B562752B7979E3A61FA23E8C16911FB80D87E32C7E55115B8514447451

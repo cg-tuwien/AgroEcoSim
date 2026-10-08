@@ -264,8 +264,9 @@ namespace Agro
         public float BudBloomDurationHours { get; init; } = 168f;
 
         /// <summary>
-        /// Maximum age of every organ in an inflorescence before floral
-        /// senescence begins.
+        /// Maximum age of a formed inflorescence organ before floral senescence
+        /// begins. An unfinished meristem, unopened bud, or retained floral birth
+        /// can continue until the species' bounded bloom window closes.
         /// </summary>
         /// <value>Hours; must be greater than zero.</value>
         public float FlowerMaximumAgeHours { get; init; } = 720f;

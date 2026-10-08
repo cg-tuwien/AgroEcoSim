@@ -1,0 +1,194 @@
+Species lookup: Geranium Macrorrhizum, BudLength: 0.01
+PlantFormation2 ctor: Geranium Macrorrhizum, BudLength: 0.01
+SpeciesSettings.Init called on Geranium Macrorrhizum, BudLength: 0.01
+PlantFormation2 after Init: Geranium Macrorrhizum, BudLength: 0.01
+Collision scene: 2 triangles (2 soil, 0 obstacle) in 9 ms, open soil surface (regular fields use their finite footprint)
+FLOWERS day=1 
+FLOWERS day=2 
+FLOWERS day=3 
+FLOWERS day=4 
+FLOWERS day=5 
+FLOWERS day=6 
+FLOWERS day=7 
+FLOWERS day=8 
+FLOWERS day=9 
+FLOWERS day=10 
+STEP 60 organs=10 pending=0 rejected=0 paused=0 pairs=3615
+FLOWERS day=11 
+FLOWERS day=12 
+FLOWERS day=13 
+FLOWERS day=14 
+FLOWERS day=15 
+FLOWERS day=16 
+FLOWERS day=17 
+FLOWERS day=18 
+FLOWERS day=19 
+FLOWERS day=20 
+STEP 120 organs=10 pending=0 rejected=0 paused=0 pairs=7395
+FLOWERS day=21 
+FLOWERS day=22 
+FLOWERS day=23 
+FLOWERS day=24 
+FLOWERS day=25 
+FLOWERS day=26 
+FLOWERS day=27 
+FLOWERS day=28 
+FLOWERS day=29 
+FLOWERS day=30 
+STEP 180 organs=10 pending=0 rejected=0 paused=0 pairs=11175
+FLOWERS day=31 
+FLOWERS day=32 
+FLOWERS day=33 
+FLOWERS day=34 
+FLOWERS day=35 
+FLOWERS day=36 
+FLOWERS day=37 
+FLOWERS day=38 
+FLOWERS day=39 
+FLOWERS day=40 
+STEP 240 organs=15 pending=0 rejected=0 paused=0 pairs=16227
+FLOWERS day=41 
+FLOWERS day=42 
+FLOWERS day=43 
+FLOWERS day=44 
+FLOWERS day=45 
+FLOWERS day=46 
+FLOWERS day=47 
+FLOWERS day=48 
+FLOWERS day=49 
+FLOWERS day=50 
+STEP 300 organs=20 pending=0 rejected=0 paused=5 pairs=34265
+FLOWERS day=51 
+FLOWERS day=52 
+FLOWERS day=53 
+FLOWERS day=54 
+FLOWERS day=55 
+FLOWERS day=56 
+FLOWERS day=57 
+FLOWERS day=58 
+FLOWERS day=59 
+FLOWERS day=60 
+STEP 360 organs=20 pending=0 rejected=0 paused=5 pairs=59617
+FLOWERS day=61 
+FLOWERS day=62 
+FLOWERS day=63 
+FLOWERS day=64 
+FLOWERS day=65 
+FLOWERS day=66 
+FLOWERS day=67 
+FLOWERS day=68 
+FLOWERS day=69 
+FLOWERS day=70 
+STEP 420 organs=20 pending=0 rejected=0 paused=4 pairs=80122
+FLOWERS day=71 
+FLOWERS day=72 FlowerMeristem=1
+FLOWERS day=73 FlowerMeristem=1
+FLOWERS day=74 FlowerStem=1 FlowerMeristem=1
+FLOWERS day=75 FlowerStem=1 FlowerMeristem=1
+FLOWERS day=76 FlowerStem=1 FlowerMeristem=1
+FLOWERS day=77 FlowerStem=2 FlowerMeristem=1
+FLOWERS day=78 FlowerStem=2 FlowerMeristem=1
+FLOWERS day=79 FlowerStem=3 FlowerMeristem=2
+FLOWERS day=80 FlowerStem=3 FlowerMeristem=2
+STEP 480 organs=49 pending=1 rejected=3 paused=14 pairs=110849
+FLOWERS day=81 FlowerStem=3 FlowerMeristem=2
+FLOWERS day=82 FlowerStem=4 FlowerMeristem=2
+FLOWERS day=83 FlowerStem=4 FlowerMeristem=2
+FLOWERS day=84 FlowerStem=5 FlowerMeristem=2
+FLOWERS day=85 FlowerStem=5 FlowerMeristem=2
+FLOWERS day=86 FlowerStem=5 FlowerMeristem=2
+FLOWERS day=87 FlowerStem=8 FlowerMeristem=2 FlowerPedicel=2 FlowerBud=2
+FLOWERS day=88 FlowerStem=8 FlowerMeristem=2 FlowerPedicel=2 FlowerBud=2
+FLOWERS day=89 FlowerStem=11 FlowerMeristem=1 FlowerPedicel=5 FlowerBud=5
+FLOWERS day=90 FlowerStem=11 FlowerMeristem=1 FlowerPedicel=5 FlowerBud=5
+STEP 540 organs=75 pending=2 rejected=18 paused=30 pairs=211584
+FLOWERS day=91 FlowerStem=11 FlowerMeristem=1 FlowerPedicel=5 FlowerBud=5
+FLOWERS day=92 FlowerStem=11 FlowerMeristem=1 FlowerPedicel=5 FlowerBud=5
+FLOWERS day=93 FlowerStem=11 FlowerMeristem=1 FlowerPedicel=5 FlowerBud=5
+FLOWERS day=94 FlowerStem=11 FlowerMeristem=1 FlowerPedicel=5 FlowerBud=5
+FLOWERS day=95 FlowerStem=11 FlowerMeristem=2 FlowerPedicel=5 FlowerBud=5
+FLOWERS day=96 FlowerStem=11 FlowerMeristem=2 FlowerPedicel=5 FlowerBud=5 FlowerPadel=10
+FLOWERS day=97 FlowerStem=11 FlowerMeristem=2 FlowerPedicel=5 FlowerBud=5 FlowerPadel=10
+FLOWERS day=98 FlowerStem=11 FlowerMeristem=2 FlowerPedicel=5 FlowerBud=5 FlowerPadel=20
+FLOWERS day=99 FlowerStem=11 FlowerMeristem=2 FlowerPedicel=5 FlowerBud=5 FlowerPadel=20
+FLOWERS day=100 FlowerStem=11 FlowerMeristem=2 FlowerPedicel=5 FlowerBud=5 FlowerPadel=20
+STEP 600 organs=109 pending=2 rejected=35 paused=49 pairs=451442
+FLOWERS day=101 FlowerStem=11 FlowerMeristem=2 FlowerPedicel=5 FlowerBud=5 FlowerPadel=20
+FLOWERS day=102 FlowerStem=11 FlowerMeristem=2 FlowerPedicel=5 FlowerBud=5 FlowerPadel=20
+FLOWERS day=103 FlowerStem=11 FlowerMeristem=2 FlowerPedicel=5 FlowerBud=5 FlowerPadel=20
+FLOWERS day=104 FlowerStem=11 FlowerMeristem=2 FlowerPedicel=5 FlowerBud=5 FlowerPadel=20
+FLOWERS day=105 FlowerStem=11 FlowerMeristem=2 FlowerPedicel=5 FlowerBud=5 FlowerPadel=20
+FLOWERS day=106 FlowerStem=12 FlowerPedicel=5 FlowerBud=5 FlowerPadel=20 FlowerMeristem=1
+FLOWERS day=107 FlowerStem=12 FlowerPedicel=5 FlowerBud=5 FlowerPadel=20 FlowerMeristem=1
+FLOWERS day=108 FlowerStem=12 FlowerPedicel=5 FlowerBud=5 FlowerPadel=20 FlowerMeristem=1
+FLOWERS day=109 FlowerStem=13 FlowerPedicel=5 FlowerBud=5 FlowerPadel=20 FlowerMeristem=2
+FLOWERS day=110 FlowerStem=13 FlowerPedicel=5 FlowerBud=5 FlowerPadel=20 FlowerMeristem=2
+STEP 660 organs=124 pending=2 rejected=53 paused=59 pairs=786382
+FLOWERS day=111 FlowerStem=14 FlowerPedicel=5 FlowerBud=5 FlowerPadel=20 FlowerMeristem=2
+FLOWERS day=112 FlowerStem=14 FlowerPedicel=5 FlowerBud=5 FlowerPadel=20 FlowerMeristem=2
+FLOWERS day=113 FlowerStem=14 FlowerPedicel=5 FlowerBud=5 FlowerPadel=20 FlowerMeristem=2
+FLOWERS day=114 FlowerStem=15 FlowerPedicel=5 FlowerBud=5 FlowerPadel=20 FlowerMeristem=2
+FLOWERS day=115 FlowerStem=15 FlowerPedicel=4 FlowerBud=4 FlowerPadel=15 FlowerMeristem=2
+FLOWERS day=116 FlowerStem=14 FlowerPedicel=4 FlowerBud=4 FlowerPadel=15 FlowerMeristem=2
+FLOWERS day=117 FlowerStem=14 FlowerPedicel=3 FlowerBud=3 FlowerPadel=15 FlowerMeristem=2
+FLOWERS day=118 FlowerStem=14 FlowerPedicel=2 FlowerBud=2 FlowerPadel=10 FlowerMeristem=2
+FLOWERS day=119 FlowerStem=15 FlowerPedicel=5 FlowerBud=5 FlowerPadel=10 FlowerMeristem=1
+FLOWERS day=120 FlowerStem=16 FlowerPedicel=5 FlowerBud=5 FlowerPadel=10 FlowerMeristem=1
+STEP 720 organs=120 pending=2 rejected=72 paused=54 pairs=1200276
+FLOWERS day=121 FlowerStem=16 FlowerPedicel=4 FlowerBud=4 FlowerPadel=5 FlowerMeristem=1
+FLOWERS day=122 FlowerStem=16 FlowerPedicel=4 FlowerBud=4 FlowerPadel=5 FlowerMeristem=1
+FLOWERS day=123 FlowerStem=16 FlowerPedicel=3 FlowerBud=3 FlowerMeristem=1
+FLOWERS day=124 FlowerStem=16 FlowerPedicel=3 FlowerBud=3 FlowerMeristem=1
+FLOWERS day=125 FlowerStem=17 FlowerPedicel=3 FlowerBud=3 FlowerMeristem=1
+FLOWERS day=126 FlowerStem=17 FlowerPedicel=3 FlowerBud=3 FlowerMeristem=1
+FLOWERS day=127 FlowerStem=17 FlowerPedicel=3 FlowerBud=3 FlowerMeristem=1
+FLOWERS day=128 FlowerStem=18 FlowerPedicel=3 FlowerBud=3 FlowerPadel=10 FlowerMeristem=1
+FLOWERS day=129 FlowerStem=18 FlowerPedicel=3 FlowerBud=3 FlowerPadel=10 FlowerMeristem=1
+FLOWERS day=130 FlowerStem=18 FlowerPedicel=3 FlowerBud=3 FlowerPadel=10 FlowerMeristem=1
+STEP 780 organs=123 pending=3 rejected=86 paused=58 pairs=1548390
+FLOWERS day=131 FlowerStem=13 FlowerPedicel=3 FlowerBud=3 FlowerPadel=10 FlowerMeristem=1
+FLOWERS day=132 FlowerStem=13 FlowerPedicel=3 FlowerBud=3 FlowerPadel=10 FlowerMeristem=1
+FLOWERS day=133 FlowerStem=16 FlowerPedicel=6 FlowerBud=6 FlowerPadel=10
+FLOWERS day=134 FlowerStem=16 FlowerPedicel=6 FlowerBud=6 FlowerPadel=10
+FLOWERS day=135 FlowerStem=16 FlowerPedicel=6 FlowerBud=6 FlowerPadel=10
+FLOWERS day=136 FlowerStem=16 FlowerPedicel=6 FlowerBud=6 FlowerPadel=10
+FLOWERS day=137 FlowerStem=16 FlowerPedicel=6 FlowerBud=6 FlowerPadel=10
+FLOWERS day=138 FlowerStem=16 FlowerPedicel=6 FlowerBud=6 FlowerPadel=10
+FLOWERS day=139 FlowerStem=16 FlowerPedicel=6 FlowerBud=6 FlowerPadel=10
+FLOWERS day=140 FlowerStem=16 FlowerPedicel=6 FlowerBud=6 FlowerPadel=10
+STEP 840 organs=130 pending=3 rejected=116 paused=60 pairs=1933684
+FLOWERS day=141 FlowerStem=16 FlowerPedicel=6 FlowerBud=6 FlowerPadel=10
+FLOWERS day=142 FlowerStem=16 FlowerPedicel=6 FlowerBud=6 FlowerPadel=15
+FLOWERS day=143 FlowerStem=16 FlowerPedicel=6 FlowerBud=6 FlowerPadel=15
+FLOWERS day=144 FlowerStem=16 FlowerPedicel=6 FlowerBud=6 FlowerPadel=15
+FLOWERS day=145 FlowerStem=16 FlowerPedicel=6 FlowerBud=6 FlowerPadel=15
+FLOWERS day=146 FlowerStem=16 FlowerPedicel=6 FlowerBud=5 FlowerPadel=15
+FLOWERS day=147 FlowerStem=16 FlowerPedicel=5 FlowerBud=5 FlowerPadel=15
+FLOWERS day=148 FlowerStem=14 FlowerPedicel=3 FlowerBud=3 FlowerPadel=5
+FLOWERS day=149 FlowerStem=14 FlowerPedicel=3 FlowerBud=3 FlowerPadel=5
+FLOWERS day=150 FlowerStem=14 FlowerPedicel=3 FlowerBud=3 FlowerPadel=5
+STEP 900 organs=128 pending=5 rejected=169 paused=56 pairs=2329035
+FLOWERS day=151 FlowerStem=14 FlowerPedicel=3 FlowerBud=3 FlowerPadel=5
+FLOWERS day=152 FlowerStem=14 FlowerPedicel=3 FlowerBud=3 FlowerPadel=5
+FLOWERS day=153 FlowerStem=14 FlowerPedicel=3 FlowerBud=3 FlowerPadel=5
+FLOWERS day=154 FlowerStem=14 FlowerPedicel=3 FlowerBud=3 FlowerPadel=5
+FLOWERS day=155 FlowerStem=14 FlowerPedicel=3 FlowerBud=3 FlowerPadel=5
+FLOWERS day=156 FlowerStem=8 FlowerPedicel=3 FlowerBud=3 FlowerPadel=5
+FLOWERS day=157 FlowerStem=8 FlowerPedicel=3 FlowerBud=3 FlowerPadel=5
+FLOWERS day=158 FlowerStem=8 FlowerPedicel=3 FlowerBud=3 FlowerPadel=5
+FLOWERS day=159 FlowerStem=8 FlowerPedicel=3 FlowerBud=3 FlowerPadel=5
+FLOWERS day=160 FlowerStem=8 FlowerPedicel=3 FlowerBud=3 FlowerPadel=5
+STEP 960 organs=136 pending=4 rejected=222 paused=59 pairs=2707094
+FLOWERS day=161 FlowerStem=8 FlowerPedicel=1 FlowerBud=1 FlowerPadel=5
+FLOWERS day=162 FlowerStem=8 FlowerPedicel=1 FlowerBud=1 FlowerPadel=5
+RESULT Geranium Macrorrhizum days=162 hours=4 organs=137 rhizomes=27 y=[-0.01,0.1777054] down=37 inverted=0 bytes=11719 contacts=0 cuts=0
+DEATHS natural=78 resources=0 accepted=53 rejected=235
+COUNTS Stem=27 down=0
+COUNTS Petiole=34 down=1
+COUNTS Leaf=34 down=22
+COUNTS Meristem=16 down=0
+COUNTS Bud=11 down=7
+COUNTS FlowerStem=8 down=5
+COUNTS FlowerPedicel=1 down=1
+COUNTS FlowerBud=1 down=1
+COUNTS FlowerPadel=5 down=3

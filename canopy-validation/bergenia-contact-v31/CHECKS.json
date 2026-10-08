@@ -1,0 +1,54 @@
+{
+  "core": {
+    "command": "dotnet build Agro/Agro.csproj --no-restore -m:1 -v:minimal",
+    "errors": 0,
+    "warnings": 298
+  },
+  "nativeServer": {
+    "command": "dotnet publish AgroServer/AgroServer.csproj --no-restore -m:1 -c Release -f net10.0 -r linux-x64 -p:PublishAot=true -p:SkipSpeciesGeneration=true -o /tmp/gf-contact-v31/native-server",
+    "published": true,
+    "existingTrimWarnings": true
+  },
+  "numerics": {
+    "distanceCasesPerRuntime": 6006,
+    "exactEndpointsPerRuntime": 4000,
+    "stationaryFieldsPerRuntime": 8000
+  },
+  "mechanics": {
+    "runtimes": [
+      "managed net8",
+      "NativeAOT net10"
+    ],
+    "casesPerTick": 8,
+    "tickHours": [
+      1,
+      4
+    ],
+    "totalPassed": 32,
+    "identicalFrozenPoseHashesBetweenTicksWithinRuntime": true,
+    "crossRuntimeBitwiseEqualityRequired": false
+  },
+  "ccd": {
+    "targetedCasesPerRuntime": 11,
+    "publishedRepresentablePerRuntime": 304,
+    "publishedPositiveRefusedPerRuntime": 145,
+    "boundSamplesPerRuntime": 190080,
+    "limitations": "20 micrometres per-body offset; rational-to-float conversion; 20 deforming edge queries excluded; sampling is not a proof"
+  },
+  "nativeCheckpoint": {
+    "freshAndMatureCasesPassed": 8,
+    "removalReindexing": true,
+    "byteIdenticalStateAndFrames": true,
+    "oldV30Rejected": true,
+    "syntheticV1Passed": true
+  },
+  "frontend": {
+    "suitesPassed": 5,
+    "testsPassed": 38,
+    "browserPixelComparison": false
+  },
+  "diffCheck": {
+    "command": "git diff --check -- Agro/AgroWorld.cs Agro/Collisions/OrganPose.cs Agro/Collisions/StaticCollider.cs Agro/COLLISIONS.md; git diff --no-index --check /dev/null <new documentation file>",
+    "scope": "three changed source files and appended/new documentation; all unrelated dirty work preserved"
+  }
+}

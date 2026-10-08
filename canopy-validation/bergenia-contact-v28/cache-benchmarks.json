@@ -1,0 +1,334 @@
+{
+  "normal": {
+    "v27": [
+      {
+        "file": "cache-benchmark-v27-normal-1.log",
+        "samples": 35,
+        "medianMs": 0.6642,
+        "p95Ms": 0.6945,
+        "medianAllocatedBytes": 10984,
+        "p95AllocatedBytes": 10984
+      },
+      {
+        "file": "cache-benchmark-v27-normal-2.log",
+        "samples": 35,
+        "medianMs": 0.6417,
+        "p95Ms": 0.6578,
+        "medianAllocatedBytes": 10984,
+        "p95AllocatedBytes": 10984
+      },
+      {
+        "file": "cache-benchmark-v27-normal-3.log",
+        "samples": 35,
+        "medianMs": 0.6533,
+        "p95Ms": 0.6684,
+        "medianAllocatedBytes": 10984,
+        "p95AllocatedBytes": 10984
+      }
+    ],
+    "cache": [
+      {
+        "file": "cache-benchmark-cache-normal-1.log",
+        "samples": 35,
+        "medianMs": 0.6432,
+        "p95Ms": 0.6567,
+        "medianAllocatedBytes": 10984,
+        "p95AllocatedBytes": 10984
+      },
+      {
+        "file": "cache-benchmark-cache-normal-2.log",
+        "samples": 35,
+        "medianMs": 0.6402,
+        "p95Ms": 0.6596,
+        "medianAllocatedBytes": 10984,
+        "p95AllocatedBytes": 10984
+      },
+      {
+        "file": "cache-benchmark-cache-normal-3.log",
+        "samples": 35,
+        "medianMs": 0.6701,
+        "p95Ms": 0.6849,
+        "medianAllocatedBytes": 10984,
+        "p95AllocatedBytes": 10984
+      }
+    ],
+    "summary": {
+      "v27": 0.6533,
+      "cache": 0.6432,
+      "changePercent": -1.54599724475738
+    }
+  },
+  "radial": {
+    "v27": [
+      {
+        "file": "cache-benchmark-v27-radial-1.log",
+        "samples": 35,
+        "medianMs": 0.9572,
+        "p95Ms": 0.9681,
+        "medianAllocatedBytes": 12232,
+        "p95AllocatedBytes": 12232
+      },
+      {
+        "file": "cache-benchmark-v27-radial-2.log",
+        "samples": 35,
+        "medianMs": 0.9546,
+        "p95Ms": 0.9627,
+        "medianAllocatedBytes": 12376,
+        "p95AllocatedBytes": 12376
+      },
+      {
+        "file": "cache-benchmark-v27-radial-3.log",
+        "samples": 35,
+        "medianMs": 1.0182,
+        "p95Ms": 1.0353,
+        "medianAllocatedBytes": 12472,
+        "p95AllocatedBytes": 12472
+      }
+    ],
+    "cache": [
+      {
+        "file": "cache-benchmark-cache-radial-1.log",
+        "samples": 35,
+        "medianMs": 0.9704,
+        "p95Ms": 1.1785,
+        "medianAllocatedBytes": 12232,
+        "p95AllocatedBytes": 12232
+      },
+      {
+        "file": "cache-benchmark-cache-radial-2.log",
+        "samples": 35,
+        "medianMs": 0.942,
+        "p95Ms": 0.9541,
+        "medianAllocatedBytes": 12232,
+        "p95AllocatedBytes": 12232
+      },
+      {
+        "file": "cache-benchmark-cache-radial-3.log",
+        "samples": 35,
+        "medianMs": 0.9501,
+        "p95Ms": 0.965,
+        "medianAllocatedBytes": 12232,
+        "p95AllocatedBytes": 12232
+      }
+    ],
+    "summary": {
+      "v27": 0.9572,
+      "cache": 0.9501,
+      "changePercent": -0.7417467613873963
+    }
+  },
+  "common": {
+    "v27": [
+      {
+        "file": "cache-benchmark-v27-common-1.log",
+        "samples": 35,
+        "medianMs": 1.7878,
+        "p95Ms": 1.8138,
+        "medianAllocatedBytes": 184,
+        "p95AllocatedBytes": 184
+      },
+      {
+        "file": "cache-benchmark-v27-common-2.log",
+        "samples": 35,
+        "medianMs": 0.8399,
+        "p95Ms": 0.8771,
+        "medianAllocatedBytes": 40,
+        "p95AllocatedBytes": 40
+      },
+      {
+        "file": "cache-benchmark-v27-common-3.log",
+        "samples": 35,
+        "medianMs": 0.8357,
+        "p95Ms": 0.8419,
+        "medianAllocatedBytes": 136,
+        "p95AllocatedBytes": 136
+      },
+      {
+        "file": "cache-benchmark-v27-common-4.log",
+        "samples": 35,
+        "medianMs": 1.7189,
+        "p95Ms": 1.7412,
+        "medianAllocatedBytes": 184,
+        "p95AllocatedBytes": 184
+      },
+      {
+        "file": "cache-benchmark-v27-common-5.log",
+        "samples": 35,
+        "medianMs": 0.8363,
+        "p95Ms": 0.8409,
+        "medianAllocatedBytes": 40,
+        "p95AllocatedBytes": 40
+      },
+      {
+        "file": "cache-benchmark-v27-common-6.log",
+        "samples": 35,
+        "medianMs": 2.6182,
+        "p95Ms": 2.6751,
+        "medianAllocatedBytes": 424,
+        "p95AllocatedBytes": 424
+      }
+    ],
+    "cache": [
+      {
+        "file": "cache-benchmark-cache-common-1.log",
+        "samples": 35,
+        "medianMs": 0.8668,
+        "p95Ms": 0.9885,
+        "medianAllocatedBytes": 40,
+        "p95AllocatedBytes": 40
+      },
+      {
+        "file": "cache-benchmark-cache-common-2.log",
+        "samples": 35,
+        "medianMs": 0.8424,
+        "p95Ms": 0.8733,
+        "medianAllocatedBytes": 40,
+        "p95AllocatedBytes": 40
+      },
+      {
+        "file": "cache-benchmark-cache-common-3.log",
+        "samples": 35,
+        "medianMs": 0.8618,
+        "p95Ms": 0.8752,
+        "medianAllocatedBytes": 40,
+        "p95AllocatedBytes": 40
+      },
+      {
+        "file": "cache-benchmark-cache-common-4.log",
+        "samples": 35,
+        "medianMs": 0.8364,
+        "p95Ms": 0.8443,
+        "medianAllocatedBytes": 40,
+        "p95AllocatedBytes": 40
+      },
+      {
+        "file": "cache-benchmark-cache-common-5.log",
+        "samples": 35,
+        "medianMs": 0.8564,
+        "p95Ms": 0.9772,
+        "medianAllocatedBytes": 40,
+        "p95AllocatedBytes": 40
+      },
+      {
+        "file": "cache-benchmark-cache-common-6.log",
+        "samples": 35,
+        "medianMs": 0.8337,
+        "p95Ms": 0.8482,
+        "medianAllocatedBytes": 40,
+        "p95AllocatedBytes": 40
+      }
+    ],
+    "summary": {
+      "v27": 1.2794,
+      "cache": 0.8494,
+      "changePercent": -33.60950445521338
+    }
+  },
+  "v1": {
+    "v27": [
+      {
+        "file": "cache-benchmark-v27-v1-1.log",
+        "samples": 35,
+        "medianMs": 34.9153,
+        "p95Ms": 35.2837,
+        "medianAllocatedBytes": 22120,
+        "p95AllocatedBytes": 22120
+      },
+      {
+        "file": "cache-benchmark-v27-v1-2.log",
+        "samples": 35,
+        "medianMs": 30.7181,
+        "p95Ms": 30.946,
+        "medianAllocatedBytes": 21832,
+        "p95AllocatedBytes": 21832
+      },
+      {
+        "file": "cache-benchmark-v27-v1-3.log",
+        "samples": 35,
+        "medianMs": 31.1253,
+        "p95Ms": 31.5722,
+        "medianAllocatedBytes": 21352,
+        "p95AllocatedBytes": 21352
+      },
+      {
+        "file": "cache-benchmark-v27-v1-4.log",
+        "samples": 35,
+        "medianMs": 40.6038,
+        "p95Ms": 41.2145,
+        "medianAllocatedBytes": 21544,
+        "p95AllocatedBytes": 21544
+      },
+      {
+        "file": "cache-benchmark-v27-v1-5.log",
+        "samples": 35,
+        "medianMs": 31.0121,
+        "p95Ms": 31.2142,
+        "medianAllocatedBytes": 22168,
+        "p95AllocatedBytes": 22168
+      },
+      {
+        "file": "cache-benchmark-v27-v1-6.log",
+        "samples": 35,
+        "medianMs": 30.2608,
+        "p95Ms": 30.3701,
+        "medianAllocatedBytes": 22264,
+        "p95AllocatedBytes": 22264
+      }
+    ],
+    "cache": [
+      {
+        "file": "cache-benchmark-cache-v1-1.log",
+        "samples": 35,
+        "medianMs": 22.0248,
+        "p95Ms": 22.2407,
+        "medianAllocatedBytes": 19720,
+        "p95AllocatedBytes": 19720
+      },
+      {
+        "file": "cache-benchmark-cache-v1-2.log",
+        "samples": 35,
+        "medianMs": 24.318,
+        "p95Ms": 24.5717,
+        "medianAllocatedBytes": 19576,
+        "p95AllocatedBytes": 19576
+      },
+      {
+        "file": "cache-benchmark-cache-v1-3.log",
+        "samples": 35,
+        "medianMs": 32.7124,
+        "p95Ms": 32.9559,
+        "medianAllocatedBytes": 19576,
+        "p95AllocatedBytes": 19576
+      },
+      {
+        "file": "cache-benchmark-cache-v1-4.log",
+        "samples": 35,
+        "medianMs": 32.8434,
+        "p95Ms": 33.8483,
+        "medianAllocatedBytes": 19288,
+        "p95AllocatedBytes": 19288
+      },
+      {
+        "file": "cache-benchmark-cache-v1-5.log",
+        "samples": 35,
+        "medianMs": 33.8872,
+        "p95Ms": 34.5083,
+        "medianAllocatedBytes": 19720,
+        "p95AllocatedBytes": 19720
+      },
+      {
+        "file": "cache-benchmark-cache-v1-6.log",
+        "samples": 35,
+        "medianMs": 37.4699,
+        "p95Ms": 38.0508,
+        "medianAllocatedBytes": 19576,
+        "p95AllocatedBytes": 19576
+      }
+    ],
+    "summary": {
+      "v27": 31.0687,
+      "cache": 32.7779,
+      "changePercent": 5.50135667086169
+    }
+  }
+}

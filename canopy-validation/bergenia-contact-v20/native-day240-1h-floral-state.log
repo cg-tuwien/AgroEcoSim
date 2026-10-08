@@ -1,0 +1,18 @@
+Species lookup: Bergenia Cordifolia, BudLength: 0.009
+PlantFormation2 ctor: Bergenia Cordifolia, BudLength: 0.009
+SpeciesSettings.Init called on Bergenia Cordifolia, BudLength: 0.009
+PlantFormation2 after Init: Bergenia Cordifolia, BudLength: 0.009
+Collision scene: 2 triangles (2 soil, 0 obstacle) in 7 ms, open soil surface (regular fields use their finite footprint)
+day=240 season=0.1589041 seasonEnd=0.252 lead=615 maxAge=504
+index=51 id=52 organ=FlowerMeristem parent=46 ageHours=923 lengthMm=6.44261 targetLengthMm=13.7000675 radiusMm=2.2902832 targetRadiusMm=4.121531 blocked=True loadLimited=False energy=0.0026905048 support=True children=0
+ support id=47 organ=Stem lengthMm=1.9158887 radiusMm=1.3519951 blocked=True loadLimited=False energy=0.00012039376
+ support id=42 organ=Stem lengthMm=2.01 radiusMm=1.3519951 blocked=True loadLimited=False energy=0.00011465488
+ support id=37 organ=Stem lengthMm=2.0609722 radiusMm=1.3519951 blocked=True loadLimited=False energy=0.00010748299
+ support id=32 organ=Stem lengthMm=2.2562869 radiusMm=5 blocked=True loadLimited=False energy=0.0016779588
+ support id=27 organ=Stem lengthMm=2.21 radiusMm=5 blocked=True loadLimited=False energy=0.0017154184
+ support id=22 organ=Stem lengthMm=1.7356522 radiusMm=5 blocked=True loadLimited=False energy=0.0013418577
+ support id=17 organ=Stem lengthMm=2.0568311 radiusMm=5 blocked=True loadLimited=False energy=0.0015530983
+ support id=12 organ=Stem lengthMm=2.5540526 radiusMm=5 blocked=True loadLimited=False energy=0.0020682164
+ support id=7 organ=Stem lengthMm=1.5877839 radiusMm=5 blocked=True loadLimited=False energy=0.0014215442
+ support id=2 organ=Stem lengthMm=20.020739 radiusMm=5 blocked=True loadLimited=False energy=0.03984866
+ support id=1 organ=Stem lengthMm=1 radiusMm=5 blocked=False loadLimited=False energy=0.001990369

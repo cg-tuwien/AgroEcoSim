@@ -4,6 +4,40 @@ namespace Agro;
 
 public partial struct AboveGroundAgent
 {
+    // Escrow crosses Census (including reindexing), but is settled before pending
+    // births commit. No per-contact allocation and no geometry scans are required.
+    internal float ConstructionStartVolume, ConstructionProposedVolume, ConstructionEscrow;
+
+    internal void FundExpansion(in AboveGroundAgent before, SpeciesSettings species)
+    {
+        if (species.ConstructionEnergyPerDryGram == 0f) return;
+        var size = new Vector2(Length, Radius);
+        var cost = ConstructionBudget.Fund(new(before.Length, before.Radius), ref size,
+            Organ is OrganTypes.Leaf or OrganTypes.FlowerPadel,
+            MathF.Max(0f, Energy - EnoughEnergy(species)), species, WoodRatio());
+        Length = size.X; Radius = size.Y;
+        ConstructionStartVolume = before.Volume();
+        ConstructionProposedVolume = Volume();
+        ConstructionEscrow = cost;
+        Energy -= cost;
+    }
+
+    internal void SettleConstruction()
+    {
+        if (ConstructionEscrow > 0f)
+        {
+            var proposed = ConstructionProposedVolume - ConstructionStartVolume;
+            var accepted = MathF.Max(0f, Volume() - ConstructionStartVolume);
+            var fraction = proposed > 0f ? Math.Clamp(accepted / proposed, 0f, 1f) : 0f;
+            Energy += ConstructionEscrow * (1f - fraction);
+        }
+        ConstructionStartVolume = ConstructionProposedVolume = ConstructionEscrow = 0f;
+    }
+
+    // Only the basal emergence axis gets this target; later compressed nodes
+    // retain their sampled NodeDistance. Normal growth and contact checks apply.
+    internal void SetEmergenceTarget(float distance) => LengthVar = MathF.Max(LengthVar, distance);
+
     internal static AboveGroundAgent RetainPhysiology(AboveGroundAgent structure, in AboveGroundAgent physiology)
     {
         structure.Energy = physiology.Energy;
@@ -48,13 +82,13 @@ public partial struct AboveGroundAgent
     internal void GrowSuspendedRadius(PlantFormation2 plant)
     {
         // Rhizomes already perform safe radial growth in Herbaceous.Tick while suspended.
-        if (IsRizome || Energy <= EnoughEnergy() || Organ is OrganTypes.Leaf or OrganTypes.FlowerPadel or OrganTypes.Bud) return;
         var species = plant.Parameters;
+        if (IsRizome || Energy <= EnoughEnergy(species) || Organ is OrganTypes.Leaf or OrganTypes.FlowerPadel or OrganTypes.Bud) return;
         var limit = IsRizome ? species.RhizomeSegmentRadius
             : Organ == OrganTypes.Petiole ? species.PetioleRadius + RadiusVar
             : Organ is >= OrganTypes.FlowerBud and <= OrganTypes.FlowerBaseBud ? RadiusVar : species.ShootMaximumRadius;
         if (Parent >= 0 && !plant.AG.GetIsRizome(Parent)) limit = MathF.Min(limit, plant.AG.GetBaseRadius(Parent));
-        var reserve = Math.Clamp(Energy / MathF.Max(1e-12f, EnergyStorageCapacity()), 0f, 1f);
+        var reserve = Math.Clamp(Energy / MathF.Max(1e-12f, EnergyStorageCapacity(species)), 0f, 1f);
         var rate = Organ == OrganTypes.Petiole || Organ is >= OrganTypes.FlowerBud and <= OrganTypes.FlowerBaseBud
             ? MathF.Max(0, limit * GrowthTimeVar) : 2e-5f * plant.World.HoursPerTick * species.HerbaceousGrowthRateScale;
         Radius = MathF.Max(Radius, MathF.Min(limit, Radius + rate * reserve * Math.Clamp(plant.WaterBalance, 0, 1)));

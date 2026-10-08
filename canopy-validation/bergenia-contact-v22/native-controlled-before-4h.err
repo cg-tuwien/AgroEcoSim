@@ -1,0 +1,3 @@
+CHECKPOINT /tmp/gf-scape-recovery/production/evasion-before-4h-day240-v21.bin bytes=51875394
+CHECKPOINT /tmp/gf-scape-recovery/production/evasion-before-4h-day254-v21.bin bytes=51877614
+DONE mode=archived-exact tick=4 firstPetalDay=-1 elapsed=00:00:12.7485862 everLeaves=16 ever50=4 ever90=2

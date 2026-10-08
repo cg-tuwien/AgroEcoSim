@@ -1,0 +1,50 @@
+[
+  {
+    "tick": 4,
+    "day": 240,
+    "nativeV30Origin": true,
+    "reindex": false,
+    "exit": 0,
+    "lines": [
+      "Collision scene: 2 triangles (2 soil, 0 obstacle) in 0 ms, open soil surface (regular fields use their finite footprint)",
+      "CHECKPOINT version=30 tick=4 immediateState=True immediateFrame=True continuedState=True continuedFrame=True finite=True maxUnresolved=0 oldV29Rejected=True",
+      "HASH state=3925698AA35FF03A3C58FA0FC52F9FE4A2398514DABA90D19AE97C0EC987DC55 frame=A7E7F26593B160A68DB3F529BEB22E0DF1395DBEFBBBA49B37F051FADCCBF2D6"
+    ]
+  },
+  {
+    "tick": 4,
+    "day": 240,
+    "nativeV30Origin": true,
+    "reindex": true,
+    "exit": 0,
+    "lines": [
+      "Collision scene: 2 triangles (2 soil, 0 obstacle) in 0 ms, open soil surface (regular fields use their finite footprint)",
+      "CHECKPOINT version=30 tick=4 immediateState=True immediateFrame=True continuedState=True continuedFrame=True finite=True maxUnresolved=0 oldV29Rejected=True",
+      "HASH state=92027D5D50AE37396ACEB58CBF04314480E6DDCD892C8D4AD3BC4492CBC71DCC frame=B0D5C72CEE1EC3D868E6A6B6CA19448C9AFAD64CCC3F09BF6F571F54D7AB8EFD"
+    ]
+  },
+  {
+    "tick": 1,
+    "day": 240,
+    "nativeV30Origin": true,
+    "reindex": false,
+    "exit": 0,
+    "lines": [
+      "Collision scene: 2 triangles (2 soil, 0 obstacle) in 0 ms, open soil surface (regular fields use their finite footprint)",
+      "CHECKPOINT version=30 tick=1 immediateState=True immediateFrame=True continuedState=True continuedFrame=True finite=True maxUnresolved=0 oldV29Rejected=True",
+      "HASH state=B6F7D855E1081EB85D9506B2D1370BB13AE132743C8112EAEFBA24230D11B3EF frame=DDF970FB38E4883C9B46C3B1FB90D4DB976A45A12281EEE2C163BBCF6544FD40"
+    ]
+  },
+  {
+    "tick": 1,
+    "day": 240,
+    "nativeV30Origin": true,
+    "reindex": true,
+    "exit": 0,
+    "lines": [
+      "Collision scene: 2 triangles (2 soil, 0 obstacle) in 0 ms, open soil surface (regular fields use their finite footprint)",
+      "CHECKPOINT version=30 tick=1 immediateState=True immediateFrame=True continuedState=True continuedFrame=True finite=True maxUnresolved=0 oldV29Rejected=True",
+      "HASH state=B5E789CBCFBAA0523D2CB488E9439AC402A8FF9943AE75A4C61513B83FA4C61D frame=82EF6EB18C457C1FE1289E9F3E2B04943B0F68A6A72DA7D1B3C33F7FACC69210"
+    ]
+  }
+]

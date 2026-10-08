@@ -576,17 +576,23 @@ public sealed partial class StaticCollider
 	public static void ClosestPointsBetweenSegments(Vector3 p0, Vector3 p1, Vector3 q0, Vector3 q1,
 		out Vector3 onFirst, out Vector3 onSecond, out float distanceSquared)
 	{
-		var d1 = p1 - p0;
-		var d2 = q1 - q0;
-		var r = p0 - q0;
-		double a = Dot(d1, d1), e = Dot(d2, d2), f = Dot(d2, r);
+		// Solve and measure in relative double coordinates. Rounding the two
+		// witnesses to world-space floats before subtracting them can change a
+		// contact decision, even though the segment parameters were double.
+		// Scalar locals also avoid large value-return helper calls in NativeAOT.
+		double d1X = (double)p1.X-p0.X, d1Y = (double)p1.Y-p0.Y, d1Z = (double)p1.Z-p0.Z;
+		double d2X = (double)q1.X-q0.X, d2Y = (double)q1.Y-q0.Y, d2Z = (double)q1.Z-q0.Z;
+		double rX = (double)p0.X-q0.X, rY = (double)p0.Y-q0.Y, rZ = (double)p0.Z-q0.Z;
+		double a = d1X*d1X+d1Y*d1Y+d1Z*d1Z;
+		double e = d2X*d2X+d2Y*d2Y+d2Z*d2Z;
+		double f = d2X*rX+d2Y*rY+d2Z*rZ;
 		double s, t;
 
 		if (a <= 1e-16f && e <= 1e-16f)
 		{
 			onFirst = p0;
 			onSecond = q0;
-			distanceSquared = Vector3.DistanceSquared(p0, q0);
+			distanceSquared = (float)(rX*rX+rY*rY+rZ*rZ);
 			return;
 		}
 
@@ -597,7 +603,7 @@ public sealed partial class StaticCollider
 		}
 		else
 		{
-			double c = Dot(d1, r);
+			double c = d1X*rX+d1Y*rY+d1Z*rZ;
 			if (e <= 1e-16f)
 			{
 				t = 0f;
@@ -605,7 +611,7 @@ public sealed partial class StaticCollider
 			}
 			else
 			{
-				double b = Dot(d1, d2);
+				double b = d1X*d2X+d1Y*d2Y+d1Z*d2Z;
 				double denom = a * e - b * b;
 				// The determinant has units m^4. An absolute threshold classifies young,
 				// perpendicular millimetre segments as parallel. Test relative conditioning.
@@ -616,10 +622,11 @@ public sealed partial class StaticCollider
 			}
 		}
 
-		onFirst = p0 + d1 * (float)s;
-		onSecond = q0 + d2 * (float)t;
-		distanceSquared = Vector3.DistanceSquared(onFirst, onSecond);
-
-		static double Dot(Vector3 x, Vector3 y) => (double)x.X * y.X + (double)x.Y * y.Y + (double)x.Z * y.Z;
+		onFirst = new((float)(p0.X+d1X*s),(float)(p0.Y+d1Y*s),(float)(p0.Z+d1Z*s));
+		onSecond = new((float)(q0.X+d2X*t),(float)(q0.Y+d2Y*t),(float)(q0.Z+d2Z*t));
+		double differenceX = rX+d1X*s-d2X*t;
+		double differenceY = rY+d1Y*s-d2Y*t;
+		double differenceZ = rZ+d1Z*s-d2Z*t;
+		distanceSquared = (float)(differenceX*differenceX+differenceY*differenceY+differenceZ*differenceZ);
 	}
 }

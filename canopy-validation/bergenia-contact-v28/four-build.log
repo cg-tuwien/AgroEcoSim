@@ -1,0 +1,9 @@
+  Determining projects to restore...
+/home/ubuntu/GreenFDT/Agro/Agro.csproj : warning NU1900: Error occurred while getting package vulnerability data: Unable to load the service index for source https://api.nuget.org/v3/index.json. [/tmp/gf-contact-v28/four/Probe.csproj]
+/home/ubuntu/GreenFDT/AgentsSystem/AgentsSystem.csproj : warning NU1900: Error occurred while getting package vulnerability data: Unable to load the service index for source https://api.nuget.org/v3/index.json. [/tmp/gf-contact-v28/four/Probe.csproj]
+/tmp/gf-contact-v28/four/Probe.csproj : warning NU1900: Error occurred while getting package vulnerability data: Unable to load the service index for source https://api.nuget.org/v3/index.json.
+/home/ubuntu/GreenFDT/Utils/Utils.csproj : warning NU1900: Error occurred while getting package vulnerability data: Unable to load the service index for source https://api.nuget.org/v3/index.json. [/tmp/gf-contact-v28/four/Probe.csproj]
+  Restored /home/ubuntu/GreenFDT/Utils/Utils.csproj (in 5.52 sec).
+  Restored /home/ubuntu/GreenFDT/AgentsSystem/AgentsSystem.csproj (in 5.52 sec).
+  Restored /tmp/gf-contact-v28/four/Probe.csproj (in 5.52 sec).
+  Restored /home/ubuntu/GreenFDT/Agro/Agro.csproj (in 5.52 sec).

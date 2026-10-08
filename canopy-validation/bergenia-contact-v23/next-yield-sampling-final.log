@@ -1,0 +1,63 @@
+Species lookup: Bergenia Cordifolia, BudLength: 0.009
+PlantFormation2 ctor: Bergenia Cordifolia, BudLength: 0.009
+SpeciesSettings.Init called on Bergenia Cordifolia, BudLength: 0.009
+PlantFormation2 after Init: Bergenia Cordifolia, BudLength: 0.009
+CONTROLLED DIAGNOSTIC: same-layout v21 state under v23; no supported migration or fresh-season claim
+Collision scene: 2 triangles (2 soil, 0 obstacle) in 6 ms, open soil surface (regular fields use their finite footprint)
+BASE lengthMm=6.596022 clear=True count=52
+BASE failures=
+PAIR round=0 a=51:FlowerMeristem b=47:Petiole gapMm=-1.7767156 ma=0 mb=0.008858395363851843 n=<0.064553976, 0.28179002, -0.95730215>
+YIELD scale=1 moved=True failures= neighbourAngleDeg=4.999813
+PAIR round=1 a=51:FlowerMeristem b=47:Petiole gapMm=-1.2128876 ma=0 mb=0.00885846488642378 n=<0.06455392, 0.28179, -0.9573022>
+YIELD scale=1 moved=True failures= neighbourAngleDeg=4.9999695
+PAIR round=2 a=51:FlowerMeristem b=47:Petiole gapMm=-0.63564557 ma=0 mb=0.008858636244785346 n=<0.06455359, 0.2817901, -0.95730215>
+YIELD-PAIR scale=1 root=0 pair=15:Leaf-48:Leaf stable=16-49 common=11 endpointGapUm=9.999996109399945
+YIELD-PATH-SAMPLES count=65 minGapUm=9.999996109399945 at=0 (sampling does not certify separation)
+YIELD-PAIR scale=1 root=16 pair=48:Leaf-15:Leaf stable=49-16 common=11 endpointGapUm=9.999996109399945
+YIELD scale=1 moved=True failures=0,1,6,11,14,15,16,21,26,31,36,41,46,47,48 neighbourAngleDeg=4.9999695
+YIELD scale=0.5 moved=True failures= neighbourAngleDeg=2.8874853
+PAIR round=3 a=51:FlowerMeristem b=47:Petiole gapMm=-0.2923794 ma=0 mb=0.008858454617681494 n=<0.06455454, 0.28178984, -0.9573021>
+YIELD-PAIR scale=1 root=0 pair=15:Leaf-48:Leaf stable=16-49 common=11 endpointGapUm=9.999996109399945
+YIELD-PAIR scale=1 root=16 pair=48:Leaf-15:Leaf stable=49-16 common=11 endpointGapUm=9.999996109399945
+YIELD scale=1 moved=True failures=0,1,6,11,14,15,16,21,26,31,36,41,46,47,48 neighbourAngleDeg=2.704389
+YIELD-PAIR scale=0.5 root=0 pair=15:Leaf-48:Leaf stable=16-49 common=11 endpointGapUm=9.999996109399945
+YIELD-PAIR scale=0.5 root=16 pair=48:Leaf-15:Leaf stable=49-16 common=11 endpointGapUm=9.999996109399945
+YIELD scale=0.5 moved=True failures=0,1,6,11,14,15,16,21,26,31,36,41,46,47,48 neighbourAngleDeg=1.351592
+YIELD-PAIR scale=0.25 root=0 pair=15:Leaf-48:Leaf stable=16-49 common=11 endpointGapUm=9.999996109399945
+YIELD-PAIR scale=0.25 root=16 pair=48:Leaf-15:Leaf stable=49-16 common=11 endpointGapUm=9.999996109399945
+YIELD scale=0.25 moved=True failures=0,1,6,11,14,15,16,21,26,31,36,41,46,47,48 neighbourAngleDeg=0.67492384
+YIELD-PAIR scale=0.125 root=0 pair=15:Leaf-48:Leaf stable=16-49 common=11 endpointGapUm=9.999996109399945
+YIELD-PAIR scale=0.125 root=16 pair=48:Leaf-15:Leaf stable=49-16 common=11 endpointGapUm=9.999996109399945
+YIELD scale=0.125 moved=True failures=0,1,6,11,14,15,16,21,26,31,36,41,46,47,48 neighbourAngleDeg=0.3357176
+YIELD-PAIR scale=0.0625 root=0 pair=15:Leaf-48:Leaf stable=16-49 common=11 endpointGapUm=9.999996109399945
+YIELD-PAIR scale=0.0625 root=16 pair=48:Leaf-15:Leaf stable=49-16 common=11 endpointGapUm=9.999996109399945
+YIELD scale=0.0625 moved=True failures=0,1,6,11,14,15,16,21,26,31,36,41,46,47,48 neighbourAngleDeg=0.16312937
+YIELD scale=0.03125 moved=True failures= neighbourAngleDeg=0.055952907
+PAIR round=4 a=51:FlowerMeristem b=47:Petiole gapMm=-0.2821968 ma=0 mb=0.008858435295758747 n=<0.06455344, 0.2817901, -0.95730215>
+YIELD-PAIR scale=1 root=0 pair=15:Leaf-48:Leaf stable=16-49 common=11 endpointGapUm=9.999996109399945
+YIELD-PAIR scale=1 root=16 pair=48:Leaf-15:Leaf stable=49-16 common=11 endpointGapUm=9.999996109399945
+YIELD scale=1 moved=True failures=0,1,6,11,14,15,16,21,26,31,36,41,46,47,48 neighbourAngleDeg=2.6134229
+YIELD-PAIR scale=0.5 root=0 pair=15:Leaf-48:Leaf stable=16-49 common=11 endpointGapUm=9.999996109399945
+YIELD-PAIR scale=0.5 root=16 pair=48:Leaf-15:Leaf stable=49-16 common=11 endpointGapUm=9.999996109399945
+YIELD scale=0.5 moved=True failures=0,1,6,11,14,15,16,21,26,31,36,41,46,47,48 neighbourAngleDeg=1.3062409
+YIELD-PAIR scale=0.25 root=0 pair=15:Leaf-48:Leaf stable=16-49 common=11 endpointGapUm=9.999996109399945
+YIELD-PAIR scale=0.25 root=16 pair=48:Leaf-15:Leaf stable=49-16 common=11 endpointGapUm=9.999996109399945
+YIELD scale=0.25 moved=True failures=0,1,6,11,14,15,16,21,26,31,36,41,46,47,48 neighbourAngleDeg=0.65251833
+YIELD-PAIR scale=0.125 root=0 pair=15:Leaf-48:Leaf stable=16-49 common=11 endpointGapUm=9.999996109399945
+YIELD-PAIR scale=0.125 root=16 pair=48:Leaf-15:Leaf stable=49-16 common=11 endpointGapUm=9.999996109399945
+YIELD scale=0.125 moved=True failures=0,1,6,11,14,15,16,21,26,31,36,41,46,47,48 neighbourAngleDeg=0.32625884
+YIELD-PAIR scale=0.0625 root=0 pair=15:Leaf-48:Leaf stable=16-49 common=11 endpointGapUm=9.999996109399945
+YIELD-PAIR scale=0.0625 root=16 pair=48:Leaf-15:Leaf stable=49-16 common=11 endpointGapUm=9.999996109399945
+YIELD scale=0.0625 moved=True failures=0,1,6,11,14,15,16,21,26,31,36,41,46,47,48 neighbourAngleDeg=0.16312937
+YIELD-PAIR scale=0.03125 root=0 pair=15:Leaf-48:Leaf stable=16-49 common=11 endpointGapUm=9.999996109399945
+YIELD-PAIR scale=0.03125 root=16 pair=48:Leaf-15:Leaf stable=49-16 common=11 endpointGapUm=9.999996109399945
+YIELD scale=0.03125 moved=True failures=0,1,6,11,14,15,16,21,26,31,36,41,46,47,48 neighbourAngleDeg=0.055952907
+YIELD-PAIR scale=0.015625 root=0 pair=15:Leaf-48:Leaf stable=16-49 common=11 endpointGapUm=9.999996109399945
+YIELD-PAIR scale=0.015625 root=16 pair=48:Leaf-15:Leaf stable=49-16 common=11 endpointGapUm=9.999996109399945
+YIELD scale=0.015625 moved=True failures=0,1,6,11,14,15,16,21,26,31,36,41,46,47,48 neighbourAngleDeg=0
+YIELD-PAIR scale=0.0078125 root=0 pair=15:Leaf-48:Leaf stable=16-49 common=11 endpointGapUm=9.999996109399945
+YIELD-PAIR scale=0.0078125 root=16 pair=48:Leaf-15:Leaf stable=49-16 common=11 endpointGapUm=9.999996109399945
+YIELD scale=0.0078125 moved=True failures=0,1,6,11,14,15,16,21,26,31,36,41,46,47,48 neighbourAngleDeg=0
+YIELD-PAIR scale=0.00390625 root=0 pair=15:Leaf-48:Leaf stable=16-49 common=11 endpointGapUm=9.999996109399945
+YIELD-PAIR scale=0.00390625 root=16 pair=48:Leaf-15:Leaf stable=49-16 common=11 endpointGapUm=9.999996109399945
+YIELD scale=0.00390625 moved=True failures=0,1,6,11,14,15,16,21,26,31,36,41,46,47,48 neighbourAngleDeg=0

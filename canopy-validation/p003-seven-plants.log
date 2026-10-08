@@ -1,0 +1,47 @@
+Species lookup: Carex morrowii 'Variegata', BudLength: 0.004
+PlantFormation2 ctor: Carex morrowii 'Variegata', BudLength: 0.004
+SpeciesSettings.Init called on Carex morrowii 'Variegata', BudLength: 0.004
+PlantFormation2 after Init: Carex morrowii 'Variegata', BudLength: 0.004
+Species lookup: Fragaria vesca 'Rügen', BudLength: 0.005
+PlantFormation2 ctor: Fragaria vesca 'Rügen', BudLength: 0.005
+SpeciesSettings.Init called on Fragaria vesca 'Rügen', BudLength: 0.005
+PlantFormation2 after Init: Fragaria vesca 'Rügen', BudLength: 0.005
+Species lookup: Geranium Macrorrhizum, BudLength: 0.01
+PlantFormation2 ctor: Geranium Macrorrhizum, BudLength: 0.01
+SpeciesSettings.Init called on Geranium Macrorrhizum, BudLength: 0.01
+PlantFormation2 after Init: Geranium Macrorrhizum, BudLength: 0.01
+Species lookup: Bergenia Cordifolia, BudLength: 0.009
+PlantFormation2 ctor: Bergenia Cordifolia, BudLength: 0.009
+SpeciesSettings.Init called on Bergenia Cordifolia, BudLength: 0.009
+PlantFormation2 after Init: Bergenia Cordifolia, BudLength: 0.009
+Species lookup: Geranium × cantabrigiense, BudLength: 0.005
+PlantFormation2 ctor: Geranium × cantabrigiense, BudLength: 0.005
+SpeciesSettings.Init called on Geranium × cantabrigiense, BudLength: 0.005
+PlantFormation2 after Init: Geranium × cantabrigiense, BudLength: 0.005
+Species lookup: Heuchera micrantha, BudLength: 0.004
+PlantFormation2 ctor: Heuchera micrantha, BudLength: 0.004
+SpeciesSettings.Init called on Heuchera micrantha, BudLength: 0.004
+PlantFormation2 after Init: Heuchera micrantha, BudLength: 0.004
+Species lookup: Campanula poscharskyana, BudLength: 0.006
+PlantFormation2 ctor: Campanula poscharskyana, BudLength: 0.006
+SpeciesSettings.Init called on Campanula poscharskyana, BudLength: 0.006
+PlantFormation2 after Init: Campanula poscharskyana, BudLength: 0.006
+Collision scene: 1869918 triangles (18012 soil, 1851906 obstacle) in 967 ms, soil hull closed
+PROGRESS step=30 seconds=5.2 collisionSeconds=1.5
+PROGRESS step=60 seconds=10.4 collisionSeconds=6.1
+PROGRESS step=90 seconds=14.3 collisionSeconds=10.0
+PROGRESS step=120 seconds=34.1 collisionSeconds=29.5
+PROGRESS step=150 seconds=56.2 collisionSeconds=51.4
+PROGRESS step=180 seconds=79.5 collisionSeconds=74.5
+FACADE day=30 plants=7 organs=513 penetrations=0 rhizomes=86 unsupported=0 lowest=0 cuts=0 bytes=43196 seconds=79.5
+CANOPY day=30 species=Carex morrowii 'Variegata' leaves=80 area=0.0013586755939823973 crowns=2 mass=0.8794430184861994 water=0.5503256556276028 paused=3 pending=0 rejectedBirths=0 naturalDeaths=0 resourceDeaths=0
+CANOPY day=30 species=Fragaria vesca 'Rügen' leaves=24 area=0.011809909186895286 crowns=2 mass=5.899887960523442 water=4.5452142840256196 paused=43 pending=1 rejectedBirths=29 naturalDeaths=0 resourceDeaths=0
+CANOPY day=30 species=Geranium Macrorrhizum leaves=6 area=0.0021463559022585343 crowns=1 mass=3.295724426570814 water=1.8480654796003364 paused=14 pending=0 rejectedBirths=0 naturalDeaths=0 resourceDeaths=0
+CANOPY day=30 species=Bergenia Cordifolia leaves=8 area=0.006126290590032093 crowns=1 mass=1.9198561744172196 water=1.2943378123080613 paused=8 pending=0 rejectedBirths=0 naturalDeaths=0 resourceDeaths=0
+CANOPY day=30 species=Geranium × cantabrigiense leaves=4 area=0.0076531387782820814 crowns=1 mass=3.960753070190549 water=2.9517690350767225 paused=5 pending=0 rejectedBirths=0 naturalDeaths=0 resourceDeaths=0
+CANOPY day=30 species=Heuchera micrantha leaves=24 area=0.018567973915370448 crowns=2 mass=9.75740105742625 water=7.446673337105494 paused=70 pending=0 rejectedBirths=0 naturalDeaths=0 resourceDeaths=0
+CANOPY day=30 species=Campanula poscharskyana leaves=28 area=0.009249164271180589 crowns=2 mass=8.390235913427603 water=6.282275152471357 paused=7 pending=2 rejectedBirths=12 naturalDeaths=0 resourceDeaths=0
+COVERAGE projectedXYm2=0.0164 unresolvedFoliage=0
+STORAGE frameRaw=43196 frameZlib=28515 checkpoint=294967
+ENCODED_HISTORY measuredThroughStep=180 rawFrames=3952553 zlibFrames=2694822 indexBytes=1440 note=payload_counted_without_retaining_all_frames
+MEMORY managed=1139803696 allocated=5022656816 peak=VmHWM:	 2075448 kB

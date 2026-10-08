@@ -1,0 +1,601 @@
+{
+  "checkpointVersion": 25,
+  "payloadLayoutChanged": false,
+  "V2DefaultEnabled": false,
+  "release": "bounded recovery retained; no deployment; biological and larger-scene acceptance remain open",
+  "request": {
+    "path": "/tmp/gf-soil-budget/bergenia-sep755.json",
+    "bytes": 237110,
+    "sha256": "74450989e51855e23248d35cdb410224a999a61c27029666dddfa312e43ff1fe"
+  },
+  "sourceFiles": {
+    "Agro/AgroWorld.cs": {
+      "path": "/home/ubuntu/GreenFDT/Agro/AgroWorld.cs",
+      "bytes": 38880,
+      "sha256": "fd0905d4b7fb2f135e1b7501b2efa70eda11f333d800b125f933c64587eed490"
+    },
+    "Agro/Collisions/CollisionWorld.Foliage.cs": {
+      "path": "/home/ubuntu/GreenFDT/Agro/Collisions/CollisionWorld.Foliage.cs",
+      "bytes": 58856,
+      "sha256": "f6edc7a4321a9f21e86e3b6919f90ecf7e7be9e6232697c2224a3e387bccab3f"
+    },
+    "Agro/Collisions/CollisionWorld.cs": {
+      "path": "/home/ubuntu/GreenFDT/Agro/Collisions/CollisionWorld.cs",
+      "bytes": 8450,
+      "sha256": "89ab3c2a743f0e561a0744bb380b58fe48cd87a66cd3d6f6c46a87a4067c4391"
+    },
+    "Agro/Plant/PlantSubFormation.Contacts.cs": {
+      "path": "/home/ubuntu/GreenFDT/Agro/Plant/PlantSubFormation.Contacts.cs",
+      "bytes": 38571,
+      "sha256": "7938732c7c3f99e588983ff69bb751a00659dd3fbb15fc36372e2da17f9ee996"
+    },
+    "Agro/COLLISIONS.md": {
+      "path": "/home/ubuntu/GreenFDT/Agro/COLLISIONS.md",
+      "bytes": 79297,
+      "sha256": "3cf2e622499512b94df71946bf1d6032f519b8eedc2b98d54930d9e65128bdad"
+    },
+    "Agro/BERGENIA_CALIBRATION.md": {
+      "path": "/home/ubuntu/GreenFDT/Agro/BERGENIA_CALIBRATION.md",
+      "bytes": 49947,
+      "sha256": "f31b961df85474887dbbf13e621eb53eafab893472b0e55d51796bd14a0f9345"
+    },
+    "Agro/Collisions/CollisionWorld.Continuation.cs": {
+      "path": "/home/ubuntu/GreenFDT/Agro/Collisions/CollisionWorld.Continuation.cs",
+      "bytes": 9838,
+      "sha256": "39c893ffc5d6b96e25aa74634a47d4d0d2dce3f4250d78a416380a5748116907"
+    }
+  },
+  "baselineSources": {
+    "Agro/AgroWorld.cs": {
+      "path": "/tmp/gf-coupled-growth-v25/baseline/AgroWorld.cs",
+      "bytes": 38629,
+      "sha256": "67318918bb50af54ffe3a1bd30a264d05e9c4c3c91c294e7a1fd9ebe001a7583"
+    },
+    "Agro/Collisions/CollisionWorld.Foliage.cs": {
+      "path": "/tmp/gf-coupled-growth-v25/baseline/CollisionWorld.Foliage.cs",
+      "bytes": 57784,
+      "sha256": "260a3c17d9395f8bc7060bf3c7f78bb7beb3387f20239c5a6c95401c66ce8420"
+    },
+    "Agro/Collisions/CollisionWorld.cs": {
+      "path": "/tmp/gf-coupled-growth-v25/baseline/CollisionWorld.cs",
+      "bytes": 8197,
+      "sha256": "247d4b47a1007f7344cd5c4e5366f0d372f8d9b1ab8edc60cc6d819ef08b4ce1"
+    },
+    "Agro/Plant/PlantSubFormation.Contacts.cs": {
+      "path": "/tmp/gf-coupled-growth-v25/baseline/PlantSubFormation.Contacts.cs",
+      "bytes": 37380,
+      "sha256": "1773005354d492b1ca78338d4dd649455ac53b005c3755c2f37f0d68a951fbf3"
+    },
+    "Agro/COLLISIONS.md": {
+      "path": "/tmp/gf-coupled-growth-v25/baseline/COLLISIONS.md",
+      "bytes": 75478,
+      "sha256": "853e11504e65c7c873e1ae97af61fb6a465d285d384d1cc67e7172dbcf11266d"
+    },
+    "Agro/BERGENIA_CALIBRATION.md": {
+      "path": "/tmp/gf-coupled-growth-v25/baseline/BERGENIA_CALIBRATION.md",
+      "bytes": 45568,
+      "sha256": "e120c970fcecefd331422fe172fd15c47e696a29ea2d52415255525f4ae24d92"
+    }
+  },
+  "baselineCopy": "/tmp/gf-coupled-growth-v25/control/Agro",
+  "binaryFiles": {
+    "finalTickBenchmark": {
+      "path": "/tmp/gf-coupled-growth-v25/perf-final-native/Perf",
+      "bytes": 17814848,
+      "sha256": "a011ccc6fec2007b49b5a1388c1fba7be9805ef5e33398e71f61f870c8f16117"
+    },
+    "v24TickBenchmark": {
+      "path": "/tmp/gf-crown-retry/perf-strict-native/Perf",
+      "bytes": 17794080,
+      "sha256": "036bd1d89f4b17b40ba7168ea5ccf024ae187d32fef7cfd3c770230b685ee7d6"
+    },
+    "finalRecoveryBenchmark": {
+      "path": "/tmp/gf-coupled-growth-v25/recovery-perf-v25-native/Perf",
+      "bytes": 17410656,
+      "sha256": "9358e10d86290d25c6558d19ed508564c823fb270256f1b0395651fdee00394c"
+    },
+    "v24RecoveryBenchmark": {
+      "path": "/tmp/gf-coupled-growth-v25/recovery-perf-v24-native/Control",
+      "bytes": 17389984,
+      "sha256": "9b4104fd0395745278a288418164f900a4940ebefea323ccd3f9b54f33f93099"
+    },
+    "finalCheckpointProbe": {
+      "path": "/tmp/gf-coupled-growth-v25/checkpoint-final-native/Probe",
+      "bytes": 17814848,
+      "sha256": "b69033a8efc4581e150ba07e4d60829394e900bc5db6098915e10d81c65c0271"
+    },
+    "seasonalV25": {
+      "path": "/tmp/gf-coupled-growth-v25/growth-final-native/Probe",
+      "bytes": 17876816,
+      "sha256": "80d4fad19cfc1fa5890ee2982c319642a2af23acdbf855fb94aeeb005f6cf70a"
+    },
+    "seasonalV24": {
+      "path": "/tmp/gf-coupled-growth-v25/control-native/Probe",
+      "bytes": 17860240,
+      "sha256": "779949d222e35be35b6d637890978fddc9ae1442c7b906917bc4d3753a64f4b1"
+    },
+    "server": {
+      "path": "/tmp/gf-coupled-growth-v25/server-native/AgroServer",
+      "bytes": 86503640,
+      "sha256": "54d2d4acf4e03753341e42ee99ce427afcea3aac53a8afe6a24f588188ffcde3"
+    }
+  },
+  "snapshots": {
+    "frozenInput": {
+      "path": "/tmp/gf-scape-recovery/production/crown-pruning-1h-day303-v23.bin",
+      "bytes": 51896194,
+      "sha256": "3f1ff89ea52e2a9139058498b359746f7d80705b5e1b93fef35cefa0c9e6d658"
+    },
+    "acceptedSynthetic": {
+      "path": "/tmp/gf-coupled-growth-v25/accepted-fold-1h-v25.bin",
+      "bytes": 51896118,
+      "sha256": "9929bc1b0b5262de1e5893cc947f9e788471109237c1d3dc495c80550af7a1d2"
+    },
+    "freshV25-1h": {
+      "path": "/tmp/gf-scape-recovery/production/coupled-fresh-1h-day275-v25.bin",
+      "bytes": 51892790,
+      "sha256": "83c4dc79ec4e3fba599a6096ce5cc2174456b728d7d2ccc5f6c732e8c19062a4"
+    },
+    "freshV24-1h": {
+      "path": "/tmp/gf-scape-recovery/production/coupled-control-fresh-1h-day275-v24.bin",
+      "bytes": 51892778,
+      "sha256": "9b37260cd1971c71117813c06e3b1e81cf82cf32327cff83004a3446984a0b8b"
+    },
+    "freshV25-4h": {
+      "path": "/tmp/gf-scape-recovery/production/coupled-fresh-4h-day330-v25.bin",
+      "bytes": 51892098,
+      "sha256": "3642a160c0750c4c510ba2c9b7d9845ea0d7812fd008eb1b7cc78e28e3764b42"
+    },
+    "freshV24-4h": {
+      "path": "/tmp/gf-scape-recovery/production/coupled-control-fresh-4h-day330-v24.bin",
+      "bytes": 51892646,
+      "sha256": "67aaaac5de9126415a74bb312be8c3a4a6d8761098dcf49479dcf58c1b0eeec4"
+    }
+  },
+  "harnesses": {
+    "/tmp/gf-coupled-growth-v25/cross-fixture/Program.cs": {
+      "path": "/tmp/gf-coupled-growth-v25/cross-fixture/Program.cs",
+      "bytes": 6700,
+      "sha256": "256a1e74acac9ec1b80dd7ad8698ad9f4583fb0175b1815c196c8799f2c7bc07"
+    },
+    "/tmp/gf-coupled-growth-v25/cross-fixture/Probe.csproj": {
+      "path": "/tmp/gf-coupled-growth-v25/cross-fixture/Probe.csproj",
+      "bytes": 302,
+      "sha256": "a2ea646bb836cbb0aa3199913849265f7662d2a71ff2b0b4aa362aff9021f851"
+    },
+    "/tmp/gf-coupled-growth-v25/control/Program.cs": {
+      "path": "/tmp/gf-coupled-growth-v25/control/Program.cs",
+      "bytes": 7850,
+      "sha256": "c02e229dd04a79d433afc33b3defa0c6bb4aaca0c8056961960f1d82118cbd79"
+    },
+    "/tmp/gf-coupled-growth-v25/recovery-perf/Program.cs": {
+      "path": "/tmp/gf-coupled-growth-v25/recovery-perf/Program.cs",
+      "bytes": 5267,
+      "sha256": "591e8a277998597014e37e23368a5ed80455c9f5718004364c5257ac382d4622"
+    },
+    "/tmp/gf-coupled-growth-v25/recovery-perf/Perf.csproj": {
+      "path": "/tmp/gf-coupled-growth-v25/recovery-perf/Perf.csproj",
+      "bytes": 542,
+      "sha256": "430dc1d9bba6018a8bcb14e1ec0ca961fa8229e7d2888e5e5131b2d846c7d69f"
+    },
+    "/tmp/gf-coupled-growth-v25/recovery-perf/Control.csproj": {
+      "path": "/tmp/gf-coupled-growth-v25/recovery-perf/Control.csproj",
+      "bytes": 555,
+      "sha256": "4e3c3064b44a9fe4abba28105f6d87b1a8912e46501ce7acd6baf0c1dfd366e7"
+    },
+    "/tmp/gf-coupled-growth-v25/benchmark_final.py": {
+      "path": "/tmp/gf-coupled-growth-v25/benchmark_final.py",
+      "bytes": 4208,
+      "sha256": "aee446296eebff59502a8334667241dea21bda1b15afe1102bc1c84ad3eed807"
+    },
+    "/tmp/gf-v22-checkpoint/Program.cs": {
+      "path": "/tmp/gf-v22-checkpoint/Program.cs",
+      "bytes": 2901,
+      "sha256": "9d5ecca40c2abb13d9226a4ca0aec467906585bcb4787a7b99a9723d1f289e3e"
+    },
+    "/tmp/gf-crown-v23/four-plants/Program.cs": {
+      "path": "/tmp/gf-crown-v23/four-plants/Program.cs",
+      "bytes": 2331,
+      "sha256": "048889e27faa79cb887041022b19fffc5c7001a456f2b8a098577b074a46cc90"
+    },
+    "/tmp/gf-scape-evasion/Program.cs": {
+      "path": "/tmp/gf-scape-evasion/Program.cs",
+      "bytes": 15936,
+      "sha256": "90e33aa19eb1dd767813337bf4904198069b0eb87ef398ed1ac135d8b5f3bc29"
+    },
+    "/tmp/gf-evasion-perf/corrected/Program.cs": {
+      "path": "/tmp/gf-evasion-perf/corrected/Program.cs",
+      "bytes": 2224,
+      "sha256": "2acd018a6ee98ed4aaea45c2bd1e377e2a2921ffebbcb604cc4910c47716c036"
+    },
+    "/tmp/gf-coupled-growth-v25/inspect/Program.cs": {
+      "path": "/tmp/gf-coupled-growth-v25/inspect/Program.cs",
+      "bytes": 1471,
+      "sha256": "d6411d16f5dfcc9f285ae0bea7b4535dad5ddb6a26255ddc06acb001c2e9eacf"
+    },
+    "/tmp/gf-coupled-growth-v25/refresh_evidence.py": {
+      "path": "/tmp/gf-coupled-growth-v25/refresh_evidence.py",
+      "bytes": 3386,
+      "sha256": "4d1d157bf0ccba1faf357c7947b0a642adab5326f016b3402fba92163d291152"
+    }
+  },
+  "diagnosticHeaderRebinding": "Explicit old-version rejection followed by private same-layout header rewrite only in labelled diagnostics; never a supported migration",
+  "seasonalBinaryScope": "Fresh single-plant runs compiled before final unjoined-neighbour history and reversed contact-memory fixes. Final frozen-crown poses and 12-hour resumed native state/frame hashes from both mature snapshots match prior results. Fresh final-source seasonal replay has not been run; short checks do not establish full-run equivalence.",
+  "checks": {
+    "core": "zero errors; existing warnings",
+    "NativeAOTServer": "isolated publish succeeded",
+    "frontend": "5 suites, 34 tests passed",
+    "fourPlants": "one/four-worker state and frame equality at both tick sizes, 81 final certificates each",
+    "checkpoint": "Final-source native state/frame equality, removal/reindexing, strict v24 rejection; mature 1h/4h and accepted synthetic 1h hashes preserved after history fixes.",
+    "performance": "three interleaved serial processes per version/tick; all other simulation/build work idle",
+    "scopedWhitespace": "Tracked changed paths plus continuation source, calibration appendix and evidence README pass git diff --check; no-index exit 1 represents differences only"
+  },
+  "evidenceFiles": {
+    "README.md": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/README.md",
+      "bytes": 10833,
+      "sha256": "8c72070842d6dfd4ac37ab6e9d8d5a061950413460edc714c19b13225a42c131"
+    },
+    "active-v24-r1.log": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/active-v24-r1.log",
+      "bytes": 993,
+      "sha256": "2c882dc3c186da656b6fd0d724ec2f06cf346917fc11958fe0dc4bdca372a316"
+    },
+    "active-v24-r2.log": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/active-v24-r2.log",
+      "bytes": 993,
+      "sha256": "8324fdbc072b17c8ccbe8cbc6898acb3fbd2c63689aaad7908ae3cc938df262b"
+    },
+    "active-v24-r3.log": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/active-v24-r3.log",
+      "bytes": 993,
+      "sha256": "643668fe214ef8c43af598a3f781e6e098d33a2f8ff382e26e97449b3887b25a"
+    },
+    "active-v25-r1.log": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/active-v25-r1.log",
+      "bytes": 1164,
+      "sha256": "c1e8d8e6da29cec856d8eec2c6649888da2f13ec7bc59a62c1b07bf02777b5d8"
+    },
+    "active-v25-r2.log": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/active-v25-r2.log",
+      "bytes": 1164,
+      "sha256": "448fa0b3d7d078174d0f39bdfe2785564eccf6ff4c45b604c6fb3700ca4404cb"
+    },
+    "active-v25-r3.log": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/active-v25-r3.log",
+      "bytes": 1164,
+      "sha256": "b4da799195fff5b231ac6979cb4512e24e58e99972a0113799dfb2a8d4f9fd9c"
+    },
+    "actual-growth-sampling.log": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/actual-growth-sampling.log",
+      "bytes": 388,
+      "sha256": "8a6c9e429e56bfad9a4eb0048e6585bcd8b8a9a69b923080fe0b9f9a882613c6"
+    },
+    "ccd.log": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/ccd.log",
+      "bytes": 2642,
+      "sha256": "090946f2a5cf4c6725fe13577de07caecfae25289487739f8f0a989cf3bc30d3"
+    },
+    "checkpoint-final-coupled-1h.log": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/checkpoint-final-coupled-1h.log",
+      "bytes": 995,
+      "sha256": "e1def9469458948b1ae7a4d6c006d927d25d87b338b92e8e75815e60e9880333"
+    },
+    "checkpoint-final-fresh-1h.log": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/checkpoint-final-fresh-1h.log",
+      "bytes": 950,
+      "sha256": "74dfcf730367097802f66338475cda1e9a6bad32d9bff0bc5283fecf42b9cc2d"
+    },
+    "checkpoint-final-fresh-4h.log": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/checkpoint-final-fresh-4h.log",
+      "bytes": 993,
+      "sha256": "3ca8c7f184e108431c01ca491afeb2118e59d63e8db2febe29112ec3229555a2"
+    },
+    "checkpoint-final-mature-1h.log": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/checkpoint-final-mature-1h.log",
+      "bytes": 995,
+      "sha256": "8fef6b3c0ee60768a9bbfc15f854edd9eba3909c7ac53ac89a9f4b40353c3d61"
+    },
+    "checkpoint-final-mature-4h.log": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/checkpoint-final-mature-4h.log",
+      "bytes": 995,
+      "sha256": "4ab7380b5ef37b3241914f28fbaf105288e82a9a40249e0f6c9956e25439d7ed"
+    },
+    "core-final-build.log": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/core-final-build.log",
+      "bytes": 152640,
+      "sha256": "27ac38b41b18fa8dce8e690737184e0ab0f0422621eb8cfe976db229de2e5f52"
+    },
+    "coupled-control-fresh-leaves-1h-755d.csv": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/coupled-control-fresh-leaves-1h-755d.csv",
+      "bytes": 215,
+      "sha256": "66b332f5378ef56f72ad71fdd671f4f0c0838992a003a91b8257219b5d3bd72e"
+    },
+    "coupled-control-fresh-leaves-4h-755d.csv": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/coupled-control-fresh-leaves-4h-755d.csv",
+      "bytes": 216,
+      "sha256": "3b7345dfc6777f50777cdae551ab2f9f79ee1a8f123b47cc856248558da88b11"
+    },
+    "coupled-fresh-leaves-1h-755d.csv": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/coupled-fresh-leaves-1h-755d.csv",
+      "bytes": 215,
+      "sha256": "66b332f5378ef56f72ad71fdd671f4f0c0838992a003a91b8257219b5d3bd72e"
+    },
+    "coupled-fresh-leaves-4h-755d.csv": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/coupled-fresh-leaves-4h-755d.csv",
+      "bytes": 216,
+      "sha256": "3b7345dfc6777f50777cdae551ab2f9f79ee1a8f123b47cc856248558da88b11"
+    },
+    "cross-fixture-1h.log": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/cross-fixture-1h.log",
+      "bytes": 1997,
+      "sha256": "948a2cf9987fb69f114e98bbe224fd1872537a75c97ac760f661206cb22cb393"
+    },
+    "cross-fixture-4h.log": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/cross-fixture-4h.log",
+      "bytes": 1997,
+      "sha256": "ce6fa3f7626327ca2b8d4a8be3be6d91fcb8cda09c0e296b70933372f1c32ade"
+    },
+    "cross-fixture-ceiling-1h.log": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/cross-fixture-ceiling-1h.log",
+      "bytes": 1966,
+      "sha256": "f4ddc304d118d427aab15fc04d7db92a2ce4c8fdf2fa6754c08482cdb70cc5f4"
+    },
+    "cross-fixture-ceiling-4h.log": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/cross-fixture-ceiling-4h.log",
+      "bytes": 1966,
+      "sha256": "d35759b208627716f6a791774b237a1ceb1948753811616c8d54cd50dcff8ce7"
+    },
+    "cross-fixture-earlier-neighbour-motion-1h.log": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/cross-fixture-earlier-neighbour-motion-1h.log",
+      "bytes": 1909,
+      "sha256": "07c712fd40d0646e7ddac823610388c528e2fd946693938be3b0c946b6bc0c42"
+    },
+    "cross-fixture-earlier-neighbour-motion-4h.log": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/cross-fixture-earlier-neighbour-motion-4h.log",
+      "bytes": 1909,
+      "sha256": "e10ca2636ccf12ee3e9a67098fa918b1b22662adcfc203cdd7f8f5aa6a0dd457"
+    },
+    "cross-fixture-final-ceiling-1h.log": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/cross-fixture-final-ceiling-1h.log",
+      "bytes": 1966,
+      "sha256": "f4ddc304d118d427aab15fc04d7db92a2ce4c8fdf2fa6754c08482cdb70cc5f4"
+    },
+    "cross-fixture-final-ceiling-4h.log": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/cross-fixture-final-ceiling-4h.log",
+      "bytes": 1966,
+      "sha256": "a8845851aa7bd8c196ce55a1c6628b277b09c41e220c56d97c441269dd059955"
+    },
+    "cross-fixture-final-earlier-neighbour-motion-1h.log": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/cross-fixture-final-earlier-neighbour-motion-1h.log",
+      "bytes": 1909,
+      "sha256": "07c712fd40d0646e7ddac823610388c528e2fd946693938be3b0c946b6bc0c42"
+    },
+    "cross-fixture-final-earlier-neighbour-motion-4h.log": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/cross-fixture-final-earlier-neighbour-motion-4h.log",
+      "bytes": 1909,
+      "sha256": "e10ca2636ccf12ee3e9a67098fa918b1b22662adcfc203cdd7f8f5aa6a0dd457"
+    },
+    "cross-fixture-final-normal-1h.log": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/cross-fixture-final-normal-1h.log",
+      "bytes": 1998,
+      "sha256": "98c9d4508eff9a7480aceafcfe34ce27845884126995e1e601706feb04c7d47a"
+    },
+    "cross-fixture-final-normal-4h.log": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/cross-fixture-final-normal-4h.log",
+      "bytes": 1997,
+      "sha256": "50e5bf858695cf1468420e37f33741e3263dd3d38c12eeafae8e5a0f9c4be825"
+    },
+    "cross-fixture-memory-1h.log": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/cross-fixture-memory-1h.log",
+      "bytes": 2000,
+      "sha256": "d1c4c8c199591046c01b00e946c376d03817dbe1515214c987b887cb45cbdea8"
+    },
+    "cross-fixture-memory-4h.log": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/cross-fixture-memory-4h.log",
+      "bytes": 2000,
+      "sha256": "50b0d8feb3a3e4025600503a7774795566eea2c9a47681cdafa94eabcafec658"
+    },
+    "cross-fixture-memory-reverse-1h.log": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/cross-fixture-memory-reverse-1h.log",
+      "bytes": 2000,
+      "sha256": "d1c4c8c199591046c01b00e946c376d03817dbe1515214c987b887cb45cbdea8"
+    },
+    "cross-fixture-memory-reverse-4h.log": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/cross-fixture-memory-reverse-4h.log",
+      "bytes": 2000,
+      "sha256": "50b0d8feb3a3e4025600503a7774795566eea2c9a47681cdafa94eabcafec658"
+    },
+    "four-plants-1h-worker1.log": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/four-plants-1h-worker1.log",
+      "bytes": 1385,
+      "sha256": "a0f32b11ef21669aa499782223a06d9836f9d1c3b911bd70e0df912b0283d44a"
+    },
+    "four-plants-final-1h-worker1.log": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/four-plants-final-1h-worker1.log",
+      "bytes": 1385,
+      "sha256": "a0f32b11ef21669aa499782223a06d9836f9d1c3b911bd70e0df912b0283d44a"
+    },
+    "four-plants-final-1h-worker4.log": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/four-plants-final-1h-worker4.log",
+      "bytes": 1385,
+      "sha256": "5eb42d4b29ecc11196e3482dac7780addfeaa26b2e0b1a5cf4c9996e8a8373b6"
+    },
+    "four-plants-final-4h-worker1.log": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/four-plants-final-4h-worker1.log",
+      "bytes": 1383,
+      "sha256": "ddb2597e63a58cc86b80054418cb7ad12e5b6df3c1b69812ae293cc0abbc9464"
+    },
+    "four-plants-final-4h-worker4.log": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/four-plants-final-4h-worker4.log",
+      "bytes": 1383,
+      "sha256": "3ef9cde320ea7dfd29461499614b7517fc4917a733577340fb2e51a243213c13"
+    },
+    "fresh-control-cpu-1h-day275.log": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/fresh-control-cpu-1h-day275.log",
+      "bytes": 7282,
+      "sha256": "70d01982989935b0c727f53c5e3312571bc013d9820c97bff3a22840d5a871b4"
+    },
+    "fresh-control-cpu-4h-day330.log": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/fresh-control-cpu-4h-day330.log",
+      "bytes": 8409,
+      "sha256": "4d72f02671c8e8135be80010f0508f204dc05911ecf2658330f987b9b566fa50"
+    },
+    "fresh-cpu-1h-day275.log": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/fresh-cpu-1h-day275.log",
+      "bytes": 7251,
+      "sha256": "9f2e155ada1f54c9398a3bdd7cfb1880f9c522b54c9eb34cf4bfe311f48b1415"
+    },
+    "fresh-cpu-4h-day330.log": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/fresh-cpu-4h-day330.log",
+      "bytes": 8377,
+      "sha256": "fa04ef9d8969195bcc98b9ce359cbd691dda5617a0ab57c7b9a85d07d0ea3f9d"
+    },
+    "frontend.log": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/frontend.log",
+      "bytes": 14912,
+      "sha256": "6507ea32b2403d187a11e8de075a55126af610d19aaf63ee0429b494aac2a9a4"
+    },
+    "frozen-final-1h.log": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/frozen-final-1h.log",
+      "bytes": 1080,
+      "sha256": "d6c83540fd2798c0d434b84ae6fb58feef6e41b0289807139627cff906ea2ad9"
+    },
+    "frozen-final-4h.log": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/frozen-final-4h.log",
+      "bytes": 1080,
+      "sha256": "32965881cac56ca9e4f53c61d3a4af0f8123439995ae8b440ea1c198f06e341f"
+    },
+    "frozen-final-memory-1h.log": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/frozen-final-memory-1h.log",
+      "bytes": 1080,
+      "sha256": "d6c83540fd2798c0d434b84ae6fb58feef6e41b0289807139627cff906ea2ad9"
+    },
+    "frozen-final-memory-4h.log": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/frozen-final-memory-4h.log",
+      "bytes": 1080,
+      "sha256": "50282db1c47a726c5c86c0f9e9e2c8554d93794fa4ecdd08b5fa2dd154c13e46"
+    },
+    "funded-state.log": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/funded-state.log",
+      "bytes": 1067,
+      "sha256": "b731878e40ebf74d9be12f622e34f520687b40fed0b22596c2da4eb722804a9a"
+    },
+    "implementation.patch": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/implementation.patch",
+      "bytes": 26049,
+      "sha256": "d478fc79d694613ebe5d0af7fe64e5d3b96e0d71378ff3248878fdf884676957"
+    },
+    "inspect-fresh-1h.log": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/inspect-fresh-1h.log",
+      "bytes": 921,
+      "sha256": "f3c2083b533eb1e91af14b94da5f98999bb214f20de6ac4f431c79016f7a9682"
+    },
+    "inspect-fresh-4h.log": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/inspect-fresh-4h.log",
+      "bytes": 784,
+      "sha256": "8b6eea19e91b733e5a55ef16e159bc0d24a6209e2dc67b3d1e09a5c66be8723d"
+    },
+    "native-checkpoint-final-build.log": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/native-checkpoint-final-build.log",
+      "bytes": 2470,
+      "sha256": "a82c370b8506764795af3c2a38a2d7c41655bafe7be287690301d010129658ac"
+    },
+    "native-perf-final-build.log": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/native-perf-final-build.log",
+      "bytes": 2717,
+      "sha256": "b4edd2fd2ebe581ff337d177d599a00d8c87080e7acb2a39abf602cd520a15a2"
+    },
+    "native-recovery-perf-v24-build.log": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/native-recovery-perf-v24-build.log",
+      "bytes": 48410,
+      "sha256": "980c91f9d1005d4f2fa2d2f8945d08c4fbfde19f6dfcf88a288ef92d7a45df61"
+    },
+    "native-recovery-perf-v25-build.log": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/native-recovery-perf-v25-build.log",
+      "bytes": 44497,
+      "sha256": "df2d19d295dafb8421ea30df3643745b23b0f7e10f0ac3aa04118040bdbad9b3"
+    },
+    "native-server-build.log": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/native-server-build.log",
+      "bytes": 95385,
+      "sha256": "f7748a31d181518955bfc57bcbee1f6dc77470d573cf29addd2f24528d3ab9e5"
+    },
+    "performance-final.json": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/performance-final.json",
+      "bytes": 8536,
+      "sha256": "2212f0bf59b7696629a2fde4f9987adc88485941a31d0fe1cfc0852a735dd244"
+    },
+    "results.json": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/results.json",
+      "bytes": 5025,
+      "sha256": "dde3ec9f4871ca99b6e4b09bca5cd09105d54b3240652cff417a9f29f2bd4ed3"
+    },
+    "scoped-whitespace-final.log": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/scoped-whitespace-final.log",
+      "bytes": 179,
+      "sha256": "d6278aa8e04ebb64005f36bb0ea67cf23d5817a24c703dffebf25d044ff83927"
+    },
+    "v24-1h-r1.log": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/v24-1h-r1.log",
+      "bytes": 1834,
+      "sha256": "4e47debf85e47d5074767f8a4fe7ddea9be4a33c41d7e219efdbde03689a0a84"
+    },
+    "v24-1h-r2.log": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/v24-1h-r2.log",
+      "bytes": 1835,
+      "sha256": "3dd75fa2a7f8202be4a1c13f64e0c99cd04d170b7bf5d872498bacf3fca6b5b8"
+    },
+    "v24-1h-r3.log": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/v24-1h-r3.log",
+      "bytes": 1835,
+      "sha256": "46030760f1e3918b171a3858a28b0436445b285a397d479bf41901acd1b384b9"
+    },
+    "v24-4h-r1.log": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/v24-4h-r1.log",
+      "bytes": 1788,
+      "sha256": "1e4f9ca2d6aadc0ee1aec8cfa03df4f29bd44c181a4dc5e584a041323209e0aa"
+    },
+    "v24-4h-r2.log": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/v24-4h-r2.log",
+      "bytes": 1788,
+      "sha256": "c6285800f853351f37af12460b0c895b92ce0231d0984d3eea692cbe08771e6f"
+    },
+    "v24-4h-r3.log": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/v24-4h-r3.log",
+      "bytes": 1788,
+      "sha256": "74b28194a167b95741aeed11b2b3c5cf7ad56874a852dae8b466d672353e7903"
+    },
+    "v25-1h-r1.log": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/v25-1h-r1.log",
+      "bytes": 1834,
+      "sha256": "b40a70b8857466abfc2e0ccabf8a0fa5ef9c87ffbd87511b98481ba174fdd888"
+    },
+    "v25-1h-r2.log": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/v25-1h-r2.log",
+      "bytes": 1834,
+      "sha256": "400d8c22c99195b5c1ea3311382f4bdf6899bc3c7df31fb0c94c2df97cc95a4c"
+    },
+    "v25-1h-r3.log": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/v25-1h-r3.log",
+      "bytes": 1835,
+      "sha256": "4232f3359d1525dd9f441d0b646070d999075fe9f98f38a33bafcde3d03fa38d"
+    },
+    "v25-4h-r1.log": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/v25-4h-r1.log",
+      "bytes": 1788,
+      "sha256": "a3e7f60f76f1ba0ebcdd073f52d20c923feabf110c28ac247bbe58cd443528db"
+    },
+    "v25-4h-r2.log": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/v25-4h-r2.log",
+      "bytes": 1788,
+      "sha256": "0bd05fc55d1de1b31ffbb19fe206e379e4012dc183ff43294b3d4eeef3e1ecfe"
+    },
+    "v25-4h-r3.log": {
+      "path": "/home/ubuntu/GreenFDT/canopy-validation/bergenia-contact-v25/v25-4h-r3.log",
+      "bytes": 1803,
+      "sha256": "c2b7c012040f2c88a8234b964b8605358c1e72469f9ee73037869b52794f3a84"
+    }
+  },
+  "finalCrossPlantChecks": "Final source reruns normal, ceiling and earlier-certified-motion fixtures at 1h/4h. Larger-proposal history-injected fixtures agree under reversed plant registration, without claiming that every remembered side was selected."
+}

@@ -1,0 +1,23 @@
+{
+  "state": "failed",
+  "variant": "mechanics",
+  "command": [
+    "dotnet",
+    "/tmp/greenfdt-canopy-comparison-checked/Probe.dll",
+    "--facade",
+    "470",
+    "3",
+    "0"
+  ],
+  "plants": 790,
+  "hours_per_tick": 4,
+  "seed": 42,
+  "target_days": 470,
+  "started_utc": "2026-09-17T17:47:26.056969+00:00",
+  "assembly_sha256": "db04fcf0c79d1069db4b6660fb8ecea835d77578d432a86879163043e26a56b4",
+  "step": 60,
+  "pid_in_launcher_namespace": 3,
+  "elapsed_wall_seconds": 816.02,
+  "exit_code": -6,
+  "finished_utc": "2026-09-17T18:01:02.081647+00:00"
+}

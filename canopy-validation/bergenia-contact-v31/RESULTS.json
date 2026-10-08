@@ -1,0 +1,230 @@
+{
+  "date": "2026-10-07",
+  "checkpointVersion": 31,
+  "requestSha256": "74450989e51855e23248d35cdb410224a999a61c27029666dddfa312e43ff1fe",
+  "measurementDefinition": "Whole biological leaves. Both sampled intrinsic attachment-axis length and half-width must reach 50/90 percent. Daily threshold observation; completed-only durations have survivor bias and incomplete expansions are right-censored. No area or folded-envelope threshold.",
+  "seasonal": [
+    {
+      "version": "v30",
+      "tickHours": 1,
+      "mode": 0,
+      "day330": {
+        "day": 330,
+        "AG": 51,
+        "UG": 249,
+        "leaves": 20,
+        "half": 8,
+        "ninety": 4,
+        "petals": 0,
+        "floral": 0,
+        "blocked": 45,
+        "water": 44.645163756329566,
+        "energy": 1498.2832243338053,
+        "finite": true,
+        "maxUnresolved": 0,
+        "elapsedSec": 2624.98
+      },
+      "observedWholeLeaves": 20,
+      "expansion": [
+        {
+          "threshold": "halfDay",
+          "observed": 20,
+          "reached": 8,
+          "rightCensored": 12,
+          "medianCompletedDays": 67.0,
+          "minimumCompletedDays": 43,
+          "maximumCompletedDays": 158
+        },
+        {
+          "threshold": "ninetyDay",
+          "observed": 20,
+          "reached": 4,
+          "rightCensored": 16,
+          "medianCompletedDays": 111.5,
+          "minimumCompletedDays": 89,
+          "maximumCompletedDays": 187
+        }
+      ],
+      "everLoggedPetalsBefore330": false,
+      "dailyFinite": true,
+      "maxUnresolved": 0,
+      "sourceRunDays": 755,
+      "done": "DONE day=755 finite=True maxUnresolved=0 observedLeaves=52 petalsObservedSum=0 frameBytes=9645"
+    },
+    {
+      "version": "v30",
+      "tickHours": 4,
+      "mode": 0,
+      "day330": {
+        "day": 330,
+        "AG": 51,
+        "UG": 198,
+        "leaves": 20,
+        "half": 9,
+        "ninety": 4,
+        "petals": 0,
+        "floral": 0,
+        "blocked": 44,
+        "water": 47.926096986513585,
+        "energy": 1572.036501096365,
+        "finite": true,
+        "maxUnresolved": 0,
+        "elapsedSec": 510.62
+      },
+      "observedWholeLeaves": 20,
+      "expansion": [
+        {
+          "threshold": "halfDay",
+          "observed": 20,
+          "reached": 9,
+          "rightCensored": 11,
+          "medianCompletedDays": 74,
+          "minimumCompletedDays": 43,
+          "maximumCompletedDays": 171
+        },
+        {
+          "threshold": "ninetyDay",
+          "observed": 20,
+          "reached": 4,
+          "rightCensored": 16,
+          "medianCompletedDays": 131.5,
+          "minimumCompletedDays": 97,
+          "maximumCompletedDays": 184
+        }
+      ],
+      "everLoggedPetalsBefore330": false,
+      "dailyFinite": true,
+      "maxUnresolved": 0,
+      "sourceRunDays": 755,
+      "done": "DONE day=755 finite=True maxUnresolved=0 observedLeaves=50 petalsObservedSum=0 frameBytes=9645"
+    },
+    {
+      "version": "v31",
+      "tickHours": 1,
+      "mode": 0,
+      "day330": {
+        "day": 330,
+        "AG": 51,
+        "UG": 249,
+        "leaves": 20,
+        "half": 7,
+        "ninety": 5,
+        "petals": 0,
+        "floral": 0,
+        "blocked": 46,
+        "water": 44.758404430700466,
+        "energy": 1458.3333402912249,
+        "finite": true,
+        "maxUnresolved": 0,
+        "elapsedSec": 2959.15
+      },
+      "observedWholeLeaves": 20,
+      "expansion": [
+        {
+          "threshold": "halfDay",
+          "observed": 20,
+          "reached": 7,
+          "rightCensored": 13,
+          "medianCompletedDays": 114,
+          "minimumCompletedDays": 49,
+          "maximumCompletedDays": 177
+        },
+        {
+          "threshold": "ninetyDay",
+          "observed": 20,
+          "reached": 5,
+          "rightCensored": 15,
+          "medianCompletedDays": 162,
+          "minimumCompletedDays": 84,
+          "maximumCompletedDays": 211
+        }
+      ],
+      "everLoggedPetalsBefore330": false,
+      "dailyFinite": true,
+      "maxUnresolved": 0,
+      "sourceRunDays": 330,
+      "done": "DONE day=330 finite=True maxUnresolved=0 observedLeaves=20 petalsObservedSum=0 frameBytes=9645"
+    },
+    {
+      "version": "v31",
+      "tickHours": 4,
+      "mode": 0,
+      "day330": {
+        "day": 330,
+        "AG": 51,
+        "UG": 246,
+        "leaves": 20,
+        "half": 7,
+        "ninety": 5,
+        "petals": 0,
+        "floral": 0,
+        "blocked": 43,
+        "water": 41.82956409873441,
+        "energy": 1410.1820183786622,
+        "finite": true,
+        "maxUnresolved": 0,
+        "elapsedSec": 499.99
+      },
+      "observedWholeLeaves": 20,
+      "expansion": [
+        {
+          "threshold": "halfDay",
+          "observed": 20,
+          "reached": 7,
+          "rightCensored": 13,
+          "medianCompletedDays": 71,
+          "minimumCompletedDays": 43,
+          "maximumCompletedDays": 199
+        },
+        {
+          "threshold": "ninetyDay",
+          "observed": 20,
+          "reached": 5,
+          "rightCensored": 15,
+          "medianCompletedDays": 115,
+          "minimumCompletedDays": 79,
+          "maximumCompletedDays": 158
+        }
+      ],
+      "everLoggedPetalsBefore330": false,
+      "dailyFinite": true,
+      "maxUnresolved": 0,
+      "sourceRunDays": 330,
+      "done": "DONE day=330 finite=True maxUnresolved=0 observedLeaves=20 petalsObservedSum=0 frameBytes=9645"
+    }
+  ],
+  "benchmarkMedianChangesPercent": {
+    "first": {
+      "single": 0.21756021756023092,
+      "radial": -1.0866190624029826,
+      "same-crown": 0.9150991357397054,
+      "v1": -14.817411747722486
+    },
+    "quietRepeat": {
+      "single": -0.22813688212927064,
+      "radial": 0.04108885464817469,
+      "same-crown": -0.26171485543369233,
+      "v1": 18.01392957453798
+    }
+  },
+  "gates": {
+    "independentDistance": true,
+    "exactInterpolationFields": true,
+    "mechanicalFixtures": true,
+    "continuousFixtures": true,
+    "nativeCheckpointContinuation": true,
+    "flowering": false,
+    "doubledDevelopedDensityAtBothTicks": false,
+    "zeroSteadyStateContactAllocations": false,
+    "fullScene25Percent": "not established",
+    "V2Default": "not enabled",
+    "newPerOrganPersistentBytes": 0
+  },
+  "limitations": [
+    "330-day candidate horizon does not cover overwintering or the complete 755-day request",
+    "Mode 0 seasonal comparison; V1 covered by frozen fixtures and native checkpoint tests",
+    "Historical and fresh mature scape increments remain rejected",
+    "Rounded float geometry is not an exact interval-certified real-number trajectory",
+    "Timing varies across processes; fixed-retry microbenchmark is not full-scene performance"
+  ]
+}

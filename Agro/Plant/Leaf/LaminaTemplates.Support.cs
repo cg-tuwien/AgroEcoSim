@@ -7,6 +7,18 @@ public sealed partial class LaminaTemplate
 {
     internal Vector3 Support(in OrganPose pose, Vector3 direction)
     {
+        if (pose.Deformation != Vector4.Zero)
+        {
+            var bestPoint = pose.Base;
+            var bestDot = float.PositiveInfinity;
+            foreach (var vertex in Vertices)
+            {
+                var point = Transform(pose, vertex);
+                var dot = Vector3.Dot(point, direction);
+                if (dot < bestDot) { bestDot = dot; bestPoint = point; }
+            }
+            return bestPoint;
+        }
         var local = Vector3.Transform(direction, Quaternion.Conjugate(pose.Rotation));
         var relief = ReliefScale(pose.Width);
         float best = float.PositiveInfinity; int selected = -1, i = 0;

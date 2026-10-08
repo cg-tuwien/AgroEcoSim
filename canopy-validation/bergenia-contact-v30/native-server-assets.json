@@ -1,0 +1,262 @@
+{
+  "reference": "earlier task v29 native server; geometry was unchanged by that experiment",
+  "results": [
+    {
+      "variant": "earlier",
+      "species": "Default",
+      "kind": "leaf",
+      "status": 200,
+      "bytes": 788,
+      "sha256": "76c9fa89e2de921b14a7486cf059228d2dc19d20915e8c623bbaa939f544fc73"
+    },
+    {
+      "variant": "earlier",
+      "species": "Default",
+      "kind": "petal",
+      "status": 200,
+      "bytes": 788,
+      "sha256": "319deeae6a2551e1c0fd79827f305efd23db81d3af4c3b4f5f1a0e7180f59fa8"
+    },
+    {
+      "variant": "earlier",
+      "species": "Geranium Macrorrhizum",
+      "kind": "leaf",
+      "status": 200,
+      "bytes": 2000,
+      "sha256": "3fe197d0b4911dbaf21b193711ac7a91ab758c97f7a944f93646848bb7228586"
+    },
+    {
+      "variant": "earlier",
+      "species": "Geranium Macrorrhizum",
+      "kind": "petal",
+      "status": 200,
+      "bytes": 788,
+      "sha256": "319deeae6a2551e1c0fd79827f305efd23db81d3af4c3b4f5f1a0e7180f59fa8"
+    },
+    {
+      "variant": "earlier",
+      "species": "Geranium \u00d7 cantabrigiense",
+      "kind": "leaf",
+      "status": 200,
+      "bytes": 4160,
+      "sha256": "b4231ec8c246a598d81b6ee58fa8141ea22c9323a8e576fe4f720420689a3817"
+    },
+    {
+      "variant": "earlier",
+      "species": "Geranium \u00d7 cantabrigiense",
+      "kind": "petal",
+      "status": 200,
+      "bytes": 788,
+      "sha256": "319deeae6a2551e1c0fd79827f305efd23db81d3af4c3b4f5f1a0e7180f59fa8"
+    },
+    {
+      "variant": "earlier",
+      "species": "Bergenia Cordifolia",
+      "kind": "leaf",
+      "status": 200,
+      "bytes": 3512,
+      "sha256": "6382f0c0ca096fb8d0d8adb6797ca1a69c93cd6aa1e14de581289cb503b6d477"
+    },
+    {
+      "variant": "earlier",
+      "species": "Bergenia Cordifolia",
+      "kind": "petal",
+      "status": 200,
+      "bytes": 788,
+      "sha256": "319deeae6a2551e1c0fd79827f305efd23db81d3af4c3b4f5f1a0e7180f59fa8"
+    },
+    {
+      "variant": "earlier",
+      "species": "Heuchera micrantha",
+      "kind": "leaf",
+      "status": 200,
+      "bytes": 2000,
+      "sha256": "338c02532f1c8bd11f6433f4bddf9157d35d55d6b89ecec46411d471af14dae1"
+    },
+    {
+      "variant": "earlier",
+      "species": "Heuchera micrantha",
+      "kind": "petal",
+      "status": 200,
+      "bytes": 788,
+      "sha256": "d452d9f9ae3351002baf63bf3eb889928176d1ec34ee28c5ba7a522ef3856b69"
+    },
+    {
+      "variant": "earlier",
+      "species": "Campanula poscharskyana",
+      "kind": "leaf",
+      "status": 200,
+      "bytes": 2516,
+      "sha256": "13275af0633e791c72de0f626e69b9aaa4f2ee91d8a2d9a84dd27fe2512d3439"
+    },
+    {
+      "variant": "earlier",
+      "species": "Campanula poscharskyana",
+      "kind": "petal",
+      "status": 200,
+      "bytes": 788,
+      "sha256": "319deeae6a2551e1c0fd79827f305efd23db81d3af4c3b4f5f1a0e7180f59fa8"
+    },
+    {
+      "variant": "earlier",
+      "species": "Carex morrowii 'Variegata'",
+      "kind": "leaf",
+      "status": 200,
+      "bytes": 1556,
+      "sha256": "109a1f2670d1f860489bf2749011e901d77c8fd6f386014041a60ddb2db24819"
+    },
+    {
+      "variant": "earlier",
+      "species": "Carex morrowii 'Variegata'",
+      "kind": "petal",
+      "status": 200,
+      "bytes": 788,
+      "sha256": "92794bec61895882f1210d17bc63088eb16282f15144d94c01529396697a1dcd"
+    },
+    {
+      "variant": "earlier",
+      "species": "Fragaria vesca 'R\u00fcgen'",
+      "kind": "leaf",
+      "status": 200,
+      "bytes": 3584,
+      "sha256": "9c2e26dceb6a5b298265d290b8c78d7fb9ecb53099a7805c33a5c684449dd07d"
+    },
+    {
+      "variant": "earlier",
+      "species": "Fragaria vesca 'R\u00fcgen'",
+      "kind": "petal",
+      "status": 200,
+      "bytes": 788,
+      "sha256": "994ed474d39a3381e1fb33a53328115b3be1a40901db1234615a6dd406684e5d"
+    },
+    {
+      "variant": "v30",
+      "species": "Default",
+      "kind": "leaf",
+      "status": 200,
+      "bytes": 788,
+      "sha256": "76c9fa89e2de921b14a7486cf059228d2dc19d20915e8c623bbaa939f544fc73"
+    },
+    {
+      "variant": "v30",
+      "species": "Default",
+      "kind": "petal",
+      "status": 200,
+      "bytes": 788,
+      "sha256": "319deeae6a2551e1c0fd79827f305efd23db81d3af4c3b4f5f1a0e7180f59fa8"
+    },
+    {
+      "variant": "v30",
+      "species": "Geranium Macrorrhizum",
+      "kind": "leaf",
+      "status": 200,
+      "bytes": 2000,
+      "sha256": "3fe197d0b4911dbaf21b193711ac7a91ab758c97f7a944f93646848bb7228586"
+    },
+    {
+      "variant": "v30",
+      "species": "Geranium Macrorrhizum",
+      "kind": "petal",
+      "status": 200,
+      "bytes": 788,
+      "sha256": "319deeae6a2551e1c0fd79827f305efd23db81d3af4c3b4f5f1a0e7180f59fa8"
+    },
+    {
+      "variant": "v30",
+      "species": "Geranium \u00d7 cantabrigiense",
+      "kind": "leaf",
+      "status": 200,
+      "bytes": 4160,
+      "sha256": "b4231ec8c246a598d81b6ee58fa8141ea22c9323a8e576fe4f720420689a3817"
+    },
+    {
+      "variant": "v30",
+      "species": "Geranium \u00d7 cantabrigiense",
+      "kind": "petal",
+      "status": 200,
+      "bytes": 788,
+      "sha256": "319deeae6a2551e1c0fd79827f305efd23db81d3af4c3b4f5f1a0e7180f59fa8"
+    },
+    {
+      "variant": "v30",
+      "species": "Bergenia Cordifolia",
+      "kind": "leaf",
+      "status": 200,
+      "bytes": 3512,
+      "sha256": "6382f0c0ca096fb8d0d8adb6797ca1a69c93cd6aa1e14de581289cb503b6d477"
+    },
+    {
+      "variant": "v30",
+      "species": "Bergenia Cordifolia",
+      "kind": "petal",
+      "status": 200,
+      "bytes": 788,
+      "sha256": "319deeae6a2551e1c0fd79827f305efd23db81d3af4c3b4f5f1a0e7180f59fa8"
+    },
+    {
+      "variant": "v30",
+      "species": "Heuchera micrantha",
+      "kind": "leaf",
+      "status": 200,
+      "bytes": 2000,
+      "sha256": "338c02532f1c8bd11f6433f4bddf9157d35d55d6b89ecec46411d471af14dae1"
+    },
+    {
+      "variant": "v30",
+      "species": "Heuchera micrantha",
+      "kind": "petal",
+      "status": 200,
+      "bytes": 788,
+      "sha256": "d452d9f9ae3351002baf63bf3eb889928176d1ec34ee28c5ba7a522ef3856b69"
+    },
+    {
+      "variant": "v30",
+      "species": "Campanula poscharskyana",
+      "kind": "leaf",
+      "status": 200,
+      "bytes": 2516,
+      "sha256": "13275af0633e791c72de0f626e69b9aaa4f2ee91d8a2d9a84dd27fe2512d3439"
+    },
+    {
+      "variant": "v30",
+      "species": "Campanula poscharskyana",
+      "kind": "petal",
+      "status": 200,
+      "bytes": 788,
+      "sha256": "319deeae6a2551e1c0fd79827f305efd23db81d3af4c3b4f5f1a0e7180f59fa8"
+    },
+    {
+      "variant": "v30",
+      "species": "Carex morrowii 'Variegata'",
+      "kind": "leaf",
+      "status": 200,
+      "bytes": 1556,
+      "sha256": "109a1f2670d1f860489bf2749011e901d77c8fd6f386014041a60ddb2db24819"
+    },
+    {
+      "variant": "v30",
+      "species": "Carex morrowii 'Variegata'",
+      "kind": "petal",
+      "status": 200,
+      "bytes": 788,
+      "sha256": "92794bec61895882f1210d17bc63088eb16282f15144d94c01529396697a1dcd"
+    },
+    {
+      "variant": "v30",
+      "species": "Fragaria vesca 'R\u00fcgen'",
+      "kind": "leaf",
+      "status": 200,
+      "bytes": 3584,
+      "sha256": "9c2e26dceb6a5b298265d290b8c78d7fb9ecb53099a7805c33a5c684449dd07d"
+    },
+    {
+      "variant": "v30",
+      "species": "Fragaria vesca 'R\u00fcgen'",
+      "kind": "petal",
+      "status": 200,
+      "bytes": 788,
+      "sha256": "994ed474d39a3381e1fb33a53328115b3be1a40901db1234615a6dd406684e5d"
+    }
+  ],
+  "allMeshesUnchanged": true
+}

@@ -1,0 +1,298 @@
+[
+  {
+    "file": "final-managed-1h-ceiling-stale-hint.log",
+    "observations": [
+      "RESULT h=1 accepted=False length=0.012 radius=0.0012 movedNeighbour=False clear=True trials=16 steps=0 corrections=0 coupledSets=0 stages=0 counts=3/4 ms=4.8368",
+      "POSE_SHA256 1BB78D13218E293CB477FD2F2554B5070B388E967EE3903554FFD864C36A9A33",
+      "REJECTED_STATE identical=True"
+    ]
+  },
+  {
+    "file": "final-managed-1h-limit-fixture.log",
+    "observations": [
+      "DIRECT conditioned solved=True force0=0 force1=0.000101 residualMetres=0 directCount=1"
+    ]
+  },
+  {
+    "file": "final-managed-1h-radial-same-crown.log",
+    "observations": [
+      "RESULT h=1 accepted=True length=0.03 radius=0.0048562502 movedNeighbour=True clear=True trials=16 steps=6 corrections=104 coupledSets=17 stages=0 counts=9 ms=126.4544",
+      "POSE_SHA256 3E8EAC897974CDC3EA27667BCA1425CB3D971CB02D5AE1E5189E63799842D364"
+    ]
+  },
+  {
+    "file": "final-managed-1h-radial-v1-checkpoint.log",
+    "observations": [
+      "RESULT h=1 accepted=True length=0.012 radius=0.009 movedNeighbour=True clear=True trials=12 steps=6 corrections=171 coupledSets=171 stages=3 counts=3/4/4 ms=568.8518",
+      "POSE_SHA256 19C1C8BC358D0153B79715BE08E9A31A799ABEAD7700F792A403C5464385CD01",
+      "CHECKPOINT immediateState=True immediateFrame=True continued=True continuedFrame=True unresolved=0/0"
+    ]
+  },
+  {
+    "file": "final-managed-1h-radial-v1.log",
+    "observations": [
+      "RESULT h=1 accepted=True length=0.012 radius=0.009 movedNeighbour=True clear=True trials=12 steps=6 corrections=171 coupledSets=171 stages=3 counts=3/4/4 ms=494.1594",
+      "POSE_SHA256 19C1C8BC358D0153B79715BE08E9A31A799ABEAD7700F792A403C5464385CD01"
+    ]
+  },
+  {
+    "file": "final-managed-1h-radial-walls.log",
+    "observations": [
+      "RESULT h=1 accepted=False length=0.012 radius=0.0012 movedNeighbour=False clear=True trials=16 steps=0 corrections=0 coupledSets=0 stages=0 counts=3/4/4 ms=7.0261",
+      "POSE_SHA256 2E61B045147EB527BF031F35285392130072D27D794DD3A342CA87BE7D11B850",
+      "REJECTED_STATE identical=True"
+    ]
+  },
+  {
+    "file": "final-managed-1h-radial.log",
+    "observations": [
+      "RESULT h=1 accepted=True length=0.012 radius=0.0052218754 movedNeighbour=True clear=True trials=16 steps=6 corrections=113 coupledSets=28 stages=0 counts=3/4/4 ms=54.1965",
+      "POSE_SHA256 85BBA243978588CFDAD13CE75BE57B84BD407E1665C92A2AF666A6A7A76780FF"
+    ]
+  },
+  {
+    "file": "final-managed-1h-single.log",
+    "observations": [
+      "RESULT h=1 accepted=True length=0.02996875 radius=0.0012 movedNeighbour=True clear=True trials=16 steps=6 corrections=104 coupledSets=0 stages=0 counts=3/4 ms=36.8853",
+      "POSE_SHA256 DD90FF9987BD4F691A765E503FF3FAFEADC95A232B72B12DD22326A375C259C6"
+    ]
+  },
+  {
+    "file": "final-managed-4h-ceiling-stale-hint.log",
+    "observations": [
+      "RESULT h=4 accepted=False length=0.012 radius=0.0012 movedNeighbour=False clear=True trials=16 steps=0 corrections=0 coupledSets=0 stages=0 counts=3/4 ms=4.7397",
+      "POSE_SHA256 1BB78D13218E293CB477FD2F2554B5070B388E967EE3903554FFD864C36A9A33",
+      "REJECTED_STATE identical=True"
+    ]
+  },
+  {
+    "file": "final-managed-4h-limit-fixture.log",
+    "observations": [
+      "DIRECT conditioned solved=True force0=0 force1=0.000101 residualMetres=0 directCount=1"
+    ]
+  },
+  {
+    "file": "final-managed-4h-radial-same-crown.log",
+    "observations": [
+      "RESULT h=4 accepted=True length=0.03 radius=0.0048562502 movedNeighbour=True clear=True trials=16 steps=6 corrections=104 coupledSets=17 stages=0 counts=9 ms=125.0531",
+      "POSE_SHA256 3E8EAC897974CDC3EA27667BCA1425CB3D971CB02D5AE1E5189E63799842D364"
+    ]
+  },
+  {
+    "file": "final-managed-4h-radial-v1-checkpoint.log",
+    "observations": [
+      "RESULT h=4 accepted=True length=0.012 radius=0.009 movedNeighbour=True clear=True trials=12 steps=6 corrections=171 coupledSets=171 stages=3 counts=3/4/4 ms=510.969",
+      "POSE_SHA256 19C1C8BC358D0153B79715BE08E9A31A799ABEAD7700F792A403C5464385CD01",
+      "CHECKPOINT immediateState=True immediateFrame=True continued=True continuedFrame=True unresolved=0/0"
+    ]
+  },
+  {
+    "file": "final-managed-4h-radial-v1.log",
+    "observations": [
+      "RESULT h=4 accepted=True length=0.012 radius=0.009 movedNeighbour=True clear=True trials=12 steps=6 corrections=171 coupledSets=171 stages=3 counts=3/4/4 ms=510.0424",
+      "POSE_SHA256 19C1C8BC358D0153B79715BE08E9A31A799ABEAD7700F792A403C5464385CD01"
+    ]
+  },
+  {
+    "file": "final-managed-4h-radial-walls.log",
+    "observations": [
+      "RESULT h=4 accepted=False length=0.012 radius=0.0012 movedNeighbour=False clear=True trials=16 steps=0 corrections=0 coupledSets=0 stages=0 counts=3/4/4 ms=7.0121",
+      "POSE_SHA256 2E61B045147EB527BF031F35285392130072D27D794DD3A342CA87BE7D11B850",
+      "REJECTED_STATE identical=True"
+    ]
+  },
+  {
+    "file": "final-managed-4h-radial.log",
+    "observations": [
+      "RESULT h=4 accepted=True length=0.012 radius=0.0052218754 movedNeighbour=True clear=True trials=16 steps=6 corrections=113 coupledSets=28 stages=0 counts=3/4/4 ms=68.348",
+      "POSE_SHA256 85BBA243978588CFDAD13CE75BE57B84BD407E1665C92A2AF666A6A7A76780FF"
+    ]
+  },
+  {
+    "file": "final-managed-4h-single.log",
+    "observations": [
+      "RESULT h=4 accepted=True length=0.02996875 radius=0.0012 movedNeighbour=True clear=True trials=16 steps=6 corrections=104 coupledSets=0 stages=0 counts=3/4 ms=42.6984",
+      "POSE_SHA256 DD90FF9987BD4F691A765E503FF3FAFEADC95A232B72B12DD22326A375C259C6"
+    ]
+  },
+  {
+    "file": "final-native-1h-ceiling-stale-hint.log",
+    "observations": [
+      "RESULT h=1 accepted=False length=0.012 radius=0.0012 movedNeighbour=False clear=True trials=16 steps=0 corrections=0 coupledSets=0 stages=0 counts=3/4 ms=0.1237",
+      "POSE_SHA256 1BB78D13218E293CB477FD2F2554B5070B388E967EE3903554FFD864C36A9A33",
+      "REJECTED_STATE identical=True"
+    ]
+  },
+  {
+    "file": "final-native-1h-limit-fixture.log",
+    "observations": [
+      "DIRECT conditioned solved=True force0=0 force1=0.000101 residualMetres=0 directCount=1"
+    ]
+  },
+  {
+    "file": "final-native-1h-radial-same-crown.log",
+    "observations": [
+      "RESULT h=1 accepted=True length=0.03 radius=0.0048562502 movedNeighbour=True clear=True trials=16 steps=6 corrections=104 coupledSets=17 stages=0 counts=9 ms=29.648",
+      "POSE_SHA256 55A490DF79B6ACF55DD1F79C36374196578E1D71E4E831DD63D4CF53B476E9D2"
+    ]
+  },
+  {
+    "file": "final-native-1h-radial-v1-checkpoint.log",
+    "observations": [
+      "RESULT h=1 accepted=True length=0.012 radius=0.009 movedNeighbour=True clear=True trials=12 steps=6 corrections=171 coupledSets=171 stages=3 counts=3/4/4 ms=183.5587",
+      "POSE_SHA256 064552588FD22CBCE4FA96BE35F5DFF94991745ACB700AE2AF00A6718B439404",
+      "CHECKPOINT immediateState=True immediateFrame=True continued=True continuedFrame=True unresolved=0/0"
+    ]
+  },
+  {
+    "file": "final-native-1h-radial-v1.log",
+    "observations": [
+      "RESULT h=1 accepted=True length=0.012 radius=0.009 movedNeighbour=True clear=True trials=12 steps=6 corrections=171 coupledSets=171 stages=3 counts=3/4/4 ms=186.7822",
+      "POSE_SHA256 064552588FD22CBCE4FA96BE35F5DFF94991745ACB700AE2AF00A6718B439404"
+    ]
+  },
+  {
+    "file": "final-native-1h-radial-walls.log",
+    "observations": [
+      "RESULT h=1 accepted=False length=0.012 radius=0.0012 movedNeighbour=False clear=True trials=16 steps=0 corrections=0 coupledSets=0 stages=0 counts=3/4/4 ms=1.0598",
+      "POSE_SHA256 2E61B045147EB527BF031F35285392130072D27D794DD3A342CA87BE7D11B850",
+      "REJECTED_STATE identical=True"
+    ]
+  },
+  {
+    "file": "final-native-1h-radial.log",
+    "observations": [
+      "RESULT h=1 accepted=True length=0.012 radius=0.0052218754 movedNeighbour=True clear=True trials=16 steps=6 corrections=113 coupledSets=28 stages=0 counts=3/4/4 ms=12.8465",
+      "POSE_SHA256 C57DB03953682989543EB4967BDC10CF89D5FAD4FBBE9035391A6DFCA75964B1"
+    ]
+  },
+  {
+    "file": "final-native-1h-single.log",
+    "observations": [
+      "RESULT h=1 accepted=True length=0.02996875 radius=0.0012 movedNeighbour=True clear=True trials=16 steps=6 corrections=104 coupledSets=0 stages=0 counts=3/4 ms=3.9489",
+      "POSE_SHA256 B9556CFA869400EFD032EB7F572E8D16212E32EBF41736EEE5D482B0926655D6"
+    ]
+  },
+  {
+    "file": "final-native-4h-ceiling-stale-hint.log",
+    "observations": [
+      "RESULT h=4 accepted=False length=0.012 radius=0.0012 movedNeighbour=False clear=True trials=16 steps=0 corrections=0 coupledSets=0 stages=0 counts=3/4 ms=0.1034",
+      "POSE_SHA256 1BB78D13218E293CB477FD2F2554B5070B388E967EE3903554FFD864C36A9A33",
+      "REJECTED_STATE identical=True"
+    ]
+  },
+  {
+    "file": "final-native-4h-limit-fixture.log",
+    "observations": [
+      "DIRECT conditioned solved=True force0=0 force1=0.000101 residualMetres=0 directCount=1"
+    ]
+  },
+  {
+    "file": "final-native-4h-radial-same-crown.log",
+    "observations": [
+      "RESULT h=4 accepted=True length=0.03 radius=0.0048562502 movedNeighbour=True clear=True trials=16 steps=6 corrections=104 coupledSets=17 stages=0 counts=9 ms=29.12",
+      "POSE_SHA256 55A490DF79B6ACF55DD1F79C36374196578E1D71E4E831DD63D4CF53B476E9D2"
+    ]
+  },
+  {
+    "file": "final-native-4h-radial-v1-checkpoint.log",
+    "observations": [
+      "RESULT h=4 accepted=True length=0.012 radius=0.009 movedNeighbour=True clear=True trials=12 steps=6 corrections=171 coupledSets=171 stages=3 counts=3/4/4 ms=152.6388",
+      "POSE_SHA256 064552588FD22CBCE4FA96BE35F5DFF94991745ACB700AE2AF00A6718B439404",
+      "CHECKPOINT immediateState=True immediateFrame=True continued=True continuedFrame=True unresolved=0/0"
+    ]
+  },
+  {
+    "file": "final-native-4h-radial-v1.log",
+    "observations": [
+      "RESULT h=4 accepted=True length=0.012 radius=0.009 movedNeighbour=True clear=True trials=12 steps=6 corrections=171 coupledSets=171 stages=3 counts=3/4/4 ms=150.0629",
+      "POSE_SHA256 064552588FD22CBCE4FA96BE35F5DFF94991745ACB700AE2AF00A6718B439404"
+    ]
+  },
+  {
+    "file": "final-native-4h-radial-walls.log",
+    "observations": [
+      "RESULT h=4 accepted=False length=0.012 radius=0.0012 movedNeighbour=False clear=True trials=16 steps=0 corrections=0 coupledSets=0 stages=0 counts=3/4/4 ms=0.1386",
+      "POSE_SHA256 2E61B045147EB527BF031F35285392130072D27D794DD3A342CA87BE7D11B850",
+      "REJECTED_STATE identical=True"
+    ]
+  },
+  {
+    "file": "final-native-4h-radial.log",
+    "observations": [
+      "RESULT h=4 accepted=True length=0.012 radius=0.0052218754 movedNeighbour=True clear=True trials=16 steps=6 corrections=113 coupledSets=28 stages=0 counts=3/4/4 ms=9.3108",
+      "POSE_SHA256 C57DB03953682989543EB4967BDC10CF89D5FAD4FBBE9035391A6DFCA75964B1"
+    ]
+  },
+  {
+    "file": "final-native-4h-single.log",
+    "observations": [
+      "RESULT h=4 accepted=True length=0.02996875 radius=0.0012 movedNeighbour=True clear=True trials=16 steps=6 corrections=104 coupledSets=0 stages=0 counts=3/4 ms=4.0482",
+      "POSE_SHA256 B9556CFA869400EFD032EB7F572E8D16212E32EBF41736EEE5D482B0926655D6"
+    ]
+  },
+  {
+    "file": "checkpoint-fresh-1h-reindex.log",
+    "observations": [
+      "CHECKPOINT version=31 tick=1 immediateState=True immediateFrame=True continuedState=True continuedFrame=True finite=True maxUnresolved=0 oldV30Rejected=True"
+    ]
+  },
+  {
+    "file": "checkpoint-fresh-1h.log",
+    "observations": [
+      "CHECKPOINT version=31 tick=1 immediateState=True immediateFrame=True continuedState=True continuedFrame=True finite=True maxUnresolved=0 oldV30Rejected=True"
+    ]
+  },
+  {
+    "file": "checkpoint-fresh-4h-reindex.log",
+    "observations": [
+      "CHECKPOINT version=31 tick=4 immediateState=True immediateFrame=True continuedState=True continuedFrame=True finite=True maxUnresolved=0 oldV30Rejected=True"
+    ]
+  },
+  {
+    "file": "checkpoint-fresh-4h.log",
+    "observations": [
+      "CHECKPOINT version=31 tick=4 immediateState=True immediateFrame=True continuedState=True continuedFrame=True finite=True maxUnresolved=0 oldV30Rejected=True"
+    ]
+  },
+  {
+    "file": "checkpoint-mature-1h-reindex.log",
+    "observations": [
+      "CHECKPOINT version=31 tick=1 immediateState=True immediateFrame=True continuedState=True continuedFrame=True finite=True maxUnresolved=0 oldV30Rejected=True"
+    ]
+  },
+  {
+    "file": "checkpoint-mature-1h.log",
+    "observations": [
+      "CHECKPOINT version=31 tick=1 immediateState=True immediateFrame=True continuedState=True continuedFrame=True finite=True maxUnresolved=0 oldV30Rejected=True"
+    ]
+  },
+  {
+    "file": "checkpoint-mature-4h-reindex.log",
+    "observations": [
+      "CHECKPOINT version=31 tick=4 immediateState=True immediateFrame=True continuedState=True continuedFrame=True finite=True maxUnresolved=0 oldV30Rejected=True"
+    ]
+  },
+  {
+    "file": "checkpoint-mature-4h.log",
+    "observations": [
+      "CHECKPOINT version=31 tick=4 immediateState=True immediateFrame=True continuedState=True continuedFrame=True finite=True maxUnresolved=0 oldV30Rejected=True"
+    ]
+  },
+  {
+    "file": "mature-fresh-1h.log",
+    "observations": [
+      "ONE_AXIS lengthAxis=True staticClear=True growthClear=False failure=(Agro.PlantFormation2, 51, 52, Agro.PlantFormation2, 28, 29)",
+      "ONE_AXIS lengthAxis=False staticClear=True growthClear=False failure=(Agro.PlantFormation2, 51, 52, Agro.PlantFormation2, 28, 29)",
+      "MATURE h=1 accepted=False gainedLengthUm=0 gainedRadiusUm=0 trials=26 steps=0 corrections=18 coupledSets=9 stages=0 clear=True"
+    ]
+  },
+  {
+    "file": "mature-fresh-4h.log",
+    "observations": [
+      "ONE_AXIS lengthAxis=True staticClear=True growthClear=False failure=(Agro.PlantFormation2, 46, 47, Agro.PlantFormation2, 4, 5)",
+      "ONE_AXIS lengthAxis=False staticClear=True growthClear=False failure=(Agro.PlantFormation2, 46, 47, Agro.PlantFormation2, 4, 5)",
+      "MATURE h=4 accepted=False gainedLengthUm=0 gainedRadiusUm=0 trials=26 steps=0 corrections=57 coupledSets=15 stages=0 clear=True"
+    ]
+  }
+]

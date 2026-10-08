@@ -14,6 +14,7 @@ public class PlantGlobalStats
 
 	public double EnergyRequirementPerTick{ get; set; }
 	public double WaterRequirementPerTick { get; set; }
+	public double WaterPriorityPerTick { get; set; }
 
 	public List<GatherDataBase> Gathering = [];
 	public int Count => Gathering.Count;
@@ -94,20 +95,44 @@ public class PlantGlobalStats
 			ReceivedEnergy[i] = Gathering[i].LifesupportEnergy * Gathering[i].ProductionEfficiency * factor; //in sum over all i: LifeSupportEnergy[i] / energyRequirementTotal yields 1
 	}
 
-	internal void DistributeWaterByStorage(float factor)
+	// The photosynthetic forecast has first claim on tissue water. It is not
+	// extra storage: a leaf can hold at most its current anatomical capacity.
+	internal static float WaterPriority(in GatherDataBase data)
+		=> Math.Clamp(data.PhotosynthWater, 0f, Math.Max(0f, data.CapacityWater));
+
+	static float RoundWaterDown(double amount)
 	{
-		ResizeWaterArray();
-		var limit = Gathering.Count;
-		for(int i = 0; i < limit; ++i)
-			ReceivedWater[i] = Gathering[i].PhotosynthWater + Gathering[i].CapacityWater * factor;
+		if (amount <= 0d) return 0f;
+		var result = (float)amount;
+		return (double)result > amount ? MathF.BitDecrement(result) : result;
 	}
 
-	internal void DistributeWaterByRequirement(float factor)
+	internal void DistributeWaterByStorage(double factor)
 	{
 		ResizeWaterArray();
 		var limit = Gathering.Count;
 		for(int i = 0; i < limit; ++i)
-			ReceivedWater[i] = Gathering[i].PhotosynthWater * factor;
+		{
+			var capacity = Math.Max(0f, Gathering[i].CapacityWater);
+			var priority = WaterPriority(Gathering[i]);
+			ReceivedWater[i] = RoundWaterDown(priority + (capacity - priority) * factor);
+		}
+	}
+
+	internal void DistributeWaterByRequirement(double factor)
+	{
+		ResizeWaterArray();
+		var limit = Gathering.Count;
+		for(int i = 0; i < limit; ++i)
+			ReceivedWater[i] = RoundWaterDown(WaterPriority(Gathering[i]) * factor);
+	}
+
+	internal double ReceivedWaterSum()
+	{
+		var total = 0d;
+		for (int i = 0; i < Gathering.Count; ++i)
+			total += ReceivedWater[i];
+		return total;
 	}
 
     internal float ReceivedEnergySum()

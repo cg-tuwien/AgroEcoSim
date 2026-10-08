@@ -27,6 +27,9 @@ public partial class PlantSubFormation<T>
         public ulong[] Retire = [];
         public uint Created;
         public float Energy, Water, EnergyFraction, WaterFraction;
+        // Admission retries are independent of the owner's elongation retries.
+        public float NextAttemptHour;
+        public int AdmissionFailures;
     }
 
     readonly Dictionary<ulong, RetryState> GrowthRetries = [];
@@ -65,9 +68,45 @@ public partial class PlantSubFormation<T>
         foreach (var id in Developments.Keys)
             if (!OrganIndices.ContainsKey(id)) RemovedGrowthIds.Add(id);
         foreach (var id in RemovedGrowthIds) Developments.Remove(id);
+        PruneDeformationState();
     }
 
     internal bool HasPendingDevelopment(int i) => i >= 0 && Developments.ContainsKey(Src()[i].StableId);
+
+    // A rejected first scape is a sampled spring commitment. Keep its exact
+    // proposal while emergence could still lead to bloom, then release the
+    // vegetative owner rather than pinning that crown until obstacle removal.
+    bool FloralDevelopmentExpired(Development proposal)
+    {
+        if (proposal.Children.Length != 1 || proposal.Children[0].Organ != OrganTypes.FlowerMeristem
+            || !proposal.Children[0].FlowerAgent.flowerBase || proposal.Children[0].FlowerAgent.debth != 0)
+            return false;
+
+        var world = Plant.World;
+        var species = Plant.Parameters;
+        // Created is immutable while the proposal is pending; FlowerStartTime can
+        // be rebased after admission and is not a reliable pending-commitment date.
+        var created = world.GetTime(proposal.Created);
+        var now = world.GetTime(world.Timestep);
+        // A pending spring commitment must not become eligible again after the
+        // next March-cycle wrap, even if its within-year season is small again.
+        if (SeasonCycle(now) != SeasonCycle(created)) return true;
+
+        const float hoursPerSeason = 365f * 24f;
+        var createdDay = created.DayOfYear - 1;
+        var createdSeason = (createdDay >= 59 ? createdDay - 59 : 306 + createdDay) / 365f;
+        // The flowering phase can start late when the plant first reaches maturity.
+        // Bound this sampled commitment from its actual creation season, not the
+        // nominal start of the species window.
+        var lastCommitmentSeason = MathF.Min(species.FloweringSeasonEnd,
+            createdSeason + species.FloweringPhaseDurationHours / hoursPerSeason);
+        var latestBloomSeason = species.PostFloweringCommitmentProbabilityPerHour > 0f
+            || species.DormantFloweringCommitmentProbabilityPerHour > 0f
+            ? species.SeasonalSenescence
+            : MathF.Min(species.SeasonalSenescence,
+                lastCommitmentSeason + species.FlowerSettings.CommitmentToBloomLeadHours / hoursPerSeason);
+        return world.Season > latestBloomSeason;
+    }
 
     internal void WakeGrowth(int index = -1)
     {
@@ -75,11 +114,14 @@ public partial class PlantSubFormation<T>
         if (index < 0)
         {
             foreach (var retry in GrowthRetries.Values) { retry.NextHour = hour; retry.Failures = 0; }
+            foreach (var proposal in Developments.Values) { proposal.NextAttemptHour = hour; proposal.AdmissionFailures = 0; }
             return;
         }
         for (var i = index; i >= 0; i = GetParent(i))
+        {
             if (GrowthRetries.TryGetValue(GetOrganId(i), out var retry))
             { retry.NextHour = hour; retry.Failures = 0; }
+        }
     }
 
     void PrepareGrowthAttempts(Span<T> agents)
@@ -121,7 +163,7 @@ public partial class PlantSubFormation<T>
             agent.Tick(this, index, timestep);
             return;
         }
-        if (!CollisionSettings.Enabled)
+        if (!CollisionSettings.Enabled && Plant.Parameters.ConstructionEnergyPerDryGram == 0f)
         {
             var length = agent.Length;
             agent.Tick(this,index,timestep);
@@ -173,6 +215,7 @@ public partial class PlantSubFormation<T>
             after.Length = before.Length;
             after.GrowSuspendedRadius(Plant);
         }
+        after.FundExpansion(before, Plant.Parameters);
         var delta = Quaternion.Normalize(after.Orientation * Quaternion.Conjugate(before.Orientation));
         if (new Vector3(delta.X,delta.Y,delta.Z).LengthSquared() > 1e-16f)
         {
@@ -196,7 +239,15 @@ public partial class PlantSubFormation<T>
         {
             var index = FindOrgan(proposal.Owner);
             if (index < 0 || Deaths.Contains(index)) { Developments.Remove(proposal.Owner); continue; }
-            if (GrowthRetries.TryGetValue(proposal.Owner, out var retry) && hour < retry.NextHour && !retry.Attempted) continue;
+            if (FloralDevelopmentExpired(proposal))
+            {
+                Developments.Remove(proposal.Owner);
+                // SetObstruction(false) alone can leave a sleeping retry blocked.
+                GrowthRetries.Remove(proposal.Owner);
+                SetObstruction(index, false);
+                continue;
+            }
+            if (hour < proposal.NextAttemptHour) continue;
             GeometryState[]? supportFallback=null;
             var supportAttempts=0;
             var supportRoots=DevelopmentSupportRoots;
@@ -218,6 +269,16 @@ public partial class PlantSubFormation<T>
                 parent.targetOrientation = current.targetOrientation;
             }
             var children = proposal.Children;
+            var construction = 0f;
+            if (Plant.Parameters.ConstructionEnergyPerDryGram > 0f)
+            {
+                construction = ConstructionBudget.Cost(parent.Volume() - current.Volume(), Plant.Parameters, parent.WoodRatio());
+                foreach (var child in children)
+                    construction += ConstructionBudget.Cost(child.Volume(), Plant.Parameters, child.WoodRatio());
+            }
+            // A financial delay retains the sampled transaction without treating it
+            // as a physical obstruction or consuming another probability draw.
+            if (construction > current.Energy) continue;
             if (DevelopmentPoses.Length < children.Length)
             {
                 var capacity = Math.Max(children.Length, Math.Max(8, DevelopmentPoses.Length * 2));
@@ -226,7 +287,7 @@ public partial class PlantSubFormation<T>
             }
             var poses = DevelopmentPoses;
             var templates = DevelopmentTemplates;
-            var parentPose = PoseFor(parent, GetBaseCenterWorld(index));
+            var parentPose = PoseFor(parent, GetBaseCenterWorld(index)) with { Deformation = GetDeformation(index) };
             var oldPose = GetContactPose(index);
             var changed = oldPose.MotionBound(parentPose) > 1e-7f;
             var descendants = DevelopmentDescendants;
@@ -239,8 +300,8 @@ public partial class PlantSubFormation<T>
                 for (int k = 0; k < descendants.Count; ++k)
                 { moving.Add(GetOrganId(descendants[k])); descendants.AddRange(GetChildren(descendants[k])); }
             }
-            var delta = Quaternion.Normalize(parentPose.Rotation * Quaternion.Conjugate(oldPose.Rotation));
-            var valid = collisions.AcceptDevelopmentPose(ag, index, parentPose, ag.GetLaminaTemplate(index),
+            var delta = Quaternion.Normalize(AttachmentRotation(parentPose) * Quaternion.Conjugate(AttachmentRotation(oldPose)));
+            var valid = !CollisionSettings.Enabled || collisions.AcceptDevelopmentPose(ag, index, parentPose, ag.GetLaminaTemplate(index),
                 replacingOwner: true, moving: moving, previousPose: oldPose);
             foreach (var descendant in descendants)
             {
@@ -248,13 +309,35 @@ public partial class PlantSubFormation<T>
                 var old = GetContactPose(descendant);
                 var moved = old with { Base = parentPose.Tip + Vector3.Transform(old.Base - oldPose.Tip, delta),
                     Rotation = Quaternion.Normalize(delta * old.Rotation) };
-                valid = collisions.AcceptDevelopmentPose(ag, descendant, moved, ag.GetLaminaTemplate(descendant),
+                valid = !CollisionSettings.Enabled || collisions.AcceptDevelopmentPose(ag, descendant, moved, ag.GetLaminaTemplate(descendant),
                     moving: moving, previousPose: old);
             }
             var childCarry=carry;
             var blockedPose=parentPose;
             var blockedTemplate=ag.GetLaminaTemplate(index);
             var blockedSupport=index;
+            // The first basal scape must have a viable finite emergence path. A tiny
+            // accepted meristem can otherwise be trapped by older petioles on its
+            // very first growth step, despite passing the point-sized birth test.
+            var previewFirstScape = children.Length == 1 && children[0].Organ == OrganTypes.FlowerMeristem
+                && children[0].FlowerAgent.flowerBase && children[0].FlowerAgent.debth == 0
+                && Plant.Parameters.BasalScapeEmergenceMaxTiltDegrees > 0f;
+            // A rejected coarse sweep may have exhausted its conservative CCD
+            // budget. Re-run only failed first-scape intervals in two shorter
+            // halves. Each half passes the complete endpoint, solid and foliage
+            // checks with its own size-dependent attachment neighbourhood.
+            // Four levels bound both work and the accepted motion certificate.
+            bool CertifyFirstScapeInterval(int owner, int childIndex, bool attachedToOwner,
+                OrganPose from, OrganPose to, int depth)
+            {
+                if (collisions.AcceptDevelopmentPose(ag, owner, to, templates[childIndex],
+                    proposal.Retire, previousPose: from, attachedToOwner: attachedToOwner,
+                    previousPoseInCurrentFrame: true)) return true;
+                if (depth >= 4) return false;
+                var mid = from.Interpolate(to, .5f);
+                return CertifyFirstScapeInterval(owner, childIndex, attachedToOwner, from, mid, depth + 1)
+                    && CertifyFirstScapeInterval(owner, childIndex, attachedToOwner, mid, to, depth + 1);
+            }
             bool ChildrenFit(Quaternion orientationCarry)
             {
                 for (int j = 0; j < children.Length; ++j)
@@ -280,18 +363,68 @@ public partial class PlantSubFormation<T>
                         for (var n = existingAncestor; n >= 0 && GetOrgan(n) == OrganTypes.Leaf; n = GetParent(n)) ++slice;
                     templates[j] = LaminaTemplates.For(Plant.Parameters, child.Organ, slice);
                     blockedPose=poses[j];blockedTemplate=templates[j];blockedSupport=existing>=0?existing:index;
-                    if (!collisions.AcceptDevelopmentPose(ag, existing >= 0 ? existing : index, poses[j], templates[j], proposal.Retire,
+                    if (CollisionSettings.Enabled && !collisions.AcceptDevelopmentPose(ag, existing >= 0 ? existing : index, poses[j], templates[j], proposal.Retire,
                         attachedToOwner: p < 0)) return false;
+                    if (CollisionSettings.Enabled && previewFirstScape)
+                    {
+                        // Test the first basal segment along its monotone growth path.
+                        // A single long CCD query can be uncertified in this crowded
+                        // geometry even when short, individually certified sweeps pass.
+                        // This is a birth-selection forecast; live neighbours are still
+                        // rechecked at every subsequent growth step.
+                        var growthDurationHours = Plant.World.HoursPerTick / child.GetGrowthTimeVar();
+                        var steps = Math.Clamp((int)MathF.Ceiling(growthDurationHours), 1, 32);
+                        var prior = poses[j];
+                        for (var step = 1; step <= steps; ++step)
+                        {
+                            var fraction = step / (float)steps;
+                            var preview = poses[j] with
+                            {
+                                Length = child.Length + (child.GetLengthVar() - child.Length) * fraction,
+                                Radius = child.Radius + (child.GetRadiusVar() - child.Radius) * fraction
+                            };
+                            if (!CertifyFirstScapeInterval(existing >= 0 ? existing : index,
+                                j, p < 0, prior, preview, 0))
+                            { blockedPose = preview; return false; }
+                            prior = preview;
+                        }
+                    }
                     for (int k = 0; k < j; ++k)
                     {
                         if (proposal.LocalParents[j] == k) continue;
-                        if (!CollisionWorld.AdmissibleBirthPair(poses[j], templates[j], poses[k], templates[k], basis)) return false;
+                        if (CollisionSettings.Enabled && !CollisionWorld.AdmissibleBirthPair(poses[j], templates[j], poses[k], templates[k], basis)) return false;
                     }
                 }
                 return true;
             }
             var parentFits=valid;
             valid = valid && ChildrenFit(carry);
+            if (!valid && parentFits && previewFirstScape && CollisionSettings.Enabled)
+            {
+                // This is a rest direction selected once at birth, not an elastic
+                // 75-degree bend. Subsequent scape segments still follow their
+                // species' gravitropic target. Test least-tilted directions first.
+                var authored = Quaternion.Normalize(carry * children[0].Orientation);
+                var up = Vector3.Transform(Vector3.UnitX, authored);
+                var side = Vector3.Cross(up, MathF.Abs(up.Y) < .9f ? Vector3.UnitY : Vector3.UnitZ);
+                side = Vector3.Normalize(side);
+                var across = Vector3.Normalize(Vector3.Cross(up, side));
+                for (var tiltDegrees = 15; tiltDegrees <= Plant.Parameters.BasalScapeEmergenceMaxTiltDegrees && !valid; tiltDegrees += 15)
+                {
+                    var tilt = tiltDegrees * (MathF.PI / 180f);
+                    for (var azimuth = 0; azimuth < 16; ++azimuth)
+                    {
+                        var radial = side * MathF.Cos(azimuth * MathF.Tau / 16f)
+                            + across * MathF.Sin(azimuth * MathF.Tau / 16f);
+                        var axis = Vector3.Normalize(Vector3.Cross(up, radial));
+                        var candidate = Quaternion.Normalize(Quaternion.CreateFromAxisAngle(axis, tilt) * carry);
+                        if (!ChildrenFit(candidate)) continue;
+                        childCarry = candidate;
+                        valid = true;
+                        break;
+                    }
+                }
+            }
             if (!valid && supportAttempts<4)
             {
                 supportFallback ??= SaveContactTrial();
@@ -336,11 +469,14 @@ public partial class PlantSubFormation<T>
             {
                 if(supportFallback!=null) RestoreContactTrial(supportFallback);
                 ++RejectedDevelopments;
+                ++proposal.AdmissionFailures;
+                proposal.NextAttemptHour = hour + (proposal.AdmissionFailures >= 3 ? 72f : 24f);
                 SetObstruction(index, true);
                 continue;
             }
             // Resource distribution runs between the sampled decision and this commit. Preserve
             // the sampled shares, not an obsolete absolute balance from before redistribution.
+            parent.Energy -= construction;
             var energy = MathF.Min(MathF.Max(0, parent.Energy) * proposal.EnergyFraction, proposal.Energy);
             var water = MathF.Min(MathF.Max(0, parent.Water_g) * proposal.WaterFraction, proposal.Water);
             parent.Energy -= energy;
@@ -368,8 +504,14 @@ public partial class PlantSubFormation<T>
             GrowthRetries.Remove(proposal.Owner);
             ++AcceptedDevelopments;
             Census();
-            collisions.RefreshPlantBounds(Plant);
+            if (CollisionSettings.Enabled) collisions.RefreshPlantBounds(Plant);
         }
+    }
+
+    internal void SettleConstruction()
+    {
+        if (!IsAboveGround || Plant.Parameters.ConstructionEnergyPerDryGram == 0f) return;
+        foreach (ref var agent in Src()) Unsafe.As<T, AboveGroundAgent>(ref agent).SettleConstruction();
     }
 
     internal static OrganPose PoseFor(in AboveGroundAgent a, Vector3 basis) => new(basis + a.BaseOffset,
@@ -389,6 +531,7 @@ public partial class PlantSubFormation<T>
         {
             w.Write(p.Owner); WriteValue(w, p.Before); WriteValue(w, p.After); w.Write(p.Created); w.Write(p.Energy); w.Write(p.Water);
             w.Write(p.EnergyFraction); w.Write(p.WaterFraction);
+            w.Write(p.NextAttemptHour); w.Write(p.AdmissionFailures);
             w.Write(p.Children.Length);
             for (int i = 0; i < p.Children.Length; ++i) { WriteValue(w, p.Children[i]); w.Write(p.Parents[i]); w.Write(p.LocalParents[i]); }
             w.Write(p.Retire.Length); foreach (var id in p.Retire) w.Write(id);
@@ -407,7 +550,8 @@ public partial class PlantSubFormation<T>
         for (int i = 0; i < count; ++i)
         {
             var p = new Development { Owner = r.ReadUInt64(), Before = ReadValue<AboveGroundAgent>(r), After = ReadValue<AboveGroundAgent>(r),
-                Created = r.ReadUInt32(), Energy = r.ReadSingle(), Water = r.ReadSingle(), EnergyFraction = r.ReadSingle(), WaterFraction = r.ReadSingle() };
+                Created = r.ReadUInt32(), Energy = r.ReadSingle(), Water = r.ReadSingle(), EnergyFraction = r.ReadSingle(), WaterFraction = r.ReadSingle(),
+                NextAttemptHour = r.ReadSingle(), AdmissionFailures = r.ReadInt32() };
             var n = r.ReadInt32(); p.Children = new AboveGroundAgent[n]; p.Parents = new ulong[n]; p.LocalParents = new int[n];
             for (int j = 0; j < n; ++j) { p.Children[j] = ReadValue<AboveGroundAgent>(r); p.Parents[j] = r.ReadUInt64(); p.LocalParents[j] = r.ReadInt32(); }
             p.Retire = new ulong[r.ReadInt32()]; for (int j = 0; j < p.Retire.Length; ++j) p.Retire[j] = r.ReadUInt64();
@@ -418,7 +562,29 @@ public partial class PlantSubFormation<T>
     }
 
     internal static void WriteValue<U>(BinaryWriter writer, U value) where U : struct
-        => writer.Write(MemoryMarshal.AsBytes(MemoryMarshal.CreateReadOnlySpan(ref value, 1)));
+    {
+        if (typeof(U) == typeof(OrganPose))
+        {
+            // Keep the existing 60-byte layout, but do not serialize the three
+            // alignment bytes after Rounded. NativeAOT can leave them uninitialized
+            // in a stack-created retry pose, making identical states differ on disk.
+            // Reading old v20 poses remains valid: their padding is never state.
+            if (Unsafe.SizeOf<OrganPose>() != 60)
+                throw new InvalidDataException("OrganPose checkpoint layout changed; update its explicit writer.");
+            var pose = Unsafe.As<U, OrganPose>(ref value);
+            WriteValue(writer, pose.Base);
+            WriteValue(writer, pose.Rotation);
+            writer.Write(pose.Length);
+            writer.Write(pose.Width);
+            writer.Write(pose.Radius);
+            writer.Write(pose.Rounded);
+            writer.Write((byte)0);
+            writer.Write((ushort)0);
+            WriteValue(writer, pose.Deformation);
+            return;
+        }
+        writer.Write(MemoryMarshal.AsBytes(MemoryMarshal.CreateReadOnlySpan(ref value, 1)));
+    }
     internal static U ReadValue<U>(BinaryReader reader) where U : struct
     {
         var bytes = reader.ReadBytes(Unsafe.SizeOf<U>());

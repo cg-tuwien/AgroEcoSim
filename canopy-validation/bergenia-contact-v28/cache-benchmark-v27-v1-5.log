@@ -1,0 +1,23 @@
+Species lookup: Bergenia Cordifolia, BudLength: 0.009
+PlantFormation2 ctor: Bergenia Cordifolia, BudLength: 0.009
+SpeciesSettings.Init called on Bergenia Cordifolia, BudLength: 0.009
+PlantFormation2 after Init: Bergenia Cordifolia, BudLength: 0.009
+Species lookup: Bergenia Cordifolia, BudLength: 0.009
+PlantFormation2 ctor: Bergenia Cordifolia, BudLength: 0.009
+SpeciesSettings.Init called on Bergenia Cordifolia, BudLength: 0.009
+PlantFormation2 after Init: Bergenia Cordifolia, BudLength: 0.009
+Species lookup: Bergenia Cordifolia, BudLength: 0.009
+PlantFormation2 ctor: Bergenia Cordifolia, BudLength: 0.009
+SpeciesSettings.Init called on Bergenia Cordifolia, BudLength: 0.009
+PlantFormation2 after Init: Bergenia Cordifolia, BudLength: 0.009
+Collision scene: 2 triangles (2 soil, 0 obstacle) in 0 ms, open soil surface (regular fields use their finite footprint)
+BENCHMARK samples=35 medianMs=31.0121 p95Ms=31.2142 medianAllocatedBytes=22168 p95AllocatedBytes=22168 mode=BroadLeafV1
+SCRATCH ContinuationSlots System.UInt16[] length=4096 capacity= count=
+SCRATCH ContinuationMatrix System.Double[] length=256 capacity= count=
+SCRATCH ContinuationDepth System.Double[] length=16 capacity= count=
+SCRATCH ContinuationForces System.Double[] length=16 capacity= count=
+SCRATCH ContinuationTurns System.Numerics.Vector3[] length=256 capacity= count=
+SCRATCH ContinuationFolds System.Numerics.Vector4[] length=256 capacity= count=
+SCRATCH ContinuationJoints System.Collections.Generic.List`1[Agro.Collisions.CollisionWorld+ContinuationJoint] length=-1 capacity= count=
+SCRATCH ContinuationGradients System.Collections.Generic.List`1[Agro.Collisions.CollisionWorld+ContinuationGradient] length=-1 capacity= count=
+SCRATCH ContinuationJointIndices System.Collections.Generic.Dictionary`2[Agro.Collisions.CollisionWorld+ContinuationJoint,System.Int32] length=-1 capacity= count=

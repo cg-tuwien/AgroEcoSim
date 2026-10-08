@@ -3,7 +3,10 @@ import { Obstacle } from "./Obstacle";
 import { Organs, Primitive, Primitives } from "./Primitives";
 import { BoxTerrainItem, ITerrainItem, MeshTerrainItem } from "./Terrain";
 import type { ObstacleGroup } from "./Obstacle";
-import { PlantModel } from "./Scene";
+import { PlantModel, RecordedGeometry } from "./Scene";
+import { registerGeometry } from '../render/core/GeometryStore';
+import { computeVertexNormals } from '../render/core/Geometry';
+const recordedGeometry = new Map<string, RecordedGeometry>();
 
 const decoder = new TextDecoder("utf-8");
 
@@ -146,6 +149,7 @@ export default class BinaryReader {
         switch (version)
         {
             case 7: return this.readAgroSceneV7();
+            case 8: return this.readAgroSceneV7(true);
             default: console.error("Unsupported scene format version:", version);
         }
     }
@@ -304,10 +308,11 @@ export default class BinaryReader {
         return primitives;
     }
 
-    readAgroSceneV7()
+    readAgroSceneV7(v8 = false)
     {
         const result : PlantModel[] = [];
         const flags = this.readInt8();
+        if (v8) this.readRecordedGeometry();
         const doRoots = (flags & 1) > 0;
         const doAnalytics = (flags & 2) >0;
         const entitesCount = this.readUInt32();
@@ -315,6 +320,8 @@ export default class BinaryReader {
         {
             const entity : Primitive[] = [];
             const species = this.readString();
+            const geometry = v8 ? recordedGeometry.get(this.readString()) : undefined;
+            if (v8 && !geometry) throw new Error('V8 scene references a missing immutable mesh asset.');
             const primitivesCount = this.readUInt32();
             let maxDailyResourceShoots = 0;
             let maxDailyProductionShoots = 0;
@@ -332,6 +339,17 @@ export default class BinaryReader {
             {
                 const parentIndex = this.readInt32();
                 const organ = this.readUInt8();
+                const kind = v8 ? this.readUInt8() : 0;
+                if (kind > 2 || (kind === 1 && organ !== Organs.Leaf) || (kind === 2 && organ !== Organs.Petiole))
+                    throw new Error('Invalid V8 deformation record.');
+                const deformation = kind ? this.readFloat32Vector(4) : undefined;
+                if (deformation && (geometry?.profile !== 1 || deformation.some(x => !Number.isFinite(x))
+                    || (kind === 1 && deformation.some((x, axis) => Math.abs(x) > (axis < 2 ? 25 : 75) * Math.PI / 180 + 1e-6))
+                    // Species may opt into a larger whole-petiole contact budget.
+                    // Coordinates retain the V8 three-span interpretation; older frames
+                    // need no conversion. Match the maximum explicit backend setting.
+                    || (kind === 2 && Math.hypot(deformation[0],deformation[1]) + Math.hypot(deformation[2],deformation[3]) > Math.PI / 2 + 1e-6)))
+                    throw new Error('Invalid V8 deformation coordinates.');
                 if (organ === Organs.Leaf)
                 {
                     leafOrgan[j] = 1;
@@ -353,14 +371,14 @@ export default class BinaryReader {
                             const color = this.readHexRGB();
                             const auxins = this.readFloat32();
                             const dailyEfficiency = this.readFloat32();
-                            entity.push({ type: Primitives.Rectangle, organ: organ, affineTransform: transform, stats: new Float32Array([waterRatio, energyRatio, auxins, 0, lastIrradiance, dailyResource, dailyProduction, 0, 0]), color: color, laminaSlice: slice });
+                            entity.push({ type: Primitives.Rectangle, organ: organ, affineTransform: transform, stats: new Float32Array([waterRatio, energyRatio, auxins, 0, lastIrradiance, dailyResource, dailyProduction, 0, 0]), color: color, laminaSlice: slice, deformation });
                             maxDailyProductionShoots = Math.max(dailyProduction, maxDailyProductionShoots);
                             maxDailyResourceShoots = Math.max(dailyResource, maxDailyResourceShoots);
                         }
                         else
                         {
                             const color = this.readHexRGB();
-                            entity.push({ type: Primitives.Rectangle, organ: organ, affineTransform: transform, stats: new Float32Array([0, 0, 0, 0, 0, 0, 0, 0, 0]), color: color, laminaSlice: slice });
+                            entity.push({ type: Primitives.Rectangle, organ: organ, affineTransform: transform, stats: new Float32Array([0, 0, 0, 0, 0, 0, 0, 0, 0]), color: color, laminaSlice: slice, deformation });
                         }
                     }
                     break;
@@ -379,14 +397,14 @@ export default class BinaryReader {
                             const color = this.readHexRGB();
                             const auxins = this.readFloat32();
                             const dailyEfficiency = this.readFloat32();
-                            entity.push({ type: Primitives.Cylinder, organ: organ, affineTransform: transform, length: length, radius: radius, stats: new Float32Array([waterRatio, energyRatio, auxins, 0, woodRatio, dailyResource, dailyProduction, 0, 0]), color: color });
+                            entity.push({ type: Primitives.Cylinder, organ: organ, affineTransform: transform, length: length, radius: radius, stats: new Float32Array([waterRatio, energyRatio, auxins, 0, woodRatio, dailyResource, dailyProduction, 0, 0]), color: color, deformation });
                             maxDailyProductionShoots = Math.max(dailyProduction, maxDailyProductionShoots);
                             maxDailyResourceShoots = Math.max(dailyResource, maxDailyResourceShoots);
                         }
                         else
                         {
                             const color = this.readHexRGB();
-                            entity.push({ type: Primitives.Cylinder, organ: organ, affineTransform: transform, length: length, radius: radius, stats: new Float32Array([0, 0, 0, 0, 0, 0, 0, 0, 0]), color: color });
+                            entity.push({ type: Primitives.Cylinder, organ: organ, affineTransform: transform, length: length, radius: radius, stats: new Float32Array([0, 0, 0, 0, 0, 0, 0, 0, 0]), color: color, deformation });
                         }
                     }
                     break;
@@ -466,10 +484,40 @@ export default class BinaryReader {
                 }
             }
 
-            result.push({ primitives: entity, species: species });
+            result.push({ primitives: entity, species: species, geometry });
         }
 
         return result;
+    }
+
+    private readRecordedGeometry() {
+        const count = this.readUInt32();
+        if (count > 4096) throw new Error('Invalid V8 asset count.');
+        for (let i = 0; i < count; ++i) {
+            const id = this.readString(), bytes = this.readUInt32(), end = this.pos + bytes;
+            if (!/^[0-9a-f]{64}$/.test(id) || end > this.source.length) throw new Error('Invalid V8 asset.');
+            if (recordedGeometry.has(id)) { this.pos = end; continue; }
+            const profile = this.readUInt8(), version = this.readUInt8();
+            if (profile > 1 || version !== 1) throw new Error(`Unsupported deformation profile ${profile}/${version}.`);
+            const slices = this.readUInt32();
+            if (!slices || slices > 256) throw new Error('Invalid V8 blade slices.');
+            const readMesh = (key: string) => {
+                const vertices = this.readUInt32();
+                if (vertices > 1000000 || this.pos + vertices * 12 > end) throw new Error('Invalid V8 vertices.');
+                const positions = this.readFloat32Vector(vertices * 3), size = this.readUInt32();
+                if (size % 3 || size > 6000000 || this.pos + size * 4 + vertices * 4 > end) throw new Error('Invalid V8 triangles.');
+                const indices = new Uint32Array(this.readInt32Array(size));
+                if (indices.some(x => x >= vertices)) throw new Error('Invalid V8 vertex index.');
+                const uvs = new Float32Array(vertices * 2);
+                for (let v = 0; v < vertices; ++v) uvs[v * 2] = this.readFloat32();
+                return registerGeometry(key, { positions, indices, uvs, normals: computeVertexNormals(positions, indices), name: key });
+            };
+            const leaves: number[] = [];
+            for (let slice = 0; slice < slices; ++slice) leaves.push(readMesh(`recorded:${id}:leaf:${slice}`));
+            const petal = readMesh(`recorded:${id}:petal`);
+            if (this.pos !== end) throw new Error('Invalid V8 asset length.');
+            recordedGeometry.set(id, { id, profile, leaves, petal });
+        }
     }
 
     readTerrain() {

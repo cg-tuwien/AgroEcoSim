@@ -4,16 +4,17 @@ import { IFlags, InstanceList } from '../core/InstanceList';
 import { DataRef } from '../core/Picking';
 import { Mat3, Mat4, normalMatrix3 } from '../core/Mat4';
 import { GeometryAtlas, GeometrySlice } from './GeometryAtlas';
+import { Fold } from '../core/ContactDeformation';
 
 /**
- * 160 bytes per instance:
+ * 192 bytes per instance (last 32 bytes are compact leaf folds):
  *   mat4x4f model            64
  *   vec4f   normalMat rows   48   (3 x vec4, the 4th component padding)
  *   vec4f   color            16
  *   vec4f   emissive         16
  *   u32     pickId, flags, _pad x2  16
  */
-export const INSTANCE_FLOATS = 40;
+export const INSTANCE_FLOATS = 48;
 export const INSTANCE_BYTES = INSTANCE_FLOATS * 4;
 
 export type DrawBucket = {
@@ -112,7 +113,7 @@ export class InstanceBuffers {
                     Math.hypot(m[4], m[5], m[6]),
                     Math.hypot(m[8], m[9], m[10]));
                 this.writeInstance(slot, m, list.items[index].color,
-                    list.items[index].emissive, list.items[index].flags, slot + 1);
+                    list.items[index].emissive, list.items[index].flags, slot + 1, list.items[index].fold);
                 this.slotRefs.push(list.items[index].ref);
                 slot++;
             }
@@ -124,7 +125,7 @@ export class InstanceBuffers {
     }
 
     private writeInstance(slot: number, model: Mat4, color: { r: number; g: number; b: number },
-                          emissive: { r: number; g: number; b: number }, flags: number, pickId: number) {
+                          emissive: { r: number; g: number; b: number }, flags: number, pickId: number, fold?: Fold) {
         const f = this.staging;
         const u = this.stagingU32;
         const at = slot * INSTANCE_FLOATS;
@@ -147,6 +148,8 @@ export class InstanceBuffers {
         u[at + 37] = flags;
         u[at + 38] = 0;
         u[at + 39] = 0;
+        f.fill(0, at + 40, at + 48);
+        if (fold) { f.set(fold.angles, at + 40); f.set(fold.scale, at + 44); }
     }
 
     private ensureStaging(instances: number) {

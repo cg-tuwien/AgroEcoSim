@@ -1,0 +1,10 @@
+Species lookup: Bergenia Cordifolia, BudLength: 0.009
+PlantFormation2 ctor: Bergenia Cordifolia, BudLength: 0.009
+SpeciesSettings.Init called on Bergenia Cordifolia, BudLength: 0.009
+PlantFormation2 after Init: Bergenia Cordifolia, BudLength: 0.009
+CONTROLLED DIAGNOSTIC: same-layout v21 state under v22; no supported migration or fresh-season claim
+Collision scene: 2 triangles (2 soil, 0 obstacle) in 10 ms, open soil surface (regular fields use their finite footprint)
+ISOLATE kept=0,1,6,11,16,21,26,31,36,41,46,47,48,51
+BASE lengthMm=6.596022 clear=True count=14
+BASE failures=
+SOLVER frozenHours=1 oldLengthMm=6.596022 newLengthMm=6.6060224 targetLengthMm=6.6060224 petioleTurnDeg=15.000006 failures= unresolved=0 rounds=4/1/1

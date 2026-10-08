@@ -1,0 +1,265 @@
+--- Agro/Collisions/FoliageGeometry.Attachment.cs (v31)
++++ Agro/Collisions/FoliageGeometry.Attachment.cs (v32)
+@@ -30,6 +30,8 @@
+         if (radius <= 0) return Distance(a, b, search);
+         if(a.Feature<0 && b.Feature<0 && BoundsSeparate(a,b,search))
+             return new(a.Pose.Base,b.Pose.Base,Vector3.UnitY,search,-1,-1);
++        if (a.Lamina == null && b.Lamina == null)
++            return RodsOutsideAttachment(a.Pose, b.Pose, search, attachment, radius);
+         var aa = OutsideA ??= []; var bb = OutsideB ??= [];
+         Parts(a, attachment, radius, aa, Pad(b.Bounds,search));
+         Parts(b, attachment, radius, bb, Pad(a.Bounds,search));
+@@ -129,9 +131,8 @@
+         in ContactShape b0, in ContactShape b1, Vector3 attachment0, Vector3 attachment1, float radius)
+     {
+         if (!a0.SweptBounds(a1).Intersects(b0.SweptBounds(b1))) return MotionResult.Clear;
+-        var low=Vector3.Max(attachment0,attachment1)-new Vector3(radius);
+-        var high=Vector3.Min(attachment0,attachment1)+new Vector3(radius);
+-        if (AttachmentContained(low,high,a0,a1) || AttachmentContained(low,high,b0,b1)) return MotionResult.Clear;
++        if (AttachmentContained(attachment0,attachment1,radius,a0,a1)
++            || AttachmentContained(attachment0,attachment1,radius,b0,b1)) return MotionResult.Clear;
+         var movement=a0.MotionBound(a1)+b0.MotionBound(b1);
+         if (SweptPlanesSeparate(a0,a1,b0,b1)) return MotionResult.Clear;
+         var reach=MathF.Max(a0.Pose.Radius,a1.Pose.Radius)+MathF.Max(b0.Pose.Radius,b1.Pose.Radius);
+@@ -150,7 +151,7 @@
+             var x0=a0.Lamina==null?a0:a0 with {Feature=i};
+             var x1=a1.Lamina==null?a1:a1 with {Feature=i};
+             var core=AttachmentBounds(x0,x1);
+-            if (Contains(low,high,core)) continue;
++            if (AttachmentBoxContains(attachment0,attachment1,radius,core)) continue;
+             var bounds=Pad(core,MathF.Max(x0.Pose.Radius,x1.Pose.Radius));
+             second.Clear();
+             if(b0.Lamina==null) second.Add(-1);
+@@ -160,7 +161,7 @@
+                 var y0=b0.Lamina==null?b0:b0 with {Feature=j};
+                 var y1=b1.Lamina==null?b1:b1 with {Feature=j};
+                 var otherCore=AttachmentBounds(y0,y1);
+-                if (Contains(low,high,otherCore)) continue;
++                if (AttachmentBoxContains(attachment0,attachment1,radius,otherCore)) continue;
+                 var other=Pad(otherCore,MathF.Max(y0.Pose.Radius,y1.Pose.Radius));
+                 if (!bounds.Intersects(other)) continue;
+                 var result = AttachmentInterval(x0,x1,y0,y1,attachment0,attachment1,radius,ref budget);
+@@ -185,9 +186,8 @@
+         // If either whole body remains inside the moving attachment neighbourhood,
+         // its outside portion is empty throughout the interval. This proof is especially
+         // useful for new blades; distance subdivision alone needlessly erodes the joint.
+-        var low = Vector3.Max(p0,p1)-new Vector3(radius);
+-        var high = Vector3.Min(p0,p1)+new Vector3(radius);
+-        if (AttachmentContained(low,high,a0,a1) || AttachmentContained(low,high,b0,b1)) return MotionResult.Clear;
++        if (AttachmentContained(p0,p1,radius,a0,a1)
++            || AttachmentContained(p0,p1,radius,b0,b1)) return MotionResult.Clear;
+         var am = a0.Interpolate(a1, .5f); var bm = b0.Interpolate(b1, .5f);
+         var motion = MathF.Max(a0.MotionBound(am), am.MotionBound(a1)) + MathF.Max(b0.MotionBound(bm), bm.MotionBound(b1));
+         var reach = MathF.Max(a0.Pose.Radius, a1.Pose.Radius) + MathF.Max(b0.Pose.Radius, b1.Pose.Radius);
+@@ -207,12 +207,22 @@
+         return left == MotionResult.Clear ? AttachmentInterval(am,a1,bm,b1,pm,p1,radius,ref budget) : left;
+     }
+ 
+-    static bool Contains(Vector3 low, Vector3 high, Bvh.BoundingBox box)
+-        => box.Min.X>=low.X && box.Min.Y>=low.Y && box.Min.Z>=low.Z
+-            && box.Max.X<=high.X && box.Max.Y<=high.Y && box.Max.Z<=high.Z;
+-
+-    static bool AttachmentContained(Vector3 low, Vector3 high, in ContactShape start, in ContactShape end)
+-        => Contains(low, high, AttachmentBounds(start,end));
++    static bool AttachmentContained(Vector3 center0, Vector3 center1, float radius,
++        in ContactShape start, in ContactShape end)
++        => AttachmentBoxContains(center0,center1,radius,AttachmentBounds(start,end));
++
++    static bool AttachmentBoxContains(Vector3 center0, Vector3 center1, float radius, Bvh.BoundingBox bounds)
++    {
++        // Test the intersection of the two exemption boxes without rounding their
++        // faces to world floats. A rounded-out box can otherwise certify an entire
++        // rod as exempt although its double-clipped parameter range is nonempty.
++        for (var axis = 0; axis < 3; ++axis)
++            if ((double)bounds.Min[axis] - center0[axis] < -radius
++                || (double)bounds.Min[axis] - center1[axis] < -radius
++                || (double)bounds.Max[axis] - center0[axis] > radius
++                || (double)bounds.Max[axis] - center1[axis] > radius) return false;
++        return true;
++    }
+ 
+     static Bvh.BoundingBox AttachmentBounds(in ContactShape start, in ContactShape end)
+     {
+--- Agro/AgroWorld.cs (v31)
++++ Agro/AgroWorld.cs (v32)
+@@ -749,7 +749,11 @@
+     // V30 aligns interval distance proofs with the existing clearance tolerance
+     // and removes unchecked tiny-motion acceptance, including at attachments.
+     // Certification decisions can alter continuation; payload/playback are unchanged.
+-	public const byte CheckpointVersion = 31;
++    // V31 measures unrestricted rod distances in relative doubles and preserves
++    // exact accepted interpolation endpoints. V32 clips attached rod pairs in
++    // double parameter ranges and uses matching exemption-containment predicates.
++    // Contact/retry decisions can change; payload layout and playback are unchanged.
++	public const byte CheckpointVersion = 32;
+ 
+ 	/// <summary>
+ 	/// Everything the next step depends on that the request does not determine.
+--- /dev/null
++++ Agro/Collisions/FoliageGeometry.AttachmentRods.cs
+@@ -0,0 +1,75 @@
++using System.Numerics;
++
++namespace Agro.Collisions;
++
++internal static partial class FoliageGeometry
++{
++    // Keep the original represented endpoints and clip only their parameter domain.
++    // Materialising a clipped endpoint as a world-space float loses the precision
++    // gained by the relative-double segment kernel, especially in translated crowns.
++    readonly record struct RodRange(Vector3 Start, Vector3 End, double Low, double High);
++
++    static FoliageContact RodsOutsideAttachment(in OrganPose a, in OrganPose b,
++        float search, Vector3 center, float radius)
++    {
++        // Three mechanical spans can each leave the box twice. No per-organ state,
++        // cached fragment vertices or per-contact heap allocation is needed.
++        Span<RodRange> aa = stackalloc RodRange[6];
++        Span<RodRange> bb = stackalloc RodRange[6];
++        var countA = RodRanges(a, center, radius, aa);
++        var countB = RodRanges(b, center, radius, bb);
++        var best = new FoliageContact(a.Base, b.Base, Vector3.UnitY, search, -1, -1);
++        for (var i = 0; i < countA; ++i)
++            for (var j = 0; j < countB; ++j)
++            {
++                ref readonly var x = ref aa[i];
++                ref readonly var y = ref bb[j];
++                var squared = StaticCollider.ClosestPointsBetweenSegmentRanges(
++                    x.Start, x.End, x.Low, x.High, y.Start, y.End, y.Low, y.High,
++                    out var onA, out var onB);
++                var distance = (float)Math.Sqrt(squared);
++                if (distance >= best.Distance) continue;
++                var normal = onA - onB;
++                if (normal.LengthSquared() < 1e-16f)
++                    normal = Vector3.Cross(x.End - x.Start, y.End - y.Start);
++                if (normal.LengthSquared() < 1e-20f) normal = Vector3.UnitY;
++                best = new(onA, onB, Vector3.Normalize(normal), distance, -1, -1);
++                if (distance <= 1e-9f || distance < a.Radius + b.Radius - Skin) return best;
++            }
++        return best;
++    }
++
++    static int RodRanges(in OrganPose pose, Vector3 center, float radius, Span<RodRange> ranges)
++    {
++        var count = 0;
++        for (var span = 0; span < (pose.CurvedRod ? 3 : 1); ++span)
++        {
++            var rod = pose.CurvedRod ? pose.RodSpan(span) : pose;
++            var start = rod.Base;
++            var end = rod.Tip;
++            double enter = 0, exit = 1;
++            for (var axis = 0; axis < 3; ++axis)
++            {
++                double direction = (double)end[axis] - start[axis];
++                double offset = (double)start[axis] - center[axis];
++                if (direction == 0)
++                {
++                    if (Math.Abs(offset) > radius) { enter = 1; exit = 0; break; }
++                    continue;
++                }
++                var lo = (-radius - offset) / direction;
++                var hi = (radius - offset) / direction;
++                enter = Math.Max(enter, Math.Min(lo, hi));
++                exit = Math.Min(exit, Math.Max(lo, hi));
++                if (enter >= exit) break;
++            }
++            if (enter >= exit) ranges[count++] = new(start, end, 0, 1);
++            else
++            {
++                if (enter > 0) ranges[count++] = new(start, end, 0, enter);
++                if (exit < 1) ranges[count++] = new(start, end, exit, 1);
++            }
++        }
++        return count;
++    }
++}
+--- /dev/null
++++ Agro/Collisions/StaticCollider.SegmentRanges.cs
+@@ -0,0 +1,87 @@
++using System.Numerics;
++
++namespace Agro.Collisions;
++
++public sealed partial class StaticCollider
++{
++    // Restricted segments must remain in relative double coordinates until the
++    // distance is measured. Only the returned witnesses are rounded to world floats.
++    // Leave the existing unrestricted hot kernel unchanged.
++    internal static double ClosestPointsBetweenSegmentRanges(
++        Vector3 p0, Vector3 p1, double lowP, double highP,
++        Vector3 q0, Vector3 q1, double lowQ, double highQ,
++        out Vector3 onFirst, out Vector3 onSecond)
++    {
++        double px = (double)p1.X - p0.X, py = (double)p1.Y - p0.Y, pz = (double)p1.Z - p0.Z;
++        double qx = (double)q1.X - q0.X, qy = (double)q1.Y - q0.Y, qz = (double)q1.Z - q0.Z;
++        var rangeP = highP - lowP;
++        var rangeQ = highQ - lowQ;
++        double ux = px * rangeP, uy = py * rangeP, uz = pz * rangeP;
++        double vx = qx * rangeQ, vy = qy * rangeQ, vz = qz * rangeQ;
++        double rx = ((double)p0.X - q0.X) + px * lowP - qx * lowQ;
++        double ry = ((double)p0.Y - q0.Y) + py * lowP - qy * lowQ;
++        double rz = ((double)p0.Z - q0.Z) + pz * lowP - qz * lowQ;
++        double a = ux * ux + uy * uy + uz * uz;
++        double e = vx * vx + vy * vy + vz * vz;
++        double f = vx * rx + vy * ry + vz * rz;
++        double c = ux * rx + uy * ry + uz * rz;
++        double b = ux * vx + uy * vy + uz * vz;
++        double s, t;
++        if (a == 0) { s = 0; t = e > 0 ? Math.Clamp(f / e, 0, 1) : 0; }
++        else if (e == 0) { t = 0; s = Math.Clamp(-c / a, 0, 1); }
++        else
++        {
++            var determinant = a * e - b * b;
++            if (determinant > 1e-8 * a * e)
++            {
++                s = Math.Clamp((b * f - c * e) / determinant, 0, 1);
++                t = (b * s + f) / e;
++                if (t < 0) { t = 0; s = Math.Clamp(-c / a, 0, 1); }
++                else if (t > 1) { t = 1; s = Math.Clamp((b - c) / a, 0, 1); }
++            }
++            else
++            {
++                // Near parallelism, subtracting a*e-b*b is ill-conditioned. Test
++                // boundary minima and a cross-product interior candidate instead.
++                // Evaluate residual vectors rather than the expanded quadratic.
++                s = 0; t = Math.Clamp(f / e, 0, 1);
++                var best = Squared(rx, ry, rz, ux, uy, uz, vx, vy, vz, s, t);
++                Consider(1, Math.Clamp((b + f) / e, 0, 1), rx, ry, rz, ux, uy, uz, vx, vy, vz, ref best, ref s, ref t);
++                Consider(Math.Clamp(-c / a, 0, 1), 0, rx, ry, rz, ux, uy, uz, vx, vy, vz, ref best, ref s, ref t);
++                Consider(Math.Clamp((b - c) / a, 0, 1), 1, rx, ry, rz, ux, uy, uz, vx, vy, vz, ref best, ref s, ref t);
++                double nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
++                var crossSquared = nx * nx + ny * ny + nz * nz;
++                if (crossSquared > 0)
++                {
++                    var interiorS = -((ry * vz - rz * vy) * nx + (rz * vx - rx * vz) * ny + (rx * vy - ry * vx) * nz) / crossSquared;
++                    var interiorT = -((ry * uz - rz * uy) * nx + (rz * ux - rx * uz) * ny + (rx * uy - ry * ux) * nz) / crossSquared;
++                    if (interiorS >= 0 && interiorS <= 1 && interiorT >= 0 && interiorT <= 1)
++                        Consider(interiorS, interiorT, rx, ry, rz, ux, uy, uz, vx, vy, vz, ref best, ref s, ref t);
++                }
++            }
++        }
++        var parameterP = lowP + rangeP * s;
++        var parameterQ = lowQ + rangeQ * t;
++        onFirst = new((float)(p0.X + px * parameterP), (float)(p0.Y + py * parameterP), (float)(p0.Z + pz * parameterP));
++        onSecond = new((float)(q0.X + qx * parameterQ), (float)(q0.Y + qy * parameterQ), (float)(q0.Z + qz * parameterQ));
++        return Squared(rx, ry, rz, ux, uy, uz, vx, vy, vz, s, t);
++    }
++
++    static double Squared(double rx, double ry, double rz, double ux, double uy, double uz,
++        double vx, double vy, double vz, double s, double t)
++    {
++        var x = rx + ux * s - vx * t;
++        var y = ry + uy * s - vy * t;
++        var z = rz + uz * s - vz * t;
++        return x * x + y * y + z * z;
++    }
++
++    static void Consider(double candidateS, double candidateT, double rx, double ry, double rz,
++        double ux, double uy, double uz, double vx, double vy, double vz,
++        ref double best, ref double s, ref double t)
++    {
++        var distance = Squared(rx, ry, rz, ux, uy, uz, vx, vy, vz, candidateS, candidateT);
++        if (distance >= best) return;
++        best = distance; s = candidateS; t = candidateT;
++    }
++}

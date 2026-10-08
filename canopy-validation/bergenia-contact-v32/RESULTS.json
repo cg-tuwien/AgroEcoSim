@@ -1,0 +1,554 @@
+{
+  "date": "2026-10-08",
+  "checkpointVersion": 32,
+  "requestSha256": "74450989e51855e23248d35cdb410224a999a61c27029666dddfa312e43ff1fe",
+  "measurementDefinition": "Whole biological leaves, both sampled intrinsic length and half-width reaching 50/90 percent. Daily threshold observation. Completed-only expansion times are survivor-biased; unfinished leaves are right-censored. Runs stop at day 240 for 1h and day 330 for 4h.",
+  "geometry": {
+    "baselineCases": 6013,
+    "baselineDiscrepancies": 377,
+    "updatedCases": 6028,
+    "updatedDiscrepanciesManaged": 0,
+    "updatedDiscrepanciesNative": 0,
+    "addedPersistentBytesPerOrgan": 0,
+    "restrictedKernelAllocatedBytesPerMillionCalls": 0,
+    "perQueryRangeStackBytes": 480
+  },
+  "ccd": {
+    "representable": 304,
+    "referenceCases": 324,
+    "positiveRejected": 145,
+    "positiveMissed": 0,
+    "negativeRefused": 33,
+    "offsetPerBodyUm": 20,
+    "motionBoundMaterialSamples": 190080,
+    "guarantee": "subset regression, not exact interval certification"
+  },
+  "nativeFixtures": [
+    {
+      "name": "fixture-1h-single",
+      "exit": 0
+    },
+    {
+      "name": "fixture-1h-multi",
+      "exit": 0
+    },
+    {
+      "name": "fixture-1h-radial",
+      "exit": 0
+    },
+    {
+      "name": "fixture-1h-same-crown",
+      "exit": 0
+    },
+    {
+      "name": "fixture-1h-ceiling",
+      "exit": 0
+    },
+    {
+      "name": "fixture-1h-walls",
+      "exit": 0
+    },
+    {
+      "name": "fixture-1h-v1",
+      "exit": 0
+    },
+    {
+      "name": "fixture-1h-v1-radial",
+      "exit": 0
+    },
+    {
+      "name": "fixture-1h-v1-ceiling",
+      "exit": 0
+    },
+    {
+      "name": "fixture-1h-v1-walls",
+      "exit": 0
+    },
+    {
+      "name": "fixture-4h-single",
+      "exit": 0
+    },
+    {
+      "name": "fixture-4h-multi",
+      "exit": 0
+    },
+    {
+      "name": "fixture-4h-radial",
+      "exit": 0
+    },
+    {
+      "name": "fixture-4h-same-crown",
+      "exit": 0
+    },
+    {
+      "name": "fixture-4h-ceiling",
+      "exit": 0
+    },
+    {
+      "name": "fixture-4h-walls",
+      "exit": 0
+    },
+    {
+      "name": "fixture-4h-v1",
+      "exit": 0
+    },
+    {
+      "name": "fixture-4h-v1-radial",
+      "exit": 0
+    },
+    {
+      "name": "fixture-4h-v1-ceiling",
+      "exit": 0
+    },
+    {
+      "name": "fixture-4h-v1-walls",
+      "exit": 0
+    },
+    {
+      "name": "four-1h-mode0-worker-comparison",
+      "exit": 0
+    },
+    {
+      "name": "four-1h-mode1-worker-comparison",
+      "exit": 0
+    },
+    {
+      "name": "four-4h-mode0-worker-comparison",
+      "exit": 0
+    },
+    {
+      "name": "four-4h-mode1-worker-comparison",
+      "exit": 0
+    }
+  ],
+  "nativeCheckpointCases": {
+    "synthetic": 16,
+    "matureTickSizes": [
+      1,
+      4
+    ],
+    "matureIncrementsPerTickSize": 3,
+    "stateAndExportByteIdentical": true,
+    "olderVersion31Rejected": true
+  },
+  "frontendPassedTests": 37,
+  "benchmarks": [
+    {
+      "case": "single",
+      "baselineMedianMs": 0.6754,
+      "updatedMedianMs": 0.679,
+      "changePercent": 0.5330174711282165,
+      "runs": [
+        {
+          "version": 31,
+          "repetition": 0,
+          "medianMs": 0.6748,
+          "p95Ms": 0.829,
+          "allocatedBytes": 10984
+        },
+        {
+          "version": 32,
+          "repetition": 0,
+          "medianMs": 0.6761,
+          "p95Ms": 0.7071,
+          "allocatedBytes": 10984
+        },
+        {
+          "version": 32,
+          "repetition": 1,
+          "medianMs": 0.6751,
+          "p95Ms": 0.7872,
+          "allocatedBytes": 10984
+        },
+        {
+          "version": 31,
+          "repetition": 1,
+          "medianMs": 0.6754,
+          "p95Ms": 1.1602,
+          "allocatedBytes": 10984
+        },
+        {
+          "version": 31,
+          "repetition": 2,
+          "medianMs": 1.0153,
+          "p95Ms": 1.1943,
+          "allocatedBytes": 10984
+        },
+        {
+          "version": 32,
+          "repetition": 2,
+          "medianMs": 0.679,
+          "p95Ms": 0.8129,
+          "allocatedBytes": 10984
+        },
+        {
+          "version": 32,
+          "repetition": 3,
+          "medianMs": 0.6815,
+          "p95Ms": 0.6987,
+          "allocatedBytes": 10984
+        },
+        {
+          "version": 31,
+          "repetition": 3,
+          "medianMs": 0.6755,
+          "p95Ms": 0.7467,
+          "allocatedBytes": 10984
+        },
+        {
+          "version": 31,
+          "repetition": 4,
+          "medianMs": 0.6684,
+          "p95Ms": 0.689,
+          "allocatedBytes": 10984
+        },
+        {
+          "version": 32,
+          "repetition": 4,
+          "medianMs": 0.6831,
+          "p95Ms": 0.701,
+          "allocatedBytes": 10984
+        }
+      ]
+    },
+    {
+      "case": "radial",
+      "baselineMedianMs": 0.9912,
+      "updatedMedianMs": 0.9819,
+      "changePercent": -0.9382566585956376,
+      "runs": [
+        {
+          "version": 31,
+          "repetition": 0,
+          "medianMs": 0.9873,
+          "p95Ms": 1.0675,
+          "allocatedBytes": 12232
+        },
+        {
+          "version": 32,
+          "repetition": 0,
+          "medianMs": 0.9803,
+          "p95Ms": 1.8698,
+          "allocatedBytes": 12232
+        },
+        {
+          "version": 32,
+          "repetition": 1,
+          "medianMs": 0.9819,
+          "p95Ms": 1.1231,
+          "allocatedBytes": 12232
+        },
+        {
+          "version": 31,
+          "repetition": 1,
+          "medianMs": 1.005,
+          "p95Ms": 1.1517,
+          "allocatedBytes": 12232
+        },
+        {
+          "version": 31,
+          "repetition": 2,
+          "medianMs": 0.9964,
+          "p95Ms": 1.0755,
+          "allocatedBytes": 12232
+        },
+        {
+          "version": 32,
+          "repetition": 2,
+          "medianMs": 0.9766,
+          "p95Ms": 0.9949,
+          "allocatedBytes": 12232
+        },
+        {
+          "version": 32,
+          "repetition": 3,
+          "medianMs": 0.9955,
+          "p95Ms": 1.0999,
+          "allocatedBytes": 12232
+        },
+        {
+          "version": 31,
+          "repetition": 3,
+          "medianMs": 0.9832,
+          "p95Ms": 1.0084,
+          "allocatedBytes": 12232
+        },
+        {
+          "version": 31,
+          "repetition": 4,
+          "medianMs": 0.9912,
+          "p95Ms": 1.0109,
+          "allocatedBytes": 12232
+        },
+        {
+          "version": 32,
+          "repetition": 4,
+          "medianMs": 0.9821,
+          "p95Ms": 1.0036,
+          "allocatedBytes": 12232
+        }
+      ]
+    },
+    {
+      "case": "radial-v1",
+      "baselineMedianMs": 31.5394,
+      "updatedMedianMs": 27.8675,
+      "changePercent": -11.642263327774149,
+      "runs": [
+        {
+          "version": 31,
+          "repetition": 0,
+          "medianMs": 42.8196,
+          "p95Ms": 45.4377,
+          "allocatedBytes": 19384
+        },
+        {
+          "version": 32,
+          "repetition": 0,
+          "medianMs": 24.6709,
+          "p95Ms": 28.8909,
+          "allocatedBytes": 19624
+        },
+        {
+          "version": 32,
+          "repetition": 1,
+          "medianMs": 27.1577,
+          "p95Ms": 30.0621,
+          "allocatedBytes": 19576
+        },
+        {
+          "version": 31,
+          "repetition": 1,
+          "medianMs": 31.5394,
+          "p95Ms": 35.6865,
+          "allocatedBytes": 19960
+        },
+        {
+          "version": 31,
+          "repetition": 2,
+          "medianMs": 27.3011,
+          "p95Ms": 34.7251,
+          "allocatedBytes": 19480
+        },
+        {
+          "version": 32,
+          "repetition": 2,
+          "medianMs": 34.8334,
+          "p95Ms": 47.4186,
+          "allocatedBytes": 19864
+        },
+        {
+          "version": 32,
+          "repetition": 3,
+          "medianMs": 30.8374,
+          "p95Ms": 37.8675,
+          "allocatedBytes": 19720
+        },
+        {
+          "version": 31,
+          "repetition": 3,
+          "medianMs": 23.2666,
+          "p95Ms": 35.9783,
+          "allocatedBytes": 19720
+        },
+        {
+          "version": 31,
+          "repetition": 4,
+          "medianMs": 38.7483,
+          "p95Ms": 39.7161,
+          "allocatedBytes": 19480
+        },
+        {
+          "version": 32,
+          "repetition": 4,
+          "medianMs": 27.8675,
+          "p95Ms": 28.3422,
+          "allocatedBytes": 20008
+        }
+      ]
+    }
+  ],
+  "seasonal": [
+    {
+      "version": 31,
+      "tickHours": 1,
+      "lightModel": "CPU (RenderMode 3)",
+      "contactMode": 0,
+      "day240": {
+        "day": 240,
+        "AG": 52,
+        "UG": 178,
+        "leaves": 20,
+        "half": 7,
+        "ninety": 4,
+        "petals": 0,
+        "floral": 1,
+        "blocked": 39,
+        "water": 42.23302804795094,
+        "energy": 608.4149238923856,
+        "finite": true,
+        "maxUnresolved": 0,
+        "elapsedSec": 2040.34
+      },
+      "day330": {
+        "day": 330,
+        "AG": 51,
+        "UG": 249,
+        "leaves": 20,
+        "half": 7,
+        "ninety": 5,
+        "petals": 0,
+        "floral": 0,
+        "blocked": 46,
+        "water": 44.758404430700466,
+        "energy": 1458.3333402912249,
+        "finite": true,
+        "maxUnresolved": 0,
+        "elapsedSec": 2959.15
+      }
+    },
+    {
+      "version": 31,
+      "tickHours": 4,
+      "lightModel": "CPU (RenderMode 3)",
+      "contactMode": 0,
+      "day240": {
+        "day": 240,
+        "AG": 52,
+        "UG": 160,
+        "leaves": 20,
+        "half": 6,
+        "ninety": 5,
+        "petals": 0,
+        "floral": 1,
+        "blocked": 37,
+        "water": 40.04761284519918,
+        "energy": 591.0385532423388,
+        "finite": true,
+        "maxUnresolved": 0,
+        "elapsedSec": 317.05
+      },
+      "day330": {
+        "day": 330,
+        "AG": 51,
+        "UG": 246,
+        "leaves": 20,
+        "half": 7,
+        "ninety": 5,
+        "petals": 0,
+        "floral": 0,
+        "blocked": 43,
+        "water": 41.82956409873441,
+        "energy": 1410.1820183786622,
+        "finite": true,
+        "maxUnresolved": 0,
+        "elapsedSec": 499.99
+      }
+    },
+    {
+      "version": 32,
+      "tickHours": 1,
+      "lightModel": "CPU (RenderMode 3)",
+      "contactMode": 0,
+      "day240": {
+        "day": 240,
+        "AG": 47,
+        "UG": 180,
+        "leaves": 18,
+        "half": 5,
+        "ninety": 3,
+        "petals": 0,
+        "floral": 1,
+        "blocked": 39,
+        "water": 27.040531343547627,
+        "energy": 486.78924541434026,
+        "finite": true,
+        "maxUnresolved": 0,
+        "elapsedSec": 994.19
+      },
+      "day330": null
+    },
+    {
+      "version": 32,
+      "tickHours": 4,
+      "lightModel": "CPU (RenderMode 3)",
+      "contactMode": 0,
+      "day240": {
+        "day": 240,
+        "AG": 52,
+        "UG": 153,
+        "leaves": 20,
+        "half": 5,
+        "ninety": 4,
+        "petals": 0,
+        "floral": 1,
+        "blocked": 29,
+        "water": 38.79385095695034,
+        "energy": 578.8700431713078,
+        "finite": true,
+        "maxUnresolved": 0,
+        "elapsedSec": 349.66
+      },
+      "day330": {
+        "day": 330,
+        "AG": 51,
+        "UG": 213,
+        "leaves": 20,
+        "half": 6,
+        "ninety": 5,
+        "petals": 0,
+        "floral": 0,
+        "blocked": 46,
+        "water": 46.55206472473219,
+        "energy": 1376.4117835384095,
+        "finite": true,
+        "maxUnresolved": 0,
+        "elapsedSec": 530.88
+      }
+    }
+  ],
+  "expansion": [
+    {
+      "tickHours": 1,
+      "threshold": "halfDay",
+      "completed": 5,
+      "observedLeaves": 18,
+      "rightCensored": 13,
+      "completedOnlyMedianDays": 55,
+      "completedOnlyMinDays": 49,
+      "completedOnlyMaxDays": 102
+    },
+    {
+      "tickHours": 1,
+      "threshold": "ninetyDay",
+      "completed": 3,
+      "observedLeaves": 18,
+      "rightCensored": 15,
+      "completedOnlyMedianDays": 88,
+      "completedOnlyMinDays": 84,
+      "completedOnlyMaxDays": 92
+    },
+    {
+      "tickHours": 4,
+      "threshold": "halfDay",
+      "completed": 6,
+      "observedLeaves": 20,
+      "rightCensored": 14,
+      "completedOnlyMedianDays": 63.5,
+      "completedOnlyMinDays": 43,
+      "completedOnlyMaxDays": 179
+    },
+    {
+      "tickHours": 4,
+      "threshold": "ninetyDay",
+      "completed": 5,
+      "observedLeaves": 20,
+      "rightCensored": 15,
+      "completedOnlyMedianDays": 137,
+      "completedOnlyMinDays": 88,
+      "completedOnlyMaxDays": 318
+    }
+  ],
+  "biologicalAcceptance": false,
+  "remainingGeometryGate": "Finite-thickness rod contact changes abruptly when a centre line emerges from the attachment box; query changes from capped-clear at +0.6 um growth to -1.9457 mm gap at +0.8 um."
+}

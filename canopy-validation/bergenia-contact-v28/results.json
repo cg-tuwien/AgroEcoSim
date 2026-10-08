@@ -1,0 +1,95 @@
+{
+  "checkpointVersion": 28,
+  "defaultMode": 0,
+  "experimentalMode": 1,
+  "botanicalParametersChanged": false,
+  "mechanics": {
+    "angularLimitReference": true,
+    "inwardRelease": true,
+    "impossibleTangentRejected": true,
+    "conditionedDirectSolve": true,
+    "frozenNativeTicks": [
+      1,
+      4
+    ],
+    "acceptedNativePosesUnchangedByCache": true,
+    "v1FullSyntheticRadiusMm": 9,
+    "matureRigidAdditionalGrowthUm": [
+      0,
+      0
+    ]
+  },
+  "seasonal": {
+    "lightMode": 3,
+    "seed": 42,
+    "startDay": 282,
+    "endDay": 285,
+    "comparison": "controlled Release .NET 8 continuation against v27; payload identical except version header",
+    "horizonDays": 755,
+    "clonalSpread": "disabled as in archived request",
+    "1h": {
+      "wholeLeaves": 20,
+      "halfExpanded": 8,
+      "ninetyExpanded": 3,
+      "petals": 0,
+      "flowerRetiresDuringInterval": true,
+      "finite": true,
+      "unresolved": 0
+    },
+    "4h": {
+      "wholeLeaves": 20,
+      "halfExpanded": 4,
+      "ninetyExpanded": 2,
+      "petals": 0,
+      "blockedScapeLengthMm": 0.40286416,
+      "blockedScapeRadiusMm": 1.2429563,
+      "finite": true,
+      "unresolved": 0
+    }
+  },
+  "storageDelta": {
+    "newAcceptedPerLeafFields": 0,
+    "boundedWorldNumericScratchPayloadMaximumBytes": 61568,
+    "additionalDirectStackBytes": 2512,
+    "memoEntriesUnchanged": [
+      4096,
+      2048
+    ],
+    "workerRecencyMetadataBeforeBytes": 3072,
+    "workerRecencyMetadataAfterBytes": 1536,
+    "completePerLeafGateEstablished": false
+  },
+  "performance": {
+    "finalData": "cache-benchmarks.json",
+    "earlierPreCacheData": "benchmarks-final.json",
+    "scope": "fixed-population retry kernel; serial NativeAOT processes; 10 warmups/35 samples per process",
+    "zeroAllocationGateEstablished": false,
+    "endToEndGateEstablished": false
+  },
+  "checks": {
+    "coreBuild": "passed, zero errors, 298 warnings",
+    "nativeAotFixture": "passed",
+    "nativeAotCheckpoint": "passed fresh and mature at 1h/4h",
+    "nativeAotServer": "published into temporary directory; not deployed",
+    "frontend": {
+      "suites": 5,
+      "tests": 34,
+      "passed": true
+    },
+    "fourPlantScheduling": "four-scheduling.json; configured workers 1/4, matching hashes at each tick size; not a scaling benchmark",
+    "scopedAddedLineWhitespace": "passed"
+  },
+  "notEstablished": [
+    "four-hour flowering",
+    "developed-leaf density doubling",
+    "individual expansion times",
+    "seasonal V1 acceptance",
+    "fresh 755-day comparison",
+    "overwintering",
+    "complete BAC/CCD gates",
+    "dense and full FAV11 panels",
+    "multicore scaling",
+    "complete persistent-state and performance gates"
+  ],
+  "experimentsNotRetained": "All-mode angular constraints/direct fallback had no certified mature growth gain. Broader Debug seasonal explorations are excluded from final biological/performance acceptance."
+}

@@ -1,0 +1,200 @@
+TEMPLATE Default triangles=32
+TEMPLATE Geranium Macrorrhizum triangles=82
+TEMPLATE Geranium × cantabrigiense triangles=174
+TEMPLATE Bergenia Cordifolia triangles=178
+TEMPLATE Heuchera micrantha triangles=82
+TEMPLATE Campanula poscharskyana triangles=120
+TEMPLATE Carex morrowii 'Variegata' triangles=14
+TEMPLATE Fragaria vesca 'Rügen' triangles=168
+PASS crossing 2 cm stems
+PASS crossing 20 micrometre seedling segments
+PASS rod crossing a leaf between ticks
+PASS projected leaf overlap on separate planes
+PASS leaf crossing leaf between ticks
+PASS pass around a finite leaf edge
+PASS persistent thin-sheet sliding
+PASS coincident sheets have finite contact normal
+PASS coincident contact history takes precedence over contrary organ bases
+PASS coincident normal follows the established side in either direction
+PASS coincident contact without history uses the previous side
+PASS attachment exemption does not hide distant sheet overlap
+PASS widening lamina cannot sweep across a stem
+PASS seedling curvature scales with blade dimensions instead of retaining mature relief
+PASS displayed Carex slice cannot cross displayed Bergenia from below
+PASS displayed Carex slice cannot cross displayed Bergenia from above
+PASS actual Carex geometry can move around Bergenia edge
+Species lookup: Bergenia Cordifolia, BudLength: 0.009
+PlantFormation2 ctor: Bergenia Cordifolia, BudLength: 0.009
+SpeciesSettings.Init called on Bergenia Cordifolia, BudLength: 0.009
+PlantFormation2 after Init: Bergenia Cordifolia, BudLength: 0.009
+Collision scene: 4 triangles (2 soil, 2 obstacle) in 8 ms, open soil surface (regular fields use their finite footprint)
+PASS total 5 degree limit after all contact sweeps
+PASS safe partial extension retained at angle limit
+PASS 800 hours of obstruction does not kill tissue
+Species lookup: Geranium Macrorrhizum, BudLength: 0.01
+PlantFormation2 ctor: Geranium Macrorrhizum, BudLength: 0.01
+SpeciesSettings.Init called on Geranium Macrorrhizum, BudLength: 0.01
+PlantFormation2 after Init: Geranium Macrorrhizum, BudLength: 0.01
+PASS local rejection preserves unrelated sibling growth
+PASS local rejection does not climb to every moving ancestor
+PASS Geranium scape inherits deflected heading
+Species lookup: Geranium Macrorrhizum, BudLength: 0.01
+PlantFormation2 ctor: Geranium Macrorrhizum, BudLength: 0.01
+SpeciesSettings.Init called on Geranium Macrorrhizum, BudLength: 0.01
+PlantFormation2 after Init: Geranium Macrorrhizum, BudLength: 0.01
+PASS thin supporting parent receives greater elastic correction
+Species lookup: Geranium Macrorrhizum, BudLength: 0.01
+PlantFormation2 ctor: Geranium Macrorrhizum, BudLength: 0.01
+SpeciesSettings.Init called on Geranium Macrorrhizum, BudLength: 0.01
+PlantFormation2 after Init: Geranium Macrorrhizum, BudLength: 0.01
+PASS released elastic floral joint relaxes
+Species lookup: Geranium Macrorrhizum, BudLength: 0.01
+PlantFormation2 ctor: Geranium Macrorrhizum, BudLength: 0.01
+SpeciesSettings.Init called on Geranium Macrorrhizum, BudLength: 0.01
+PlantFormation2 after Init: Geranium Macrorrhizum, BudLength: 0.01
+PASS offset bloom mass bends an initially vertical scape at 1 h
+Species lookup: Geranium Macrorrhizum, BudLength: 0.01
+PlantFormation2 ctor: Geranium Macrorrhizum, BudLength: 0.01
+SpeciesSettings.Init called on Geranium Macrorrhizum, BudLength: 0.01
+PlantFormation2 after Init: Geranium Macrorrhizum, BudLength: 0.01
+PASS offset bloom mass bends an initially vertical scape at 4 h
+PASS flower loading agrees across 1 h and 4 h mechanics
+Species lookup: Geranium Macrorrhizum, BudLength: 0.01
+PlantFormation2 ctor: Geranium Macrorrhizum, BudLength: 0.01
+SpeciesSettings.Init called on Geranium Macrorrhizum, BudLength: 0.01
+PlantFormation2 after Init: Geranium Macrorrhizum, BudLength: 0.01
+PASS first retry in 24 h at 1 h ticks
+PASS second retry daily
+PASS third failure backs off to 72 h
+Species lookup: Geranium Macrorrhizum, BudLength: 0.01
+PlantFormation2 ctor: Geranium Macrorrhizum, BudLength: 0.01
+SpeciesSettings.Init called on Geranium Macrorrhizum, BudLength: 0.01
+PlantFormation2 after Init: Geranium Macrorrhizum, BudLength: 0.01
+PASS first retry in 24 h at 4 h ticks
+PASS second retry daily
+PASS third failure backs off to 72 h
+Species lookup: Geranium Macrorrhizum, BudLength: 0.01
+PlantFormation2 ctor: Geranium Macrorrhizum, BudLength: 0.01
+SpeciesSettings.Init called on Geranium Macrorrhizum, BudLength: 0.01
+PlantFormation2 after Init: Geranium Macrorrhizum, BudLength: 0.01
+PASS hanging rhizome carries its bending load
+PASS surface reaction reduces rhizome residual moment
+PASS support preserves weight without an airborne anchor
+Species lookup: Geranium Macrorrhizum, BudLength: 0.01
+PlantFormation2 ctor: Geranium Macrorrhizum, BudLength: 0.01
+SpeciesSettings.Init called on Geranium Macrorrhizum, BudLength: 0.01
+PlantFormation2 after Init: Geranium Macrorrhizum, BudLength: 0.01
+PASS ancestor thickening does not expand a child's motion rollback
+PASS rollback component includes every moving support but excludes unrelated siblings
+PASS support rollback preserves independent descendant elongation
+PASS retained descendants follow the restored support attachment
+PASS support rotation rollback transports rather than erases a descendant's independent bend
+PASS final fallback includes sub-tolerance support-frame changes at attachment boundaries
+PASS repeated fallback restores accepted parent and leaf poses bit-for-bit
+Species lookup: Bergenia Cordifolia, BudLength: 0.009
+PlantFormation2 ctor: Bergenia Cordifolia, BudLength: 0.009
+SpeciesSettings.Init called on Bergenia Cordifolia, BudLength: 0.009
+PlantFormation2 after Init: Bergenia Cordifolia, BudLength: 0.009
+Species lookup: Bergenia Cordifolia, BudLength: 0.009
+PlantFormation2 ctor: Bergenia Cordifolia, BudLength: 0.009
+SpeciesSettings.Init called on Bergenia Cordifolia, BudLength: 0.009
+PlantFormation2 after Init: Bergenia Cordifolia, BudLength: 0.009
+Collision scene: 2 triangles (2 soil, 0 obstacle) in 0 ms, open soil surface (regular fields use their finite footprint)
+PASS touching sheets retain a sparse contact
+PASS moving around a leaf edge releases the old contact side
+Species lookup: Geranium Macrorrhizum, BudLength: 0.01
+PlantFormation2 ctor: Geranium Macrorrhizum, BudLength: 0.01
+SpeciesSettings.Init called on Geranium Macrorrhizum, BudLength: 0.01
+PlantFormation2 after Init: Geranium Macrorrhizum, BudLength: 0.01
+PASS usable diffuse guidance
+PASS symmetric sky has no horizontal bias
+PASS 64 fixed rays per active apex
+PASS guidance cached before 24 simulated hours
+PASS guidance refreshes after 24 simulated hours
+PASS mature rest orientation is not light-steered
+Species lookup: Geranium Macrorrhizum, BudLength: 0.01
+PlantFormation2 ctor: Geranium Macrorrhizum, BudLength: 0.01
+SpeciesSettings.Init called on Geranium Macrorrhizum, BudLength: 0.01
+PlantFormation2 after Init: Geranium Macrorrhizum, BudLength: 0.01
+Collision scene: 2 triangles (2 soil, 0 obstacle) in 0 ms, open soil surface (regular fields use their finite footprint)
+PASS guidance filter checkpoint round trip
+PASS older live checkpoint rejected with explicit version message
+Species lookup: Geranium Macrorrhizum, BudLength: 0.01
+PlantFormation2 ctor: Geranium Macrorrhizum, BudLength: 0.01
+SpeciesSettings.Init called on Geranium Macrorrhizum, BudLength: 0.01
+PlantFormation2 after Init: Geranium Macrorrhizum, BudLength: 0.01
+PASS usable diffuse guidance
+PASS guidance points away from blocked sky
+PASS 64 fixed rays per active apex
+PASS guidance cached before 24 simulated hours
+PASS guidance refreshes after 24 simulated hours
+PASS mature rest orientation is not light-steered
+Species lookup: Geranium Macrorrhizum, BudLength: 0.01
+PlantFormation2 ctor: Geranium Macrorrhizum, BudLength: 0.01
+SpeciesSettings.Init called on Geranium Macrorrhizum, BudLength: 0.01
+PlantFormation2 after Init: Geranium Macrorrhizum, BudLength: 0.01
+Collision scene: 2 triangles (2 soil, 0 obstacle) in 0 ms, open soil surface (regular fields use their finite footprint)
+PASS guidance filter checkpoint round trip
+PASS older live checkpoint rejected with explicit version message
+Species lookup: Geranium Macrorrhizum, BudLength: 0.01
+PlantFormation2 ctor: Geranium Macrorrhizum, BudLength: 0.01
+SpeciesSettings.Init called on Geranium Macrorrhizum, BudLength: 0.01
+PlantFormation2 after Init: Geranium Macrorrhizum, BudLength: 0.01
+PASS new-tissue light steering capped at 3 degrees per day @1h
+PASS stalled rest orientation is not light-steered @1h
+Species lookup: Geranium Macrorrhizum, BudLength: 0.01
+PlantFormation2 ctor: Geranium Macrorrhizum, BudLength: 0.01
+SpeciesSettings.Init called on Geranium Macrorrhizum, BudLength: 0.01
+PlantFormation2 after Init: Geranium Macrorrhizum, BudLength: 0.01
+PASS new-tissue light steering capped at 3 degrees per day @4h
+PASS stalled rest orientation is not light-steered @4h
+Species lookup: Geranium Macrorrhizum, BudLength: 0.01
+PlantFormation2 ctor: Geranium Macrorrhizum, BudLength: 0.01
+SpeciesSettings.Init called on Geranium Macrorrhizum, BudLength: 0.01
+PlantFormation2 after Init: Geranium Macrorrhizum, BudLength: 0.01
+PASS geometry guidance preserves scalar irradiance in mode 1
+Species lookup: Geranium Macrorrhizum, BudLength: 0.01
+PlantFormation2 ctor: Geranium Macrorrhizum, BudLength: 0.01
+SpeciesSettings.Init called on Geranium Macrorrhizum, BudLength: 0.01
+PlantFormation2 after Init: Geranium Macrorrhizum, BudLength: 0.01
+PASS geometry guidance preserves scalar irradiance in mode 2
+Species lookup: Geranium Macrorrhizum, BudLength: 0.01
+PlantFormation2 ctor: Geranium Macrorrhizum, BudLength: 0.01
+SpeciesSettings.Init called on Geranium Macrorrhizum, BudLength: 0.01
+PlantFormation2 after Init: Geranium Macrorrhizum, BudLength: 0.01
+PASS geometry guidance preserves scalar irradiance in mode 3
+Species lookup: Geranium Macrorrhizum, BudLength: 0.01
+PlantFormation2 ctor: Geranium Macrorrhizum, BudLength: 0.01
+SpeciesSettings.Init called on Geranium Macrorrhizum, BudLength: 0.01
+PlantFormation2 after Init: Geranium Macrorrhizum, BudLength: 0.01
+PASS branching staged before parent conversion
+Collision scene: 2 triangles (2 soil, 0 obstacle) in 0 ms, open soil surface (regular fields use their finite footprint)
+PASS admissible development committed
+PASS development conserves allocated energy
+Species lookup: Geranium Macrorrhizum, BudLength: 0.01
+PlantFormation2 ctor: Geranium Macrorrhizum, BudLength: 0.01
+SpeciesSettings.Init called on Geranium Macrorrhizum, BudLength: 0.01
+PlantFormation2 after Init: Geranium Macrorrhizum, BudLength: 0.01
+Collision scene: 4 triangles (2 soil, 2 obstacle) in 0 ms, open soil surface (regular fields use their finite footprint)
+PASS obstructed birth retains sampled development
+Collision scene: 2 triangles (2 soil, 0 obstacle) in 0 ms, open soil surface (regular fields use their finite footprint)
+PASS obstacle removal wakes and commits the retained birth
+PASS failed birth consumes no resources
+Species lookup: Geranium Macrorrhizum, BudLength: 0.01
+PlantFormation2 ctor: Geranium Macrorrhizum, BudLength: 0.01
+SpeciesSettings.Init called on Geranium Macrorrhizum, BudLength: 0.01
+PlantFormation2 after Init: Geranium Macrorrhizum, BudLength: 0.01
+PASS crown activation retains bud and unconsumed seasonal opportunity before acceptance
+Collision scene: 4 triangles (2 soil, 2 obstacle) in 0 ms, open soil surface (regular fields use their finite footprint)
+PASS obstructed crown activation retains its sampled transaction and seasonal opportunity
+Collision scene: 2 triangles (2 soil, 0 obstacle) in 0 ms, open soil surface (regular fields use their finite footprint)
+PASS removing obstruction commits retained crown activation and claims its season
+Species lookup: Geranium Macrorrhizum, BudLength: 0.01
+PlantFormation2 ctor: Geranium Macrorrhizum, BudLength: 0.01
+SpeciesSettings.Init called on Geranium Macrorrhizum, BudLength: 0.01
+PlantFormation2 after Init: Geranium Macrorrhizum, BudLength: 0.01
+PASS old viable leaf survives sampled renewal before geometry acceptance
+Collision scene: 4 triangles (2 soil, 2 obstacle) in 0 ms, open soil surface (regular fields use their finite footprint)
+PASS blocked renewal retains old leaf and replacement opportunity
+Collision scene: 2 triangles (2 soil, 0 obstacle) in 0 ms, open soil surface (regular fields use their finite footprint)
+PASS old leaf retires only after replacement fits

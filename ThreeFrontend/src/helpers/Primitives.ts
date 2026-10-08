@@ -17,6 +17,7 @@ type StatsBase = {
 type PrimitiveBase = StatsBase & {
     affineTransform: Float32Array
     organ: Organs
+    deformation?: Float32Array;
 }
 
 export type Disk = PrimitiveBase & {

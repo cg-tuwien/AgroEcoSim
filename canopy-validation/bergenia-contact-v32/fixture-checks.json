@@ -1,0 +1,98 @@
+[
+  {
+    "name": "fixture-1h-single",
+    "exit": 0
+  },
+  {
+    "name": "fixture-1h-multi",
+    "exit": 0
+  },
+  {
+    "name": "fixture-1h-radial",
+    "exit": 0
+  },
+  {
+    "name": "fixture-1h-same-crown",
+    "exit": 0
+  },
+  {
+    "name": "fixture-1h-ceiling",
+    "exit": 0
+  },
+  {
+    "name": "fixture-1h-walls",
+    "exit": 0
+  },
+  {
+    "name": "fixture-1h-v1",
+    "exit": 0
+  },
+  {
+    "name": "fixture-1h-v1-radial",
+    "exit": 0
+  },
+  {
+    "name": "fixture-1h-v1-ceiling",
+    "exit": 0
+  },
+  {
+    "name": "fixture-1h-v1-walls",
+    "exit": 0
+  },
+  {
+    "name": "fixture-4h-single",
+    "exit": 0
+  },
+  {
+    "name": "fixture-4h-multi",
+    "exit": 0
+  },
+  {
+    "name": "fixture-4h-radial",
+    "exit": 0
+  },
+  {
+    "name": "fixture-4h-same-crown",
+    "exit": 0
+  },
+  {
+    "name": "fixture-4h-ceiling",
+    "exit": 0
+  },
+  {
+    "name": "fixture-4h-walls",
+    "exit": 0
+  },
+  {
+    "name": "fixture-4h-v1",
+    "exit": 0
+  },
+  {
+    "name": "fixture-4h-v1-radial",
+    "exit": 0
+  },
+  {
+    "name": "fixture-4h-v1-ceiling",
+    "exit": 0
+  },
+  {
+    "name": "fixture-4h-v1-walls",
+    "exit": 0
+  },
+  {
+    "name": "four-1h-mode0-worker-comparison",
+    "exit": 0
+  },
+  {
+    "name": "four-1h-mode1-worker-comparison",
+    "exit": 0
+  },
+  {
+    "name": "four-4h-mode0-worker-comparison",
+    "exit": 0
+  },
+  {
+    "name": "four-4h-mode1-worker-comparison",
+    "exit": 0
+  }
+]

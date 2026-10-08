@@ -1,0 +1,13 @@
+{
+  "coreBuild": {
+    "command": "dotnet build Agro/Agro.csproj --no-restore -m:1 -v:minimal",
+    "errors": 0,
+    "warnings": 298
+  },
+  "nativeServerPublish": "passed",
+  "frontendSuites": 5,
+  "frontendTests": 38,
+  "scopedDiffCheck": "passed final source and documentation",
+  "V1MatureCheckpoint": "passed with and without removal/reindexing",
+  "longCarexExtension": "deliberately stopped before 450 days; checks completed through day 200"
+}

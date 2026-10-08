@@ -1,0 +1,4 @@
+CONTROLLED DIAGNOSTIC ONLY: same-layout v21 snapshot under v22 mechanics; not a fresh seasonal replay or supported live migration.
+CHECKPOINT /tmp/gf-scape-recovery/production/evasion-final-4h-day240-v22.bin bytes=51875394
+CHECKPOINT /tmp/gf-scape-recovery/production/evasion-final-4h-day254-v22.bin bytes=51877614
+DONE mode=archived-exact tick=4 firstPetalDay=-1 elapsed=00:00:10.6481555 everLeaves=16 ever50=4 ever90=2

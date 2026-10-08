@@ -1,0 +1,50 @@
+Species lookup: Bergenia Cordifolia, BudLength: 0.009
+PlantFormation2 ctor: Bergenia Cordifolia, BudLength: 0.009
+SpeciesSettings.Init called on Bergenia Cordifolia, BudLength: 0.009
+PlantFormation2 after Init: Bergenia Cordifolia, BudLength: 0.009
+Collision scene: 2 triangles (2 soil, 0 obstacle) in 0 ms, open soil surface (regular fields use their finite footprint)
+tick,totalMs,hardMs,foliageMs,developmentMs,allocBytes,intervals,triangles,interPlantCandidates,staticQueries,acceptedDelta,rejectedDelta,organs,supportRadiusGrowth
+1441,284.633,0.227,279.953,0.006,4515896,54525,735835,8438,0,0,0,46,-
+1442,336.676,0.252,332.349,0.003,1507256,70400,926516,8472,0,0,0,46,-
+1443,287.356,0.198,281.023,0.003,498056,55539,789636,8458,0,0,0,46,-
+1444,433.804,0.095,428.852,0.004,2384904,69919,1406534,8440,0,0,0,46,-
+1445,342.653,0.188,335.708,0.004,479624,65496,929334,8385,0,0,0,46,-
+1446,376.950,0.119,356.302,0.004,223640,69124,952680,8854,0,0,0,46,-
+FINAL bytes=51878106 sha256=1EB8F39552C8851EB7166812C3523F0970EEDCD189A8C97F649A678578C42736
+DIAG unresolved=0 rejectedMotions=75126 validationRounds=8
+ORGAN 2:Petiole length=0.07139009 radius=0.0018248801
+ORGAN 3:Leaf length=0.119942866 radius=0.048476197
+ORGAN 4:Petiole length=0.0909661 radius=0.0029425484
+ORGAN 5:Leaf length=0.24616866 radius=0.10171572
+ORGAN 7:Petiole length=0.032163877 radius=0.0007914593
+ORGAN 8:Leaf length=0.068540946 radius=0.022602746
+ORGAN 9:Petiole length=0.059706014 radius=0.0013203754
+ORGAN 10:Leaf length=0.10566811 radius=0.042952847
+ORGAN 12:Petiole length=0.12646304 radius=0.0025727723
+ORGAN 13:Leaf length=0.22289458 radius=0.09715612
+ORGAN 14:Petiole length=0.04985191 radius=0.0012228332
+ORGAN 15:Leaf length=0.09181536 radius=0.03363234
+ORGAN 17:Petiole length=0.12922299 radius=0.0020780305
+ORGAN 18:Leaf length=0.23131876 radius=0.090156674
+ORGAN 19:Petiole length=0.06901748 radius=0.0015288008
+ORGAN 20:Leaf length=0.1361704 radius=0.05010691
+ORGAN 22:Petiole length=0.025227893 radius=0.00087615976
+ORGAN 23:Leaf length=0.045691285 radius=0.019332165
+ORGAN 24:Petiole length=0.03498081 radius=0.001349722
+ORGAN 25:Leaf length=0.070843495 radius=0.031963628
+ORGAN 27:Petiole length=0.045507498 radius=0.0017211372
+ORGAN 28:Leaf length=0.04870386 radius=0.0228831
+ORGAN 29:Petiole length=0.13191444 radius=0.0021135397
+ORGAN 30:Leaf length=0.25246885 radius=0.097298495
+ORGAN 32:Petiole length=0.01756037 radius=0.0008211349
+ORGAN 33:Leaf length=0.033939626 radius=0.014978622
+ORGAN 34:Petiole length=0.06984298 radius=0.0022060797
+ORGAN 35:Leaf length=0.1106587 radius=0.04592601
+ORGAN 37:Petiole length=0.008547385 radius=0.0010153882
+ORGAN 38:Leaf length=0.014938773 radius=0.005276946
+ORGAN 39:Petiole length=0.020209368 radius=0.000657563
+ORGAN 40:Leaf length=0.0045631984 radius=0.0019267113
+ORGAN 42:Petiole length=0.008236183 radius=0.00014881072
+ORGAN 43:Leaf length=0.008829931 radius=0.003105012
+ORGAN 44:Petiole length=0.0071598724 radius=0.00014881072
+ORGAN 45:Leaf length=0.010163214 radius=0.004319467

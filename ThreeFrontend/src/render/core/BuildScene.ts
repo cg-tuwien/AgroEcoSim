@@ -15,6 +15,7 @@ import { neutral } from './Theme';
 import { black } from './Ramps';
 import { RGB } from './Color';
 import { Mat4, identity, scaleInPlace, setPosition } from './Mat4';
+import { foldScale, petioleSpan } from './ContactDeformation';
 
 export type PlantBuildInputs = {
     scene: PlantModel[];
@@ -52,7 +53,7 @@ export function buildPlants(out: InstanceList, inp: PlantBuildInputs) {
 
     for (let i = 0; i < inp.scene.length; ++i) {
         const entity = inp.scene[i];
-        const petalGeomId = inp.petalGeom(entity.species);
+        const petalGeomId = entity.geometry?.petal ?? inp.petalGeom(entity.species);
 
         for (let j = 0; j < entity.primitives.length; ++j) {
             const p = entity.primitives[j];
@@ -81,13 +82,29 @@ export function buildPlants(out: InstanceList, inp: PlantBuildInputs) {
                     //organ is the only thing that distinguishes them.
                     const laminaGeom = p.organ === Organs.FlowerPadel
                         ? petalGeomId
-                        : inp.leafGeom(entity.species, p.laminaSlice);
-                    assign(inst, laminaGeom, c.color, c.emissive, IFlags.DoubleSided | IFlags.Foliage | hiddenFlag(p, inp), ref);
+                        : entity.geometry?.leaves[Math.min(p.laminaSlice, entity.geometry.leaves.length - 1)] ?? inp.leafGeom(entity.species, p.laminaSlice);
+                    const folding = p.deformation?.some(x => x !== 0);
+                    if (folding) inst.fold = { angles: p.deformation!, scale: foldScale(inst.model) };
+                    assign(inst, laminaGeom, c.color, c.emissive, IFlags.DoubleSided | IFlags.Foliage
+                        | (folding ? IFlags.FlatShaded : 0) | hiddenFlag(p, inp), ref);
                     break;
                 }
                 case Primitives.Cylinder: {
                     const c = p.stats ? stemColor(p, inp.visualMapping) : { color: neutral, emissive: black };
                     assign(inst, Geom.Cylinder, c.color, c.emissive, hiddenFlag(p, inp), ref);
+                    if (p.deformation?.some(x => x !== 0)) {
+                        for (let span = 0; span < 3; ++span) {
+                            const segment = span === 0 ? inst : out.push();
+                            petioleSpan(segment.model, p.affineTransform, p.length, p.radius, p.deformation, span);
+                            assign(segment, Geom.Cylinder, c.color, c.emissive, hiddenFlag(p, inp), ref);
+                            if (span < 2) {
+                                const joint = out.push(); identity(joint.model); scaleInPlace(joint.model, p.radius, p.radius, p.radius);
+                                setPosition(joint.model, segment.model[12] + segment.model[4] * .5,
+                                    segment.model[13] + segment.model[5] * .5, segment.model[14] + segment.model[6] * .5);
+                                assign(joint, Geom.Sphere, c.color, c.emissive, hiddenFlag(p, inp), ref);
+                            }
+                        }
+                    }
                     break;
                 }
                 case Primitives.Box: {

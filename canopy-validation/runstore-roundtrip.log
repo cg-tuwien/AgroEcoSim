@@ -1,0 +1,7 @@
+RunStore root: /tmp/greenfdt-canopy-store-20260917173644
+Species lookup: Heuchera micrantha, BudLength: 0.004
+PlantFormation2 ctor: Heuchera micrantha, BudLength: 0.004
+SpeciesSettings.Init called on Heuchera micrantha, BudLength: 0.004
+PlantFormation2 after Init: Heuchera micrantha, BudLength: 0.004
+Collision scene: 2 triangles (2 soil, 0 obstacle) in 8 ms, open soil surface (regular fields use their finite footprint)
+PASS actual RunStore 180-frame run and checkpoint roundtrip: root=/tmp/greenfdt-canopy-store-20260917173644 id=eb8e0561e9c34a9a99b2282dff0b589e rawFrames=753894 compressedFrames=496749 index=1440 checkpointRaw=57679 diskTotal=547996 seconds=0.99 allocated=17880704

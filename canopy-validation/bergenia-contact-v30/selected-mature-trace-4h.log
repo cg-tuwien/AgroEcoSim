@@ -1,0 +1,206 @@
+Species lookup: Bergenia Cordifolia, BudLength: 0.009
+PlantFormation2 ctor: Bergenia Cordifolia, BudLength: 0.009
+SpeciesSettings.Init called on Bergenia Cordifolia, BudLength: 0.009
+PlantFormation2 after Init: Bergenia Cordifolia, BudLength: 0.009
+Collision scene: 2 triangles (2 soil, 0 obstacle) in 7 ms, open soil surface (regular fields use their finite footprint)
+ORGAN index=0 id=1 type=Stem parent=-1 lengthMm=1 radiusMm=5 bendDegrees=0 base=<5, -0.01, 5> anchored=True
+ORGAN index=1 id=2 type=Stem parent=0 lengthMm=20.25036 radiusMm=5 bendDegrees=0.0041237134 base=<5.0009823, -0.01, 5.000187> anchored=False
+ORGAN index=2 id=3 type=Petiole parent=1 lengthMm=139.94954 radiusMm=2.3826168 bendDegrees=24.999977 base=<5.0024314, 0.01019744, 5.0003886> anchored=False
+ORGAN index=3 id=4 type=Leaf parent=2 lengthMm=243.32552 radiusMm=98.342636 bendDegrees=0.64586973 base=<5.093755, 0.11575332, 5.010579> anchored=False
+ORGAN index=4 id=5 type=Petiole parent=1 lengthMm=72.11741 radiusMm=2.3935192 bendDegrees=4.5420957 base=<5.0024314, 0.01019744, 5.0003886> anchored=False
+ORGAN index=5 id=6 type=Leaf parent=4 lengthMm=195.16112 radiusMm=80.63965 bendDegrees=0.20181374 base=<5.0042925, 0.082025185, 5.006572> anchored=False
+ORGAN index=6 id=7 type=Stem parent=1 lengthMm=2.2729876 radiusMm=5 bendDegrees=0.0019680876 base=<5.0024314, 0.01019744, 5.0003886> anchored=False
+ORGAN index=7 id=8 type=Petiole parent=6 lengthMm=57.904156 radiusMm=1.3798741 bendDegrees=3.3787656 base=<5.0025287, 0.0124475155, 5.0006957> anchored=False
+ORGAN index=8 id=9 type=Leaf parent=7 lengthMm=110.26772 radiusMm=36.362995 bendDegrees=0.012290412 base=<5.0293074, 0.06321335, 4.993039> anchored=False
+ORGAN index=9 id=10 type=Petiole parent=6 lengthMm=133.7301 radiusMm=2.696046 bendDegrees=20.989136 base=<5.0025287, 0.0124475155, 5.0006957> anchored=False
+ORGAN index=10 id=11 type=Leaf parent=9 lengthMm=255.55327 radiusMm=103.879456 bendDegrees=1.9370174 base=<4.9483433, 0.10582702, 5.0796127> anchored=False
+ORGAN index=11 id=12 type=Stem parent=6 lengthMm=2.0615373 radiusMm=5 bendDegrees=0.0014359065 base=<5.0025287, 0.0124475155, 5.0006957> anchored=False
+ORGAN index=12 id=13 type=Petiole parent=11 lengthMm=110.20179 radiusMm=2.2520683 bendDegrees=9.324669 base=<5.0031767, 0.014400692, 5.0008183> anchored=False
+ORGAN index=13 id=14 type=Leaf parent=12 lengthMm=194.23369 radiusMm=84.6633 bendDegrees=0.6098135 base=<5.0486712, 0.11424078, 5.0111437> anchored=False
+ORGAN index=14 id=15 type=Petiole parent=11 lengthMm=137.3201 radiusMm=2.9419217 bendDegrees=13.915514 base=<5.0031767, 0.014400692, 5.0008183> anchored=False
+ORGAN index=15 id=16 type=Leaf parent=14 lengthMm=252.91096 radiusMm=92.64232 bendDegrees=1.6186854 base=<4.9463644, 0.13126686, 5.0452194> anchored=False
+ORGAN index=16 id=17 type=Stem parent=11 lengthMm=2.0550332 radiusMm=5 bendDegrees=0.0050591356 base=<5.0031767, 0.014400692, 5.0008183> anchored=False
+ORGAN index=17 id=18 type=Petiole parent=16 lengthMm=49.13756 radiusMm=0.81152874 bendDegrees=22.547358 base=<5.0038614, 0.016320499, 5.0005565> anchored=False
+ORGAN index=18 id=19 type=Leaf parent=17 lengthMm=87.95989 radiusMm=34.28244 bendDegrees=0.26364115 base=<5.017624, 0.05643522, 4.975739> anchored=False
+ORGAN index=19 id=20 type=Petiole parent=16 lengthMm=72.10986 radiusMm=2.5024972 bendDegrees=12.528751 base=<5.0038614, 0.016320499, 5.0005565> anchored=False
+ORGAN index=20 id=21 type=Leaf parent=19 lengthMm=142.27164 radiusMm=52.351997 bendDegrees=0.2224185 base=<5.039181, 0.07100614, 5.03157> anchored=False
+ORGAN index=21 id=22 type=Stem parent=16 lengthMm=2.3548808 radiusMm=5 bendDegrees=0.08524829 base=<5.0038614, 0.016320499, 5.0005565> anchored=False
+ORGAN index=22 id=23 type=Petiole parent=21 lengthMm=36.64306 radiusMm=1.3408252 bendDegrees=10.9514065 base=<5.004428, 0.018499553, 4.999866> anchored=False
+ORGAN index=23 id=24 type=Leaf parent=22 lengthMm=61.645016 radiusMm=21.268282 bendDegrees=0.00024873076 base=<5.0037932, 0.053222768, 4.988178> anchored=False
+ORGAN index=24 id=25 type=Petiole parent=21 lengthMm=123.50811 radiusMm=2.1046968 bendDegrees=24.999992 base=<5.004428, 0.018499553, 4.999866> anchored=False
+ORGAN index=25 id=26 type=Leaf parent=24 lengthMm=236.65875 radiusMm=88.20419 bendDegrees=1.5939052 base=<5.0991683, 0.06842656, 4.938337> anchored=False
+ORGAN index=26 id=27 type=Stem parent=21 lengthMm=3.0320387 radiusMm=5 bendDegrees=0.4312733 base=<5.004428, 0.018499553, 4.999866> anchored=False
+ORGAN index=27 id=28 type=Petiole parent=26 lengthMm=22.79606 radiusMm=0.75827384 bendDegrees=13.369926 base=<5.0049543, 0.021313608, 4.9988675> anchored=False
+ORGAN index=28 id=29 type=Leaf parent=27 lengthMm=34.85691 radiusMm=15.074736 bendDegrees=6.9640613 base=<5.0076284, 0.043196805, 5.004667> anchored=False
+ORGAN index=29 id=30 type=Petiole parent=26 lengthMm=30.240946 radiusMm=1.5183372 bendDegrees=9.304727 base=<5.0049543, 0.021313608, 4.9988675> anchored=False
+ORGAN index=30 id=31 type=Leaf parent=29 lengthMm=19.007391 radiusMm=7.876629 bendDegrees=0.02330229 base=<5.007563, 0.046958584, 4.9830546> anchored=False
+ORGAN index=31 id=32 type=Stem parent=26 lengthMm=2.550652 radiusMm=5 bendDegrees=0.027930431 base=<5.0049543, 0.021313608, 4.9988675> anchored=False
+ORGAN index=32 id=33 type=Petiole parent=31 lengthMm=17.240723 radiusMm=1.6552368 bendDegrees=18.89158 base=<5.0053015, 0.02369884, 4.998033> anchored=False
+ORGAN index=33 id=34 type=Leaf parent=32 lengthMm=23.223297 radiusMm=9.444793 bendDegrees=20.36297 base=<5.0138373, 0.038159303, 4.9941244> anchored=False
+ORGAN index=34 id=35 type=Petiole parent=31 lengthMm=74.03287 radiusMm=2.2356691 bendDegrees=24.999704 base=<5.0053015, 0.02369884, 4.998033> anchored=False
+ORGAN index=35 id=36 type=Leaf parent=34 lengthMm=172.39685 radiusMm=72.35179 bendDegrees=8.967183 base=<4.9824505, 0.08045133, 4.9563456> anchored=False
+ORGAN index=36 id=37 type=Stem parent=31 lengthMm=2.4105139 radiusMm=2.4651525 bendDegrees=0.011402369 base=<5.0053015, 0.02369884, 4.998033> anchored=False
+ORGAN index=37 id=38 type=Petiole parent=36 lengthMm=45.15847 radiusMm=1.0318102 bendDegrees=8.590764 base=<5.0057054, 0.025956381, 4.9972906> anchored=False
+ORGAN index=38 id=39 type=Leaf parent=37 lengthMm=67.97983 radiusMm=28.432343 bendDegrees=0.26015857 base=<5.0395393, 0.04570049, 4.9748244> anchored=False
+ORGAN index=39 id=40 type=Petiole parent=36 lengthMm=23.0837 radiusMm=0.6644482 bendDegrees=17.59795 base=<5.0057054, 0.025956381, 4.9972906> anchored=False
+ORGAN index=40 id=41 type=Leaf parent=39 lengthMm=52.642395 radiusMm=20.561037 bendDegrees=0.22920401 base=<4.991775, 0.044328474, 4.9961634> anchored=False
+ORGAN index=41 id=42 type=Stem parent=36 lengthMm=2.6481369 radiusMm=2.4651525 bendDegrees=0.5229502 base=<5.0057054, 0.025956381, 4.9972906> anchored=False
+ORGAN index=42 id=43 type=Petiole parent=41 lengthMm=41.715225 radiusMm=0.6228738 bendDegrees=18.557835 base=<5.005875, 0.028430287, 4.9963613> anchored=False
+ORGAN index=43 id=44 type=Leaf parent=42 lengthMm=55.0551 radiusMm=21.047531 bendDegrees=0.020571008 base=<5.016031, 0.04431569, 4.95915> anchored=False
+ORGAN index=44 id=45 type=Petiole parent=41 lengthMm=28.07668 radiusMm=0.722934 bendDegrees=24.99995 base=<5.005875, 0.028430287, 4.9963613> anchored=False
+ORGAN index=45 id=46 type=Leaf parent=44 lengthMm=30.624624 radiusMm=11.601492 bendDegrees=0.77367574 base=<5.013942, 0.055105165, 4.992944> anchored=False
+ORGAN index=46 id=47 type=FlowerMeristem parent=41 lengthMm=5.181651 radiusMm=3.6753511 bendDegrees=12.044418 base=<5.005875, 0.028430287, 4.9963613> anchored=False
+ORGAN index=47 id=48 type=Meristem parent=41 lengthMm=2.1482031 radiusMm=0.8262604 bendDegrees=20.393862 base=<5.005875, 0.028430287, 4.9963613> anchored=False
+ORGAN index=48 id=49 type=Petiole parent=47 lengthMm=1.4623225 radiusMm=0.22588514 bendDegrees=24.999931 base=<5.006268, 0.0300872, 4.995052> anchored=False
+ORGAN index=49 id=50 type=Leaf parent=48 lengthMm=1.582624 radiusMm=0.54289854 bendDegrees=4.576628 base=<5.0066032, 0.030559998, 4.9937096> anchored=False
+ORGAN index=50 id=51 type=Petiole parent=47 lengthMm=6.514536 radiusMm=0.34031898 bendDegrees=0.5207711 base=<5.006268, 0.0300872, 4.995052> anchored=False
+ORGAN index=51 id=52 type=Leaf parent=50 lengthMm=8.993616 radiusMm=3.527911 bendDegrees=12.122115 base=<5.009542, 0.035648182, 4.99416> anchored=False
+BASELINE clear=True count=52 scape=46 base=<5.005875, 0.028430287, 4.9963613> direction=<-0.20411092, 0.97798705, 0.043364048> lmm=5.181651 rmm=3.6753511
+ONE_AXIS lengthAxis=True staticClear=True growthClear=False failure=(Agro.PlantFormation2, 46, 47, Agro.PlantFormation2, 4, 5)
+ONE_AXIS lengthAxis=False staticClear=True growthClear=False failure=(Agro.PlantFormation2, 46, 47, Agro.PlantFormation2, 4, 5)
+CONTINUATION_CONTACT t=1440 ids=47/5 gapUm=-34.59584
+CONTINUATION_CONTACT t=1440 ids=5/47 gapUm=7.4645505
+CONTINUATION_FAILURE motionCertificate ids=5/47 witnesses=1
+CONTINUATION t=1440 id=47 lengthAxis=True trial=0 from=0 to=1 clear=False failure=5/47
+CONTINUATION_CONTACT t=1440 ids=47/5 gapUm=-23.385975
+CONTINUATION_CONTACT t=1440 ids=6/24 gapUm=-12.830126
+CONTINUATION_CONTACT t=1440 ids=23/35 gapUm=-13.265293
+CONTINUATION_CONTACT t=1440 ids=23/47 gapUm=-3202.9468
+CONTINUATION_CONTACT t=1440 ids=5/28 gapUm=-30.876137
+CONTINUATION_CONTACT t=1440 ids=5/28 gapUm=-52.648365
+CONTINUATION_CONTACT t=1440 ids=5/28 gapUm=-74.52536
+CONTINUATION_CONTACT t=1440 ids=5/28 gapUm=-94.86964
+CONTINUATION t=1440 id=47 lengthAxis=True trial=1 from=0 to=0.5 clear=False failure=5/28
+CONTINUATION_CONTACT t=1440 ids=47/5 gapUm=-16.948208
+CONTINUATION_CONTACT t=1440 ids=6/24 gapUm=-11.922566
+CONTINUATION_CONTACT t=1440 ids=23/35 gapUm=-13.136072
+CONTINUATION_CONTACT t=1440 ids=23/47 gapUm=-3203.1558
+CONTINUATION_CONTACT t=1440 ids=5/28 gapUm=-33.53972
+CONTINUATION_CONTACT t=1440 ids=5/28 gapUm=-55.33197
+CONTINUATION_CONTACT t=1440 ids=5/28 gapUm=-77.234116
+CONTINUATION_CONTACT t=1440 ids=5/28 gapUm=-97.597946
+CONTINUATION t=1440 id=47 lengthAxis=True trial=2 from=0 to=0.25 clear=False failure=5/28
+CONTINUATION_CONTACT t=1440 ids=47/5 gapUm=-13.522338
+CONTINUATION_CONTACT t=1440 ids=6/24 gapUm=-11.214099
+CONTINUATION_CONTACT t=1440 ids=23/35 gapUm=-13.040844
+CONTINUATION_CONTACT t=1440 ids=23/47 gapUm=-3203.2202
+CONTINUATION_CONTACT t=1440 ids=5/28 gapUm=-34.932747
+CONTINUATION_CONTACT t=1440 ids=5/28 gapUm=-56.71056
+CONTINUATION_CONTACT t=1440 ids=5/28 gapUm=-78.623184
+CONTINUATION_CONTACT t=1440 ids=5/28 gapUm=-99.00308
+CONTINUATION t=1440 id=47 lengthAxis=True trial=3 from=0 to=0.125 clear=False failure=5/28
+CONTINUATION_CONTACT t=1440 ids=47/5 gapUm=-11.757482
+CONTINUATION_CONTACT t=1440 ids=6/24 gapUm=-10.9127
+CONTINUATION_CONTACT t=1440 ids=23/35 gapUm=-12.992415
+CONTINUATION t=1440 id=47 lengthAxis=True trial=4 from=0 to=0.0625 clear=True failure=/
+CONTINUATION_CONTACT t=1440 ids=47/23 gapUm=-3203.2705
+CONTINUATION_CONTACT t=1440 ids=23/35 gapUm=-17.805723
+CONTINUATION_CONTACT t=1440 ids=23/35 gapUm=-17.138199
+CONTINUATION_CONTACT t=1440 ids=23/35 gapUm=-16.64413
+CONTINUATION_CONTACT t=1440 ids=23/35 gapUm=-16.072765
+CONTINUATION_CONTACT t=1440 ids=23/35 gapUm=-15.758677
+CONTINUATION_CONTACT t=1440 ids=23/35 gapUm=-15.127706
+CONTINUATION_CONTACT t=1440 ids=23/35 gapUm=-14.822698
+CONTINUATION t=1440 id=47 lengthAxis=True trial=5 from=0.0625 to=0.1875 clear=False failure=23/35
+CONTINUATION_CONTACT t=1440 ids=47/23 gapUm=-3203.2705
+CONTINUATION_CONTACT t=1440 ids=23/35 gapUm=-17.805723
+CONTINUATION_CONTACT t=1440 ids=23/35 gapUm=-17.137033
+CONTINUATION_CONTACT t=1440 ids=23/35 gapUm=-16.63994
+CONTINUATION_CONTACT t=1440 ids=23/35 gapUm=-16.071367
+CONTINUATION_CONTACT t=1440 ids=23/35 gapUm=-15.755417
+CONTINUATION_CONTACT t=1440 ids=23/35 gapUm=-15.124446
+CONTINUATION_CONTACT t=1440 ids=23/30 gapUm=-68.938126
+CONTINUATION t=1440 id=47 lengthAxis=True trial=6 from=0.0625 to=0.125 clear=False failure=23/30
+CONTINUATION t=1440 id=47 lengthAxis=True trial=7 from=0.0625 to=0.09375 clear=True failure=/
+CONTINUATION_CONTACT t=1440 ids=47/23 gapUm=-3203.2705
+CONTINUATION_CONTACT t=1440 ids=23/35 gapUm=-17.805723
+CONTINUATION_CONTACT t=1440 ids=23/35 gapUm=-17.137033
+CONTINUATION_CONTACT t=1440 ids=23/35 gapUm=-16.63994
+CONTINUATION_CONTACT t=1440 ids=23/35 gapUm=-16.071367
+CONTINUATION_CONTACT t=1440 ids=23/35 gapUm=-15.755417
+CONTINUATION_CONTACT t=1440 ids=23/35 gapUm=-15.124446
+CONTINUATION_CONTACT t=1440 ids=23/35 gapUm=-14.8213005
+CONTINUATION t=1440 id=47 lengthAxis=True trial=8 from=0.09375 to=0.15625 clear=False failure=23/35
+CONTINUATION_CONTACT t=1440 ids=47/23 gapUm=-3203.2705
+CONTINUATION_CONTACT t=1440 ids=23/35 gapUm=-17.805723
+CONTINUATION_CONTACT t=1440 ids=23/35 gapUm=-17.137033
+CONTINUATION_CONTACT t=1440 ids=23/35 gapUm=-16.63994
+CONTINUATION_CONTACT t=1440 ids=23/35 gapUm=-16.071367
+CONTINUATION_CONTACT t=1440 ids=23/35 gapUm=-15.755417
+CONTINUATION_CONTACT t=1440 ids=23/35 gapUm=-15.124446
+CONTINUATION_CONTACT t=1440 ids=23/30 gapUm=-68.938126
+CONTINUATION t=1440 id=47 lengthAxis=True trial=9 from=0.09375 to=0.125 clear=False failure=23/30
+CONTINUATION_CONTACT t=1440 ids=47/23 gapUm=-3203.2705
+CONTINUATION_CONTACT t=1440 ids=23/35 gapUm=-17.805723
+CONTINUATION_CONTACT t=1440 ids=23/35 gapUm=-17.137033
+CONTINUATION_CONTACT t=1440 ids=23/35 gapUm=-16.640173
+CONTINUATION_CONTACT t=1440 ids=23/35 gapUm=-16.070902
+CONTINUATION_CONTACT t=1440 ids=23/30 gapUm=-20.748238
+CONTINUATION_CONTACT t=1440 ids=23/48 gapUm=-61.34552
+CONTINUATION_CONTACT t=1440 ids=23/48 gapUm=-38.790516
+CONTINUATION t=1440 id=47 lengthAxis=True trial=10 from=0.09375 to=0.109375 clear=False failure=23/48
+CONTINUATION_CONTACT t=1440 ids=47/23 gapUm=-3203.2705
+CONTINUATION_CONTACT t=1440 ids=23/35 gapUm=-17.805723
+CONTINUATION_CONTACT t=1440 ids=23/35 gapUm=-17.137033
+CONTINUATION_CONTACT t=1440 ids=23/48 gapUm=-28.841663
+CONTINUATION_CONTACT t=1440 ids=30/50 gapUm=-643.9328
+CONTINUATION_CONTACT t=1440 ids=30/50 gapUm=-593.398
+CONTINUATION_CONTACT t=1440 ids=23/47 gapUm=-3159.5479
+CONTINUATION_CONTACT t=1440 ids=23/30 gapUm=-13.372628
+CONTINUATION t=1440 id=47 lengthAxis=True trial=11 from=0.09375 to=0.1015625 clear=False failure=23/47
+CONTINUATION t=1440 id=47 lengthAxis=True trial=12 from=0.09375 to=0.09765625 clear=True failure=/
+CONTINUATION_CONTACT t=1440 ids=47/23 gapUm=-3203.2705
+CONTINUATION_CONTACT t=1440 ids=23/35 gapUm=-17.805723
+CONTINUATION_CONTACT t=1440 ids=23/35 gapUm=-17.137033
+CONTINUATION_CONTACT t=1440 ids=23/35 gapUm=-16.640173
+CONTINUATION_CONTACT t=1440 ids=23/48 gapUm=-54.02579
+CONTINUATION_CONTACT t=1440 ids=23/48 gapUm=-32.098732
+CONTINUATION_CONTACT t=1440 ids=30/50 gapUm=-686.19415
+CONTINUATION_CONTACT t=1440 ids=30/50 gapUm=-637.568
+CONTINUATION t=1440 id=47 lengthAxis=True trial=13 from=0.09765625 to=0.10546875 clear=False failure=23/47
+CONTINUATION_CONTACT t=1440 ids=47/23 gapUm=-3203.2705
+CONTINUATION_CONTACT t=1440 ids=23/35 gapUm=-17.805723
+CONTINUATION_CONTACT t=1440 ids=23/35 gapUm=-17.137033
+CONTINUATION_CONTACT t=1440 ids=23/48 gapUm=-28.841663
+CONTINUATION_CONTACT t=1440 ids=30/50 gapUm=-643.9328
+CONTINUATION_CONTACT t=1440 ids=30/50 gapUm=-593.398
+CONTINUATION_CONTACT t=1440 ids=23/47 gapUm=-3159.5479
+CONTINUATION_CONTACT t=1440 ids=23/30 gapUm=-13.372628
+CONTINUATION t=1440 id=47 lengthAxis=True trial=14 from=0.09765625 to=0.1015625 clear=False failure=23/47
+CONTINUATION_CONTACT t=1440 ids=47/23 gapUm=-3203.2705
+CONTINUATION_CONTACT t=1440 ids=23/35 gapUm=-17.805723
+CONTINUATION_CONTACT t=1440 ids=23/35 gapUm=-17.137033
+CONTINUATION_CONTACT t=1440 ids=23/48 gapUm=-28.841663
+CONTINUATION_CONTACT t=1440 ids=30/50 gapUm=-643.9328
+CONTINUATION_CONTACT t=1440 ids=30/50 gapUm=-593.398
+CONTINUATION_CONTACT t=1440 ids=24/6 gapUm=-10.391494
+CONTINUATION_CONTACT t=1440 ids=5/47 gapUm=-21.548943
+CONTINUATION t=1440 id=47 lengthAxis=True trial=15 from=0.09765625 to=0.099609375 clear=False failure=19/31
+CONTINUATION_CONTACT t=1440 ids=47/5 gapUm=-240.95224
+CONTINUATION_CONTACT t=1440 ids=5/47 gapUm=-198.76472
+CONTINUATION_CONTACT t=1440 ids=5/47 gapUm=-156.89526
+CONTINUATION_CONTACT t=1440 ids=5/47 gapUm=-115.66002
+CONTINUATION_CONTACT t=1440 ids=5/47 gapUm=-74.59847
+CONTINUATION_CONTACT t=1440 ids=5/47 gapUm=-33.711082
+CONTINUATION_CONTACT t=1440 ids=6/24 gapUm=-51.603176
+CONTINUATION_CONTACT t=1440 ids=8/47 gapUm=-80.80667
+CONTINUATION t=1440 id=47 lengthAxis=False trial=0 from=0 to=1 clear=False failure=8/47
+CONTINUATION_CONTACT t=1440 ids=47/5 gapUm=-115.95292
+CONTINUATION_CONTACT t=1440 ids=5/47 gapUm=-74.68974
+CONTINUATION_CONTACT t=1440 ids=5/47 gapUm=-33.742283
+CONTINUATION_CONTACT t=1440 ids=6/24 gapUm=-19.769562
+CONTINUATION_CONTACT t=1440 ids=9/34 gapUm=-10.68975
+CONTINUATION_CONTACT t=1440 ids=18/30 gapUm=-10.193092
+CONTINUATION_CONTACT t=1440 ids=19/31 gapUm=-29.093964
+CONTINUATION_CONTACT t=1440 ids=18/38 gapUm=-17.56032
+CONTINUATION t=1440 id=47 lengthAxis=False trial=1 from=0 to=0.5 clear=True failure=/
+CONTINUATION_CONTACT t=1440 ids=47/5 gapUm=-114.98248
+CONTINUATION_CONTACT t=1440 ids=5/47 gapUm=-73.92373
+CONTINUATION_CONTACT t=1440 ids=5/47 gapUm=-33.0396
+CONTINUATION_CONTACT t=1440 ids=6/24 gapUm=-21.059343
+CONTINUATION_CONTACT t=1440 ids=8/47 gapUm=-75.78824
+CONTINUATION_CONTACT t=1440 ids=8/47 gapUm=-43.614304
+CONTINUATION_CONTACT t=1440 ids=8/47 gapUm=-11.4045105
+CONTINUATION_CONTACT t=1440 ids=39/44 gapUm=-12.3772335
+CONTINUATION t=1440 id=47 lengthAxis=False trial=2 from=0.5 to=1 clear=True failure=/
+MATURE h=4 accepted=True gainedLengthUm=97.65616 gainedRadiusUm=249.9998 trials=19 steps=5 corrections=124 coupledSets=98 stages=0 clear=True

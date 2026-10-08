@@ -1,0 +1,9 @@
+Species lookup: Bergenia Cordifolia, BudLength: 0.009
+PlantFormation2 ctor: Bergenia Cordifolia, BudLength: 0.009
+SpeciesSettings.Init called on Bergenia Cordifolia, BudLength: 0.009
+PlantFormation2 after Init: Bergenia Cordifolia, BudLength: 0.009
+Collision scene: 2 triangles (2 soil, 0 obstacle) in 0 ms, open soil surface (regular fields use their finite footprint)
+BASELINE clear=True count=52 scape=46 base=<5.0074944, 0.026099427, 4.9989333> direction=<-0.27185965, 0.9191741, 0.28497645> lmm=6.923978 rmm=1.8024888
+ONE_AXIS lengthAxis=True staticClear=True growthClear=False failure=(Agro.PlantFormation2, 46, 47, Agro.PlantFormation2, 4, 5)
+ONE_AXIS lengthAxis=False staticClear=True growthClear=False failure=(Agro.PlantFormation2, 46, 47, Agro.PlantFormation2, 4, 5)
+MATURE h=4 accepted=False gainedLengthUm=0 gainedRadiusUm=0 trials=26 steps=0 corrections=57 coupledSets=15 stages=0 clear=True

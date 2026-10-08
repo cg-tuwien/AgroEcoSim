@@ -21,9 +21,9 @@ public sealed partial class CollisionWorld
                 if (!Eligible(ag, i)) continue;
                 var pose = ag.GetContactPose(i);
                 var trusted = TrustedPoint(plant, i);
-                if (CollisionSettings.ObstaclePass && !ClearOfObstacles(ag, i, pose))
+                if (CollisionSettings.ObstaclePass && (HasStaticReaction(ag,i,StaticSurface.Obstacle) || !ClearOfObstacles(ag, i, pose)))
                     Correct(ag, i, trusted, StaticSurface.Obstacle);
-                if (CollisionSettings.SoilPass && SoilEligible(ag, i, pose))
+                if (CollisionSettings.SoilPass && (HasStaticReaction(ag,i,StaticSurface.Soil) || SoilEligible(ag, i, pose)))
                     Correct(ag, i, trusted, StaticSurface.Soil);
             }
             if (!ag.EndContactSweep(MaxCorrectionRadians)) break;
@@ -124,6 +124,9 @@ public sealed partial class CollisionWorld
         in ContactShape previous, Vector3 trusted)
     {
         var ag = plant.AG;
+        if (ag.HasContactDeformation && ag.GetOrgan(i) == OrganTypes.Leaf && shape.Lamina is { } blade
+            && (!blade.WithinStrainTolerance(shape.Pose,shape.Pose.Deformation)
+                || !blade.SelfSweepAdmissible(previous.Pose,shape.Pose))) return false;
         if (CollisionSettings.ObstaclePass && !ClearOfObstacles(ag, i, shape.Pose)
             && (Static.ShapeContact(shape, trusted, StaticSurface.Obstacle, out _, out _, out _)
                 || !Static.ShapeSweepClear(previous, shape, StaticSurface.Obstacle))) return false;
@@ -168,6 +171,7 @@ public sealed partial class CollisionWorld
         ++Work[ag.Plant].Queries;
         var deviation = template == null ? 0f : template.WideReach * pose.Width + template.ReliefAt(pose)
             + MathF.Max(0f, template.LongReach - 1f) * pose.Length;
+        deviation += template?.DeformationReach(pose) ?? ContactDeformation.MotionBound(pose.Length,0,Vector4.Zero,pose.Deformation);
         var probe = deviation + pose.Radius + CollisionSettings.ClearanceProbeDistance;
         var found = Static.ClosestObstacleSurface(pose.Base, pose.Tip, Vector3.Zero, probe, out var hit);
         var clearance = MathF.Max(0f, (found ? hit.Distance : probe) - pose.Radius - deviation);
@@ -176,8 +180,36 @@ public sealed partial class CollisionWorld
             && (!previous.Exists || clearance > Travel(previous.Pose, pose) + CollisionSettings.ContactTolerance);
     }
 
+    bool HasStaticReaction(PlantSubFormation<AboveGroundAgent> ag,int i,StaticSurface surface)
+        => Work[ag.Plant].StaticElastic is { } reactions && reactions.TryGetValue((ag.GetOrganId(i),surface),out var c) && c.Force>0;
+
     void Correct(PlantSubFormation<AboveGroundAgent> ag, int i, Vector3 trusted, StaticSurface surface)
     {
+        if(ag.HasContactDeformation)
+        {
+            var reactions=Work[ag.Plant].StaticElastic ??= [];
+            var key=(ag.GetOrganId(i),surface);
+            reactions.TryGetValue(key,out var reaction);
+            var shape=Shape(ag,i);
+            var padding=reaction.Force*reaction.Mobility+CollisionSettings.ContactTolerance;
+            var query=shape with { Pose=shape.Pose with { Radius=shape.Pose.Radius+padding } };
+            var found=Static.ShapeContact(query,trusted,surface,out var elasticPoint,out var elasticNormal,out var elasticDepth);
+            if(!found && reaction.Force<=0)return;
+            if(!found){elasticPoint=reaction.Point;elasticNormal=reaction.Normal;}
+            var signedGap=elasticDepth-padding+CollisionSettings.ContactTolerance;
+            if(found)Work[ag.Plant].HardCorrectionDepth=MathF.Max(Work[ag.Plant].HardCorrectionDepth,MathF.Max(0,signedGap));
+            var responseNormal=!found || signedGap<0 ? -elasticNormal : elasticNormal;
+            var mobility=ag.ContactMobility(i,elasticPoint,responseNormal);
+            if(mobility<=1e-20 || !double.IsFinite(mobility))return;
+            var increment=found ? (float)((elasticDepth-padding+CollisionSettings.ContactTolerance)/mobility) : -reaction.Force;
+            var limit=ag.ContactForceStepLimit(i,elasticPoint,responseNormal);
+            increment=Math.Clamp(MathF.Max(-reaction.Force,increment),-limit,limit);
+            reactions[key]=new(MathF.Max(0,reaction.Force+increment),(float)mobility,elasticPoint,elasticNormal);
+            if(increment==0)return;
+            ag.QueueContactCorrection(i,elasticPoint,elasticNormal,increment*(float)mobility);
+            if(surface==StaticSurface.Obstacle)++Work[ag.Plant].Obstacle;else ++Work[ag.Plant].Soil;
+            return;
+        }
         if (!Static.ShapeContact(Shape(ag, i), trusted, surface, out var point, out var normal, out var depth)) return;
         if (!ag.QueueContactCorrection(i, point, normal, depth + CollisionSettings.ContactTolerance)) return;
         if (surface == StaticSurface.Obstacle) ++Work[ag.Plant].Obstacle;
@@ -187,7 +219,8 @@ public sealed partial class CollisionWorld
     void RecordSupport(PlantSubFormation<AboveGroundAgent> ag, int i, StaticSurface surface)
     {
         var pose = ag.GetContactPose(i);
-        if (ag.GetLaminaTemplate(i) is { } lamina)
+        var lamina = ag.GetLaminaTemplate(i);
+        if (lamina != null || pose.CurvedRod)
         {
             // A supported blade also transmits a reaction through its petiole. Expand only
             // this proximity query, never the accepted geometry or its physical thickness.

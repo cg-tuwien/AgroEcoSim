@@ -1,0 +1,50 @@
+[
+  {
+    "tick": 1,
+    "case": "fresh",
+    "exit": 0,
+    "result": [
+      "CHECKPOINT version=30 tick=1 immediateState=True immediateFrame=True continuedState=True continuedFrame=True finite=True maxUnresolved=0 oldV29Rejected=True"
+    ]
+  },
+  {
+    "tick": 1,
+    "case": "native-origin",
+    "exit": 0,
+    "result": [
+      "CHECKPOINT version=30 tick=1 immediateState=True immediateFrame=True continuedState=True continuedFrame=True finite=True maxUnresolved=0 oldV29Rejected=True"
+    ]
+  },
+  {
+    "tick": 1,
+    "case": "native-origin-reindex",
+    "exit": 0,
+    "result": [
+      "CHECKPOINT version=30 tick=1 immediateState=True immediateFrame=True continuedState=True continuedFrame=True finite=True maxUnresolved=0 oldV29Rejected=True"
+    ]
+  },
+  {
+    "tick": 4,
+    "case": "fresh",
+    "exit": 0,
+    "result": [
+      "CHECKPOINT version=30 tick=4 immediateState=True immediateFrame=True continuedState=True continuedFrame=True finite=True maxUnresolved=0 oldV29Rejected=True"
+    ]
+  },
+  {
+    "tick": 4,
+    "case": "native-origin",
+    "exit": 0,
+    "result": [
+      "CHECKPOINT version=30 tick=4 immediateState=True immediateFrame=True continuedState=True continuedFrame=True finite=True maxUnresolved=0 oldV29Rejected=True"
+    ]
+  },
+  {
+    "tick": 4,
+    "case": "native-origin-reindex",
+    "exit": 0,
+    "result": [
+      "CHECKPOINT version=30 tick=4 immediateState=True immediateFrame=True continuedState=True continuedFrame=True finite=True maxUnresolved=0 oldV29Rejected=True"
+    ]
+  }
+]

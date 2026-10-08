@@ -1,0 +1,11 @@
+{
+  "version": 30,
+  "case": "Carex",
+  "seed": 42,
+  "tickHours": 4,
+  "render": 3,
+  "requestedDays": 450,
+  "lastLoggedCompletedDay": 200,
+  "terminatedByAgent": true,
+  "reason": "Bounded broader regression after completing 100-day controls; dense extension cost exceeds this work step. No 450-day culm acceptance claimed."
+}

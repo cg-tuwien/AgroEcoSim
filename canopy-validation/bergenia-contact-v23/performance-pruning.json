@@ -1,0 +1,144 @@
+{
+  "version": 23,
+  "definition": "Three independent processes per variant and tick size, three warmups plus fifteen measured single ticks per process. Identical fixed-population snapshots, restore excluded. All measurements serial with no concurrent builds or simulations. Before and after both have canonical growth-retry ordering; after adds conservative edge-plane distance pruning.",
+  "results": {
+    "1h": {
+      "order-only": {
+        "medianOfProcessMediansMs": 336.296,
+        "medianOfProcessP95Ms": 350.574,
+        "processes": [
+          {
+            "file": "perf-pruning-order-only-rep1-1h.log",
+            "medianMs": 336.296,
+            "p95Ms": 350.574,
+            "medianAllocBytes": 996808,
+            "sceneHashes": [
+              "630D63BF6F10D185"
+            ]
+          },
+          {
+            "file": "perf-pruning-order-only-rep2-1h.log",
+            "medianMs": 332.583,
+            "p95Ms": 342.261,
+            "medianAllocBytes": 995872,
+            "sceneHashes": [
+              "630D63BF6F10D185"
+            ]
+          },
+          {
+            "file": "perf-pruning-order-only-rep3-1h.log",
+            "medianMs": 344.579,
+            "p95Ms": 361.799,
+            "medianAllocBytes": 998072,
+            "sceneHashes": [
+              "630D63BF6F10D185"
+            ]
+          }
+        ]
+      },
+      "edge-pruning": {
+        "medianOfProcessMediansMs": 313.092,
+        "medianOfProcessP95Ms": 324.159,
+        "processes": [
+          {
+            "file": "perf-pruning-edge-pruning-rep1-1h.log",
+            "medianMs": 306.237,
+            "p95Ms": 318.934,
+            "medianAllocBytes": 996648,
+            "sceneHashes": [
+              "630D63BF6F10D185"
+            ]
+          },
+          {
+            "file": "perf-pruning-edge-pruning-rep2-1h.log",
+            "medianMs": 313.092,
+            "p95Ms": 324.159,
+            "medianAllocBytes": 998232,
+            "sceneHashes": [
+              "630D63BF6F10D185"
+            ]
+          },
+          {
+            "file": "perf-pruning-edge-pruning-rep3-1h.log",
+            "medianMs": 314.009,
+            "p95Ms": 348.327,
+            "medianAllocBytes": 994232,
+            "sceneHashes": [
+              "630D63BF6F10D185"
+            ]
+          }
+        ]
+      },
+      "changePercent": -6.899873920593769
+    },
+    "4h": {
+      "order-only": {
+        "medianOfProcessMediansMs": 84.996,
+        "medianOfProcessP95Ms": 110.511,
+        "processes": [
+          {
+            "file": "perf-pruning-order-only-rep1-4h.log",
+            "medianMs": 84.996,
+            "p95Ms": 110.511,
+            "medianAllocBytes": 866168,
+            "sceneHashes": [
+              "EE66A01BC8D5C53E"
+            ]
+          },
+          {
+            "file": "perf-pruning-order-only-rep2-4h.log",
+            "medianMs": 83.617,
+            "p95Ms": 111.493,
+            "medianAllocBytes": 865144,
+            "sceneHashes": [
+              "EE66A01BC8D5C53E"
+            ]
+          },
+          {
+            "file": "perf-pruning-order-only-rep3-4h.log",
+            "medianMs": 87.683,
+            "p95Ms": 106.101,
+            "medianAllocBytes": 865320,
+            "sceneHashes": [
+              "EE66A01BC8D5C53E"
+            ]
+          }
+        ]
+      },
+      "edge-pruning": {
+        "medianOfProcessMediansMs": 82.401,
+        "medianOfProcessP95Ms": 95.976,
+        "processes": [
+          {
+            "file": "perf-pruning-edge-pruning-rep1-4h.log",
+            "medianMs": 82.401,
+            "p95Ms": 101.484,
+            "medianAllocBytes": 861120,
+            "sceneHashes": [
+              "EE66A01BC8D5C53E"
+            ]
+          },
+          {
+            "file": "perf-pruning-edge-pruning-rep2-4h.log",
+            "medianMs": 86.683,
+            "p95Ms": 89.237,
+            "medianAllocBytes": 866800,
+            "sceneHashes": [
+              "EE66A01BC8D5C53E"
+            ]
+          },
+          {
+            "file": "perf-pruning-edge-pruning-rep3-4h.log",
+            "medianMs": 80.74,
+            "p95Ms": 95.976,
+            "medianAllocBytes": 862640,
+            "sceneHashes": [
+              "EE66A01BC8D5C53E"
+            ]
+          }
+        ]
+      },
+      "changePercent": -3.0530848510518127
+    }
+  }
+}

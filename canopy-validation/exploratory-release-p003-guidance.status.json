@@ -1,0 +1,23 @@
+{
+  "state": "failed",
+  "variant": "guidance",
+  "command": [
+    "dotnet",
+    "/tmp/greenfdt-canopy-final-build/Probe.dll",
+    "--facade",
+    "470",
+    "3",
+    "0"
+  ],
+  "plants": 790,
+  "hours_per_tick": 4,
+  "seed": 42,
+  "target_days": 470,
+  "started_utc": "2026-09-17T16:19:20.663017+00:00",
+  "assembly_sha256": "06c7461ead6dff5a27532960419144618bc1faaa07807857b200aaba1211cd3a",
+  "step": 60,
+  "pid_in_launcher_namespace": 3,
+  "elapsed_wall_seconds": 471.63,
+  "exit_code": 143,
+  "finished_utc": "2026-09-17T16:27:12.289131+00:00"
+}

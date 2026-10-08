@@ -15,7 +15,7 @@ public sealed partial class LaminaTemplate
         float tolerance, out float error)
     {
         error = 0;
-        if (!(tolerance > 0) || CollisionLevels == null) return this;
+        if (!(tolerance > 0) || CollisionLevels == null || from.Deformation != Vector4.Zero || to.Deformation != Vector4.Zero) return this;
         var width = MathF.Max(from.Width, to.Width);
         // Five percent of the narrowest nonzero width during the interval protects seedlings.
         var narrow = MathF.Min(from.Width, to.Width);

@@ -1,0 +1,278 @@
+{
+  "pausedPids": [
+    64153,
+    74860,
+    77060,
+    82905,
+    82917
+  ],
+  "allResumed": true,
+  "controlSource": "control-v28/Agro",
+  "candidateSource": "/home/ubuntu/GreenFDT/Agro",
+  "results": [
+    {
+      "case": "single",
+      "pair": 0,
+      "variant": "v28",
+      "exit": 0,
+      "samples": 35.0,
+      "medianMs": 0.6382,
+      "p95Ms": 0.6785,
+      "medianAllocatedBytes": 10984.0,
+      "p95AllocatedBytes": 10984.0
+    },
+    {
+      "case": "single",
+      "pair": 0,
+      "variant": "v30",
+      "exit": 0,
+      "samples": 35.0,
+      "medianMs": 0.6791,
+      "p95Ms": 0.6889,
+      "medianAllocatedBytes": 10984.0,
+      "p95AllocatedBytes": 10984.0
+    },
+    {
+      "case": "single",
+      "pair": 1,
+      "variant": "v30",
+      "exit": 0,
+      "samples": 35.0,
+      "medianMs": 0.6552,
+      "p95Ms": 0.6915,
+      "medianAllocatedBytes": 10984.0,
+      "p95AllocatedBytes": 10984.0
+    },
+    {
+      "case": "single",
+      "pair": 1,
+      "variant": "v28",
+      "exit": 0,
+      "samples": 35.0,
+      "medianMs": 0.6805,
+      "p95Ms": 0.6984,
+      "medianAllocatedBytes": 10984.0,
+      "p95AllocatedBytes": 10984.0
+    },
+    {
+      "case": "single",
+      "pair": 2,
+      "variant": "v28",
+      "exit": 0,
+      "samples": 35.0,
+      "medianMs": 0.6398,
+      "p95Ms": 0.674,
+      "medianAllocatedBytes": 10984.0,
+      "p95AllocatedBytes": 10984.0
+    },
+    {
+      "case": "single",
+      "pair": 2,
+      "variant": "v30",
+      "exit": 0,
+      "samples": 35.0,
+      "medianMs": 0.6878,
+      "p95Ms": 0.6999,
+      "medianAllocatedBytes": 10984.0,
+      "p95AllocatedBytes": 10984.0
+    },
+    {
+      "case": "radial",
+      "pair": 0,
+      "variant": "v28",
+      "exit": 0,
+      "samples": 35.0,
+      "medianMs": 0.9626,
+      "p95Ms": 0.9774,
+      "medianAllocatedBytes": 12232.0,
+      "p95AllocatedBytes": 12232.0
+    },
+    {
+      "case": "radial",
+      "pair": 0,
+      "variant": "v30",
+      "exit": 0,
+      "samples": 35.0,
+      "medianMs": 0.9995,
+      "p95Ms": 1.0138,
+      "medianAllocatedBytes": 12232.0,
+      "p95AllocatedBytes": 12232.0
+    },
+    {
+      "case": "radial",
+      "pair": 1,
+      "variant": "v30",
+      "exit": 0,
+      "samples": 35.0,
+      "medianMs": 0.929,
+      "p95Ms": 0.9419,
+      "medianAllocatedBytes": 12232.0,
+      "p95AllocatedBytes": 12232.0
+    },
+    {
+      "case": "radial",
+      "pair": 1,
+      "variant": "v28",
+      "exit": 0,
+      "samples": 35.0,
+      "medianMs": 0.9849,
+      "p95Ms": 1.0165,
+      "medianAllocatedBytes": 12232.0,
+      "p95AllocatedBytes": 12232.0
+    },
+    {
+      "case": "radial",
+      "pair": 2,
+      "variant": "v28",
+      "exit": 0,
+      "samples": 35.0,
+      "medianMs": 0.9566,
+      "p95Ms": 0.9938,
+      "medianAllocatedBytes": 12232.0,
+      "p95AllocatedBytes": 12232.0
+    },
+    {
+      "case": "radial",
+      "pair": 2,
+      "variant": "v30",
+      "exit": 0,
+      "samples": 35.0,
+      "medianMs": 0.9926,
+      "p95Ms": 1.0477,
+      "medianAllocatedBytes": 12232.0,
+      "p95AllocatedBytes": 12232.0
+    },
+    {
+      "case": "radial same-crown",
+      "pair": 0,
+      "variant": "v28",
+      "exit": 0,
+      "samples": 35.0,
+      "medianMs": 0.882,
+      "p95Ms": 0.8883,
+      "medianAllocatedBytes": 40.0,
+      "p95AllocatedBytes": 40.0
+    },
+    {
+      "case": "radial same-crown",
+      "pair": 0,
+      "variant": "v30",
+      "exit": 0,
+      "samples": 35.0,
+      "medianMs": 0.7788,
+      "p95Ms": 0.7918,
+      "medianAllocatedBytes": 40.0,
+      "p95AllocatedBytes": 40.0
+    },
+    {
+      "case": "radial same-crown",
+      "pair": 1,
+      "variant": "v30",
+      "exit": 0,
+      "samples": 35.0,
+      "medianMs": 0.8004,
+      "p95Ms": 0.8074,
+      "medianAllocatedBytes": 40.0,
+      "p95AllocatedBytes": 40.0
+    },
+    {
+      "case": "radial same-crown",
+      "pair": 1,
+      "variant": "v28",
+      "exit": 0,
+      "samples": 35.0,
+      "medianMs": 0.8317,
+      "p95Ms": 0.8949,
+      "medianAllocatedBytes": 40.0,
+      "p95AllocatedBytes": 40.0
+    },
+    {
+      "case": "radial same-crown",
+      "pair": 2,
+      "variant": "v28",
+      "exit": 0,
+      "samples": 35.0,
+      "medianMs": 0.8745,
+      "p95Ms": 0.8807,
+      "medianAllocatedBytes": 40.0,
+      "p95AllocatedBytes": 40.0
+    },
+    {
+      "case": "radial same-crown",
+      "pair": 2,
+      "variant": "v30",
+      "exit": 0,
+      "samples": 35.0,
+      "medianMs": 0.8037,
+      "p95Ms": 0.8903,
+      "medianAllocatedBytes": 40.0,
+      "p95AllocatedBytes": 40.0
+    },
+    {
+      "case": "radial v1",
+      "pair": 0,
+      "variant": "v28",
+      "exit": 0,
+      "samples": 35.0,
+      "medianMs": 30.1826,
+      "p95Ms": 30.3708,
+      "medianAllocatedBytes": 19528.0,
+      "p95AllocatedBytes": 19528.0
+    },
+    {
+      "case": "radial v1",
+      "pair": 0,
+      "variant": "v30",
+      "exit": 0,
+      "samples": 35.0,
+      "medianMs": 30.1453,
+      "p95Ms": 30.3137,
+      "medianAllocatedBytes": 19960.0,
+      "p95AllocatedBytes": 19960.0
+    },
+    {
+      "case": "radial v1",
+      "pair": 1,
+      "variant": "v30",
+      "exit": 0,
+      "samples": 35.0,
+      "medianMs": 21.9439,
+      "p95Ms": 22.1393,
+      "medianAllocatedBytes": 19576.0,
+      "p95AllocatedBytes": 19576.0
+    },
+    {
+      "case": "radial v1",
+      "pair": 1,
+      "variant": "v28",
+      "exit": 0,
+      "samples": 35.0,
+      "medianMs": 35.2122,
+      "p95Ms": 35.3343,
+      "medianAllocatedBytes": 20056.0,
+      "p95AllocatedBytes": 20056.0
+    },
+    {
+      "case": "radial v1",
+      "pair": 2,
+      "variant": "v28",
+      "exit": 0,
+      "samples": 35.0,
+      "medianMs": 27.0731,
+      "p95Ms": 27.2922,
+      "medianAllocatedBytes": 19240.0,
+      "p95AllocatedBytes": 19240.0
+    },
+    {
+      "case": "radial v1",
+      "pair": 2,
+      "variant": "v30",
+      "exit": 0,
+      "samples": 35.0,
+      "medianMs": 33.5224,
+      "p95Ms": 33.7503,
+      "medianAllocatedBytes": 19288.0,
+      "p95AllocatedBytes": 19288.0
+    }
+  ]
+}

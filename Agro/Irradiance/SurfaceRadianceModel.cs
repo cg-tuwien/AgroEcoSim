@@ -49,4 +49,16 @@ public readonly struct SurfaceRadianceModel
 			return 0f;
 		return StaticAlbedo[hit.Group] * StaticShading[hit.Group] * dome.PlaneIrradiance(hit.Normal) / MathF.PI;
 	}
+    /// <summary>Mean radiance over the complete lighting interval; no extra geometry rays.</summary>
+    public float Radiance(in RayHit hit, in SkyInterval sky)
+    {
+        if (hit.IsPlant)
+        {
+            var plant = hit.Group - FirstPlantGroup;
+            return plant >= 0 && plant < PlantRadiosity.Length ? PlantRadiosity[plant] : 0f;
+        }
+        if (hit.Group < 0 || hit.Group >= StaticAlbedo.Length) return 0f;
+        return StaticAlbedo[hit.Group] * StaticShading[hit.Group] * sky.PlaneIrradiance(hit.Normal) / MathF.PI;
+    }
+
 }

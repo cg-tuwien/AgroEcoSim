@@ -48,6 +48,8 @@ public static class Carex_Morrowii_Variegata
         LeafPitch = 12f * DegToRad,  // Small pitch - leaves grow mostly horizontal then arch down
 
         LeafGrowthTime = 24f * 18f * 2f,
+        // Provisional CPU-light calibration; see LIGHT_GROWTH_CALIBRATION.md.
+        LeafExpansionRateScale = 1.4f,
         LeafGrowthTimeVar = 24f * 6f,
         LeafMaximumAgeHours = 24 * 400,
 

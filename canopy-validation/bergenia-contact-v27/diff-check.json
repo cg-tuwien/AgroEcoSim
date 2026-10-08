@@ -1,0 +1,6 @@
+{
+  "trackedScopedExitCode": 0,
+  "trackedScopedOutput": "",
+  "phaseAddedLineWhitespace": [],
+  "note": "The phase checker includes files untracked in Git and compares against the starting dirty snapshots."
+}

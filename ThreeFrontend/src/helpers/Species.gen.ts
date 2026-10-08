@@ -9,6 +9,9 @@ const DegToRad = Math.PI / 180.0;
 const RadToDeg = 180.0 / Math.PI;
 
 export class SpeciesBase {
+    contactDeformationMode = signal(0);
+    contactLeafFoldingEnabled = signal(true);
+    petioleContactBendDegrees = signal(0);
     name = signal("Default");
     aka = signal("");
     behaviorIndex = signal(0);
@@ -34,6 +37,10 @@ export class SpeciesBase {
     leafSegmentLength = signal(0);
     leafKeelThickness = signal(0.0028);
     leafElasticModulus = signal(0);
+    leafMembraneElasticModulus = signal(0);
+    leafBendingElasticModulus = signal(0);
+    leafMechanicalThickness = signal(0);
+    leafPoissonRatio = signal(0.3);
     leafTipStiffnessFraction = signal(1);
     maximumLeafSegments = signal(16);
     leafRadius = signal(0.04);
@@ -45,6 +52,8 @@ export class SpeciesBase {
     petioleRadius = signal(0.0025);
     petioleRadiusVar = signal(0.0005);
     leafGrowthTime = signal(480);
+    leafExpansionRateScale = signal(1);
+    constructionEnergyPerDryGram = signal(0);
     leafGrowthTimeVar = signal(120);
     leafSenescenceSeasonalDuration = signal(480);
     leafSenescenceSeasonalDurationVar = signal(120);
@@ -73,6 +82,7 @@ export class SpeciesBase {
     postFloweringCrownContinuationProbabilityPerHour = signal(0.001);
     dormantCrownContinuationProbabilityPerHour = signal(0);
     continueCrownAfterFlowerCommitment = signal(true);
+    basalScapeEmergenceMaxTiltDegrees = signal(0);
     flowerStemSegmentGrowthDurationVarianceHours = signal(0);
     budBloomDurationVarianceHours = signal(0);
     maximumFlowersPerCrown = signal(1);
@@ -117,6 +127,9 @@ export class SpeciesBase {
 
     public save() {
         return {
+            contactDeformationMode: this.contactDeformationMode.peek(),
+            contactLeafFoldingEnabled: this.contactLeafFoldingEnabled.peek(),
+            petioleContactBendDegrees: this.petioleContactBendDegrees.peek(),
             name: this.name.peek(),
             aka: this.aka.peek(),
             behavior: this.behaviorIndex.peek(),
@@ -142,6 +155,10 @@ export class SpeciesBase {
             leafSegmentLength: this.leafSegmentLength.peek(),
             leafKeelThickness: this.leafKeelThickness.peek(),
             leafElasticModulus: this.leafElasticModulus.peek(),
+            leafMembraneElasticModulus: this.leafMembraneElasticModulus.peek(),
+            leafBendingElasticModulus: this.leafBendingElasticModulus.peek(),
+            leafMechanicalThickness: this.leafMechanicalThickness.peek(),
+            leafPoissonRatio: this.leafPoissonRatio.peek(),
             leafTipStiffnessFraction: this.leafTipStiffnessFraction.peek(),
             maximumLeafSegments: this.maximumLeafSegments.peek(),
             leafRadius: this.leafRadius.peek(),
@@ -153,6 +170,8 @@ export class SpeciesBase {
             petioleRadius: this.petioleRadius.peek(),
             petioleRadiusVar: this.petioleRadiusVar.peek(),
             leafGrowthTime: this.leafGrowthTime.peek(),
+            leafExpansionRateScale: this.leafExpansionRateScale.peek(),
+            constructionEnergyPerDryGram: this.constructionEnergyPerDryGram.peek(),
             leafGrowthTimeVar: this.leafGrowthTimeVar.peek(),
             leafSenescenceSeasonalDuration: this.leafSenescenceSeasonalDuration.peek(),
             leafSenescenceSeasonalDurationVar: this.leafSenescenceSeasonalDurationVar.peek(),
@@ -181,6 +200,7 @@ export class SpeciesBase {
             postFloweringCrownContinuationProbabilityPerHour: this.postFloweringCrownContinuationProbabilityPerHour.peek(),
             dormantCrownContinuationProbabilityPerHour: this.dormantCrownContinuationProbabilityPerHour.peek(),
             continueCrownAfterFlowerCommitment: this.continueCrownAfterFlowerCommitment.peek(),
+            basalScapeEmergenceMaxTiltDegrees: this.basalScapeEmergenceMaxTiltDegrees.peek(),
             flowerStemSegmentGrowthDurationVarianceHours: this.flowerStemSegmentGrowthDurationVarianceHours.peek(),
             budBloomDurationVarianceHours: this.budBloomDurationVarianceHours.peek(),
             maximumFlowersPerCrown: this.maximumFlowersPerCrown.peek(),
@@ -226,6 +246,9 @@ export class SpeciesBase {
     }
 
     public load(s: any) {
+        this.contactDeformationMode.value = s.contactDeformationMode ?? 0;
+        this.contactLeafFoldingEnabled.value = s.contactLeafFoldingEnabled;
+        this.petioleContactBendDegrees.value = s.petioleContactBendDegrees;
         this.name.value = s.name;
         this.aka.value = s.aka;
         this.behaviorIndex.value = s.behavior;
@@ -251,6 +274,10 @@ export class SpeciesBase {
         this.leafSegmentLength.value = s.leafSegmentLength;
         this.leafKeelThickness.value = s.leafKeelThickness;
         this.leafElasticModulus.value = s.leafElasticModulus;
+        this.leafMembraneElasticModulus.value = s.leafMembraneElasticModulus ?? 0;
+        this.leafBendingElasticModulus.value = s.leafBendingElasticModulus ?? 0;
+        this.leafMechanicalThickness.value = s.leafMechanicalThickness ?? 0;
+        this.leafPoissonRatio.value = s.leafPoissonRatio ?? 0.3;
         this.leafTipStiffnessFraction.value = s.leafTipStiffnessFraction;
         this.maximumLeafSegments.value = s.maximumLeafSegments;
         this.leafRadius.value = s.leafRadius;
@@ -262,6 +289,8 @@ export class SpeciesBase {
         this.petioleRadius.value = s.petioleRadius;
         this.petioleRadiusVar.value = s.petioleRadiusVar;
         this.leafGrowthTime.value = s.leafGrowthTime;
+        this.leafExpansionRateScale.value = s.leafExpansionRateScale;
+        this.constructionEnergyPerDryGram.value = s.constructionEnergyPerDryGram;
         this.leafGrowthTimeVar.value = s.leafGrowthTimeVar;
         this.leafSenescenceSeasonalDuration.value = s.leafSenescenceSeasonalDuration;
         this.leafSenescenceSeasonalDurationVar.value = s.leafSenescenceSeasonalDurationVar;
@@ -290,6 +319,7 @@ export class SpeciesBase {
         this.postFloweringCrownContinuationProbabilityPerHour.value = s.postFloweringCrownContinuationProbabilityPerHour;
         this.dormantCrownContinuationProbabilityPerHour.value = s.dormantCrownContinuationProbabilityPerHour;
         this.continueCrownAfterFlowerCommitment.value = s.continueCrownAfterFlowerCommitment;
+        this.basalScapeEmergenceMaxTiltDegrees.value = s.basalScapeEmergenceMaxTiltDegrees;
         this.flowerStemSegmentGrowthDurationVarianceHours.value = s.flowerStemSegmentGrowthDurationVarianceHours;
         this.budBloomDurationVarianceHours.value = s.budBloomDurationVarianceHours;
         this.maximumFlowersPerCrown.value = s.maximumFlowersPerCrown;
@@ -336,6 +366,9 @@ export class SpeciesBase {
 
     public serialize() {
         return {
+            ContactDeformationMode: this.contactDeformationMode.peek(),
+            ContactLeafFoldingEnabled: this.contactLeafFoldingEnabled.peek(),
+            PetioleContactBendDegrees: this.petioleContactBendDegrees.peek(),
             Name: this.name.peek(),
             Aka: this.aka.peek(),
             Behavior: this.behaviorIndex.peek(),
@@ -361,6 +394,10 @@ export class SpeciesBase {
             LeafSegmentLength: this.leafSegmentLength.peek(),
             LeafKeelThickness: this.leafKeelThickness.peek(),
             LeafElasticModulus: this.leafElasticModulus.peek(),
+            LeafMembraneElasticModulus: this.leafMembraneElasticModulus.peek(),
+            LeafBendingElasticModulus: this.leafBendingElasticModulus.peek(),
+            LeafMechanicalThickness: this.leafMechanicalThickness.peek(),
+            LeafPoissonRatio: this.leafPoissonRatio.peek(),
             LeafTipStiffnessFraction: this.leafTipStiffnessFraction.peek(),
             MaximumLeafSegments: this.maximumLeafSegments.peek(),
             LeafRadius: this.leafRadius.peek(),
@@ -372,6 +409,8 @@ export class SpeciesBase {
             PetioleRadius: this.petioleRadius.peek(),
             PetioleRadiusVar: this.petioleRadiusVar.peek(),
             LeafGrowthTime: this.leafGrowthTime.peek(),
+            LeafExpansionRateScale: this.leafExpansionRateScale.peek(),
+            ConstructionEnergyPerDryGram: this.constructionEnergyPerDryGram.peek(),
             LeafGrowthTimeVar: this.leafGrowthTimeVar.peek(),
             LeafSenescenceSeasonalDuration: this.leafSenescenceSeasonalDuration.peek(),
             LeafSenescenceSeasonalDurationVar: this.leafSenescenceSeasonalDurationVar.peek(),
@@ -400,6 +439,7 @@ export class SpeciesBase {
             PostFloweringCrownContinuationProbabilityPerHour: this.postFloweringCrownContinuationProbabilityPerHour.peek(),
             DormantCrownContinuationProbabilityPerHour: this.dormantCrownContinuationProbabilityPerHour.peek(),
             ContinueCrownAfterFlowerCommitment: this.continueCrownAfterFlowerCommitment.peek(),
+            BasalScapeEmergenceMaxTiltDegrees: this.basalScapeEmergenceMaxTiltDegrees.peek(),
             FlowerStemSegmentGrowthDurationVarianceHours: this.flowerStemSegmentGrowthDurationVarianceHours.peek(),
             BudBloomDurationVarianceHours: this.budBloomDurationVarianceHours.peek(),
             MaximumFlowersPerCrown: this.maximumFlowersPerCrown.peek(),

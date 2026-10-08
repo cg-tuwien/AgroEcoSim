@@ -1,0 +1,168 @@
+{
+  "phase": "bergenia-contact-v27",
+  "checkpointVersion": 27,
+  "sourceFiles": [
+    "Agro/AgroWorld.cs",
+    "Agro/BERGENIA_CALIBRATION.md",
+    "Agro/COLLISIONS.md",
+    "Agro/Collisions/CollisionWorld.Continuation.cs",
+    "Agro/Collisions/CollisionWorld.Foliage.cs",
+    "Agro/Plant/PlantSubFormation.Contacts.cs"
+  ],
+  "defaultMode": 0,
+  "richerResponseMode": 1,
+  "request": {
+    "path": "../bergenia-contact-v20/request.json",
+    "sha256": "74450989e51855e23248d35cdb410224a999a61c27029666dddfa312e43ff1fe",
+    "seed": 42,
+    "renderMode": 3,
+    "weatherHorizonDays": 755,
+    "startDate": "2025-09-01",
+    "clonalSpreadDisabled": true,
+    "method": "Diagnostic continuation from v26 day-240 state with header-only promotion; production rejects old live states."
+  },
+  "mechanics": {
+    "fixtureStartingRadiusMetres": 0.0012,
+    "fixtureTargetRadiusMetres": 0.009,
+    "finalRadiusMetres": {
+      "rigidRadial": 0.0052218754,
+      "rigidCommonSupport": 0.0048562502,
+      "v1Radial": 0.009
+    },
+    "v26V1FinalRadiusMetres": 0.0074156253,
+    "v1RetainedIncrementIncreasePercent": 25.49019002158961,
+    "nativeFrozenPoseHashes": {
+      "radial": {
+        "oneHour": "DFDDB9E4B6B8C709B4AE8CC961FF23F5CE69C6064ECC58D0D39D70B00A709C3A",
+        "fourHour": "DFDDB9E4B6B8C709B4AE8CC961FF23F5CE69C6064ECC58D0D39D70B00A709C3A",
+        "equal": true
+      },
+      "common": {
+        "oneHour": "ED17DC08A11F23DE92CE3BCB8160B01327817A9C84D220E15AF9947172581BD3",
+        "fourHour": "ED17DC08A11F23DE92CE3BCB8160B01327817A9C84D220E15AF9947172581BD3",
+        "equal": true
+      },
+      "v1": {
+        "oneHour": "20D920FD38FB3439F456541BB6D43D059A151B2F413C9D279DEE73D9211EE933",
+        "fourHour": "20D920FD38FB3439F456541BB6D43D059A151B2F413C9D279DEE73D9211EE933",
+        "equal": true
+      },
+      "ceiling": {
+        "oneHour": "1BB78D13218E293CB477FD2F2554B5070B388E967EE3903554FFD864C36A9A33",
+        "fourHour": "1BB78D13218E293CB477FD2F2554B5070B388E967EE3903554FFD864C36A9A33",
+        "equal": true
+      },
+      "walls": {
+        "oneHour": "2E61B045147EB527BF031F35285392130072D27D794DD3A342CA87BE7D11B850",
+        "fourHour": "2E61B045147EB527BF031F35285392130072D27D794DD3A342CA87BE7D11B850",
+        "equal": true
+      }
+    },
+    "v1TangentReference": {
+      "rows": 4,
+      "forceDifferenceNewtons": 4.2539791314359383e-10,
+      "complementarityResidualMetres": 5.6630880742601634e-11,
+      "interpretation": "Tangent reference only; full motion certificates remain authoritative."
+    },
+    "ceilingAndWalls": {
+      "accepted": false,
+      "exactPoseRestoration": true
+    },
+    "staleFoliageHintBeforeSolidFailure": {
+      "reactionCleared": true,
+      "accepted": false,
+      "corrections": 0,
+      "exactPoseRestoration": true
+    },
+    "completeFourHourDay240Crown": {
+      "acceptedWaypoint": false,
+      "lengthProposalMetres": 0.001,
+      "radiusProposalMetres": 0.00025,
+      "interpretation": "Unresolved certification/recovery; not evidence of physical confinement."
+    }
+  },
+  "biologyDay282": [
+    {
+      "hoursPerTick": 1,
+      "aboveGroundOrgans": 130,
+      "belowGroundOrgans": 212,
+      "wholeLeaves": 20,
+      "bothDimensionsAtLeast50Percent": 8,
+      "bothDimensionsAtLeast90Percent": 3,
+      "petals": 5,
+      "openFlowers": 1,
+      "water": 56.06504649994895,
+      "energy": 834.7092769139545,
+      "finite": true,
+      "maxUnresolvedAcceptedContacts": 0,
+      "frameBytes": 16952
+    },
+    {
+      "hoursPerTick": 4,
+      "aboveGroundOrgans": 52,
+      "belowGroundOrgans": 127,
+      "wholeLeaves": 20,
+      "bothDimensionsAtLeast50Percent": 4,
+      "bothDimensionsAtLeast90Percent": 2,
+      "petals": 0,
+      "openFlowers": 0,
+      "scapeLengthMetres": 0.00040286416,
+      "scapeRadiusMetres": 0.0012429563,
+      "scapeBlocked": true,
+      "water": 25.419032889069058,
+      "energy": 643.8927930667378,
+      "finite": true,
+      "maxUnresolvedAcceptedContacts": 0,
+      "frameBytes": 9738
+    }
+  ],
+  "performance": {
+    "artifact": "benchmarks-final.json",
+    "method": "Serial NativeAOT fixed-population retries, 3 processes per version/case; each 10 warmups and 35 samples; median of process medians. Repeats 4-6 only.",
+    "endToEndGateEstablished": false,
+    "v1PerformanceGatePassed": false,
+    "zeroPerContactAllocationsEstablished": false
+  },
+  "storage": {
+    "newAcceptedPerLeafFields": 0,
+    "newWorldSharedV1RotationFoldPayloadBytes": 7168,
+    "newEnabledFlags": 16,
+    "newRotationFoldArraysForMode0": false,
+    "completePerLeafBudgetGateEstablished": false,
+    "note": "Existing per-organ trial backup may allocate on first use; shared scratch is separate from persistent per-organ storage."
+  },
+  "checks": {
+    "coreBuildErrors": 0,
+    "corePreexistingWarnings": 318,
+    "managedProbeBuildErrors": 0,
+    "nativeFixturePublish": true,
+    "nativeCheckpointPublish": true,
+    "nativeServerPublish": true,
+    "serverDeployed": false,
+    "nativeCheckpointByteAndFrameEquality": {
+      "fresh1h": true,
+      "fresh4h": true,
+      "mature1h": true,
+      "mature4h": true,
+      "v1ReleaseRemovalReindex1h": true,
+      "v1ReleaseRemovalReindex4h": true
+    },
+    "oldLiveV26Rejected": true,
+    "frontendSuitesPassed": 5,
+    "frontendTestsPassed": 34,
+    "scopedWhitespacePassed": true
+  },
+  "remainingGates": [
+    "Four-hour seasonal scape growth and flowering",
+    "Seasonal V1 comparison",
+    "Developed-leaf density improvement at both tick sizes",
+    "Fresh full 755-day and overwintering run",
+    "Individual expansion timing",
+    "BAC V2 shell/equilibrium integration",
+    "Dense stand and FAV11/P003 full-panel performance",
+    "Multicore, peak memory, CPU-light and archive costs",
+    "Zero per-contact allocations",
+    "Complete per-leaf storage budget"
+  ],
+  "botanicalScope": "No biological or material parameters changed. Synthetic scape fixtures are not cultivar dimensions. Rotblum largest blade 16 cm, petiole approximately 5 cm and pot diameter 19.5 cm remain separate observations; blade width and initial age unknown."
+}

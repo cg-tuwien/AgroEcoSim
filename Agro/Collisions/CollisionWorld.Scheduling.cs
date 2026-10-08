@@ -45,6 +45,12 @@ public sealed partial class CollisionWorld
         public readonly HashSet<int> Rejected = [];
         public readonly Dictionary<int, Vector3> Normals = [];
         public readonly List<(int, int)> OwnPairs = [];
+        // Biological sizes sampled before coupled contact correction; reused each tick.
+        // Depth then stable ID is independent of array positions after organ reindexing.
+        public readonly List<(int Index, float Radius, int Depth, ulong Id)> SampledSupportRadius = [];
+        public readonly List<(int Index, float Length, float Radius, int Depth, ulong Id)> SampledOrganGrowth = [];
+        public Dictionary<ContactKey,ElasticContact>? Elastic;
+        public Dictionary<(ulong,StaticSurface),ElasticStaticContact>? StaticElastic;
         public bool[] Certified = [];
         public readonly Comparison<(int, int)> PairOrder;
         public readonly Comparison<int> OrganOrder;
@@ -53,6 +59,7 @@ public sealed partial class CollisionWorld
         public Evaluation[] Evaluations = new Evaluation[64];
         public long GeometryRevision = -1, TopologyRevision = -1, NextStamp, OwnRevision = -1;
         public bool Found;
+        public float FoliageResidual, HardCorrectionDepth;
         public long Candidates, ContactsCount, Queries, Skips, Obstacle, Soil, Reused;
         public long Intervals, Triangles, StaticReused;
         public long ApproximationQueries, ApproximationSeparations;
@@ -97,6 +104,7 @@ public sealed partial class CollisionWorld
     {
         public readonly PlantWork A, B;
         public readonly List<(int, int)> Pairs = [];
+        public Dictionary<ContactKey,ElasticContact>? Elastic;
         public readonly Comparison<(int, int)> PairOrder;
         public long RevisionA = -1, RevisionB = -1;
         public bool Found;
@@ -170,6 +178,8 @@ public sealed partial class CollisionWorld
         }
         if (PlantMembershipChanged)
         {
+            // The ordering hint must not retain a retired plant graph.
+            LastTrialFailure = null;
             PlantIndices.Clear();
             for (int i = 0; i < plants.Count; ++i) PlantIndices.Add(plants[i], i);
             foreach (var retired in Work.Keys.Where(p => !PlantIndices.ContainsKey(p)).ToArray())

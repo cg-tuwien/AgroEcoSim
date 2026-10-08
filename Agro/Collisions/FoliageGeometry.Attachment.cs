@@ -30,6 +30,8 @@ internal static partial class FoliageGeometry
         if (radius <= 0) return Distance(a, b, search);
         if(a.Feature<0 && b.Feature<0 && BoundsSeparate(a,b,search))
             return new(a.Pose.Base,b.Pose.Base,Vector3.UnitY,search,-1,-1);
+        if (a.Lamina == null && b.Lamina == null)
+            return RodsOutsideAttachment(a.Pose, b.Pose, search, attachment, radius);
         var aa = OutsideA ??= []; var bb = OutsideB ??= [];
         Parts(a, attachment, radius, aa, Pad(b.Bounds,search));
         Parts(b, attachment, radius, bb, Pad(a.Bounds,search));
@@ -125,22 +127,18 @@ internal static partial class FoliageGeometry
         }
     }
 
-    static bool AttachmentSweepUncached(in ContactShape a0, in ContactShape a1,
+    static MotionResult AttachmentSweepUncached(in ContactShape a0, in ContactShape a1,
         in ContactShape b0, in ContactShape b1, Vector3 attachment0, Vector3 attachment1, float radius)
     {
-        if (!a0.SweptBounds(a1).Intersects(b0.SweptBounds(b1))) return true;
-        var low=Vector3.Max(attachment0,attachment1)-new Vector3(radius);
-        var high=Vector3.Min(attachment0,attachment1)+new Vector3(radius);
-        if (Contains(low,high,a0.SweptBounds(a1)) || Contains(low,high,b0.SweptBounds(b1))) return true;
+        if (!a0.SweptBounds(a1).Intersects(b0.SweptBounds(b1))) return MotionResult.Clear;
+        if (AttachmentContained(attachment0,attachment1,radius,a0,a1)
+            || AttachmentContained(attachment0,attachment1,radius,b0,b1)) return MotionResult.Clear;
         var movement=a0.MotionBound(a1)+b0.MotionBound(b1);
-        // Endpoints are checked independently. Below a quarter skin, the whole path stays
-        // within the same contact tolerance; do not exhaust a triangle budget on roundoff.
-        if (movement < Skin * .25f) return true;
-        if (SweptPlanesSeparate(a0,a1,b0,b1)) return true;
+        if (SweptPlanesSeparate(a0,a1,b0,b1)) return MotionResult.Clear;
         var reach=MathF.Max(a0.Pose.Radius,a1.Pose.Radius)+MathF.Max(b0.Pose.Radius,b1.Pose.Radius);
         var gap=OutsideAttachment(a0,b0,reach+movement+Skin,attachment0,
             radius-movement-Vector3.Distance(attachment0,attachment1)).Distance;
-        if (gap>=reach+movement-Skin) return true;
+        if (DistanceBoundsMotion(gap,reach,movement)) return MotionResult.Clear;
         // Split sheets before temporal subdivision: a small triangle's motion bound is
         // much tighter than that of the complete blade, especially near an attachment.
         var budget = 256;
@@ -152,8 +150,9 @@ internal static partial class FoliageGeometry
         {
             var x0=a0.Lamina==null?a0:a0 with {Feature=i};
             var x1=a1.Lamina==null?a1:a1 with {Feature=i};
-            var bounds=x0.SweptBounds(x1);
-            if (Contains(low,high,bounds)) continue;
+            var core=AttachmentBounds(x0,x1);
+            if (AttachmentBoxContains(attachment0,attachment1,radius,core)) continue;
+            var bounds=Pad(core,MathF.Max(x0.Pose.Radius,x1.Pose.Radius));
             second.Clear();
             if(b0.Lamina==null) second.Add(-1);
             else b0.Lamina.Query(b0.Pose,Pad(bounds,b0.MotionBound(b1)),second);
@@ -161,25 +160,34 @@ internal static partial class FoliageGeometry
             {
                 var y0=b0.Lamina==null?b0:b0 with {Feature=j};
                 var y1=b1.Lamina==null?b1:b1 with {Feature=j};
-                var other=y0.SweptBounds(y1);
-                if (!bounds.Intersects(other) || Contains(low,high,other)) continue;
-                if (!AttachmentInterval(x0,x1,y0,y1,attachment0,attachment1,radius,ref budget)) return false;
+                var otherCore=AttachmentBounds(y0,y1);
+                if (AttachmentBoxContains(attachment0,attachment1,radius,otherCore)) continue;
+                var other=Pad(otherCore,MathF.Max(y0.Pose.Radius,y1.Pose.Radius));
+                if (!bounds.Intersects(other)) continue;
+                var result = AttachmentInterval(x0,x1,y0,y1,attachment0,attachment1,radius,ref budget);
+                if (result != MotionResult.Clear) return result;
             }
         }
-        return true;
+        return MotionResult.Clear;
     }
 
-    static bool AttachmentInterval(in ContactShape a0, in ContactShape a1, in ContactShape b0, in ContactShape b1,
+    static MotionResult AttachmentInterval(in ContactShape a0, in ContactShape a1, in ContactShape b0, in ContactShape b1,
         Vector3 p0, Vector3 p1, float radius, ref int budget)
     {
         ++IntervalCount;
-        if (--budget < 0) return false;
+        if (--budget < 0) return MotionResult.Uncertified;
+        // Clipped parts are subsets of these facets. A separating plane for the
+        // complete finite-thickness facets therefore certifies their clipped
+        // motion too, including rotation/deformation through the arc bound. Use
+        // the facet's actual rest-curved normal, not only the organ's midrib frame.
+        // Test this before transforming candidate
+        // vertices again for attachment bounds and temporal subdivision.
+        if (FacetPlaneSeparates(a0,a1,b0,b1) || FacetPlaneSeparates(b0,b1,a0,a1)) return MotionResult.Clear;
         // If either whole body remains inside the moving attachment neighbourhood,
         // its outside portion is empty throughout the interval. This proof is especially
         // useful for new blades; distance subdivision alone needlessly erodes the joint.
-        var low = Vector3.Max(p0,p1)-new Vector3(radius);
-        var high = Vector3.Min(p0,p1)+new Vector3(radius);
-        if (Contains(low,high,a0.SweptBounds(a1)) || Contains(low,high,b0.SweptBounds(b1))) return true;
+        if (AttachmentContained(p0,p1,radius,a0,a1)
+            || AttachmentContained(p0,p1,radius,b0,b1)) return MotionResult.Clear;
         var am = a0.Interpolate(a1, .5f); var bm = b0.Interpolate(b1, .5f);
         var motion = MathF.Max(a0.MotionBound(am), am.MotionBound(a1)) + MathF.Max(b0.MotionBound(bm), bm.MotionBound(b1));
         var reach = MathF.Max(a0.Pose.Radius, a1.Pose.Radius) + MathF.Max(b0.Pose.Radius, b1.Pose.Radius);
@@ -187,23 +195,92 @@ internal static partial class FoliageGeometry
         // Erode the excluded region by the entire motion bound. A contact leaving the
         // attachment during this interval must therefore participate in the distance proof.
         var hit = OutsideAttachment(am, bm, reach+motion+Skin, pm, radius-motion-Vector3.Distance(p0,pm));
-        if (hit.Distance >= reach+motion+Skin*.5f) return true;
-        if (motion < Skin*.25f) return hit.Distance >= reach-Skin;
-        if (OutsideAttachment(am, bm, reach+Skin, pm, radius).Distance < reach-Skin) return false;
-        return AttachmentInterval(a0,am,b0,bm,p0,pm,radius,ref budget)
-            && AttachmentInterval(am,a1,bm,b1,pm,p1,radius,ref budget);
+        if (DistanceBoundsMotion(hit.Distance, reach, motion)) return MotionResult.Clear;
+        // The eroded attachment region and full motion bound are required even
+        // below the skin; a clear midpoint does not certify its endpoints/path.
+        // Continue bounded subdivision rather than treating small motion as clear.
+        // Use actual midpoint thickness to identify penetration; the larger
+        // endpoint thickness remains the conservative separation-proof bound.
+        var midpointReach = am.Pose.Radius + bm.Pose.Radius;
+        if (OutsideAttachment(am, bm, midpointReach+Skin, pm, radius).Distance < midpointReach-Skin) return MotionResult.Intersecting;
+        var left = AttachmentInterval(a0,am,b0,bm,p0,pm,radius,ref budget);
+        return left == MotionResult.Clear ? AttachmentInterval(am,a1,bm,b1,pm,p1,radius,ref budget) : left;
     }
 
-    static bool Contains(Vector3 low, Vector3 high, Bvh.BoundingBox box)
-        => box.Min.X>=low.X && box.Min.Y>=low.Y && box.Min.Z>=low.Z
-            && box.Max.X<=high.X && box.Max.Y<=high.Y && box.Max.Z<=high.Z;
+    static bool AttachmentContained(Vector3 center0, Vector3 center1, float radius,
+        in ContactShape start, in ContactShape end)
+        => AttachmentBoxContains(center0,center1,radius,AttachmentBounds(start,end));
 
-    static void Parts(in ContactShape shape, Vector3 center, float radius, List<Part> result, Bvh.BoundingBox against)
+    static bool AttachmentBoxContains(Vector3 center0, Vector3 center1, float radius, Bvh.BoundingBox bounds)
     {
-        result.Clear();
-        if (shape.Lamina == null)
+        // Test the intersection of the two exemption boxes without rounding their
+        // faces to world floats. A rounded-out box can otherwise certify an entire
+        // rod as exempt although its double-clipped parameter range is nonempty.
+        for (var axis = 0; axis < 3; ++axis)
+            if ((double)bounds.Min[axis] - center0[axis] < -radius
+                || (double)bounds.Min[axis] - center1[axis] < -radius
+                || (double)bounds.Max[axis] - center0[axis] > radius
+                || (double)bounds.Max[axis] - center1[axis] > radius) return false;
+        return true;
+    }
+
+    static Bvh.BoundingBox AttachmentBounds(in ContactShape start, in ContactShape end)
+    {
+        // Parts clips centre lines / blade surfaces, then the distance test applies
+        // collision thickness to the remaining parts. Use that same geometry for
+        // the empty-outside proof: a thickness-expanded box could straddle the seam
+        // even though no clipped part exists at any instant. Keep curvature, growth
+        // and the rotational arc bound; do not enlarge the attachment exemption.
+        var a = start with { Pose = start.Pose with { Radius = 0f } };
+        var b = end with { Pose = end.Pose with { Radius = 0f } };
+        return a.SweptBounds(b);
+    }
+
+    static bool FacetPlaneSeparates(in ContactShape start, in ContactShape end,
+        in ContactShape otherStart, in ContactShape otherEnd)
+    {
+        if (start.Lamina == null || start.Feature < 0) return false;
+        start.Lamina.Triangle(start.Pose, start.Feature, out var a, out var b, out var c);
+        var normal = Vector3.Cross(b-a,c-a);
+        var size = normal.LengthSquared();
+        if (size <= 1e-30f) return false;
+        normal /= MathF.Sqrt(size);
+        // Project each endpoint once for both faces, reusing the start vertices.
+        // A local origin avoids cancellation of large world-coordinate projections.
+        var p = Vector3.Dot(b-a,normal); var q = Vector3.Dot(c-a,normal);
+        var al0 = MathF.Min(0,MathF.Min(p,q)); var ah0 = MathF.Max(0,MathF.Max(p,q));
+        ProjectAttachmentFeature(otherStart,normal,a,out var bl0,out var bh0);
+        var offset0 = start.Pose.Radius + otherStart.Pose.Radius;
+        var forward0 = al0-bh0-offset0; var reverse0 = bl0-ah0-offset0;
+        // A path certificate also needs separation at its start. Avoid endpoint
+        // transforms and arc calculations when neither face can meet that condition.
+        if (forward0 < -Skin && reverse0 < -Skin) return false;
+        var bound = start.ArcBound(end) + otherStart.ArcBound(otherEnd) - Skin;
+        if (forward0 < bound && reverse0 < bound) return false;
+        ProjectAttachmentFeature(end,normal,a,out var al1,out var ah1);
+        ProjectAttachmentFeature(otherEnd,normal,a,out var bl1,out var bh1);
+        var offset1 = end.Pose.Radius + otherEnd.Pose.Radius;
+        return MathF.Min(forward0,al1-bh1-offset1) >= bound
+            || MathF.Min(reverse0,bl1-ah1-offset1) >= bound;
+    }
+
+    static void ProjectAttachmentFeature(in ContactShape shape, Vector3 axis, Vector3 origin,
+        out float low, out float high)
+    {
+        if (shape.Lamina != null && shape.Feature >= 0)
         {
-            var a = shape.Pose.Base; var b = shape.Pose.Tip; var direction = b-a;
+            shape.Lamina.Triangle(shape.Pose,shape.Feature,out var a,out var b,out var c);
+            var x = Vector3.Dot(a-origin,axis); var y = Vector3.Dot(b-origin,axis); var z = Vector3.Dot(c-origin,axis);
+            low = MathF.Min(x,MathF.Min(y,z)); high = MathF.Max(x,MathF.Max(y,z));
+            return;
+        }
+        // Whole-sheet bounds remain conservative; rods include every internal node.
+        Project(shape with { Pose = shape.Pose with { Base = shape.Pose.Base-origin } },axis,out low,out high);
+    }
+
+    static void ClipRod(Vector3 a, Vector3 b, Vector3 center, float radius, List<Part> result)
+    {
+        var direction=b-a;
             float enter = 0, exit = 1;
             for (int axis=0; axis<3; ++axis)
             {
@@ -221,6 +298,18 @@ internal static partial class FoliageGeometry
             {
                 if (enter > 0) result.Add(new(a,a+direction*enter,a,false,-1));
                 if (exit < 1) result.Add(new(a+direction*exit,b,b,false,-1));
+            }
+    }
+
+    static void Parts(in ContactShape shape, Vector3 center, float radius, List<Part> result, Bvh.BoundingBox against)
+    {
+        result.Clear();
+        if (shape.Lamina == null)
+        {
+            for(var span=0;span<(shape.Pose.CurvedRod?3:1);++span)
+            {
+                var rod=shape.Pose.CurvedRod?shape.Pose.RodSpan(span):shape.Pose;
+                ClipRod(rod.Base,rod.Tip,center,radius,result);
             }
             return;
         }

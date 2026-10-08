@@ -1,0 +1,204 @@
+{
+  "single": {
+    "v30": [
+      {
+        "samples": 35.0,
+        "medianMs": 0.6685,
+        "p95Ms": 0.7192,
+        "medianAllocatedBytes": 10984.0,
+        "p95AllocatedBytes": 10984.0
+      },
+      {
+        "samples": 35.0,
+        "medianMs": 0.6435,
+        "p95Ms": 0.6626,
+        "medianAllocatedBytes": 10984.0,
+        "p95AllocatedBytes": 10984.0
+      },
+      {
+        "samples": 35.0,
+        "medianMs": 0.6428,
+        "p95Ms": 0.6724,
+        "medianAllocatedBytes": 10984.0,
+        "p95AllocatedBytes": 10984.0
+      }
+    ],
+    "v31": [
+      {
+        "samples": 35.0,
+        "medianMs": 0.6449,
+        "p95Ms": 0.7004,
+        "medianAllocatedBytes": 10984.0,
+        "p95AllocatedBytes": 10984.0
+      },
+      {
+        "samples": 35.0,
+        "medianMs": 0.6826,
+        "p95Ms": 0.7417,
+        "medianAllocatedBytes": 10984.0,
+        "p95AllocatedBytes": 10984.0
+      },
+      {
+        "samples": 35.0,
+        "medianMs": 0.6442,
+        "p95Ms": 0.6705,
+        "medianAllocatedBytes": 10984.0,
+        "p95AllocatedBytes": 10984.0
+      }
+    ],
+    "changePercent": 0.21756021756023092
+  },
+  "radial": {
+    "v30": [
+      {
+        "samples": 35.0,
+        "medianMs": 0.9663,
+        "p95Ms": 0.9788,
+        "medianAllocatedBytes": 12232.0,
+        "p95AllocatedBytes": 12232.0
+      },
+      {
+        "samples": 35.0,
+        "medianMs": 0.9501,
+        "p95Ms": 0.9703,
+        "medianAllocatedBytes": 12232.0,
+        "p95AllocatedBytes": 12232.0
+      },
+      {
+        "samples": 35.0,
+        "medianMs": 0.9973,
+        "p95Ms": 1.1285,
+        "medianAllocatedBytes": 12232.0,
+        "p95AllocatedBytes": 12232.0
+      }
+    ],
+    "v31": [
+      {
+        "samples": 35.0,
+        "medianMs": 0.9876,
+        "p95Ms": 1.9676,
+        "medianAllocatedBytes": 12232.0,
+        "p95AllocatedBytes": 12232.0
+      },
+      {
+        "samples": 35.0,
+        "medianMs": 0.9509,
+        "p95Ms": 0.988,
+        "medianAllocatedBytes": 12232.0,
+        "p95AllocatedBytes": 12232.0
+      },
+      {
+        "samples": 35.0,
+        "medianMs": 0.9558,
+        "p95Ms": 0.991,
+        "medianAllocatedBytes": 12232.0,
+        "p95AllocatedBytes": 12232.0
+      }
+    ],
+    "changePercent": -1.0866190624029826
+  },
+  "same-crown": {
+    "v30": [
+      {
+        "samples": 35.0,
+        "medianMs": 0.7868,
+        "p95Ms": 0.7954,
+        "medianAllocatedBytes": 40.0,
+        "p95AllocatedBytes": 40.0
+      },
+      {
+        "samples": 35.0,
+        "medianMs": 0.814,
+        "p95Ms": 0.8481,
+        "medianAllocatedBytes": 40.0,
+        "p95AllocatedBytes": 40.0
+      },
+      {
+        "samples": 35.0,
+        "medianMs": 0.7721,
+        "p95Ms": 0.78,
+        "medianAllocatedBytes": 40.0,
+        "p95AllocatedBytes": 40.0
+      }
+    ],
+    "v31": [
+      {
+        "samples": 35.0,
+        "medianMs": 0.8009,
+        "p95Ms": 0.8262,
+        "medianAllocatedBytes": 40.0,
+        "p95AllocatedBytes": 40.0
+      },
+      {
+        "samples": 35.0,
+        "medianMs": 0.7813,
+        "p95Ms": 0.8105,
+        "medianAllocatedBytes": 40.0,
+        "p95AllocatedBytes": 40.0
+      },
+      {
+        "samples": 35.0,
+        "medianMs": 0.794,
+        "p95Ms": 0.9131,
+        "medianAllocatedBytes": 40.0,
+        "p95AllocatedBytes": 40.0
+      }
+    ],
+    "changePercent": 0.9150991357397054
+  },
+  "v1": {
+    "v30": [
+      {
+        "samples": 35.0,
+        "medianMs": 39.5589,
+        "p95Ms": 40.0729,
+        "medianAllocatedBytes": 19576.0,
+        "p95AllocatedBytes": 19576.0
+      },
+      {
+        "samples": 35.0,
+        "medianMs": 31.2677,
+        "p95Ms": 31.4439,
+        "medianAllocatedBytes": 19576.0,
+        "p95AllocatedBytes": 19576.0
+      },
+      {
+        "samples": 35.0,
+        "medianMs": 38.7922,
+        "p95Ms": 39.9762,
+        "medianAllocatedBytes": 20056.0,
+        "p95AllocatedBytes": 20056.0
+      }
+    ],
+    "v31": [
+      {
+        "samples": 35.0,
+        "medianMs": 33.244,
+        "p95Ms": 33.4118,
+        "medianAllocatedBytes": 19816.0,
+        "p95AllocatedBytes": 19816.0
+      },
+      {
+        "samples": 35.0,
+        "medianMs": 33.0442,
+        "p95Ms": 33.3183,
+        "medianAllocatedBytes": 19768.0,
+        "p95AllocatedBytes": 19768.0
+      },
+      {
+        "samples": 35.0,
+        "medianMs": 27.6221,
+        "p95Ms": 28.3333,
+        "medianAllocatedBytes": 19624.0,
+        "p95AllocatedBytes": 19624.0
+      }
+    ],
+    "changePercent": -14.817411747722486
+  },
+  "provenance": {
+    "controlSHA256": "1f5ee121064f588e5578f6b47e295da60d73b96eacc44ed551332e548feb41fc",
+    "candidateSHA256": "3db965851a018b8c0505dcc8e1766a0f29cd4537d5b4cf5fd8988fefbb9ee95c",
+    "pausedTaskProbes": 2,
+    "scope": "fixed-population retry; not full-growth, light or FAV11 end-to-end"
+  }
+}

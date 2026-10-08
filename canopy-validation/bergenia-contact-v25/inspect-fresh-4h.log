@@ -1,0 +1,9 @@
+Species lookup: Bergenia Cordifolia, BudLength: 0.009
+PlantFormation2 ctor: Bergenia Cordifolia, BudLength: 0.009
+SpeciesSettings.Init called on Bergenia Cordifolia, BudLength: 0.009
+PlantFormation2 after Init: Bergenia Cordifolia, BudLength: 0.009
+Collision scene: 2 triangles (2 soil, 0 obstacle) in 6 ms, open soil surface (regular fields use their finite footprint)
+STATE v=25 day=330 exportedBytes=9645
+ORGAN Stem count=11 downward=0 inverted=0 lengthMm=1..20.25036 radiusMm=0.36586344..5 maxTipAboveSeedMm=40.344143
+ORGAN Leaf count=20 downward=0 inverted=0 lengthMm=9.605688..256.45926 radiusMm=3.3352013..101.71572 maxTipAboveSeedMm=355.73767
+ORGAN Petiole count=20 downward=0 inverted=0 lengthMm=8.051442..131.91444 radiusMm=0.14947008..2.9425483 maxTipAboveSeedMm=125.19358

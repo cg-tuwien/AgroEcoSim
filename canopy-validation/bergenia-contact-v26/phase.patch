@@ -1,0 +1,341 @@
+--- before/Agro/AgroWorld.cs
++++ after/Agro/AgroWorld.cs
+@@ -740,7 +740,9 @@
+     // V25 recovers sampled floral development through certified waypoints, with
+     // both contacting support systems yielding at each smaller growth increment.
+     // Only certified prefixes are retained. Payload layout and playback are unchanged.
+-	public const byte CheckpointVersion = 25;
++    // V26 retains multiple continuation witnesses and solves their coupled
++    // unilateral tangent constraints. Accepted geometry and retries can differ.
++	public const byte CheckpointVersion = 26;
+ 
+ 	/// <summary>
+ 	/// Everything the next step depends on that the request does not determine.
+--- before/Agro/Collisions/CollisionWorld.Continuation.cs
++++ after/Agro/Collisions/CollisionWorld.Continuation.cs
+@@ -8,11 +8,22 @@
+         PlantSubFormation<AboveGroundAgent>.GeometryState[] Original);
+     readonly List<ContinuationPlant> ContinuationPlants = [];
+     bool ContinuingGrowth;
++    const int MaximumContinuationContacts = 16, MaximumContinuationJoints = 256;
++    readonly record struct ContinuationWitness(ContactKey Key, int I, int J);
++    readonly record struct ContinuationJoint(PlantFormation2 Plant, int Index);
++    readonly record struct ContinuationGradient(int Row, int Joint, Vector3 Torque, Vector3 Turn, Vector4 Shape, Vector4 Fold);
++    readonly List<ContinuationWitness> ContinuationWitnesses = new(MaximumContinuationContacts);
++    readonly List<ContinuationJoint> ContinuationJoints = [];
++    readonly Dictionary<ContinuationJoint, int> ContinuationJointIndices = [];
++    readonly List<ContinuationGradient> ContinuationGradients = [];
++    ushort[] ContinuationSlots = [];
++    double[] ContinuationMatrix = [], ContinuationDepth = [], ContinuationForces = [];
+ 
+     /// <summary>Certified mechanical recovery work in the last tick, separate from biological time.</summary>
+     public int LastContinuationTrials { get; private set; }
+     public int LastContinuationSteps { get; private set; }
+     public int LastContinuationCorrections { get; private set; }
++    public int LastContinuationCoupledSets { get; private set; }
+ 
+     // Only sampled, already-existing floral axes enter this bounded recovery path.
+     // It neither samples biology again nor commits births. The previous geometry
+@@ -55,6 +66,7 @@
+                 if (accepted) RefreshContactLoads(participant.Plant);
+             }
+             ContinuationPlants.Clear();
++            ContinuationWitnesses.Clear();
+             LastTrialFailure = null;
+         }
+ 
+@@ -90,6 +102,7 @@
+             {
+                 ++LastContinuationTrials;
+                 RestoreWaypoint();
++                ContinuationWitnesses.Clear();
+                 var next = MathF.Min(1f, fraction + step);
+                 var size = start + (target - start) * next;
+                 ag.SetContinuationDimensions(index, longitudinal ? size : fixedSize,
+@@ -163,6 +176,21 @@
+             if (TraceContacts)
+                 Console.WriteLine($"CONTINUATION_CONTACT t={pa.World.Timestep} ids={failure.IdA}/{failure.IdB} gapUm={(hit.Distance-reach)*1e6f:R}");
+             if (hit.Distance >= reach - FoliageGeometry.Skin) return false;
++            var first = a == b ? failure.IdA < failure.IdB : PlantIndices[pa] < PlantIndices[pb];
++            var witness = first ? new ContinuationWitness(new(pa, failure.IdA, pb, failure.IdB), i, j)
++                : new ContinuationWitness(new(pb, failure.IdB, pa, failure.IdA), j, i);
++            var known = false;
++            foreach (var existing in ContinuationWitnesses) known |= existing.Key == witness.Key;
++            if (!known)
++            {
++                if (ContinuationWitnesses.Count == MaximumContinuationContacts) return false;
++                // Stable ordering also makes the small dual solve independent of which
++                // changed body discovers a pair first.
++                var at = 0;
++                while (at < ContinuationWitnesses.Count && CompareWitness(ContinuationWitnesses[at], witness) < 0) ++at;
++                ContinuationWitnesses.Insert(at, witness);
++            }
++            if (ContinuationWitnesses.Count > 1 && YieldTogether(witness.Key, hit, first)) return true;
+             AddPlant(pa); AddPlant(pb);
+             // Main-pass memories use stable-ID/plant order. A trial can discover
+             // the reverse direction; retain the remembered side and reverse its
+@@ -196,5 +224,133 @@
+             if (a != b) RefreshPlantBounds(pb);
+             return moved;
+         }
++
++        int CompareWitness(ContinuationWitness x, ContinuationWitness y)
++        {
++            var c = PlantIndices[x.Key.A].CompareTo(PlantIndices[y.Key.A]);
++            if (c == 0) c = x.Key.OrganA.CompareTo(y.Key.OrganA);
++            if (c == 0) c = PlantIndices[x.Key.B].CompareTo(PlantIndices[y.Key.B]);
++            return c == 0 ? x.Key.OrganB.CompareTo(y.Key.OrganB) : c;
++        }
++
++        bool YieldTogether(ContactKey latest, FoliageContact endpoint, bool canonicalEndpoint)
++        {
++            // A bounded unilateral tangent solve. Full nonlinear endpoint and swept
++            // certificates still decide acceptance; this is not an equilibrium proof.
++            if (ContinuationSlots.Length == 0)
++            {
++                ContinuationSlots = new ushort[MaximumContinuationContacts * MaximumContinuationJoints];
++                ContinuationMatrix = new double[MaximumContinuationContacts * MaximumContinuationContacts];
++                ContinuationDepth = new double[MaximumContinuationContacts];
++                ContinuationForces = new double[MaximumContinuationContacts];
++            }
++            Array.Fill(ContinuationSlots, ushort.MaxValue);
++            Array.Clear(ContinuationMatrix); Array.Clear(ContinuationForces);
++            ContinuationJoints.Clear(); ContinuationJointIndices.Clear(); ContinuationGradients.Clear();
++            var rows = ContinuationWitnesses.Count;
++            for (var row = 0; row < rows; ++row)
++            {
++                var w = ContinuationWitnesses[row]; var a = w.Key.A.AG; var b = w.Key.B.AG;
++                AddPlant(w.Key.A); AddPlant(w.Key.B);
++                var sa = Shape(a, w.I); var sb = Shape(b, w.J);
++                var common = a == b ? CommonAncestor(a, w.I, w.J) : -1;
++                var reach = sa.Pose.Radius + sb.Pose.Radius;
++                // A proximity query caps the returned distance at its search radius.
++                // Search beyond touching by the trial's motion bound so a cleared
++                // witness retains usable clearance instead of becoming a pinned seam.
++                var search = reach + FoliageGeometry.Skin
++                    + Previous(a, w.I, sa).MotionBound(sa) + Previous(b, w.J, sb).MotionBound(sb);
++                // The failing pair was just evaluated at these exact poses. Reuse
++                // its penetrating witness when already in canonical query order;
++                // reversing tie order can otherwise choose a different mesh feature.
++                var hit = canonicalEndpoint && w.Key == latest ? endpoint
++                    : PairDistance(a, common, sa, sb, search);
++                Vector3? remembered = Work[w.Key.A].Contacts.TryGetValue(w.Key, out var memory) ? memory.Value.Normal : null;
++                var normal = ContactNormal(hit, a.PreviousGeometry[w.I].Pose.Base - b.PreviousGeometry[w.J].Pose.Base, remembered);
++                // Negative depths preserve a previously cleared contact as an inequality:
++                // another correction must not spend more than its available clearance.
++                ContinuationDepth[row] = reach - hit.Distance + FoliageGeometry.Skin;
++                if (!AppendChain(a, w.I, hit.A, normal, common, row)
++                    || !AppendChain(b, w.J, hit.B, -normal, common, row)) return false;
++                if (common >= 0 && !Append(a, common, row, a.CommonContactGradient(common, w.I, hit.A, w.J, hit.B, normal))) return false;
++            }
++            foreach (var g in ContinuationGradients)
++                for (var column = 0; column < rows; ++column)
++                {
++                    var slot = ContinuationSlots[g.Joint * MaximumContinuationContacts + column];
++                    if (slot == ushort.MaxValue) continue;
++                    var other = ContinuationGradients[slot];
++                    ContinuationMatrix[g.Row * MaximumContinuationContacts + column]
++                        += (double)Vector3.Dot(g.Torque, other.Turn) + Vector4.Dot(g.Shape, other.Fold);
++                }
++            // Directional bend/strain limits can make the local tangent nonsymmetric.
++            // Preserve the old bounded response in that case instead of silently
++            // replacing it with an invented material operator.
++            for (var row = 0; row < rows; ++row)
++            {
++                var diagonal = ContinuationMatrix[row * MaximumContinuationContacts + row];
++                if (!(diagonal > 1e-20) || !double.IsFinite(diagonal)) return false;
++                for (var column = 0; column < row; ++column)
++                {
++                    var x = ContinuationMatrix[row * MaximumContinuationContacts + column];
++                    var y = ContinuationMatrix[column * MaximumContinuationContacts + row];
++                    var scale = Math.Sqrt(diagonal * ContinuationMatrix[column * MaximumContinuationContacts + column]);
++                    if (!double.IsFinite(x + y) || Math.Abs(x - y) > 1e-5 * scale
++                        || Math.Abs(x) > scale * (1 + 1e-5)) return false;
++                }
++            }
++            for (var sweep = 0; sweep < 64; ++sweep)
++            {
++                var maximumChange = 0d;
++                for (var row = 0; row < rows; ++row)
++                {
++                    var predicted = 0d;
++                    for (var column = 0; column < rows; ++column)
++                        predicted += ContinuationMatrix[row * MaximumContinuationContacts + column] * ContinuationForces[column];
++                    var diagonal = ContinuationMatrix[row * MaximumContinuationContacts + row];
++                    var force = Math.Max(0, ContinuationForces[row] + (ContinuationDepth[row] - predicted) / diagonal);
++                    if (!double.IsFinite(force) || force > float.MaxValue) return false;
++                    maximumChange = Math.Max(maximumChange, Math.Abs(force - ContinuationForces[row]) * Math.Sqrt(diagonal));
++                    ContinuationForces[row] = force;
++                }
++                if (maximumChange < 1e-8) break;
++            }
++            foreach (var p in ContinuationPlants) p.Plant.AG.BeginContactSweep();
++            foreach (var g in ContinuationGradients)
++                ContinuationJoints[g.Joint].Plant.AG.QueueCoupledContactResponse(ContinuationJoints[g.Joint].Index,
++                    g.Turn, g.Fold, (float)ContinuationForces[g.Row]);
++            var moved = false;
++            foreach (var p in ContinuationPlants)
++            {
++                moved |= p.Plant.AG.EndContactSweep(MathF.Min(CollisionSettings.MaxCorrectionRadians, MathF.PI / 1800f));
++                RefreshPlantBounds(p.Plant);
++            }
++            ++LastContinuationCoupledSets;
++            return moved;
++        }
++
++        bool AppendChain(PlantSubFormation<AboveGroundAgent> other, int body, Vector3 point, Vector3 normal, int stop, int row)
++        {
++            for (var joint = body; joint >= 0 && joint != stop && !other.IsMechanicallyAnchored(joint); joint = other.GetParent(joint))
++                if (!Append(other, joint, row, other.ContactGradient(joint, body, point, normal))) return false;
++            return true;
++        }
++
++        bool Append(PlantSubFormation<AboveGroundAgent> other, int index, int row,
++            (Vector3 Torque, Vector3 Turn, Vector4 Shape, Vector4 Fold) gradient)
++        {
++            if (gradient.Torque == Vector3.Zero && gradient.Shape == Vector4.Zero) return true;
++            var key = new ContinuationJoint(other.Plant, index);
++            if (!ContinuationJointIndices.TryGetValue(key, out var joint))
++            {
++                if (ContinuationJoints.Count == MaximumContinuationJoints) return false;
++                joint = ContinuationJoints.Count;
++                ContinuationJoints.Add(key); ContinuationJointIndices.Add(key, joint);
++            }
++            // At most 16 * 256 gradients; the sentinel is outside this bounded range.
++            ContinuationSlots[joint * MaximumContinuationContacts + row] = (ushort)ContinuationGradients.Count;
++            ContinuationGradients.Add(new(row, joint, gradient.Torque, gradient.Turn, gradient.Shape, gradient.Fold));
++            return true;
++        }
+     }
+ }
+--- before/Agro/Collisions/CollisionWorld.Foliage.cs
++++ after/Agro/Collisions/CollisionWorld.Foliage.cs
+@@ -703,6 +703,10 @@
+             foliage.Clear();
+             for (var i = 0; i < ag.Count; ++i)
+             {
++                // A restored history has only its live prefix, whereas warm arrays
++                // can have spare capacity. Organs inserted before the first hard
++                // pass have no sampled previous dimensions in either case.
++                if (i >= ag.PreviousGeometry.Length) continue;
+                 var old = ag.PreviousGeometry[i];
+                 if (!old.Exists || ag.GetIsRizome(i) || ag.HasPendingDevelopment(i)) continue;
+                 var organ = ag.GetOrgan(i);
+@@ -731,6 +735,7 @@
+         ++ContactEpoch;
+         LastCorrectionRounds = LastValidationRounds = LastFallbackRounds = 0;
+         LastContinuationTrials = LastContinuationSteps = LastContinuationCorrections = 0;
++        LastContinuationCoupledSets = 0;
+         ExtendedRelaxation=false;
+         var rounds=plants.Any(p=>p.AG.HasContactDeformation)?16:CollisionSettings.HardRounds;
+         for (int round = 0; round < rounds; ++round)
+--- before/Agro/Plant/PlantSubFormation.Contacts.cs
++++ after/Agro/Plant/PlantSubFormation.Contacts.cs
+@@ -665,6 +665,36 @@
+         return total;
+     }
+ 
++    // Tangent of the same compliance operator used by QueueContactCorrection.
++    // Kept separate from geometry trials so several contact rows can share a joint.
++    internal (Vector3 Torque, Vector3 Turn, Vector4 Shape, Vector4 Fold) ContactGradient(
++        int joint, int contacted, Vector3 point, Vector3 normal)
++    {
++        var torque = Vector3.Cross(point - GetBaseCenterWorld(joint) - Src()[joint].BaseOffset, normal);
++        var gain = torque.Length();
++        var turn = gain > 1e-8f && AvailableCompliance(joint, torque / gain) > 0
++            ? ComplianceVector(joint, torque) : Vector3.Zero;
++        var shape = Deformable(joint) ? ShapeGradient(joint, contacted, point, normal) : Vector4.Zero;
++        return (torque, turn, shape, Deformable(joint) ? ShapeResponse(joint, shape) : Vector4.Zero);
++    }
++
++    internal (Vector3 Torque, Vector3 Turn, Vector4 Shape, Vector4 Fold) CommonContactGradient(
++        int common, int first, Vector3 a, int second, Vector3 b, Vector3 normal)
++    {
++        if (common < 0 || !Deformable(common) || IsMechanicallyAnchored(common)) return default;
++        var shape = ShapeGradient(common, first, a, normal) + ShapeGradient(common, second, b, -normal);
++        return (Vector3.Zero, Vector3.Zero, shape, ShapeResponse(common, shape));
++    }
++
++    internal void QueueCoupledContactResponse(int joint, Vector3 turn, Vector4 fold, float force)
++    {
++        ContactTurns[joint] += turn * force;
++        if (!Deformable(joint)) return;
++        var state = State(joint);
++        state.Pending += fold * force;
++        state.ReactionNewtons = MathF.Max(state.ReactionNewtons, force);
++    }
++
+     internal float ContactForceStepLimit(int index,Vector3 contact,Vector3 normal,int stop=-1)
+     {
+         var limit=float.MaxValue;var src=Src();
+--- before/Agro/COLLISIONS.md
++++ after/Agro/COLLISIONS.md
+@@ -1143,3 +1143,31 @@
+ their payload layout is unchanged. Recorded playback and wire formats are
+ unchanged. Fresh seasonal results and performance limits are recorded in
+ [`bergenia-contact-v25`](../canopy-validation/bergenia-contact-v25/README.md).
++
++## Multiple continuation witnesses (v26)
++
++Floral continuation now retains a bounded set of endpoint witnesses and applies
++a unilateral tangent response through both bodies' existing compliance. Common
++ancestors use relative gradients. Cleared witnesses retain usable conservative
++clearance; they must not become pinned constraints because a proximity query
++returned its capped search distance. Canonically ordered penetrating witnesses
++are reused without changing feature tie order. Full endpoint and swept-motion
++certificates remain mandatory, and exhausted budgets do not prove confinement.
++
++Add these regression cases to subsequent contact changes:
++
++| Fixture | Required result |
++| --- | --- |
++| Scape thickening between two neighbouring plants | Both leaves yield; retain approximately 4.022 mm radial growth with rigid blades and 6.216 mm with V1, with all certificates passing. |
++| Two contacting leaves sharing an unanchored crown support | Both yield, the common support stays fixed, and the tangent forces agree with the independent two-row active-set solve. |
++| Previously cleared witness while another body yields | Retain a nonpositive penetration allowance from a sufficiently wide proximity query; certify the complete resulting motion. |
++| Ceiling and two-wall confinement | No accepted waypoint; restore all poses exactly. |
++| Frozen accepted fixtures at 1 h and 4 h | Identical canonical poses within each runtime; retain support, removal/reindexing and cache-rebuilding checkpoint checks. |
++| Full day-240 crown, manual 1,000/250 micrometre proposal | Currently no certified increment in either version; retain the numerical-failure classification rather than treating this as physical confinement. |
++| CPU-light biological comparison | One-hour flowering gain and corrected leaf targets must be checked separately from the still-stalled four-hour case. Count dimensions against the species target plus sampled variation, not the variation alone. |
++
++Checkpoint v26 rejects older live states; its payload and saved playback formats
++are unchanged. The shared-support retry is slower, the end-to-end performance
++gate is not established, and biological/default-enablement acceptance remains incomplete. Evidence,
++the probe reporting correction and bounded scratch accounting are in
++[`bergenia-contact-v26`](../canopy-validation/bergenia-contact-v26/README.md).
+--- before/Agro/BERGENIA_CALIBRATION.md
++++ after/Agro/BERGENIA_CALIBRATION.md
+@@ -762,3 +762,34 @@
+ sequence. BAC V2/default enablement and biological acceptance remain pending.
+ Full evidence, the fresh one-hour comparison and benchmark scope are recorded in
+ [`bergenia-contact-v25`](../canopy-validation/bergenia-contact-v25/README.md).
++
++## Coordinated continuation witnesses: v26
++
++The new continuation response retains several contact witnesses and distributes
++their reactions through both bodies and shared supports, using existing tissue
++coefficients. The isolated rigid-blade thickening fixture retains about 10% more
++radial growth; the V1 fixture retains about 27.5% more. All newly accepted motion
++still requires complete collision certification. No botanical parameter changed.
++
++The matched one-hour case now opens a flower. Correct final snapshots at day 275
++show eight leaves reaching both 50% intrinsic dimensions, versus six in v25, and
++three reaching both 90% in either version. At four-hour ticks, day 330 remains at
++four half-expanded and two near-mature leaves, without petals, in both versions.
++This does not meet the doubled-density objective at both tick sizes. Final-source
++continuations from day 240 retain the one-hour flowering gain and the four-hour
++failure. Upright basal scapes do not establish full flower-posture acceptance;
++some branch, bud and pedicel axes point downward.
++
++This increment's development probe had a reporting error: it treated sampled
++variation offsets as full leaf targets. Its raw threshold columns and threshold
++CSV histories are invalid. The counts above were recomputed using species
++dimensions plus sampled offsets. Correct individual expansion times cannot be
++recovered from these final snapshots; retain the 84-day setting and report that
++timing remains unmeasured. This correction does not invalidate older probes
++without checking their separate target calculations.
++
++The measured shared-support retry is still substantially slower; the end-to-end
++performance gate is not established. Full seasonal/overwintering and panel gates remain outstanding, so no
++deformation mode is enabled by default. Evidence and botanical measurement
++definitions are in
++[`bergenia-contact-v26`](../canopy-validation/bergenia-contact-v26/README.md).

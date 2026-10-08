@@ -1,0 +1,471 @@
+--- a/Agro/AgroWorld.cs
++++ b/Agro/AgroWorld.cs
+@@ -737,7 +737,10 @@
+     // bounded facet-plane certificates after the distance-query budget, and uses
+     // a mechanical retry budget independent of biological tick duration. Accepted
+     // continuation paths can change; the payload layout and playback do not.
+-	public const byte CheckpointVersion = 24;
++    // V25 recovers sampled floral development through certified waypoints, with
++    // both contacting support systems yielding at each smaller growth increment.
++    // Only certified prefixes are retained. Payload layout and playback are unchanged.
++	public const byte CheckpointVersion = 25;
+ 
+ 	/// <summary>
+ 	/// Everything the next step depends on that the request does not determine.
+--- a/Agro/Collisions/CollisionWorld.Foliage.cs
++++ b/Agro/Collisions/CollisionWorld.Foliage.cs
+@@ -585,7 +585,14 @@
+                 foreach (var j in TrialOrgans)
+                 {
+                     if (!other.IsCollisionEligiblePublic(j) || other == ag && (i == j || Connected(ag, i, j))) continue;
+-                    var b = Shape(other, j); var oldB = Previous(other, j, b);
++                    var b = Shape(other, j);
++                    // Continuation starts after the original motion is certified.
++                    // Unchanged neighbours stay at that accepted endpoint. Replaying
++                    // their earlier motion can invent an old penetration exemption
++                    // or reject a feasible path. Joined participants have their own
++                    // last certified waypoint for the actual coupled sweep.
++                    var oldB = ContinuingGrowth && !other.HasContinuationWaypoint
++                        ? b : Previous(other, j, b);
+                     var common = ag == other ? CommonAncestor(ag, i, j) : -1;
+                     var reach = a.Pose.Radius + b.Pose.Radius;
+                     // Match VisitPairs: the finite CCD work budget can make an
+@@ -677,6 +684,12 @@
+ 
+     void ResolveVegetation(List<PlantFormation2> plants)
+     {
++        CaptureGrowthProposals(plants);
++        ResolveCapturedVegetation(plants);
++    }
++
++    void CaptureGrowthProposals(List<PlantFormation2> plants)
++    {
+         // Save physiological proposals before coupled correction can roll back an
+         // organ that was never itself named by a contact pair. Reindexing can move
+         // descendants before ancestors in the array, so order trials by graph depth
+@@ -711,8 +724,13 @@
+             support.Sort(static (a, b) => a.Depth != b.Depth ? a.Depth.CompareTo(b.Depth) : a.Id.CompareTo(b.Id));
+             foliage.Sort(static (a, b) => a.Depth != b.Depth ? a.Depth.CompareTo(b.Depth) : a.Id.CompareTo(b.Id));
+         }
++    }
++
++    void ResolveCapturedVegetation(List<PlantFormation2> plants)
++    {
+         ++ContactEpoch;
+         LastCorrectionRounds = LastValidationRounds = LastFallbackRounds = 0;
++        LastContinuationTrials = LastContinuationSteps = LastContinuationCorrections = 0;
+         ExtendedRelaxation=false;
+         var rounds=plants.Any(p=>p.AG.HasContactDeformation)?16:CollisionSettings.HardRounds;
+         for (int round = 0; round < rounds; ++round)
+@@ -892,7 +910,10 @@
+                 if (length <= currentLength + 1e-7f && radius <= currentRadius + 1e-7f) continue;
+                 bool AcceptFoliage() => GrowthTrialClear(plant, i);
+                 var floralAxis = ag.GetOrgan(i) is OrganTypes.FlowerMeristem or OrganTypes.FlowerStem or OrganTypes.FlowerPedicel;
+-                if (!ag.TryGrowthAfterRollback(i, length, radius, AcceptFoliage, allowPartial: floralAxis)) continue;
++                var recovered = ag.TryGrowthAfterRollback(i, length, radius, AcceptFoliage, allowPartial: floralAxis);
++                if (floralAxis && (ag.GetLength(i) < length - 1e-7f || ag.GetBaseRadius(i) < radius - 1e-7f))
++                    recovered |= TryCoupledGrowth(plant, i, length, radius);
++                if (!recovered) continue;
+                 changed = true;
+                 if (ag.GetOrgan(i) == OrganTypes.Petiole && length > currentLength + 1e-7f)
+                     foreach (var child in ag.GetChildren(i)) ag.WakeGrowth(child);
+--- a/Agro/Collisions/CollisionWorld.cs
++++ b/Agro/Collisions/CollisionWorld.cs
+@@ -89,10 +89,15 @@
+         PrepareWork(plants);
+         ResetElasticContacts();
+ 
++        // The hard pass can restore a sampled increment too. Record biology before
++        // either constraint pass, so its final certified recovery does not lose it.
++        var soft = ((AgroWorld)world).SoftCollisions;
++        if (soft) CaptureGrowthProposals(plants);
++
+         ResolveHardPlants(plants);
+ 
+         var afterHard = System.Diagnostics.Stopwatch.GetTimestamp();
+-        if (((AgroWorld)world).SoftCollisions) ResolveVegetation(plants);
++        if (soft) ResolveCapturedVegetation(plants);
+         var afterFoliage = System.Diagnostics.Stopwatch.GetTimestamp();
+         // Soft collisions can be disabled, but development still calls through the same
+         // hierarchy APIs. Keep the plant lookup ready in either mode.
+--- a/Agro/Plant/PlantSubFormation.Contacts.cs
++++ b/Agro/Plant/PlantSubFormation.Contacts.cs
+@@ -39,7 +39,7 @@
+     bool BatchingContacts;
+     Vector3[] SupportMoments = [];
+     readonly HashSet<int> RejectedBranches = [];
+-    GeometryState[] ContactTrialStates = [], RedirectTrialStates = [];
++    GeometryState[] ContactTrialStates = [], RedirectTrialStates = [], ContinuationStates = [];
+     readonly List<int> RedirectTrialOrgans = [];
+     readonly List<int> ContactMovedRoots = [];
+     readonly List<Vector3> RedirectCandidates = new(6);
+@@ -344,6 +344,35 @@
+         return saved;
+     }
+ 
++    // Separate reusable scratch: a coupled growth step may move several plants,
++    // while ordinary development/redirection trials use their own saved frames.
++    internal GeometryState[] SaveContinuationGeometry()
++    {
++        if (ContinuationStates.Length < Count)
++            Array.Resize(ref ContinuationStates, Math.Max(Count, ContinuationStates.Length * 3 / 2 + 8));
++        var live = Src();
++        for (int i = 0; i < Count; ++i)
++            ContinuationStates[i] = new(GetContactPose(i), live[i].baseOrientation,
++                live[i].restOrientation, live[i].targetOrientation, live[i].Radius, true);
++        return ContinuationStates;
++    }
++
++    internal bool HasContinuationWaypoint => ReferenceEquals(PreviousGeometry, ContinuationStates);
++
++    internal void SetContinuationDimensions(int index, float length, float radius)
++    {
++        Src()[index].SetGeometry(length, radius);
++        RebaseAndRefit(index);
++    }
++
++    internal void CompleteCertifiedGrowth(int index)
++    {
++        ref var organ = ref Src()[index];
++        GrowthRetries.Remove(organ.StableId);
++        organ.GrowthBlocked = false;
++        organ.ObstructionHours = 0f;
++    }
++
+     internal void RestoreContactTrial(GeometryState[] saved)
+     {
+         var live=Src();
+--- a/Agro/COLLISIONS.md
++++ b/Agro/COLLISIONS.md
+@@ -1091,3 +1091,55 @@
+ live checkpoints advance to v24 because continuation acceptance can differ.
+ Evidence, matched baseline fixtures and scoped performance measurements are in
+ [`bergenia-contact-v24`](../canopy-validation/bergenia-contact-v24/README.md).
++
++## Coupled continuation of sampled floral growth (v25)
++
++Capture physiological dimension proposals before either the hard or foliage
++constraint pass. Previously, the first hard rollback could erase a proposal before
++the foliage solver recorded it. After the usual validated fallback and stationary
++retries, existing floral axes can now retry their remaining sampled extension and
++thickening through separate, bounded continuation paths. This does not create
++another biological opportunity or commit pending births.
++
++Each trial starts from the last certified waypoint. Endpoint foliage contact
++distributes a correction between both contacting bodies using the existing
++compliance and leverage calculation, with relative derivatives at common ancestors.
++Changed descendants and cross-plant neighbours receive their own endpoint and
++continuous-motion certificates. Static obstruction and a failed separation proof
++without endpoint penetration supply no invented reaction. Failed trials restore
++all participating frames exactly; accepted trials wake affected growth retries.
++Unchanged, unjoined neighbours are held at their already-certified current poses;
++their earlier tick motion is not replayed or used to invent an old-penetration
++exemption in the new continuation interval.
++Contact history is looked up in the main pass's canonical plant/stable-ID order;
++reversed trials reverse the remembered normal, preserving the contact side at
++coincident witnesses.
++
++The limit is sixteen adaptive trials per dimension and eight contact corrections
++per trial. Whole-joint corrections have a local 0.1-degree step cap, independent of
++biological tick duration; cumulative joint limits and V1 shape safeguards remain
++unchanged. Budget exhaustion leaves an uncertified remainder. This is bounded
++geometric recovery using the existing mechanics, not a converged shell/contact
++energy minimization or an implementation of C-IPC.
++
++Scratch is allocated lazily for participating formations and reused: one 116-byte
++`GeometryState` per capacity slot, plus a reusable participant list. The measured
++52-organ formation uses 6,032 bytes of new geometry scratch in total. Capacity can
++grow with the existing geometric allocation policy; this is per-organ scratch,
++not a new mesh or contact table hidden in a global cache. Ordinary species with no
++coupled floral retry allocate no continuation geometry array.
++
++Add these fixtures to later changes:
++
++| Fixture | Required result |
++| --- | --- |
++| Two anchored plants, one scape growing into the other's blade | Retain about 17.97 mm of a 23 mm proposal, with petiole yield, unchanged organ counts and complete certificates; identical frozen poses at 1 h and 4 h. |
++| Same fixture with a solid ceiling at the existing cylinder-contact tolerance | Zero accepted waypoints and exact restoration of both plants; the ceiling supplies no foliage reaction. |
++| Two plants after certified earlier support/scape extension | Retain the remaining 5 mm extension with the raised neighbour stationary; no contact correction or replay of its earlier motion. |
++| Complete day-303 crown, manually imposed nominal scape dimensions | About 71.35 micrometres of extension retained, no radial gain, all certificates pass; matching frozen poses at both tick settings. This scape is already senescing, so this is a geometry fixture only. |
++| Native v25 continuation through removal/reindexing and cache rebuilding | Byte-identical continued state and actual exported frames; reject v24 live state explicitly. |
++
++Live checkpoints advance to v25 because acceptance and retry scheduling changed;
++their payload layout is unchanged. Recorded playback and wire formats are
++unchanged. Fresh seasonal results and performance limits are recorded in
++[`bergenia-contact-v25`](../canopy-validation/bergenia-contact-v25/README.md).
+--- a/Agro/BERGENIA_CALIBRATION.md
++++ b/Agro/BERGENIA_CALIBRATION.md
+@@ -695,3 +695,70 @@
+ source-traced numerical limitation, not evidence for softer Bergenia tissue or
+ faster leaf expansion. Evidence is in
+ [`bergenia-contact-v24`](../canopy-validation/bergenia-contact-v24/README.md).
++
++## Bounded coupled continuation and fresh controls: v25
++
++Existing floral axes now retry sampled dimensions through certified intermediate
++sizes while neighbours yield. Extension and thickening have independent trials,
++and rejected trials restore both bodies and their supports. Physiological
++proposals are captured before the first hard rollback. No botanical coefficient,
++resource debit, leaf duration, crown probability or clonal-spread setting changed.
++
++The complete frozen day-303 crown retains about 71.35 micrometres of the manually
++imposed nominal 913-micrometre extension, versus zero in v24; its approximately
++275-micrometre radial proposal remains blocked. The neighbouring petiole turns
++about 2.17 degrees, and all accepted motion is certified. Frozen accepted poses
++are identical under one-hour and four-hour mechanical settings.
++
++An important diagnostic correction: stable scape ID 52 in that saved day-303
++state already has `flowerSupport == false` and a wood/senescence ratio of about
++0.56. A normal tick samples no extension for it. Manually extending it is only a
++geometry experiment and cannot demonstrate recovery of a living scape. Its
++nominal expansion is fully funded in the diagnostic clone, with construction
++energy charging disabled by the archived request; lack of funding is not the
++explanation established by this test.
++
++Fresh CPU-light controls start on 1 September 2025 with seed 42 and preserve the
++755-day request horizon for weather initialization. The four-hour pair was run
++from birth through day 330. Both versions observe 20 leaf IDs, five reaching both
++50% intrinsic dimension thresholds and four reaching both 90%, with no open
++petals. The first scape reaches 11.64 mm in v25 versus 10.59 mm in v24, but remains
++only about 0.366 mm in radius against a sampled target of 5.58 mm, then senesces.
++This does not recover flowering or the developed-leaf-density objective.
++
++The fresh one-hour pair reaches day 275 with 20 observed leaf IDs, six reaching
++both 50% dimensions and three reaching both 90%, again without open petals.
++The scape reaches 3.0517 mm / 1.4541 mm length/radius in v25, compared with
++3.0243 mm / 1.4538 mm in v24, against targets of 15.1306 mm / 5.9038 mm.
++The six observed half-expansion times are 52, 54, 59, 78, 86 and 127 days; the
++three 90% times are 137, 144 and 191 days. Both versions have the same threshold
++times. The small scape improvement does not meet biological acceptance.
++
++These fresh runs precede the final fixes for unjoined neighbours' motion history
++and reversed contact-memory lookup. The final source retains the frozen-fixture
++poses and passes 12-hour resumed NativeAOT comparisons from both mature snapshots,
++including removal/reindexing. Those short checks do not replace a fresh full-run
++comparison of the final source.
++
++For the five leaves that reach both 50% dimensions, observed birth-to-threshold
++times are 43, 63, 74, 97 and 211 days in both versions. The four leaves reaching
++both 90% take 77, 100, 112 and 150 days. These daily observations are conditional
++on reaching the threshold; unexpanded leaves remain censored, and the median is
++not a typical expansion duration for the entire crown. Agent length means the
++intrinsic attachment axis, not the complete basal-lobe blade envelope.
++
++The separate two-plant geometry fixture shows that feasible contact can permit
++substantial growth with mutual yielding, and a solid ceiling rejects growth with
++exact restoration. It does not supply a Bergenia material measurement. The
++[RHS 'Rotblum' description](https://www.rhs.org.uk/plants/72444/bergenia-rotblum/details)
++supports stout flowering stems and wavy blades, without a numerical stiffness
++ratio. The [C-IPC research](https://ipc-sim.github.io/C-IPC/) supports coupled
++thin-structure/contact treatment and conservative motion checking; this bounded
++recovery is groundwork for that design, not its equilibrium solver.
++
++The observed 'Rotblum' largest blade of 16 cm, approximately 5 cm petioles and
++19.5 cm pot diameter remain a separate dimensional comparison. Unknown blade
++width and initial age prevent fitting this seasonal trial to that photograph
++sequence. BAC V2/default enablement and biological acceptance remain pending.
++Full evidence, the fresh one-hour comparison and benchmark scope are recorded in
++[`bergenia-contact-v25`](../canopy-validation/bergenia-contact-v25/README.md).
+--- /dev/null
++++ b/Agro/Collisions/CollisionWorld.Continuation.cs
+@@ -0,0 +1,200 @@
++using System.Numerics;
++
++namespace Agro.Collisions;
++
++public sealed partial class CollisionWorld
++{
++    readonly record struct ContinuationPlant(PlantFormation2 Plant,
++        PlantSubFormation<AboveGroundAgent>.GeometryState[] Original);
++    readonly List<ContinuationPlant> ContinuationPlants = [];
++    bool ContinuingGrowth;
++
++    /// <summary>Certified mechanical recovery work in the last tick, separate from biological time.</summary>
++    public int LastContinuationTrials { get; private set; }
++    public int LastContinuationSteps { get; private set; }
++    public int LastContinuationCorrections { get; private set; }
++
++    // Only sampled, already-existing floral axes enter this bounded recovery path.
++    // It neither samples biology again nor commits births. The previous geometry
++    // becomes the last certified waypoint, so CCD checks the actual piecewise path.
++    bool TryCoupledGrowth(PlantFormation2 plant, int index, float length, float radius)
++    {
++        var ag = plant.AG;
++        if (UnresolvedFoliageContacts != 0 || ag.HasPendingDevelopment(index)
++            || !ag.PreviousGeometry[index].Exists) return false;
++        var initialLength = ag.GetLength(index);
++        var initialRadius = ag.GetBaseRadius(index);
++        if (length <= initialLength + 1e-7f && radius <= initialRadius + 1e-7f) return false;
++
++        ContinuationPlants.Clear();
++        var accepted = false;
++        AddPlant(plant);
++        try
++        {
++            ContinuingGrowth = true;
++            // Extension and thickening have independent admissible paths. A tight
++            // radial contact must not discard feasible longitudinal development.
++            Advance(longitudinal: true, length);
++            Advance(longitudinal: false, radius);
++            if (accepted) ag.CompleteCertifiedGrowth(index);
++            return accepted;
++        }
++        finally
++        {
++            ContinuingGrowth = false;
++            RestoreWaypoint();
++            foreach (var participant in ContinuationPlants)
++            {
++                var other = participant.Plant.AG;
++                if (accepted)
++                    Array.Copy(other.PreviousGeometry, participant.Original, other.Count);
++                other.PreviousGeometry = participant.Original;
++                // Previous poses participate in BVH bounds and query identities.
++                other.RebaseAndRefit();
++                RefreshPlantBounds(participant.Plant);
++                if (accepted) RefreshContactLoads(participant.Plant);
++            }
++            ContinuationPlants.Clear();
++            LastTrialFailure = null;
++        }
++
++        void AddPlant(PlantFormation2 participant)
++        {
++            foreach (var existing in ContinuationPlants)
++                if (existing.Plant == participant) return;
++            var other = participant.AG;
++            ContinuationPlants.Add(new(participant, other.PreviousGeometry));
++            other.PreviousGeometry = other.SaveContinuationGeometry();
++            other.RebaseAndRefit();
++            RefreshPlantBounds(participant);
++        }
++
++        void RestoreWaypoint()
++        {
++            foreach (var participant in ContinuationPlants)
++            {
++                participant.Plant.AG.RestoreContactTrial(participant.Plant.AG.PreviousGeometry);
++                RefreshPlantBounds(participant.Plant);
++            }
++        }
++
++        void Advance(bool longitudinal, float target)
++        {
++            var start = longitudinal ? ag.GetLength(index) : ag.GetBaseRadius(index);
++            if (target <= start + 1e-7f) return;
++            var fixedSize = longitudinal ? ag.GetBaseRadius(index) : ag.GetLength(index);
++            var fraction = 0f;
++            var step = 1f;
++            // Exhaustion means uncertified remainder, never proof of confinement.
++            for (var trial = 0; trial < 16 && fraction < 1f; ++trial)
++            {
++                ++LastContinuationTrials;
++                RestoreWaypoint();
++                var next = MathF.Min(1f, fraction + step);
++                var size = start + (target - start) * next;
++                ag.SetContinuationDimensions(index, longitudinal ? size : fixedSize,
++                    longitudinal ? fixedSize : size);
++                RefreshPlantBounds(plant);
++                var clear = CertifyStep();
++                for (var round = 0; !clear && round < 8; ++round)
++                {
++                    if (!YieldAtFailure()) break;
++                    ++LastContinuationCorrections;
++                    clear = CertifyStep();
++                }
++                if (TraceContacts)
++                    Console.WriteLine($"CONTINUATION t={plant.World.Timestep} id={ag.GetOrganId(index)} lengthAxis={longitudinal} trial={trial} from={fraction:R} to={next:R} clear={clear} failure={LastTrialFailure?.IdA}/{LastTrialFailure?.IdB}");
++                if (clear)
++                {
++                    accepted = true;
++                    ++LastContinuationSteps;
++                    fraction = next;
++                    foreach (var participant in ContinuationPlants)
++                    {
++                        var other = participant.Plant.AG;
++                        for (var i = 0; i < other.Count; ++i)
++                            if (other.GetContactPose(i) != other.PreviousGeometry[i].Pose)
++                                other.WakeGrowth(i);
++                        other.SaveContinuationGeometry();
++                        other.RebaseAndRefit();
++                        RefreshPlantBounds(participant.Plant);
++                    }
++                    step = MathF.Min(1f - fraction, step * 2f);
++                }
++                else
++                {
++                    step *= .5f;
++                    if ((target - start) * step <= 1e-7f) break;
++                }
++            }
++            RestoreWaypoint();
++        }
++
++        bool CertifyStep()
++        {
++            LastTrialFailure = null;
++            foreach (var participant in ContinuationPlants)
++            {
++                var other = participant.Plant.AG;
++                for (var i = 0; i < other.Count; ++i)
++                {
++                    // This is a whole-component scan, but only changed bodies
++                    // issue queries. Descendant transport is included by exact
++                    // pose comparison; ancestor thickening is not transport.
++                    if (!other.IsCollisionEligiblePublic(i)
++                        || other.GetContactPose(i) == other.PreviousGeometry[i].Pose) continue;
++                    if (!GrowthTrialClear(participant.Plant, i, radiusOnly: true)) return false;
++                }
++            }
++            return true;
++        }
++
++        bool YieldAtFailure()
++        {
++            // Static obstruction or an uncertified sweep has no endpoint reaction.
++            // Shrink the development increment instead of inventing a force.
++            if (LastTrialFailure is not { } failure) return false;
++            var pa = failure.A; var pb = failure.B;
++            var a = pa.AG; var b = pb.AG; var i = failure.I; var j = failure.J;
++            var sa = Shape(a, i); var sb = Shape(b, j);
++            var common = a == b ? CommonAncestor(a, i, j) : -1;
++            var reach = sa.Pose.Radius + sb.Pose.Radius;
++            var hit = PairDistance(a, common, sa, sb, reach + FoliageGeometry.Skin);
++            if (TraceContacts)
++                Console.WriteLine($"CONTINUATION_CONTACT t={pa.World.Timestep} ids={failure.IdA}/{failure.IdB} gapUm={(hit.Distance-reach)*1e6f:R}");
++            if (hit.Distance >= reach - FoliageGeometry.Skin) return false;
++            AddPlant(pa); AddPlant(pb);
++            // Main-pass memories use stable-ID/plant order. A trial can discover
++            // the reverse direction; retain the remembered side and reverse its
++            // normal rather than silently falling back to the organ bases.
++            var ownFirst = a == b ? failure.IdA < failure.IdB : PlantIndices[pa] < PlantIndices[pb];
++            var key = ownFirst ? new ContactKey(pa, failure.IdA, pb, failure.IdB)
++                : new ContactKey(pb, failure.IdB, pa, failure.IdA);
++            var memoryWork = Work[ownFirst ? pa : pb];
++            Vector3? remembered = memoryWork.Contacts.TryGetValue(key, out var memory)
++                ? ownFirst ? memory.Value.Normal : -memory.Value.Normal : null;
++            var normal = ContactNormal(hit, a.PreviousGeometry[i].Pose.Base - b.PreviousGeometry[j].Pose.Base,
++                remembered);
++            var depth = reach - hit.Distance + FoliageGeometry.Skin;
++            var ma = a.ContactMobility(i, hit.A, normal, common);
++            var mb = b.ContactMobility(j, hit.B, -normal, common);
++            var shared = a.SharedShapeMobility(common, i, hit.A, j, hit.B, normal);
++            var total = ma + mb + shared;
++            if (total <= 1e-20 || !double.IsFinite(total)) return false;
++            a.BeginContactSweep();
++            if (a != b) b.BeginContactSweep();
++            if (ma > 0) a.QueueContactCorrection(i, hit.A, normal, (float)(depth * ma / total), common);
++            if (mb > 0) b.QueueContactCorrection(j, hit.B, -normal, (float)(depth * mb / total), common);
++            if (shared > 0) a.QueueSharedShapeCorrection(common, i, hit.A, j, hit.B, normal, (float)(depth / total));
++            // A coarse correction can leave its endpoint clear while sweeping
++            // through a tightly packed third body. This local numerical cap is
++            // independent of biological tick duration and whole-organ stiffness.
++            var limit = MathF.Min(CollisionSettings.MaxCorrectionRadians, MathF.PI / 1800f);
++            var moved = a.EndContactSweep(limit);
++            if (a != b) moved |= b.EndContactSweep(limit);
++            RefreshPlantBounds(pa);
++            if (a != b) RefreshPlantBounds(pb);
++            return moved;
++        }
++    }
++}

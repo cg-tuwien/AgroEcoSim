@@ -16,7 +16,7 @@
 //geometry rather than a hand-written table means it cannot drift again.
 
 import { PlantModel } from '../../helpers/Scene';
-import { Primitives } from '../../helpers/Primitives';
+import { Organs, Primitives } from '../../helpers/Primitives';
 import { Geom, leafGeomKey } from './GeometryIds';
 import { geometryIdFor, getGeometry } from './GeometryStore';
 import { triangleCount } from './Geometry';
@@ -60,16 +60,21 @@ export function sceneStats(scene: PlantModel[], leafGeom?: (species: string, sli
         for (const p of plant.primitives)
             switch (p.type) {
                 case Primitives.Rectangle: {
-                    const key = `${plant.species}:${p.laminaSlice}`;
+                    const key = `${plant.geometry?.id ?? plant.species}:${p.organ}:${p.laminaSlice}`;
                     let tris = leafTrisBySlice.get(key);
                     if (tris === undefined) {
-                        tris = trianglesOf(leafGeom ? leafGeom(plant.species, p.laminaSlice) : Geom.Plane);
+                        const recorded = p.organ === Organs.FlowerPadel ? plant.geometry?.petal
+                            : plant.geometry?.leaves[Math.min(p.laminaSlice, plant.geometry.leaves.length - 1)];
+                        tris = trianglesOf(recorded ?? (leafGeom ? leafGeom(plant.species, p.laminaSlice) : Geom.Plane));
                         leafTrisBySlice.set(key, tris);
                     }
                     triangles += tris;
                     break;
                 }
-                case Primitives.Cylinder:  triangles += trianglesOf(Geom.Cylinder); break;
+                case Primitives.Cylinder:
+                    triangles += p.deformation?.some(x => x !== 0)
+                        ? 3 * trianglesOf(Geom.Cylinder) + 2 * trianglesOf(Geom.Sphere)
+                        : trianglesOf(Geom.Cylinder); break;
                 case Primitives.Box:       triangles += trianglesOf(Geom.BoxCentered); break;
                 case Primitives.Disk:      triangles += trianglesOf(Geom.CircleHalf); break;
                 //Spheres (buds) are decoded but never emitted by BuildScene, so they draw

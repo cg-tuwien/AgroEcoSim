@@ -1,0 +1,304 @@
+--- before/Agro/AgroWorld.cs
++++ after/Agro/AgroWorld.cs
+@@ -733,7 +733,11 @@
+     // V23 aligns live growth-trial pair order with the main contact solver.
+     // Equivalent sweeps now share its bounded certificate and continuation policy.
+     // The payload layout is unchanged; retry acceptance can differ from V22.
+-	public const byte CheckpointVersion = 23;
++    // V24 distinguishes observed intersections from uncertified sweeps, permits
++    // bounded facet-plane certificates after the distance-query budget, and uses
++    // a mechanical retry budget independent of biological tick duration. Accepted
++    // continuation paths can change; the payload layout and playback do not.
++	public const byte CheckpointVersion = 24;
+ 
+ 	/// <summary>
+ 	/// Everything the next step depends on that the request does not determine.
+--- before/Agro/Collisions/CollisionWorld.Foliage.cs
++++ after/Agro/Collisions/CollisionWorld.Foliage.cs
+@@ -439,10 +439,13 @@
+             a = InFrame(a, afterJunction with { Base=afterJunction.Tip, Length=0 });
+             b = InFrame(b, afterJunction with { Base=afterJunction.Tip, Length=0 });
+         }
+-        var clear = junction
+-            ? FoliageGeometry.AttachmentSweepClear(oldA,a,oldB,b,Vector3.Zero,Vector3.Zero,radius)
+-            : FoliageGeometry.SweepClear(oldA,a,oldB,b);
+-        if (clear) return true;
++        var result = junction
++            ? FoliageGeometry.AttachmentSweep(oldA,a,oldB,b,Vector3.Zero,Vector3.Zero,radius)
++            : FoliageGeometry.Sweep(oldA,a,oldB,b);
++        if (result == FoliageGeometry.MotionResult.Clear) return true;
++        var fixedAttachment = !junction || beforeJunction.Radius == afterJunction.Radius
++            && oldA.Pose.Radius == a.Pose.Radius && oldB.Pose.Radius == b.Pose.Radius;
++        if (result == FoliageGeometry.MotionResult.Intersecting && fixedAttachment) return false;
+         if (junction)
+         {
+             // The attachment neighbourhood grows with its junction and the two
+@@ -464,8 +467,12 @@
+                     var joint1 = beforeJunction.Interpolate(afterJunction,t1);
+                     var localRadius = MathF.Max(.002f, 2f*MathF.Min(joint0.Radius,joint1.Radius)
+                         + MathF.Min(a0.Pose.Radius+b0.Pose.Radius,a1.Pose.Radius+b1.Pose.Radius));
+-                    if (FoliageGeometry.AttachmentSweepClear(a0,a1,b0,b1,
+-                        Vector3.Zero,Vector3.Zero,localRadius)) continue;
++                    var subResult = FoliageGeometry.AttachmentSweep(a0,a1,b0,b1,
++                        Vector3.Zero,Vector3.Zero,localRadius);
++                    if (subResult == FoliageGeometry.MotionResult.Clear) continue;
++                    // A smaller interval may enlarge the justified attachment
++                    // region; it must still check any observed outside collision.
++                    if (subResult == FoliageGeometry.MotionResult.Intersecting && fixedAttachment) return false;
+                     certified = false; break;
+                 }
+                 if (certified) return true;
+@@ -476,7 +483,7 @@
+         // A false result may mean the conservative CCD work budget was exhausted,
+         // not that the path intersects. Every shorter segment must independently
+         // certify; a genuine crossing therefore remains rejected.
+-        var steps = Math.Clamp((int)ag.Plant.World.HoursPerTick, 2, 16);
++        const int steps = 4; // Mechanical certification is independent of biological tick duration.
+         for (var step = 1; step <= steps; ++step)
+         {
+             var t0 = (step - 1f) / steps;
+--- before/Agro/Collisions/FoliageGeometry.cs
++++ after/Agro/Collisions/FoliageGeometry.cs
+@@ -379,22 +379,31 @@
+         return Vector3.DistanceSquared(hit, StaticCollider.ClosestPointOnTriangle(hit,a,ab,ac)) <= 1e-12f;
+     }
+ 
+-    static bool SweepUncached(in ContactShape fromA, in ContactShape toA, in ContactShape fromB, in ContactShape toB, int depth = 0)
++    static MotionResult SweepUncached(in ContactShape fromA, in ContactShape toA, in ContactShape fromB, in ContactShape toB, int depth = 0)
+     {
+         var intervals = 256;
+         return SweepInterval(fromA, toA, fromB, toB, depth, ref intervals);
+     }
+ 
+-    static bool SweepInterval(in ContactShape fromA, in ContactShape toA, in ContactShape fromB, in ContactShape toB, int depth, ref int intervals)
++    static MotionResult SweepInterval(in ContactShape fromA, in ContactShape toA, in ContactShape fromB, in ContactShape toB, int depth, ref int intervals)
+     {
+         ++IntervalCount;
+-        if (--intervals < 0) return false; // Suspend uncertified motion; never skip a required check.
+-        if (!fromA.SweptBounds(toA).Intersects(fromB.SweptBounds(toB))) return true;
++        var withinBudget = --intervals >= 0;
++        if (!fromA.SweptBounds(toA).Intersects(fromB.SweptBounds(toB))) return MotionResult.Clear;
++        if (!withinBudget)
++        {
++            // After the expensive-query budget is spent, a facet plane can still
++            // certify the entire finite-thickness path. This does not deepen the
++            // distance recursion or accept an unchecked candidate.
++            if (FacetPlaneSeparates(fromA,toA,fromB,toB) || FacetPlaneSeparates(fromB,toB,fromA,toA))
++                return MotionResult.Clear;
++            return MotionResult.Uncertified;
++        }
+         if (depth == 0 && (fromA.Feature < 0 || fromB.Feature < 0))
+         {
+             // A whole-sheet plane certificate is much cheaper than the triangle distance
+             // queried below. It bounds the entire path, including curvature and rotation.
+-            if (SweptPlanesSeparate(fromA,toA,fromB,toB)) return true;
++            if (SweptPlanesSeparate(fromA,toA,fromB,toB)) return MotionResult.Clear;
+             // Certify small whole-organ motion before splitting a lamina into triangles.
+             // Daily growth usually moves only a fraction of the gap to its neighbours;
+             // a distance bound proves all vertex/face and edge/edge paths at once.
+@@ -402,12 +411,12 @@
+             var padding = MathF.Max(fromA.Pose.Radius, toA.Pose.Radius)
+                 + MathF.Max(fromB.Pose.Radius, toB.Pose.Radius);
+             var separation = Distance(fromA, fromB, padding + movement + Skin);
+-            if (separation.Distance >= padding + movement - Skin) return true;
++            if (separation.Distance >= padding + movement - Skin) return MotionResult.Clear;
+             // Radius interpolates linearly. A separating plane can therefore
+             // certify simultaneous thickening and separation without treating
+             // the final radius as present throughout the interval.
+             if ((fromA.Pose.Radius != toA.Pose.Radius || fromB.Pose.Radius != toB.Pose.Radius)
+-                && SeparatingPlane(fromA, toA, fromB, toB, separation.Normal)) return true;
++                && SeparatingPlane(fromA, toA, fromB, toB, separation.Normal)) return MotionResult.Clear;
+         }
+         if (fromA.Lamina != null && fromA.Feature < 0)
+         {
+@@ -415,8 +424,11 @@
+             var candidates = SweepFirstTriangles ??= [];
+             fromA.Lamina.Query(fromA.Pose, Pad(fromB.SweptBounds(toB), fromA.MotionBound(toA)), candidates);
+             foreach (var i in candidates)
+-                if (!SweepInterval(fromA with { Feature = i }, toA with { Feature = i }, fromB, toB, depth, ref intervals)) return false;
+-            return true;
++            {
++                var result = SweepInterval(fromA with { Feature = i }, toA with { Feature = i }, fromB, toB, depth, ref intervals);
++                if (result != MotionResult.Clear) return result;
++            }
++            return MotionResult.Clear;
+         }
+         if (fromB.Lamina != null && fromB.Feature < 0)
+         {
+@@ -424,20 +436,23 @@
+             var relative = fromA.SweptBounds(toA);
+             fromB.Lamina.Query(fromB.Pose, Pad(relative, fromB.MotionBound(toB) + fromB.Pose.Radius), candidates);
+             foreach (var j in candidates)
+-                if (!SweepInterval(fromA, toA, fromB with { Feature = j }, toB with { Feature = j }, depth, ref intervals)) return false;
+-            return true;
++            {
++                var result = SweepInterval(fromA, toA, fromB with { Feature = j }, toB with { Feature = j }, depth, ref intervals);
++                if (result != MotionResult.Clear) return result;
++            }
++            return MotionResult.Clear;
+         }
+         var midA = fromA.Interpolate(toA, 0.5f); var midB = fromB.Interpolate(toB, 0.5f);
+         var reach = MathF.Max(fromA.Pose.Radius, toA.Pose.Radius) + MathF.Max(fromB.Pose.Radius, toB.Pose.Radius);
+         var motion = MathF.Max(fromA.MotionBound(midA), midA.MotionBound(toA)) + MathF.Max(fromB.MotionBound(midB), midB.MotionBound(toB));
+         var hit = Distance(midA, midB, reach + motion + Skin);
+-        if (hit.Distance >= reach + motion + Skin * 0.5f) return true;
++        if (hit.Distance >= reach + motion + Skin * 0.5f) return MotionResult.Clear;
+         // Maximum endpoint thickness bounds separation over the interval. It
+         // cannot establish a midpoint collision: growing tissue is thinner there.
+         // Otherwise simultaneous thickening and separation can be rejected even
+         // when the actual clearance stays positive throughout the motion.
+         var midpointReach = midA.Pose.Radius + midB.Pose.Radius;
+-        if (hit.Distance < midpointReach - Skin) return false;
++        if (hit.Distance < midpointReach - Skin) return MotionResult.Intersecting;
+         // A separating plane for the WHOLE finite bodies certifies sliding without recursively
+         // rejecting every persistent touch. Arc bounds cover quaternion rotation and growth.
+         var normal = hit.Normal;
+@@ -446,11 +461,11 @@
+         var gap1 = Vector3.Dot(toA.Support(normal) - toB.Support(-normal), normal);
+         var clearance0 = gap0 - fromA.Pose.Radius - fromB.Pose.Radius;
+         var clearance1 = gap1 - toA.Pose.Radius - toB.Pose.Radius;
+-        if (MathF.Min(clearance0, clearance1) - fromA.ArcBound(toA) - fromB.ArcBound(toB) >= -Skin) return true;
+-        if (motion < Skin * 0.25f) return hit.Distance >= reach - Skin;
+-        if (depth >= 16) return false; // Uncertified motion is never accepted on budget exhaustion.
+-        return SweepInterval(fromA, midA, fromB, midB, depth + 1, ref intervals)
+-            && SweepInterval(midA, toA, midB, toB, depth + 1, ref intervals);
++        if (MathF.Min(clearance0, clearance1) - fromA.ArcBound(toA) - fromB.ArcBound(toB) >= -Skin) return MotionResult.Clear;
++        if (motion < Skin * 0.25f) return hit.Distance >= reach - Skin ? MotionResult.Clear : MotionResult.Uncertified;
++        if (depth >= 16) return MotionResult.Uncertified;
++        var left = SweepInterval(fromA, midA, fromB, midB, depth + 1, ref intervals);
++        return left == MotionResult.Clear ? SweepInterval(midA, toA, midB, toB, depth + 1, ref intervals) : left;
+     }
+ 
+     static bool SweptPlanesSeparate(in ContactShape a0, in ContactShape a1, in ContactShape b0, in ContactShape b1)
+--- before/Agro/Collisions/FoliageGeometry.Attachment.cs
++++ after/Agro/Collisions/FoliageGeometry.Attachment.cs
+@@ -125,22 +125,22 @@
+         }
+     }
+ 
+-    static bool AttachmentSweepUncached(in ContactShape a0, in ContactShape a1,
++    static MotionResult AttachmentSweepUncached(in ContactShape a0, in ContactShape a1,
+         in ContactShape b0, in ContactShape b1, Vector3 attachment0, Vector3 attachment1, float radius)
+     {
+-        if (!a0.SweptBounds(a1).Intersects(b0.SweptBounds(b1))) return true;
++        if (!a0.SweptBounds(a1).Intersects(b0.SweptBounds(b1))) return MotionResult.Clear;
+         var low=Vector3.Max(attachment0,attachment1)-new Vector3(radius);
+         var high=Vector3.Min(attachment0,attachment1)+new Vector3(radius);
+-        if (AttachmentContained(low,high,a0,a1) || AttachmentContained(low,high,b0,b1)) return true;
++        if (AttachmentContained(low,high,a0,a1) || AttachmentContained(low,high,b0,b1)) return MotionResult.Clear;
+         var movement=a0.MotionBound(a1)+b0.MotionBound(b1);
+         // Endpoints are checked independently. Below a quarter skin, the whole path stays
+         // within the same contact tolerance; do not exhaust a triangle budget on roundoff.
+-        if (movement < Skin * .25f) return true;
+-        if (SweptPlanesSeparate(a0,a1,b0,b1)) return true;
++        if (movement < Skin * .25f) return MotionResult.Clear;
++        if (SweptPlanesSeparate(a0,a1,b0,b1)) return MotionResult.Clear;
+         var reach=MathF.Max(a0.Pose.Radius,a1.Pose.Radius)+MathF.Max(b0.Pose.Radius,b1.Pose.Radius);
+         var gap=OutsideAttachment(a0,b0,reach+movement+Skin,attachment0,
+             radius-movement-Vector3.Distance(attachment0,attachment1)).Distance;
+-        if (gap>=reach+movement-Skin) return true;
++        if (gap>=reach+movement-Skin) return MotionResult.Clear;
+         // Split sheets before temporal subdivision: a small triangle's motion bound is
+         // much tighter than that of the complete blade, especially near an attachment.
+         var budget = 256;
+@@ -166,30 +166,31 @@
+                 if (Contains(low,high,otherCore)) continue;
+                 var other=Pad(otherCore,MathF.Max(y0.Pose.Radius,y1.Pose.Radius));
+                 if (!bounds.Intersects(other)) continue;
+-                if (!AttachmentInterval(x0,x1,y0,y1,attachment0,attachment1,radius,ref budget)) return false;
+-            }
+-        }
+-        return true;
+-    }
+-
+-    static bool AttachmentInterval(in ContactShape a0, in ContactShape a1, in ContactShape b0, in ContactShape b1,
++                var result = AttachmentInterval(x0,x1,y0,y1,attachment0,attachment1,radius,ref budget);
++                if (result != MotionResult.Clear) return result;
++            }
++        }
++        return MotionResult.Clear;
++    }
++
++    static MotionResult AttachmentInterval(in ContactShape a0, in ContactShape a1, in ContactShape b0, in ContactShape b1,
+         Vector3 p0, Vector3 p1, float radius, ref int budget)
+     {
+         ++IntervalCount;
+-        if (--budget < 0) return false;
++        if (--budget < 0) return MotionResult.Uncertified;
+         // Clipped parts are subsets of these facets. A separating plane for the
+         // complete finite-thickness facets therefore certifies their clipped
+         // motion too, including rotation/deformation through the arc bound. Use
+         // the facet's actual rest-curved normal, not only the organ's midrib frame.
+         // Test this before transforming candidate
+         // vertices again for attachment bounds and temporal subdivision.
+-        if (FacetPlaneSeparates(a0,a1,b0,b1) || FacetPlaneSeparates(b0,b1,a0,a1)) return true;
++        if (FacetPlaneSeparates(a0,a1,b0,b1) || FacetPlaneSeparates(b0,b1,a0,a1)) return MotionResult.Clear;
+         // If either whole body remains inside the moving attachment neighbourhood,
+         // its outside portion is empty throughout the interval. This proof is especially
+         // useful for new blades; distance subdivision alone needlessly erodes the joint.
+         var low = Vector3.Max(p0,p1)-new Vector3(radius);
+         var high = Vector3.Min(p0,p1)+new Vector3(radius);
+-        if (AttachmentContained(low,high,a0,a1) || AttachmentContained(low,high,b0,b1)) return true;
++        if (AttachmentContained(low,high,a0,a1) || AttachmentContained(low,high,b0,b1)) return MotionResult.Clear;
+         var am = a0.Interpolate(a1, .5f); var bm = b0.Interpolate(b1, .5f);
+         var motion = MathF.Max(a0.MotionBound(am), am.MotionBound(a1)) + MathF.Max(b0.MotionBound(bm), bm.MotionBound(b1));
+         var reach = MathF.Max(a0.Pose.Radius, a1.Pose.Radius) + MathF.Max(b0.Pose.Radius, b1.Pose.Radius);
+@@ -197,14 +198,14 @@
+         // Erode the excluded region by the entire motion bound. A contact leaving the
+         // attachment during this interval must therefore participate in the distance proof.
+         var hit = OutsideAttachment(am, bm, reach+motion+Skin, pm, radius-motion-Vector3.Distance(p0,pm));
+-        if (hit.Distance >= reach+motion+Skin*.5f) return true;
+-        if (motion < Skin*.25f) return hit.Distance >= reach-Skin;
++        if (hit.Distance >= reach+motion+Skin*.5f) return MotionResult.Clear;
++        if (motion < Skin*.25f) return hit.Distance >= reach-Skin ? MotionResult.Clear : MotionResult.Uncertified;
+         // Use actual midpoint thickness to identify penetration; the larger
+         // endpoint thickness remains the conservative separation-proof bound.
+         var midpointReach = am.Pose.Radius + bm.Pose.Radius;
+-        if (OutsideAttachment(am, bm, midpointReach+Skin, pm, radius).Distance < midpointReach-Skin) return false;
+-        return AttachmentInterval(a0,am,b0,bm,p0,pm,radius,ref budget)
+-            && AttachmentInterval(am,a1,bm,b1,pm,p1,radius,ref budget);
++        if (OutsideAttachment(am, bm, midpointReach+Skin, pm, radius).Distance < midpointReach-Skin) return MotionResult.Intersecting;
++        var left = AttachmentInterval(a0,am,b0,bm,p0,pm,radius,ref budget);
++        return left == MotionResult.Clear ? AttachmentInterval(am,a1,bm,b1,pm,p1,radius,ref budget) : left;
+     }
+ 
+     static bool Contains(Vector3 low, Vector3 high, Bvh.BoundingBox box)
+--- before/Agro/Collisions/FoliageGeometry.Memoization.cs
++++ after/Agro/Collisions/FoliageGeometry.Memoization.cs
+@@ -4,11 +4,14 @@
+ 
+ internal static partial class FoliageGeometry
+ {
++    // A work limit cannot establish intersection. Keep the distinction in cached
++    // results as well, so cold and warm workers make the same retry decisions.
++    internal enum MotionResult : byte { Clear, Intersecting, Uncertified }
+     readonly record struct DistanceQuery(ContactShape A, ContactShape B, float Search, Vector3 Attachment, float Radius);
+     readonly record struct MotionQuery(ContactShape A0, ContactShape A1, ContactShape B0, ContactShape B1,
+         Vector3 Attachment0, Vector3 Attachment1, float Radius);
+     [ThreadStatic] static FixedMemo<DistanceQuery,FoliageContact>? DistanceMemo;
+-    [ThreadStatic] static FixedMemo<MotionQuery,bool>? MotionMemo;
++    [ThreadStatic] static FixedMemo<MotionQuery,MotionResult>? MotionMemo;
+ 
+     // Two-way bounded storage evicts one result instead of clearing a whole worker's
+     // useful stationary-contact history when a crowded canopy crosses the old limit.
+@@ -59,6 +62,9 @@
+     }
+ 
+     internal static bool SweepClear(in ContactShape a0, in ContactShape a1, in ContactShape b0, in ContactShape b1, int depth=0)
++        => Sweep(a0,a1,b0,b1,depth) == MotionResult.Clear;
++
++    internal static MotionResult Sweep(in ContactShape a0, in ContactShape a1, in ContactShape b0, in ContactShape b1, int depth=0)
+     {
+         if (depth != 0 || a0.Feature >= 0 || b0.Feature >= 0) return SweepUncached(a0,a1,b0,b1,depth);
+         var cache = MotionMemo ??= new(2048); var key = new MotionQuery(a0,a1,b0,b1,default,default,0);
+@@ -70,6 +76,10 @@
+ 
+     internal static bool AttachmentSweepClear(in ContactShape a0, in ContactShape a1, in ContactShape b0, in ContactShape b1,
+         Vector3 point0, Vector3 point1, float radius)
++        => AttachmentSweep(a0,a1,b0,b1,point0,point1,radius) == MotionResult.Clear;
++
++    internal static MotionResult AttachmentSweep(in ContactShape a0, in ContactShape a1, in ContactShape b0, in ContactShape b1,
++        Vector3 point0, Vector3 point1, float radius)
+     {
+         var cache = MotionMemo ??= new(2048); var key = new MotionQuery(a0,a1,b0,b1,point0,point1,radius);
+         if (cache.TryGetValue(key,out var clear)) return clear;

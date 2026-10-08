@@ -1,0 +1,2 @@
+PASS diffuse DHI + albedo GHI terrain=False actual=266.46378 expected=266.45804
+PASS diffuse DHI + albedo GHI terrain=True actual=266.46378 expected=266.45804

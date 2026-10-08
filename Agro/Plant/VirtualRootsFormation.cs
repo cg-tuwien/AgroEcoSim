@@ -86,7 +86,9 @@ public class VirtualRootsFormation : IPlantSubFormation<UnderGroundAgent>
 		var species = Plant.Parameters;
 
 		//TODO perhaps it should reflect temperature
-		var lifeSupportPerHour = LifeSupportPerHour();
+		var lifeSupportPerHour = ResourceUnits.Enabled(species)
+			? ResourceUnits.MaintenancePerHour(VolumeOccupancyFactor * Volume(), 0f, species)
+			: LifeSupportPerHour();
 
 		//life support
 		Energy -= lifeSupportPerHour * world.HoursPerTick;

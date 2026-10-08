@@ -1,0 +1,20 @@
+Species lookup: Bergenia Cordifolia, BudLength: 0.009
+PlantFormation2 ctor: Bergenia Cordifolia, BudLength: 0.009
+SpeciesSettings.Init called on Bergenia Cordifolia, BudLength: 0.009
+PlantFormation2 after Init: Bergenia Cordifolia, BudLength: 0.009
+Collision scene: 2 triangles (2 soil, 0 obstacle) in 7 ms, open soil surface (regular fields use their finite footprint)
+version=27 tick=1 beginDay=240 stopDay=275 render=3 requestHorizonHours=18120
+day,AG,UG,leaves,half,ninety,petals,floral,blocked,water,energy,finite,maxUnresolved,elapsedSec
+240,52,179,20,6,3,0,1,36,35.42978448985377,509.33579339291373,True,0,0.00
+SCAPE day=240 id=52 lmm=13.705042 rmm=1.5031012 targetLmm=14.4567 targetRmm=5.532966 blocked=True
+245,58,183,20,6,3,0,7,41,37.46665041951928,544.2842321297339,True,0,31.62
+SCAPE day=245 id=58 lmm=13.816922 rmm=2.1428864 targetLmm=15.931063 targetRmm=5.462478 blocked=False
+250,66,187,20,7,3,0,15,48,41.92746305151377,578.8190761912065,True,0,65.45
+SCAPE day=250 id=66 lmm=11.498261 rmm=2.6939511 targetLmm=13.255685 targetRmm=5.375952 blocked=False
+255,74,190,20,7,3,0,23,49,45.3558418584289,617.3007706479784,True,0,93.23
+SCAPE day=255 id=74 lmm=12.402607 rmm=2.7087414 targetLmm=14.29916 targetRmm=4.957438 blocked=False
+260,125,195,20,7,3,0,53,48,47.70042231329717,656.3111869767736,True,0,119.43
+265,130,200,20,7,3,5,53,72,55.60579407506157,695.6662597666937,True,0,147.95
+270,130,204,20,7,3,5,53,75,55.840965889859945,734.4579803746037,True,0,176.83
+275,130,207,20,8,3,5,53,74,55.9366317356471,775.5594738813879,True,0,207.31
+DONE day=275 finite=True maxUnresolved=0 observedLeaves=20 petalsObservedSum=65 frameBytes=16952

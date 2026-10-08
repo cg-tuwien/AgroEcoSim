@@ -1,0 +1,34 @@
+true-interior-crossing: direct=False split2=False split4=False split16=False expected=False
+crossing-with-common-translation: direct=False split2=False split4=False split16=False expected=False
+common-translation-separated: direct=True split2=True split4=True split16=True expected=True
+near-miss: direct=True split2=True split4=True split16=True expected=True
+Species lookup: Bergenia Cordifolia, BudLength: 0.009
+PlantFormation2 ctor: Bergenia Cordifolia, BudLength: 0.009
+SpeciesSettings.Init called on Bergenia Cordifolia, BudLength: 0.009
+PlantFormation2 after Init: Bergenia Cordifolia, BudLength: 0.009
+Collision scene: 2 triangles (2 soil, 0 obstacle) in 7 ms, open soil surface (regular fields use their finite footprint)
+common-frame fixture: organs=9
+shared-support-translation: relative=True expected=True
+relative-crossing-under-support-motion: relative=False expected=False
+current-frame-increment-crossing: relative=False expected=False
+current-frame-increment-clear: relative=True expected=True
+shared-support-rotation: relative=True expected=True
+relative-crossing-under-support-rotation: relative=False expected=False
+thickening-while-retreating-constant-gap: direct=True split2=True split4=True split16=True expected=True
+thinning-while-approaching-constant-gap: direct=True split2=True split4=True split16=True expected=True
+thickening-actual-collision: direct=False split2=False split4=False split16=False expected=False
+attachment-thickening constantGap=True actualCollisionClear=False
+contained-thick-scape-neighbour-yield: clear=True expected=True
+contained-thick-scape-symmetric-order: clear=True expected=True
+growing-contained-thick-scape: clear=True expected=True
+contained-curved-petiole-internal-bend: clear=True expected=True
+contained-curved-petiole-release: clear=True expected=True
+scape-emerges-through-neighbour: clear=False expected=False
+contained-endpoints-interior-rotation-escape: clear=False expected=False
+contained-tiny-curved-blade-basal-lobes clear=True expected=True
+tilted-facets-slide-positive-face: clear=True expected=True
+tilted-facets-slide-negative-face: clear=True expected=True
+tilted-facets-cross-between-separated-endpoints: clear=False expected=False
+analytic-parallel-tilted-facets cases=499 certified=151 conservativeRejections=0 unsafeAcceptances=0
+analytic-parallel-capsules cases=500 certified=366 conservativeRejections=0 unsafeAcceptances=0
+finite-search-triangle-pruning seed=44 cases=10000 mismatches=0

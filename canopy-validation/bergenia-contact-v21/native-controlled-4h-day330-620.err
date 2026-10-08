@@ -1,0 +1,17 @@
+CONTROLLED DIAGNOSTIC ONLY: same-layout v20 snapshot under v21 mechanics; not a fresh seasonal replay or supported live migration.
+CHECKPOINT /tmp/gf-scape-recovery/production/control-4h-day330-v21.bin bytes=51891478
+SCAPE day=560 id=88 lmm=3.601269 rmm=1.1332344 targetLmm=13.4672575 targetRmm=4.242129 blocked=False
+SCAPE day=565 id=88 lmm=10.783808 rmm=1.8711882 targetLmm=13.4672575 targetRmm=4.242129 blocked=True
+SCAPE day=570 id=88 lmm=10.783808 rmm=1.8711882 targetLmm=13.4672575 targetRmm=4.242129 blocked=True
+SCAPE day=575 id=88 lmm=10.783808 rmm=1.8711882 targetLmm=13.4672575 targetRmm=4.242129 blocked=True
+SCAPE day=580 id=88 lmm=10.783808 rmm=1.8711882 targetLmm=13.4672575 targetRmm=4.242129 blocked=True
+SCAPE day=585 id=88 lmm=10.783808 rmm=1.8711882 targetLmm=13.4672575 targetRmm=4.242129 blocked=True
+SCAPE day=590 id=88 lmm=10.783808 rmm=1.8711882 targetLmm=13.4672575 targetRmm=4.242129 blocked=True
+SCAPE day=595 id=88 lmm=10.783808 rmm=1.8711882 targetLmm=13.4672575 targetRmm=4.242129 blocked=True
+SCAPE day=600 id=88 lmm=10.783808 rmm=1.8711882 targetLmm=13.4672575 targetRmm=4.242129 blocked=True
+SCAPE day=605 id=88 lmm=10.783808 rmm=1.8711882 targetLmm=13.4672575 targetRmm=4.242129 blocked=True
+SCAPE day=610 id=88 lmm=10.783808 rmm=1.8711882 targetLmm=13.4672575 targetRmm=4.242129 blocked=True
+SCAPE day=615 id=88 lmm=10.783808 rmm=1.8711882 targetLmm=13.4672575 targetRmm=4.242129 blocked=True
+CHECKPOINT /tmp/gf-scape-recovery/production/control-4h-day620-v21.bin bytes=51919974
+SCAPE day=620 id=88 lmm=10.783808 rmm=1.8711882 targetLmm=13.4672575 targetRmm=4.242129 blocked=True
+DONE mode=archived-exact tick=4 firstPetalDay=-1 elapsed=00:09:53.2530435 everLeaves=38 ever50=18 ever90=14

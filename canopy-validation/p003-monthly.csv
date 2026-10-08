@@ -1,0 +1,3 @@
+variant,day,date,organs,livingLeafAreaM2,crowns,projectedXYm2,pausedTips,rejectedBirths,naturalDeaths,resourceDeaths,penetrations,unresolvedFoliage,seconds,allocated,managed,peak,rawFrames,zlibFrames,indexBytes,checkpoint
+guidance,30,2026-03-31,50436,5.934940377413782,1271,1.7092,13532,4499,0,0,0,0,3762.5,39048264424,3132933128,VmHWM:	 4931644 kB,422433901,282251478,1440,15611056
+guidance,60,2026-04-30,123470,10.645713450735341,3480,3.0104,44512,28131,0,0,0,0,15643.4,150675388136,1499725016,VmHWM:	 4931644 kB,1669312803,1157044887,2880,38956660

@@ -1,0 +1,82 @@
+[
+  {
+    "version": "v28",
+    "tick": 1,
+    "render": 0,
+    "exit": 0,
+    "records": [
+      "CAREX version=28 day=50 tick=1 render=0 AG=23 UG=29 down=0 inverted=0 scapeDown=0 finite=True maxUnresolved=0 water=0.7119973902590573 energy=3.9839306756621227 elapsedSec=0.25 counts=Bud:3;Stem:1;Leaf:16;Petiole:2;Meristem:1 downByType= frameSha256=CD96185A9E7B76B8BF785BBE2F73D84746D35A3AA8E66F0131173169E9C42A17 frameBytes=10099",
+      "CAREX version=28 day=100 tick=1 render=0 AG=242 UG=60 down=22 inverted=0 scapeDown=0 finite=True maxUnresolved=0 water=2.876163905730209 energy=13.635038785059578 elapsedSec=39.64 counts=Bud:25;Stem:28;Leaf:160;Petiole:20;Meristem:9 downByType=Bud:16;Leaf:6 frameSha256=06E2A3BA4AC3DB261F552C216E59DCFF49F5B87AF5BD5792D5D80683B3000886 frameBytes=28104"
+    ]
+  },
+  {
+    "version": "v28",
+    "tick": 1,
+    "render": 3,
+    "exit": 0,
+    "records": [
+      "CAREX version=28 day=50 tick=1 render=3 AG=23 UG=28 down=0 inverted=0 scapeDown=0 finite=True maxUnresolved=0 water=0.7133337827399373 energy=1.754301245964598 elapsedSec=0.72 counts=Bud:3;Stem:1;Leaf:16;Petiole:2;Meristem:1 downByType= frameSha256=FB69E9D482671C40652E3BA19A69081D1D06FDDBF5F807755F3077B7AAE85179 frameBytes=10099",
+      "CAREX version=28 day=100 tick=1 render=3 AG=303 UG=41 down=16 inverted=0 scapeDown=0 finite=True maxUnresolved=0 water=2.882685007408213 energy=7.700329435221036 elapsedSec=15.62 counts=Bud:28;Stem:33;Leaf:208;Petiole:26;Meristem:8 downByType=Bud:16 frameSha256=700C67E478F8AB0FCAC1387252ABDD8F01285D433C7B8670C413B3689722BD30 frameBytes=33228"
+    ]
+  },
+  {
+    "version": "v28",
+    "tick": 4,
+    "render": 0,
+    "exit": 0,
+    "records": [
+      "CAREX version=28 day=50 tick=4 render=0 AG=23 UG=41 down=0 inverted=0 scapeDown=0 finite=True maxUnresolved=0 water=0.7103454002644867 energy=3.897144054993987 elapsedSec=0.06 counts=Bud:3;Stem:1;Leaf:16;Petiole:2;Meristem:1 downByType= frameSha256=3FEAE05C86BB5A3CF1A7C980E61C6D40F31545851F31342D18FBE728828C3E46 frameBytes=10099",
+      "CAREX version=28 day=100 tick=4 render=0 AG=318 UG=65 down=20 inverted=0 scapeDown=0 finite=True maxUnresolved=0 water=3.0501123778773858 energy=16.136562081893793 elapsedSec=13.03 counts=Bud:37;Stem:38;Leaf:208;Petiole:26;Meristem:9 downByType=Bud:20 frameSha256=5F223995552961152ABC888FB9A8A263185BD80BF8E188F4B3E471158E9AA1BE frameBytes=34128"
+    ]
+  },
+  {
+    "version": "v28",
+    "tick": 4,
+    "render": 3,
+    "exit": 0,
+    "records": [
+      "CAREX version=28 day=50 tick=4 render=3 AG=23 UG=35 down=0 inverted=0 scapeDown=0 finite=True maxUnresolved=0 water=0.7170514123281464 energy=1.4786884894128889 elapsedSec=0.58 counts=Bud:3;Stem:1;Leaf:16;Petiole:2;Meristem:1 downByType= frameSha256=8D5B4A83D3345A42E24BD26905EE16A79A1A15F9082FF6E564463159523ED106 frameBytes=10099",
+      "CAREX version=28 day=100 tick=4 render=3 AG=375 UG=57 down=23 inverted=0 scapeDown=0 finite=True maxUnresolved=0 water=3.298040226761259 energy=9.50466821495894 elapsedSec=31.28 counts=Bud:35;Stem:43;Leaf:256;Petiole:32;Meristem:9 downByType=Bud:23 frameSha256=9F6120A98A09D3710813E95AFFAA8D02EADF615179F524DB325EB105C3854763 frameBytes=39155"
+    ]
+  },
+  {
+    "version": "v30",
+    "tick": 1,
+    "render": 0,
+    "exit": 0,
+    "records": [
+      "CAREX version=30 day=50 tick=1 render=0 AG=23 UG=29 down=0 inverted=0 scapeDown=0 finite=True maxUnresolved=0 water=0.7119973902590573 energy=3.9839306756621227 elapsedSec=0.18 counts=Bud:3;Stem:1;Leaf:16;Petiole:2;Meristem:1 downByType= frameSha256=CD96185A9E7B76B8BF785BBE2F73D84746D35A3AA8E66F0131173169E9C42A17 frameBytes=10099",
+      "CAREX version=30 day=100 tick=1 render=0 AG=361 UG=62 down=17 inverted=0 scapeDown=0 finite=True maxUnresolved=0 water=2.7382004344195003 energy=13.481206430913844 elapsedSec=31.04 counts=Bud:29;Stem:37;Leaf:256;Petiole:32;Meristem:7 downByType=Bud:17 frameSha256=47F6D673F002D5CE8F1BD947B4FBC3643262552AFD5D34F5503B0AE6E98DE07B frameBytes=38183"
+    ]
+  },
+  {
+    "version": "v30",
+    "tick": 1,
+    "render": 3,
+    "exit": 0,
+    "records": [
+      "CAREX version=30 day=50 tick=1 render=3 AG=23 UG=28 down=0 inverted=0 scapeDown=0 finite=True maxUnresolved=0 water=0.7133337827399373 energy=1.7545289376284927 elapsedSec=0.60 counts=Bud:3;Stem:1;Leaf:16;Petiole:2;Meristem:1 downByType= frameSha256=232E455A34DC1B5D13D7806289116FC6EADCE205C8F7B0E64141021D605C5400 frameBytes=10099",
+      "CAREX version=30 day=100 tick=1 render=3 AG=251 UG=50 down=20 inverted=0 scapeDown=0 finite=True maxUnresolved=0 water=3.0774757218005107 energy=7.732150307551819 elapsedSec=5.45 counts=Bud:32;Stem:31;Leaf:160;Petiole:20;Meristem:8 downByType=Bud:19;Leaf:1 frameSha256=F1972CCD738F8EE491FFB42E688882772B23A5B4AB2456F55308D4A514E78789 frameBytes=28556"
+    ]
+  },
+  {
+    "version": "v30",
+    "tick": 4,
+    "render": 0,
+    "exit": 0,
+    "records": [
+      "CAREX version=30 day=50 tick=4 render=0 AG=23 UG=41 down=0 inverted=0 scapeDown=0 finite=True maxUnresolved=0 water=0.7103454002644867 energy=3.897144054993987 elapsedSec=0.06 counts=Bud:3;Stem:1;Leaf:16;Petiole:2;Meristem:1 downByType= frameSha256=3FEAE05C86BB5A3CF1A7C980E61C6D40F31545851F31342D18FBE728828C3E46 frameBytes=10099",
+      "CAREX version=30 day=100 tick=4 render=0 AG=462 UG=65 down=17 inverted=0 scapeDown=0 finite=True maxUnresolved=0 water=3.4133775847961614 energy=18.07238509318805 elapsedSec=23.51 counts=Bud:28;Stem:44;Leaf:336;Petiole:42;Meristem:12 downByType=Bud:17 frameSha256=332447EEFCD456D042F569F45360C203DAED50E2116ED0F2C371AE29A824CB87 frameBytes=46991"
+    ]
+  },
+  {
+    "version": "v30",
+    "tick": 4,
+    "render": 3,
+    "exit": 0,
+    "records": [
+      "CAREX version=30 day=50 tick=4 render=3 AG=23 UG=35 down=0 inverted=0 scapeDown=0 finite=True maxUnresolved=0 water=0.7170514123281464 energy=1.4786884894128889 elapsedSec=0.44 counts=Bud:3;Stem:1;Leaf:16;Petiole:2;Meristem:1 downByType= frameSha256=8D5B4A83D3345A42E24BD26905EE16A79A1A15F9082FF6E564463159523ED106 frameBytes=10099",
+      "CAREX version=30 day=100 tick=4 render=3 AG=304 UG=49 down=18 inverted=0 scapeDown=0 finite=True maxUnresolved=0 water=2.345205309455669 energy=7.237419438135036 elapsedSec=22.76 counts=Bud:28;Stem:34;Leaf:208;Petiole:26;Meristem:8 downByType=Bud:18 frameSha256=7CAC487FC351C5BCFE0D32C03608E5D6A7608B4580AFBF208982C057F0208F3B frameBytes=33321"
+    ]
+  }
+]

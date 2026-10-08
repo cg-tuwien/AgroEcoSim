@@ -1,0 +1,148 @@
+{
+  "baselineVersion": 21,
+  "retainedVersion": 23,
+  "definition": "Three independent NativeAOT processes per version and tick size; three warmups plus fifteen measured ticks per process. Same fixed organ populations and restored starting snapshots. Restore excluded, all timing processes serial with no concurrent builds or simulations. Corrected certificates can change accepted geometry.",
+  "results": {
+    "1h": {
+      "v21": {
+        "medianOfProcessMediansMs": 265.087,
+        "medianOfProcessP95Ms": 287.574,
+        "processes": [
+          {
+            "file": "perf-release-v21-rep1-1h.log",
+            "medianMs": 265.554,
+            "p95Ms": 287.574,
+            "medianAllocationBytes": 990600,
+            "sceneHashes": [
+              "DEDF53EABF96CBD8"
+            ]
+          },
+          {
+            "file": "perf-release-v21-rep2-1h.log",
+            "medianMs": 260.916,
+            "p95Ms": 285.699,
+            "medianAllocationBytes": 990368,
+            "sceneHashes": [
+              "DEDF53EABF96CBD8"
+            ]
+          },
+          {
+            "file": "perf-release-v21-rep3-1h.log",
+            "medianMs": 265.087,
+            "p95Ms": 293.388,
+            "medianAllocationBytes": 993992,
+            "sceneHashes": [
+              "DEDF53EABF96CBD8"
+            ]
+          }
+        ]
+      },
+      "v23": {
+        "medianOfProcessMediansMs": 303.24,
+        "medianOfProcessP95Ms": 310.253,
+        "processes": [
+          {
+            "file": "perf-release-v23-rep1-1h.log",
+            "medianMs": 313.432,
+            "p95Ms": 364.825,
+            "medianAllocationBytes": 997184,
+            "sceneHashes": [
+              "630D63BF6F10D185"
+            ]
+          },
+          {
+            "file": "perf-release-v23-rep2-1h.log",
+            "medianMs": 293.69,
+            "p95Ms": 300.616,
+            "medianAllocationBytes": 994992,
+            "sceneHashes": [
+              "630D63BF6F10D185"
+            ]
+          },
+          {
+            "file": "perf-release-v23-rep3-1h.log",
+            "medianMs": 303.24,
+            "p95Ms": 310.253,
+            "medianAllocationBytes": 997328,
+            "sceneHashes": [
+              "630D63BF6F10D185"
+            ]
+          }
+        ]
+      },
+      "changePercent": 14.392633361877438,
+      "scoped25PercentGatePass": true
+    },
+    "4h": {
+      "v21": {
+        "medianOfProcessMediansMs": 82.243,
+        "medianOfProcessP95Ms": 96.774,
+        "processes": [
+          {
+            "file": "perf-release-v21-rep1-4h.log",
+            "medianMs": 82.243,
+            "p95Ms": 96.774,
+            "medianAllocationBytes": 863528,
+            "sceneHashes": [
+              "EE66A01BC8D5C53E"
+            ]
+          },
+          {
+            "file": "perf-release-v21-rep2-4h.log",
+            "medianMs": 78.235,
+            "p95Ms": 81.926,
+            "medianAllocationBytes": 864800,
+            "sceneHashes": [
+              "EE66A01BC8D5C53E"
+            ]
+          },
+          {
+            "file": "perf-release-v21-rep3-4h.log",
+            "medianMs": 82.858,
+            "p95Ms": 105.252,
+            "medianAllocationBytes": 864304,
+            "sceneHashes": [
+              "EE66A01BC8D5C53E"
+            ]
+          }
+        ]
+      },
+      "v23": {
+        "medianOfProcessMediansMs": 83.534,
+        "medianOfProcessP95Ms": 90.633,
+        "processes": [
+          {
+            "file": "perf-release-v23-rep1-4h.log",
+            "medianMs": 78.751,
+            "p95Ms": 80.346,
+            "medianAllocationBytes": 863776,
+            "sceneHashes": [
+              "EE66A01BC8D5C53E"
+            ]
+          },
+          {
+            "file": "perf-release-v23-rep2-4h.log",
+            "medianMs": 83.534,
+            "p95Ms": 90.633,
+            "medianAllocationBytes": 865312,
+            "sceneHashes": [
+              "EE66A01BC8D5C53E"
+            ]
+          },
+          {
+            "file": "perf-release-v23-rep3-4h.log",
+            "medianMs": 84.35,
+            "p95Ms": 92.98,
+            "medianAllocationBytes": 863184,
+            "sceneHashes": [
+              "EE66A01BC8D5C53E"
+            ]
+          }
+        ]
+      },
+      "changePercent": 1.569738457984271,
+      "scoped25PercentGatePass": true
+    }
+  },
+  "releaseGate": "Scoped fixed-population overhead only; larger stands, multicore speed, FAV11/P003, general mechanics and biological acceptance remain outstanding."
+}

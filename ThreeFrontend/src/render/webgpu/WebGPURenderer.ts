@@ -14,6 +14,8 @@ import { InstanceList, IFlags } from '../core/InstanceList';
 import { buildPlants } from '../core/BuildScene';
 import { Geom } from '../core/GeometryIds';
 import { registerGeometry } from '../core/GeometryStore';
+import { deformLeaf } from '../core/ContactDeformation';
+import { exportGeometry } from '../core/GeometryExport';
 import { writeObstacleColors } from '../core/ObstacleColors';
 //Side effect: fills the static geometry table. Imported here and not left to the Three
 //adapter, which used to be the only thing populating it - so the WebGPU path silently
@@ -804,6 +806,7 @@ export class WebGPURenderer implements IViewportRenderer {
         const tri = new Float32Array(9);
         const m = createMat4();
 
+        const hinges = new Float32Array(3), folded = { x: 0, y: 0, z: 0 };
         const cellArea = grid.cell.x * grid.cell.z;
         for (const set of [this.statics, this.plants]) {
             const packed = set.packed;
@@ -821,10 +824,12 @@ export class WebGPURenderer implements IViewportRenderer {
                     for (let i = 0; i < 16; ++i) m[i] = packed[base + i];
 
                     for (let t = 0; t < triangles; ++t) {
-                        if (!this.atlas.triangle(bucket.slice, t, tri)) continue;
+                        if (!this.atlas.triangle(bucket.slice, t, tri, hinges)) continue;
                         const p: Vec3[] = [];
                         for (let k = 0; k < 3; ++k) {
-                            const x = tri[k * 3], y = tri[k * 3 + 1], z = tri[k * 3 + 2];
+                            let x = tri[k * 3], y = tri[k * 3 + 1], z = tri[k * 3 + 2];
+                            deformLeaf(folded, x, y, z, hinges[k], packed.subarray(base + 40, base + 44), packed.subarray(base + 44, base + 48));
+                            x = folded.x; y = folded.y; z = folded.z;
                             p.push({
                                 x: m[0] * x + m[4] * y + m[8] * z + m[12],
                                 y: m[1] * x + m[5] * y + m[9] * z + m[13],
@@ -838,6 +843,8 @@ export class WebGPURenderer implements IViewportRenderer {
         }
         return out;
     }
+
+    exportGLTF(save: (json: string) => void) { save(exportGeometry([this.staticList, this.plantList])); }
 
     private drawSet(pass: GPURenderPassEncoder, set: InstanceBuffers, bind: GPUBindGroup | undefined, picking: boolean) {
         if (!bind || set.count === 0) return;

@@ -1,0 +1,2743 @@
+{
+  "sourceTreeSha256": "e0c6cae36144ad1449a144edca0bea8aaf7058eb1faeed2888ceae7c0796b75f",
+  "sourceHashDefinition": "SHA256 of sorted compact JSON mapping repository-relative source paths to their content SHA256; cs, csproj, ts and tsx in simulator, server, dependencies, generator and frontend source",
+  "gitBase": "27001a195ddba3443b8d0a0c44c73d2bc8255889",
+  "status": "experimental-default-disabled",
+  "checkpointVersion": 6,
+  "sceneVersion": 8,
+  "deformationProfileVersion": 1,
+  "referenceRun": "55d485f815824db9ba882de241776624",
+  "referenceRequestSha256": "fab159e2e9bf73e9f5c67af1a955fd4a7bb43cef4f513eafd3dab75706ad771b",
+  "conditions": {
+    "seed": 42,
+    "initialDate": "2026-01-01",
+    "days": 470,
+    "clonalSpread": "disabled in source request",
+    "growthSettings": "source request preserved; inverse historical initialization scaling before fresh initialization",
+    "configuration": "Release net8.0",
+    "leafGrowthDurationHours": 2016,
+    "bladeAttachmentToTipTargetMetres": 0.24,
+    "bladeFullWidthTargetMetres": 0.19,
+    "petioleLengthTargetMetres": 0.12,
+    "crownMaximumNodes": 10,
+    "leavesPerNode": 2,
+    "nodeDistanceMetres": 0.002,
+    "crownContinuationRatesPerHour": {
+      "preFlowering": 0.008,
+      "flowering": 0.002,
+      "postFlowering": 0.002
+    },
+    "thresholdDefinition": "minimum of intrinsic attachment-to-tip length / sampled target length and full blade width / sampled target width",
+    "thresholdResolution": "one actual simulation tick",
+    "censoring": "null means not reached by the observation time; conditional medians exclude these leaves",
+    "cpuComparisonCaveat": "None uses the legacy CPU light leaf approximation; BroadLeafV1 uses triangles, so this comparison includes optical geometry changes",
+    "wholeLeafDefinition": "one biological leaf, never a mechanical section"
+  },
+  "seasonalCases": [
+    {
+      "label": "accept-rigid-ambient1",
+      "profile": 0,
+      "hoursPerTick": 1,
+      "renderMode": 0,
+      "completed470Days": true,
+      "snapshots": [
+        {
+          "day": 330,
+          "wholeLivingLeaves": 12,
+          "livingLeavesAt50Percent": 7,
+          "livingLeavesAt90Percent": 2,
+          "everReached50Percent": 7,
+          "everReached90Percent": 2,
+          "medianT50DaysAmongReaching": 44.541667,
+          "medianT90DaysAmongReaching": 78.083333,
+          "maximumBladeAttachmentToTipMetres": 0.24616866,
+          "medianBladeAttachmentToTipMetres": 0.125427618,
+          "medianFullBladeWidthMetres": 0.105437663,
+          "medianPetioleLengthMetres": 0.07178211300000001,
+          "petioleOfLargestBladeLengthMetres": 0.0909661,
+          "medianPetioleDiameterMetres": 0.0027946037000000003,
+          "crowns": 1,
+          "crownAxialEnvelopeMetres": 0.030529553070664406,
+          "abovegroundMassGrams": 29.928699757438153,
+          "abovegroundWaterGrams": 23.72644131933339,
+          "buds": 0,
+          "petals": 0,
+          "pendingDevelopment": 0,
+          "pausedGrowthCount": 23,
+          "acceptedDevelopments": 46,
+          "rejectedDevelopments": 350,
+          "naturalDeaths": 121,
+          "resourceDeaths": 0,
+          "individualLeaves": [
+            {
+              "organId": 4,
+              "birthHour": 1,
+              "alive": true,
+              "expansionFractionAtLastObservation": 1,
+              "t50Hours": 1063,
+              "t90Hours": 1910,
+              "targetAttachmentToTipMetres": 0.24332552,
+              "targetFullWidthMetres": 0.19668527
+            },
+            {
+              "organId": 6,
+              "birthHour": 1,
+              "alive": true,
+              "expansionFractionAtLastObservation": 1,
+              "t50Hours": 1023,
+              "t90Hours": 1838,
+              "targetAttachmentToTipMetres": 0.24616866,
+              "targetFullWidthMetres": 0.20343144
+            },
+            {
+              "organId": 9,
+              "birthHour": 1461,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.67919326,
+              "t50Hours": 1069,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.23668444,
+              "targetFullWidthMetres": 0.2038629
+            },
+            {
+              "organId": 11,
+              "birthHour": 1461,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.17966,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.25411007,
+              "targetFullWidthMetres": 0.20401
+            },
+            {
+              "organId": 14,
+              "birthHour": 1617,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.56200826,
+              "t50Hours": 1177,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.226872,
+              "targetFullWidthMetres": 0.19655533
+            },
+            {
+              "organId": 16,
+              "birthHour": 1617,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.08804953,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.2424746,
+              "targetFullWidthMetres": 0.18650824
+            },
+            {
+              "organId": 19,
+              "birthHour": 1715,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.5290905,
+              "t50Hours": 1239,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.23313434,
+              "targetFullWidthMetres": 0.20650578
+            },
+            {
+              "organId": 21,
+              "birthHour": 1715,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.08307432,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.24787448,
+              "targetFullWidthMetres": 0.17425728
+            },
+            {
+              "organId": 24,
+              "birthHour": 1801,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.5670876,
+              "t50Hours": 2007,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.22932318,
+              "targetFullWidthMetres": 0.1982286
+            },
+            {
+              "organId": 26,
+              "birthHour": 1801,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.57969064,
+              "t50Hours": 1065,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.22359794,
+              "targetFullWidthMetres": 0.17529191
+            },
+            {
+              "organId": 30,
+              "birthHour": 2310,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.052193273,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.25422874,
+              "targetFullWidthMetres": 0.17684542
+            },
+            {
+              "organId": 32,
+              "birthHour": 2310,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.32908344,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.25828713,
+              "targetFullWidthMetres": 0.19468288
+            }
+          ]
+        },
+        {
+          "day": 470,
+          "wholeLivingLeaves": 12,
+          "livingLeavesAt50Percent": 2,
+          "livingLeavesAt90Percent": 1,
+          "everReached50Percent": 9,
+          "everReached90Percent": 4,
+          "medianT50DaysAmongReaching": 44.375,
+          "medianT90DaysAmongReaching": 78.083333,
+          "maximumBladeAttachmentToTipMetres": 0.22867574,
+          "medianBladeAttachmentToTipMetres": 0.093300555,
+          "medianFullBladeWidthMetres": 0.067840254,
+          "medianPetioleLengthMetres": 0.0377719225,
+          "petioleOfLargestBladeLengthMetres": 0.14086343,
+          "medianPetioleDiameterMetres": 0.0019291906,
+          "crowns": 1,
+          "crownAxialEnvelopeMetres": 0.030531371012330055,
+          "abovegroundMassGrams": 16.81318095317488,
+          "abovegroundWaterGrams": 13.326782184806348,
+          "buds": 0,
+          "petals": 0,
+          "pendingDevelopment": 0,
+          "pausedGrowthCount": 6,
+          "acceptedDevelopments": 56,
+          "rejectedDevelopments": 350,
+          "naturalDeaths": 141,
+          "resourceDeaths": 0,
+          "individualLeaves": [
+            {
+              "organId": 4,
+              "birthHour": 1,
+              "alive": false,
+              "expansionFractionAtLastObservation": 1,
+              "t50Hours": 1063,
+              "t90Hours": 1910,
+              "targetAttachmentToTipMetres": 0.24332552,
+              "targetFullWidthMetres": 0.19668527
+            },
+            {
+              "organId": 6,
+              "birthHour": 1,
+              "alive": false,
+              "expansionFractionAtLastObservation": 1,
+              "t50Hours": 1023,
+              "t90Hours": 1838,
+              "targetAttachmentToTipMetres": 0.24616866,
+              "targetFullWidthMetres": 0.20343144
+            },
+            {
+              "organId": 9,
+              "birthHour": 1461,
+              "alive": false,
+              "expansionFractionAtLastObservation": 1,
+              "t50Hours": 1069,
+              "t90Hours": 7658,
+              "targetAttachmentToTipMetres": 0.23668444,
+              "targetFullWidthMetres": 0.2038629
+            },
+            {
+              "organId": 11,
+              "birthHour": 1461,
+              "alive": false,
+              "expansionFractionAtLastObservation": 0.17966,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.25411007,
+              "targetFullWidthMetres": 0.20401
+            },
+            {
+              "organId": 14,
+              "birthHour": 1617,
+              "alive": false,
+              "expansionFractionAtLastObservation": 0.605923,
+              "t50Hours": 1177,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.226872,
+              "targetFullWidthMetres": 0.19655533
+            },
+            {
+              "organId": 16,
+              "birthHour": 1617,
+              "alive": false,
+              "expansionFractionAtLastObservation": 0.08804953,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.2424746,
+              "targetFullWidthMetres": 0.18650824
+            },
+            {
+              "organId": 19,
+              "birthHour": 1715,
+              "alive": false,
+              "expansionFractionAtLastObservation": 0.76147497,
+              "t50Hours": 1239,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.23313434,
+              "targetFullWidthMetres": 0.20650578
+            },
+            {
+              "organId": 21,
+              "birthHour": 1715,
+              "alive": false,
+              "expansionFractionAtLastObservation": 0.08307432,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.24787448,
+              "targetFullWidthMetres": 0.17425728
+            },
+            {
+              "organId": 24,
+              "birthHour": 1801,
+              "alive": false,
+              "expansionFractionAtLastObservation": 0.5670876,
+              "t50Hours": 2007,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.22932318,
+              "targetFullWidthMetres": 0.1982286
+            },
+            {
+              "organId": 26,
+              "birthHour": 1801,
+              "alive": false,
+              "expansionFractionAtLastObservation": 0.57969064,
+              "t50Hours": 1065,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.22359794,
+              "targetFullWidthMetres": 0.17529191
+            },
+            {
+              "organId": 30,
+              "birthHour": 2310,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.063686825,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.25422874,
+              "targetFullWidthMetres": 0.17684542
+            },
+            {
+              "organId": 32,
+              "birthHour": 2310,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.37367886,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.25828713,
+              "targetFullWidthMetres": 0.19468288
+            },
+            {
+              "organId": 279,
+              "birthHour": 8646,
+              "alive": true,
+              "expansionFractionAtLastObservation": 1,
+              "t50Hours": 1000,
+              "t90Hours": 1798,
+              "targetAttachmentToTipMetres": 0.22867574,
+              "targetFullWidthMetres": 0.19649242
+            },
+            {
+              "organId": 283,
+              "birthHour": 10102,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.57922405,
+              "t50Hours": 1018,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.2557956,
+              "targetFullWidthMetres": 0.19530126
+            },
+            {
+              "organId": 287,
+              "birthHour": 10258,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.3572485,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.2521563,
+              "targetFullWidthMetres": 0.17615645
+            },
+            {
+              "organId": 291,
+              "birthHour": 10356,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.44219738,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.24264404,
+              "targetFullWidthMetres": 0.19056956
+            },
+            {
+              "organId": 295,
+              "birthHour": 10442,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.41946793,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.24146065,
+              "targetFullWidthMetres": 0.20549117
+            },
+            {
+              "organId": 297,
+              "birthHour": 10442,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.40103018,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.24941453,
+              "targetFullWidthMetres": 0.20426995
+            },
+            {
+              "organId": 281,
+              "birthHour": 11256,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.008049127,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.22613506,
+              "targetFullWidthMetres": 0.18112211
+            },
+            {
+              "organId": 289,
+              "birthHour": 11257,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.008952625,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.24453273,
+              "targetFullWidthMetres": 0.18653946
+            },
+            {
+              "organId": 293,
+              "birthHour": 11257,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.008900355,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.22288758,
+              "targetFullWidthMetres": 0.19975434
+            },
+            {
+              "organId": 285,
+              "birthHour": 11258,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.008372532,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.24460052,
+              "targetFullWidthMetres": 0.20968501
+            }
+          ]
+        }
+      ],
+      "elapsedSeconds": 900.1887203
+    },
+    {
+      "label": "accept-rigid-ambient4",
+      "profile": 0,
+      "hoursPerTick": 4,
+      "renderMode": 0,
+      "completed470Days": true,
+      "snapshots": [
+        {
+          "day": 330,
+          "wholeLivingLeaves": 6,
+          "livingLeavesAt50Percent": 5,
+          "livingLeavesAt90Percent": 5,
+          "everReached50Percent": 5,
+          "everReached90Percent": 5,
+          "medianT50DaysAmongReaching": 44.833333,
+          "medianT90DaysAmongReaching": 79.833333,
+          "maximumBladeAttachmentToTipMetres": 0.25345,
+          "medianBladeAttachmentToTipMetres": 0.24415529,
+          "medianFullBladeWidthMetres": 0.200058355,
+          "medianPetioleLengthMetres": 0.114534675,
+          "petioleOfLargestBladeLengthMetres": 0.1180551,
+          "medianPetioleDiameterMetres": 0.0050340364000000005,
+          "crowns": 1,
+          "crownAxialEnvelopeMetres": 0.02475557290017605,
+          "abovegroundMassGrams": 43.12241344153881,
+          "abovegroundWaterGrams": 34.262544970959425,
+          "buds": 0,
+          "petals": 0,
+          "pendingDevelopment": 0,
+          "pausedGrowthCount": 10,
+          "acceptedDevelopments": 40,
+          "rejectedDevelopments": 420,
+          "naturalDeaths": 108,
+          "resourceDeaths": 0,
+          "individualLeaves": [
+            {
+              "organId": 4,
+              "birthHour": 4,
+              "alive": true,
+              "expansionFractionAtLastObservation": 1,
+              "t50Hours": 1076,
+              "t90Hours": 1924,
+              "targetAttachmentToTipMetres": 0.24332552,
+              "targetFullWidthMetres": 0.19668527
+            },
+            {
+              "organId": 6,
+              "birthHour": 4,
+              "alive": true,
+              "expansionFractionAtLastObservation": 1,
+              "t50Hours": 1036,
+              "t90Hours": 1852,
+              "targetAttachmentToTipMetres": 0.24616866,
+              "targetFullWidthMetres": 0.20343144
+            },
+            {
+              "organId": 10,
+              "birthHour": 1864,
+              "alive": true,
+              "expansionFractionAtLastObservation": 1,
+              "t50Hours": 980,
+              "t90Hours": 1752,
+              "targetAttachmentToTipMetres": 0.23915842,
+              "targetFullWidthMetres": 0.20966496
+            },
+            {
+              "organId": 12,
+              "birthHour": 1864,
+              "alive": true,
+              "expansionFractionAtLastObservation": 1,
+              "t50Hours": 1080,
+              "t90Hours": 1916,
+              "targetAttachmentToTipMetres": 0.24498506,
+              "targetFullWidthMetres": 0.19615124
+            },
+            {
+              "organId": 16,
+              "birthHour": 1880,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.404582,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.25771475,
+              "targetFullWidthMetres": 0.17902927
+            },
+            {
+              "organId": 18,
+              "birthHour": 1880,
+              "alive": true,
+              "expansionFractionAtLastObservation": 1,
+              "t50Hours": 1332,
+              "t90Hours": 2160,
+              "targetAttachmentToTipMetres": 0.25345,
+              "targetFullWidthMetres": 0.2090908
+            }
+          ]
+        },
+        {
+          "day": 470,
+          "wholeLivingLeaves": 6,
+          "livingLeavesAt50Percent": 4,
+          "livingLeavesAt90Percent": 3,
+          "everReached50Percent": 6,
+          "everReached90Percent": 5,
+          "medianT50DaysAmongReaching": 44.916666500000005,
+          "medianT90DaysAmongReaching": 79.833333,
+          "maximumBladeAttachmentToTipMetres": 0.25345,
+          "medianBladeAttachmentToTipMetres": 0.1819180975,
+          "medianFullBladeWidthMetres": 0.149630337,
+          "medianPetioleLengthMetres": 0.09245192499999999,
+          "petioleOfLargestBladeLengthMetres": 0.1180551,
+          "medianPetioleDiameterMetres": 0.0035959645,
+          "crowns": 1,
+          "crownAxialEnvelopeMetres": 0.02475557290017605,
+          "abovegroundMassGrams": 29.093770742416382,
+          "abovegroundWaterGrams": 23.246020559221506,
+          "buds": 0,
+          "petals": 0,
+          "pendingDevelopment": 3,
+          "pausedGrowthCount": 11,
+          "acceptedDevelopments": 42,
+          "rejectedDevelopments": 420,
+          "naturalDeaths": 112,
+          "resourceDeaths": 0,
+          "individualLeaves": [
+            {
+              "organId": 4,
+              "birthHour": 4,
+              "alive": true,
+              "expansionFractionAtLastObservation": 1,
+              "t50Hours": 1076,
+              "t90Hours": 1924,
+              "targetAttachmentToTipMetres": 0.24332552,
+              "targetFullWidthMetres": 0.19668527
+            },
+            {
+              "organId": 6,
+              "birthHour": 4,
+              "alive": false,
+              "expansionFractionAtLastObservation": 1,
+              "t50Hours": 1036,
+              "t90Hours": 1852,
+              "targetAttachmentToTipMetres": 0.24616866,
+              "targetFullWidthMetres": 0.20343144
+            },
+            {
+              "organId": 10,
+              "birthHour": 1864,
+              "alive": false,
+              "expansionFractionAtLastObservation": 1,
+              "t50Hours": 980,
+              "t90Hours": 1752,
+              "targetAttachmentToTipMetres": 0.23915842,
+              "targetFullWidthMetres": 0.20966496
+            },
+            {
+              "organId": 12,
+              "birthHour": 1864,
+              "alive": true,
+              "expansionFractionAtLastObservation": 1,
+              "t50Hours": 1080,
+              "t90Hours": 1916,
+              "targetAttachmentToTipMetres": 0.24498506,
+              "targetFullWidthMetres": 0.19615124
+            },
+            {
+              "organId": 16,
+              "birthHour": 1880,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.404582,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.25771475,
+              "targetFullWidthMetres": 0.17902927
+            },
+            {
+              "organId": 18,
+              "birthHour": 1880,
+              "alive": true,
+              "expansionFractionAtLastObservation": 1,
+              "t50Hours": 1332,
+              "t90Hours": 2160,
+              "targetAttachmentToTipMetres": 0.25345,
+              "targetFullWidthMetres": 0.2090908
+            },
+            {
+              "organId": 253,
+              "birthHour": 8648,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.5090405,
+              "t50Hours": 1108,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.23674086,
+              "targetFullWidthMetres": 0.20255646
+            },
+            {
+              "organId": 260,
+              "birthHour": 10508,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.35825348,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.25673354,
+              "targetFullWidthMetres": 0.17765807
+            }
+          ]
+        }
+      ],
+      "elapsedSeconds": 78.5852992
+    },
+    {
+      "label": "accept-rigid-cpu1",
+      "profile": 0,
+      "hoursPerTick": 1,
+      "renderMode": 3,
+      "completed470Days": true,
+      "snapshots": [
+        {
+          "day": 330,
+          "wholeLivingLeaves": 6,
+          "livingLeavesAt50Percent": 2,
+          "livingLeavesAt90Percent": 2,
+          "everReached50Percent": 2,
+          "everReached90Percent": 2,
+          "medianT50DaysAmongReaching": 45.041666500000005,
+          "medianT90DaysAmongReaching": 83.1875,
+          "maximumBladeAttachmentToTipMetres": 0.24616866,
+          "medianBladeAttachmentToTipMetres": 0.068659986,
+          "medianFullBladeWidthMetres": 0.050258098,
+          "medianPetioleLengthMetres": 0.0298719805,
+          "petioleOfLargestBladeLengthMetres": 0.0909661,
+          "medianPetioleDiameterMetres": 0.00173224586,
+          "crowns": 1,
+          "crownAxialEnvelopeMetres": 0.02487134374678135,
+          "abovegroundMassGrams": 17.587849704083055,
+          "abovegroundWaterGrams": 13.938836740329862,
+          "buds": 0,
+          "petals": 0,
+          "pendingDevelopment": 0,
+          "pausedGrowthCount": 11,
+          "acceptedDevelopments": 42,
+          "rejectedDevelopments": 441,
+          "naturalDeaths": 116,
+          "resourceDeaths": 0,
+          "individualLeaves": [
+            {
+              "organId": 4,
+              "birthHour": 1,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.92750174,
+              "t50Hours": 1125,
+              "t90Hours": 2136,
+              "targetAttachmentToTipMetres": 0.24332552,
+              "targetFullWidthMetres": 0.19668527
+            },
+            {
+              "organId": 6,
+              "birthHour": 1,
+              "alive": true,
+              "expansionFractionAtLastObservation": 1,
+              "t50Hours": 1037,
+              "t90Hours": 1857,
+              "targetAttachmentToTipMetres": 0.24616866,
+              "targetFullWidthMetres": 0.20343144
+            },
+            {
+              "organId": 9,
+              "birthHour": 1705,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.18203206,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.2563986,
+              "targetFullWidthMetres": 0.2072309
+            },
+            {
+              "organId": 11,
+              "birthHour": 1705,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.34980112,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.25256205,
+              "targetFullWidthMetres": 0.17951185
+            },
+            {
+              "organId": 15,
+              "birthHour": 1882,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.07839331,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.25423712,
+              "targetFullWidthMetres": 0.20640866
+            },
+            {
+              "organId": 17,
+              "birthHour": 1882,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.19305843,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.25367165,
+              "targetFullWidthMetres": 0.17789276
+            }
+          ]
+        },
+        {
+          "day": 470,
+          "wholeLivingLeaves": 6,
+          "livingLeavesAt50Percent": 2,
+          "livingLeavesAt90Percent": 2,
+          "everReached50Percent": 4,
+          "everReached90Percent": 3,
+          "medianT50DaysAmongReaching": 53.041666500000005,
+          "medianT90DaysAmongReaching": 89.0,
+          "maximumBladeAttachmentToTipMetres": 0.23366371,
+          "medianBladeAttachmentToTipMetres": 0.07100638000000001,
+          "medianFullBladeWidthMetres": 0.053032657,
+          "medianPetioleLengthMetres": 0.0384613125,
+          "petioleOfLargestBladeLengthMetres": 0.10054456,
+          "medianPetioleDiameterMetres": 0.00182339556,
+          "crowns": 1,
+          "crownAxialEnvelopeMetres": 0.024871349334716797,
+          "abovegroundMassGrams": 16.758960034232587,
+          "abovegroundWaterGrams": 13.279936714097857,
+          "buds": 0,
+          "petals": 0,
+          "pendingDevelopment": 3,
+          "pausedGrowthCount": 7,
+          "acceptedDevelopments": 44,
+          "rejectedDevelopments": 441,
+          "naturalDeaths": 120,
+          "resourceDeaths": 0,
+          "individualLeaves": [
+            {
+              "organId": 4,
+              "birthHour": 1,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.92750174,
+              "t50Hours": 1125,
+              "t90Hours": 2136,
+              "targetAttachmentToTipMetres": 0.24332552,
+              "targetFullWidthMetres": 0.19668527
+            },
+            {
+              "organId": 6,
+              "birthHour": 1,
+              "alive": false,
+              "expansionFractionAtLastObservation": 1,
+              "t50Hours": 1037,
+              "t90Hours": 1857,
+              "targetAttachmentToTipMetres": 0.24616866,
+              "targetFullWidthMetres": 0.20343144
+            },
+            {
+              "organId": 9,
+              "birthHour": 1705,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.18203206,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.2563986,
+              "targetFullWidthMetres": 0.2072309
+            },
+            {
+              "organId": 11,
+              "birthHour": 1705,
+              "alive": false,
+              "expansionFractionAtLastObservation": 0.6630085,
+              "t50Hours": 7375,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.25256205,
+              "targetFullWidthMetres": 0.17951185
+            },
+            {
+              "organId": 15,
+              "birthHour": 1882,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.07839331,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.25423712,
+              "targetFullWidthMetres": 0.20640866
+            },
+            {
+              "organId": 17,
+              "birthHour": 1882,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.25079432,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.25367165,
+              "targetFullWidthMetres": 0.17789276
+            },
+            {
+              "organId": 251,
+              "birthHour": 8642,
+              "alive": true,
+              "expansionFractionAtLastObservation": 1,
+              "t50Hours": 1421,
+              "t90Hours": 2322,
+              "targetAttachmentToTipMetres": 0.23366371,
+              "targetFullWidthMetres": 0.1761733
+            },
+            {
+              "organId": 255,
+              "birthHour": 10346,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.3493794,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.22437887,
+              "targetFullWidthMetres": 0.17588538
+            }
+          ]
+        }
+      ],
+      "elapsedSeconds": 268.7374635
+    },
+    {
+      "label": "accept-rigid-cpu4",
+      "profile": 0,
+      "hoursPerTick": 4,
+      "renderMode": 3,
+      "completed470Days": true,
+      "snapshots": [
+        {
+          "day": 330,
+          "wholeLivingLeaves": 18,
+          "livingLeavesAt50Percent": 3,
+          "livingLeavesAt90Percent": 2,
+          "everReached50Percent": 3,
+          "everReached90Percent": 2,
+          "medianT50DaysAmongReaching": 46.166667,
+          "medianT90DaysAmongReaching": 83.5,
+          "maximumBladeAttachmentToTipMetres": 0.24332552,
+          "medianBladeAttachmentToTipMetres": 0.0276701185,
+          "medianFullBladeWidthMetres": 0.0230532695,
+          "medianPetioleLengthMetres": 0.021081944999999998,
+          "petioleOfLargestBladeLengthMetres": 0.13994955,
+          "medianPetioleDiameterMetres": 0.0012201689699999998,
+          "crowns": 1,
+          "crownAxialEnvelopeMetres": 0.03692373260855675,
+          "abovegroundMassGrams": 21.757635868299985,
+          "abovegroundWaterGrams": 17.433320737225586,
+          "buds": 0,
+          "petals": 0,
+          "pendingDevelopment": 0,
+          "pausedGrowthCount": 44,
+          "acceptedDevelopments": 8,
+          "rejectedDevelopments": 0,
+          "naturalDeaths": 2,
+          "resourceDeaths": 0,
+          "individualLeaves": [
+            {
+              "organId": 4,
+              "birthHour": 4,
+              "alive": true,
+              "expansionFractionAtLastObservation": 1,
+              "t50Hours": 1108,
+              "t90Hours": 2096,
+              "targetAttachmentToTipMetres": 0.24332552,
+              "targetFullWidthMetres": 0.19668527
+            },
+            {
+              "organId": 6,
+              "birthHour": 4,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.941476,
+              "t50Hours": 1072,
+              "t90Hours": 1912,
+              "targetAttachmentToTipMetres": 0.24616866,
+              "targetFullWidthMetres": 0.20343144
+            },
+            {
+              "organId": 9,
+              "birthHour": 1420,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.53793216,
+              "t50Hours": 1380,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.24233876,
+              "targetFullWidthMetres": 0.18934703
+            },
+            {
+              "organId": 11,
+              "birthHour": 1420,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.24849981,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.22223434,
+              "targetFullWidthMetres": 0.19141106
+            },
+            {
+              "organId": 14,
+              "birthHour": 1552,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.061121594,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.23052406,
+              "targetFullWidthMetres": 0.1898636
+            },
+            {
+              "organId": 16,
+              "birthHour": 1552,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.1482711,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.2348334,
+              "targetFullWidthMetres": 0.20094292
+            },
+            {
+              "organId": 19,
+              "birthHour": 1588,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.028252289,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.24149965,
+              "targetFullWidthMetres": 0.2069203
+            },
+            {
+              "organId": 21,
+              "birthHour": 1588,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.052417364,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.24855423,
+              "targetFullWidthMetres": 0.17652585
+            },
+            {
+              "organId": 25,
+              "birthHour": 1972,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.016798992,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.24133478,
+              "targetFullWidthMetres": 0.19419137
+            },
+            {
+              "organId": 27,
+              "birthHour": 1972,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.08424798,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.23151557,
+              "targetFullWidthMetres": 0.18050097
+            },
+            {
+              "organId": 30,
+              "birthHour": 2608,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.15629542,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.24030448,
+              "targetFullWidthMetres": 0.19044532
+            },
+            {
+              "organId": 32,
+              "birthHour": 2608,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.028282171,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.24605907,
+              "targetFullWidthMetres": 0.2005291
+            },
+            {
+              "organId": 36,
+              "birthHour": 2756,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.23917641,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.22323996,
+              "targetFullWidthMetres": 0.20168298
+            },
+            {
+              "organId": 38,
+              "birthHour": 2756,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.06682645,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.22845863,
+              "targetFullWidthMetres": 0.184732
+            },
+            {
+              "organId": 41,
+              "birthHour": 3012,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.07957919,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.25787178,
+              "targetFullWidthMetres": 0.20534024
+            },
+            {
+              "organId": 43,
+              "birthHour": 3012,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.1722149,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.2279329,
+              "targetFullWidthMetres": 0.19697064
+            },
+            {
+              "organId": 46,
+              "birthHour": 3840,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.011182321,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.23054817,
+              "targetFullWidthMetres": 0.20183867
+            },
+            {
+              "organId": 48,
+              "birthHour": 3840,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.33452547,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.2469184,
+              "targetFullWidthMetres": 0.20592828
+            }
+          ]
+        },
+        {
+          "day": 470,
+          "wholeLivingLeaves": 20,
+          "livingLeavesAt50Percent": 1,
+          "livingLeavesAt90Percent": 1,
+          "everReached50Percent": 4,
+          "everReached90Percent": 4,
+          "medianT50DaysAmongReaching": 51.833333499999995,
+          "medianT90DaysAmongReaching": 95.16666649999999,
+          "maximumBladeAttachmentToTipMetres": 0.22604905,
+          "medianBladeAttachmentToTipMetres": 0.020362876000000002,
+          "medianFullBladeWidthMetres": 0.0148597164,
+          "medianPetioleLengthMetres": 0.0143662345,
+          "petioleOfLargestBladeLengthMetres": 0.14497812,
+          "medianPetioleDiameterMetres": 0.00079692866,
+          "crowns": 1,
+          "crownAxialEnvelopeMetres": 0.038761503994464874,
+          "abovegroundMassGrams": 13.338781297534224,
+          "abovegroundWaterGrams": 10.6801299528172,
+          "buds": 0,
+          "petals": 0,
+          "pendingDevelopment": 2,
+          "pausedGrowthCount": 35,
+          "acceptedDevelopments": 19,
+          "rejectedDevelopments": 0,
+          "naturalDeaths": 22,
+          "resourceDeaths": 0,
+          "individualLeaves": [
+            {
+              "organId": 4,
+              "birthHour": 4,
+              "alive": false,
+              "expansionFractionAtLastObservation": 1,
+              "t50Hours": 1108,
+              "t90Hours": 2096,
+              "targetAttachmentToTipMetres": 0.24332552,
+              "targetFullWidthMetres": 0.19668527
+            },
+            {
+              "organId": 6,
+              "birthHour": 4,
+              "alive": false,
+              "expansionFractionAtLastObservation": 0.941476,
+              "t50Hours": 1072,
+              "t90Hours": 1912,
+              "targetAttachmentToTipMetres": 0.24616866,
+              "targetFullWidthMetres": 0.20343144
+            },
+            {
+              "organId": 9,
+              "birthHour": 1420,
+              "alive": false,
+              "expansionFractionAtLastObservation": 0.9445127,
+              "t50Hours": 1380,
+              "t90Hours": 8424,
+              "targetAttachmentToTipMetres": 0.24233876,
+              "targetFullWidthMetres": 0.18934703
+            },
+            {
+              "organId": 11,
+              "birthHour": 1420,
+              "alive": false,
+              "expansionFractionAtLastObservation": 0.24989857,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.22223434,
+              "targetFullWidthMetres": 0.19141106
+            },
+            {
+              "organId": 14,
+              "birthHour": 1552,
+              "alive": false,
+              "expansionFractionAtLastObservation": 0.061121594,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.23052406,
+              "targetFullWidthMetres": 0.1898636
+            },
+            {
+              "organId": 16,
+              "birthHour": 1552,
+              "alive": false,
+              "expansionFractionAtLastObservation": 0.1482711,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.2348334,
+              "targetFullWidthMetres": 0.20094292
+            },
+            {
+              "organId": 19,
+              "birthHour": 1588,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.028252289,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.24149965,
+              "targetFullWidthMetres": 0.2069203
+            },
+            {
+              "organId": 21,
+              "birthHour": 1588,
+              "alive": false,
+              "expansionFractionAtLastObservation": 0.052417364,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.24855423,
+              "targetFullWidthMetres": 0.17652585
+            },
+            {
+              "organId": 25,
+              "birthHour": 1972,
+              "alive": false,
+              "expansionFractionAtLastObservation": 0.10008988,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.24133478,
+              "targetFullWidthMetres": 0.19419137
+            },
+            {
+              "organId": 27,
+              "birthHour": 1972,
+              "alive": false,
+              "expansionFractionAtLastObservation": 0.08424798,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.23151557,
+              "targetFullWidthMetres": 0.18050097
+            },
+            {
+              "organId": 30,
+              "birthHour": 2608,
+              "alive": false,
+              "expansionFractionAtLastObservation": 0.19375768,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.24030448,
+              "targetFullWidthMetres": 0.19044532
+            },
+            {
+              "organId": 32,
+              "birthHour": 2608,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.03007102,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.24605907,
+              "targetFullWidthMetres": 0.2005291
+            },
+            {
+              "organId": 36,
+              "birthHour": 2756,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.23917641,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.22323996,
+              "targetFullWidthMetres": 0.20168298
+            },
+            {
+              "organId": 38,
+              "birthHour": 2756,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.2562462,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.22845863,
+              "targetFullWidthMetres": 0.184732
+            },
+            {
+              "organId": 41,
+              "birthHour": 3012,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.12854046,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.25787178,
+              "targetFullWidthMetres": 0.20534024
+            },
+            {
+              "organId": 43,
+              "birthHour": 3012,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.34194738,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.2279329,
+              "targetFullWidthMetres": 0.19697064
+            },
+            {
+              "organId": 46,
+              "birthHour": 3840,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.07542312,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.23054817,
+              "targetFullWidthMetres": 0.20183867
+            },
+            {
+              "organId": 48,
+              "birthHour": 3840,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.33452547,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.2469184,
+              "targetFullWidthMetres": 0.20592828
+            },
+            {
+              "organId": 50,
+              "birthHour": 8652,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.9741006,
+              "t50Hours": 1572,
+              "t90Hours": 2472,
+              "targetAttachmentToTipMetres": 0.23205926,
+              "targetFullWidthMetres": 0.18552746
+            },
+            {
+              "organId": 52,
+              "birthHour": 8784,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.0773509,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.25880826,
+              "targetFullWidthMetres": 0.18208729
+            },
+            {
+              "organId": 54,
+              "birthHour": 10064,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.40837514,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.25366628,
+              "targetFullWidthMetres": 0.19559592
+            },
+            {
+              "organId": 58,
+              "birthHour": 10200,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.26231232,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.22831182,
+              "targetFullWidthMetres": 0.19556037
+            },
+            {
+              "organId": 66,
+              "birthHour": 10640,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.010965307,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.23814313,
+              "targetFullWidthMetres": 0.17413929
+            },
+            {
+              "organId": 60,
+              "birthHour": 10648,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.08395116,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.24665177,
+              "targetFullWidthMetres": 0.17267336
+            },
+            {
+              "organId": 64,
+              "birthHour": 10652,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.11386073,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.24495532,
+              "targetFullWidthMetres": 0.17605348
+            },
+            {
+              "organId": 56,
+              "birthHour": 10656,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.05464216,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.22928005,
+              "targetFullWidthMetres": 0.18862402
+            },
+            {
+              "organId": 68,
+              "birthHour": 10992,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.05692064,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.24265707,
+              "targetFullWidthMetres": 0.17544006
+            },
+            {
+              "organId": 71,
+              "birthHour": 11164,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.00026696737,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.25322095,
+              "targetFullWidthMetres": 0.20598926
+            },
+            {
+              "organId": 73,
+              "birthHour": 11164,
+              "alive": true,
+              "expansionFractionAtLastObservation": 8.4468455e-05,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.2390964,
+              "targetFullWidthMetres": 0.17565939
+            },
+            {
+              "organId": 75,
+              "birthHour": 11252,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.008290942,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.25110465,
+              "targetFullWidthMetres": 0.20213705
+            }
+          ]
+        }
+      ],
+      "elapsedSeconds": 425.2117494
+    },
+    {
+      "label": "accept-fold-ambient1",
+      "profile": 1,
+      "hoursPerTick": 1,
+      "renderMode": 0,
+      "completed470Days": true,
+      "snapshots": [
+        {
+          "day": 330,
+          "wholeLivingLeaves": 2,
+          "livingLeavesAt50Percent": 0,
+          "livingLeavesAt90Percent": 0,
+          "everReached50Percent": 0,
+          "everReached90Percent": 0,
+          "medianT50DaysAmongReaching": null,
+          "medianT90DaysAmongReaching": null,
+          "maximumBladeAttachmentToTipMetres": 0.006387527,
+          "medianBladeAttachmentToTipMetres": 0.00607387925,
+          "medianFullBladeWidthMetres": 0.004967355600000001,
+          "medianPetioleLengthMetres": 0.0028366924999999998,
+          "petioleOfLargestBladeLengthMetres": 0.0023603672,
+          "medianPetioleDiameterMetres": 0.000133617144,
+          "crowns": 1,
+          "crownAxialEnvelopeMetres": 0.010010000318288803,
+          "abovegroundMassGrams": 0.1026344980346039,
+          "abovegroundWaterGrams": 0.08107729694893351,
+          "buds": 0,
+          "petals": 0,
+          "pendingDevelopment": 0,
+          "pausedGrowthCount": 2,
+          "acceptedDevelopments": 0,
+          "rejectedDevelopments": 0,
+          "naturalDeaths": 0,
+          "resourceDeaths": 0,
+          "individualLeaves": [
+            {
+              "organId": 4,
+              "birthHour": 1,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.023672944,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.24332552,
+              "targetFullWidthMetres": 0.19668527
+            },
+            {
+              "organId": 6,
+              "birthHour": 1,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.025947768,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.24616866,
+              "targetFullWidthMetres": 0.20343144
+            }
+          ]
+        },
+        {
+          "day": 470,
+          "wholeLivingLeaves": 2,
+          "livingLeavesAt50Percent": 0,
+          "livingLeavesAt90Percent": 0,
+          "everReached50Percent": 0,
+          "everReached90Percent": 0,
+          "medianT50DaysAmongReaching": null,
+          "medianT90DaysAmongReaching": null,
+          "maximumBladeAttachmentToTipMetres": 0.006387527,
+          "medianBladeAttachmentToTipMetres": 0.00607387925,
+          "medianFullBladeWidthMetres": 0.004967355600000001,
+          "medianPetioleLengthMetres": 0.0028366924999999998,
+          "petioleOfLargestBladeLengthMetres": 0.0023603672,
+          "medianPetioleDiameterMetres": 0.000133617144,
+          "crowns": 1,
+          "crownAxialEnvelopeMetres": 0.010010000318288803,
+          "abovegroundMassGrams": 0.1026344980346039,
+          "abovegroundWaterGrams": 0.08107729694893351,
+          "buds": 0,
+          "petals": 0,
+          "pendingDevelopment": 0,
+          "pausedGrowthCount": 2,
+          "acceptedDevelopments": 0,
+          "rejectedDevelopments": 0,
+          "naturalDeaths": 0,
+          "resourceDeaths": 0,
+          "individualLeaves": [
+            {
+              "organId": 4,
+              "birthHour": 1,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.023672944,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.24332552,
+              "targetFullWidthMetres": 0.19668527
+            },
+            {
+              "organId": 6,
+              "birthHour": 1,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.025947768,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.24616866,
+              "targetFullWidthMetres": 0.20343144
+            }
+          ]
+        }
+      ],
+      "elapsedSeconds": 174.9061792
+    },
+    {
+      "label": "accept-fold-ambient4",
+      "profile": 1,
+      "hoursPerTick": 4,
+      "renderMode": 0,
+      "completed470Days": true,
+      "snapshots": [
+        {
+          "day": 330,
+          "wholeLivingLeaves": 12,
+          "livingLeavesAt50Percent": 3,
+          "livingLeavesAt90Percent": 3,
+          "everReached50Percent": 3,
+          "everReached90Percent": 3,
+          "medianT50DaysAmongReaching": 44.0,
+          "medianT90DaysAmongReaching": 80.166667,
+          "maximumBladeAttachmentToTipMetres": 0.24616866,
+          "medianBladeAttachmentToTipMetres": 0.014781137,
+          "medianFullBladeWidthMetres": 0.0121500613,
+          "medianPetioleLengthMetres": 0.00875742775,
+          "petioleOfLargestBladeLengthMetres": 0.0909661,
+          "medianPetioleDiameterMetres": 0.0006905630800000001,
+          "crowns": 1,
+          "crownAxialEnvelopeMetres": 0.03004661202430725,
+          "abovegroundMassGrams": 27.8335446007477,
+          "abovegroundWaterGrams": 22.175412752363627,
+          "buds": 0,
+          "petals": 0,
+          "pendingDevelopment": 0,
+          "pausedGrowthCount": 23,
+          "acceptedDevelopments": 40,
+          "rejectedDevelopments": 291,
+          "naturalDeaths": 97,
+          "resourceDeaths": 0,
+          "individualLeaves": [
+            {
+              "organId": 4,
+              "birthHour": 4,
+              "alive": true,
+              "expansionFractionAtLastObservation": 1,
+              "t50Hours": 1076,
+              "t90Hours": 1924,
+              "targetAttachmentToTipMetres": 0.24332552,
+              "targetFullWidthMetres": 0.19668527
+            },
+            {
+              "organId": 6,
+              "birthHour": 4,
+              "alive": true,
+              "expansionFractionAtLastObservation": 1,
+              "t50Hours": 1036,
+              "t90Hours": 1852,
+              "targetAttachmentToTipMetres": 0.24616866,
+              "targetFullWidthMetres": 0.20343144
+            },
+            {
+              "organId": 10,
+              "birthHour": 1864,
+              "alive": true,
+              "expansionFractionAtLastObservation": 1,
+              "t50Hours": 1056,
+              "t90Hours": 2076,
+              "targetAttachmentToTipMetres": 0.23915842,
+              "targetFullWidthMetres": 0.20966496
+            },
+            {
+              "organId": 12,
+              "birthHour": 1864,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.07789932,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.24498506,
+              "targetFullWidthMetres": 0.19615124
+            },
+            {
+              "organId": 16,
+              "birthHour": 1880,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.14892368,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.25771475,
+              "targetFullWidthMetres": 0.17902927
+            },
+            {
+              "organId": 18,
+              "birthHour": 1880,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.04750524,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.25345,
+              "targetFullWidthMetres": 0.2090908
+            },
+            {
+              "organId": 29,
+              "birthHour": 2076,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.05008213,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.22552967,
+              "targetFullWidthMetres": 0.19833085
+            },
+            {
+              "organId": 31,
+              "birthHour": 2076,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.028587852,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.2507297,
+              "targetFullWidthMetres": 0.18786745
+            },
+            {
+              "organId": 241,
+              "birthHour": 4164,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.070562705,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.24827938,
+              "targetFullWidthMetres": 0.20360917
+            },
+            {
+              "organId": 243,
+              "birthHour": 4164,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.04235458,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.22577643,
+              "targetFullWidthMetres": 0.17435834
+            },
+            {
+              "organId": 246,
+              "birthHour": 4600,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.00914724,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.23007971,
+              "targetFullWidthMetres": 0.18959095
+            },
+            {
+              "organId": 248,
+              "birthHour": 4600,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.0011287279,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.23594142,
+              "targetFullWidthMetres": 0.19926697
+            }
+          ]
+        },
+        {
+          "day": 470,
+          "wholeLivingLeaves": 12,
+          "livingLeavesAt50Percent": 1,
+          "livingLeavesAt90Percent": 1,
+          "everReached50Percent": 4,
+          "everReached90Percent": 4,
+          "medianT50DaysAmongReaching": 43.583333499999995,
+          "medianT90DaysAmongReaching": 78.666667,
+          "maximumBladeAttachmentToTipMetres": 0.2322722,
+          "medianBladeAttachmentToTipMetres": 0.012409704,
+          "medianFullBladeWidthMetres": 0.010271636800000001,
+          "medianPetioleLengthMetres": 0.00827119375,
+          "petioleOfLargestBladeLengthMetres": 0.13329448,
+          "medianPetioleDiameterMetres": 0.0010887088000000001,
+          "crowns": 1,
+          "crownAxialEnvelopeMetres": 0.030046505853533745,
+          "abovegroundMassGrams": 12.108583573592114,
+          "abovegroundWaterGrams": 9.667536146451312,
+          "buds": 0,
+          "petals": 0,
+          "pendingDevelopment": 3,
+          "pausedGrowthCount": 18,
+          "acceptedDevelopments": 45,
+          "rejectedDevelopments": 291,
+          "naturalDeaths": 107,
+          "resourceDeaths": 0,
+          "individualLeaves": [
+            {
+              "organId": 4,
+              "birthHour": 4,
+              "alive": false,
+              "expansionFractionAtLastObservation": 1,
+              "t50Hours": 1076,
+              "t90Hours": 1924,
+              "targetAttachmentToTipMetres": 0.24332552,
+              "targetFullWidthMetres": 0.19668527
+            },
+            {
+              "organId": 6,
+              "birthHour": 4,
+              "alive": false,
+              "expansionFractionAtLastObservation": 1,
+              "t50Hours": 1036,
+              "t90Hours": 1852,
+              "targetAttachmentToTipMetres": 0.24616866,
+              "targetFullWidthMetres": 0.20343144
+            },
+            {
+              "organId": 10,
+              "birthHour": 1864,
+              "alive": false,
+              "expansionFractionAtLastObservation": 1,
+              "t50Hours": 1056,
+              "t90Hours": 2076,
+              "targetAttachmentToTipMetres": 0.23915842,
+              "targetFullWidthMetres": 0.20966496
+            },
+            {
+              "organId": 12,
+              "birthHour": 1864,
+              "alive": false,
+              "expansionFractionAtLastObservation": 0.07789932,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.24498506,
+              "targetFullWidthMetres": 0.19615124
+            },
+            {
+              "organId": 16,
+              "birthHour": 1880,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.20833686,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.25771475,
+              "targetFullWidthMetres": 0.17902927
+            },
+            {
+              "organId": 18,
+              "birthHour": 1880,
+              "alive": false,
+              "expansionFractionAtLastObservation": 0.04750524,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.25345,
+              "targetFullWidthMetres": 0.2090908
+            },
+            {
+              "organId": 29,
+              "birthHour": 2076,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.05008213,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.22552967,
+              "targetFullWidthMetres": 0.19833085
+            },
+            {
+              "organId": 31,
+              "birthHour": 2076,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.028587852,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.2507297,
+              "targetFullWidthMetres": 0.18786745
+            },
+            {
+              "organId": 241,
+              "birthHour": 4164,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.070562705,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.24827938,
+              "targetFullWidthMetres": 0.20360917
+            },
+            {
+              "organId": 243,
+              "birthHour": 4164,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.04235458,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.22577643,
+              "targetFullWidthMetres": 0.17435834
+            },
+            {
+              "organId": 246,
+              "birthHour": 4600,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.00914724,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.23007971,
+              "targetFullWidthMetres": 0.18959095
+            },
+            {
+              "organId": 248,
+              "birthHour": 4600,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.0018819202,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.23594142,
+              "targetFullWidthMetres": 0.19926697
+            },
+            {
+              "organId": 250,
+              "birthHour": 8648,
+              "alive": true,
+              "expansionFractionAtLastObservation": 1,
+              "t50Hours": 1020,
+              "t90Hours": 1828,
+              "targetAttachmentToTipMetres": 0.2322722,
+              "targetFullWidthMetres": 0.17704582
+            },
+            {
+              "organId": 252,
+              "birthHour": 8648,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.3931508,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.22836657,
+              "targetFullWidthMetres": 0.17895024
+            },
+            {
+              "organId": 254,
+              "birthHour": 10508,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.3642724,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.23585464,
+              "targetFullWidthMetres": 0.19980688
+            },
+            {
+              "organId": 256,
+              "birthHour": 10508,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.05283616,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.25546736,
+              "targetFullWidthMetres": 0.20081782
+            },
+            {
+              "organId": 260,
+              "birthHour": 10524,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.046096407,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.2242379,
+              "targetFullWidthMetres": 0.19511095
+            }
+          ]
+        }
+      ],
+      "elapsedSeconds": 1751.7167321
+    },
+    {
+      "label": "accept-fold-cpu1",
+      "profile": 1,
+      "hoursPerTick": 1,
+      "renderMode": 3,
+      "completed470Days": true,
+      "snapshots": [
+        {
+          "day": 330,
+          "wholeLivingLeaves": 10,
+          "livingLeavesAt50Percent": 2,
+          "livingLeavesAt90Percent": 2,
+          "everReached50Percent": 2,
+          "everReached90Percent": 2,
+          "medianT50DaysAmongReaching": 45.666667,
+          "medianT90DaysAmongReaching": 82.64583350000001,
+          "maximumBladeAttachmentToTipMetres": 0.24616866,
+          "medianBladeAttachmentToTipMetres": 0.020709927000000003,
+          "medianFullBladeWidthMetres": 0.0180366563,
+          "medianPetioleLengthMetres": 0.034698265,
+          "petioleOfLargestBladeLengthMetres": 0.0909661,
+          "medianPetioleDiameterMetres": 0.0019972245299999998,
+          "crowns": 1,
+          "crownAxialEnvelopeMetres": 0.028075698763132095,
+          "abovegroundMassGrams": 19.69727166375378,
+          "abovegroundWaterGrams": 15.603331422917108,
+          "buds": 0,
+          "petals": 0,
+          "pendingDevelopment": 0,
+          "pausedGrowthCount": 22,
+          "acceptedDevelopments": 4,
+          "rejectedDevelopments": 0,
+          "naturalDeaths": 1,
+          "resourceDeaths": 0,
+          "individualLeaves": [
+            {
+              "organId": 4,
+              "birthHour": 1,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.9352571,
+              "t50Hours": 1126,
+              "t90Hours": 2053,
+              "targetAttachmentToTipMetres": 0.24332552,
+              "targetFullWidthMetres": 0.19668527
+            },
+            {
+              "organId": 6,
+              "birthHour": 1,
+              "alive": true,
+              "expansionFractionAtLastObservation": 1,
+              "t50Hours": 1066,
+              "t90Hours": 1914,
+              "targetAttachmentToTipMetres": 0.24616866,
+              "targetFullWidthMetres": 0.20343144
+            },
+            {
+              "organId": 9,
+              "birthHour": 1705,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.2850719,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.2563986,
+              "targetFullWidthMetres": 0.2072309
+            },
+            {
+              "organId": 11,
+              "birthHour": 1705,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.19112946,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.25256205,
+              "targetFullWidthMetres": 0.17951185
+            },
+            {
+              "organId": 15,
+              "birthHour": 1793,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.03616661,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.23130402,
+              "targetFullWidthMetres": 0.18009038
+            },
+            {
+              "organId": 17,
+              "birthHour": 1793,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.075234294,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.22032347,
+              "targetFullWidthMetres": 0.19668785
+            },
+            {
+              "organId": 20,
+              "birthHour": 3020,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.10134456,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.24485709,
+              "targetFullWidthMetres": 0.2099337
+            },
+            {
+              "organId": 22,
+              "birthHour": 3020,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.050138813,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.23866068,
+              "targetFullWidthMetres": 0.19044773
+            },
+            {
+              "organId": 25,
+              "birthHour": 5082,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.017005324,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.22094984,
+              "targetFullWidthMetres": 0.18832591
+            },
+            {
+              "organId": 27,
+              "birthHour": 5082,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.0038892832,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.24596718,
+              "targetFullWidthMetres": 0.20462166
+            }
+          ]
+        },
+        {
+          "day": 470,
+          "wholeLivingLeaves": 10,
+          "livingLeavesAt50Percent": 2,
+          "livingLeavesAt90Percent": 2,
+          "everReached50Percent": 2,
+          "everReached90Percent": 2,
+          "medianT50DaysAmongReaching": 45.666667,
+          "medianT90DaysAmongReaching": 82.64583350000001,
+          "maximumBladeAttachmentToTipMetres": 0.24616866,
+          "medianBladeAttachmentToTipMetres": 0.014271021500000002,
+          "medianFullBladeWidthMetres": 0.0121745961,
+          "medianPetioleLengthMetres": 0.0245419625,
+          "petioleOfLargestBladeLengthMetres": 0.0909661,
+          "medianPetioleDiameterMetres": 0.00114233617,
+          "crowns": 1,
+          "crownAxialEnvelopeMetres": 0.02807575650513172,
+          "abovegroundMassGrams": 18.26901818475926,
+          "abovegroundWaterGrams": 14.473257962705247,
+          "buds": 0,
+          "petals": 0,
+          "pendingDevelopment": 5,
+          "pausedGrowthCount": 20,
+          "acceptedDevelopments": 5,
+          "rejectedDevelopments": 0,
+          "naturalDeaths": 3,
+          "resourceDeaths": 0,
+          "individualLeaves": [
+            {
+              "organId": 4,
+              "birthHour": 1,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.9352571,
+              "t50Hours": 1126,
+              "t90Hours": 2053,
+              "targetAttachmentToTipMetres": 0.24332552,
+              "targetFullWidthMetres": 0.19668527
+            },
+            {
+              "organId": 6,
+              "birthHour": 1,
+              "alive": true,
+              "expansionFractionAtLastObservation": 1,
+              "t50Hours": 1066,
+              "t90Hours": 1914,
+              "targetAttachmentToTipMetres": 0.24616866,
+              "targetFullWidthMetres": 0.20343144
+            },
+            {
+              "organId": 9,
+              "birthHour": 1705,
+              "alive": false,
+              "expansionFractionAtLastObservation": 0.2850719,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.2563986,
+              "targetFullWidthMetres": 0.2072309
+            },
+            {
+              "organId": 11,
+              "birthHour": 1705,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.19112946,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.25256205,
+              "targetFullWidthMetres": 0.17951185
+            },
+            {
+              "organId": 15,
+              "birthHour": 1793,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.03616661,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.23130402,
+              "targetFullWidthMetres": 0.18009038
+            },
+            {
+              "organId": 17,
+              "birthHour": 1793,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.075234294,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.22032347,
+              "targetFullWidthMetres": 0.19668785
+            },
+            {
+              "organId": 20,
+              "birthHour": 3020,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.12210384,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.24485709,
+              "targetFullWidthMetres": 0.2099337
+            },
+            {
+              "organId": 22,
+              "birthHour": 3020,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.050138813,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.23866068,
+              "targetFullWidthMetres": 0.19044773
+            },
+            {
+              "organId": 25,
+              "birthHour": 5082,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.017005324,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.22094984,
+              "targetFullWidthMetres": 0.18832591
+            },
+            {
+              "organId": 27,
+              "birthHour": 5082,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.0038892832,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.24596718,
+              "targetFullWidthMetres": 0.20462166
+            },
+            {
+              "organId": 33,
+              "birthHour": 11218,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.017876467,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.24286674,
+              "targetFullWidthMetres": 0.20217669
+            }
+          ]
+        }
+      ],
+      "elapsedSeconds": 2384.4823028
+    },
+    {
+      "label": "accept-fold-cpu4",
+      "profile": 1,
+      "hoursPerTick": 4,
+      "renderMode": 3,
+      "completed470Days": true,
+      "snapshots": [
+        {
+          "day": 330,
+          "wholeLivingLeaves": 10,
+          "livingLeavesAt50Percent": 2,
+          "livingLeavesAt90Percent": 0,
+          "everReached50Percent": 2,
+          "everReached90Percent": 0,
+          "medianT50DaysAmongReaching": 46.416667,
+          "medianT90DaysAmongReaching": null,
+          "maximumBladeAttachmentToTipMetres": 0.21549495,
+          "medianBladeAttachmentToTipMetres": 0.023933164,
+          "medianFullBladeWidthMetres": 0.019056055000000002,
+          "medianPetioleLengthMetres": 0.016595476499999998,
+          "petioleOfLargestBladeLengthMetres": 0.07963131,
+          "medianPetioleDiameterMetres": 0.00086240025,
+          "crowns": 1,
+          "crownAxialEnvelopeMetres": 0.026424622163176537,
+          "abovegroundMassGrams": 12.56441269936408,
+          "abovegroundWaterGrams": 10.062661289057711,
+          "buds": 0,
+          "petals": 0,
+          "pendingDevelopment": 0,
+          "pausedGrowthCount": 20,
+          "acceptedDevelopments": 4,
+          "rejectedDevelopments": 0,
+          "naturalDeaths": 0,
+          "resourceDeaths": 0,
+          "individualLeaves": [
+            {
+              "organId": 4,
+              "birthHour": 4,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.7090463,
+              "t50Hours": 1108,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.24332552,
+              "targetFullWidthMetres": 0.19668527
+            },
+            {
+              "organId": 6,
+              "birthHour": 4,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.87539554,
+              "t50Hours": 1120,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.24616866,
+              "targetFullWidthMetres": 0.20343144
+            },
+            {
+              "organId": 9,
+              "birthHour": 1420,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.09893167,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.24233876,
+              "targetFullWidthMetres": 0.18934703
+            },
+            {
+              "organId": 11,
+              "birthHour": 1420,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.066144824,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.22223434,
+              "targetFullWidthMetres": 0.19141106
+            },
+            {
+              "organId": 14,
+              "birthHour": 1444,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.025553893,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.24542221,
+              "targetFullWidthMetres": 0.18648285
+            },
+            {
+              "organId": 16,
+              "birthHour": 1444,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.092512146,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.25825092,
+              "targetFullWidthMetres": 0.20945922
+            },
+            {
+              "organId": 19,
+              "birthHour": 1520,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.16784438,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.23976453,
+              "targetFullWidthMetres": 0.1712998
+            },
+            {
+              "organId": 21,
+              "birthHour": 1520,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.19939949,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.23037359,
+              "targetFullWidthMetres": 0.2053575
+            },
+            {
+              "organId": 24,
+              "birthHour": 1580,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.026300833,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.24149965,
+              "targetFullWidthMetres": 0.2069203
+            },
+            {
+              "organId": 26,
+              "birthHour": 1580,
+              "alive": true,
+              "expansionFractionAtLastObservation": 2.2659571e-05,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.24855423,
+              "targetFullWidthMetres": 0.17652585
+            }
+          ]
+        },
+        {
+          "day": 470,
+          "wholeLivingLeaves": 10,
+          "livingLeavesAt50Percent": 1,
+          "livingLeavesAt90Percent": 0,
+          "everReached50Percent": 2,
+          "everReached90Percent": 0,
+          "medianT50DaysAmongReaching": 46.416667,
+          "medianT90DaysAmongReaching": null,
+          "maximumBladeAttachmentToTipMetres": 0.21549495,
+          "medianBladeAttachmentToTipMetres": 0.0290351375,
+          "medianFullBladeWidthMetres": 0.024451631,
+          "medianPetioleLengthMetres": 0.0161314755,
+          "petioleOfLargestBladeLengthMetres": 0.07963131,
+          "medianPetioleDiameterMetres": 0.0010762779,
+          "crowns": 1,
+          "crownAxialEnvelopeMetres": 0.026424895972013474,
+          "abovegroundMassGrams": 9.272292303299764,
+          "abovegroundWaterGrams": 7.416215263365302,
+          "buds": 0,
+          "petals": 0,
+          "pendingDevelopment": 1,
+          "pausedGrowthCount": 18,
+          "acceptedDevelopments": 11,
+          "rejectedDevelopments": 0,
+          "naturalDeaths": 14,
+          "resourceDeaths": 0,
+          "individualLeaves": [
+            {
+              "organId": 4,
+              "birthHour": 4,
+              "alive": false,
+              "expansionFractionAtLastObservation": 0.7090463,
+              "t50Hours": 1108,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.24332552,
+              "targetFullWidthMetres": 0.19668527
+            },
+            {
+              "organId": 6,
+              "birthHour": 4,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.87539554,
+              "t50Hours": 1120,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.24616866,
+              "targetFullWidthMetres": 0.20343144
+            },
+            {
+              "organId": 9,
+              "birthHour": 1420,
+              "alive": false,
+              "expansionFractionAtLastObservation": 0.09893167,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.24233876,
+              "targetFullWidthMetres": 0.18934703
+            },
+            {
+              "organId": 11,
+              "birthHour": 1420,
+              "alive": false,
+              "expansionFractionAtLastObservation": 0.066144824,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.22223434,
+              "targetFullWidthMetres": 0.19141106
+            },
+            {
+              "organId": 14,
+              "birthHour": 1444,
+              "alive": false,
+              "expansionFractionAtLastObservation": 0.025557747,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.24542221,
+              "targetFullWidthMetres": 0.18648285
+            },
+            {
+              "organId": 16,
+              "birthHour": 1444,
+              "alive": false,
+              "expansionFractionAtLastObservation": 0.10745541,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.25825092,
+              "targetFullWidthMetres": 0.20945922
+            },
+            {
+              "organId": 19,
+              "birthHour": 1520,
+              "alive": false,
+              "expansionFractionAtLastObservation": 0.18666601,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.23976453,
+              "targetFullWidthMetres": 0.1712998
+            },
+            {
+              "organId": 21,
+              "birthHour": 1520,
+              "alive": false,
+              "expansionFractionAtLastObservation": 0.19939949,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.23037359,
+              "targetFullWidthMetres": 0.2053575
+            },
+            {
+              "organId": 24,
+              "birthHour": 1580,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.02707035,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.24149965,
+              "targetFullWidthMetres": 0.2069203
+            },
+            {
+              "organId": 26,
+              "birthHour": 1580,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.06961987,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.24855423,
+              "targetFullWidthMetres": 0.17652585
+            },
+            {
+              "organId": 34,
+              "birthHour": 10080,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.16709639,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.2424959,
+              "targetFullWidthMetres": 0.20431913
+            },
+            {
+              "organId": 42,
+              "birthHour": 10164,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.20539545,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.2586198,
+              "targetFullWidthMetres": 0.20576535
+            },
+            {
+              "organId": 36,
+              "birthHour": 10332,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.030518487,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.25614288,
+              "targetFullWidthMetres": 0.18438175
+            },
+            {
+              "organId": 28,
+              "birthHour": 10336,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.1928867,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.22704366,
+              "targetFullWidthMetres": 0.17457087
+            },
+            {
+              "organId": 38,
+              "birthHour": 10552,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.09274045,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.24481316,
+              "targetFullWidthMetres": 0.19138886
+            },
+            {
+              "organId": 32,
+              "birthHour": 10580,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.15393174,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.22975244,
+              "targetFullWidthMetres": 0.20238695
+            },
+            {
+              "organId": 40,
+              "birthHour": 11004,
+              "alive": true,
+              "expansionFractionAtLastObservation": 0.03316432,
+              "t50Hours": null,
+              "t90Hours": null,
+              "targetAttachmentToTipMetres": 0.22734733,
+              "targetFullWidthMetres": 0.19564502
+            }
+          ]
+        }
+      ],
+      "elapsedSeconds": 655.0797539
+    }
+  ],
+  "nativeAot": [
+    {
+      "id": "12962328279a42d0a867b8a07430b639",
+      "frames": 120,
+      "packedFrameBytes": 638090,
+      "finalFrameBytes": 8100,
+      "frameVersion": 8,
+      "checkpointVersion": 6,
+      "checkpointBytes": 455556
+    },
+    {
+      "id": "a82ec96e419e434ab7a98cd5098d2a86",
+      "frames": 126,
+      "packedFrameBytes": 670060,
+      "finalFrameBytes": 8100,
+      "frameVersion": 8,
+      "checkpointVersion": 6,
+      "checkpointBytes": 455565
+    }
+  ],
+  "analyticFoldedLight": [
+    {
+      "degrees": 0,
+      "measured": 299.9798,
+      "expected": 299.9996281776643,
+      "relativeError": 6.6102796538507e-05,
+      "samples": 65536
+    },
+    {
+      "degrees": 60,
+      "measured": 262.21524,
+      "expected": 262.2169907459787,
+      "relativeError": 6.674881967416263e-06,
+      "samples": 65536
+    }
+  ],
+  "strainEnvelopeScan": [
+    {
+      "size": 1,
+      "control": "midrib",
+      "sign": -1,
+      "maximumContiguousAngleDegrees": 4.75,
+      "vertices": 176,
+      "triangles": 298
+    },
+    {
+      "size": 1,
+      "control": "midrib",
+      "sign": 1,
+      "maximumContiguousAngleDegrees": 4.75,
+      "vertices": 176,
+      "triangles": 298
+    },
+    {
+      "size": 1,
+      "control": "cup",
+      "sign": -1,
+      "maximumContiguousAngleDegrees": 5.25,
+      "vertices": 176,
+      "triangles": 298
+    },
+    {
+      "size": 1,
+      "control": "cup",
+      "sign": 1,
+      "maximumContiguousAngleDegrees": 5.5,
+      "vertices": 176,
+      "triangles": 298
+    },
+    {
+      "size": 1,
+      "control": "one-side",
+      "sign": -1,
+      "maximumContiguousAngleDegrees": 5.5,
+      "vertices": 176,
+      "triangles": 298
+    },
+    {
+      "size": 1,
+      "control": "one-side",
+      "sign": 1,
+      "maximumContiguousAngleDegrees": 5.5,
+      "vertices": 176,
+      "triangles": 298
+    },
+    {
+      "size": 0.1,
+      "control": "midrib",
+      "sign": -1,
+      "maximumContiguousAngleDegrees": 5,
+      "vertices": 176,
+      "triangles": 298
+    },
+    {
+      "size": 0.1,
+      "control": "midrib",
+      "sign": 1,
+      "maximumContiguousAngleDegrees": 4.75,
+      "vertices": 176,
+      "triangles": 298
+    },
+    {
+      "size": 0.1,
+      "control": "cup",
+      "sign": -1,
+      "maximumContiguousAngleDegrees": 5.25,
+      "vertices": 176,
+      "triangles": 298
+    },
+    {
+      "size": 0.1,
+      "control": "cup",
+      "sign": 1,
+      "maximumContiguousAngleDegrees": 5.5,
+      "vertices": 176,
+      "triangles": 298
+    },
+    {
+      "size": 0.1,
+      "control": "one-side",
+      "sign": -1,
+      "maximumContiguousAngleDegrees": 5.5,
+      "vertices": 176,
+      "triangles": 298
+    },
+    {
+      "size": 0.1,
+      "control": "one-side",
+      "sign": 1,
+      "maximumContiguousAngleDegrees": 5.5,
+      "vertices": 176,
+      "triangles": 298
+    },
+    {
+      "size": 0.01,
+      "control": "midrib",
+      "sign": -1,
+      "maximumContiguousAngleDegrees": 5,
+      "vertices": 176,
+      "triangles": 298
+    },
+    {
+      "size": 0.01,
+      "control": "midrib",
+      "sign": 1,
+      "maximumContiguousAngleDegrees": 4.75,
+      "vertices": 176,
+      "triangles": 298
+    },
+    {
+      "size": 0.01,
+      "control": "cup",
+      "sign": -1,
+      "maximumContiguousAngleDegrees": 5.25,
+      "vertices": 176,
+      "triangles": 298
+    },
+    {
+      "size": 0.01,
+      "control": "cup",
+      "sign": 1,
+      "maximumContiguousAngleDegrees": 5.25,
+      "vertices": 176,
+      "triangles": 298
+    },
+    {
+      "size": 0.01,
+      "control": "one-side",
+      "sign": -1,
+      "maximumContiguousAngleDegrees": 5.5,
+      "vertices": 176,
+      "triangles": 298
+    },
+    {
+      "size": 0.01,
+      "control": "one-side",
+      "sign": 1,
+      "maximumContiguousAngleDegrees": 5.5,
+      "vertices": 176,
+      "triangles": 298
+    }
+  ],
+  "fixedPopulationBenchmark": {
+    "rigid": {
+      "plants": 16,
+      "folding": false,
+      "organs": 144,
+      "leaves": 32,
+      "collisionMs": 28.932409999999997,
+      "lightMs": 0.33222999999999997,
+      "allocatedBytesPerCollisionTick": 237622,
+      "trianglesPerTick": 2917,
+      "candidatesPerTick": 3808,
+      "frameBytes": 19533,
+      "zlibBytes": 9177,
+      "peakWorkingSet": 92229632,
+      "UnresolvedFoliageContacts": 7,
+      "MaximumElasticContactForceNewtons": 0
+    },
+    "fold": {
+      "plants": 16,
+      "folding": true,
+      "organs": 144,
+      "leaves": 32,
+      "collisionMs": 277.91896,
+      "lightMs": 0.5885100000000001,
+      "allocatedBytesPerCollisionTick": 369252,
+      "trianglesPerTick": 178138,
+      "candidatesPerTick": 5149,
+      "frameBytes": 22989,
+      "zlibBytes": 11437,
+      "peakWorkingSet": 103071744,
+      "UnresolvedFoliageContacts": 6,
+      "MaximumElasticContactForceNewtons": 0.104255006
+    }
+  },
+  "fixedPopulationCaveat": "16 plants, 144 organs, 32 leaves, dimensions forced and growth frozen; initially overlapping adversarial fixture, separate concurrent validation processes; not a botanical stand or precision timing",
+  "fieldObservations": {
+    "cultivar": "Bergenia cordifolia Rotblum",
+    "largestBladeAttachmentToTipMetres": 0.16,
+    "approximatePetioleLengthMetres": 0.05,
+    "potTopDiameterMetres": 0.195,
+    "bladeWidth": null,
+    "initialAge": null
+  },
+  "gates": {
+    "defaultEnablement": false,
+    "denseTimeOverheadTarget": 0.25,
+    "denseTimeOverheadMeasured": 8.516859595744217,
+    "biologicalDensityAccepted": false,
+    "warmContactProposalAllocatedBytesFor10000Calls": 0,
+    "approximateDeformationStateBytesPerLeafPetiolePair": 473,
+    "completeFeatureMemoryBudgetCertified": false,
+    "mature790PlantFacadeValidated": false
+  }
+}

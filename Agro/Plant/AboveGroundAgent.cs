@@ -215,6 +215,13 @@ public partial struct AboveGroundAgent : IPlantAgent
 		if (parent < 0 || (formation.GetOrgan(parent) != OrganTypes.Petiole && formation.GetOrgan(parent) != OrganTypes.FlowerPedicel))
 			return growth;
 
+		// Maturity is relative to this petiole's sampled adult dimensions. Comparing
+		// with the species mean permanently stunts blades on smaller adult petioles.
+		// Floral bracts use fixed dimensions; their fields are not these variances.
+		ref readonly var petiole = ref formation.GetAgent(parent);
+		if (petiole.Organ == OrganTypes.Petiole && !petiole.FlowerAgent.flowerBase)
+			petioleSizeLimit += new Vector2(petiole.LengthVar, petiole.RadiusVar);
+
 		//The whole petiole, not the one segment the blade happens to hang off.
 		var grown = formation.GetOrgan(parent) == OrganTypes.Petiole
 			? PetioleChainLength(formation, parent)
@@ -410,6 +417,13 @@ public partial struct AboveGroundAgent : IPlantAgent
 	public bool flowerSupport { get; set; } = true;
 
 	/// <summary>
+	/// A committed floral axis needs a vegetative successor. The successor is a separate
+	/// collision-checked birth, so crowded leaves cannot veto placement of the scape.
+	/// Cleared only when that birth is accepted or another apex makes it unnecessary.
+	/// </summary>
+	public bool FloralHandoverPending { get; set; }
+
+	/// <summary>
 	/// This organ's inadmissible increment or pending development is waiting for its next
 	/// geometry retry. The flag is local and is not inherited by a whole branch.
 	/// </summary>
@@ -453,6 +467,7 @@ public partial struct AboveGroundAgent : IPlantAgent
     /// </summary>
 	float RadiusVar;
 	float GrowthTimeVar;
+    internal readonly float GetGrowthTimeVar() => GrowthTimeVar;
 	#endregion
 
 	public readonly float GetLengthVar() => LengthVar;
@@ -521,16 +536,21 @@ public partial struct AboveGroundAgent : IPlantAgent
 	[M(AI)]public readonly float WaterTotalCapacityPerTick_g(AgroWorld world) => WaterTotalCapacityPerHour_g() * world.HoursPerTick;
 
 	/// <summary>
-	/// Timespan for which 1 unit of energy can feed 1m³ of plant tissue
+	/// Historical reserve-allocation coefficient in model energy units per m³.
 	/// </summary>
-	//Assuming the energy units are chosen s.t. a plant need an amount of energy per hour
-	//equal to its volume, then this coefficient expresses how long it can survive
-	//without any energy gains if its storage is initially full
-	const float EnergyStorageCoef = 24 * 31 * 3; //3 months
+	// This is not a physical carbohydrate capacity or a survival duration: the
+	// maintenance model has organ-specific coefficients and reserves are not capped.
+	const float EnergyStorageCoef = 24 * 31 * 3;
 
-	[M(AI)]static float EnergyCapacityFunc(float radius, float length, float woodRatio) => 4f * radius * radius * length * MathF.Pow(1f + woodRatio, 3) * EnergyStorageCoef;
-
-	[M(AI)]public readonly float EnergyStorageCapacity() => EnergyCapacityFunc(Radius, Length, WoodFactor);
+	// Preserve the historical allocation weight for zero-cost requests. It is
+	// not a storage cap; the cylindrical proxy overweights a thin lamina.
+	[M(AI)]public readonly float EnergyStorageCapacity() => 4f * Radius * Radius * Length * MathF.Pow(1f + WoodFactor, 3) * EnergyStorageCoef;
+	// Positive-cost accounting instead weights the blade by physiological tissue
+	// volume, consistent with construction mass and maintenance.
+	[M(AI)]public readonly float EnergyStorageCapacity(SpeciesSettings species) =>
+		ResourceUnits.Enabled(species) ? Volume() * MathF.Pow(1f + WoodFactor, 3) * EnergyStorageCoef : EnergyStorageCapacity();
+	[M(AI)]public readonly float EnergyAllocationWeight(SpeciesSettings species)
+		=> MathF.Max(EnergyStorageCapacity(species), ResourceUnits.ConstructionSinkPerHour(this, species));
 
 	public readonly static Quaternion OrientationUp = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, MathF.PI * 0.5f);
 
@@ -539,12 +559,42 @@ public partial struct AboveGroundAgent : IPlantAgent
 
     [M(AI)]public readonly float LifeSupportPerHour() => Length * Radius * (Organ == OrganTypes.Leaf ? LeafThickness : Radius * WoodFactor);
 	[M(AI)]public readonly float LifeSupportPerTick(AgroWorld world) => LifeSupportPerHour() * world.HoursPerTick;
+	[M(AI)]internal readonly float LifeSupportPerHour(SpeciesSettings species) => ResourceUnits.Enabled(species)
+		? ResourceUnits.MaintenancePerHour(Volume(), WoodRatio(), species) : LifeSupportPerHour();
+	[M(AI)]public readonly float LifeSupportPerTick(AgroWorld world, SpeciesSettings species)
+		=> LifeSupportPerHour(species) * world.HoursPerTick;
 
 	public const float mPhotoEfficiency = 0.005f;
-	public const float ExpectedIrradiance = 500f; //in W/m² per hour see https://en.wikipedia.org/wiki/Solar_irradiance
-	[M(AI)]public readonly float PhotosynthPerTick(AgroWorld world) => Length * Radius * (Organ == OrganTypes.Leaf ? 2f : TwoPiTenth) * mPhotoEfficiency * ExpectedIrradiance * world.HoursPerTick;
+	public const float ExpectedIrradiance = 500f; // W/m², an empirical water-demand forecast, not measured incident light
+	// Both active Tick paths photosynthesize only in leaves. Nonphotosynthetic
+	// axes and floral organs still receive their tissue-water storage share; they
+	// must not also demand water for assimilation that never takes place.
+	[M(AI)]public readonly float PhotosynthPerTick(AgroWorld world) => Organ == OrganTypes.Leaf
+		? Length * Radius * 2f * mPhotoEfficiency * ExpectedIrradiance * world.HoursPerTick
+		: 0f;
+	[M(AI)]public readonly float PhotosynthPerTick(AgroWorld world, SpeciesSettings species)
+		=> PhotosynthPerTick(world) * (ResourceUnits.Enabled(species) ? ResourceUnits.WaterPerGlucose : 1f);
 
     [M(AI)]readonly float EnoughEnergy(float? lifeSupportPerHour = null) => (lifeSupportPerHour ?? LifeSupportPerHour()) * 320;
+	[M(AI)]readonly float EnoughEnergy(SpeciesSettings species) => EnoughEnergy(LifeSupportPerHour(species));
+
+	void Photosynthesize(PlantSubFormation<AboveGroundAgent> formation, int agentID,
+		SpeciesSettings species, AgroWorld world)
+	{
+		if (Organ != OrganTypes.Leaf || Water_g <= 0f) return;
+		var irradiance = world.Irradiance.GetIrradiance(formation, agentID); // Wh/m² over this tick
+		if (irradiance <= 0.01f) return;
+		var area = Length * Radius * 2f;
+		if (area <= 0f) return;
+		var glucoseAccounting = ResourceUnits.Enabled(species);
+		var production = ResourceUnits.PhotosynthesizedGlucose(irradiance, area, Water_g, glucoseAccounting);
+		Water_g -= ResourceUnits.WaterDebit(production, glucoseAccounting);
+		Energy += production;
+		CurrentDayEnvResources += irradiance * area;
+		CurrentDayEnvResourcesInv += irradiance;
+		CurrentDayProductionInv += production / area;
+	}
+
 
 	public AboveGroundAgent(PlantFormation2 plant, int parent, OrganTypes organ, Quaternion orientation, float initialEnergy, float radius = InitialRadius, float length = InitialLength, float initialResources = 0f, float initialProduction = 0f, bool rizome = false, Flower flowerAgent = default)
 	{
@@ -720,8 +770,8 @@ public partial struct AboveGroundAgent : IPlantAgent
 		var ageHours = (timestep - BirthTime) * world.HoursPerTick; //age in hours
 
 		//TODO growth should reflect temperature
-		var lifeSupportPerHour = LifeSupportPerHour();
-		var lifeSupportPerTick = LifeSupportPerTick(world);
+		var lifeSupportPerHour = LifeSupportPerHour(species);
+		var lifeSupportPerTick = lifeSupportPerHour * world.HoursPerTick;
 
 		Energy -= lifeSupportPerTick; //life support
 
@@ -753,36 +803,7 @@ public partial struct AboveGroundAgent : IPlantAgent
 		else if (world.Season > species.SeasonalSenescence && Organ == OrganTypes.Petiole)
 			InitSenescence(timestep, plant, species, formation, children, world.HoursPerTick, stressReason: false);
 
-		//Photosynthesis
-		if (Organ == OrganTypes.Leaf && Water_g > 0f)
-		{
-			var approxLight = world.Irradiance.GetIrradiance(formation, agentID); //in Watt per Hour per m²
-			if (approxLight > 0.01f)
-			{
-				//var airTemp = world.GetTemperature(timestep);
-				//var surface = Length * Radius * (Organ == OrganTypes.Leaf ? 2f : TwoPi);
-				var surface = Length * Radius * 2f;
-				//var possibleAmountByLight = surface * approxLight * mPhotoFactor * (Organ != OrganTypes.Leaf ? 0.1f : 1f);
-				var possibleAmountByLight = surface * approxLight;
-				var possibleAmountByWater = Water_g;
-				// var possibleAmountByCO2 = airTemp >= plant.VegetativeHighTemperature.Y
-				// 	? 0f
-				// 	: (airTemp <= plant.VegetativeHighTemperature.X
-				// 		? float.MaxValue
-				// 		: surface * (airTemp - plant.VegetativeHighTemperature.X) / (plant.VegetativeHighTemperature.Y - plant.VegetativeHighTemperature.X)); //TODO respiratory cycle
-
-				//simplified photosynthesis equation:
-				//CO_2 + H2O + photons → [CH_2 O] + O_2
-				//var photosynthesizedEnergy = Math.Min(possibleAmountByLight * mPhotoEfficiency, Math.Min(possibleAmountByWater, possibleAmountByCO2));
-				var photosynthesizedEnergy = Math.Min(possibleAmountByLight * mPhotoEfficiency, possibleAmountByWater);
-
-				Water_g -= photosynthesizedEnergy;
-				Energy += photosynthesizedEnergy;
-				CurrentDayEnvResources += approxLight * surface;
-				CurrentDayEnvResourcesInv += approxLight;
-				CurrentDayProductionInv += photosynthesizedEnergy / surface;
-			}
-		}
+		Photosynthesize(formation, agentID, species, world);
 
 		formation.MarkDevelopmentPhysiology(this);
 		switch(Organ)
@@ -921,7 +942,7 @@ public partial struct AboveGroundAgent : IPlantAgent
 					break;
 					case OrganTypes.Meristem:
 					{
-						var energyReserve = Math.Clamp(Energy / EnergyStorageCapacity(), 0f, 1f);
+						var energyReserve = Math.Clamp(Energy / EnergyStorageCapacity(species), 0f, 1f);
 						var waterReserve = Math.Min(1f, plant.WaterBalance);
 						var growth = formation.DailyProductionMax > 1e-6f ? new Vector2(1e-3f, 2e-5f) * (dominanceFactor * energyReserve * waterReserve * world.HoursPerTick * (PreviousDayProductionInvariant / formation.DailyProductionMax)) : Vector2.Zero;
 
@@ -935,7 +956,7 @@ public partial struct AboveGroundAgent : IPlantAgent
 					break;
 					case OrganTypes.Stem:
 					{
-						var energyReserve = Math.Clamp(Energy / EnergyStorageCapacity(), 0f, 1f);
+						var energyReserve = Math.Clamp(Energy / EnergyStorageCapacity(species), 0f, 1f);
 						var growth = 2e-5f * dominanceFactor * energyReserve * Math.Min(plant.WaterBalance, energyReserve) * world.HoursPerTick;
 
 						//assure not to outgrow the parent
@@ -1217,11 +1238,11 @@ public partial struct AboveGroundAgent : IPlantAgent
 
 	public readonly Quaternion RandomOrientation(PlantFormation2 plant, SpeciesSettings species, Quaternion orientation, bool gravitropism = true)
 	{
-		var range = 0.2f * MathF.PI * (species.TwigsBendingByLevel * DominanceLevel - species.TwigsBendingApical);
+		var range = 0.2f * MathF.PI * (species.TwigsBendingByLevel * DominanceLevel - species.EffectiveTwigsBendingApical);
 		var factor = species.TwigsBending * range;
 		var a = plant.RNG.NextFloatVar(factor);
 		orientation *= Quaternion.CreateFromAxisAngle(Vector3.UnitY, a);
-		if (!gravitropism || species.ShootsGravitaxis <= 0f) return orientation;
+		if (!gravitropism || species.EffectiveShootsGravitaxis <= 0f) return orientation;
 		var y = Vector3.Transform(Vector3.UnitX, orientation).Y;
 
 		if (species.ShootsGravitropicSetPointAngle > 0f)
@@ -1230,11 +1251,11 @@ public partial struct AboveGroundAgent : IPlantAgent
 			//made a trailing bellflower climb rather than sprawl.
 			orientation = Quaternion.Slerp(orientation,
 				GravitropicSetPointOrientation(orientation, species.ShootsGravitropicSetPointAngle),
-				Math.Clamp(plant.RNG.NextPositiveFloat(species.ShootsGravitaxis), 0f, 1f));
+				Math.Clamp(plant.RNG.NextPositiveFloat(species.EffectiveShootsGravitaxis), 0f, 1f));
 		else if (y < 0)
 			orientation = Quaternion.Slerp(orientation, PlantFormation2.AdjustUpBase(orientation, up: true), plant.RNG.NextPositiveFloat(-y));
-		else //if (species.ShootsGravitaxis > 0)
-		  	orientation = Quaternion.Slerp(orientation, PlantFormation2.AdjustUpBase(orientation, up: true), plant.RNG.NextPositiveFloat(species.ShootsGravitaxis));
+		else //if (species.EffectiveShootsGravitaxis > 0)
+			orientation = Quaternion.Slerp(orientation, PlantFormation2.AdjustUpBase(orientation, up: true), plant.RNG.NextPositiveFloat(species.EffectiveShootsGravitaxis));
 
 		return orientation;
 	}

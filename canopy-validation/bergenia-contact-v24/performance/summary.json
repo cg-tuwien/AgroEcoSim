@@ -1,0 +1,140 @@
+{
+  "v21-1h": {
+    "n": 45,
+    "medianMs": 267.331,
+    "p95Ms": 280.946,
+    "medianFoliageMs": 264.442,
+    "intervals": [
+      58727,
+      59058,
+      59915
+    ],
+    "triangles": [
+      482151,
+      482459,
+      488206
+    ],
+    "medianTickAllocBytes": 991360,
+    "unresolved": [
+      0
+    ],
+    "hashes": [
+      "DEDF53EABF96CBD8"
+    ]
+  },
+  "v21-4h": {
+    "n": 45,
+    "medianMs": 83.052,
+    "p95Ms": 89.633,
+    "medianFoliageMs": 79.376,
+    "intervals": [
+      17343,
+      17407,
+      18780
+    ],
+    "triangles": [
+      89492,
+      91631,
+      91734
+    ],
+    "medianTickAllocBytes": 863808,
+    "unresolved": [
+      0
+    ],
+    "hashes": [
+      "EE66A01BC8D5C53E"
+    ]
+  },
+  "v23-1h": {
+    "n": 45,
+    "medianMs": 311.305,
+    "p95Ms": 329.024,
+    "medianFoliageMs": 308.254,
+    "intervals": [
+      89521,
+      90054,
+      90817
+    ],
+    "triangles": [
+      574555,
+      581188,
+      600719
+    ],
+    "medianTickAllocBytes": 997368,
+    "unresolved": [
+      0
+    ],
+    "hashes": [
+      "630D63BF6F10D185"
+    ]
+  },
+  "v23-4h": {
+    "n": 45,
+    "medianMs": 80.962,
+    "p95Ms": 83.754,
+    "medianFoliageMs": 78.731,
+    "intervals": [
+      16512,
+      17407,
+      17489
+    ],
+    "triangles": [
+      89276,
+      90730,
+      98500
+    ],
+    "medianTickAllocBytes": 863280,
+    "unresolved": [
+      0
+    ],
+    "hashes": [
+      "EE66A01BC8D5C53E"
+    ]
+  },
+  "v24-1h": {
+    "n": 45,
+    "medianMs": 315.728,
+    "p95Ms": 321.117,
+    "medianFoliageMs": 313.226,
+    "intervals": [
+      91152,
+      91295,
+      91626
+    ],
+    "triangles": [
+      578094,
+      597141,
+      599145
+    ],
+    "medianTickAllocBytes": 995480,
+    "unresolved": [
+      0
+    ],
+    "hashes": [
+      "630D63BF6F10D185"
+    ]
+  },
+  "v24-4h": {
+    "n": 45,
+    "medianMs": 82.563,
+    "p95Ms": 93.269,
+    "medianFoliageMs": 80.024,
+    "intervals": [
+      17049,
+      17743,
+      18438
+    ],
+    "triangles": [
+      90811,
+      95151,
+      104432
+    ],
+    "medianTickAllocBytes": 862584,
+    "unresolved": [
+      0
+    ],
+    "hashes": [
+      "EE66A01BC8D5C53E"
+    ]
+  }
+}

@@ -1,0 +1,14 @@
+Species lookup: Bergenia Cordifolia, BudLength: 0.009
+PlantFormation2 ctor: Bergenia Cordifolia, BudLength: 0.009
+SpeciesSettings.Init called on Bergenia Cordifolia, BudLength: 0.009
+PlantFormation2 after Init: Bergenia Cordifolia, BudLength: 0.009
+CONTROLLED DIAGNOSTIC ONLY: same-layout v23 snapshot under v24 mechanics; not a fresh seasonal replay or supported live migration.
+Collision scene: 2 triangles (2 soil, 0 obstacle) in 0 ms, open soil surface (regular fields use their finite footprint)
+mode=archived-exact tick=1 requestedDays=755 initial=2025-09-01T00:00:00.0000000 field=10x4x10@0.05 seed=42 light=3 deterministic=True presetTilt=0.0 presetScapeGravitropism=0.50 contactMode=None
+day,date,AG,UG,leaves,leaves50,leaves90,cumulative50,cumulative90,maxBladeCm,maxWidthCm,petals,floral,blocked,pending,accepted,rejected,waterBalance,totalWater,totalEnergy,finite,elapsedSec
+SCAPE day=305 id=52 lmm=7.049122 rmm=2.743225 targetLmm=13.7000675 targetRmm=4.121531 blocked=True
+305,2026-07-03,52,231,20,4,2,4,2,23.92,20.21,0,1,36,0,10,0,1978.387,694.417,655.546,1,19.9
+310,2026-07-08,51,235,20,4,2,4,2,23.92,20.21,0,0,29,0,10,0,1957.891,706.757,678.778,1,68.6
+315,2026-07-13,51,241,20,4,2,4,2,23.92,20.21,0,0,35,0,10,0,1936.838,718.303,700.669,1,113.0
+CHECKPOINT /tmp/gf-scape-recovery/production/crown-v24-continuation-1h-day317-v24.bin bytes=51896338
+DONE mode=archived-exact tick=1 firstPetalDay=-1 elapsed=00:02:10.9822955 everLeaves=20 ever50=4 ever90=2

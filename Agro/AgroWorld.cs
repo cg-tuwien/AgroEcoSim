@@ -385,6 +385,58 @@ public class AgroWorld : SimulationWorld
 	internal Pcg RNG = new(42);
     internal ISoilFormation Soil;
 
+    // Soil transport must finish before roots inspect its water balances. The
+    // generic parallel scheduler otherwise races soil writes with plant reads.
+    // The inner per-column soil workers have joined before the plant workers start.
+    protected override void TickParallel()
+    {
+        if (Soil == null)
+        {
+            base.TickParallel();
+            return;
+        }
+        Soil.Tick(Timestep);
+        var formations = FormationList;
+        Parallel.For(0, formations.Count, i =>
+        {
+            var formation = formations[i];
+            if (!ReferenceEquals(formation, Soil))
+                formation.Tick(Timestep);
+        });
+    }
+
+    // Soil receipts must enter plant inboxes before those inboxes are drained.
+    // A second round still handles any messages produced by the plant round.
+    public override void DeliverPostParallel()
+    {
+        if (Soil == null)
+        {
+            base.DeliverPostParallel();
+            return;
+        }
+        var formations = FormationList;
+        int delivered;
+        do
+        {
+            delivered = 0;
+            if (Soil.HasUndeliveredPost)
+            {
+                Soil.DeliverPost(Timestep);
+                delivered = 1;
+            }
+            Parallel.For(0, formations.Count, i =>
+            {
+                var formation = formations[i];
+                if (!ReferenceEquals(formation, Soil) && formation.HasUndeliveredPost)
+                {
+                    formation.DeliverPost(Timestep);
+                    Interlocked.Exchange(ref delivered, 1);
+                }
+            });
+        }
+        while (delivered != 0);
+    }
+
     internal void InitRNG(ulong seed) => RNG = new(seed);
 
 	int[] DistributeSunAndClouds(Pcg rng, int totalSun, int totalClouds)
@@ -633,8 +685,75 @@ public class AgroWorld : SimulationWorld
 	//first tick after a restore - which is why a resumed run has to be given a world built the
 	//normal way rather than an empty one.
 
-	/// <summary>The format this world writes and accepts. Bumped when the payload changes shape.</summary>
-	public const byte CheckpointVersion = 3;
+	/// <summary>The state and geometry semantics this world writes and accepts.</summary>
+	// V4 corrects authored leaf widths. V3 contact caches and accepted frames refer to the old
+	// geometry and cannot safely resume under the corrected templates; saved V7 playback is unchanged.
+	// V5 keeps request coefficients unmodified during initialization. Earlier archives
+	// contain already-converted settings without a marker, so rebuilding their live
+	// world would apply the conversion twice. Their recorded playback is still valid.
+    // V6 adds accepted internal blade/petiole controls and pins their immutable
+    // geometry/profile identity. V7 scene playback remains independently readable.
+    // V7 integrates the moving direct and diffuse sky at ten-minute midpoints and
+    // supports calibrated expansion/contact limits. Old live states would continue
+    // under different light and growth semantics; recorded scene playback is unchanged.
+    // V8 corrects lamina reserve weights, maintenance horizons, photosynthetic
+    // water demand and root growth units. The layout is unchanged, but old live
+    // continuations diverge.
+    // V9 adds construction escrow and retained root-branch funding intent.
+	// V10 separates seed reserves from hydration and corrects germination accounting.
+	// V11 debits delivered water from both soil models, saves high-precision cell
+	// balances and the tetrahedral virtual reservoir, and introduces opt-in
+	// glucose-equivalent accounting. Older live states would continue with a
+	// different resource budget; recorded playback remains independently readable.
+    // V13 stores independent admission retry state for retained organ births.
+    // V14 certifies segmented scape emergence, changes Bergenia's unloaded scape
+    // curve and inherits the new search bound in older requests that omitted it.
+    // V15 changes foliage rollback: a rejected stationary petiole can yield after
+    // rejected neighbours are restored, and a floral increment may be retried
+    // against that accepted geometry with a full continuous clearance check.
+    // Older live states would take a different growth path; scene playback is independent.
+    // V16 certifies attachment sweeps against the minimum exclusion radius of each
+    // subinterval, permitting radius growth without freezing the whole path at its
+    // starting size. V15 continuations could reject feasible scape growth.
+    // V17 captures sampled support-radius growth, but a later contact fallback
+    // could still discard its early retry. V18 certifies that retry after final
+    // fallback, preserving accepted radii. V19 keeps unfinished floral precursors
+    // viable only through their bounded bloom window instead of applying an
+    // organ-age cutoff before the successor can develop. Older live states follow
+    // different development paths; recorded playback remains independently readable.
+    // V20 retries only sampled leaf/petiole growth after final contact fallback and
+    // releases an unplaceable first scape once its original spring opportunity ends.
+    // Both change continuation semantics without changing the saved-state layout.
+    // V21 uses actual interpolated thickness for midpoint collision rejection
+    // and endpoint thickness for separating-plane proofs. Sampled floral growth
+    // can retain a certified partial increment after the final contact rollback.
+    // V22 certifies attachment containment using the same centre-line / blade
+    // surface geometry as clipping, avoiding false rejection of neighbour yield.
+    // The payload layout is unchanged; accepted continuation paths can differ.
+    // V23 aligns live growth-trial pair order with the main contact solver.
+    // Equivalent sweeps now share its bounded certificate and continuation policy.
+    // The payload layout is unchanged; retry acceptance can differ from V22.
+    // V24 distinguishes observed intersections from uncertified sweeps, permits
+    // bounded facet-plane certificates after the distance-query budget, and uses
+    // a mechanical retry budget independent of biological tick duration. Accepted
+    // continuation paths can change; the payload layout and playback do not.
+    // V25 recovers sampled floral development through certified waypoints, with
+    // both contacting support systems yielding at each smaller growth increment.
+    // Only certified prefixes are retained. Payload layout and playback are unchanged.
+    // V26 retains multiple continuation witnesses and solves their coupled
+    // unilateral tangent constraints. Accepted geometry and retries can differ.
+    // V27 adds certified staged evasion and clearance guards to experimental V1.
+    // Retry ordering/precision changes can alter continuation; playback is unchanged.
+    // V28 solves shared angular limits in the coupled tangent and adds a bounded
+    // direct solve for poorly conditioned contact sets. Payload layout is unchanged.
+    // V30 aligns interval distance proofs with the existing clearance tolerance
+    // and removes unchecked tiny-motion acceptance, including at attachments.
+    // Certification decisions can alter continuation; payload/playback are unchanged.
+    // V31 measures unrestricted rod distances in relative doubles and preserves
+    // exact accepted interpolation endpoints. V32 clips attached rod pairs in
+    // double parameter ranges and uses matching exemption-containment predicates.
+    // Contact/retry decisions can change; payload layout and playback are unchanged.
+	public const byte CheckpointVersion = 32;
 
 	/// <summary>
 	/// Everything the next step depends on that the request does not determine.
@@ -659,6 +778,7 @@ public class AgroWorld : SimulationWorld
 		//Counted so a restore can refuse a world of a different shape rather than silently reading
 		//one formation's state into another's.
 		writer.Write(Count);
+        ForEach(formation => { if(formation is PlantFormation2 plant) writer.Write(SceneGeometryAssets.For(plant.Parameters).Id); });
 
 		ForEach(formation =>
 		{
@@ -703,6 +823,11 @@ public class AgroWorld : SimulationWorld
 				$"The checkpoint holds {count} formations and this request builds {Count}. " +
 				$"The scenario has changed since the run was saved.");
 
+        ForEach(formation =>
+        {
+            if(formation is PlantFormation2 plant && reader.ReadString()!=SceneGeometryAssets.For(plant.Parameters).Id)
+                throw new InvalidDataException("The checkpoint mesh or deformation profile has changed. Recorded playback remains available.");
+        });
 		ForEach(formation =>
 		{
 			switch (formation)

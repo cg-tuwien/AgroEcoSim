@@ -24,8 +24,8 @@ namespace Agro
                 var phase = formation.GetFloweringPhase(species, timestep);
 
                 //TODO growth should reflect temperature
-                var lifeSupportPerHour = agent.LifeSupportPerHour();
-                var lifeSupportPerTick = agent.LifeSupportPerTick(world);
+                var lifeSupportPerHour = agent.LifeSupportPerHour(species);
+                var lifeSupportPerTick = lifeSupportPerHour * world.HoursPerTick;
 
                 agent.Energy -= lifeSupportPerTick; //life support
 
@@ -34,36 +34,7 @@ namespace Agro
                 var enoughEnergyState = agent.EnoughEnergy(lifeSupportPerHour);
                 var wasMeristem = false;
 
-                //Photosynthesis
-                if (agent.Organ == OrganTypes.Leaf && agent.Water_g > 0f)
-                {
-                    var approxLight = world.Irradiance.GetIrradiance(formation, agentID); //in Watt per Hour per m²
-                    if (approxLight > 0.01f)
-                    {
-                        //var airTemp = world.GetTemperature(timestep);
-                        //var surface = Length * Radius * (Organ == OrganTypes.Leaf ? 2f : TwoPi);
-                        var surface = agent.Length * agent.Radius * 2f;
-                        //var possibleAmountByLight = surface * approxLight * mPhotoFactor * (Organ != OrganTypes.Leaf ? 0.1f : 1f);
-                        var possibleAmountByLight = surface * approxLight;
-                        var possibleAmountByWater = agent.Water_g;
-                        // var possibleAmountByCO2 = airTemp >= plant.VegetativeHighTemperature.Y
-                        // 	? 0f
-                        // 	: (airTemp <= plant.VegetativeHighTemperature.X
-                        // 		? float.MaxValue
-                        // 		: surface * (airTemp - plant.VegetativeHighTemperature.X) / (plant.VegetativeHighTemperature.Y - plant.VegetativeHighTemperature.X)); //TODO respiratory cycle
-
-                        //simplified photosynthesis equation:
-                        //CO_2 + H2O + photons → [CH_2 O] + O_2
-                        //var photosynthesizedEnergy = Math.Min(possibleAmountByLight * mPhotoEfficiency, Math.Min(possibleAmountByWater, possibleAmountByCO2));
-                        var photosynthesizedEnergy = Math.Min(possibleAmountByLight * mPhotoEfficiency, possibleAmountByWater);
-
-                        agent.Water_g -= photosynthesizedEnergy;
-                        agent.Energy += photosynthesizedEnergy;
-                        agent.CurrentDayEnvResources += approxLight * surface;
-                        agent.CurrentDayEnvResourcesInv += approxLight;
-                        agent.CurrentDayProductionInv += photosynthesizedEnergy / surface;
-                    }
-                }
+                agent.Photosynthesize(formation, agentID, species, world);
 
                 formation.MarkDevelopmentPhysiology(agent);
                 switch (agent.Organ)
@@ -131,9 +102,12 @@ namespace Agro
                     return;
                 }
 
-                // Suspension is local to this organ; an obstructed sibling or supporting
-                // axis does not suppress an independently admissible growth increment.
-                if (agent.Energy > enoughEnergyState && !agent.IsRizome && !agent.GrowthBlocked)
+                // A blocked apex still experiences the seasonal opportunity to flower.
+                // Its extension stays suspended, and a retained birth is sampled only once;
+                // the new floral axis must pass the usual developmental collision trial.
+                if (agent.Energy > enoughEnergyState && !agent.IsRizome
+                    && (!agent.GrowthBlocked || (agent.Organ == OrganTypes.Meristem
+                        && !formation.HasPendingDevelopment(agentID))))
                 {
                     //Growth and branching
                     if (agent.Organ != OrganTypes.Bud) //for simplicity dormant buds do not grow
@@ -157,7 +131,7 @@ namespace Agro
                                 if (currentSize.X < sizeLimit.X || currentSize.Y < sizeLimit.Y)
                                 {
                                     //HoursPerTick are included in GrowthTimeVar
-                                    var growth = Math.Min(1f, plant.WaterBalance) * sizeLimit * agent.GrowthTimeVar * productionFactor;
+                                    var growth = Math.Min(1f, plant.WaterBalance) * sizeLimit * agent.GrowthTimeVar * productionFactor * species.LeafExpansionRateScale;
                                     var petioleSizeLimit = !agent.FlowerAgent.flowerBase
                                         ? new Vector2(species.PetioleLength, species.PetioleRadius)
                                         : new Vector2(species.FlowerSettings.FlowerBaseLeafPetioleLength, species.FlowerSettings.FlowerBaseLeafPetioleRadius);
@@ -191,7 +165,7 @@ namespace Agro
                                 if (currentSize.X < sizeLimit.X || currentSize.Y < sizeLimit.Y)
                                 {
                                     //HoursPerTick are included in GrowthTimeVar
-                                    var growth = Math.Min(1f, plant.WaterBalance) * sizeLimit * agent.GrowthTimeVar * productionFactor;
+                                    var growth = Math.Min(1f, plant.WaterBalance) * sizeLimit * agent.GrowthTimeVar * productionFactor * species.LeafExpansionRateScale;
                                     var resultingSize = Vector2.Min(currentSize + growth, sizeLimit);
                                     growth = resultingSize - currentSize;
 
@@ -205,9 +179,9 @@ namespace Agro
                             break;
                             case OrganTypes.Meristem:
                             {
-                                if (!agent.IsRizome)
+                                if (!agent.IsRizome && !agent.GrowthBlocked)
                                 {
-                                    var energyReserve = Math.Clamp(agent.Energy / agent.EnergyStorageCapacity(), 0f, 1f);
+                                    var energyReserve = Math.Clamp(agent.Energy / agent.EnergyStorageCapacity(species), 0f, 1f);
                                     var waterReserve = Math.Min(1f, plant.WaterBalance);
                                     var growth = new Vector2(1e-3f, 2e-5f) * (dominanceFactor * energyReserve * waterReserve * world.HoursPerTick * productionFactor * species.HerbaceousGrowthRateScale);
 
@@ -225,7 +199,7 @@ namespace Agro
                             {
                                 if (phase != SeasonalPhase.ResetPending)
                                 {
-                                    var energyReserve = Math.Clamp(agent.Energy / agent.EnergyStorageCapacity(), 0f, 1f);
+                                    var energyReserve = Math.Clamp(agent.Energy / agent.EnergyStorageCapacity(species), 0f, 1f);
                                     var growth = 2e-5f * dominanceFactor * energyReserve * Math.Min(plant.WaterBalance, energyReserve) * world.HoursPerTick * species.HerbaceousGrowthRateScale;
 
                                     //assure not to outgrow the parent
@@ -275,7 +249,11 @@ namespace Agro
                                 }
                             }
 
-                            if (agent.Organ == OrganTypes.Meristem && agent.Length > agent.LengthVar)
+                            // A mature crown apex can commit to flower even when contact
+                            // prevents its tiny vegetative internode from elongating. The
+                            // floral axis still has to pass its own collision admission.
+                            if (agent.Organ == OrganTypes.Meristem
+                                && (agent.Length > agent.LengthVar || agent.GrowthBlocked))
                             {
                                 float prevResources, prevProduction;
                                 if (timestep - agent.BirthTime > world.HoursPerTick)
@@ -296,36 +274,19 @@ namespace Agro
                                     agent.Organ = OrganTypes.Stem;
                                     agent.GrowthTimeVar = world.HoursPerTick / (species.WoodGrowthTime + plant.RNG.NextFloatVar(species.WoodGrowthTimeVar));
                                     wasMeristem = true;
-                                    //Committing a flower consumes the apex, so the crown needs a
-                                    //replacement or it is finished for good - a capped axis that
-                                    //flowered once simply stopped, and the plant froze at a
-                                    //constant organ count from its first summer onwards.
-                                    //
-                                    //A full axis must not grow, though: an old flower dying frees a
-                                    //slot under MaximumFlowersPerCrown, the same axis commits again
-                                    //a month later, and that path alone stacked 106 nodes on a
-                                    //Fragaria crown. So the hand-over is sympodial - the
-                                    //replacement is born as a SIBLING of the flowering node rather
-                                    //than as its child, which is what an axillary take-over
-                                    //actually is, and the axis keeps its length.
-                                    //Committing a flower consumes the apex. A crown with room left
-                                    //hands over to a replacement, which is the sympodial succession
-                                    //of a rosette; a crown that is already at CrownMaximumNodes is
-                                    //simply finished, and the plant renews itself from a rhizome or
-                                    //offset bud instead. Letting a full crown hand over anyway grew
-                                    //it by one node per flower - 93 stacked nodes on an everbearing
-                                    //Fragaria - and skipping the hand-over unconditionally left
-                                    //every crown apexless and the whole plant frozen.
-                                    //
-                                    //The apex test excludes the committing agent: its Organ was set
-                                    //to Stem on the local struct copy but the formation is
-                                    //double-buffered and still reports a Meristem.
-                                    if (species.ContinueCrownAfterFlowerCommitment
+                                    // A floral axis and its vegetative successor must be admitted
+                                    // independently. A crowded replacement with several leaves used
+                                    // to reject the scape in the same birth transaction, even when
+                                    // the scape itself had room. The pending flag is structural state:
+                                    // it survives a retained placement and checkpoint continuation.
+                                    // A full crown cannot hand over; excluding this committing apex
+                                    // matters because the formation still holds its old Meristem type.
+                                    agent.FloralHandoverPending = species.ContinueCrownAfterFlowerCommitment
                                         && CrownAxisHasRoom(formation, agentID, species)
-                                        && !HasVegetativeApex(formation, agentID, agentID))
-                                        ContinueCrown(ref agent, formation, agentID, prevResources, prevProduction);
+                                        && !HasVegetativeApex(formation, agentID, agentID);
                                 }
-                                else if ((plant.RNG.NextFloat() < crownContinuationProbability)
+                                else if (!agent.GrowthBlocked
+                                    && (plant.RNG.NextFloat() < crownContinuationProbability)
                                     && CrownAxisHasRoom(formation, agentID, species))
                                 {
                                     agent.Organ = OrganTypes.Stem;
@@ -438,7 +399,7 @@ namespace Agro
                         // Suspended extension must not create free strengthening in dormancy.
                         if (agent.Organ != OrganTypes.Bud && phase != SeasonalPhase.ResetPending)
                         {
-                            var reserve = Math.Clamp(agent.Energy / Math.Max(1e-12f, agent.EnergyStorageCapacity()), 0f, 1f);
+                            var reserve = Math.Clamp(agent.Energy / Math.Max(1e-12f, agent.EnergyStorageCapacity(species)), 0f, 1f);
                             var radial = 2e-5f * world.HoursPerTick * species.RhizomeGrowthRateScale
                                 * species.GetDominanceFactor(agent.DominanceLevel) * reserve * Math.Clamp(plant.WaterBalance, 0f, 1f);
                             agent.Radius = Math.Max(agent.Radius, Math.Min(species.RhizomeSegmentRadius, agent.Radius + radial));
@@ -511,7 +472,7 @@ namespace Agro
                                 if (phase == SeasonalPhase.ResetPending)
                                     break;
 
-                                var energyReserve = Math.Clamp(agent.Energy / agent.EnergyStorageCapacity(), 0f, 1f);
+                                var energyReserve = Math.Clamp(agent.Energy / agent.EnergyStorageCapacity(species), 0f, 1f);
                                 var waterReserve = Math.Min(1f, plant.WaterBalance);
                                 var growth = new Vector2(1e-3f, 2e-5f) * (dominanceFactor * energyReserve * waterReserve * world.HoursPerTick * (agent.IsRizome ? species.RhizomeGrowthRateScale : species.HerbaceousGrowthRateScale));
                                 // Console.WriteLine($"growm {growth.X} {energyReserve} {waterReserve} {agent.PreviousDayProductionInvariant / formation.DailyProductionMax} {agent.PreviousDayProductionInvariant} {formation.DailyProductionMax}");
@@ -582,7 +543,7 @@ namespace Agro
                             {
                                 if (phase != SeasonalPhase.ResetPending)
                                 {
-                                    var energyReserve = Math.Clamp(agent.Energy / agent.EnergyStorageCapacity(), 0f, 1f);
+                                    var energyReserve = Math.Clamp(agent.Energy / agent.EnergyStorageCapacity(species), 0f, 1f);
                                     var growth = 2e-5f * dominanceFactor * energyReserve * Math.Min(plant.WaterBalance, energyReserve) * world.HoursPerTick * species.RhizomeGrowthRateScale;
 
                                     //assure not to outgrow the parent
@@ -598,6 +559,28 @@ namespace Agro
                     }
                 }
 
+                // A scape already accepted by collision gets its own sympodial crown
+                // handover. Retained replacement proposals keep this flag until they fit,
+                // so neither a failed placement nor a checkpoint resamples the leaves.
+                // On the commitment tick births have not yet entered the pending map.
+                // Wait for a later tick so the scape and successor are separate trials.
+                if (agent.FloralHandoverPending && !wasMeristem && agent.Organ == OrganTypes.Stem
+                    && !formation.HasPendingDevelopment(agentID))
+                {
+                    if (!CrownAxisHasRoom(formation, agentID, species)
+                        || HasVegetativeApex(formation, agentID, agentID))
+                        agent.FloralHandoverPending = false;
+                    else if (agent.Energy > enoughEnergyState)
+                    {
+                        var prevResources = agent.PreviousDayEnvResourcesInvariant > 0f
+                            ? agent.PreviousDayEnvResourcesInvariant : formation.DailyResourceMax;
+                        var prevProduction = agent.PreviousDayProductionInvariant > 0f
+                            ? agent.PreviousDayProductionInvariant : formation.DailyProductionMax;
+                        agent.FloralHandoverPending = false;
+                        ContinueCrown(ref agent, formation, agentID, prevResources, prevProduction);
+                    }
+                }
+
                 //update auxins for meristem and stems that were meristem in the previous step
                 agent.Auxins = wasMeristem || agent.Organ == OrganTypes.Meristem ? species.AuxinsProduction : 0;
             }
@@ -608,7 +591,7 @@ namespace Agro
                 var plant = formation.Plant;
                 var species = plant.Parameters;
                 if (agent.GrowthBlocked || agent.LoadLimited || formation.IsLoadLimited(agent.Parent) || ageHours <= 24f || !species.CrownBudActivationPeriod.HasFlag(phase) ||
-                    agent.Energy <= agent.EnoughEnergy())
+                    agent.Energy <= agent.EnoughEnergy(species))
                     return false;
 
                 //A bud sitting on a rhizome starts a NEW crown, and the walk inside
@@ -760,7 +743,7 @@ namespace Agro
 
             static void TryActivateRhizomeBud(ref AboveGroundAgent agent, PlantFormation2 plant, SpeciesSettings species, SeasonalPhase phase, float ageHours)
             {
-                if (ageHours <= 24f || !species.RhizomeBudActivationPeriod.HasFlag(phase) || agent.Energy <= agent.EnoughEnergy())
+                if (ageHours <= 24f || !species.RhizomeBudActivationPeriod.HasFlag(phase) || agent.Energy <= agent.EnoughEnergy(species))
                     return;
 
                 //Lateral branching of a creeping rhizome is an annual developmental

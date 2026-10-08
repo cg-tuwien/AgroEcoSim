@@ -1,0 +1,50 @@
+[
+  {
+    "case": "normal",
+    "tickHours": 1,
+    "poseSha256": "0B66C7B562752B7979E3A61FA23E8C16911FB80D87E32C7E55115B8514447451",
+    "unchanged": true
+  },
+  {
+    "case": "radial",
+    "tickHours": 1,
+    "poseSha256": "DFDDB9E4B6B8C709B4AE8CC961FF23F5CE69C6064ECC58D0D39D70B00A709C3A",
+    "unchanged": true
+  },
+  {
+    "case": "common",
+    "tickHours": 1,
+    "poseSha256": "ED17DC08A11F23DE92CE3BCB8160B01327817A9C84D220E15AF9947172581BD3",
+    "unchanged": true
+  },
+  {
+    "case": "v1",
+    "tickHours": 1,
+    "poseSha256": "6391FD41598B37E2628995CF3AE48E22F14F7FF6C2453D045FDA868C7E6EDEBD",
+    "unchanged": true
+  },
+  {
+    "case": "normal",
+    "tickHours": 4,
+    "poseSha256": "0B66C7B562752B7979E3A61FA23E8C16911FB80D87E32C7E55115B8514447451",
+    "unchanged": true
+  },
+  {
+    "case": "radial",
+    "tickHours": 4,
+    "poseSha256": "DFDDB9E4B6B8C709B4AE8CC961FF23F5CE69C6064ECC58D0D39D70B00A709C3A",
+    "unchanged": true
+  },
+  {
+    "case": "common",
+    "tickHours": 4,
+    "poseSha256": "ED17DC08A11F23DE92CE3BCB8160B01327817A9C84D220E15AF9947172581BD3",
+    "unchanged": true
+  },
+  {
+    "case": "v1",
+    "tickHours": 4,
+    "poseSha256": "6391FD41598B37E2628995CF3AE48E22F14F7FF6C2453D045FDA868C7E6EDEBD",
+    "unchanged": true
+  }
+]

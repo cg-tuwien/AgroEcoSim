@@ -1,0 +1,52 @@
+Species lookup: Carex morrowii 'Variegata', BudLength: 0.004
+PlantFormation2 ctor: Carex morrowii 'Variegata', BudLength: 0.004
+SpeciesSettings.Init called on Carex morrowii 'Variegata', BudLength: 0.004
+PlantFormation2 after Init: Carex morrowii 'Variegata', BudLength: 0.004
+Collision scene: 2 triangles (2 soil, 0 obstacle) in 11 ms, open soil surface (regular fields use their finite footprint)
+STEP 60 organs=23 pending=0 rejected=0 paused=0 pairs=5511
+STEP 120 organs=23 pending=0 rejected=0 paused=0 pairs=6951
+STEP 180 organs=23 pending=0 rejected=0 paused=0 pairs=8391
+STEP 240 organs=23 pending=0 rejected=0 paused=0 pairs=9831
+STEP 300 organs=23 pending=0 rejected=0 paused=0 pairs=11271
+STEP 360 organs=23 pending=0 rejected=0 paused=0 pairs=12711
+STEP 420 organs=23 pending=0 rejected=0 paused=0 pairs=14151
+STEP 480 organs=23 pending=0 rejected=0 paused=0 pairs=15591
+STEP 540 organs=23 pending=0 rejected=0 paused=0 pairs=17031
+STEP 600 organs=23 pending=0 rejected=0 paused=0 pairs=18471
+STEP 660 organs=23 pending=0 rejected=0 paused=0 pairs=19911
+STEP 720 organs=23 pending=0 rejected=0 paused=0 pairs=21351
+STEP 780 organs=42 pending=0 rejected=0 paused=0 pairs=26838
+STEP 840 organs=61 pending=0 rejected=0 paused=12 pairs=60113
+STEP 900 organs=61 pending=0 rejected=0 paused=12 pairs=119821
+STEP 960 organs=70 pending=0 rejected=0 paused=22 pairs=197234
+STEP 1020 organs=70 pending=0 rejected=0 paused=21 pairs=300889
+STEP 1080 organs=74 pending=0 rejected=0 paused=23 pairs=409687
+STEP 1140 organs=83 pending=1 rejected=2 paused=26 pairs=522703
+STEP 1200 organs=108 pending=1 rejected=3 paused=22 pairs=669832
+STEP 1260 organs=127 pending=1 rejected=4 paused=22 pairs=843055
+STEP 1320 organs=146 pending=1 rejected=5 paused=22 pairs=1020764
+STEP 1380 organs=149 pending=1 rejected=6 paused=35 pairs=1190295
+STEP 1440 organs=150 pending=1 rejected=6 paused=25 pairs=1370381
+STEP 1500 organs=153 pending=1 rejected=7 paused=41 pairs=1578633
+STEP 1560 organs=153 pending=2 rejected=10 paused=42 pairs=1794110
+STEP 1620 organs=153 pending=3 rejected=14 paused=45 pairs=2024297
+STEP 1680 organs=175 pending=2 rejected=16 paused=38 pairs=2278310
+STEP 1740 organs=213 pending=3 rejected=21 paused=34 pairs=2560138
+STEP 1800 organs=217 pending=3 rejected=23 paused=39 pairs=2823820
+STEP 1860 organs=236 pending=3 rejected=26 paused=39 pairs=3086471
+STEP 1920 organs=242 pending=3 rejected=27 paused=32 pairs=3358705
+STEP 1980 organs=261 pending=2 rejected=29 paused=51 pairs=3639643
+STEP 2040 organs=318 pending=2 rejected=31 paused=57 pairs=3967523
+STEP 2100 organs=340 pending=1 rejected=32 paused=58 pairs=4270245
+STEP 2160 organs=400 pending=2 rejected=35 paused=54 pairs=4656385
+STEP 2220 organs=422 pending=3 rejected=38 paused=85 pairs=5116788
+STEP 2280 organs=466 pending=3 rejected=41 paused=114 pairs=5702201
+STEP 2340 organs=506 pending=3 rejected=44 paused=113 pairs=6338318
+STEP 2400 organs=507 pending=4 rejected=47 paused=129 pairs=6949362
+RESULT Carex morrowii 'Variegata' days=100 hours=1 organs=507 rhizomes=44 y=[-0.01,0.20515433] down=18 inverted=0 bytes=42032 contacts=0 cuts=0
+DEATHS natural=0 resources=0 accepted=49 rejected=47
+COUNTS Stem=49 down=0
+COUNTS Petiole=46 down=0
+COUNTS Leaf=368 down=0
+COUNTS Meristem=13 down=0
+COUNTS Bud=31 down=18

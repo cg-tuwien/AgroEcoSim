@@ -189,6 +189,7 @@ public class IrradianceClient
 		}
 	}
 
+    bool ReportedDeformationFallback;
 	public void Tick(SimulationWorld world, uint timestep, IList<IFormation> formations, IList<IObstacle> obstacles)
 	{
 		if (timestep == 0)
@@ -213,8 +214,16 @@ public class IrradianceClient
 		//the rest of the run even after it came up.
 		RefreshSkipFormations(formations);
 
-		var agroWorld = world as AgroWorld;
-		if (IsOnline && GlobalIllumination && SelectedMode != Mode.Internal)
+        var agroWorld = world as AgroWorld;
+        var foldedExternal = GlobalIllumination && SelectedMode != Mode.Internal
+            && formations.OfType<PlantFormation2>().Any(p=>p.AG.HasContactDeformation);
+        if(foldedExternal)
+        {
+            UseInternal=true;world.RendererName=$"{Mode.Internal} (deformable-surface fallback)";
+            if(!ReportedDeformationFallback)
+            {Console.WriteLine($"{RequestedMode} light protocol lacks area-weighted deformable leaf sensors; using the CPU folded-surface solver.");ReportedDeformationFallback=true;}
+        }
+		if (!foldedExternal && IsOnline && GlobalIllumination && SelectedMode != Mode.Internal)
 		{
 			DoTick(agroWorld, timestep, formations, obstacles);
 			//An external renderer lights the plants but measures nothing on the facade, so the
@@ -432,7 +441,7 @@ public class IrradianceClient
 	{
 		var obji = new System.Text.StringBuilder();
 		var points = new List<Vector3>();
-		foreach(var obstacle in obstacles)
+		foreach(var obstacle in obstacles ?? [])
 			obstacle.ExportObj(points, obji);
 
 		var skipPointer = 0;
@@ -449,6 +458,12 @@ public class IrradianceClient
 				for (int i = 0; i < count; ++i)
 				{
 					var organ = ag.GetOrgan(i);
+                    if(MechanicalMesh.For(ag,i) is { } mesh)
+                    {
+                        var offset=points.Count;points.AddRange(mesh.Positions);
+                        for(var t=0;t<mesh.Indices.Count;t+=3)obji.AppendLine(OF(offset+mesh.Indices[t],offset+mesh.Indices[t+1],offset+mesh.Indices[t+2]));
+                        continue;
+                    }
 					var center = ag.GetBaseCenterWorld(i);
 					var scale = ag.GetScale(i);
 					var halfRadiusX = new Vector3(0f, 0f, scale.Z * 0.5f);
@@ -522,7 +537,9 @@ public class IrradianceClient
 	{
 		IrradianceFormationOffsets.Clear();
 		using var writer = new BinaryWriter(binaryStream);
-		writer.WriteU8(1); //version 1 using triangular meshes
+		var version2=formations.OfType<PlantFormation2>().Any(p=>p.AG.HasContactDeformation);
+        writer.WriteU8(version2?2:1); // V2 widens vegetation triangle counts; obstacle records are unchanged.
+        void TriangleCount(int count) {if(version2)writer.WriteU32(count);else writer.WriteU8(count);}
 
 		//Obstacles
 		if (obstacles == null)
@@ -558,6 +575,13 @@ public class IrradianceClient
 				for (int i = 0; i < count; ++i)
 				{
 					var organ = ag.GetOrgan(i);
+                    if(MechanicalMesh.For(ag,i) is { } mesh)
+                    {
+                        TriangleCount(mesh.Indices.Count/3);var offset=IrradiancePoints.Count;
+                        IrradiancePoints.AddRange(mesh.Positions);
+                        foreach(var vertex in mesh.Indices)writer.WriteU32(offset+vertex);
+                        continue;
+                    }
 					var center = ag.GetBaseCenterWorld(i);
 					var scale = ag.GetScale(i);
 					var halfRadiusX = new Vector3(0f, 0f, scale.Z * 0.5f);
@@ -567,7 +591,7 @@ public class IrradianceClient
 					{
 						case OrganTypes.Leaf:
 							{
-								writer.WriteU8(2); //WRITE NUMBER OF TRIANGLES in this surface
+								TriangleCount(2); //WRITE NUMBER OF TRIANGLES in this surface
 
 								var p = IrradiancePoints.Count;
 								IrradiancePoints.Add(center + Vector3.Transform(-halfRadiusX, orientation));
@@ -587,7 +611,7 @@ public class IrradianceClient
 						case OrganTypes.Stem: case OrganTypes.Petiole: case OrganTypes.Meristem:
 							{
 								var halfRadiusY = new Vector3(0f, scale.Y * 0.5f, 0f);
-								writer.WriteU8(8); //WRITE NUMBER OF TRIANGLES in this surface
+								TriangleCount(8); //WRITE NUMBER OF TRIANGLES in this surface
 								var p = IrradiancePoints.Count;
 								IrradiancePoints.Add(center + Vector3.Transform(-halfRadiusX - halfRadiusY, orientation));
 								IrradiancePoints.Add(center + Vector3.Transform(halfRadiusX - halfRadiusY, orientation));
@@ -631,7 +655,7 @@ public class IrradianceClient
 						case OrganTypes.Bud:
 							{
 								var halfRadiusY = new Vector3(0f, scale.Y * 0.5f, 0f);
-								writer.WriteU8(2); //WRITE NUMBER OF TRIANGLES in this surface
+								TriangleCount(2); //WRITE NUMBER OF TRIANGLES in this surface
 								var p = IrradiancePoints.Count;
 								IrradiancePoints.Add(center + Vector3.Transform(-halfRadiusX - halfRadiusY, orientation));
 								IrradiancePoints.Add(center + Vector3.Transform(halfRadiusX - halfRadiusY, orientation));
@@ -1001,13 +1025,26 @@ public class IrradianceClient
 		}
 	}
 
-	internal void ExportV7(IList<IFormation> formations, Stream binaryStream, ExportFlags flags)
+    byte[]? RecordedGeometryAssets;
+    internal void ExportV7(IList<IFormation> formations, Stream binaryStream, ExportFlags flags)
+        => ExportRecordedScene(formations, binaryStream, flags, false);
+    internal void ExportV8(IList<IFormation> formations, Stream binaryStream, ExportFlags flags)
+        => ExportRecordedScene(formations, binaryStream, flags, true);
+
+    void ExportRecordedScene(IList<IFormation> formations, Stream binaryStream, ExportFlags flags, bool v8)
 	{
 		using var writer = new BinaryWriter(binaryStream, System.Text.Encoding.UTF8, leaveOpen: true);
-		writer.WriteU8(7);
+		writer.WriteU8(v8 ? 8 : 7);
 
 		var includeAnalytics = flags.HasFlag(ExportFlags.Analytics);
 		writer.Write((byte)flags);
+        if (v8)
+        {
+            // Every frame is independently decodable, including random-access playback
+            // and downloaded archives. Build and hash assets once, never per leaf/tick.
+            RecordedGeometryAssets ??= SceneGeometryAssets.Table(formations.OfType<PlantFormation2>().Select(p => p.Parameters));
+            writer.Write(RecordedGeometryAssets);
+        }
 		//Formations
 		writer.WriteU32(formations.Count - SkipFormations.Count); //WRITE NUMBER OF PLANTS in this system
 		var seasonProgress = -1f;
@@ -1029,6 +1066,7 @@ public class IrradianceClient
 						++sensorsCount;
 
 				writer.Write(plant.Parameters.Name);
+                if (v8) writer.Write(SceneGeometryAssets.For(plant.Parameters).Id);
 				writer.WriteU32(count); //WRITE NUMBER OF ABOVE-GROUND SURFACES in this plant
 
 				for (int i = 0; i < count; ++i)
@@ -1045,16 +1083,29 @@ public class IrradianceClient
 					var parentIndex = ag.GetParent(i);
 					writer.Write(parentIndex);
 					writer.WriteU8((byte)organ);
+                    if (v8)
+                    {
+                        var kind = ag.HasContactDeformation && organ is OrganTypes.Leaf or OrganTypes.Petiole
+                            ? organ == OrganTypes.Leaf ? (byte)1 : (byte)2 : (byte)0;
+                        writer.Write(kind);
+                        if (kind != 0)
+                        {
+                            var q = ag.GetDeformation(i);
+                            writer.Write(q.X); writer.Write(q.Y); writer.Write(q.Z); writer.Write(q.W);
+                        }
+                    }
 					switch (organ)
 					{
 						case OrganTypes.Leaf:
                         case OrganTypes.FlowerPadel:
                             {
+								var template = ag.GetLaminaTemplate(i)!;
 								var ax = x * scale.X * 0.5f;
-								var ay = -z * scale.Z * 0.5f;
-								// Relief is authored at the morphology's reference width and grows with
-								// the blade. Use the same transform as the collision templates.
-								var az = y * ag.GetLaminaTemplate(i)!.ReliefScale(scale.Z * .5f);
+								var ay = -z * (scale.Z * 0.5f * template.WidthScale);
+								// Served vertices retain their authored width for old playback. New matrices
+								// apply the same correction as the cached collision vertices.
+								// Relief still grows with the physical blade width, independently of that correction.
+								var az = y * template.ReliefScale(scale.Z * .5f);
 								var c = center + ax;
 								writer.WriteM32(ax, ay, az, c);
 								if (includeAnalytics)
@@ -1214,7 +1265,7 @@ public class IrradianceClient
 		// 	case 6: ExportAsBeautyPrimitives(formations, target, extended: true, roots: true); break;
 		// 	case 7:
         // }
-		ExportV7(formations, target, flags);
+		ExportV8(formations, target, flags);
 
     }
 
@@ -1323,8 +1374,13 @@ public class IrradianceClient
 			if (formation is not PlantFormation2 plant) continue;
 			if (IrradianceFormationOffsets.TryGetValue(plant.AG, out var offsets))
 			{
-				writer.Write(offsets.Length);
-				foreach (var offset in offsets) writer.Write(offset);
+                // CPU buffers grow geometrically. Their spare capacity depends on
+                // whether the world was resumed and is not continuation state.
+                // GetIrradiance treats missing entries exactly like -1 entries.
+                var length = offsets.Length;
+                while (length > 0 && offsets[length - 1] < 0) --length;
+                writer.Write(length);
+                for (var i = 0; i < length; ++i) writer.Write(offsets[i]);
 			}
 			else writer.Write(-1);
 		}

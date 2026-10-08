@@ -315,10 +315,12 @@ export function sampleSkyDome(utc: Date, latitude = LATITUDE, longitude = LONGIT
 }
 
 /**
- * The dome a whole TIMESTEP should be shown under - the one CpuLightSolver actually integrates.
+ * Representative instantaneous dome for the TIMESTEP preview, not the CPU light integral.
  *
- * A mirror of Agro/Irradiance/CpuLightSolver.cs BuildDomes, and the reason it exists is that the
- * obvious thing is wrong: the solver never samples the instant a tick BEGINS. It takes
+ * The CPU now integrates six solar positions per hour, including the diffuse sky. This
+ * preview retains one sun for interactive rendering and must not be used for plant energy.
+ * Its historical representative-dome approximation remains useful because the
+ * obvious thing is wrong: sampling only the instant a tick BEGINS can show a dark sky. It takes
  * `clamp(HoursPerTick, 1, 6)` domes at the midpoints of equal sub-steps, keeps the geometry of
  * the BRIGHTEST one, and scales its magnitudes so they carry the mean irradiance over the tick.
  *
@@ -347,8 +349,8 @@ export function sampleTickDome(start: Date, hoursPerTick: number,
     }
     meanGlobal /= subSteps;
 
-    //Scaled so the tick's MEAN irradiance rides the brightest instant's geometry, which is what
-    //the diffuse gather should see. A dark tick is returned untouched - there is nothing to
+    //Scale the representative preview's brightness to the tick mean. CPU gathering uses
+    //the full angular time integral instead. A dark tick is untouched - there is nothing to
     //scale and the ratio would be 0/0.
     return isLit(brightest!) ? scaledDome(brightest!, meanGlobal / brightest!.globalHorizontal)
                              : brightest!;
@@ -376,7 +378,7 @@ export function tickSunInstant(start: Date, hoursPerTick: number,
     return best;
 }
 
-/** Agro/Irradiance/CpuLightSolver.cs: six sub-steps cover a day tick at four-hour resolution. */
+/** Preview-only sampling budget. CPU integration uses six positions per hour. */
 function subStepsOf(hoursPerTick: number): number {
     const whole = Math.trunc(hoursPerTick);
     return whole < 1 ? 1 : whole > 6 ? 6 : whole;

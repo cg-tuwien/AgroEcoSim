@@ -225,20 +225,48 @@ namespace Agro
 
             public void handleAgent(ref AboveGroundAgent agent, int agentID, PlantSubFormation<AboveGroundAgent> formation, uint timestep)
             {
-
-                //Console.WriteLine($"{timestep} {agent.BirthTime} {formation.Plant.World.HoursPerTick} {(timestep - agent.BirthTime) * formation.Plant.World.HoursPerTick} {30 * 24}");
-                if ((timestep - agent.BirthTime) * formation.Plant.World.HoursPerTick < formation.Plant.Parameters.FlowerSettings.FlowerMaximumAgeHours)
+                var species = formation.Plant.Parameters;
+                var ageHours = (timestep - agent.BirthTime) * formation.Plant.World.HoursPerTick;
+                var pending = formation.HasPendingDevelopment(agentID);
+                var precursor = agent.Organ is OrganTypes.FlowerMeristem or OrganTypes.FlowerBaseBud or OrganTypes.FlowerBud;
+                var awaitingSuccessor = pending;
+                if (precursor && !awaitingSuccessor)
                 {
-
+                    awaitingSuccessor = true;
+                    foreach (var child in formation.GetChildren(agentID))
+                    {
+                        var kind = formation.GetOrgan(child);
+                        if (kind >= OrganTypes.FlowerBud && kind <= OrganTypes.FlowerBaseBud
+                            && formation.GetHasFlowerSupport(child))
+                        {
+                            awaitingSuccessor = false;
+                            break;
+                        }
+                    }
+                }
+                // A still-growing scape meristem must not age out before it can make
+                // its next segment; the same applies to an unopened bud or a retained
+                // floral birth. This is a finite developmental extension, not an
+                // indefinite lifespan under impossible contact. Post-flower rebloom
+                // settings can commit later; otherwise the final commitment window
+                // plus nominal lead bounds the latest possible bloom. All cases end
+                // no later than seasonal senescence.
+                var leadSeason = _settings.CommitmentToBloomLeadHours / (365f * 24f);
+                var latestCommitment = species.PostFloweringCommitmentProbabilityPerHour > 0f
+                    || species.DormantFloweringCommitmentProbabilityPerHour > 0f
+                    ? species.SeasonalSenescence - leadSeason : species.FloweringSeasonEnd;
+                var latestBloom = MathF.Min(species.SeasonalSenescence, latestCommitment + leadSeason);
+                var developing = agent.Energy > 0f && (awaitingSuccessor
+                    ? agent.flowerSupport && agent.WoodFactor == 0f && formation.Plant.World.Season <= latestBloom
+                    : ageHours < _settings.FlowerMaximumAgeHours);
+                if (developing)
+                {
                     grow(ref agent, agentID, formation);
                     if (!agent.GrowthBlocked && !agent.LoadLimited)
                         chaning(ref agent, agentID, formation, timestep);
                 }
                 else
                     receit(ref agent, agentID, formation);
-                //if (agent.Energy <= 0)
-                   // formation.Death(agentID);
-
             }
 
             /// <summary>

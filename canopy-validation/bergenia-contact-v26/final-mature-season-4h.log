@@ -1,0 +1,24 @@
+Species lookup: Bergenia Cordifolia, BudLength: 0.009
+PlantFormation2 ctor: Bergenia Cordifolia, BudLength: 0.009
+SpeciesSettings.Init called on Bergenia Cordifolia, BudLength: 0.009
+PlantFormation2 after Init: Bergenia Cordifolia, BudLength: 0.009
+Collision scene: 2 triangles (2 soil, 0 obstacle) in 7 ms, open soil surface (regular fields use their finite footprint)
+version=26 tick=4 beginDay=240 stopDay=275 render=3 requestHorizonHours=18120
+day,AG,UG,leaves,half,ninety,petals,floral,blocked,water,energy,finite,maxUnresolved,elapsedSec
+240,52,86,20,5,5,0,1,51,25.168000704143196,418.0815376627288,True,0,0.00
+SCAPE day=240 id=52 lmm=0.40286416 rmm=1.2429563 targetLmm=13.996346 targetRmm=4.6535854 blocked=True
+245,52,90,20,5,5,0,1,50,25.239460710668936,442.66781355766943,True,0,13.42
+SCAPE day=245 id=52 lmm=0.40286416 rmm=1.2429563 targetLmm=13.996346 targetRmm=4.6535854 blocked=True
+250,52,94,20,5,5,0,1,50,25.270522395614535,467.36448724876755,True,0,22.50
+SCAPE day=250 id=52 lmm=0.40286416 rmm=1.2429563 targetLmm=13.996346 targetRmm=4.6535854 blocked=True
+255,52,101,20,5,5,0,1,51,25.353770442539826,493.9881104732558,True,0,33.54
+SCAPE day=255 id=52 lmm=0.40286416 rmm=1.2429563 targetLmm=13.996346 targetRmm=4.6535854 blocked=True
+260,52,107,20,5,5,0,1,50,25.392870304523967,520.8088190905437,True,0,42.74
+SCAPE day=260 id=52 lmm=0.40286416 rmm=1.2429563 targetLmm=13.996346 targetRmm=4.6535854 blocked=True
+265,52,109,20,5,5,0,1,50,25.387235441594385,547.6636721699651,True,0,51.37
+SCAPE day=265 id=52 lmm=0.40286416 rmm=1.2429563 targetLmm=13.996346 targetRmm=4.6535854 blocked=True
+270,52,119,20,5,5,0,1,50,25.4004708614666,575.0288168571387,True,0,60.96
+SCAPE day=270 id=52 lmm=0.40286416 rmm=1.2429563 targetLmm=13.996346 targetRmm=4.6535854 blocked=True
+275,52,122,20,5,5,0,1,50,25.412332362611778,603.6515332467825,True,0,70.20
+SCAPE day=275 id=52 lmm=0.40286416 rmm=1.2429563 targetLmm=13.996346 targetRmm=4.6535854 blocked=True
+DONE day=275 finite=True maxUnresolved=0 observedLeaves=20 petalsObservedSum=0 frameBytes=9738

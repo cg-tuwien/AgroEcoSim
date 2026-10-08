@@ -97,7 +97,7 @@ public class SimulationWorld
 			Formations[i].Tick(Timestep);
 	}
 
-	void TickParallel() => Parallel.For(0, Formations.Count, i => Formations[i].Tick(Timestep));
+	protected virtual void TickParallel() => Parallel.For(0, Formations.Count, i => Formations[i].Tick(Timestep));
 
 	public void DeliverPostSequential()
 	{
@@ -114,7 +114,7 @@ public class SimulationWorld
 		}
 	}
 
-	public void DeliverPostParallel()
+	public virtual void DeliverPostParallel()
 	{
 		var anyDelivered = true;
 		while(anyDelivered)

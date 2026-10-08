@@ -44,7 +44,7 @@ public class SoilFormationTetrahedral : ISoilFormation
 	/// </summary>
     readonly HashSet<int> RequestsPresent;
 	/// <summary>
-    /// Water request in gramms. For seed requests, Part < 0
+    /// Water request in grams. For seed requests, Part is less than zero.
     /// </summary>
 	readonly List<(PlantFormation2 Plant, int Part, float Amount_g)>[] WaterRequests;
 
@@ -62,10 +62,12 @@ public class SoilFormationTetrahedral : ISoilFormation
 
     readonly bool DoVirtual = true;
     float TotalRaincatch;
-    float TotalWaterCapacity;
+    double TotalWaterCapacity;
     float TotalCellVolume;
-    float TotalWater_g;
-    float TotalRequested;
+    double TotalWater_g;
+    // Only non-virtual fields need per-cell precision. Keep the legacy float
+    // initialization array without doubling the memory of the usual virtual trays.
+    double[] FiniteWater_g;
     List<(PlantFormation2 Plant, int Part, float Amount_g)> TotalWaterRequests;
 
 	public SoilFormationTetrahedral(AgroWorld world, string name, Vector3[] vertices, IList<int> faces, List<List<int>> soilFaces)
@@ -529,14 +531,15 @@ public class SoilFormationTetrahedral : ISoilFormation
 	/// </summary>
 	/// <param name="index"></param>
 	/// <returns></returns>
-	[M(AI)] public float GetWater_g(int index, int soilIndex = 0) => DoVirtual ? TotalWater_g : (index >= 0 && index < Water_g.Length ? Water_g[index] : 0f);
+	[M(AI)] public float GetWater_g(int index, int soilIndex = 0) =>
+        (float)(DoVirtual ? TotalWater_g : (index >= 0 && index < Water_g.Length ? FiniteWater_g[index] : 0d));
 
 	/// <summary>
 	/// Maximum water amount that can be stored in this cell (in gramms)
 	/// </summary>
 	/// <param name="index"></param>
 	/// <returns></returns>
-	[M(AI)] public float GetWaterCapacity_g(int index) => DoVirtual ? TotalWaterCapacity : WaterCapacityPerCell[index];
+	[M(AI)] public float GetWaterCapacity_g(int index) => DoVirtual ? (float)TotalWaterCapacity : WaterCapacityPerCell[index];
 
 	[M(AI)] public float GetTemperature(int index, int soilIndex) => 20f;
 
@@ -597,7 +600,7 @@ public class SoilFormationTetrahedral : ISoilFormation
         {
             if (rain > 0)
             {
-                TotalWater_g += rain * TotalRaincatch;
+                TotalWater_g += (double)rain * TotalRaincatch;
                 if (TotalWaterCapacity < TotalWater_g)
                     TotalWater_g = TotalWaterCapacity;
             }
@@ -609,41 +612,37 @@ public class SoilFormationTetrahedral : ISoilFormation
                 for(int i = 0; i < RainCatchers.Length; ++i)
                 {
                     var index = RainCatchers[i].Index;
-                    Water_g[index] += rain * RainCatchers[i].ProjectedArea; //in gramms, shadowing not taken into account
-                    if (Water_g[index] > WaterCapacityPerCell[index])
-                        Water_g[index] = WaterCapacityPerCell[index];
+                    FiniteWater_g[index] = Math.Min(WaterCapacityPerCell[index],
+                        FiniteWater_g[index] + (double)rain * RainCatchers[i].ProjectedArea); // grams; shadowing not taken into account
                 }
 
             //diffusion
             var count = Tetrahedralization.Length;
 
-            var availables = new float[count];
-            var received = new float[count];
-            var removed = new float[count];
+            // Snapshot the transport budget before moving anything. Each flux is
+            // capped by both the source's remaining water and the destination's
+            // free capacity. A saturated cell cannot silently destroy inflow.
+            var availables = new double[count];
             for(int i = 0; i < count; ++i)
-                availables[i] = Water_g[i] - MinimumWaterToDiffuse[i];
+                availables[i] = Math.Max(0d, FiniteWater_g[i] - MinimumWaterToDiffuse[i]);
 
-            for(int j = 0; j < count; ++j)
-                if (availables[j] > 0)
-                    for(int i = 0; i < count; ++i)
+            for(int source = 0; source < count; ++source)
+                if (availables[source] > 0d)
+                    for(int destination = 0; destination < count; ++destination)
                     {
-                        var w = DiffusionMatrix[i, j] * availables[j];
-                        received[i] += w;
-                        removed[j] += w;
+                        if (destination == source)
+                            continue;
+                        var headroom = WaterCapacityPerCell[destination] - FiniteWater_g[destination];
+                        if (headroom <= 0d)
+                            continue;
+                        var sourceWater = FiniteWater_g[source] - MinimumWaterToDiffuse[source];
+                        var transfer = Math.Min(DiffusionMatrix[destination, source] * availables[source],
+                            Math.Min(sourceWater, headroom));
+                        if (transfer <= 0d)
+                            continue;
+                        FiniteWater_g[source] -= transfer;
+                        FiniteWater_g[destination] += transfer;
                     }
-
-            for(int i = 0; i < count; ++i)
-            {
-                var w = Water_g[i] + received[i] - removed[i];
-                if (w <= 0f)
-                    Water_g[i] = 0f;
-                if (WaterCapacityPerCell[i] >= w)
-                    Water_g[i] = w;
-                else
-                    Water_g[i] = WaterCapacityPerCell[i];
-                //TODO redistribute the remaining water
-                Water_g[i] = WaterCapacityPerCell[i];
-            }
         }
         //Debug.WriteLine($"T: {timestep}\tID:{ID}\tR:{rain}\tA:{removed.Sum()}\tR:{received.Sum()}");
 
@@ -667,19 +666,18 @@ public class SoilFormationTetrahedral : ISoilFormation
 	[M(AI)]
 	public void RequestWater(int index, float amount_g, PlantSubFormation<UnderGroundAgent> plant, int part, int soilIndex = 0)
 	{
+		if (!float.IsFinite(amount_g) || amount_g <= 0f || plant == null || part < 0)
+			return;
 		lock(RequestsPresent)
         {
             if (DoVirtual)
             {
                 if (TotalWater_g > 0)
-                {
-                    TotalRequested += amount_g;
                     TotalWaterRequests.Add((plant.Plant, part, amount_g));
-                }
             }
             else
             {
-                if (Water_g[index] > 0)
+                if ((uint)index < (uint)Water_g.Length && FiniteWater_g[index] > 0)
                 {
                     RequestsPresent.Add(index);
                     WaterRequests[index].Add((plant.Plant, part, amount_g));
@@ -691,16 +689,18 @@ public class SoilFormationTetrahedral : ISoilFormation
 	[M(AI)]
 	public void RequestWater(int index, float amount_g, PlantFormation2 plant, int soilIndex = 0)
 	{
+		if (!float.IsFinite(amount_g) || amount_g <= 0f || plant == null)
+			return;
 		lock(RequestsPresent)
         {
             if (DoVirtual)
             {
-                TotalRequested += amount_g;
-                TotalWaterRequests.Add((plant, -1, amount_g));
+                if (TotalWater_g > 0)
+                    TotalWaterRequests.Add((plant, -1, amount_g));
             }
             else
             {
-                if (Water_g[index] > 0)
+                if ((uint)index < (uint)Water_g.Length && FiniteWater_g[index] > 0)
                 {
                     RequestsPresent.Add(index);
                     WaterRequests[index].Add((plant, -1, amount_g));
@@ -709,73 +709,76 @@ public class SoilFormationTetrahedral : ISoilFormation
         }
 	}
 
+    static bool CanReceiveWater((PlantFormation2 Plant, int Part, float Amount_g) request)
+    {
+        var plant = request.Plant;
+        if (plant == null || !float.IsFinite(request.Amount_g) || request.Amount_g <= 0f)
+            return false;
+        if (request.Part == -1)
+            return plant.SeedAlive;
+        return request.Part >= 0 && plant.UG is not VirtualRootsFormation &&
+            request.Part < plant.UG.Count;
+    }
+
+    static void DeliverWater(List<(PlantFormation2 Plant, int Part, float Amount_g)> requests, ref double water_g)
+    {
+        if (water_g <= 0d || requests.Count == 0)
+            return;
+
+        double demand = 0d;
+        for (int i = 0; i < requests.Count; ++i)
+            if (CanReceiveWater(requests[i]))
+                demand += requests[i].Amount_g;
+
+        if (demand <= 0d)
+            return;
+
+        // Every valid plant sharing this pool receives the same fraction of its
+        // demand. Accumulate in double precision: individual uptake can be much
+        // smaller than one float ULP of a large imported tray's water store.
+        var fraction = Math.Min(1d, water_g / demand);
+        var remaining = water_g;
+        for (int i = 0; i < requests.Count && remaining > 0d; ++i)
+        {
+            var request = requests[i];
+            if (!CanReceiveWater(request))
+                continue;
+
+            var proposed = Math.Min((double)request.Amount_g * fraction, remaining);
+            var amount = (float)proposed;
+            if (amount > proposed)
+                amount = MathF.BitDecrement(amount);
+            if (amount <= 0f)
+                continue;
+
+            var sent = request.Part == -1
+                ? request.Plant.Send(0, new SeedAgent.WaterInc(amount))
+                : request.Plant.UG.SendProtected(request.Part, new UnderGroundAgent.WaterInc(amount));
+            if (sent)
+                remaining -= amount;
+        }
+
+        water_g = Math.Max(0d, remaining);
+    }
+
 	public void ProcessRequests()
 	{
         if (DoVirtual)
         {
-            if (TotalWater_g > 0)
-            {
-                var limit = TotalWaterRequests.Count;
-                if (TotalRequested < TotalWater_g)
-                {
-                    for (int j = 0; j < limit; ++j)
-                    {
-                        if (TotalWaterRequests[j].Part < 0)
-                            TotalWaterRequests[j].Plant.Send(0, new SeedAgent.WaterInc(TotalWaterRequests[j].Amount_g));
-                        else
-                            TotalWaterRequests[j].Plant?.UG?.SendProtected(TotalWaterRequests[j].Part, new UnderGroundAgent.WaterInc(TotalWaterRequests[j].Amount_g));
-                    }
-                }
-                else
-                {
-                    var factor = TotalWater_g / TotalRequested; //reduce all constributions so that the sum is exactly Water_g and not more
-                    for (int j = 0; j < limit; ++j)
-                        if (TotalWaterRequests[j].Part < 0)
-                            TotalWaterRequests[j].Plant.Send(0, new SeedAgent.WaterInc(TotalWaterRequests[j].Amount_g * factor));
-                        else
-                            TotalWaterRequests[j].Plant?.UG?.SendProtected(TotalWaterRequests[j].Part, new UnderGroundAgent.WaterInc(TotalWaterRequests[j].Amount_g * factor));
-                }
-            }
-
-            TotalRequested = 0f;
+            DeliverWater(TotalWaterRequests, ref TotalWater_g);
             TotalWaterRequests.Clear();
         }
         else
         {
-            foreach(var i in RequestsPresent)
+            foreach (var i in RequestsPresent)
             {
-                var reqs = WaterRequests[i];
-                var limit = reqs.Count;
-                var sum = 0f;
-                for (int j = 0; j < limit; ++j)
-                    sum += reqs[j].Amount_g;
-
-                if (sum > 0)
-                {
-                    if (sum <= Water_g[i])
-                    {
-                        for (int j = 0; j < limit; ++j)
-                            if (reqs[j].Part < 0)
-                                reqs[j].Plant.Send(0, new SeedAgent.WaterInc(reqs[j].Amount_g));
-                            else
-                                reqs[j].Plant?.UG?.SendProtected(reqs[j].Part, new UnderGroundAgent.WaterInc(reqs[j].Amount_g));
-                    }
-                    else
-                    {
-                        var factor = Water_g[i] / sum; //reduce all constributions so that the sum is exactly Water_g and not more
-                        for (int j = 0; j < limit; ++j)
-                            if (reqs[j].Part < 0)
-                                reqs[j].Plant.Send(0, new SeedAgent.WaterInc(reqs[j].Amount_g * factor));
-                            else
-                                reqs[j].Plant?.UG?.SendProtected(reqs[j].Part, new UnderGroundAgent.WaterInc(reqs[j].Amount_g * factor));
-                    }
-                    reqs.Clear();
-                }
+                var water = FiniteWater_g[i];
+                DeliverWater(WaterRequests[i], ref water);
+                FiniteWater_g[i] = water;
+                WaterRequests[i].Clear();
             }
             RequestsPresent.Clear();
         }
-
-
 	}
 
 	public Vector3 GetRandomSeedPosition(Pcg rnd, int soilIndex = 0)
@@ -799,7 +802,7 @@ public class SoilFormationTetrahedral : ISoilFormation
             TotalRaincatch = 0f;
             TotalWaterCapacity = 0f;
             TotalCellVolume = 0f;
-            TotalWater_g = 0f;
+            TotalWater_g = 0d;
 
             for(int i = 0; i < RainCatchers.Length; ++i)
                 TotalRaincatch += RainCatchers[i].ProjectedArea;
@@ -813,6 +816,13 @@ public class SoilFormationTetrahedral : ISoilFormation
         }
         else
         {
+            if (FiniteWater_g == null)
+            {
+                FiniteWater_g = new double[Water_g.Length];
+                for (int i = 0; i < Water_g.Length; ++i)
+                    FiniteWater_g[i] = Water_g[i];
+            }
+
             var heights = new float[Tetrahedralization.Length];
             for(int i = 0; i < Tetrahedralization.Length; ++i)
                 heights[i] = SimplexIndexes.Height(Points);
@@ -843,15 +853,18 @@ public class SoilFormationTetrahedral : ISoilFormation
                 }
             }
 
-            //Normalize; [x,y] means flow from y to x so we need to sum and normalize over the y dimension
-            for(int i = 0; i < Tetrahedralization.Length; ++i)
+            // [destination, source] is the fraction leaving source. Normalize
+            // each source column; normalizing rows can remove more water from a
+            // cell than it holds and creates an artificial loss when clamped.
+            for(int source = 0; source < Tetrahedralization.Length; ++source)
             {
                 double sum = 0.0;
-                for(int j = 0; j < Tetrahedralization.Length; ++j)
-                    sum += DiffusionMatrix[i, j];
+                for(int destination = 0; destination < Tetrahedralization.Length; ++destination)
+                    sum += DiffusionMatrix[destination, source];
                 if (sum > 0)
-                    for(int j = 0; j < Tetrahedralization.Length; ++j)
-                        DiffusionMatrix[i, j] = (float)(DiffusionMatrix[i, j] / sum);
+                    for(int destination = 0; destination < Tetrahedralization.Length; ++destination)
+                        DiffusionMatrix[destination, source] =
+                            (float)(DiffusionMatrix[destination, source] / sum);
             }
         }
     }
@@ -863,6 +876,11 @@ public class SoilFormationTetrahedral : ISoilFormation
 		writer.Write(MemoryMarshal.AsBytes<float>(Water_g));
 		writer.Write(MemoryMarshal.AsBytes<float>(Temperature));
 		writer.Write(MemoryMarshal.AsBytes<float>(Steam));
+		writer.Write(DoVirtual);
+		writer.Write(TotalWater_g);
+		if (!DoVirtual)
+			for (int i = 0; i < FiniteWater_g.Length; ++i)
+				writer.Write(FiniteWater_g[i]);
 	}
 
 	public void ReadState(BinaryReader reader)
@@ -875,6 +893,12 @@ public class SoilFormationTetrahedral : ISoilFormation
 		SoilFormationRegularVoxels.ReadInto(reader, Water_g);
 		SoilFormationRegularVoxels.ReadInto(reader, Temperature);
 		SoilFormationRegularVoxels.ReadInto(reader, Steam);
+		if (reader.ReadBoolean() != DoVirtual)
+			throw new InvalidDataException("The checkpoint uses a different tetrahedral soil water model.");
+		TotalWater_g = reader.ReadDouble();
+		if (!DoVirtual)
+			for (int i = 0; i < FiniteWater_g.Length; ++i)
+				FiniteWater_g[i] = reader.ReadDouble();
 	}
 
     public byte[] Serialize()
@@ -1065,4 +1089,3 @@ public class SoilFormationTetrahedral : ISoilFormation
         }
     }
 }
-

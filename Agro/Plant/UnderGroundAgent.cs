@@ -98,6 +98,8 @@ public struct UnderGroundAgent : IPlantAgent
 	/// Inverse woodyness ∈ [0, 1]. The more woody (towards 0) the less water the root can absorb.
 	/// </summary>
 	float mWaterAbsorbtionFactor;
+	// A successful branching opportunity survives a temporary construction shortage.
+	bool PendingConstructionBranch;
 
 	/// <summary>
 	/// Woodyness ∈ [0, 1].
@@ -230,13 +232,21 @@ public struct UnderGroundAgent : IPlantAgent
     [M(AI)]readonly float EnergyCapacityFunc(float radius, float length) => 4f * radius * radius * length * (1f - WaterCapacityRatio) * EnergyStorageCoef * MathF.Pow(2f - mWaterAbsorbtionFactor, 3);
 
 	public readonly float EnergyStorageCapacity() => EnergyCapacityFunc(Radius, Length);
+	public readonly float EnergyStorageCapacity(SpeciesSettings species) => EnergyStorageCapacity();
+	[M(AI)]public readonly float EnergyAllocationWeight(SpeciesSettings species) => MathF.Max(
+		EnergyStorageCapacity(), ResourceUnits.RootConstructionSinkPerHour(Length, Radius, LengthVar, WoodRatio(), species));
 
     internal const float LifeSupportFactor = 0.01f;
 	[M(AI)]public readonly float LifeSupportPerHour() => LifeSupportFactor * Volume() * mWaterAbsorbtionFactor;
+	[M(AI)]internal readonly float LifeSupportPerHour(SpeciesSettings species) => ResourceUnits.Enabled(species)
+		? ResourceUnits.MaintenancePerHour(Volume(), WoodRatio(), species) : LifeSupportPerHour();
 
 	[M(AI)]public readonly float LifeSupportPerTick(AgroWorld world) => LifeSupportPerHour() * world.HoursPerTick;
+	[M(AI)]public readonly float LifeSupportPerTick(AgroWorld world, SpeciesSettings species)
+		=> LifeSupportPerHour(species) * world.HoursPerTick;
 
 	[M(AI)]public readonly float PhotosynthPerTick(AgroWorld world) => 0f;
+	[M(AI)]public readonly float PhotosynthPerTick(AgroWorld world, SpeciesSettings species) => 0f;
 
 	public readonly static Quaternion OrientationDown = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, -MathF.PI * 0.5f);
 
@@ -305,7 +315,7 @@ public struct UnderGroundAgent : IPlantAgent
 		var species = plant.Parameters;
 
 		//TODO perhaps it should reflect temperature
-		var lifeSupportPerHour = LifeSupportPerHour();
+		var lifeSupportPerHour = LifeSupportPerHour(species);
 
 		//life support
 		Energy -= lifeSupportPerHour * world.HoursPerTick;
@@ -325,12 +335,15 @@ public struct UnderGroundAgent : IPlantAgent
 			{
 				var growthBase = (PreviousDayProductionInvariant / formation.DailyProductionMax + resourcesAvailability) * 0.5f;
 				var radiusChildGrowth = childrenCount <= 1 ? 1 : MathF.Pow(childrenCount, GrowthDeclineByExpChildren / 2);
-				var (radiusGrowthBase, lengthGrowthBase) = (1e-5f * growthBase, 2e-4f * growthBase);
+				// The empirical coefficients are rates per hour. Resource invariants
+				// are daily ratios; they do not already contain the tick duration.
+				var (radiusGrowthBase, lengthGrowthBase) = (1e-5f * growthBase * world.HoursPerTick, 2e-4f * growthBase * world.HoursPerTick);
 				var newWaterAbsorbtion = mWaterAbsorbtionFactor;
+				var beforeSize = new Vector2(Length, Radius);
 				//Debug.WriteLine($"{formationID:D5}:\t{newWaterAbsorbtion:F4}");
 
 				var ld = Length * Radius * 4f;
-				var volume = ld * Length;
+				var volume = Volume();
 				if (volume * newWaterAbsorbtion < 288)
 				{
 					float maxRadius = Parent == -1 ? plant.AG.GetBaseRadius(0) * 1.25f : formation.GetBaseRadius(Parent);
@@ -338,8 +351,8 @@ public struct UnderGroundAgent : IPlantAgent
 					{
 						var d = 1f - 0.7f * formation.GetRelDepth(formationID);
 						var radiusGrowth = radiusGrowthBase * d * d / (radiusChildGrowth * MathF.Pow(ld * Radius, 0.2f));
+						radiusGrowth = MathF.Min(radiusGrowth, MathF.Max(0f, maxRadius - Radius));
 						Radius += radiusGrowth;
-						if (Radius > maxRadius) Radius = maxRadius;
 						newWaterAbsorbtion -= radiusGrowth * childrenCount;  //become wood faster with children
 						if (newWaterAbsorbtion < 0f) newWaterAbsorbtion = 0f;
 					}
@@ -348,6 +361,14 @@ public struct UnderGroundAgent : IPlantAgent
 						Length += lengthGrowthBase / MathF.Pow(volume, 0.1f);
 				}
 
+				if (species.ConstructionEnergyPerDryGram > 0f)
+				{
+					var proposed = new Vector2(Length, Radius);
+					Energy -= ConstructionBudget.Fund(beforeSize, ref proposed, false,
+						MathF.Max(0f, Energy - lifeSupportPerHour * 240), species, WoodRatio());
+					Length = proposed.X; Radius = proposed.Y;
+					newWaterAbsorbtion = MathF.Max(0f, mWaterAbsorbtionFactor - (Radius - beforeSize.Y) * childrenCount);
+				}
 				mWaterAbsorbtionFactor = newWaterAbsorbtion;
 			}
 
@@ -355,8 +376,7 @@ public struct UnderGroundAgent : IPlantAgent
 			if (children.Count == 0 && Length >= LengthVar)
 			{
 				var energy = EnergyCapacityFunc(InitialRadius, InitialLength);
-				formation.Birth(new(plant, timestep, formationID, RandomOrientation(plant, species, Orientation), energy, initialResources: PreviousDayEnvResourcesInvariant, initialProduction: PreviousDayProductionInvariant));
-				Energy -= 2f * energy; //twice because some energy is needed for the birth itself
+				BirthFundedRoot(formation, formationID, timestep, energy);
 				//Console.WriteLine($"New root chained to {formationID} at time {timestep}");
 			}
 
@@ -368,16 +388,18 @@ public struct UnderGroundAgent : IPlantAgent
 				//Debug.WriteLine($"{plant.WaterBalance * species.RootsSparsity * MathF.Pow(childrenCount, childrenCount << 2) / (world.HoursPerTick * PreviousDayProductionInv)} = {plant.WaterBalance} * {species.RootsSparsity} * {MathF.Pow(childrenCount, childrenCount << 2)} / ({world.HoursPerTick * PreviousDayProductionInv})");
 				//Debug.WriteLine($"{PreviousDayEnvResourcesInv} {PreviousDayProductionInv}");
 				//Debug.WriteLine($"{PreviousDayProductionInv} / ({plant.WaterBalanceUG} * {species.RootsSparsity} * {BranchingByChildren[children.Count]}) = {PreviousDayProductionInv / (plant.WaterBalance * plant.WaterBalance * species.RootsSparsity * BranchingByChildren[children.Count])} -> {Utils.Pcg.AccumulatedProbability(PreviousDayProductionInv / (plant.WaterBalance * species.RootsSparsity * BranchingByChildren[childrenCount]), world.HoursPerTick)}");
-				if (plant.RNG.NextFloatAccum(resourcesAvailability * species.RootsDensity / (plant.WaterBalanceUG * BranchingByChildren[childrenCount]), world.HoursPerTick))
+				if (PendingConstructionBranch || plant.RNG.NextFloatAccum(resourcesAvailability * species.RootsDensity / (plant.WaterBalanceUG * BranchingByChildren[childrenCount]), world.HoursPerTick))
 				{
 					var energy = EnergyCapacityFunc(InitialRadius, InitialLength);
-					formation.Birth(new(plant, timestep, formationID, RandomOrientation(plant, species, Orientation), energy, initialResources: PreviousDayEnvResourcesInvariant, initialProduction: PreviousDayProductionInvariant));
-					Energy -= 2f * energy; //twice because some energy is needed for the birth itself
+					PendingConstructionBranch = !BirthFundedRoot(formation, formationID, timestep, energy);
 					//Console.WriteLine($"New root branched to {formationID} at time {timestep}");
 				}
 			}
 		}
-		else if (Energy <= 0f) //Without energy the part dies
+		// Zero after paying maintenance is a funded resting root. Deleting it
+		// also deletes funded descendants and can erase the entire root system
+		// when allocation assigns a temporarily inactive parent maintenance only.
+		else if (Energy < 0f) // Maintenance could not be paid.
 		{
 			//Console.WriteLine($"Root {formationID} depleeted at time {timestep}");
 			formation.Death(formationID);
@@ -388,7 +410,11 @@ public struct UnderGroundAgent : IPlantAgent
 		///////////////////////////
 		#region Absorb WATER from soil
 		///////////////////////////
-		if (mWaterAbsorbtionFactor > 0f)
+		// Seed hydration can exceed the new organs' tiny tissue capacity.
+		// Draw from that reserve before taking more soil water. Rounding remainders
+		// much smaller than one tick's demand must not suppress uptake indefinitely.
+		if (mWaterAbsorbtionFactor > 0f &&
+			plant.UnallocatedWater_g <= Math.Max(1e-6d, plant.WaterDemandPerTick_g))
 		{
 			var waterCapacity = WaterStorageCapacity_g();
 			if (Water_g < waterCapacity)
@@ -418,9 +444,24 @@ public struct UnderGroundAgent : IPlantAgent
 					formation.Death(formationID);
 			}
 		}
-		else
-			mWaterAbsorbtionFactor = 0f;
+		// A full root or a plant with retained seed water makes no request this
+		// tick. Neither condition converts absorptive tissue into wood: that
+		// would prevent uptake permanently after the stored water is consumed.
 		#endregion
+	}
+
+	bool BirthFundedRoot(PlantSubFormation<UnderGroundAgent> formation, int parent, uint timestep, float reserve)
+	{
+		var plant = formation.Plant;
+		var species = plant.Parameters;
+		var cost = species.ConstructionEnergyPerDryGram > 0f
+			? ConstructionBudget.Cost(4d * InitialLength * InitialRadius * InitialRadius, species, 0f)
+			: reserve; // Preserve the historical birth overhead when the budget is disabled.
+		if (species.ConstructionEnergyPerDryGram > 0f && Energy < reserve + cost) return false;
+		formation.Birth(new(plant, timestep, parent, RandomOrientation(plant, species, Orientation), reserve,
+			initialResources: PreviousDayEnvResourcesInvariant, initialProduction: PreviousDayProductionInvariant));
+		Energy -= reserve + cost;
+		return true;
 	}
 
 	private static Quaternion RandomOrientation(PlantFormation2 plant, SpeciesSettings species, Quaternion orientation)

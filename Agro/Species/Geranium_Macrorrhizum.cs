@@ -8,9 +8,12 @@ public static class Geranium_Macrorrhizum
     {
         Name = "Geranium Macrorrhizum",
         Behavior = Behavior.Herbaceous,
-        // Botanical descriptions place the rounded blade near 7 cm across.
-        LeafLength = 0.07f,
-        LeafLengthVar = 0.008f,
+        // InfoFlora: basal blades 6-10 cm wide, petioles 10-20 cm long.
+        // https://www.infoflora.ch/en/flora/geranium-macrorrhizum.html
+        // The basal lobes extend behind the attachment: a 4.5 cm axis produces a
+        // 6.96 cm total blade envelope, approximately round at the 7 cm full width.
+        LeafLength = 0.045f,
+        LeafLengthVar = 0.005f,
         LeafRadius = 0.035f,
         LeafRadiusVar = 0.004f,
         //Not segmented, deliberately. A blade's stiffness about its minor axis goes with its WIDTH,
@@ -39,6 +42,8 @@ public static class Geranium_Macrorrhizum
         PetioleRadiusVar = 0.0002f,
 
         LeafGrowthTime = 24 * 7,
+        // Provisional CPU-light calibration; see LIGHT_GROWTH_CALIBRATION.md.
+        LeafExpansionRateScale = 1f,
         Height = 0.3f,
 
         // Geranium has a compressed crown, not a sequence of centimetre-scale

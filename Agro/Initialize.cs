@@ -60,23 +60,20 @@ public static class Initialize
         if (string.IsNullOrEmpty(name))
             return null;
 
-        var tmp_custom = settings.Species?.FirstOrDefault(x => string.Compare(x.Name, name, StringComparison.InvariantCultureIgnoreCase) == 0);
-        var tmp_predefined = SpeciesSettings.Predefined?.FirstOrDefault(x => string.Compare(x.Name, name, StringComparison.InvariantCultureIgnoreCase) == 0);
+        var custom = settings.Species?.FirstOrDefault(x => string.Compare(x.Name, name, StringComparison.InvariantCultureIgnoreCase) == 0);
+        var predefined = SpeciesSettings.Predefined.FirstOrDefault(x => string.Compare(x.Name, name, StringComparison.InvariantCultureIgnoreCase) == 0);
+        var result = custom ?? predefined;
 
-        var result =
-            settings.Species?.FirstOrDefault(x => string.Compare(x.Name, name, StringComparison.InvariantCultureIgnoreCase) == 0)
-            ?? SpeciesSettings.Predefined?.FirstOrDefault(x => string.Compare(x.Name, name, StringComparison.InvariantCultureIgnoreCase) == 0);
-
-        //hack fix so that more complex settings get referenced from the predefined species
-        if (tmp_predefined != null)
+        // The editor supplies numeric settings; complex runtime assets still come from the
+        // named preset. Do not replace result afterwards or every numeric override is lost.
+        if (result != null && predefined != null)
         {
-            result.LeafMorphology = tmp_predefined.LeafMorphology;
-            result.LeafPhenology = tmp_predefined.LeafPhenology;
-            result.FlowerSettings = tmp_predefined.FlowerSettings;
-            result.FruitSettings = tmp_predefined.FruitSettings;
+            if (custom != null) custom.InheritMissingScapeEmergence(predefined);
+            result.LeafMorphology = predefined.LeafMorphology;
+            result.LeafPhenology = predefined.LeafPhenology;
+            result.FlowerSettings = predefined.FlowerSettings;
+            result.FruitSettings = predefined.FruitSettings;
         }
-
-        result = tmp_predefined;
 
         return result;
     }

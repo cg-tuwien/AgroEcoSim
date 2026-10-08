@@ -53,6 +53,8 @@ public static class Campanula_Poscharskyana
         ShootsGravitaxis = 1.5f,
 
         LeafGrowthTime = 24f * 7f * 2f,
+        // Provisional CPU-light calibration; see LIGHT_GROWTH_CALIBRATION.md.
+        LeafExpansionRateScale = 1.5f,
         LeafGrowthTimeVar = 24f * 3f,
         LeafMaximumAgeHours = 24 * 150,
 

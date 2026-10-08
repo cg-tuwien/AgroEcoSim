@@ -1,0 +1,6 @@
+CONTROLLED DIAGNOSTIC ONLY: same-layout v21 snapshot under v22 mechanics; not a fresh seasonal replay or supported live migration.
+SCAPE day=275 id=52 lmm=6.596022 rmm=2.3020897 targetLmm=13.7000675 targetRmm=4.121531 blocked=True
+SCAPE day=280 id=52 lmm=6.596022 rmm=2.3020897 targetLmm=13.7000675 targetRmm=4.121531 blocked=True
+SCAPE day=285 id=52 lmm=6.6209965 rmm=2.3267763 targetLmm=13.7000675 targetRmm=4.121531 blocked=True
+CHECKPOINT /tmp/gf-scape-recovery/production/evasion-final-1h-day289-v22.bin bytes=51894766
+DONE mode=archived-exact tick=1 firstPetalDay=-1 elapsed=00:01:52.2716665 everLeaves=20 ever50=4 ever90=2

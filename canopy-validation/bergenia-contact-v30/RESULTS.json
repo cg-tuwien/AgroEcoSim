@@ -1,0 +1,769 @@
+{
+  "date": "2026-10-07",
+  "checkpointVersion": 30,
+  "requestSha256": "74450989e51855e23248d35cdb410224a999a61c27029666dddfa312e43ff1fe",
+  "measurementDefinition": "Whole Bergenia organs; 50/90 percent require both intrinsic axis length and half-width. First observation and threshold dates have daily resolution. Completed-only durations have survivor bias.",
+  "seasonal": [
+    {
+      "version": "v28",
+      "tickHours": 1,
+      "mode": 0,
+      "complete": true,
+      "latestDay": 755,
+      "snapshots": [
+        {
+          "day": 240,
+          "AG": 52,
+          "UG": 176,
+          "leaves": 20,
+          "half": 6,
+          "ninety": 3,
+          "petals": 0,
+          "floral": 1,
+          "blocked": 48,
+          "water": 32.7321322245989,
+          "energy": 498.1341506999888,
+          "finite": true,
+          "maxUnresolved": 0,
+          "elapsedSec": 2261.29
+        },
+        {
+          "day": 275,
+          "AG": 52,
+          "UG": 204,
+          "leaves": 20,
+          "half": 6,
+          "ninety": 3,
+          "petals": 0,
+          "floral": 1,
+          "blocked": 47,
+          "water": 32.74866874655709,
+          "energy": 768.5544839123831,
+          "finite": true,
+          "maxUnresolved": 0,
+          "elapsedSec": 2746.04
+        },
+        {
+          "day": 330,
+          "AG": 51,
+          "UG": 247,
+          "leaves": 20,
+          "half": 7,
+          "ninety": 3,
+          "petals": 0,
+          "floral": 0,
+          "blocked": 45,
+          "water": 32.969370525795966,
+          "energy": 1191.8245347504271,
+          "finite": true,
+          "maxUnresolved": 0,
+          "elapsedSec": 3363.17
+        },
+        {
+          "day": 365,
+          "AG": 51,
+          "UG": 272,
+          "leaves": 20,
+          "half": 6,
+          "ninety": 3,
+          "petals": 0,
+          "floral": 0,
+          "blocked": 32,
+          "water": 28.529612336373248,
+          "energy": 1192.5221300019634,
+          "finite": true,
+          "maxUnresolved": 0,
+          "elapsedSec": 3692.76
+        },
+        {
+          "day": 730,
+          "AG": 51,
+          "UG": 459,
+          "leaves": 20,
+          "half": 5,
+          "ninety": 2,
+          "petals": 0,
+          "floral": 0,
+          "blocked": 36,
+          "water": 31.884534413362417,
+          "energy": 1064.8198964386588,
+          "finite": true,
+          "maxUnresolved": 0,
+          "elapsedSec": 6486.62
+        },
+        {
+          "day": 755,
+          "AG": 51,
+          "UG": 476,
+          "leaves": 20,
+          "half": 0,
+          "ninety": 0,
+          "petals": 0,
+          "floral": 0,
+          "blocked": 19,
+          "water": 7.649213651687546,
+          "energy": 79.15057744435339,
+          "finite": true,
+          "maxUnresolved": 0,
+          "elapsedSec": 6585.72
+        }
+      ],
+      "everRecordedPetals": false,
+      "allLoggedFinite": true,
+      "maxUnresolved": 0,
+      "observedLeaves": 54,
+      "expansion": [
+        {
+          "horizonDays": 330,
+          "threshold": "halfDay",
+          "observed": 20,
+          "reached": 7,
+          "medianCompletedDays": 78,
+          "minimumCompletedDays": 52,
+          "maximumCompletedDays": 292
+        },
+        {
+          "horizonDays": 330,
+          "threshold": "ninetyDay",
+          "observed": 20,
+          "reached": 3,
+          "medianCompletedDays": 144,
+          "minimumCompletedDays": 137,
+          "maximumCompletedDays": 191
+        },
+        {
+          "horizonDays": 755,
+          "threshold": "halfDay",
+          "observed": 54,
+          "reached": 19,
+          "medianCompletedDays": 84,
+          "minimumCompletedDays": 52,
+          "maximumCompletedDays": 359
+        },
+        {
+          "horizonDays": 755,
+          "threshold": "ninetyDay",
+          "observed": 54,
+          "reached": 8,
+          "medianCompletedDays": 143.5,
+          "minimumCompletedDays": 100,
+          "maximumCompletedDays": 191
+        }
+      ],
+      "finalFrameBytes": 9645,
+      "finalFrameGzipBytes": 5925,
+      "finalFrameSha256": "c8dbdf7bc18d768c7eb5908fdbe4ce02c00ab6f0449812ab79de2c2da9e73cae"
+    },
+    {
+      "version": "v30",
+      "tickHours": 1,
+      "mode": 0,
+      "complete": true,
+      "latestDay": 755,
+      "snapshots": [
+        {
+          "day": 240,
+          "AG": 52,
+          "UG": 177,
+          "leaves": 20,
+          "half": 8,
+          "ninety": 4,
+          "petals": 0,
+          "floral": 1,
+          "blocked": 41,
+          "water": 43.338180781225674,
+          "energy": 649.7277713686472,
+          "finite": true,
+          "maxUnresolved": 0,
+          "elapsedSec": 1717.13
+        },
+        {
+          "day": 275,
+          "AG": 52,
+          "UG": 207,
+          "leaves": 20,
+          "half": 8,
+          "ninety": 4,
+          "petals": 0,
+          "floral": 1,
+          "blocked": 45,
+          "water": 44.911182060604915,
+          "energy": 978.6535797251709,
+          "finite": true,
+          "maxUnresolved": 0,
+          "elapsedSec": 2094.19
+        },
+        {
+          "day": 330,
+          "AG": 51,
+          "UG": 249,
+          "leaves": 20,
+          "half": 8,
+          "ninety": 4,
+          "petals": 0,
+          "floral": 0,
+          "blocked": 45,
+          "water": 44.645163756329566,
+          "energy": 1498.2832243338053,
+          "finite": true,
+          "maxUnresolved": 0,
+          "elapsedSec": 2624.98
+        },
+        {
+          "day": 365,
+          "AG": 51,
+          "UG": 270,
+          "leaves": 20,
+          "half": 6,
+          "ninety": 3,
+          "petals": 0,
+          "floral": 0,
+          "blocked": 38,
+          "water": 34.748060731846635,
+          "energy": 1336.278996250122,
+          "finite": true,
+          "maxUnresolved": 0,
+          "elapsedSec": 2846.07
+        },
+        {
+          "day": 730,
+          "AG": 51,
+          "UG": 458,
+          "leaves": 20,
+          "half": 8,
+          "ninety": 5,
+          "petals": 0,
+          "floral": 0,
+          "blocked": 36,
+          "water": 47.636308053013636,
+          "energy": 1529.0226889835421,
+          "finite": true,
+          "maxUnresolved": 0,
+          "elapsedSec": 5838.92
+        },
+        {
+          "day": 755,
+          "AG": 51,
+          "UG": 473,
+          "leaves": 20,
+          "half": 4,
+          "ninety": 2,
+          "petals": 0,
+          "floral": 0,
+          "blocked": 19,
+          "water": 21.132001622354437,
+          "energy": 640.6283693135956,
+          "finite": true,
+          "maxUnresolved": 0,
+          "elapsedSec": 5975.76
+        }
+      ],
+      "everRecordedPetals": false,
+      "allLoggedFinite": true,
+      "maxUnresolved": 0,
+      "observedLeaves": 52,
+      "expansion": [
+        {
+          "horizonDays": 330,
+          "threshold": "halfDay",
+          "observed": 20,
+          "reached": 8,
+          "medianCompletedDays": 67.0,
+          "minimumCompletedDays": 43,
+          "maximumCompletedDays": 158
+        },
+        {
+          "horizonDays": 330,
+          "threshold": "ninetyDay",
+          "observed": 20,
+          "reached": 4,
+          "medianCompletedDays": 111.5,
+          "minimumCompletedDays": 89,
+          "maximumCompletedDays": 187
+        },
+        {
+          "horizonDays": 755,
+          "threshold": "halfDay",
+          "observed": 52,
+          "reached": 21,
+          "medianCompletedDays": 108,
+          "minimumCompletedDays": 43,
+          "maximumCompletedDays": 266
+        },
+        {
+          "horizonDays": 755,
+          "threshold": "ninetyDay",
+          "observed": 52,
+          "reached": 13,
+          "medianCompletedDays": 154,
+          "minimumCompletedDays": 89,
+          "maximumCompletedDays": 301
+        }
+      ],
+      "finalFrameBytes": 9645,
+      "finalFrameGzipBytes": 5932,
+      "finalFrameSha256": "af782724939d528c88bfede1ccacc75f487c8ea00f87402f9b201f2f3ff0b0d1"
+    },
+    {
+      "version": "v28",
+      "tickHours": 4,
+      "mode": 0,
+      "complete": true,
+      "latestDay": 755,
+      "snapshots": [
+        {
+          "day": 240,
+          "AG": 51,
+          "UG": 114,
+          "leaves": 20,
+          "half": 5,
+          "ninety": 4,
+          "petals": 0,
+          "floral": 0,
+          "blocked": 43,
+          "water": 32.93390228817589,
+          "energy": 515.5954349198232,
+          "finite": true,
+          "maxUnresolved": 0,
+          "elapsedSec": 541.97
+        },
+        {
+          "day": 275,
+          "AG": 52,
+          "UG": 148,
+          "leaves": 20,
+          "half": 5,
+          "ninety": 4,
+          "petals": 0,
+          "floral": 1,
+          "blocked": 46,
+          "water": 33.050954568141606,
+          "energy": 794.96393830242,
+          "finite": true,
+          "maxUnresolved": 0,
+          "elapsedSec": 645.13
+        },
+        {
+          "day": 330,
+          "AG": 51,
+          "UG": 201,
+          "leaves": 20,
+          "half": 5,
+          "ninety": 4,
+          "petals": 0,
+          "floral": 0,
+          "blocked": 45,
+          "water": 33.80066921625985,
+          "energy": 1231.6096382520564,
+          "finite": true,
+          "maxUnresolved": 0,
+          "elapsedSec": 791.38
+        },
+        {
+          "day": 365,
+          "AG": 51,
+          "UG": 205,
+          "leaves": 20,
+          "half": 3,
+          "ninety": 3,
+          "petals": 0,
+          "floral": 0,
+          "blocked": 38,
+          "water": 24.896347752655856,
+          "energy": 952.5459472112427,
+          "finite": true,
+          "maxUnresolved": 0,
+          "elapsedSec": 880.85
+        },
+        {
+          "day": 730,
+          "AG": 51,
+          "UG": 415,
+          "leaves": 20,
+          "half": 8,
+          "ninety": 7,
+          "petals": 0,
+          "floral": 0,
+          "blocked": 32,
+          "water": 49.43538412306225,
+          "energy": 2051.434485219979,
+          "finite": true,
+          "maxUnresolved": 0,
+          "elapsedSec": 1395.62
+        },
+        {
+          "day": 755,
+          "AG": 51,
+          "UG": 431,
+          "leaves": 20,
+          "half": 1,
+          "ninety": 1,
+          "petals": 0,
+          "floral": 0,
+          "blocked": 22,
+          "water": 11.19328643843619,
+          "energy": 337.3103345728963,
+          "finite": true,
+          "maxUnresolved": 0,
+          "elapsedSec": 1415.91
+        }
+      ],
+      "everRecordedPetals": false,
+      "allLoggedFinite": true,
+      "maxUnresolved": 0,
+      "observedLeaves": 52,
+      "expansion": [
+        {
+          "horizonDays": 330,
+          "threshold": "halfDay",
+          "observed": 20,
+          "reached": 5,
+          "medianCompletedDays": 74,
+          "minimumCompletedDays": 43,
+          "maximumCompletedDays": 211
+        },
+        {
+          "horizonDays": 330,
+          "threshold": "ninetyDay",
+          "observed": 20,
+          "reached": 4,
+          "medianCompletedDays": 106.0,
+          "minimumCompletedDays": 77,
+          "maximumCompletedDays": 150
+        },
+        {
+          "horizonDays": 755,
+          "threshold": "halfDay",
+          "observed": 52,
+          "reached": 14,
+          "medianCompletedDays": 78.0,
+          "minimumCompletedDays": 43,
+          "maximumCompletedDays": 211
+        },
+        {
+          "horizonDays": 755,
+          "threshold": "ninetyDay",
+          "observed": 52,
+          "reached": 12,
+          "medianCompletedDays": 127.0,
+          "minimumCompletedDays": 77,
+          "maximumCompletedDays": 216
+        }
+      ],
+      "finalFrameBytes": 9645,
+      "finalFrameGzipBytes": 5929,
+      "finalFrameSha256": "04f7ca72ebb056c572413650f21842e6bc8b87758dc7264ac5acb502366b3e8b"
+    },
+    {
+      "version": "v30",
+      "tickHours": 4,
+      "mode": 0,
+      "complete": true,
+      "latestDay": 755,
+      "snapshots": [
+        {
+          "day": 240,
+          "AG": 52,
+          "UG": 118,
+          "leaves": 20,
+          "half": 8,
+          "ninety": 4,
+          "petals": 0,
+          "floral": 1,
+          "blocked": 44,
+          "water": 43.65239301745896,
+          "energy": 655.9773739607069,
+          "finite": true,
+          "maxUnresolved": 0,
+          "elapsedSec": 276.42
+        },
+        {
+          "day": 275,
+          "AG": 52,
+          "UG": 150,
+          "leaves": 20,
+          "half": 8,
+          "ninety": 4,
+          "petals": 0,
+          "floral": 1,
+          "blocked": 41,
+          "water": 46.4453913946636,
+          "energy": 1003.812206890565,
+          "finite": true,
+          "maxUnresolved": 0,
+          "elapsedSec": 372.36
+        },
+        {
+          "day": 330,
+          "AG": 51,
+          "UG": 198,
+          "leaves": 20,
+          "half": 9,
+          "ninety": 4,
+          "petals": 0,
+          "floral": 0,
+          "blocked": 44,
+          "water": 47.926096986513585,
+          "energy": 1572.036501096365,
+          "finite": true,
+          "maxUnresolved": 0,
+          "elapsedSec": 510.62
+        },
+        {
+          "day": 365,
+          "AG": 51,
+          "UG": 225,
+          "leaves": 20,
+          "half": 7,
+          "ninety": 3,
+          "petals": 0,
+          "floral": 0,
+          "blocked": 35,
+          "water": 38.56178739878851,
+          "energy": 1413.8834797378788,
+          "finite": true,
+          "maxUnresolved": 0,
+          "elapsedSec": 587.18
+        },
+        {
+          "day": 730,
+          "AG": 51,
+          "UG": 445,
+          "leaves": 20,
+          "half": 13,
+          "ninety": 9,
+          "petals": 0,
+          "floral": 0,
+          "blocked": 39,
+          "water": 77.15629942250962,
+          "energy": 2077.0936750439087,
+          "finite": true,
+          "maxUnresolved": 0,
+          "elapsedSec": 1361.37
+        },
+        {
+          "day": 755,
+          "AG": 51,
+          "UG": 464,
+          "leaves": 20,
+          "half": 7,
+          "ninety": 4,
+          "petals": 0,
+          "floral": 0,
+          "blocked": 20,
+          "water": 42.89624420950713,
+          "energy": 1215.2346067411845,
+          "finite": true,
+          "maxUnresolved": 0,
+          "elapsedSec": 1383.16
+        }
+      ],
+      "everRecordedPetals": false,
+      "allLoggedFinite": true,
+      "maxUnresolved": 0,
+      "observedLeaves": 50,
+      "expansion": [
+        {
+          "horizonDays": 330,
+          "threshold": "halfDay",
+          "observed": 20,
+          "reached": 9,
+          "medianCompletedDays": 74,
+          "minimumCompletedDays": 43,
+          "maximumCompletedDays": 171
+        },
+        {
+          "horizonDays": 330,
+          "threshold": "ninetyDay",
+          "observed": 20,
+          "reached": 4,
+          "medianCompletedDays": 131.5,
+          "minimumCompletedDays": 97,
+          "maximumCompletedDays": 184
+        },
+        {
+          "horizonDays": 755,
+          "threshold": "halfDay",
+          "observed": 50,
+          "reached": 30,
+          "medianCompletedDays": 92.0,
+          "minimumCompletedDays": 43,
+          "maximumCompletedDays": 263
+        },
+        {
+          "horizonDays": 755,
+          "threshold": "ninetyDay",
+          "observed": 50,
+          "reached": 20,
+          "medianCompletedDays": 192.5,
+          "minimumCompletedDays": 97,
+          "maximumCompletedDays": 354
+        }
+      ],
+      "finalFrameBytes": 9645,
+      "finalFrameGzipBytes": 5928,
+      "finalFrameSha256": "9d8a034cdc07e077c4059ac5e9890f15e6ba7b5781a3143e6f01a7fbd89508ef"
+    },
+    {
+      "version": "v30-V1",
+      "tickHours": 4,
+      "mode": 1,
+      "complete": true,
+      "latestDay": 330,
+      "snapshots": [
+        {
+          "day": 240,
+          "AG": 37,
+          "UG": 165,
+          "leaves": 14,
+          "half": 3,
+          "ninety": 1,
+          "petals": 0,
+          "floral": 1,
+          "blocked": 23,
+          "water": 19.7089041328436,
+          "energy": 351.61815321775975,
+          "finite": true,
+          "maxUnresolved": 0,
+          "elapsedSec": 2842.5
+        },
+        {
+          "day": 275,
+          "AG": 42,
+          "UG": 193,
+          "leaves": 16,
+          "half": 5,
+          "ninety": 1,
+          "petals": 0,
+          "floral": 1,
+          "blocked": 28,
+          "water": 23.117072776723944,
+          "energy": 522.4823323598579,
+          "finite": true,
+          "maxUnresolved": 0,
+          "elapsedSec": 3605.27
+        },
+        {
+          "day": 330,
+          "AG": 41,
+          "UG": 224,
+          "leaves": 16,
+          "half": 6,
+          "ninety": 2,
+          "petals": 0,
+          "floral": 0,
+          "blocked": 35,
+          "water": 31.185189231148343,
+          "energy": 898.1547062641349,
+          "finite": true,
+          "maxUnresolved": 0,
+          "elapsedSec": 4885.27
+        }
+      ],
+      "everRecordedPetals": false,
+      "allLoggedFinite": true,
+      "maxUnresolved": 0,
+      "observedLeaves": 16,
+      "expansion": [
+        {
+          "horizonDays": 330,
+          "threshold": "halfDay",
+          "observed": 16,
+          "reached": 6,
+          "medianCompletedDays": 70.5,
+          "minimumCompletedDays": 51,
+          "maximumCompletedDays": 107
+        },
+        {
+          "horizonDays": 330,
+          "threshold": "ninetyDay",
+          "observed": 16,
+          "reached": 2,
+          "medianCompletedDays": 104.5,
+          "minimumCompletedDays": 94,
+          "maximumCompletedDays": 115
+        }
+      ],
+      "finalFrameBytes": 11691,
+      "finalFrameGzipBytes": 6994,
+      "finalFrameSha256": "316572230322b832bae51ecb92c1194db3ade7265b31bea6b233766e7a3a4dd8"
+    }
+  ],
+  "benchmarks": [
+    {
+      "case": "radial",
+      "v28": {
+        "medianMs": 0.9626,
+        "medianP95Ms": 0.9938,
+        "allocationMedianMin": 12232.0,
+        "allocationMedianMax": 12232.0
+      },
+      "v30": {
+        "medianMs": 0.9926,
+        "medianP95Ms": 1.0138,
+        "allocationMedianMin": 12232.0,
+        "allocationMedianMax": 12232.0
+      },
+      "medianPercentChange": 3.1165593185123575
+    },
+    {
+      "case": "radial same-crown",
+      "v28": {
+        "medianMs": 0.8745,
+        "medianP95Ms": 0.8883,
+        "allocationMedianMin": 40.0,
+        "allocationMedianMax": 40.0
+      },
+      "v30": {
+        "medianMs": 0.8004,
+        "medianP95Ms": 0.8074,
+        "allocationMedianMin": 40.0,
+        "allocationMedianMax": 40.0
+      },
+      "medianPercentChange": -8.473413379073758
+    },
+    {
+      "case": "radial v1",
+      "v28": {
+        "medianMs": 30.1826,
+        "medianP95Ms": 30.3708,
+        "allocationMedianMin": 19240.0,
+        "allocationMedianMax": 20056.0
+      },
+      "v30": {
+        "medianMs": 30.1453,
+        "medianP95Ms": 30.3137,
+        "allocationMedianMin": 19288.0,
+        "allocationMedianMax": 19960.0
+      },
+      "medianPercentChange": -0.12358113615129618
+    },
+    {
+      "case": "single",
+      "v28": {
+        "medianMs": 0.6398,
+        "medianP95Ms": 0.6785,
+        "allocationMedianMin": 10984.0,
+        "allocationMedianMax": 10984.0
+      },
+      "v30": {
+        "medianMs": 0.6791,
+        "medianP95Ms": 0.6915,
+        "allocationMedianMin": 10984.0,
+        "allocationMedianMax": 10984.0
+      },
+      "medianPercentChange": 6.142544545170359
+    }
+  ],
+  "gates": {
+    "tinyMotionRegression": true,
+    "frozenMechanics": true,
+    "sameRuntimeCheckpoints": true,
+    "fixedRetry25Percent": true,
+    "flowering": false,
+    "doubledDensityAtBothTicks": false,
+    "zeroContactAllocations": false,
+    "fullScene25Percent": "not established",
+    "V2Default": "not enabled"
+  }
+}

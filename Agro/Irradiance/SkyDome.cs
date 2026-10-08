@@ -83,9 +83,8 @@ public readonly struct SkyDome
 	public bool IsLit => GlobalHorizontal > 0.5f;
 
 	/// <summary>
-	/// The same dome with every magnitude scaled. Used to give a multi-hour timestep a dome whose
-	/// totals are the average over the step while its geometry stays that of the brightest instant
-	/// inside it, which is what the diffuse gather should see.
+	/// The same instantaneous dome with every magnitude scaled. This does not integrate
+	/// solar motion; the CPU gather uses SkyInterval for that purpose.
 	/// </summary>
 	public SkyDome Scaled(float factor) => new(SunDirection, DirectNormal * factor, DiffuseHorizontal * factor,
 		GlobalHorizontal * factor, ClearScale * factor, OvercastScale * factor);
@@ -97,8 +96,14 @@ public readonly struct SkyDome
 	{
 		if (d.Y <= 0f)
 			return GroundRadiance;
+		return Radiance(d, ClearGradation(d.Y), OvercastShape(d.Y));
+	}
+
+    // Zenith-only factors are shared by every instant in an interval lookup.
+    internal float Radiance(Vector3 d, float clearGradation, float overcastShape)
+    {
 		var cosGamma = Math.Clamp(Vector3.Dot(d, SunDirection), -1f, 1f);
-		return ClearScale * ClearShape(d.Y, cosGamma) + OvercastScale * OvercastShape(d.Y);
+		return ClearScale * (clearGradation * ClearIndicatrix(cosGamma)) + OvercastScale * overcastShape;
 	}
 
 	/// <summary>Irradiance on a plane with unit normal <paramref name="n"/>, assuming an
@@ -116,14 +121,19 @@ public readonly struct SkyDome
 	}
 
 	static float ClearShape(float cosZenith, float cosGamma)
+		=> ClearGradation(cosZenith) * ClearIndicatrix(cosGamma);
+
+    internal static float ClearGradation(float cosZenith)
+        => 1f - MathF.Exp(ClearB / MathF.Max(cosZenith, 1e-4f));
+
+    static float ClearIndicatrix(float cosGamma)
 	{
-		var gradation = 1f - MathF.Exp(ClearB / MathF.Max(cosZenith, 1e-4f));
 		var gamma = FastAcos(cosGamma);
 		var indicatrix = 1f + ClearC * (MathF.Exp(ClearD * gamma) - ClearIndicatrixOffset) + ClearE * cosGamma * cosGamma;
-		return gradation * indicatrix;
+		return indicatrix;
 	}
 
-	static float OvercastShape(float cosZenith) => 1f + OvercastA * MathF.Exp(OvercastB / MathF.Max(cosZenith, 1e-4f));
+	internal static float OvercastShape(float cosZenith) => 1f + OvercastA * MathF.Exp(OvercastB / MathF.Max(cosZenith, 1e-4f));
 
 	/// <summary>Nvidia's classic polynomial arc cosine, ~1e-5 absolute error. The indicatrix needs
 	/// an angle rather than its cosine and this runs once per sky lookup, so it is worth avoiding

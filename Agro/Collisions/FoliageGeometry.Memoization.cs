@@ -4,35 +4,59 @@ namespace Agro.Collisions;
 
 internal static partial class FoliageGeometry
 {
+    // A work limit cannot establish intersection. Keep the distinction in cached
+    // results as well, so cold and warm workers make the same retry decisions.
+    internal enum MotionResult : byte { Clear, Intersecting, Uncertified }
     readonly record struct DistanceQuery(ContactShape A, ContactShape B, float Search, Vector3 Attachment, float Radius);
     readonly record struct MotionQuery(ContactShape A0, ContactShape A1, ContactShape B0, ContactShape B1,
         Vector3 Attachment0, Vector3 Attachment1, float Radius);
     [ThreadStatic] static FixedMemo<DistanceQuery,FoliageContact>? DistanceMemo;
-    [ThreadStatic] static FixedMemo<MotionQuery,bool>? MotionMemo;
+    [ThreadStatic] static FixedMemo<MotionQuery,MotionResult>? MotionMemo;
 
-    // Two-way bounded storage evicts one result instead of clearing a whole worker's
-    // useful stationary-contact history when a crowded canopy crosses the old limit.
+    // Four-way LRU sets retain the same bounded entry count. A two-way set could
+    // repeatedly evict an expensive stationary query when several nearby poses
+    // hashed into it, making identical contact populations vary sharply in cost.
     sealed class FixedMemo<TKey,TValue> where TKey : struct, IEquatable<TKey>
     {
+        const int Ways = 4;
         struct Entry { public bool Used; public TKey Key; public TValue Value; }
         readonly Entry[] entries;
         readonly byte[] victim;
-        public FixedMemo(int capacity) { entries = new Entry[capacity]; victim = new byte[capacity / 2]; }
-        int Bucket(in TKey key) => (key.GetHashCode() & (victim.Length - 1)) * 2;
+        public FixedMemo(int capacity)
+        {
+            entries = new Entry[capacity]; victim = new byte[capacity / Ways];
+            // Two bits per way, ordered from most to least recently used.
+            Array.Fill(victim, (byte)0xe4); // 0, 1, 2, 3
+        }
+        int Bucket(in TKey key) => (key.GetHashCode() & (victim.Length - 1)) * Ways;
+        void Touch(int index, int slot)
+        {
+            var order = victim[index / Ways];
+            var promoted = (byte)slot; var shift = 2;
+            for (var position = 0; position < Ways; ++position)
+            {
+                var previous = (order >> (2 * position)) & 3;
+                if (previous == slot) continue;
+                promoted |= (byte)(previous << shift); shift += 2;
+            }
+            victim[index / Ways] = promoted;
+        }
         public bool TryGetValue(in TKey key, out TValue value)
         {
             var index = Bucket(key);
-            for (int i = index; i < index + 2; ++i)
+            for (int i = index; i < index + Ways; ++i)
                 if (entries[i].Used && entries[i].Key.Equals(key))
-                { value = entries[i].Value; victim[index / 2] = (byte)(1 - (i - index)); return true; }
+                { value = entries[i].Value; Touch(index, i - index); return true; }
             value = default!; return false;
         }
         public void Store(in TKey key, TValue value)
         {
             var index = Bucket(key);
-            var slot = !entries[index].Used ? index : !entries[index + 1].Used ? index + 1 : index + victim[index / 2];
+            var slot = index + (victim[index / Ways] >> 6);
+            for (var i = index; i < index + Ways; ++i)
+                if (!entries[i].Used) { slot = i; break; }
             entries[slot] = new() { Used = true, Key = key, Value = value };
-            victim[index / 2] = (byte)(1 - (slot - index));
+            Touch(index, slot - index);
         }
     }
 
@@ -59,6 +83,9 @@ internal static partial class FoliageGeometry
     }
 
     internal static bool SweepClear(in ContactShape a0, in ContactShape a1, in ContactShape b0, in ContactShape b1, int depth=0)
+        => Sweep(a0,a1,b0,b1,depth) == MotionResult.Clear;
+
+    internal static MotionResult Sweep(in ContactShape a0, in ContactShape a1, in ContactShape b0, in ContactShape b1, int depth=0)
     {
         if (depth != 0 || a0.Feature >= 0 || b0.Feature >= 0) return SweepUncached(a0,a1,b0,b1,depth);
         var cache = MotionMemo ??= new(2048); var key = new MotionQuery(a0,a1,b0,b1,default,default,0);
@@ -69,6 +96,10 @@ internal static partial class FoliageGeometry
     }
 
     internal static bool AttachmentSweepClear(in ContactShape a0, in ContactShape a1, in ContactShape b0, in ContactShape b1,
+        Vector3 point0, Vector3 point1, float radius)
+        => AttachmentSweep(a0,a1,b0,b1,point0,point1,radius) == MotionResult.Clear;
+
+    internal static MotionResult AttachmentSweep(in ContactShape a0, in ContactShape a1, in ContactShape b0, in ContactShape b1,
         Vector3 point0, Vector3 point1, float radius)
     {
         var cache = MotionMemo ??= new(2048); var key = new MotionQuery(a0,a1,b0,b1,point0,point1,radius);

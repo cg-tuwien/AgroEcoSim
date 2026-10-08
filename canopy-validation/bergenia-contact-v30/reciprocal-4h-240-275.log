@@ -1,0 +1,25 @@
+Species lookup: Bergenia Cordifolia, BudLength: 0.009
+PlantFormation2 ctor: Bergenia Cordifolia, BudLength: 0.009
+SpeciesSettings.Init called on Bergenia Cordifolia, BudLength: 0.009
+PlantFormation2 after Init: Bergenia Cordifolia, BudLength: 0.009
+Collision scene: 2 triangles (2 soil, 0 obstacle) in 7 ms, open soil surface (regular fields use their finite footprint)
+version=30 tick=4 beginDay=240 stopDay=275 render=3 requestHorizonHours=18120
+RESOLVED name=Bergenia Cordifolia mode=None leafGrowthHours=2016 leafLength=0.24 leafRadius=0.095 crownNodes=10 rhizomeBasalRate=0 rhizomeAxillaryRate=0 rhizomeAxillarySeason=0.15 basalBuds=0 axillaryBuds=0
+day,AG,UG,leaves,half,ninety,petals,floral,blocked,water,energy,finite,maxUnresolved,elapsedSec
+240,52,118,20,8,4,0,1,44,43.65239301745896,655.9773739607069,True,0,0.00
+SCAPE day=240 id=47 lmm=5.181651 rmm=3.6753511 targetLmm=13.455799 targetRmm=5.8000274 blocked=True
+245,52,124,20,8,4,0,1,28,45.26136119879084,701.1615764666069,True,0,21.08
+SCAPE day=245 id=47 lmm=7.883789 rmm=5.8000274 targetLmm=13.455799 targetRmm=5.8000274 blocked=False
+250,52,129,20,8,4,0,1,34,45.964822968584485,746.6738006893302,True,0,41.51
+SCAPE day=250 id=47 lmm=7.9769816 rmm=5.8000274 targetLmm=13.455799 targetRmm=5.8000274 blocked=True
+255,52,132,20,8,4,0,1,31,46.69212397187948,796.7808384534765,True,0,50.77
+SCAPE day=255 id=47 lmm=7.9774194 rmm=5.8000274 targetLmm=13.455799 targetRmm=5.8000274 blocked=False
+260,52,137,20,8,4,0,1,33,47.61561170127243,849.1887079762637,True,0,70.39
+SCAPE day=260 id=47 lmm=8.057469 rmm=5.8000274 targetLmm=13.455799 targetRmm=5.8000274 blocked=False
+265,52,141,20,8,4,0,1,23,48.50185293890536,901.0635158819132,True,0,91.96
+SCAPE day=265 id=47 lmm=8.084301 rmm=5.8000274 targetLmm=13.455799 targetRmm=5.8000274 blocked=False
+270,52,145,20,8,4,0,1,33,49.12116937804967,954.437446660304,True,0,111.52
+SCAPE day=270 id=47 lmm=8.098428 rmm=5.8000274 targetLmm=13.455799 targetRmm=5.8000274 blocked=True
+275,52,149,20,8,4,0,1,34,49.94110724609345,1011.2134420843067,True,0,131.28
+SCAPE day=275 id=47 lmm=8.116826 rmm=5.8000274 targetLmm=13.455799 targetRmm=5.8000274 blocked=True
+DONE day=275 finite=True maxUnresolved=0 observedLeaves=20 petalsObservedSum=0 frameBytes=9738

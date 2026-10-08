@@ -80,13 +80,17 @@ public interface IPlantAgent : ITreeAgent
 	public float PreviousDayEnvResources { get; }
 
 	float EnergyStorageCapacity();
+	float EnergyStorageCapacity(SpeciesSettings species);
+	float EnergyAllocationWeight(SpeciesSettings species);
 	float WaterStorageCapacity_g();
 	float WaterTotalCapacityPerTick_g(AgroWorld world);
 	float EnergyFlowToParentPerTick(AgroWorld world);
 
 	float LifeSupportPerHour();
 	float LifeSupportPerTick(AgroWorld world);
+	float LifeSupportPerTick(AgroWorld world, SpeciesSettings species);
 	float PhotosynthPerTick(AgroWorld world);
+	float PhotosynthPerTick(AgroWorld world, SpeciesSettings species);
 
 	float WoodRatio();
 	float Adulcy(uint timestep);

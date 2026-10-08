@@ -1,0 +1,12 @@
+CONTROLLED DIAGNOSTIC ONLY: same-layout v20 snapshot under v21 mechanics; not a fresh seasonal replay or supported live migration.
+CHECKPOINT /tmp/gf-scape-recovery/production/control-1h-day240-v21.bin bytes=51888202
+SCAPE day=240 id=52 lmm=6.44261 rmm=2.2902832 targetLmm=13.7000675 targetRmm=4.121531 blocked=True
+SCAPE day=245 id=52 lmm=6.596022 rmm=2.3020897 targetLmm=13.7000675 targetRmm=4.121531 blocked=True
+SCAPE day=250 id=52 lmm=6.596022 rmm=2.3020897 targetLmm=13.7000675 targetRmm=4.121531 blocked=True
+SCAPE day=255 id=52 lmm=6.596022 rmm=2.3020897 targetLmm=13.7000675 targetRmm=4.121531 blocked=True
+SCAPE day=260 id=52 lmm=6.596022 rmm=2.3020897 targetLmm=13.7000675 targetRmm=4.121531 blocked=True
+SCAPE day=265 id=52 lmm=6.596022 rmm=2.3020897 targetLmm=13.7000675 targetRmm=4.121531 blocked=True
+SCAPE day=270 id=52 lmm=6.596022 rmm=2.3020897 targetLmm=13.7000675 targetRmm=4.121531 blocked=True
+CHECKPOINT /tmp/gf-scape-recovery/production/control-1h-day275-v21.bin bytes=51892726
+SCAPE day=275 id=52 lmm=6.596022 rmm=2.3020897 targetLmm=13.7000675 targetRmm=4.121531 blocked=True
+DONE mode=archived-exact tick=1 firstPetalDay=-1 elapsed=00:04:18.7849155 everLeaves=20 ever50=4 ever90=2

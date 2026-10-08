@@ -31,6 +31,8 @@ public static class Geranium_x_Cantabrigiense
 
 
         LeafGrowthTime = 24f * 7f * 2f,
+        // Provisional CPU-light calibration; see LIGHT_GROWTH_CALIBRATION.md.
+        LeafExpansionRateScale = 1.25f,
         LeafGrowthTimeVar = 24f * 3f,
         LeafMaximumAgeHours = 24 * 365,
 

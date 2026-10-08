@@ -1,3 +1,4 @@
+import { FOLD_WGSL } from '../../../core/ContactDeformation';
 //Voxelisation of the scene into a leaf-area-density field.
 //
 //WGSL has atomics only on storage BUFFERS, never on storage textures, and WebGPU has no
@@ -48,6 +49,8 @@ fn cellIndex(g : Grid, c : vec3i) -> u32 {
  */
 export const VOXEL_INJECT_WGSL = /* wgsl */`${VOXEL_COMMON}
 
+${FOLD_WGSL}
+
 struct Instance {
   model    : mat4x4f,
   n0       : vec4f,
@@ -59,6 +62,8 @@ struct Instance {
   flags    : u32,
   _pad0    : u32,
   _pad1    : u32,
+  fold     : vec4f,
+  foldScale: vec4f,
 };
 
 struct Bucket {
@@ -128,9 +133,9 @@ fn main(@builtin(global_invocation_id) gid : vec3u) {
   let v1 = bucket.slice.z + indices[i0 + 1u];
   let v2 = bucket.slice.z + indices[i0 + 2u];
 
-  let a = (inst.model * vec4f(position(v0), 1.0)).xyz;
-  let b = (inst.model * vec4f(position(v1), 1.0)).xyz;
-  let c = (inst.model * vec4f(position(v2), 1.0)).xyz;
+  let a = (inst.model * vec4f(foldLeaf(position(v0), vertices[v0 * VERTEX_FLOATS + 6u], inst.fold, inst.foldScale.xyz), 1.0)).xyz;
+  let b = (inst.model * vec4f(foldLeaf(position(v1), vertices[v1 * VERTEX_FLOATS + 6u], inst.fold, inst.foldScale.xyz), 1.0)).xyz;
+  let c = (inst.model * vec4f(foldLeaf(position(v2), vertices[v2 * VERTEX_FLOATS + 6u], inst.fold, inst.foldScale.xyz), 1.0)).xyz;
 
   //Area in world space, after the model transform: a leaf's contribution depends on how big
   //it actually is, not on how big its prototype mesh was.

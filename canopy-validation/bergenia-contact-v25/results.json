@@ -1,0 +1,196 @@
+{
+  "definition": "Both intrinsic length and half-width; daily observation, censored leaves excluded from expansion durations",
+  "biologicalAcceptance": false,
+  "V2DefaultEnabled": false,
+  "sourceStage": "Fresh v25 runs precede final unjoined-neighbour history and reversed contact-memory fixes. Final frozen and 12-hour resumed NativeAOT comparisons preserve prior hashes; fresh final-source seasonal replay remains outstanding.",
+  "scenes": {
+    "v25-1h": {
+      "observationStopDay": 275,
+      "final": {
+        "day": 275,
+        "date": "2026-06-03",
+        "AG": 52,
+        "UG": 204,
+        "leaves": 20,
+        "leaves50": 6,
+        "leaves90": 3,
+        "cumulative50": 6,
+        "cumulative90": 3,
+        "maxBladeCm": 25.1,
+        "maxWidthCm": 20.21,
+        "petals": 0,
+        "floral": 1,
+        "blocked": 47,
+        "pending": 0,
+        "accepted": 10,
+        "rejected": 0,
+        "waterBalance": 1004.141,
+        "totalWater": 634.402,
+        "totalEnergy": 771.426,
+        "finite": 1,
+        "elapsedSec": 2536.0
+      },
+      "everObservedLeafIds": 20,
+      "expansionDays": {
+        "halfDay": [
+          52,
+          54,
+          59,
+          78,
+          86,
+          127
+        ],
+        "ninetyDay": [
+          137,
+          144,
+          191
+        ]
+      },
+      "lastScapeObservation": "SCAPE day=275 id=52 lmm=3.0517023 rmm=1.4541125 targetLmm=15.130586 targetRmm=5.9037533 blocked=True",
+      "allObservedResourcesFinite": true,
+      "elapsedIsNotReleaseBenchmark": true,
+      "maxUnresolvedContacts": 0
+    },
+    "v24-1h": {
+      "observationStopDay": 275,
+      "final": {
+        "day": 275,
+        "date": "2026-06-03",
+        "AG": 52,
+        "UG": 204,
+        "leaves": 20,
+        "leaves50": 6,
+        "leaves90": 3,
+        "cumulative50": 6,
+        "cumulative90": 3,
+        "maxBladeCm": 25.1,
+        "maxWidthCm": 20.21,
+        "petals": 0,
+        "floral": 1,
+        "blocked": 48,
+        "pending": 0,
+        "accepted": 10,
+        "rejected": 0,
+        "waterBalance": 1005.506,
+        "totalWater": 634.37,
+        "totalEnergy": 771.366,
+        "finite": 1,
+        "elapsedSec": 2417.2
+      },
+      "everObservedLeafIds": 20,
+      "expansionDays": {
+        "halfDay": [
+          52,
+          54,
+          59,
+          78,
+          86,
+          127
+        ],
+        "ninetyDay": [
+          137,
+          144,
+          191
+        ]
+      },
+      "lastScapeObservation": "SCAPE day=275 id=52 lmm=3.0242958 rmm=1.4537598 targetLmm=15.130586 targetRmm=5.9037533 blocked=True",
+      "allObservedResourcesFinite": true,
+      "elapsedIsNotReleaseBenchmark": true,
+      "maxUnresolvedContacts": 0
+    },
+    "v25-4h": {
+      "observationStopDay": 330,
+      "final": {
+        "day": 330,
+        "date": "2026-07-28",
+        "AG": 51,
+        "UG": 201,
+        "leaves": 20,
+        "leaves50": 5,
+        "leaves90": 4,
+        "cumulative50": 5,
+        "cumulative90": 4,
+        "maxBladeCm": 25.65,
+        "maxWidthCm": 20.34,
+        "petals": 0,
+        "floral": 0,
+        "blocked": 45,
+        "pending": 0,
+        "accepted": 10,
+        "rejected": 41,
+        "waterBalance": 252.541,
+        "totalWater": 641.473,
+        "totalEnergy": 1237.687,
+        "finite": 1,
+        "elapsedSec": 760.5
+      },
+      "everObservedLeafIds": 20,
+      "expansionDays": {
+        "halfDay": [
+          43,
+          63,
+          74,
+          97,
+          211
+        ],
+        "ninetyDay": [
+          77,
+          100,
+          112,
+          150
+        ]
+      },
+      "lastScapeObservation": "SCAPE day=305 id=52 lmm=11.637559 rmm=0.36586344 targetLmm=13.220396 targetRmm=5.5807314 blocked=True",
+      "allObservedResourcesFinite": true,
+      "elapsedIsNotReleaseBenchmark": true,
+      "maxUnresolvedContacts": 0
+    },
+    "v24-4h": {
+      "observationStopDay": 330,
+      "final": {
+        "day": 330,
+        "date": "2026-07-28",
+        "AG": 51,
+        "UG": 201,
+        "leaves": 20,
+        "leaves50": 5,
+        "leaves90": 4,
+        "cumulative50": 5,
+        "cumulative90": 4,
+        "maxBladeCm": 25.65,
+        "maxWidthCm": 20.34,
+        "petals": 0,
+        "floral": 0,
+        "blocked": 47,
+        "pending": 0,
+        "accepted": 10,
+        "rejected": 41,
+        "waterBalance": 251.741,
+        "totalWater": 641.735,
+        "totalEnergy": 1241.575,
+        "finite": 1,
+        "elapsedSec": 755.2
+      },
+      "everObservedLeafIds": 20,
+      "expansionDays": {
+        "halfDay": [
+          43,
+          63,
+          74,
+          97,
+          211
+        ],
+        "ninetyDay": [
+          77,
+          100,
+          112,
+          150
+        ]
+      },
+      "lastScapeObservation": "SCAPE day=305 id=52 lmm=10.586318 rmm=0.36586344 targetLmm=13.220396 targetRmm=5.5807314 blocked=True",
+      "allObservedResourcesFinite": true,
+      "elapsedIsNotReleaseBenchmark": true,
+      "maxUnresolvedContacts": 0
+    }
+  }
+}

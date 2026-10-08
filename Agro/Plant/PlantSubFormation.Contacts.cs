@@ -3,6 +3,15 @@ using Agro.Collisions;
 
 namespace Agro;
 
+internal readonly record struct ContactAngularCompliance(Vector3 First, Vector3 Second, double AlongFirst, double AlongSecond)
+{
+    static double Dot(Vector3 a, Vector3 b) => (double)a.X * b.X + (double)a.Y * b.Y + (double)a.Z * b.Z;
+    internal double Bilinear(Vector3 a, Vector3 b)
+        => AlongFirst * Dot(a, First) * Dot(b, First) + AlongSecond * Dot(a, Second) * Dot(b, Second);
+    internal Vector3 Response(Vector3 torque)
+        => First * (float)(AlongFirst * Dot(torque, First)) + Second * (float)(AlongSecond * Dot(torque, Second));
+}
+
 public partial class PlantSubFormation<T>
 {
     internal readonly record struct GeometryState(OrganPose Pose, Quaternion BaseOrientation,
@@ -39,7 +48,7 @@ public partial class PlantSubFormation<T>
     bool BatchingContacts;
     Vector3[] SupportMoments = [];
     readonly HashSet<int> RejectedBranches = [];
-    GeometryState[] ContactTrialStates = [], RedirectTrialStates = [];
+    GeometryState[] ContactTrialStates = [], RedirectTrialStates = [], ContinuationStates = [];
     readonly List<int> RedirectTrialOrgans = [];
     readonly List<int> ContactMovedRoots = [];
     readonly List<Vector3> RedirectCandidates = new(6);
@@ -58,7 +67,8 @@ public partial class PlantSubFormation<T>
             : a.Organ is OrganTypes.Bud or OrganTypes.FlowerBud or OrganTypes.FlowerBaseBud or OrganTypes.Fruit
                 ? MathF.Max(a.Radius, a.Length) : a.Radius;
         return new(GetBaseCenterWorld(index) + a.BaseOffset, a.Orientation, a.Length,
-            blade ? a.Radius : 0f, radius, a.Organ is OrganTypes.Bud or OrganTypes.FlowerBud or OrganTypes.FlowerBaseBud or OrganTypes.Fruit);
+            blade ? a.Radius : 0f, radius, a.Organ is OrganTypes.Bud or OrganTypes.FlowerBud or OrganTypes.FlowerBaseBud or OrganTypes.Fruit,
+            GetDeformation(index));
     }
 
     void CaptureGeometry()
@@ -99,6 +109,7 @@ public partial class PlantSubFormation<T>
     {
         EnsureContactCapacity(AgentCount);
         Array.Clear(ContactTurns, 0, AgentCount);
+        BeginDeformationSweep();
         BatchingContacts = true;
     }
 
@@ -111,14 +122,16 @@ public partial class PlantSubFormation<T>
         foreach (var root in GetRoots()) queue.Enqueue(root);
         var moved = false;
         ContactMovedRoots.Clear();
-        var cosineLimit = MathF.Cos(CollisionSettings.MaxElasticBendRadians * .5f);
         while (queue.Count > 0)
         {
             var i = queue.Dequeue();
+            var cosineLimit = MathF.Cos(ContactBendLimit(i) * .5f);
             var parent = src[i].Parent;
             var carry = parent >= 0 ? TransportedTurns[parent] : Quaternion.Identity;
+            var oldPose = GetContactPose(i);
+            var deformed = ApplyDeformationIncrement(i);
             var turn = ContactTurns[i];
-            if (turn == Vector3.Zero && carry == Quaternion.Identity)
+            if (!deformed && turn == Vector3.Zero && carry == Quaternion.Identity)
             {
                 // No load correction and no parent transport: a joint safely inside
                 // its limit is an exact no-op. Re-normalizing such frames every solver
@@ -136,7 +149,7 @@ public partial class PlantSubFormation<T>
             var own = angle > 1e-8f ? Quaternion.CreateFromAxisAngle(turn / angle, MathF.Min(angle, maxAngle)) : Quaternion.Identity;
             var transportedBase = Quaternion.Normalize(carry * src[i].baseOrientation);
             var proposed = Quaternion.Normalize(own * carry * src[i].Orientation);
-            var constrained = LimitJointBend(transportedBase, proposed);
+            var constrained = LimitJointBend(transportedBase, proposed, ContactBendLimit(i));
             var delta = Quaternion.Normalize(constrained * Quaternion.Conjugate(src[i].Orientation));
             TransportedTurns[i] = delta;
             if (delta.X * delta.X + delta.Y * delta.Y + delta.Z * delta.Z > 1e-16f)
@@ -151,6 +164,18 @@ public partial class PlantSubFormation<T>
                 moved = true;
             }
             else TransportedTurns[i] = Quaternion.Identity;
+            if(Deformable(i) && GetOrgan(i)==OrganTypes.Petiole)
+            {
+                var current=GetDeformation(i);var limited=LimitedShape(i,current);
+                if(current!=limited){SetDeformation(i,limited);deformed=true;}
+            }
+            if (deformed)
+            {
+                TransportedTurns[i] = Quaternion.Normalize(AttachmentRotation(GetContactPose(i))
+                    * Quaternion.Conjugate(AttachmentRotation(oldPose)));
+                if (carry == Quaternion.Identity && !ContactMovedRoots.Contains(i)) ContactMovedRoots.Add(i);
+                moved = true;
+            }
             foreach (var child in GetChildren(i)) queue.Enqueue(child);
         }
         if (moved)
@@ -226,6 +251,7 @@ public partial class PlantSubFormation<T>
             var i = queue.Dequeue();
             foreach (var child in GetChildren(i)) queue.Enqueue(child);
             var original = src[i].Orientation;
+            var originalAttachment = AttachmentRotation(GetContactPose(i));
             var parent = src[i].Parent;
             var carry = parent >= 0 ? TransportedTurns[parent] : Quaternion.Identity;
             var previous = PreviousGeometry[i];
@@ -234,10 +260,11 @@ public partial class PlantSubFormation<T>
                 // Restore only the rejected proposal. Descendants keep their independent
                 // elongation, widening and joint bend, transported by this support's change.
                 var previousCarry = parent >= 0 && PreviousGeometry[parent].Exists
-                    && src[parent].Orientation != PreviousGeometry[parent].Pose.Rotation
-                    ? Quaternion.Normalize(src[parent].Orientation * Quaternion.Conjugate(PreviousGeometry[parent].Pose.Rotation))
+                    && AttachmentRotation(GetContactPose(parent)) != AttachmentRotation(PreviousGeometry[parent].Pose)
+                    ? Quaternion.Normalize(AttachmentRotation(GetContactPose(parent)) * Quaternion.Conjugate(AttachmentRotation(PreviousGeometry[parent].Pose)))
                     : Quaternion.Identity;
                 src[i].SetGeometry(previous.Pose.Length, previous.Radius);
+                SetDeformation(i, previous.Pose.Deformation);
                 // The accepted fallback must be exact. Re-normalizing an unchanged frame
                 // can move a tip across the attachment exclusion boundary by a nanometre,
                 // exposing an otherwise excluded contact and defeating repeated rollback.
@@ -257,8 +284,9 @@ public partial class PlantSubFormation<T>
                 src[i].restOrientation = Quaternion.Normalize(carry * src[i].restOrientation);
                 src[i].targetOrientation = Quaternion.Normalize(carry * src[i].targetOrientation);
             }
-            TransportedTurns[i] = src[i].Orientation == original ? Quaternion.Identity
-                : Quaternion.Normalize(src[i].Orientation * Quaternion.Conjugate(original));
+            var attachment = AttachmentRotation(GetContactPose(i));
+            TransportedTurns[i] = attachment == originalAttachment ? Quaternion.Identity
+                : Quaternion.Normalize(attachment * Quaternion.Conjugate(originalAttachment));
         }
         RebaseAndRefit();
     }
@@ -286,7 +314,8 @@ public partial class PlantSubFormation<T>
             // ranking, restoring an accepted configuration cannot round away changes:
             // attachment clipping has a finite boundary even for an infinitesimal sliver.
             if (PreviousGeometry[i].Exists && (GetLength(i) != PreviousGeometry[i].Pose.Length
-                || GetDirection(i) != PreviousGeometry[i].Pose.Rotation)) yield return i;
+                || GetDirection(i) != PreviousGeometry[i].Pose.Rotation
+                || GetDeformation(i) != PreviousGeometry[i].Pose.Deformation)) yield return i;
     }
 
     bool ContactSupportMoved(int index)
@@ -296,11 +325,11 @@ public partial class PlantSubFormation<T>
         var current = GetContactPose(index);
         var parent = GetParent(index);
         var carry = parent >= 0 && PreviousGeometry[parent].Exists
-            ? Quaternion.Normalize(GetDirection(parent) * Quaternion.Conjugate(PreviousGeometry[parent].Pose.Rotation))
+            ? Quaternion.Normalize(AttachmentRotation(GetContactPose(parent)) * Quaternion.Conjugate(AttachmentRotation(PreviousGeometry[parent].Pose)))
             : Quaternion.Identity;
         var relative = Quaternion.Normalize(current.Rotation * Quaternion.Conjugate(carry * previous.Rotation));
         // Radial growth does not transport the attachment; its own contact is checked separately.
-        return MathF.Abs(current.Length - previous.Length) > 1e-8f
+        return current.Deformation != previous.Deformation || MathF.Abs(current.Length - previous.Length) > 1e-8f
             || new Vector3(relative.X, relative.Y, relative.Z).LengthSquared() > 1e-14f;
     }
 
@@ -324,6 +353,35 @@ public partial class PlantSubFormation<T>
         return saved;
     }
 
+    // Separate reusable scratch: a coupled growth step may move several plants,
+    // while ordinary development/redirection trials use their own saved frames.
+    internal GeometryState[] SaveContinuationGeometry()
+    {
+        if (ContinuationStates.Length < Count)
+            Array.Resize(ref ContinuationStates, Math.Max(Count, ContinuationStates.Length * 3 / 2 + 8));
+        var live = Src();
+        for (int i = 0; i < Count; ++i)
+            ContinuationStates[i] = new(GetContactPose(i), live[i].baseOrientation,
+                live[i].restOrientation, live[i].targetOrientation, live[i].Radius, true);
+        return ContinuationStates;
+    }
+
+    internal bool HasContinuationWaypoint => ReferenceEquals(PreviousGeometry, ContinuationStates);
+
+    internal void SetContinuationDimensions(int index, float length, float radius)
+    {
+        Src()[index].SetGeometry(length, radius);
+        RebaseAndRefit(index);
+    }
+
+    internal void CompleteCertifiedGrowth(int index)
+    {
+        ref var organ = ref Src()[index];
+        GrowthRetries.Remove(organ.StableId);
+        organ.GrowthBlocked = false;
+        organ.ObstructionHours = 0f;
+    }
+
     internal void RestoreContactTrial(GeometryState[] saved)
     {
         var live=Src();
@@ -332,6 +390,7 @@ public partial class PlantSubFormation<T>
         for(int i=0;i<Count;++i)
         {
             var state=saved[i];
+            SetDeformation(i, state.Pose.Deformation);
             live[i].SetGeometry(state.Pose.Length,state.Radius);
             live[i].SetOrientation(state.Pose.Rotation);
             live[i].baseOrientation=state.BaseOrientation;
@@ -345,6 +404,7 @@ public partial class PlantSubFormation<T>
     {
         var previous = PreviousGeometry[i];
         if (!previous.Exists) return;
+        SetDeformation(i, previous.Pose.Deformation);
         src[i].SetGeometry(previous.Pose.Length, previous.Radius);
         src[i].SetOrientation(previous.Pose.Rotation);
         src[i].baseOrientation = previous.BaseOrientation;
@@ -407,10 +467,84 @@ public partial class PlantSubFormation<T>
         }
     }
 
-    internal bool TryRedirectGrowth(int index, Vector3 normal, Func<bool> admissible)
+    // A simultaneous contact correction may fail even when one restored organ can
+    // safely complete its biological increment against the accepted neighbours.
+    // Retry that exact increment only after rollback, and retain it only with a
+    // full swept clearance certificate for the organ and all its descendants.
+    internal bool TryGrowthAfterRollback(int index, float length, float radius, Func<bool> admissible,
+        bool allowPartial = false)
+    {
+        if (!PreviousGeometry[index].Exists || HasPendingDevelopment(index)) return false;
+        var live = Src();
+        var previousLength = live[index].Length;
+        var previousRadius = live[index].Radius;
+        if (length < previousLength || radius < previousRadius
+            || length <= previousLength + 1e-7f && radius <= previousRadius + 1e-7f) return false;
+        live[index].SetGeometry(length, radius);
+        RebaseAndRefit(index);
+        if (admissible())
+        {
+            GrowthRetries.Remove(live[index].StableId);
+            live[index].GrowthBlocked = false;
+            live[index].ObstructionHours = 0f;
+            return true;
+        }
+        live[index].SetGeometry(previousLength, previousRadius);
+        RebaseAndRefit(index);
+        if (allowPartial && admissible())
+        {
+            // Search from the accepted dimensions, not the pre-tick snapshot: a
+            // prior certified retry may already have retained part of the growth.
+            // Extension and thickening have separate clearance limits.
+            GrowDimension(longitudinal: true, length);
+            GrowDimension(longitudinal: false, radius);
+            if ((live[index].Length > previousLength + 1e-7f
+                || live[index].Radius > previousRadius + 1e-7f) && admissible())
+            {
+                GrowthRetries.Remove(live[index].StableId);
+                live[index].GrowthBlocked = false;
+                live[index].ObstructionHours = 0f;
+                return true;
+            }
+            live[index].SetGeometry(previousLength, previousRadius);
+            RebaseAndRefit(index);
+        }
+        return false;
+
+        void GrowDimension(bool longitudinal, float target)
+        {
+            var current = Src();
+            var lower = longitudinal ? current[index].Length : current[index].Radius;
+            if (target <= lower + 1e-7f) return;
+            var fixedSize = longitudinal ? current[index].Radius : current[index].Length;
+            void Set(float value)
+            {
+                Src()[index].SetGeometry(longitudinal ? value : fixedSize,
+                    longitudinal ? fixedSize : value);
+                RebaseAndRefit(index);
+            }
+            Set(target);
+            if (admissible()) return;
+            var upper = target;
+            for (var step = 0; step < 8; ++step)
+            {
+                var mid = (lower + upper) * .5f;
+                Set(mid);
+                if (admissible()) lower = mid; else upper = mid;
+            }
+            Set(lower);
+        }
+    }
+
+    internal bool TryRedirectGrowth(int index, Vector3 normal, Func<bool> admissible,
+        bool stationaryPetioleSupport = false)
     {
         var src = Src(); var old = PreviousGeometry[index];
-        if (!old.Exists || src[index].Length <= old.Pose.Length + 1e-7f || normal.LengthSquared() < 1e-12f) return false;
+        if (!old.Exists || normal.LengthSquared() < 1e-12f
+            || stationaryPetioleSupport && (src[index].Organ != OrganTypes.Petiole
+                || IsMechanicallyAnchored(index))
+            || !stationaryPetioleSupport && src[index].Length <= old.Pose.Length + 1e-7f)
+            return false;
         normal = Vector3.Normalize(normal);
         var direction = Vector3.Transform(Vector3.UnitX, src[index].Orientation);
         var tangent = direction - normal * Vector3.Dot(direction, normal);
@@ -447,7 +581,10 @@ public partial class PlantSubFormation<T>
             if (axis.LengthSquared() < 1e-10f) continue;
             var angle = MathF.Acos(Math.Clamp(Vector3.Dot(direction, candidate), -1f, 1f));
             var orientation = LimitJointBend(src[index].baseOrientation,
-                Quaternion.CreateFromAxisAngle(Vector3.Normalize(axis), angle) * src[index].Orientation);
+                Quaternion.CreateFromAxisAngle(Vector3.Normalize(axis), angle) * src[index].Orientation, ContactBendLimit(index));
+            if (stationaryPetioleSupport
+                && MathF.Abs(Quaternion.Dot(orientation, src[index].Orientation)) >= 1f - 1e-7f)
+                continue;
             var delta = Quaternion.Normalize(orientation * Quaternion.Conjugate(src[index].Orientation));
             src[index].SetOrientation(orientation);
             PropagateToSubtree(src, index, delta);
@@ -462,6 +599,7 @@ public partial class PlantSubFormation<T>
             for (int j = 0; j < affected.Count; ++j)
             {
                 var i = affected[j]; var state = saved[j];
+                SetDeformation(i, state.Pose.Deformation);
                 live[i].SetGeometry(state.Pose.Length, state.Radius); live[i].SetOrientation(state.Pose.Rotation);
                 live[i].baseOrientation = state.BaseOrientation; live[i].restOrientation = state.RestOrientation; live[i].targetOrientation = state.TargetOrientation;
             }
@@ -494,29 +632,36 @@ public partial class PlantSubFormation<T>
             var keel = BladeKeelAt(index);
             var inverse = z * (Vector3.Dot(torque,z) / MathF.Max(1e-25f,BladeInertia(a.Radius,keel)))
                 + y * (Vector3.Dot(torque,y) / MathF.Max(1e-25f,BladeInertiaMajor(a.Radius,keel)));
-            return inverse * (a.Length / MathF.Max(1f,e));
+            return inverse * (a.Length / MathF.Max(1f,e)) / (Deformable(index) ? 3f : 1f);
         }
         var axis = Vector3.Transform(Vector3.UnitX,a.Orientation);
-        return (torque-axis*Vector3.Dot(torque,axis)) * (a.Length / MathF.Max(1e-20f,e*inertia));
+        return (torque-axis*Vector3.Dot(torque,axis)) * (a.Length / MathF.Max(1e-20f,e*inertia)) / (Deformable(index) ? 3f : 1f);
     }
 
-    internal static Quaternion LimitJointBend(Quaternion basis, Quaternion candidate)
+    float ContactBendLimit(int index) => GetOrgan(index) == OrganTypes.Petiole && Plant.Parameters.PetioleContactBendDegrees > 0
+        ? Plant.Parameters.PetioleContactBendDegrees * (MathF.PI / 180f) : CollisionSettings.MaxElasticBendRadians;
+
+    internal static Quaternion LimitJointBend(Quaternion basis, Quaternion candidate, float limit = 0f)
     {
+        if (limit <= 0f) limit = CollisionSettings.MaxElasticBendRadians;
         var delta = Quaternion.Normalize(candidate * Quaternion.Conjugate(basis));
         var angle = 2f * MathF.Atan2(new Vector3(delta.X, delta.Y, delta.Z).Length(), MathF.Abs(delta.W));
-        return angle > CollisionSettings.MaxElasticBendRadians
-            ? Quaternion.Normalize(Quaternion.Slerp(basis, candidate, CollisionSettings.MaxElasticBendRadians / angle)) : candidate;
+        return angle > limit
+            ? Quaternion.Normalize(Quaternion.Slerp(basis, candidate, limit / angle)) : candidate;
     }
 
     float AvailableCompliance(int index, Vector3 axis)
+        => ContactTurnAvailable(index, axis) ? ContactCompliance(index, axis) : 0;
+
+    bool ContactTurnAvailable(int index, Vector3 axis)
     {
         ref var a = ref Src()[index];
         var delta = Quaternion.Normalize(a.Orientation * Quaternion.Conjugate(a.baseOrientation));
         if (delta.W < 0) delta = new(-delta.X, -delta.Y, -delta.Z, -delta.W);
         var bend = new Vector3(delta.X, delta.Y, delta.Z);
-        if (2f * MathF.Atan2(bend.Length(), delta.W) >= CollisionSettings.MaxElasticBendRadians - 1e-5f
-            && Vector3.Dot(bend, axis) > 0) return 0;
-        return ContactCompliance(index, axis);
+        if (2f * MathF.Atan2(bend.Length(), delta.W) >= ContactBendLimit(index) - 1e-5f
+            && Vector3.Dot(bend, axis) > 0) return false;
+        return true;
     }
 
     internal double ContactMobility(int index, Vector3 contact, Vector3 normal, int stop = -1)
@@ -527,12 +672,100 @@ public partial class PlantSubFormation<T>
             var cross = Vector3.Cross(contact - GetBaseCenterWorld(n) - src[n].BaseOffset, normal);
             var gain = cross.Length();
             if (gain > 1e-8f) total += AvailableCompliance(n, cross / gain) * (double)gain * gain;
+            total += ShapeMobility(n, index, contact, normal);
         }
         return total;
     }
 
+    // Tangent of the same compliance operator used by QueueContactCorrection.
+    // Kept separate from geometry trials so several contact rows can share a joint.
+    internal (Vector3 Torque, Vector3 Turn, Vector4 Shape, Vector4 Fold) ContactGradient(
+        int joint, int contacted, Vector3 point, Vector3 normal, bool coupledLimits = false)
+    {
+        var torque = Vector3.Cross(point - GetBaseCenterWorld(joint) - Src()[joint].BaseOffset, normal);
+        // Coupled contacts solve the joint's unilateral angular limit as one
+        // constraint. Removing compliance separately for each force direction
+        // produces a nonsymmetric matrix when contacts share a saturated joint.
+        var gain = torque.Length();
+        // V1's assembler applies one cached material tensor per shared joint.
+        // Keep the inexpensive directional response for the rigid retry path.
+        var turn = !coupledLimits && gain > 1e-8f && ContactTurnAvailable(joint, torque / gain)
+            ? ComplianceVector(joint, torque) : Vector3.Zero;
+        if (coupledLimits && gain <= 1e-8f) torque = Vector3.Zero;
+        var shape = Deformable(joint) ? ShapeGradient(joint, contacted, point, normal) : Vector4.Zero;
+        return (torque, turn, shape, Deformable(joint) ? ShapeResponse(joint, shape) : Vector4.Zero);
+    }
+
+    internal ContactAngularCompliance CoupledAngularCompliance(int joint)
+    {
+        ref var a = ref Src()[joint];
+        var first = Vector3.Normalize(Vector3.Transform(Vector3.UnitZ, a.Orientation));
+        var second = Vector3.Normalize(Vector3.Cross(first, Vector3.Transform(Vector3.UnitX, a.Orientation)));
+        var alongFirst = (double)ContactCompliance(joint, first);
+        var alongSecond = a.Organ is OrganTypes.Leaf or OrganTypes.FlowerPadel
+            ? (double)ContactCompliance(joint, second) : alongFirst;
+        // The scalar beam coefficients are unchanged. Double spectral products
+        // keep reciprocal terms consistent, especially when a limit removes an
+        // entire direction and its remaining compliance is nearly zero.
+        return new(first, second, alongFirst, alongSecond);
+    }
+
+    internal bool ContactBendConstraint(int joint, out Vector3 normal, out double allowance)
+    {
+        ref var a = ref Src()[joint];
+        var delta = Quaternion.Normalize(a.Orientation * Quaternion.Conjugate(a.baseOrientation));
+        if (delta.W < 0) delta = new(-delta.X, -delta.Y, -delta.Z, -delta.W);
+        var bend = new Vector3(delta.X, delta.Y, delta.Z);
+        var sine = bend.Length();
+        var angle = 2f * MathF.Atan2(sine, delta.W);
+        allowance = Math.Max(0, ContactBendLimit(joint) - angle);
+        normal = Vector3.Zero;
+        // Inside the limit the existing finite-step clamp remains authoritative.
+        // Only near-saturated joints need an additional tangent constraint.
+        if (sine <= 1e-8f || allowance > 1e-5) return false;
+        normal = bend / sine;
+        return true;
+    }
+
+    internal (Vector3 Torque, Vector3 Turn, Vector4 Shape, Vector4 Fold) CommonContactGradient(
+        int common, int first, Vector3 a, int second, Vector3 b, Vector3 normal)
+    {
+        if (common < 0 || !Deformable(common) || IsMechanicallyAnchored(common)) return default;
+        var shape = ShapeGradient(common, first, a, normal) + ShapeGradient(common, second, b, -normal);
+        return (Vector3.Zero, Vector3.Zero, shape, ShapeResponse(common, shape));
+    }
+
+    internal void QueueCoupledContactResponse(int joint, Vector3 turn, Vector4 fold, float force)
+    {
+        ContactTurns[joint] += turn * force;
+        if (!Deformable(joint)) return;
+        var state = State(joint);
+        state.Pending += fold * force;
+        state.ReactionNewtons = MathF.Max(state.ReactionNewtons, force);
+    }
+
+    internal float ContactForceStepLimit(int index,Vector3 contact,Vector3 normal,int stop=-1)
+    {
+        var limit=float.MaxValue;var src=Src();
+        for(var n=index;n>=0 && n!=stop && !src[n].SoilAnchored;n=src[n].Parent)
+        {
+            var cross=Vector3.Cross(contact-GetBaseCenterWorld(n)-src[n].BaseOffset,normal);
+            var gain=cross.Length();
+            var turn=gain>1e-8f && AvailableCompliance(n,cross/gain)>0 ? ComplianceVector(n,cross).Length() : 0;
+            if(turn>0)limit=MathF.Min(limit,CollisionSettings.MaxCorrectionRadians/turn);
+            if(Deformable(n))
+            {
+                var response=Vector4.Abs(ShapeResponse(n,ShapeGradient(n,index,contact,normal)));
+                var largest=MathF.Max(MathF.Max(response.X,response.Y),MathF.Max(response.Z,response.W));
+                if(largest>0)limit=MathF.Min(limit,CollisionSettings.MaxCorrectionRadians/largest);
+            }
+        }
+        return limit;
+    }
+
     internal bool QueueContactCorrection(int index, Vector3 contact, Vector3 normal, float depth, int stop = -1)
     {
+        if(depth<0)return QueueContactCorrection(index,contact,-normal,-depth,stop);
         var src = Src();
         var total = ContactMobility(index, contact, normal, stop);
         // Existing graph segments supply the degrees of freedom. Walk to a rooted anchor;
@@ -544,6 +777,7 @@ public partial class PlantSubFormation<T>
             {
                 var cross = Vector3.Cross(contact - GetBaseCenterWorld(n) - src[n].BaseOffset, normal);
                 var gain = cross.Length();
+                QueueShapeCorrection(n, index, contact, normal, (float)lambda);
                 if (gain <= 1e-8f) continue;
                 var axis = cross / gain;
                 if (AvailableCompliance(n,axis) <= 0) continue;

@@ -1,0 +1,6 @@
+CHECKPOINT /tmp/gf-native-season/archived-exact-1h-day60-v20.bin bytes=51864874
+CHECKPOINT /tmp/gf-native-season/archived-exact-1h-day120-v20.bin bytes=51873294
+CHECKPOINT /tmp/gf-native-season/archived-exact-1h-day240-v20.bin bytes=51888202
+CHECKPOINT /tmp/gf-native-season/archived-exact-1h-day330-v20.bin bytes=51899698
+CHECKPOINT /tmp/gf-native-season/archived-exact-1h-day755-v20.bin bytes=51928698
+DONE mode=archived-exact tick=1 firstPetalDay=-1 elapsed=01:44:30.9718023 everLeaves=52 ever50=16 ever90=11

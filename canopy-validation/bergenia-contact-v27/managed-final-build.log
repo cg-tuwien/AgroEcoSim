@@ -1,0 +1,11 @@
+/tmp/gf-contact-v27/fixture/Program.cs(189,97): warning CS8604: Possible null reference argument for parameter 'bytes' in 'void File.WriteAllBytes(string path, byte[] bytes)'. [/tmp/gf-contact-v27/fixture/Probe.csproj::TargetFramework=net8.0]
+/tmp/gf-contact-v27/fixture/Program.cs(189,178): warning CS8604: Possible null reference argument for parameter 'bytes' in 'void File.WriteAllBytes(string path, byte[] bytes)'. [/tmp/gf-contact-v27/fixture/Probe.csproj::TargetFramework=net8.0]
+
+
+
+/tmp/gf-contact-v27/fixture/Program.cs(189,97): warning CS8604: Possible null reference argument for parameter 'bytes' in 'void File.WriteAllBytes(string path, byte[] bytes)'. [/tmp/gf-contact-v27/fixture/Probe.csproj::TargetFramework=net8.0]
+/tmp/gf-contact-v27/fixture/Program.cs(189,178): warning CS8604: Possible null reference argument for parameter 'bytes' in 'void File.WriteAllBytes(string path, byte[] bytes)'. [/tmp/gf-contact-v27/fixture/Probe.csproj::TargetFramework=net8.0]
+    2 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:03.02

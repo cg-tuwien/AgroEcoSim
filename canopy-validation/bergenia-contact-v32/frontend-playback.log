@@ -1,0 +1,391 @@
+
+> ThreeFrontend@0.0.0 test
+> jest --runInBand tests/decodeParity.test.ts tests/loadStoredRun.test.ts tests/buildScene.test.ts tests/picking.test.ts tests/laminaSlices.test.ts
+
+(node:20) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+PASS tests/buildScene.test.ts (5.279 s)
+  ● Console
+
+    console.warn
+      enzyme is unavailable in this environment; component tests will fail: MessagePort is not defined
+
+
+
+      at Object.<anonymous> (tests/__mocks__/setupTests.ts:18:11)
+
+PASS tests/laminaSlices.test.ts
+  ● Console
+
+    console.warn
+      enzyme is unavailable in this environment; component tests will fail: MessagePort is not defined
+
+
+
+      at Object.<anonymous> (tests/__mocks__/setupTests.ts:18:11)
+
+    console.warn
+      Scripts "build/three.js" and "build/three.min.js" are deprecated with r150+, and will be removed with r160. Please use ES Modules or alternatives: https://threejs.org/docs/index.html#manual/en/introduction/Installation
+
+      2 | //This file is part of the Three adapter, so importing three here is expected.
+      3 |
+    > 4 | import * as THREE from 'three';
+        | ^
+      5 | import { MeshData, computeVertexNormals } from '../core/Geometry';
+      6 |
+      7 | const cache = new WeakMap<MeshData, THREE.BufferGeometry>();
+
+      at Object.<anonymous> (node_modules/three/build/three.js:1:91)
+      at Object.<anonymous> (src/render/three/ThreeGeometry.ts:4:1)
+      at Object.<anonymous> (src/helpers/Species.ts:6:1)
+      at Object.<anonymous> (src/appstate.ts:22:1)
+      at Object.<anonymous> (src/helpers/Obstacle.ts:2:1)
+      at Object.<anonymous> (src/helpers/BinaryReader.ts:2:1)
+      at Object.<anonymous> (tests/laminaSlices.test.ts:9:1)
+
+PASS tests/loadStoredRun.test.ts
+  ● Console
+
+    console.warn
+      enzyme is unavailable in this environment; component tests will fail: MessagePort is not defined
+
+
+
+      at Object.<anonymous> (tests/__mocks__/setupTests.ts:18:11)
+
+    console.warn
+      Scripts "build/three.js" and "build/three.min.js" are deprecated with r150+, and will be removed with r160. Please use ES Modules or alternatives: https://threejs.org/docs/index.html#manual/en/introduction/Installation
+
+      2 | //This file is part of the Three adapter, so importing three here is expected.
+      3 |
+    > 4 | import * as THREE from 'three';
+        | ^
+      5 | import { MeshData, computeVertexNormals } from '../core/Geometry';
+      6 |
+      7 | const cache = new WeakMap<MeshData, THREE.BufferGeometry>();
+
+      at Object.<anonymous> (node_modules/three/build/three.js:1:91)
+      at Object.<anonymous> (src/render/three/ThreeGeometry.ts:4:1)
+      at Object.<anonymous> (src/helpers/Species.ts:6:1)
+      at Object.<anonymous> (src/appstate.ts:22:1)
+      at Object.<anonymous> (tests/loadStoredRun.test.ts:59:20)
+
+    console.log
+      Timeline synced to 3 stored frames of run abc123.
+
+      at call (src/appstate.ts:2942:17)
+
+    console.log
+      Opened stored run abc123: 3 frames, 1 plants.
+
+      at call (src/appstate.ts:2203:21)
+
+    console.warn
+      Scripts "build/three.js" and "build/three.min.js" are deprecated with r150+, and will be removed with r160. Please use ES Modules or alternatives: https://threejs.org/docs/index.html#manual/en/introduction/Installation
+
+      2 | //This file is part of the Three adapter, so importing three here is expected.
+      3 |
+    > 4 | import * as THREE from 'three';
+        | ^
+      5 | import { MeshData, computeVertexNormals } from '../core/Geometry';
+      6 |
+      7 | const cache = new WeakMap<MeshData, THREE.BufferGeometry>();
+
+      at Object.<anonymous> (node_modules/three/build/three.js:1:91)
+      at Object.<anonymous> (src/render/three/ThreeGeometry.ts:4:1)
+      at Object.<anonymous> (src/helpers/Species.ts:6:1)
+      at Object.<anonymous> (src/appstate.ts:22:1)
+      at Object.<anonymous> (tests/loadStoredRun.test.ts:59:20)
+
+    console.warn
+      WARNING: Multiple instances of Three.js being imported.
+
+      2 | //This file is part of the Three adapter, so importing three here is expected.
+      3 |
+    > 4 | import * as THREE from 'three';
+        | ^
+      5 | import { MeshData, computeVertexNormals } from '../core/Geometry';
+      6 |
+      7 | const cache = new WeakMap<MeshData, THREE.BufferGeometry>();
+
+      at node_modules/three/build/three.js:51033:12
+      at node_modules/three/build/three.js:8:65
+      at Object.<anonymous> (node_modules/three/build/three.js:11:3)
+      at Object.<anonymous> (src/render/three/ThreeGeometry.ts:4:1)
+      at Object.<anonymous> (src/helpers/Species.ts:6:1)
+      at Object.<anonymous> (src/appstate.ts:22:1)
+      at Object.<anonymous> (tests/loadStoredRun.test.ts:59:20)
+
+    console.log
+      Timeline synced to 3 stored frames of run abc123.
+
+      at call (src/appstate.ts:2942:17)
+
+    console.log
+      Timeline synced to 3 stored frames of run abc123.
+
+      at call (src/appstate.ts:2942:17)
+
+    console.log
+      Opened stored run abc123: 3 frames, 1 plants.
+
+      at call (src/appstate.ts:2203:21)
+
+    console.warn
+      Scripts "build/three.js" and "build/three.min.js" are deprecated with r150+, and will be removed with r160. Please use ES Modules or alternatives: https://threejs.org/docs/index.html#manual/en/introduction/Installation
+
+      2 | //This file is part of the Three adapter, so importing three here is expected.
+      3 |
+    > 4 | import * as THREE from 'three';
+        | ^
+      5 | import { MeshData, computeVertexNormals } from '../core/Geometry';
+      6 |
+      7 | const cache = new WeakMap<MeshData, THREE.BufferGeometry>();
+
+      at Object.<anonymous> (node_modules/three/build/three.js:1:91)
+      at Object.<anonymous> (src/render/three/ThreeGeometry.ts:4:1)
+      at Object.<anonymous> (src/helpers/Species.ts:6:1)
+      at Object.<anonymous> (src/appstate.ts:22:1)
+      at Object.<anonymous> (tests/loadStoredRun.test.ts:59:20)
+
+    console.warn
+      WARNING: Multiple instances of Three.js being imported.
+
+      2 | //This file is part of the Three adapter, so importing three here is expected.
+      3 |
+    > 4 | import * as THREE from 'three';
+        | ^
+      5 | import { MeshData, computeVertexNormals } from '../core/Geometry';
+      6 |
+      7 | const cache = new WeakMap<MeshData, THREE.BufferGeometry>();
+
+      at node_modules/three/build/three.js:51033:12
+      at node_modules/three/build/three.js:8:65
+      at Object.<anonymous> (node_modules/three/build/three.js:11:3)
+      at Object.<anonymous> (src/render/three/ThreeGeometry.ts:4:1)
+      at Object.<anonymous> (src/helpers/Species.ts:6:1)
+      at Object.<anonymous> (src/appstate.ts:22:1)
+      at Object.<anonymous> (tests/loadStoredRun.test.ts:59:20)
+
+    console.log
+      Timeline synced to 3 stored frames of run abc123.
+
+      at call (src/appstate.ts:2942:17)
+
+    console.log
+      Timeline synced to 3 stored frames of run abc123.
+
+      at call (src/appstate.ts:2942:17)
+
+    console.log
+      Opened stored run abc123: 3 frames, 1 plants.
+
+      at call (src/appstate.ts:2203:21)
+
+    console.log
+      Run old1 has no stored terrain; keeping the loaded 'mini.obj', which is the model it names.
+
+      at call (src/appstate.ts:2244:21)
+
+    console.log
+      Timeline synced to 3 stored frames of run old1.
+
+      at call (src/appstate.ts:2942:17)
+
+    console.log
+      Opened stored run old1: 3 frames, 1 plants.
+
+      at call (src/appstate.ts:2203:21)
+
+    console.warn
+      Scripts "build/three.js" and "build/three.min.js" are deprecated with r150+, and will be removed with r160. Please use ES Modules or alternatives: https://threejs.org/docs/index.html#manual/en/introduction/Installation
+
+      2 | //This file is part of the Three adapter, so importing three here is expected.
+      3 |
+    > 4 | import * as THREE from 'three';
+        | ^
+      5 | import { MeshData, computeVertexNormals } from '../core/Geometry';
+      6 |
+      7 | const cache = new WeakMap<MeshData, THREE.BufferGeometry>();
+
+      at Object.<anonymous> (node_modules/three/build/three.js:1:91)
+      at Object.<anonymous> (src/render/three/ThreeGeometry.ts:4:1)
+      at Object.<anonymous> (src/helpers/Species.ts:6:1)
+      at Object.<anonymous> (src/appstate.ts:22:1)
+      at Object.<anonymous> (tests/loadStoredRun.test.ts:59:20)
+
+    console.warn
+      WARNING: Multiple instances of Three.js being imported.
+
+      2 | //This file is part of the Three adapter, so importing three here is expected.
+      3 |
+    > 4 | import * as THREE from 'three';
+        | ^
+      5 | import { MeshData, computeVertexNormals } from '../core/Geometry';
+      6 |
+      7 | const cache = new WeakMap<MeshData, THREE.BufferGeometry>();
+
+      at node_modules/three/build/three.js:51033:12
+      at node_modules/three/build/three.js:8:65
+      at Object.<anonymous> (node_modules/three/build/three.js:11:3)
+      at Object.<anonymous> (src/render/three/ThreeGeometry.ts:4:1)
+      at Object.<anonymous> (src/helpers/Species.ts:6:1)
+      at Object.<anonymous> (src/appstate.ts:22:1)
+      at Object.<anonymous> (tests/loadStoredRun.test.ts:59:20)
+
+    console.log
+      Timeline synced to 3 stored frames of run old1.
+
+      at call (src/appstate.ts:2942:17)
+
+    console.log
+      Timeline synced to 3 stored frames of run abc123.
+
+      at call (src/appstate.ts:2942:17)
+
+    console.log
+      Opened stored run abc123: 3 frames, 1 plants.
+
+      at call (src/appstate.ts:2203:21)
+
+    console.log
+      Timeline synced to 3 stored frames of run old2.
+
+      at call (src/appstate.ts:2942:17)
+
+    console.log
+      Opened stored run old2: 3 frames, 1 plants.
+
+      at call (src/appstate.ts:2203:21)
+
+    console.warn
+      Scripts "build/three.js" and "build/three.min.js" are deprecated with r150+, and will be removed with r160. Please use ES Modules or alternatives: https://threejs.org/docs/index.html#manual/en/introduction/Installation
+
+      2 | //This file is part of the Three adapter, so importing three here is expected.
+      3 |
+    > 4 | import * as THREE from 'three';
+        | ^
+      5 | import { MeshData, computeVertexNormals } from '../core/Geometry';
+      6 |
+      7 | const cache = new WeakMap<MeshData, THREE.BufferGeometry>();
+
+      at Object.<anonymous> (node_modules/three/build/three.js:1:91)
+      at Object.<anonymous> (src/render/three/ThreeGeometry.ts:4:1)
+      at Object.<anonymous> (src/helpers/Species.ts:6:1)
+      at Object.<anonymous> (src/appstate.ts:22:1)
+      at Object.<anonymous> (tests/loadStoredRun.test.ts:59:20)
+
+    console.warn
+      WARNING: Multiple instances of Three.js being imported.
+
+      2 | //This file is part of the Three adapter, so importing three here is expected.
+      3 |
+    > 4 | import * as THREE from 'three';
+        | ^
+      5 | import { MeshData, computeVertexNormals } from '../core/Geometry';
+      6 |
+      7 | const cache = new WeakMap<MeshData, THREE.BufferGeometry>();
+
+      at node_modules/three/build/three.js:51033:12
+      at node_modules/three/build/three.js:8:65
+      at Object.<anonymous> (node_modules/three/build/three.js:11:3)
+      at Object.<anonymous> (src/render/three/ThreeGeometry.ts:4:1)
+      at Object.<anonymous> (src/helpers/Species.ts:6:1)
+      at Object.<anonymous> (src/appstate.ts:22:1)
+      at Object.<anonymous> (tests/loadStoredRun.test.ts:59:20)
+
+    console.log
+      Timeline synced to 3 stored frames of run old2.
+
+      at call (src/appstate.ts:2942:17)
+
+    console.log
+      Timeline synced to 3 stored frames of run abc123.
+
+      at call (src/appstate.ts:2942:17)
+
+    console.log
+      Opened stored run abc123: 3 frames, 1 plants.
+
+      at call (src/appstate.ts:2203:21)
+
+    console.log
+      Timeline synced to 3 stored frames of run plain.
+
+      at call (src/appstate.ts:2942:17)
+
+    console.log
+      Opened stored run plain: 3 frames, 1 plants.
+
+      at call (src/appstate.ts:2203:21)
+
+PASS tests/picking.test.ts
+  ● Console
+
+    console.warn
+      enzyme is unavailable in this environment; component tests will fail: MessagePort is not defined
+
+
+
+      at Object.<anonymous> (tests/__mocks__/setupTests.ts:18:11)
+
+    console.warn
+      Scripts "build/three.js" and "build/three.min.js" are deprecated with r150+, and will be removed with r160. Please use ES Modules or alternatives: https://threejs.org/docs/index.html#manual/en/introduction/Installation
+
+      2 | //This file is part of the Three adapter, so importing three here is expected.
+      3 |
+    > 4 | import * as THREE from 'three';
+        | ^
+      5 | import { MeshData, computeVertexNormals } from '../core/Geometry';
+      6 |
+      7 | const cache = new WeakMap<MeshData, THREE.BufferGeometry>();
+
+      at Object.<anonymous> (node_modules/three/build/three.js:1:91)
+      at Object.<anonymous> (src/render/three/ThreeGeometry.ts:4:1)
+      at Object.<anonymous> (src/helpers/Species.ts:6:1)
+      at Object.<anonymous> (src/appstate.ts:22:1)
+      at Object.<anonymous> (tests/picking.test.ts:8:1)
+
+PASS tests/decodeParity.test.ts
+  ● Console
+
+    console.warn
+      enzyme is unavailable in this environment; component tests will fail: MessagePort is not defined
+
+
+
+      at Object.<anonymous> (tests/__mocks__/setupTests.ts:18:11)
+      at TestScheduler.scheduleTests (node_modules/@jest/core/build/TestScheduler.js:333:13)
+      at runJest (node_modules/@jest/core/build/runJest.js:404:19)
+      at _run10000 (node_modules/@jest/core/build/cli/index.js:320:7)
+      at runCLI (node_modules/@jest/core/build/cli/index.js:173:3)
+
+    console.warn
+      Scripts "build/three.js" and "build/three.min.js" are deprecated with r150+, and will be removed with r160. Please use ES Modules or alternatives: https://threejs.org/docs/index.html#manual/en/introduction/Installation
+
+      2 | //This file is part of the Three adapter, so importing three here is expected.
+      3 |
+    > 4 | import * as THREE from 'three';
+        | ^
+      5 | import { MeshData, computeVertexNormals } from '../core/Geometry';
+      6 |
+      7 | const cache = new WeakMap<MeshData, THREE.BufferGeometry>();
+
+      at Object.<anonymous> (node_modules/three/build/three.js:1:91)
+      at Object.<anonymous> (src/render/three/ThreeGeometry.ts:4:1)
+      at Object.<anonymous> (src/helpers/Species.ts:6:1)
+      at Object.<anonymous> (src/appstate.ts:22:1)
+      at Object.<anonymous> (src/helpers/Obstacle.ts:2:1)
+      at Object.<anonymous> (src/helpers/BinaryReader.ts:2:1)
+      at Object.<anonymous> (tests/decodeParity.test.ts:8:1)
+      at TestScheduler.scheduleTests (node_modules/@jest/core/build/TestScheduler.js:333:13)
+      at runJest (node_modules/@jest/core/build/runJest.js:404:19)
+      at _run10000 (node_modules/@jest/core/build/cli/index.js:320:7)
+      at runCLI (node_modules/@jest/core/build/cli/index.js:173:3)
+
+
+Test Suites: 5 passed, 5 total
+Tests:       37 passed, 37 total
+Snapshots:   0 total
+Time:        12.806 s
+Ran all test suites matching /tests\/decodeParity.test.ts|tests\/loadStoredRun.test.ts|tests\/buildScene.test.ts|tests\/picking.test.ts|tests\/laminaSlices.test.ts/i.

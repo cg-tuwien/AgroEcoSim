@@ -1,0 +1,360 @@
+{
+  "scope": "Serial NativeAOT, fixed population, three processes/version/tick, three warmup ticks and fifteen measured restored ticks/process. Initialization, restore and export excluded. No concurrent builds or simulations.",
+  "ordinaryTicks": {
+    "v24-1h": {
+      "processes": [
+        {
+          "log": "v24-1h-r1.log",
+          "medianMs": 314.926,
+          "p95Ms": 342.592,
+          "allocationMedianBytes": 994856,
+          "organs": [
+            52,
+            52
+          ],
+          "frameHashes": [
+            "630D63BF6F10D185"
+          ],
+          "unresolved": 0
+        },
+        {
+          "log": "v24-1h-r2.log",
+          "medianMs": 316.94,
+          "p95Ms": 350.106,
+          "allocationMedianBytes": 994152,
+          "organs": [
+            52,
+            52
+          ],
+          "frameHashes": [
+            "630D63BF6F10D185"
+          ],
+          "unresolved": 0
+        },
+        {
+          "log": "v24-1h-r3.log",
+          "medianMs": 315.896,
+          "p95Ms": 348.447,
+          "allocationMedianBytes": 995416,
+          "organs": [
+            52,
+            52
+          ],
+          "frameHashes": [
+            "630D63BF6F10D185"
+          ],
+          "unresolved": 0
+        }
+      ],
+      "medianOfProcessMediansMs": 315.896,
+      "medianOfProcessP95Ms": 348.447,
+      "medianOfProcessAllocationMediansBytes": 994856
+    },
+    "v25-1h": {
+      "processes": [
+        {
+          "log": "v25-1h-r1.log",
+          "medianMs": 308.412,
+          "p95Ms": 315.639,
+          "allocationMedianBytes": 994848,
+          "organs": [
+            52,
+            52
+          ],
+          "frameHashes": [
+            "630D63BF6F10D185"
+          ],
+          "unresolved": 0
+        },
+        {
+          "log": "v25-1h-r2.log",
+          "medianMs": 308.668,
+          "p95Ms": 322.537,
+          "allocationMedianBytes": 995096,
+          "organs": [
+            52,
+            52
+          ],
+          "frameHashes": [
+            "630D63BF6F10D185"
+          ],
+          "unresolved": 0
+        },
+        {
+          "log": "v25-1h-r3.log",
+          "medianMs": 313.931,
+          "p95Ms": 332.477,
+          "allocationMedianBytes": 996296,
+          "organs": [
+            52,
+            52
+          ],
+          "frameHashes": [
+            "630D63BF6F10D185"
+          ],
+          "unresolved": 0
+        }
+      ],
+      "medianOfProcessMediansMs": 308.668,
+      "medianOfProcessP95Ms": 322.537,
+      "medianOfProcessAllocationMediansBytes": 995096
+    },
+    "v24-4h": {
+      "processes": [
+        {
+          "log": "v24-4h-r1.log",
+          "medianMs": 75.6,
+          "p95Ms": 85.724,
+          "allocationMedianBytes": 860944,
+          "organs": [
+            41,
+            41
+          ],
+          "frameHashes": [
+            "EE66A01BC8D5C53E"
+          ],
+          "unresolved": 0
+        },
+        {
+          "log": "v24-4h-r2.log",
+          "medianMs": 80.424,
+          "p95Ms": 89.153,
+          "allocationMedianBytes": 862168,
+          "organs": [
+            41,
+            41
+          ],
+          "frameHashes": [
+            "EE66A01BC8D5C53E"
+          ],
+          "unresolved": 0
+        },
+        {
+          "log": "v24-4h-r3.log",
+          "medianMs": 77.736,
+          "p95Ms": 84.348,
+          "allocationMedianBytes": 861616,
+          "organs": [
+            41,
+            41
+          ],
+          "frameHashes": [
+            "EE66A01BC8D5C53E"
+          ],
+          "unresolved": 0
+        }
+      ],
+      "medianOfProcessMediansMs": 77.736,
+      "medianOfProcessP95Ms": 85.724,
+      "medianOfProcessAllocationMediansBytes": 861616
+    },
+    "v25-4h": {
+      "processes": [
+        {
+          "log": "v25-4h-r1.log",
+          "medianMs": 76.306,
+          "p95Ms": 86.27,
+          "allocationMedianBytes": 860824,
+          "organs": [
+            41,
+            41
+          ],
+          "frameHashes": [
+            "EE66A01BC8D5C53E"
+          ],
+          "unresolved": 0
+        },
+        {
+          "log": "v25-4h-r2.log",
+          "medianMs": 75.813,
+          "p95Ms": 78.316,
+          "allocationMedianBytes": 860240,
+          "organs": [
+            41,
+            41
+          ],
+          "frameHashes": [
+            "EE66A01BC8D5C53E"
+          ],
+          "unresolved": 0
+        },
+        {
+          "log": "v25-4h-r3.log",
+          "medianMs": 82.494,
+          "p95Ms": 91.951,
+          "allocationMedianBytes": 863048,
+          "organs": [
+            41,
+            41
+          ],
+          "frameHashes": [
+            "EE66A01BC8D5C53E"
+          ],
+          "unresolved": 0
+        }
+      ],
+      "medianOfProcessMediansMs": 76.306,
+      "medianOfProcessP95Ms": 86.27,
+      "medianOfProcessAllocationMediansBytes": 860824
+    },
+    "overhead-1h-percent": -2.2880948160153958,
+    "overhead-4h-percent": -1.8395595348358662
+  },
+  "activeFrozenRecovery": {
+    "scope": "Synthetic nominal length/radius imposed on a senescing scape in a fixed 52-organ crown; measures solver cost and geometry only. Two warmups and nine measured solves/process; baseline/accepted certificates outside timing.",
+    "processes": {
+      "v24-r1": {
+        "log": "active-v24-r1.log",
+        "medianMs": 230.447,
+        "p95Ms": 234.905,
+        "allocationMedianBytes": 904720,
+        "intervalMedian": 52210,
+        "triangleMedian": 477239,
+        "unresolved": 0,
+        "acceptedLengthUm": [
+          0.0
+        ],
+        "acceptedRadiusUm": [
+          0.0
+        ],
+        "trialCounts": [
+          0
+        ],
+        "waypointCounts": [
+          0
+        ],
+        "correctionCounts": [
+          0
+        ]
+      },
+      "v25-r1": {
+        "log": "active-v25-r1.log",
+        "medianMs": 286.078,
+        "p95Ms": 289.552,
+        "allocationMedianBytes": 945280,
+        "intervalMedian": 62456,
+        "triangleMedian": 514743,
+        "unresolved": 0,
+        "acceptedLengthUm": [
+          71.35467603802681
+        ],
+        "acceptedRadiusUm": [
+          0.0
+        ],
+        "trialCounts": [
+          28
+        ],
+        "waypointCounts": [
+          5
+        ],
+        "correctionCounts": [
+          124
+        ]
+      },
+      "v25-r2": {
+        "log": "active-v25-r2.log",
+        "medianMs": 288.553,
+        "p95Ms": 291.23,
+        "allocationMedianBytes": 943600,
+        "intervalMedian": 62744,
+        "triangleMedian": 515300,
+        "unresolved": 0,
+        "acceptedLengthUm": [
+          71.35467603802681
+        ],
+        "acceptedRadiusUm": [
+          0.0
+        ],
+        "trialCounts": [
+          28
+        ],
+        "waypointCounts": [
+          5
+        ],
+        "correctionCounts": [
+          124
+        ]
+      },
+      "v24-r2": {
+        "log": "active-v24-r2.log",
+        "medianMs": 233.83,
+        "p95Ms": 235.27,
+        "allocationMedianBytes": 907984,
+        "intervalMedian": 52579,
+        "triangleMedian": 448492,
+        "unresolved": 0,
+        "acceptedLengthUm": [
+          0.0
+        ],
+        "acceptedRadiusUm": [
+          0.0
+        ],
+        "trialCounts": [
+          0
+        ],
+        "waypointCounts": [
+          0
+        ],
+        "correctionCounts": [
+          0
+        ]
+      },
+      "v24-r3": {
+        "log": "active-v24-r3.log",
+        "medianMs": 233.289,
+        "p95Ms": 237.262,
+        "allocationMedianBytes": 906784,
+        "intervalMedian": 52202,
+        "triangleMedian": 475724,
+        "unresolved": 0,
+        "acceptedLengthUm": [
+          0.0
+        ],
+        "acceptedRadiusUm": [
+          0.0
+        ],
+        "trialCounts": [
+          0
+        ],
+        "waypointCounts": [
+          0
+        ],
+        "correctionCounts": [
+          0
+        ]
+      },
+      "v25-r3": {
+        "log": "active-v25-r3.log",
+        "medianMs": 285.765,
+        "p95Ms": 288.338,
+        "allocationMedianBytes": 943744,
+        "intervalMedian": 62046,
+        "triangleMedian": 515476,
+        "unresolved": 0,
+        "acceptedLengthUm": [
+          71.35467603802681
+        ],
+        "acceptedRadiusUm": [
+          0.0
+        ],
+        "trialCounts": [
+          28
+        ],
+        "waypointCounts": [
+          5
+        ],
+        "correctionCounts": [
+          124
+        ]
+      }
+    },
+    "v24": {
+      "medianOfProcessMediansMs": 233.289,
+      "medianOfProcessP95Ms": 235.27
+    },
+    "v25": {
+      "medianOfProcessMediansMs": 286.078,
+      "medianOfProcessP95Ms": 289.552
+    }
+  }
+}

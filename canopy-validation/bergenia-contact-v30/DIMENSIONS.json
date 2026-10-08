@@ -1,0 +1,413 @@
+[
+  {
+    "log": "snapshot-control-native-long-1h-330.log",
+    "leafCount": 20,
+    "stemCount": 11,
+    "stemHighestTipMm": 29.003819,
+    "lengthMm": {
+      "minimum": 8.621217,
+      "median": 66.969675,
+      "maximum": 250.9903
+    },
+    "bladeEnvelopeLengthMm": {
+      "minimum": 9.621898,
+      "median": 74.742975,
+      "maximum": 280.12323
+    },
+    "bladeEnvelopeWidthMm": {
+      "minimum": 5.9447575,
+      "median": 47.038599,
+      "maximum": 202.06546
+    },
+    "petioleLengthMm": {
+      "minimum": 3.49393,
+      "median": 38.496883499999996,
+      "maximum": 133.27608
+    },
+    "petioleDiameterMm": {
+      "minimum": 0.98552704,
+      "median": 3.09191515,
+      "maximum": 4.8958282
+    }
+  },
+  {
+    "log": "snapshot-control-native-long-1h-755.log",
+    "leafCount": 20,
+    "stemCount": 11,
+    "stemHighestTipMm": 29.038929,
+    "lengthMm": {
+      "minimum": 0.9159316,
+      "median": 23.9690725,
+      "maximum": 128.63486
+    },
+    "bladeEnvelopeLengthMm": {
+      "minimum": 1.0222456,
+      "median": 26.7512075,
+      "maximum": 143.56575
+    },
+    "bladeEnvelopeWidthMm": {
+      "minimum": 0.6317332,
+      "median": 20.0168015,
+      "maximum": 91.66852
+    },
+    "petioleLengthMm": {
+      "minimum": 0.5562252,
+      "median": 11.507911,
+      "maximum": 77.06457
+    },
+    "petioleDiameterMm": {
+      "minimum": 0.018693293,
+      "median": 0.7689886,
+      "maximum": 5.5602007
+    },
+    "largestAbsSideFoldDegrees": 0.0,
+    "largestAbsMidribBendDegrees": 0.0
+  },
+  {
+    "log": "snapshot-control-native-long-4h-240.log",
+    "leafCount": 20,
+    "stemCount": 10,
+    "stemHighestTipMm": 27.981182,
+    "lengthMm": {
+      "minimum": 9.605688,
+      "median": 60.335463000000004,
+      "maximum": 256.45926
+    },
+    "bladeEnvelopeLengthMm": {
+      "minimum": 10.720639,
+      "median": 67.3387205,
+      "maximum": 286.227
+    },
+    "bladeEnvelopeWidthMm": {
+      "minimum": 6.6704025,
+      "median": 50.214472,
+      "maximum": 203.43146
+    },
+    "petioleLengthMm": {
+      "minimum": 7.7413416,
+      "median": 45.853761500000005,
+      "maximum": 131.91444
+    },
+    "petioleDiameterMm": {
+      "minimum": 0.27729312,
+      "median": 2.4703790000000003,
+      "maximum": 5.8850965
+    }
+  },
+  {
+    "log": "snapshot-control-native-long-4h-330.log",
+    "leafCount": 20,
+    "stemCount": 11,
+    "stemHighestTipMm": 30.344154,
+    "lengthMm": {
+      "minimum": 9.605688,
+      "median": 60.335463000000004,
+      "maximum": 256.45926
+    },
+    "bladeEnvelopeLengthMm": {
+      "minimum": 10.720639,
+      "median": 67.3387205,
+      "maximum": 286.227
+    },
+    "bladeEnvelopeWidthMm": {
+      "minimum": 6.6704025,
+      "median": 50.214472,
+      "maximum": 203.43146
+    },
+    "petioleLengthMm": {
+      "minimum": 8.051442,
+      "median": 45.853761500000005,
+      "maximum": 131.91444
+    },
+    "petioleDiameterMm": {
+      "minimum": 0.29894015,
+      "median": 2.4703790000000003,
+      "maximum": 5.8850965
+    }
+  },
+  {
+    "log": "snapshot-control-native-long-4h-755.log",
+    "leafCount": 20,
+    "stemCount": 11,
+    "stemHighestTipMm": 30.352385,
+    "lengthMm": {
+      "minimum": 0.01,
+      "median": 23.839405,
+      "maximum": 241.5826
+    },
+    "bladeEnvelopeLengthMm": {
+      "minimum": 0.011160719,
+      "median": 26.606491,
+      "maximum": 269.62357
+    },
+    "bladeEnvelopeWidthMm": {
+      "minimum": 0.0040000007,
+      "median": 18.7790295,
+      "maximum": 184.80507
+    },
+    "petioleLengthMm": {
+      "minimum": 0.01,
+      "median": 11.730872000000002,
+      "maximum": 119.4326
+    },
+    "petioleDiameterMm": {
+      "minimum": 0.004,
+      "median": 0.810383265,
+      "maximum": 5.558132
+    }
+  },
+  {
+    "log": "snapshot-v30-native-long-1h-240.log",
+    "leafCount": 20,
+    "stemCount": 11,
+    "stemHighestTipMm": 28.217306,
+    "lengthMm": {
+      "minimum": 5.3971643,
+      "median": 84.513345,
+      "maximum": 256.82126
+    },
+    "bladeEnvelopeLengthMm": {
+      "minimum": 6.0236235,
+      "median": 94.322975,
+      "maximum": 286.63095
+    },
+    "bladeEnvelopeWidthMm": {
+      "minimum": 4.1373305,
+      "median": 67.494135,
+      "maximum": 207.57266
+    },
+    "petioleLengthMm": {
+      "minimum": 3.0569727,
+      "median": 42.425821,
+      "maximum": 146.63837
+    },
+    "petioleDiameterMm": {
+      "minimum": 0.83146036,
+      "median": 3.3974010999999997,
+      "maximum": 5.4584703
+    }
+  },
+  {
+    "log": "snapshot-v30-native-long-1h-330.log",
+    "leafCount": 20,
+    "stemCount": 11,
+    "stemHighestTipMm": 28.217306,
+    "lengthMm": {
+      "minimum": 5.3971643,
+      "median": 84.681505,
+      "maximum": 256.82126
+    },
+    "bladeEnvelopeLengthMm": {
+      "minimum": 6.0236235,
+      "median": 94.510655,
+      "maximum": 286.63095
+    },
+    "bladeEnvelopeWidthMm": {
+      "minimum": 4.1373305,
+      "median": 67.62215,
+      "maximum": 207.57266
+    },
+    "petioleLengthMm": {
+      "minimum": 3.0569727,
+      "median": 43.873926,
+      "maximum": 146.63837
+    },
+    "petioleDiameterMm": {
+      "minimum": 1.1231827,
+      "median": 3.41508855,
+      "maximum": 5.4584703
+    }
+  },
+  {
+    "log": "snapshot-v30-native-long-1h-755.log",
+    "leafCount": 20,
+    "stemCount": 11,
+    "stemHighestTipMm": 28.123882,
+    "lengthMm": {
+      "minimum": 5.287444,
+      "median": 44.313064499999996,
+      "maximum": 258.97498
+    },
+    "bladeEnvelopeLengthMm": {
+      "minimum": 5.901168,
+      "median": 49.4565685,
+      "maximum": 289.03473
+    },
+    "bladeEnvelopeWidthMm": {
+      "minimum": 3.9353306,
+      "median": 35.215780499999994,
+      "maximum": 181.8575
+    },
+    "petioleLengthMm": {
+      "minimum": 2.1209242,
+      "median": 22.0830065,
+      "maximum": 106.418396
+    },
+    "petioleDiameterMm": {
+      "minimum": 0.11397942,
+      "median": 1.35327355,
+      "maximum": 5.2933564
+    },
+    "largestAbsSideFoldDegrees": 0.0,
+    "largestAbsMidribBendDegrees": 0.0
+  },
+  {
+    "log": "snapshot-v30-native-long-4h-240.log",
+    "leafCount": 20,
+    "stemCount": 10,
+    "stemHighestTipMm": 28.43032,
+    "lengthMm": {
+      "minimum": 1.582624,
+      "median": 77.96986000000001,
+      "maximum": 255.55327
+    },
+    "bladeEnvelopeLengthMm": {
+      "minimum": 1.7663221,
+      "median": 87.01997499999999,
+      "maximum": 285.21585
+    },
+    "bladeEnvelopeWidthMm": {
+      "minimum": 1.0857971,
+      "median": 62.7147825,
+      "maximum": 207.75891
+    },
+    "petioleLengthMm": {
+      "minimum": 1.4623225,
+      "median": 47.148015,
+      "maximum": 139.94954
+    },
+    "petioleDiameterMm": {
+      "minimum": 0.45177028,
+      "median": 2.8982113500000004,
+      "maximum": 5.8838434
+    }
+  },
+  {
+    "log": "snapshot-v30-native-long-4h-330.log",
+    "leafCount": 20,
+    "stemCount": 10,
+    "stemHighestTipMm": 28.43029,
+    "lengthMm": {
+      "minimum": 8.993616,
+      "median": 105.96669,
+      "maximum": 255.55327
+    },
+    "bladeEnvelopeLengthMm": {
+      "minimum": 10.037522,
+      "median": 118.266457,
+      "maximum": 285.21585
+    },
+    "bladeEnvelopeWidthMm": {
+      "minimum": 7.0558224,
+      "median": 78.884345,
+      "maximum": 207.75891
+    },
+    "petioleLengthMm": {
+      "minimum": 6.514536,
+      "median": 54.066853,
+      "maximum": 139.94954
+    },
+    "petioleDiameterMm": {
+      "minimum": 1.445868,
+      "median": 3.1735741,
+      "maximum": 5.8838434
+    }
+  },
+  {
+    "log": "snapshot-v30-native-long-4h-755.log",
+    "leafCount": 20,
+    "stemCount": 11,
+    "stemHighestTipMm": 30.979015,
+    "lengthMm": {
+      "minimum": 6.711303,
+      "median": 56.3271735,
+      "maximum": 256.54233
+    },
+    "bladeEnvelopeLengthMm": {
+      "minimum": 7.490297,
+      "median": 62.865182,
+      "maximum": 286.3197
+    },
+    "bladeEnvelopeWidthMm": {
+      "minimum": 5.434171,
+      "median": 47.7954975,
+      "maximum": 206.613
+    },
+    "petioleLengthMm": {
+      "minimum": 3.4901178,
+      "median": 29.822975,
+      "maximum": 147.89629
+    },
+    "petioleDiameterMm": {
+      "minimum": 0.13325264,
+      "median": 2.35276505,
+      "maximum": 5.9804173
+    }
+  },
+  {
+    "log": "snapshot-v30-native-v1-4h-275.log",
+    "leafCount": 16,
+    "stemCount": 8,
+    "stemHighestTipMm": 21.493744,
+    "lengthMm": {
+      "minimum": 0.35071367,
+      "median": 67.278082,
+      "maximum": 256.45926
+    },
+    "bladeEnvelopeLengthMm": {
+      "minimum": 0.39142168,
+      "median": 75.08718250000001,
+      "maximum": 286.227
+    },
+    "bladeEnvelopeWidthMm": {
+      "minimum": 0.28650126,
+      "median": 51.1309065,
+      "maximum": 185.35965
+    },
+    "petioleLengthMm": {
+      "minimum": 1.2462311,
+      "median": 48.7637225,
+      "maximum": 129.98546
+    },
+    "petioleDiameterMm": {
+      "minimum": 0.53567505,
+      "median": 2.4190801000000004,
+      "maximum": 5.705278
+    },
+    "largestAbsSideFoldDegrees": 4.6875,
+    "largestAbsMidribBendDegrees": 0.00023449115
+  },
+  {
+    "log": "snapshot-v30-native-v1-4h-330.log",
+    "leafCount": 16,
+    "stemCount": 8,
+    "stemHighestTipMm": 21.493689,
+    "lengthMm": {
+      "minimum": 0.35071367,
+      "median": 76.169353,
+      "maximum": 256.45926
+    },
+    "bladeEnvelopeLengthMm": {
+      "minimum": 0.39142168,
+      "median": 85.010475,
+      "maximum": 286.227
+    },
+    "bladeEnvelopeWidthMm": {
+      "minimum": 0.28650126,
+      "median": 52.8969715,
+      "maximum": 195.73709
+    },
+    "petioleLengthMm": {
+      "minimum": 1.2462311,
+      "median": 56.3654085,
+      "maximum": 139.2127
+    },
+    "petioleDiameterMm": {
+      "minimum": 0.53567505,
+      "median": 3.55920695,
+      "maximum": 5.705278
+    },
+    "largestAbsSideFoldDegrees": 4.6875,
+    "largestAbsMidribBendDegrees": 0.00023449115
+  }
+]

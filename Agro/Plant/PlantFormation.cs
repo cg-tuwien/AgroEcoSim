@@ -43,6 +43,16 @@ public partial class PlantFormation2 : IPlantFormation
 	/// The ratio of available water to the required water, adapted for the needs of underground agents.
 	/// </summary>
 	internal float WaterBalanceUG = 0f;
+	/// <summary>
+	/// Hydrated seed water and other water not yet held by organ tissue. The
+	/// census releases it as anatomical capacity grows; roots do not draw more
+	/// soil water while this reserve remains. This is counted exactly once in
+	/// the plant water budget and is not an organ's storage capacity.
+	/// </summary>
+	internal double UnallocatedWater_g { get; private set; }
+	// The previous census' biological water demand, retained for the next root
+	// tick so tiny rounding remnants do not suppress genuine soil uptake.
+	internal double WaterDemandPerTick_g { get; private set; }
 
 	/// <summary>
 	/// The ratio of available energy to the required energy. If > 1, there is more production than need.
@@ -137,6 +147,8 @@ public partial class PlantFormation2 : IPlantFormation
 		writer.Write(WaterBalanceUG);
 		writer.Write(EnergyBalance);
 		writer.Write(EnergyProductionMax);
+		writer.Write(UnallocatedWater_g);
+		writer.Write(WaterDemandPerTick_g);
 
 		//The per-plant generator. Reseeding instead would carry the same plants on with different
 		//random decisions - a different experiment that looks like a continuation.
@@ -157,6 +169,8 @@ public partial class PlantFormation2 : IPlantFormation
 			var bytes = reader.ReadBytes(Unsafe.SizeOf<SeedAgent>());
 			if (bytes.Length != Unsafe.SizeOf<SeedAgent>())
 				throw new EndOfStreamException("The checkpoint ended inside a seed.");
+			// A caller may rewind a world that has already germinated.
+			if (Seed.Length != 1) Seed = new SeedAgent[1];
 			bytes.AsSpan().CopyTo(MemoryMarshal.AsBytes(Seed.AsSpan(0, 1)));
 		}
 		else if (Seed.Length == 1)
@@ -169,12 +183,22 @@ public partial class PlantFormation2 : IPlantFormation
 		WaterBalanceUG = reader.ReadSingle();
 		EnergyBalance = reader.ReadSingle();
 		EnergyProductionMax = reader.ReadSingle();
+		UnallocatedWater_g = reader.ReadDouble();
+		WaterDemandPerTick_g = reader.ReadDouble();
+		if (!double.IsFinite(UnallocatedWater_g) || UnallocatedWater_g < 0d ||
+			!double.IsFinite(WaterDemandPerTick_g) || WaterDemandPerTick_g < 0d)
+			throw new InvalidDataException("The checkpoint contains an invalid plant water budget.");
 
 		RNG.SetState(reader.ReadUInt64(), reader.ReadUInt64());
 
 		AG.ReadState(reader);
 		UG.ReadState(reader);
 	}
+
+	// A seven-day reserve (or one full tick for unusually long intervals), in
+	// the same model energy units as the pool. Also used when removing demand.
+	internal static double MaintenanceReserve(double requirementPerTick, ushort hoursPerTick)
+		=> requirementPerTick * Math.Max(1d, 168d / hoursPerTick);
 
 	public void Census()
 	{
@@ -195,15 +219,20 @@ public partial class PlantFormation2 : IPlantFormation
 			var agGathered = AG.Gather();
 
 			var energy = agGathered.Energy + ugGathered.Energy;
-			var water = agGathered.Water + ugGathered.Water;
+			var water = agGathered.Water + ugGathered.Water + UnallocatedWater_g;
 
 			var energyRequirement = agGathered.EnergyRequirementPerTick + ugGathered.EnergyRequirementPerTick;
 			var waterRequirement = agGathered.WaterRequirementPerTick + ugGathered.WaterRequirementPerTick;
+			WaterDemandPerTick_g = Math.Max(0d, waterRequirement);
 
 			var energyStorage = agGathered.EnergyCapacity + ugGathered.EnergyCapacity;
-			var waterStorage = agGathered.WaterCapacity + ugGathered.WaterCapacity;
+			var waterStorage = Math.Max(0d, agGathered.WaterCapacity + ugGathered.WaterCapacity);
+			var waterPriority = Math.Clamp(
+				agGathered.WaterPriorityPerTick + ugGathered.WaterPriorityPerTick, 0d, waterStorage);
 
-			var energyEmergencyThrehold = Math.Max(1, 168 / World.HoursPerTick) * energyRequirement / World.HoursPerTick;
+			// Seven days of maintenance, independent of the biological tick duration.
+			// energyRequirement is already integrated over this tick; divide only once.
+			var energyEmergencyThrehold = MaintenanceReserve(energyRequirement, World.HoursPerTick);
 			var energAlertThreshold = Math.Max(energyEmergencyThrehold * 4, 0.01 * energyStorage);
 
 			const double zero = 1e-12;
@@ -229,14 +258,14 @@ public partial class PlantFormation2 : IPlantFormation
 						continue;
 					if (!removed.Contains(index))
 					{
-						target -= agGathered[index].LifesupportEnergy;
+						target -= MaintenanceReserve(agGathered[index].LifesupportEnergy, World.HoursPerTick);
 						removed.Add(index);
 						var deaths = AG.Death(index, reason: OrganDeathReason.Resources);
 						if (deaths != null)
 							foreach(var item in deaths)
 								if (!removed.Contains(item))
 								{
-									target -= agGathered[item].LifesupportEnergy;
+									target -= MaintenanceReserve(agGathered[item].LifesupportEnergy, World.HoursPerTick);
 									removed.Add(item);
 								}
 					}
@@ -251,28 +280,36 @@ public partial class PlantFormation2 : IPlantFormation
 			else if (energy < energAlertThreshold || energyStorage < energyRequirement) //the plant is short on energy, it must be distributed
 			{
 				//Debug.WriteLine("E DIST: req");
-				var min = float.MaxValue;
-				var minList = new List<int>();
-				var count = agGathered.Count;
-				for(int i = 0; i < count; ++i)
+				// In the construction-accounted mode this is only an early warning:
+				// the pool can still cover many ticks of maintenance. Killing a low-
+				// efficiency support here recursively removes an otherwise lit crown.
+				// Prioritize maintenance with requirement-weighted distribution;
+				// construction still pays from the conserved pool. Retain shedding
+				// for the genuine emergency below.
+				if (Parameters.ConstructionEnergyPerDryGram <= 0f)
 				{
-					// A clonal perennial may shed leaves and aerial shoots under
-					// stress, but pruning a rhizome deletes every descendant crown.
-					if (Parameters.RetainDormantRhizomes && AG.GetIsRizome(i))
-						continue;
-					switch (agGathered[i].ResourcesEfficiency.CompareTo(min))
+					var min = float.MaxValue;
+					var minList = new List<int>();
+					var count = agGathered.Count;
+					for(int i = 0; i < count; ++i)
 					{
-						case -1:
-							min = agGathered[i].ResourcesEfficiency;
-							minList.Clear();
-							minList.Add(i);
-						break;
-						case 0: minList.Add(i); break;
+						// A clonal perennial may shed leaves and aerial shoots under
+						// stress, but pruning a rhizome deletes every descendant crown.
+						if (Parameters.RetainDormantRhizomes && AG.GetIsRizome(i))
+							continue;
+						switch (agGathered[i].ResourcesEfficiency.CompareTo(min))
+						{
+							case -1:
+								min = agGathered[i].ResourcesEfficiency;
+								minList.Clear();
+								minList.Add(i);
+								break;
+							case 0: minList.Add(i); break;
+						}
 					}
+					foreach(var item in minList)
+						AG.Death(item, reason: OrganDeathReason.Resources);
 				}
-
-				foreach(var item in minList)
-					AG.Death(item, reason: OrganDeathReason.Resources);
 
 				var weights = agGathered.Weights4EnergyDistributionByRequirement() + ugGathered.Weights4EnergyDistributionByRequirement();
 				var factor = (float)(energy / (weights >= zero ? weights : 1));
@@ -294,34 +331,35 @@ public partial class PlantFormation2 : IPlantFormation
 			Debug.Assert(check <= energy * 1e-3);
 			#endif
 
-			if (water < waterRequirement || waterStorage < waterRequirement)
+			// The forecast is a priority for distributing water *inside* tissue,
+			// not additional capacity. If the hydrated seed supplied more water
+			// than the newborn organs can hold, keep the excess in a separate
+			// plant reserve and admit it as the organs expand.
+			var allocatableWater = Math.Clamp(water, 0d, waterStorage);
+			if (allocatableWater < waterPriority)
 			{
-				//Debug.WriteLine("W DIST: req");
-				var factor = (float)(water / (waterRequirement >= zero ? waterRequirement : 1));
-
+				var factor = waterPriority > zero ? allocatableWater / waterPriority : 0d;
 				agGathered.DistributeWaterByRequirement(factor);
 				ugGathered.DistributeWaterByRequirement(factor);
 			}
 			else
 			{
-				//Debug.WriteLine("W DIST: storage");
-				var waterOverhead = water - waterRequirement;
-				// Received water consists of the photosynthetic requirement plus a
-				// capacity-weighted storage share.  The denominator must therefore be
-				// the complete storage weight.  Subtracting the requirement made the
-				// allocation non-conservative and diverged as capacity approached the
-				// per-tick requirement (the source of the astronomical Carex masses).
-				var waterWeight = waterStorage;
-
-				var factor = (float)(waterOverhead / (waterWeight >= zero ? waterWeight : 1));
+				var remainingCapacity = waterStorage - waterPriority;
+				var factor = remainingCapacity > zero
+					? (allocatableWater - waterPriority) / remainingCapacity : 1d;
 				agGathered.DistributeWaterByStorage(factor);
 				ugGathered.DistributeWaterByStorage(factor);
 			}
+			UnallocatedWater_g = Math.Max(0d, water -
+				(agGathered.ReceivedWaterSum() + ugGathered.ReceivedWaterSum()));
 
 			UG.Distribute(ugGathered);
 			AG.Distribute(agGathered);
 
-			WaterBalance = waterRequirement > 1e-6 ? (float)(water / waterRequirement) : 1;
+			// The unallocated reserve cannot be consumed by a leaf this tick;
+			// count only water that fits in tissue when reporting water sufficiency.
+			WaterBalance = waterRequirement > 1e-6
+				? (float)(allocatableWater / waterRequirement) : 1;
 			//WaterBalanceUG = WaterBalance * WaterBalance;
 			//WaterBalanceUG = MathF.Pow(WaterBalance, 4f);
 			if (WaterBalance < WaterBalancePrev && WaterBalance < 1f / (1.00001f - Parameters.RootsDensity)) //The constant actually steers the roots sparsity, maybe take over from the species parameter

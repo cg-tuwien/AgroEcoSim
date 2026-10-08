@@ -47,6 +47,9 @@ public sealed partial class CollisionWorld
 	/// <summary>Organ-steps skipped because the organ was still inside its cached clearance.</summary>
 	public long ClearanceSkips;
 	public long Ticks;
+    public long HardConstraintTicks { get; private set; }
+    public long FoliageConstraintTicks { get; private set; }
+    public long DevelopmentConstraintTicks { get; private set; }
 
 	public StaticCollider StaticScene => Static;
 
@@ -56,7 +59,15 @@ public sealed partial class CollisionWorld
 	public void Tick(SimulationWorld world, uint timestep, IList<IFormation> formations, IList<IObstacle> obstacles)
 	{
 		if (!CollisionSettings.Enabled)
-			return;
+        {
+            foreach (var formation in formations)
+                if (formation is PlantFormation2 p && p.Parameters.ConstructionEnergyPerDryGram > 0f)
+                {
+                    p.AG.SettleConstruction();
+                    p.AG.ProcessDevelopments(this);
+                }
+            return;
+        }
 
 		EnsureStatic((AgroWorld)world);
         InitializeBackend((AgroWorld)world);
@@ -76,21 +87,32 @@ public sealed partial class CollisionWorld
 				plants.Add(p);
 
         PrepareWork(plants);
+        ResetElasticContacts();
+
+        // The hard pass can restore a sampled increment too. Record biology before
+        // either constraint pass, so its final certified recovery does not lose it.
+        var soft = ((AgroWorld)world).SoftCollisions;
+        if (soft) CaptureGrowthProposals(plants);
 
         ResolveHardPlants(plants);
 
-        var afterHard = TraceTiming ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
-        if (((AgroWorld)world).SoftCollisions) ResolveVegetation(plants);
-        var afterFoliage = TraceTiming ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
+        var afterHard = System.Diagnostics.Stopwatch.GetTimestamp();
+        if (soft) ResolveCapturedVegetation(plants);
+        var afterFoliage = System.Diagnostics.Stopwatch.GetTimestamp();
         // Soft collisions can be disabled, but development still calls through the same
         // hierarchy APIs. Keep the plant lookup ready in either mode.
         if (!((AgroWorld)world).SoftCollisions) RefreshNeighbours(plants);
         foreach (var plant in plants)
         {
+            plant.AG.SettleConstruction();
             plant.AG.ProcessDevelopments(this);
             plant.AG.SealNewGeometry();
             plant.AG.CompleteGrowthAttempts();
         }
+        var afterDevelopment = System.Diagnostics.Stopwatch.GetTimestamp();
+        HardConstraintTicks += afterHard-t0;
+        FoliageConstraintTicks += afterFoliage-afterHard;
+        DevelopmentConstraintTicks += afterDevelopment-afterFoliage;
         FlushCounters();
         // Include serial development/rollback trials as well as worker jobs. A job can
         // run on this thread too, so remove its already-reduced counts before adding.

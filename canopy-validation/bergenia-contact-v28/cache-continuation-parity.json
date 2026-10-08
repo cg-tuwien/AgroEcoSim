@@ -1,0 +1,22 @@
+{
+  "1": {
+    "startDay": 282,
+    "stopDay": 285,
+    "headerVersions": [
+      27,
+      28
+    ],
+    "payloadIdentical": true,
+    "payloadSha256": "9e7e188a56bd6227e05e52abad2445e4f26793ddfc85382aa0074893b2afb48a"
+  },
+  "4": {
+    "startDay": 282,
+    "stopDay": 285,
+    "headerVersions": [
+      27,
+      28
+    ],
+    "payloadIdentical": true,
+    "payloadSha256": "cfb0d99e39e909f03a79c074c42b0c415cc5f333e843925d4595282d2759ae30"
+  }
+}

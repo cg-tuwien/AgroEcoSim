@@ -1,0 +1,172 @@
+{
+  "1": {
+    "baseline": {
+      "totalMs": {
+        "median": 258.458,
+        "p95": 269.268
+      },
+      "foliageMs": {
+        "median": 256.142,
+        "p95": 266.582
+      },
+      "hardMs": {
+        "median": 0.185,
+        "p95": 0.259
+      },
+      "developmentMs": {
+        "median": 0.002,
+        "p95": 0.002
+      },
+      "allocBytes": {
+        "median": 988904.0,
+        "p95": 999328.0
+      },
+      "intervals": {
+        "median": 57990.0,
+        "p95": 57990.0
+      },
+      "triangles": {
+        "median": 470396.0,
+        "p95": 470396.0
+      },
+      "repetitions": 15,
+      "startOrgans": [
+        52
+      ],
+      "endOrgans": [
+        52
+      ],
+      "sceneHashes": [
+        "DEDF53EABF96CBD8"
+      ],
+      "maxUnresolved": 0
+    },
+    "corrected": {
+      "totalMs": {
+        "median": 344.659,
+        "p95": 364.436
+      },
+      "foliageMs": {
+        "median": 342.391,
+        "p95": 359.174
+      },
+      "hardMs": {
+        "median": 0.182,
+        "p95": 0.22
+      },
+      "developmentMs": {
+        "median": 0.002,
+        "p95": 0.004
+      },
+      "allocBytes": {
+        "median": 997240.0,
+        "p95": 1001632.0
+      },
+      "intervals": {
+        "median": 90641.0,
+        "p95": 90641.0
+      },
+      "triangles": {
+        "median": 673075.0,
+        "p95": 673075.0
+      },
+      "repetitions": 15,
+      "startOrgans": [
+        52
+      ],
+      "endOrgans": [
+        52
+      ],
+      "sceneHashes": [
+        "630D63BF6F10D185"
+      ],
+      "maxUnresolved": 0
+    },
+    "medianTotalChangePercent": 33.35203398617956
+  },
+  "4": {
+    "baseline": {
+      "totalMs": {
+        "median": 78.375,
+        "p95": 89.141
+      },
+      "foliageMs": {
+        "median": 76.171,
+        "p95": 83.878
+      },
+      "hardMs": {
+        "median": 0.154,
+        "p95": 0.198
+      },
+      "developmentMs": {
+        "median": 0.002,
+        "p95": 0.004
+      },
+      "allocBytes": {
+        "median": 863808.0,
+        "p95": 870472.0
+      },
+      "intervals": {
+        "median": 16905.0,
+        "p95": 16905.0
+      },
+      "triangles": {
+        "median": 89214.0,
+        "p95": 89214.0
+      },
+      "repetitions": 15,
+      "startOrgans": [
+        41
+      ],
+      "endOrgans": [
+        41
+      ],
+      "sceneHashes": [
+        "EE66A01BC8D5C53E"
+      ],
+      "maxUnresolved": 0
+    },
+    "corrected": {
+      "totalMs": {
+        "median": 84.183,
+        "p95": 90.037
+      },
+      "foliageMs": {
+        "median": 81.698,
+        "p95": 83.163
+      },
+      "hardMs": {
+        "median": 0.16,
+        "p95": 0.201
+      },
+      "developmentMs": {
+        "median": 0.002,
+        "p95": 0.004
+      },
+      "allocBytes": {
+        "median": 864864.0,
+        "p95": 873984.0
+      },
+      "intervals": {
+        "median": 17608.0,
+        "p95": 17608.0
+      },
+      "triangles": {
+        "median": 99693.0,
+        "p95": 99693.0
+      },
+      "repetitions": 15,
+      "startOrgans": [
+        41
+      ],
+      "endOrgans": [
+        41
+      ],
+      "sceneHashes": [
+        "EE66A01BC8D5C53E"
+      ],
+      "maxUnresolved": 0
+    },
+    "medianTotalChangePercent": 7.41052631578949
+  }
+}

@@ -101,6 +101,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 		dst = (ReadTMP ? Agents : AgentsTMP).AsSpan(0, AgentCount);
 	}
 	Span<T> Src() => (ReadTMP ? AgentsTMP : Agents).AsSpan(0, AgentCount);
+	internal ref readonly T GetAgent(int index) => ref Src()[index];
 
 	void EnsureAgentCapacity(int count)
 	{
@@ -211,6 +212,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 			writer.Write(MemoryMarshal.AsBytes(born));
 		}
 		WriteGrowthState(writer);
+        WriteDeformationState(writer);
 	}
 
 	/// <summary>
@@ -279,6 +281,8 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 		}
 
 		ReadGrowthState(reader);
+        ReadDeformationState(reader);
+        TreeCache.UpdateBases(this);
 		if (IsAboveGround)
 			BuildBvh();
 	}
@@ -403,6 +407,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 	public PlantGlobalStats Gather()
 	{
 		var world = Plant.World;
+		var species = Plant.Parameters;
 		var energy = 0.0;
 		var water = 0.0;
 		var energyDiff = 0.0;
@@ -411,6 +416,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 		var waterCapacity = 0.0;
 		var energyRequirement = 0.0;
 		var waterRequirement = 0.0;
+		var waterPriority = 0.0;
 		SrcDst(out var dst, out var src); //since Tick already swapped them
 		var prevLength = Gathering.Count;
 
@@ -430,19 +436,19 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 			energyDiff -= previousEnergy;
 			waterDiff -= src[i].Water_g;
 
-			var lifeSupport = dst[i].LifeSupportPerTick(world);
+			var lifeSupport = dst[i].LifeSupportPerTick(world, species);
 			energyRequirement += lifeSupport;
 
 			float photosynthSupport;
 			if (IsAboveGround)
 			{
-				photosynthSupport = dst[i].PhotosynthPerTick(world);
+				photosynthSupport = dst[i].PhotosynthPerTick(world, species);
 				waterRequirement += photosynthSupport;
 			}
 			else
 				photosynthSupport = 0;
 
-			var energyStorageCapacity = dst[i].EnergyStorageCapacity();
+			var energyStorageCapacity = dst[i].EnergyAllocationWeight(species);
 			energyCapacity += energyStorageCapacity;
 
 			var waterStorageCapacity = dst[i].WaterStorageCapacity_g();
@@ -453,6 +459,11 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 
             if (IsAboveGround)
             {
+                // New tissue is a carbon sink even before it receives direct light.
+                // Relative irradiance still governs production, while the plant's
+                // absolute pool funds construction and remains conserved.
+                if (ResourceUnits.Enabled(species) && energyStorageCapacity > dst[i].EnergyStorageCapacity(species))
+                    resEff = 1f;
                 var parent = dst[i].Parent;
                 var isRhizomeSupportedCrownBase = !dst[i].IsRizome &&
                     parent >= 0 && parent < dst.Length && dst[parent].IsRizome;
@@ -467,15 +478,17 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
                 }
             }
             Gathering[i] = new(lifeSupport, photosynthSupport, energyStorageCapacity, waterStorageCapacity, resEff,prodEff);
+			waterPriority += PlantGlobalStats.WaterPriority(Gathering[i]);
 		}
 
 		//this is faster than probing .Contains() for each i
 		foreach(var i in Deaths)
 		{
+			waterPriority -= PlantGlobalStats.WaterPriority(Gathering[i]);
 			Gathering[i] = default;
-			energyRequirement -= dst[i].LifeSupportPerTick(world);
-			waterRequirement -= dst[i].PhotosynthPerTick(world);
-			energyCapacity -= dst[i].EnergyStorageCapacity();
+			energyRequirement -= dst[i].LifeSupportPerTick(world, species);
+			waterRequirement -= dst[i].PhotosynthPerTick(world, species);
+			energyCapacity -= dst[i].EnergyAllocationWeight(species);
 			waterCapacity -= dst[i].WaterStorageCapacity_g();
 		}
 
@@ -491,6 +504,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 			Gathered.WaterCapacity = waterCapacity;
 			Gathered.EnergyRequirementPerTick = energyRequirement;
 			Gathered.WaterRequirementPerTick = waterRequirement;
+			Gathered.WaterPriorityPerTick = waterPriority;
 			Gathered.Gathering = Gathering;
 		//};
 
@@ -604,7 +618,9 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
             //the weight, this gives every node the centre of mass of everything it carries, which
             //is the only thing that can supply a correct lever arm.
             var selfDir = Vector3.Transform(Vector3.UnitX, dst[i].Orientation);
-            WeightedCentroids[i] = weight * (GetBaseCenter(i) + selfDir * (dst[i].Length * 0.5f));
+            WeightedCentroids[i] = weight * (GetBaseCenter(i) + (GetDeformation(i) != Vector4.Zero && dst[i].Organ == OrganTypes.Petiole
+                ? Vector3.Transform(ContactDeformation.RodPoint(.5f,dst[i].Length,GetDeformation(i)),dst[i].Orientation)
+                : selfDir * (dst[i].Length * 0.5f)));
             WeightReoslveChildren[i] = GetChildren(i).Count;
         }
         //accumulate weights from leaves up
@@ -646,6 +662,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
         RefreshAnchors(Plant.World.Collisions.StaticScene);
         if (count == 0)
             return;
+        ResetElasticDeformation();
         RefreshMechanicalLoads();
 
 		// Process nodes from roots to leaves, propagating rotations.  The response
@@ -653,7 +670,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 		// how quickly an organ approaches its elastic equilibrium.
 		float tickSpeed = MathF.Max(0f, Plant.World.HoursPerTick);
 		const float responsePerHour = 0.05f;
-		float response = 1f - MathF.Pow(1f - responsePerHour, tickSpeed);
+		float response = HasContactDeformation ? 1f : 1f - MathF.Pow(1f - responsePerHour, tickSpeed);
 		//Bending used to be clamped here so no tip could drop below the flat plane
 		//Plant.Position.Y - which is the SEED, a few centimetres under the surface. It kept a long
 		//chain of segments from pointing straight down and burying its own leaves, and it also made
@@ -788,7 +805,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 						kappa = (torque - ex * Vector3.Dot(torque, ex)) / (elasticity * rodInertia);
 					}
 
-					var deltaThetaBlade = kappa.Length() * length;
+					var deltaThetaBlade = kappa.Length() * length / (Deformable(i) ? 3f : 1f);
                     if (agent.IsRizome)
                         agent.LoadLimited = !float.IsFinite(deltaThetaBlade) || deltaThetaBlade > Collisions.CollisionSettings.MaxElasticBendRadians;
 					if (deltaThetaBlade > 1e-7f && float.IsFinite(deltaThetaBlade))
@@ -880,11 +897,23 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 
                 PropagateToSubtree(dst, i, appliedDelta);
             }
+            else if (HasContactDeformation && agent.Orientation != agent.baseOrientation)
+            {
+                // A tiny or unloaded joint has no gravitational moment, but must
+                // still release a previous elastic contact turn. Keep its unloaded
+                // frame exactly, without repeatedly normalizing an unchanged frame.
+                var released=agent.baseOrientation;
+                appliedDelta=Quaternion.Normalize(released*Quaternion.Conjugate(agent.Orientation));
+                agent.targetOrientation=released;
+                agent.SetOrientation(released);
+                PropagateToSubtree(dst,i,appliedDelta);
+            }
 			foreach (var child in GetChildren(i))
 			{
                 nodesToVisit.Enqueue(child);
             }
         }
+        GravityDeformation();
 		TreeCache.UpdateBases(this);
 		HeightDirty = false;
 		refitAllBounds();
@@ -1181,7 +1210,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
     {
         var dst = Src();
         var direction = Vector3.Transform(Vector3.UnitX, dst[index].Orientation); // Local X axis
-        return GetBaseCenter(index) + direction * dst[index].Length;
+        return GetBaseCenter(index) + GetAttachmentOffset(index);
     }
     public bool BranchIntersect(int index1, int index2)
         => BranchIntersect(index1, index2, out _);
@@ -1786,8 +1815,8 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 	}
 
 	internal float GetEnergyCapacity(int index) => ReadTMP
-		? (AgentCount > index ? AgentsTMP[index].EnergyStorageCapacity() : 0f)
-		: (AgentCount > index ? Agents[index].EnergyStorageCapacity() : 0f);
+		? (AgentCount > index ? AgentsTMP[index].EnergyStorageCapacity(Plant.Parameters) : 0f)
+		: (AgentCount > index ? Agents[index].EnergyStorageCapacity(Plant.Parameters) : 0f);
 
 	internal float GetWaterStorageCapacity(int index) => ReadTMP
 		? (AgentCount > index ? AgentsTMP[index].WaterStorageCapacity_g() : 0f)
@@ -1803,7 +1832,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 		if (AgentCount > index)
 		{
 			var agent = src[index];
-			return agent.WaterStorageCapacity_g() + agent.PhotosynthPerTick(world);
+			return agent.WaterStorageCapacity_g() + agent.PhotosynthPerTick(world, Plant.Parameters);
 		}
 		else
 			return 0f;

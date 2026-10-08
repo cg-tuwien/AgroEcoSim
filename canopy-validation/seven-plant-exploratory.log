@@ -1,0 +1,153 @@
+Species lookup: Carex morrowii 'Variegata', BudLength: 0.004
+PlantFormation2 ctor: Carex morrowii 'Variegata', BudLength: 0.004
+SpeciesSettings.Init called on Carex morrowii 'Variegata', BudLength: 0.004
+PlantFormation2 after Init: Carex morrowii 'Variegata', BudLength: 0.004
+Species lookup: Fragaria vesca 'Rügen', BudLength: 0.005
+PlantFormation2 ctor: Fragaria vesca 'Rügen', BudLength: 0.005
+SpeciesSettings.Init called on Fragaria vesca 'Rügen', BudLength: 0.005
+PlantFormation2 after Init: Fragaria vesca 'Rügen', BudLength: 0.005
+Species lookup: Geranium Macrorrhizum, BudLength: 0.01
+PlantFormation2 ctor: Geranium Macrorrhizum, BudLength: 0.01
+SpeciesSettings.Init called on Geranium Macrorrhizum, BudLength: 0.01
+PlantFormation2 after Init: Geranium Macrorrhizum, BudLength: 0.01
+Species lookup: Bergenia Cordifolia, BudLength: 0.009
+PlantFormation2 ctor: Bergenia Cordifolia, BudLength: 0.009
+SpeciesSettings.Init called on Bergenia Cordifolia, BudLength: 0.009
+PlantFormation2 after Init: Bergenia Cordifolia, BudLength: 0.009
+Species lookup: Geranium × cantabrigiense, BudLength: 0.005
+PlantFormation2 ctor: Geranium × cantabrigiense, BudLength: 0.005
+SpeciesSettings.Init called on Geranium × cantabrigiense, BudLength: 0.005
+PlantFormation2 after Init: Geranium × cantabrigiense, BudLength: 0.005
+Species lookup: Heuchera micrantha, BudLength: 0.004
+PlantFormation2 ctor: Heuchera micrantha, BudLength: 0.004
+SpeciesSettings.Init called on Heuchera micrantha, BudLength: 0.004
+PlantFormation2 after Init: Heuchera micrantha, BudLength: 0.004
+Species lookup: Campanula poscharskyana, BudLength: 0.006
+PlantFormation2 ctor: Campanula poscharskyana, BudLength: 0.006
+SpeciesSettings.Init called on Campanula poscharskyana, BudLength: 0.006
+PlantFormation2 after Init: Campanula poscharskyana, BudLength: 0.006
+Collision scene: 1869918 triangles (18012 soil, 1851906 obstacle) in 3052 ms, soil hull closed
+PROGRESS step=30 seconds=5.2 collisionSeconds=1.1
+PROGRESS step=60 seconds=7.2 collisionSeconds=3.0
+PROGRESS step=90 seconds=10.9 collisionSeconds=6.5
+PROGRESS step=120 seconds=17.6 collisionSeconds=13.1
+PROGRESS step=150 seconds=25.9 collisionSeconds=21.1
+PROGRESS step=180 seconds=35.7 collisionSeconds=30.5
+FACADE day=30 plants=7 organs=373 penetrations=0 rhizomes=86 unsupported=0 lowest=0 cuts=0 bytes=30638 seconds=35.7
+CANOPY day=30 species=Carex morrowii 'Variegata' leaves=64 area=0.0013000952094490703 crowns=2 mass=0.8726085312955547 water=0.5446974927945121 paused=3 pending=0 rejectedBirths=0 naturalDeaths=0 resourceDeaths=0
+CANOPY day=30 species=Fragaria vesca 'Rügen' leaves=8 area=0.007378972381686388 crowns=1 mass=3.8326906027505174 water=2.91306840244215 paused=6 pending=0 rejectedBirths=0 naturalDeaths=0 resourceDeaths=0
+CANOPY day=30 species=Geranium Macrorrhizum leaves=4 area=0.0016293075013802394 crowns=1 mass=3.4472483198624104 water=1.8855336642591283 paused=6 pending=0 rejectedBirths=0 naturalDeaths=0 resourceDeaths=0
+CANOPY day=30 species=Bergenia Cordifolia leaves=10 area=0.004536826648214531 crowns=1 mass=1.712472021194003 water=1.1294265049587011 paused=8 pending=1 rejectedBirths=4 naturalDeaths=0 resourceDeaths=0
+CANOPY day=30 species=Geranium × cantabrigiense leaves=8 area=0.009597979207216407 crowns=1 mass=4.487720218593722 water=3.351909467615144 paused=10 pending=0 rejectedBirths=0 naturalDeaths=0 resourceDeaths=0
+CANOPY day=30 species=Heuchera micrantha leaves=14 area=0.01731501524938407 crowns=1 mass=8.266789090472747 water=6.46453250089206 paused=2 pending=1 rejectedBirths=6 naturalDeaths=0 resourceDeaths=0
+CANOPY day=30 species=Campanula poscharskyana leaves=12 area=0.0038560755886834232 crowns=1 mass=4.243821615692217 water=3.031835107522066 paused=7 pending=2 rejectedBirths=7 naturalDeaths=0 resourceDeaths=0
+COVERAGE projectedXYm2=0.0148 unresolvedFoliage=0
+STORAGE frameRaw=30638 frameZlib=19970 checkpoint=254203
+MEMORY managed=1019941840 allocated=5174380688 peak=VmHWM:	 2064588 kB
+PROGRESS step=210 seconds=42.8 collisionSeconds=37.4
+PROGRESS step=240 seconds=52.7 collisionSeconds=47.0
+PROGRESS step=270 seconds=65.4 collisionSeconds=59.5
+PROGRESS step=300 seconds=76.5 collisionSeconds=70.3
+PROGRESS step=330 seconds=90.6 collisionSeconds=84.3
+PROGRESS step=360 seconds=107.9 collisionSeconds=101.4
+FACADE day=60 plants=7 organs=883 penetrations=0 rhizomes=130 unsupported=4 lowest=-0.00036478043 cuts=0 bytes=73405 seconds=107.9
+CANOPY day=60 species=Carex morrowii 'Variegata' leaves=320 area=0.003100608451513291 crowns=8 mass=2.264685030744421 water=1.4498432955912404 paused=36 pending=4 rejectedBirths=14 naturalDeaths=0 resourceDeaths=0
+CANOPY day=60 species=Fragaria vesca 'Rügen' leaves=12 area=0.007378951112364204 crowns=1 mass=5.137468885352297 water=3.593323708482691 paused=7 pending=1 rejectedBirths=9 naturalDeaths=0 resourceDeaths=0
+CANOPY day=60 species=Geranium Macrorrhizum leaves=4 area=0.0016293119427981395 crowns=1 mass=10.04032641777303 water=5.301970221567899 paused=9 pending=2 rejectedBirths=11 naturalDeaths=0 resourceDeaths=0
+CANOPY day=60 species=Bergenia Cordifolia leaves=18 area=0.01263938685488369 crowns=2 mass=6.7448098472796865 water=4.2598358777231 paused=13 pending=0 rejectedBirths=7 naturalDeaths=0 resourceDeaths=0
+CANOPY day=60 species=Geranium × cantabrigiense leaves=18 area=0.011126792303580713 crowns=3 mass=7.648011128404285 water=5.139472913390435 paused=21 pending=0 rejectedBirths=0 naturalDeaths=0 resourceDeaths=0
+CANOPY day=60 species=Heuchera micrantha leaves=14 area=0.01731501524938407 crowns=1 mass=8.289704310989714 water=6.487447749261394 paused=2 pending=1 rejectedBirths=16 naturalDeaths=0 resourceDeaths=0
+CANOPY day=60 species=Campanula poscharskyana leaves=40 area=0.010010840691150182 crowns=7 mass=12.772739239230471 water=8.598644532018692 paused=26 pending=10 rejectedBirths=103 naturalDeaths=0 resourceDeaths=0
+COVERAGE projectedXYm2=0.0204 unresolvedFoliage=0
+STORAGE frameRaw=73405 frameZlib=48217 checkpoint=428983
+MEMORY managed=1074624912 allocated=6959356200 peak=VmHWM:	 2067884 kB
+PROGRESS step=390 seconds=131.5 collisionSeconds=124.5
+PROGRESS step=420 seconds=155.2 collisionSeconds=148.0
+PROGRESS step=450 seconds=185.4 collisionSeconds=177.8
+PROGRESS step=480 seconds=218.4 collisionSeconds=210.4
+PROGRESS step=510 seconds=258.3 collisionSeconds=249.8
+PROGRESS step=540 seconds=297.5 collisionSeconds=288.6
+FACADE day=90 plants=7 organs=1328 penetrations=0 rhizomes=150 unsupported=6 lowest=-0.00023841858 cuts=0 bytes=112634 seconds=297.5
+CANOPY day=90 species=Carex morrowii 'Variegata' leaves=512 area=0.004658243206016288 crowns=12 mass=3.475392538612559 water=2.291654167069354 paused=70 pending=4 rejectedBirths=53 naturalDeaths=0 resourceDeaths=0
+CANOPY day=90 species=Fragaria vesca 'Rügen' leaves=12 area=0.0074401068899013845 crowns=1 mass=6.6885610064745435 water=4.401518575190079 paused=7 pending=1 rejectedBirths=19 naturalDeaths=0 resourceDeaths=0
+CANOPY day=90 species=Geranium Macrorrhizum leaves=10 area=0.002615209503882274 crowns=2 mass=20.092305458833962 water=10.664992802141102 paused=12 pending=2 rejectedBirths=31 naturalDeaths=0 resourceDeaths=0
+CANOPY day=90 species=Bergenia Cordifolia leaves=18 area=0.03007592208139409 crowns=2 mass=16.207672334346867 water=10.317227504339684 paused=17 pending=0 rejectedBirths=7 naturalDeaths=1 resourceDeaths=0
+CANOPY day=90 species=Geranium × cantabrigiense leaves=32 area=0.018452266244177284 crowns=6 mass=16.47702340018082 water=10.883191782303825 paused=39 pending=2 rejectedBirths=2 naturalDeaths=0 resourceDeaths=0
+CANOPY day=90 species=Heuchera micrantha leaves=14 area=0.01731501524938407 crowns=1 mass=8.32057508640083 water=6.5183184716016775 paused=2 pending=1 rejectedBirths=26 naturalDeaths=0 resourceDeaths=0
+CANOPY day=90 species=Campanula poscharskyana leaves=90 area=0.012774324735430375 crowns=15 mass=19.145781957400317 water=13.248499869263219 paused=36 pending=11 rejectedBirths=226 naturalDeaths=0 resourceDeaths=0
+COVERAGE projectedXYm2=0.0296 unresolvedFoliage=0
+STORAGE frameRaw=112634 frameZlib=75915 checkpoint=554079
+MEMORY managed=597093336 allocated=14509923856 peak=VmHWM:	 2062832 kB
+PROGRESS step=570 seconds=339.2 collisionSeconds=329.8
+PROGRESS step=600 seconds=386.2 collisionSeconds=376.1
+PROGRESS step=630 seconds=428.0 collisionSeconds=417.5
+PROGRESS step=660 seconds=474.2 collisionSeconds=463.3
+PROGRESS step=690 seconds=536.2 collisionSeconds=524.7
+PROGRESS step=720 seconds=612.0 collisionSeconds=599.8
+FACADE day=120 plants=7 organs=1889 penetrations=0 rhizomes=174 unsupported=7 lowest=-0.0001835823 cuts=0 bytes=161363 seconds=612.0
+CANOPY day=120 species=Carex morrowii 'Variegata' leaves=768 area=0.005598226905557885 crowns=18 mass=4.704722518712348 water=3.1202105513976073 paused=112 pending=11 rejectedBirths=143 naturalDeaths=0 resourceDeaths=0
+CANOPY day=120 species=Fragaria vesca 'Rügen' leaves=12 area=0.007578738935858039 crowns=1 mass=7.200028709585499 water=4.682206232333486 paused=8 pending=1 rejectedBirths=29 naturalDeaths=0 resourceDeaths=0
+CANOPY day=120 species=Geranium Macrorrhizum leaves=16 area=0.019729034990810555 crowns=3 mass=39.39260782931848 water=22.90080488163815 paused=15 pending=2 rejectedBirths=51 naturalDeaths=1 resourceDeaths=0
+CANOPY day=120 species=Bergenia Cordifolia leaves=18 area=0.04260763334686113 crowns=2 mass=24.438021406529913 water=15.289545922461585 paused=20 pending=0 rejectedBirths=7 naturalDeaths=1 resourceDeaths=0
+CANOPY day=120 species=Geranium × cantabrigiense leaves=54 area=0.020955534699914305 crowns=10 mass=22.928274770906256 water=14.74184877088239 paused=85 pending=3 rejectedBirths=17 naturalDeaths=1 resourceDeaths=0
+CANOPY day=120 species=Heuchera micrantha leaves=14 area=0.01731501524938407 crowns=1 mass=8.328033050767647 water=6.525776353430029 paused=2 pending=1 rejectedBirths=36 naturalDeaths=0 resourceDeaths=0
+CANOPY day=120 species=Campanula poscharskyana leaves=132 area=0.01806356023866351 crowns=17 mass=27.017127835445663 water=18.987292426812544 paused=40 pending=9 rejectedBirths=333 naturalDeaths=0 resourceDeaths=0
+COVERAGE projectedXYm2=0.0424 unresolvedFoliage=0
+STORAGE frameRaw=161363 frameZlib=109869 checkpoint=734551
+MEMORY managed=606165720 allocated=28204211832 peak=VmHWM:	 2062832 kB
+PROGRESS step=750 seconds=673.2 collisionSeconds=660.2
+PROGRESS step=780 seconds=746.7 collisionSeconds=733.2
+PROGRESS step=810 seconds=821.7 collisionSeconds=807.0
+PROGRESS step=840 seconds=895.5 collisionSeconds=880.0
+PROGRESS step=870 seconds=971.4 collisionSeconds=955.2
+PROGRESS step=900 seconds=1057.1 collisionSeconds=1039.7
+FACADE day=150 plants=7 organs=2228 penetrations=0 rhizomes=186 unsupported=7 lowest=-0.0001373291 cuts=0 bytes=190363 seconds=1057.1
+CANOPY day=150 species=Carex morrowii 'Variegata' leaves=976 area=0.0067369948554584745 crowns=23 mass=5.859345285064644 water=3.9615650888282286 paused=152 pending=12 rejectedBirths=254 naturalDeaths=0 resourceDeaths=0
+CANOPY day=150 species=Fragaria vesca 'Rügen' leaves=12 area=0.0075787015118492585 crowns=1 mass=7.967752948425017 water=5.080020558010302 paused=10 pending=1 rejectedBirths=39 naturalDeaths=0 resourceDeaths=0
+CANOPY day=150 species=Geranium Macrorrhizum leaves=18 area=0.028628102078785272 crowns=3 mass=53.154645617545356 water=30.9778599872229 paused=13 pending=2 rejectedBirths=71 naturalDeaths=4 resourceDeaths=0
+CANOPY day=150 species=Bergenia Cordifolia leaves=18 area=0.04275305635509563 crowns=2 mass=31.930090403056056 water=19.18205863745807 paused=21 pending=0 rejectedBirths=7 naturalDeaths=1 resourceDeaths=0
+CANOPY day=150 species=Geranium × cantabrigiense leaves=66 area=0.02193205819171406 crowns=12 mass=26.64371284643247 water=16.338576809167456 paused=61 pending=3 rejectedBirths=37 naturalDeaths=31 resourceDeaths=0
+CANOPY day=150 species=Heuchera micrantha leaves=14 area=0.01731501524938407 crowns=1 mass=8.338631422882006 water=6.53637475941397 paused=2 pending=1 rejectedBirths=46 naturalDeaths=0 resourceDeaths=0
+CANOPY day=150 species=Campanula poscharskyana leaves=156 area=0.020285828357818447 crowns=18 mass=33.205338254036356 water=23.05128650159375 paused=43 pending=8 rejectedBirths=417 naturalDeaths=24 resourceDeaths=0
+COVERAGE projectedXYm2=0.0444 unresolvedFoliage=0
+STORAGE frameRaw=190363 frameZlib=128938 checkpoint=828383
+MEMORY managed=514786144 allocated=48922321624 peak=VmHWM:	 2062832 kB
+PROGRESS step=930 seconds=1142.7 collisionSeconds=1124.5
+PROGRESS step=960 seconds=1223.0 collisionSeconds=1204.2
+PROGRESS step=990 seconds=1303.4 collisionSeconds=1283.9
+PROGRESS step=1020 seconds=1384.8 collisionSeconds=1364.4
+PROGRESS step=1050 seconds=1472.3 collisionSeconds=1451.2
+PROGRESS step=1080 seconds=1559.1 collisionSeconds=1537.3
+FACADE day=180 plants=7 organs=2374 penetrations=0 rhizomes=194 unsupported=9 lowest=-0.0006637573 cuts=0 bytes=202766 seconds=1559.1
+CANOPY day=180 species=Carex morrowii 'Variegata' leaves=1072 area=0.0075351136832136015 crowns=24 mass=6.3965862128815205 water=4.348621142782733 paused=181 pending=13 rejectedBirths=369 naturalDeaths=0 resourceDeaths=0
+CANOPY day=180 species=Fragaria vesca 'Rügen' leaves=12 area=0.007578710745060787 crowns=1 mass=8.835321328237972 water=5.53074330673606 paused=11 pending=1 rejectedBirths=49 naturalDeaths=0 resourceDeaths=0
+CANOPY day=180 species=Geranium Macrorrhizum leaves=22 area=0.030089909797719406 crowns=3 mass=68.00552404666449 water=39.14516596176327 paused=19 pending=2 rejectedBirths=91 naturalDeaths=4 resourceDeaths=0
+CANOPY day=180 species=Bergenia Cordifolia leaves=18 area=0.04275305635509563 crowns=2 mass=40.986172202041544 water=23.87358985117166 paused=21 pending=0 rejectedBirths=7 naturalDeaths=1 resourceDeaths=0
+CANOPY day=180 species=Geranium × cantabrigiense leaves=66 area=0.022078008101419817 crowns=12 mass=28.47989746459435 water=17.247581239031163 paused=61 pending=3 rejectedBirths=57 naturalDeaths=34 resourceDeaths=0
+CANOPY day=180 species=Heuchera micrantha leaves=14 area=0.01731501524938407 crowns=1 mass=8.336455835176727 water=6.534199185220151 paused=2 pending=1 rejectedBirths=56 naturalDeaths=0 resourceDeaths=0
+CANOPY day=180 species=Campanula poscharskyana leaves=164 area=0.021277149948851472 crowns=20 mass=36.62338790599412 water=25.023534352671724 paused=45 pending=6 rejectedBirths=493 naturalDeaths=38 resourceDeaths=0
+COVERAGE projectedXYm2=0.046 unresolvedFoliage=0
+STORAGE frameRaw=202766 frameZlib=136075 checkpoint=875063
+MEMORY managed=525502848 allocated=77983677200 peak=VmHWM:	 2062832 kB
+PROGRESS step=1110 seconds=1653.9 collisionSeconds=1631.2
+PROGRESS step=1140 seconds=1753.5 collisionSeconds=1730.0
+PROGRESS step=1170 seconds=1852.0 collisionSeconds=1827.7
+PROGRESS step=1200 seconds=1959.1 collisionSeconds=1934.1
+PROGRESS step=1230 seconds=2062.6 collisionSeconds=2036.6
+PROGRESS step=1260 seconds=2166.2 collisionSeconds=2139.4
+FACADE day=210 plants=7 organs=2427 penetrations=0 rhizomes=198 unsupported=9 lowest=-0.0006637573 cuts=0 bytes=207049 seconds=2166.2
+CANOPY day=210 species=Carex morrowii 'Variegata' leaves=1088 area=0.007542549406464358 crowns=24 mass=6.639065728926266 water=4.47804218037964 paused=181 pending=14 rejectedBirths=498 naturalDeaths=0 resourceDeaths=0
+CANOPY day=210 species=Fragaria vesca 'Rügen' leaves=12 area=0.007578704182395709 crowns=1 mass=9.111883723552584 water=5.675451969886657 paused=12 pending=1 rejectedBirths=59 naturalDeaths=0 resourceDeaths=0
+CANOPY day=210 species=Geranium Macrorrhizum leaves=26 area=0.031360881389178946 crowns=3 mass=72.7976418526387 water=41.94992964175348 paused=21 pending=2 rejectedBirths=111 naturalDeaths=4 resourceDeaths=0
+CANOPY day=210 species=Bergenia Cordifolia leaves=18 area=0.044686218904755715 crowns=2 mass=45.452933492683684 water=26.3086662288258 paused=19 pending=0 rejectedBirths=7 naturalDeaths=1 resourceDeaths=0
+CANOPY day=210 species=Geranium × cantabrigiense leaves=72 area=0.02493869562095386 crowns=12 mass=30.17584517076732 water=18.46288213399009 paused=71 pending=3 rejectedBirths=77 naturalDeaths=34 resourceDeaths=0
+CANOPY day=210 species=Heuchera micrantha leaves=14 area=0.01731501524938407 crowns=1 mass=8.359018401035764 water=6.556761741722303 paused=2 pending=1 rejectedBirths=66 naturalDeaths=0 resourceDeaths=0
+CANOPY day=210 species=Campanula poscharskyana leaves=164 area=0.021292692482964955 crowns=20 mass=38.43930805008269 water=25.992040109562446 paused=43 pending=6 rejectedBirths=553 naturalDeaths=40 resourceDeaths=0
+COVERAGE projectedXYm2=0.048 unresolvedFoliage=0
+STORAGE frameRaw=207049 frameZlib=138547 checkpoint=917907
+MEMORY managed=539998512 allocated=110727941536 peak=VmHWM:	 2062832 kB
+PROGRESS step=1290 seconds=2278.0 collisionSeconds=2250.4
+PROGRESS step=1320 seconds=2377.5 collisionSeconds=2349.1
+PROGRESS step=1350 seconds=2480.7 collisionSeconds=2451.3
+PROGRESS step=1380 seconds=2579.1 collisionSeconds=2548.8
+PROGRESS step=1410 seconds=2685.5 collisionSeconds=2654.4

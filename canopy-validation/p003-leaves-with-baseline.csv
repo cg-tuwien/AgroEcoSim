@@ -1,0 +1,127 @@
+variant,day,species,living_leaf_segments
+baseline,30,Carex morrowii 'Variegata',21551
+baseline,30,Fragaria vesca 'Rügen',508
+baseline,30,Geranium Macrorrhizum,61
+baseline,30,Bergenia Cordifolia,654
+baseline,30,Geranium × cantabrigiense,187
+baseline,30,Heuchera micrantha,118
+baseline,30,Campanula poscharskyana,2833
+baseline,60,Carex morrowii 'Variegata',70258
+baseline,60,Fragaria vesca 'Rügen',2495
+baseline,60,Geranium Macrorrhizum,558
+baseline,60,Bergenia Cordifolia,599
+baseline,60,Geranium × cantabrigiense,1504
+baseline,60,Heuchera micrantha,281
+baseline,60,Campanula poscharskyana,10202
+baseline,90,Carex morrowii 'Variegata',138501
+baseline,90,Fragaria vesca 'Rügen',2296
+baseline,90,Geranium Macrorrhizum,1441
+baseline,90,Bergenia Cordifolia,528
+baseline,90,Geranium × cantabrigiense,5791
+baseline,90,Heuchera micrantha,377
+baseline,90,Campanula poscharskyana,19198
+baseline,120,Carex morrowii 'Variegata',214519
+baseline,120,Fragaria vesca 'Rügen',1070
+baseline,120,Geranium Macrorrhizum,2155
+baseline,120,Bergenia Cordifolia,385
+baseline,120,Geranium × cantabrigiense,9825
+baseline,120,Heuchera micrantha,529
+baseline,120,Campanula poscharskyana,18795
+baseline,150,Carex morrowii 'Variegata',285855
+baseline,150,Fragaria vesca 'Rügen',781
+baseline,150,Geranium Macrorrhizum,1540
+baseline,150,Bergenia Cordifolia,290
+baseline,150,Geranium × cantabrigiense,10916
+baseline,150,Heuchera micrantha,498
+baseline,150,Campanula poscharskyana,14468
+baseline,180,Carex morrowii 'Variegata',350997
+baseline,180,Fragaria vesca 'Rügen',757
+baseline,180,Geranium Macrorrhizum,1351
+baseline,180,Bergenia Cordifolia,213
+baseline,180,Geranium × cantabrigiense,9873
+baseline,180,Heuchera micrantha,479
+baseline,180,Campanula poscharskyana,12147
+baseline,210,Carex morrowii 'Variegata',407009
+baseline,210,Fragaria vesca 'Rügen',751
+baseline,210,Geranium Macrorrhizum,1291
+baseline,210,Bergenia Cordifolia,172
+baseline,210,Geranium × cantabrigiense,8910
+baseline,210,Heuchera micrantha,501
+baseline,210,Campanula poscharskyana,10577
+baseline,240,Carex morrowii 'Variegata',455976
+baseline,240,Fragaria vesca 'Rügen',743
+baseline,240,Geranium Macrorrhizum,1284
+baseline,240,Bergenia Cordifolia,156
+baseline,240,Geranium × cantabrigiense,8589
+baseline,240,Heuchera micrantha,463
+baseline,240,Campanula poscharskyana,9872
+baseline,270,Carex morrowii 'Variegata',480168
+baseline,270,Fragaria vesca 'Rügen',743
+baseline,270,Geranium Macrorrhizum,1270
+baseline,270,Bergenia Cordifolia,144
+baseline,270,Geranium × cantabrigiense,8374
+baseline,270,Heuchera micrantha,390
+baseline,270,Campanula poscharskyana,9676
+baseline,300,Carex morrowii 'Variegata',473177
+baseline,300,Fragaria vesca 'Rügen',729
+baseline,300,Geranium Macrorrhizum,1270
+baseline,300,Bergenia Cordifolia,144
+baseline,300,Geranium × cantabrigiense,8181
+baseline,300,Heuchera micrantha,337
+baseline,300,Campanula poscharskyana,9593
+baseline,330,Carex morrowii 'Variegata',466519
+baseline,330,Fragaria vesca 'Rügen',729
+baseline,330,Geranium Macrorrhizum,1260
+baseline,330,Bergenia Cordifolia,144
+baseline,330,Geranium × cantabrigiense,8112
+baseline,330,Heuchera micrantha,311
+baseline,330,Campanula poscharskyana,9138
+baseline,360,Carex morrowii 'Variegata',460220
+baseline,360,Fragaria vesca 'Rügen',705
+baseline,360,Geranium Macrorrhizum,1246
+baseline,360,Bergenia Cordifolia,144
+baseline,360,Geranium × cantabrigiense,8088
+baseline,360,Heuchera micrantha,296
+baseline,360,Campanula poscharskyana,8495
+baseline,390,Carex morrowii 'Variegata',492044
+baseline,390,Fragaria vesca 'Rügen',4097
+baseline,390,Geranium Macrorrhizum,8739
+baseline,390,Bergenia Cordifolia,953
+baseline,390,Geranium × cantabrigiense,15084
+baseline,390,Heuchera micrantha,330
+baseline,390,Campanula poscharskyana,20864
+baseline,420,Carex morrowii 'Variegata',501967
+baseline,420,Fragaria vesca 'Rügen',7031
+baseline,420,Geranium Macrorrhizum,14862
+baseline,420,Bergenia Cordifolia,922
+baseline,420,Geranium × cantabrigiense,22078
+baseline,420,Heuchera micrantha,338
+baseline,420,Campanula poscharskyana,29574
+baseline,450,Carex morrowii 'Variegata',505785
+baseline,450,Fragaria vesca 'Rügen',6573
+baseline,450,Geranium Macrorrhizum,17744
+baseline,450,Bergenia Cordifolia,694
+baseline,450,Geranium × cantabrigiense,29506
+baseline,450,Heuchera micrantha,367
+baseline,450,Campanula poscharskyana,24974
+baseline,470,Carex morrowii 'Variegata',509872
+baseline,470,Fragaria vesca 'Rügen',5447
+baseline,470,Geranium Macrorrhizum,17738
+baseline,470,Bergenia Cordifolia,629
+baseline,470,Geranium × cantabrigiense,30190
+baseline,470,Heuchera micrantha,332
+baseline,470,Campanula poscharskyana,20581
+guidance,30,Carex morrowii 'Variegata',16848
+guidance,30,Fragaria vesca 'Rügen',2316
+guidance,30,Geranium Macrorrhizum,878
+guidance,30,Bergenia Cordifolia,542
+guidance,30,Geranium × cantabrigiense,960
+guidance,30,Heuchera micrantha,480
+guidance,30,Campanula poscharskyana,1404
+guidance,60,Carex morrowii 'Variegata',50688
+guidance,60,Fragaria vesca 'Rügen',4400
+guidance,60,Geranium Macrorrhizum,1332
+guidance,60,Bergenia Cordifolia,1016
+guidance,60,Geranium × cantabrigiense,2178
+guidance,60,Heuchera micrantha,892
+guidance,60,Campanula poscharskyana,5198

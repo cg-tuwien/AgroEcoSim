@@ -28,8 +28,9 @@ public struct SeedAgent : IAgent
     }
 
 	const float Pi4 = MathF.PI * 4f;
-	const float PiV = 3f * 0.001f * 0.1f / Pi4;
-	const float Third = 1f/3f;
+	// Additive-volume proxy for imbibition: water density is 1e6 g/m³.
+	// This is not a species-specific swelling constitutive law.
+	const double WaterToRadiusCubed = 3d / (4d * Math.PI * 1e6);
 
 	/// <summary>
 	/// Sphere center
@@ -44,6 +45,9 @@ public struct SeedAgent : IAgent
 	/// </summary>
 	public float Water_g { get; private set; }
 
+	/// <summary>Stored reserve in model energy units, independent of hydration.</summary>
+	public float Energy { get; private set; }
+
 	readonly Vector2 mVegetativeTemperature;
 
 	/// <summary>
@@ -52,13 +56,28 @@ public struct SeedAgent : IAgent
 	public readonly float GerminationThreshold;
 
 	/// <summary>
-	/// Ratio ∈ [0, 1] of the required energy to start growing roots and stems
+	/// Hydration progress ∈ [0, 1] toward the germination threshold
 	/// </summary>
-	public readonly float GerminationProgress => Water_g / GerminationThreshold;
+	public readonly float GerminationProgress => Math.Clamp(Water_g / GerminationThreshold, 0f, 1f);
 	public readonly int SoilIndex;
 
-	public SeedAgent(int soilIndex, Vector3 center, float radius, Vector2 vegetativeTemperature, float energy = -1f)
+	/// <summary>Creates an initial propagule with independent water and energy pools.</summary>
+	/// <param name="soilIndex">Soil field containing the seed.</param>
+	/// <param name="center">Initial position in simulation coordinates.</param>
+	/// <param name="radius">Initial spherical-envelope radius in metres.</param>
+	/// <param name="vegetativeTemperature">Lower and full-uptake temperatures in degrees Celsius.</param>
+	/// <param name="energy">Legacy initial-water argument in grams; negative selects
+	/// historical initial hydration. The name is retained for source compatibility.</param>
+	/// <param name="reserveEnergy">Initial reserve in custom model energy units. The
+	/// default preserves the size-based nominal legacy budget, without water overshoot.
+	/// It is not a measured seed carbohydrate mass.</param>
+	public SeedAgent(int soilIndex, Vector3 center, float radius, Vector2 vegetativeTemperature,
+		float energy = -1f, float? reserveEnergy = null)
 	{
+		if (!float.IsFinite(radius) || radius <= 0f) throw new ArgumentOutOfRangeException(nameof(radius));
+		if (!float.IsFinite(energy)) throw new ArgumentOutOfRangeException(nameof(energy));
+		if (reserveEnergy.HasValue && (!float.IsFinite(reserveEnergy.Value) || reserveEnergy.Value < 0f))
+			throw new ArgumentOutOfRangeException(nameof(reserveEnergy));
 		SoilIndex = soilIndex;
 		Center = center;
 		Radius = radius;
@@ -68,6 +87,9 @@ public struct SeedAgent : IAgent
 			Water_g = energy;
 
 		GerminationThreshold = Water_g * 500f + 100f * radius;
+		Energy = reserveEnergy ?? (radius * radius * radius * 100f * 500f + 100f * radius);
+		if (!float.IsFinite(GerminationThreshold) || !float.IsFinite(Energy))
+			throw new ArgumentOutOfRangeException(nameof(radius), "Seed initialization exceeds the finite model range.");
 		mVegetativeTemperature = vegetativeTemperature;
 	}
 
@@ -75,10 +97,14 @@ public struct SeedAgent : IAgent
 	{
 		var plant = (PlantFormation2)_formation;
 		var world = plant.World;
-		Water_g -= Radius * Radius * Radius * world.HoursPerTick; //life support
-		if (Water_g <= 0) //energy depleted
+		// A seed hydrated at the boundary germinates before another interval's loss.
+		// Otherwise a request capped at the threshold could never germinate.
+		if (Water_g < GerminationThreshold)
+			Water_g -= Radius * Radius * Radius * world.HoursPerTick; // Empirical hydration loss, g/h.
+		if (Water_g <= 0) // Dehydration, not carbon starvation.
 		{
 			Water_g = 0f;
+			Energy = 0f;
 			plant.SeedDeath();
 			Debug.WriteLine($"Seed death: {formationID} at {world.Timestep} in field {SoilIndex}");
 		}
@@ -90,12 +116,14 @@ public struct SeedAgent : IAgent
 				const float rootReserveFraction = 0.3f;
 				const float rhizomeReserveFraction = 0.3f;
 				const float aerialReserveFraction = 1f - rootReserveFraction - rhizomeReserveFraction;
-				var seedReserve = Water_g;
+				var seedReserve = Energy;
+				var seedWater = Water_g;
 				var initialYawAngle = plant.RNG.NextFloat(-MathF.PI, MathF.PI);
 				var initialYaw = Quaternion.CreateFromAxisAngle(Vector3.UnitY, initialYawAngle);
 				plant.UGBirth(new UnderGroundAgent(plant, timestep, -1,
 					initialYaw * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, -0.5f * MathF.PI),
-					seedReserve * rootReserveFraction, initialResources: 1f, initialProduction: 1f));
+					seedReserve * rootReserveFraction, initialWater_g: seedWater * rootReserveFraction,
+					initialResources: 1f, initialProduction: 1f));
 
 				var baseStemOrientation = initialYaw * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, 0.5f * MathF.PI);
 				var rhizomeOrientation = initialYaw;
@@ -104,22 +132,40 @@ public struct SeedAgent : IAgent
 					seedReserve * rhizomeReserveFraction,
 					radius: initialRhizomeRadius, length: 0.001f, initialResources: 1f, initialProduction: 1f)
 				{
-					IsRizome = true
+					IsRizome = true,
+					Water_g = seedWater * rhizomeReserveFraction
 				};
 				var rhizomeIndex = plant.AG.Birth(rhizome);
-				var aerialOrganCount = 1 + plant.Parameters.LateralsPerNode *
-					(plant.Parameters.PetioleSegmentCount + 1);
+				// Each petiole/blade helper already shares resources among its segments.
+				var aerialOrganCount = 1 + plant.Parameters.LateralsPerNode * 2;
 				var aerialReservePerOrgan = seedReserve * aerialReserveFraction / aerialOrganCount;
+				var aerialWaterPerOrgan = seedWater * aerialReserveFraction / aerialOrganCount;
 				var meristem = new AboveGroundAgent(plant, rhizomeIndex, OrganTypes.Meristem,
-					baseStemOrientation, aerialReservePerOrgan, initialResources: 1f, initialProduction: 1f);
+					baseStemOrientation, aerialReservePerOrgan, initialResources: 1f, initialProduction: 1f)
+				{ Water_g = aerialWaterPerOrgan };
+				// The first crown must emerge from its local soil just as a later rhizome
+				// crown does. A compressed internode target alone can finish below the
+				// surface and keep every subsequent leaf node crowded into the soil.
+				// Set a growth target; do not move the seed or teleport its descendants.
+				if (plant.Parameters.Behavior == Behavior.Herbaceous)
+				{
+					var crownBase = plant.Position + plant.AG.FieldOrigin
+						+ Vector3.Transform(Vector3.UnitX, rhizomeOrientation) * rhizome.Length;
+					var scene = world.Collisions.StaticScene;
+					if (scene.InsideSoil(crownBase, 1f)
+						&& scene.ClosestSoilSurface(crownBase, crownBase + Vector3.UnitY * 0.1f,
+							0.0001f, out var surface))
+						meristem.SetEmergenceTarget(surface.Point.Y - crownBase.Y + plant.Parameters.CrownNodeHeightAboveSoil);
+				}
 				var meristemIndex = plant.AG.Birth(meristem); //base stem
 
 				if (plant.Parameters.LateralsPerNode > 0)
 					AboveGroundAgent.CreateLeavesFromReserve(meristem, plant, 0f, meristemIndex,
-						1f, 1f, aerialReservePerOrgan, 0f);
+						1f, 1f, aerialReservePerOrgan, aerialWaterPerOrgan);
 
 				plant.SeedDeath();
 				Water_g = 0f;
+				Energy = 0f;
 			}
 			else
 			{
@@ -141,6 +187,8 @@ public struct SeedAgent : IAgent
 							waterRequest_g += amount_g;
 						}
 					}
+					// Limit uptake at the request; never discard already delivered water.
+					waterRequest_g = MathF.Min(waterRequest_g, MathF.Max(0f, GerminationThreshold - Water_g));
 					soil.RequestWater(source, waterRequest_g, plant, SoilIndex);
 				}
 			}
@@ -149,8 +197,8 @@ public struct SeedAgent : IAgent
 
 	void IncWater(float amount)
 	{
-		Debug.Assert(amount >= 0f);
+		Debug.Assert(float.IsFinite(amount) && amount >= 0f);
 		Water_g += amount;
-		Radius = MathF.Pow(Radius * Radius * Radius + amount * PiV, Third); //use the rest for growth
+		Radius = (float)Math.Cbrt((double)Radius * Radius * Radius + amount * WaterToRadiusCubed);
 	}
 }

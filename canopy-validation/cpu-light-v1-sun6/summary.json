@@ -1,0 +1,100 @@
+[
+  {
+    "case": "s1-h1",
+    "species": "Geranium Macrorrhizum",
+    "reached90": 12,
+    "observed": 14,
+    "medianDays90": 16.0
+  },
+  {
+    "case": "s1-h4",
+    "species": "Geranium Macrorrhizum",
+    "reached90": 12,
+    "observed": 14,
+    "medianDays90": 15.25
+  },
+  {
+    "case": "s2-h1",
+    "species": "Geranium \u00d7 cantabrigiense",
+    "reached90": 12,
+    "observed": 14,
+    "medianDays90": 14.1875
+  },
+  {
+    "case": "s2-h4",
+    "species": "Geranium \u00d7 cantabrigiense",
+    "reached90": 12,
+    "observed": 14,
+    "medianDays90": 14.833333333333332
+  },
+  {
+    "case": "s3-h1",
+    "species": "Bergenia Cordifolia",
+    "reached90": 11,
+    "observed": 20,
+    "medianDays90": 102.41666666666667
+  },
+  {
+    "case": "s3-h4",
+    "species": "Bergenia Cordifolia",
+    "reached90": 10,
+    "observed": 20,
+    "medianDays90": 87.33333333333334
+  },
+  {
+    "case": "s4-h1",
+    "species": "Heuchera micrantha",
+    "reached90": 14,
+    "observed": 14,
+    "medianDays90": 27.541666666666668
+  },
+  {
+    "case": "s4-h4",
+    "species": "Heuchera micrantha",
+    "reached90": 14,
+    "observed": 14,
+    "medianDays90": 29.083333333333336
+  },
+  {
+    "case": "s5-h1",
+    "species": "Campanula poscharskyana",
+    "reached90": 28,
+    "observed": 28,
+    "medianDays90": 12.0
+  },
+  {
+    "case": "s5-h4",
+    "species": "Campanula poscharskyana",
+    "reached90": 28,
+    "observed": 28,
+    "medianDays90": 13.0
+  },
+  {
+    "case": "s6-h1",
+    "species": "Carex morrowii 'Variegata'",
+    "reached90": 10,
+    "observed": 10,
+    "medianDays90": 32.541666666666664
+  },
+  {
+    "case": "s6-h4",
+    "species": "Carex morrowii 'Variegata'",
+    "reached90": 10,
+    "observed": 10,
+    "medianDays90": 31.333333333333336
+  },
+  {
+    "case": "s7-h1",
+    "species": "Fragaria vesca 'R\u00fcgen'",
+    "reached90": 24,
+    "observed": 24,
+    "medianDays90": 19.666666666666664
+  },
+  {
+    "case": "s7-h4",
+    "species": "Fragaria vesca 'R\u00fcgen'",
+    "reached90": 24,
+    "observed": 24,
+    "medianDays90": 20.25
+  }
+]

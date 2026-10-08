@@ -94,7 +94,7 @@ export class GeometryAtlas {
      * triangles the injection kernel walks - reading the same arrays is what makes the two
      * comparable rather than merely similar.
      */
-    triangle(slice: GeometrySlice, tri: number, out: Float32Array): boolean {
+    triangle(slice: GeometrySlice, tri: number, out: Float32Array, hinges?: Float32Array): boolean {
         const i0 = slice.firstIndex + tri * 3;
         if (i0 + 2 >= this.indexCount) return false;
         for (let k = 0; k < 3; ++k) {
@@ -102,6 +102,7 @@ export class GeometryAtlas {
             out[k * 3] = this.vertexData[v];
             out[k * 3 + 1] = this.vertexData[v + 1];
             out[k * 3 + 2] = this.vertexData[v + 2];
+            if (hinges) hinges[k] = this.vertexData[v + 6];
         }
         return true;
     }

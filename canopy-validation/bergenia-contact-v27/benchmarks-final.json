@@ -1,0 +1,230 @@
+{
+  "normal": {
+    "v26": {
+      "samples": [
+        {
+          "file": "benchmark-v26-normal-4.log",
+          "medianMs": 0.6468,
+          "p95Ms": 0.7496,
+          "medianAllocatedBytes": 10984,
+          "p95AllocatedBytes": 10984
+        },
+        {
+          "file": "benchmark-v26-normal-5.log",
+          "medianMs": 0.6524,
+          "p95Ms": 0.6997,
+          "medianAllocatedBytes": 10984,
+          "p95AllocatedBytes": 10984
+        },
+        {
+          "file": "benchmark-v26-normal-6.log",
+          "medianMs": 0.6248,
+          "p95Ms": 0.9133,
+          "medianAllocatedBytes": 10984,
+          "p95AllocatedBytes": 10984
+        }
+      ],
+      "medianMs": 0.6468,
+      "p95Ms": 0.7496
+    },
+    "v27": {
+      "samples": [
+        {
+          "file": "benchmark-v27-normal-4.log",
+          "medianMs": 0.6541,
+          "p95Ms": 0.6917,
+          "medianAllocatedBytes": 10984,
+          "p95AllocatedBytes": 10984
+        },
+        {
+          "file": "benchmark-v27-normal-5.log",
+          "medianMs": 0.6504,
+          "p95Ms": 0.6832,
+          "medianAllocatedBytes": 10984,
+          "p95AllocatedBytes": 10984
+        },
+        {
+          "file": "benchmark-v27-normal-6.log",
+          "medianMs": 0.6619,
+          "p95Ms": 0.7287,
+          "medianAllocatedBytes": 10984,
+          "p95AllocatedBytes": 10984
+        }
+      ],
+      "medianMs": 0.6541,
+      "p95Ms": 0.6917
+    },
+    "changePercent": 1.1286332714904201
+  },
+  "radial": {
+    "v26": {
+      "samples": [
+        {
+          "file": "benchmark-v26-radial-4.log",
+          "medianMs": 1.0233,
+          "p95Ms": 1.1934,
+          "medianAllocatedBytes": 12424,
+          "p95AllocatedBytes": 12424
+        },
+        {
+          "file": "benchmark-v26-radial-5.log",
+          "medianMs": 0.9861,
+          "p95Ms": 1.137,
+          "medianAllocatedBytes": 12280,
+          "p95AllocatedBytes": 12280
+        },
+        {
+          "file": "benchmark-v26-radial-6.log",
+          "medianMs": 0.9585,
+          "p95Ms": 0.9959,
+          "medianAllocatedBytes": 12376,
+          "p95AllocatedBytes": 12376
+        }
+      ],
+      "medianMs": 0.9861,
+      "p95Ms": 1.137
+    },
+    "v27": {
+      "samples": [
+        {
+          "file": "benchmark-v27-radial-4.log",
+          "medianMs": 0.9737,
+          "p95Ms": 1.0868,
+          "medianAllocatedBytes": 12424,
+          "p95AllocatedBytes": 12424
+        },
+        {
+          "file": "benchmark-v27-radial-5.log",
+          "medianMs": 1.0794,
+          "p95Ms": 1.1171,
+          "medianAllocatedBytes": 12520,
+          "p95AllocatedBytes": 12520
+        },
+        {
+          "file": "benchmark-v27-radial-6.log",
+          "medianMs": 1.0131,
+          "p95Ms": 1.0551,
+          "medianAllocatedBytes": 12760,
+          "p95AllocatedBytes": 12760
+        }
+      ],
+      "medianMs": 1.0131,
+      "p95Ms": 1.0868
+    },
+    "changePercent": 2.73805902038331
+  },
+  "common": {
+    "v26": {
+      "samples": [
+        {
+          "file": "benchmark-v26-common-4.log",
+          "medianMs": 10.1123,
+          "p95Ms": 10.1561,
+          "medianAllocatedBytes": 1912,
+          "p95AllocatedBytes": 1912
+        },
+        {
+          "file": "benchmark-v26-common-5.log",
+          "medianMs": 6.3578,
+          "p95Ms": 6.9728,
+          "medianAllocatedBytes": 1048,
+          "p95AllocatedBytes": 1048
+        },
+        {
+          "file": "benchmark-v26-common-6.log",
+          "medianMs": 7.1656,
+          "p95Ms": 7.3591,
+          "medianAllocatedBytes": 1096,
+          "p95AllocatedBytes": 1096
+        }
+      ],
+      "medianMs": 7.1656,
+      "p95Ms": 7.3591
+    },
+    "v27": {
+      "samples": [
+        {
+          "file": "benchmark-v27-common-4.log",
+          "medianMs": 2.1412,
+          "p95Ms": 2.1748,
+          "medianAllocatedBytes": 280,
+          "p95AllocatedBytes": 280
+        },
+        {
+          "file": "benchmark-v27-common-5.log",
+          "medianMs": 1.7414,
+          "p95Ms": 1.7922,
+          "medianAllocatedBytes": 328,
+          "p95AllocatedBytes": 328
+        },
+        {
+          "file": "benchmark-v27-common-6.log",
+          "medianMs": 2.065,
+          "p95Ms": 2.1487,
+          "medianAllocatedBytes": 232,
+          "p95AllocatedBytes": 232
+        }
+      ],
+      "medianMs": 2.065,
+      "p95Ms": 2.1487
+    },
+    "changePercent": -71.18175728480519
+  },
+  "v1": {
+    "v26": {
+      "samples": [
+        {
+          "file": "benchmark-v26-v1-4.log",
+          "medianMs": 5.5296,
+          "p95Ms": 5.6671,
+          "medianAllocatedBytes": 10840,
+          "p95AllocatedBytes": 10840
+        },
+        {
+          "file": "benchmark-v26-v1-5.log",
+          "medianMs": 8.1479,
+          "p95Ms": 8.3451,
+          "medianAllocatedBytes": 10888,
+          "p95AllocatedBytes": 10888
+        },
+        {
+          "file": "benchmark-v26-v1-6.log",
+          "medianMs": 7.1196,
+          "p95Ms": 7.217,
+          "medianAllocatedBytes": 10744,
+          "p95AllocatedBytes": 10744
+        }
+      ],
+      "medianMs": 7.1196,
+      "p95Ms": 7.217
+    },
+    "v27": {
+      "samples": [
+        {
+          "file": "benchmark-v27-v1-4.log",
+          "medianMs": 42.483,
+          "p95Ms": 42.8455,
+          "medianAllocatedBytes": 21976,
+          "p95AllocatedBytes": 21976
+        },
+        {
+          "file": "benchmark-v27-v1-5.log",
+          "medianMs": 31.2162,
+          "p95Ms": 32.0544,
+          "medianAllocatedBytes": 21112,
+          "p95AllocatedBytes": 21112
+        },
+        {
+          "file": "benchmark-v27-v1-6.log",
+          "medianMs": 29.732,
+          "p95Ms": 30.0792,
+          "medianAllocatedBytes": 21304,
+          "p95AllocatedBytes": 21304
+        }
+      ],
+      "medianMs": 31.2162,
+      "p95Ms": 32.0544
+    },
+    "changePercent": 338.454407550986
+  }
+}

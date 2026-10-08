@@ -1,0 +1,5 @@
+Species lookup: Bergenia Cordifolia, BudLength: 0.009
+PlantFormation2 ctor: Bergenia Cordifolia, BudLength: 0.009
+SpeciesSettings.Init called on Bergenia Cordifolia, BudLength: 0.009
+PlantFormation2 after Init: Bergenia Cordifolia, BudLength: 0.009
+OLDER_CHECKPOINT rejected=True diagnostic=This checkpoint is version 31 and this build writes version 32. A run saved by a different build of the simulation cannot be resumed.

@@ -9,27 +9,34 @@ public static class Bergenia_Cordifolia
     {
         Name = "Bergenia Cordifolia",
         Behavior = Behavior.Herbaceous,
-        // MOBOT measures the blade at 10 x 8 inches, i.e. 25 x 20 cm; RHS says "to 30cm
-        // long". Mature leaves want the full figure - 17 cm was still short of it.
+        // MOBOT's 25 x 20 cm and RHS's "to 30cm long" describe upper sizes,
+        // not typical targets. Retained pending cultivar calibration: the user's
+        // 'Rotblum' has a largest observed attachment-to-tip blade of 16 cm.
+        // See BERGENIA_CALIBRATION.md for measurement definitions and limitations.
         LeafLength = 0.24f,
         LeafRadius = 0.095f,
-        // Stout petioles roughly as long as the blade: 5-20 cm in the field.
+        // Retained provisional target; the user's 'Rotblum' petioles are about 5 cm.
         PetioleLength = 0.12f,
         PetioleLengthVar = 0.03f,
         PetioleRadius = 0.0025f,
         LeafGrowthTime = 24 * 7 * 12,
+        // Provisional CPU-light calibration; see LIGHT_GROWTH_CALIBRATION.md.
+        LeafExpansionRateScale = 1.15f,
         // MOBOT: height and spread 1.0-1.5 ft, foliage clump "to 12 inches tall",
         // flower stalks "to 16 inches".
         Height = 0.45f,
         // The rosette sits on a thick rhizome; internodes are short but not absent,
         // otherwise every leaf of a crown attaches at exactly the same point.
-        NodeDistance = 0.004f,
-        NodeDistanceVar = 0.001f,
+        // Twice the node capacity below, at half the internode length: a denser rosette,
+        // not a taller caudex. These are field-calibration values; see LEAF_DIMENSIONS.md.
+        NodeDistance = 0.002f,
+        NodeDistanceVar = 0.0005f,
         CrownNodeHeightAboveSoil = 0.01f,
 
         PreFloweringCrownContinuationProbabilityPerHour = 0.008f,
         FloweringCrownContinuationProbabilityPerHour = 0.002f,
-        PostFloweringCrownContinuationProbabilityPerHour = 0.00f,
+        // Vegetative leaf production continues after the spring bloom.
+        PostFloweringCrownContinuationProbabilityPerHour = 0.002f,
         DormantCrownContinuationProbabilityPerHour = 0f,
 
         PreFloweringCommitmentProbabilityPerHour = 0f,
@@ -51,9 +58,14 @@ public static class Bergenia_Cordifolia
         // One thick scape per crown, which is what makes the "distinct strand" of a
         // flowering Bergenia.
         MaximumFlowersPerCrown = 1,
-        // A Bergenia rosette carries six to twelve leathery leaves; with two petioles
-        // per node that is about five nodes on a compressed rhizome apex.
-        CrownMaximumNodes = 5,
+        // A dense Bergenia crown sometimes needs an off-axis first scape segment.
+        // The search is collision-certified; 75 degrees is a provisional limit,
+        // not a measured 'Rotblum' emergence angle.
+        BasalScapeEmergenceMaxTiltDegrees = 75f,
+        // Field observation: about twice the simulated leaf density per crown. Twenty
+        // potential leaves is a calibration ceiling, not a universal botanical leaf count.
+        // Keep LateralsPerNode and clonal spread unchanged; slow blade expansion is separate.
+        CrownMaximumNodes = 10,
 
         LeafMaximumAgeHours = 24 * 360,
         CrownBudActivationProbabilityPerSeason = 0.5f,
@@ -76,7 +88,7 @@ public static class Bergenia_Cordifolia
         // photographs show the outer petioles about 45 degrees off the vertical axis.
         // Bergenia holds its blades obliquely upright, not flat: at 45 degrees a single
         // rosette of 20 cm leaves spanned 57 cm against the 30-46 cm MOBOT measures.
-        LateralPitch= 35f * DegToRad,
+        LateralPitch = 35f * DegToRad,
         // LeafPitch is measured from the petiole, and LateralPitch from the vertical
         // crown axis, so a blade only comes out horizontal when the two are
         // complementary: LeafPitch ~ 90 - LateralPitch. Both Geraniums satisfied that
@@ -103,23 +115,23 @@ public static class Bergenia_Cordifolia
             PetalAndPedicelGrowthDurationVarianceHours = 24f,
 
             FlowerPhenology = new LeafPhenology(
-        expectedAge: 504f,
-        colorModel: new ColorModel(
-            age: new ColorCurve()
-                .Add(0.00f, ColorUtils.OkLabFromSrgb8(230, 100, 165))
-                .Add(0.25f, ColorUtils.OkLabFromSrgb8(215, 85, 150))
-                .Add(0.70f, ColorUtils.OkLabFromSrgb8(200, 80, 140))
-                .Add(1.00f, ColorUtils.OkLabFromSrgb8(180, 72, 125)),
-            stress: new ColorCurve()
-                .Add(0.00f, new Vector3(0.00f, 1.00f, 0.00f))
-                .Add(1.00f, new Vector3(-0.04f, 0.82f, 0.01f)),
-            senescenceSeason: new ColorCurve()
-                .Add(0.00f, ColorUtils.OkLabFromSrgb8(170, 100, 130))
-                .Add(0.40f, ColorUtils.OkLabFromSrgb8(145, 85, 95))
-                .Add(0.75f, ColorUtils.OkLabFromSrgb8(115, 70, 65))
-                .Add(1.00f, ColorUtils.OkLabFromSrgb8(88, 58, 48))
-        )
-    ),
+            expectedAge: 504f,
+            colorModel: new ColorModel(
+                age: new ColorCurve()
+                    .Add(0.00f, ColorUtils.OkLabFromSrgb8(230, 100, 165))
+                    .Add(0.25f, ColorUtils.OkLabFromSrgb8(215, 85, 150))
+                    .Add(0.70f, ColorUtils.OkLabFromSrgb8(200, 80, 140))
+                    .Add(1.00f, ColorUtils.OkLabFromSrgb8(180, 72, 125)),
+                stress: new ColorCurve()
+                    .Add(0.00f, new Vector3(0.00f, 1.00f, 0.00f))
+                    .Add(1.00f, new Vector3(-0.04f, 0.82f, 0.01f)),
+                senescenceSeason: new ColorCurve()
+                    .Add(0.00f, ColorUtils.OkLabFromSrgb8(170, 100, 130))
+                    .Add(0.40f, ColorUtils.OkLabFromSrgb8(145, 85, 95))
+                    .Add(0.75f, ColorUtils.OkLabFromSrgb8(115, 70, 65))
+                    .Add(1.00f, ColorUtils.OkLabFromSrgb8(88, 58, 48))
+                )
+            ),
 
             PetalSenescenceDurationHours = 168f,
 
@@ -130,6 +142,9 @@ public static class Bergenia_Cordifolia
 
             // The scape is a thick fleshy RED stem, and the panicle is dense pink bells.
             ScapeColor = new Vector3(0.62f, 0.24f, 0.26f),
+            // Return a deflected basal scape toward vertical over several short
+            // segments rather than making a sharp elbow after its first segment.
+            ScapeGravitropism = 0.5f,
             FlowerCentreLength = 0.004f,
             FlowerCentreRadius = 0.0028f,
             FlowerCentreColor = new Vector3(0.95f, 0.83f, 0.88f),

@@ -125,7 +125,7 @@ internal class TreeCacheData
 		foreach(var root in Roots)
 		{
 			PointNodes[root] = formation.Plant.Position;
-			var point = formation.Plant.Position + Vector3.Transform(Vector3.UnitX, formation.GetDirection(root)) * formation.GetLength(root);
+			var point = formation.Plant.Position + formation.GetAttachmentOffset(root);
 			var children = GetChildren(root);
 			if (children.Count > 0)
 			{
@@ -143,7 +143,7 @@ internal class TreeCacheData
 			var children = GetChildren(next);
 			if (children.Count > 0)
 			{
-				var point = PointNodes[next] + Vector3.Transform(Vector3.UnitX, formation.GetDirection(next)) * formation.GetLength(next);
+				var point = PointNodes[next] + formation.GetAttachmentOffset(next);
 				foreach(var child in children)
 				{
 					PointNodes[child] = point;
@@ -187,7 +187,7 @@ internal class TreeCacheData
         {
             var parent = formation.GetParent(start);
             PointNodes[start] = parent >= 0
-                ? PointNodes[parent] + Vector3.Transform(Vector3.UnitX, formation.GetDirection(parent)) * formation.GetLength(parent)
+                ? PointNodes[parent] + formation.GetAttachmentOffset(parent)
                 : formation.Plant.Position;
 
             stack.Push(start);
@@ -198,7 +198,7 @@ internal class TreeCacheData
                 if (children.Count == 0)
                     continue;
 
-                var point = PointNodes[node] + Vector3.Transform(Vector3.UnitX, formation.GetDirection(node)) * formation.GetLength(node);
+                var point = PointNodes[node] + formation.GetAttachmentOffset(node);
                 foreach (var child in children)
                 {
                     PointNodes[child] = point;
@@ -219,7 +219,7 @@ internal class TreeCacheData
 		stack.Clear();
 		var parent = formation.GetParent(index);
 		PointNodes[index] = parent >= 0
-			? PointNodes[parent] + Vector3.Transform(Vector3.UnitX, formation.GetDirection(parent)) * formation.GetLength(parent)
+			? PointNodes[parent] + formation.GetAttachmentOffset(parent)
 			: formation.Plant.Position;
 
 		stack.Push(index);
@@ -230,7 +230,7 @@ internal class TreeCacheData
 			if (children.Count == 0)
 				continue;
 
-			var point = PointNodes[node] + Vector3.Transform(Vector3.UnitX, formation.GetDirection(node)) * formation.GetLength(node);
+			var point = PointNodes[node] + formation.GetAttachmentOffset(node);
 			foreach (var child in children)
 			{
 				PointNodes[child] = point;
@@ -245,7 +245,7 @@ internal class TreeCacheData
 		var groundHeight = formation.Plant.Position.Y;
 		for (var i = 0; i < Count; ++i)
 		{
-			var tip = PointNodes[i] + Vector3.Transform(Vector3.UnitX, formation.GetDirection(i)) * formation.GetLength(i);
+			var tip = PointNodes[i] + formation.GetAttachmentOffset(i);
 			Height = MathF.Max(Height, MathF.Max(PointNodes[i].Y, tip.Y) - groundHeight);
 		}
 	}

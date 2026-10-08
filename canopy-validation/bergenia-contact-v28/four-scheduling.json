@@ -1,0 +1,54 @@
+[
+  {
+    "tick": "1",
+    "workers": "1",
+    "pairCount": "2",
+    "checks": "81",
+    "contactVisits": "907",
+    "finite": "True",
+    "unresolved": "0",
+    "clear": "True",
+    "stateSha256": "CA414B98C4772D2FD8F5C23EFAB4F05C1A8D91570A8A73645BDD37BC7AE41E2A",
+    "frameSha256": "1FFAE0032E9719A3D3E78557FF5F5810B1ED58ACD75685FC92D645DC115797E9",
+    "file": "four-1h-workers1.log"
+  },
+  {
+    "tick": "1",
+    "workers": "4",
+    "pairCount": "2",
+    "checks": "81",
+    "contactVisits": "907",
+    "finite": "True",
+    "unresolved": "0",
+    "clear": "True",
+    "stateSha256": "CA414B98C4772D2FD8F5C23EFAB4F05C1A8D91570A8A73645BDD37BC7AE41E2A",
+    "frameSha256": "1FFAE0032E9719A3D3E78557FF5F5810B1ED58ACD75685FC92D645DC115797E9",
+    "file": "four-1h-workers4.log"
+  },
+  {
+    "tick": "4",
+    "workers": "1",
+    "pairCount": "2",
+    "checks": "66",
+    "contactVisits": "57",
+    "finite": "True",
+    "unresolved": "0",
+    "clear": "True",
+    "stateSha256": "02B7199CC81116FD2436BD2CA8147B4653FA560B2D8A51971C2625976F1986D7",
+    "frameSha256": "F4B58DE04DC500CC720B0B1007769036B318D25D0CE5156B1447A3E57A25DB8C",
+    "file": "four-4h-workers1.log"
+  },
+  {
+    "tick": "4",
+    "workers": "4",
+    "pairCount": "2",
+    "checks": "66",
+    "contactVisits": "57",
+    "finite": "True",
+    "unresolved": "0",
+    "clear": "True",
+    "stateSha256": "02B7199CC81116FD2436BD2CA8147B4653FA560B2D8A51971C2625976F1986D7",
+    "frameSha256": "F4B58DE04DC500CC720B0B1007769036B318D25D0CE5156B1447A3E57A25DB8C",
+    "file": "four-4h-workers4.log"
+  }
+]

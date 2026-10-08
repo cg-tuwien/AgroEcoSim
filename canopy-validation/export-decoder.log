@@ -1,0 +1,3 @@
+PASS current exported V7: 7 plants, 462 organs, 174 leaves, 70 sliced laminae; legacy parity and finite decoded values: canopy-validation/p003-seven-plants-last.prim
+PASS current exported V7: 1 plants, 126 organs, 34 leaves, 0 sliced laminae; legacy parity and finite decoded values: canopy-validation/geranium-162d.prim
+PASS current exported V7: 1 plants, 417 organs, 320 leaves, 280 sliced laminae; legacy parity and finite decoded values: canopy-validation/carex-100d-4h.prim

@@ -1,0 +1,23 @@
+Species lookup: Carex morrowii 'Variegata', BudLength: 0.004
+PlantFormation2 ctor: Carex morrowii 'Variegata', BudLength: 0.004
+SpeciesSettings.Init called on Carex morrowii 'Variegata', BudLength: 0.004
+PlantFormation2 after Init: Carex morrowii 'Variegata', BudLength: 0.004
+Collision scene: 2 triangles (2 soil, 0 obstacle) in 9 ms, open soil surface (regular fields use their finite footprint)
+STEP 60 organs=23 pending=0 rejected=0 paused=0 pairs=4170
+STEP 120 organs=23 pending=0 rejected=0 paused=0 pairs=5610
+STEP 180 organs=23 pending=0 rejected=0 paused=0 pairs=7050
+STEP 240 organs=51 pending=0 rejected=0 paused=0 pairs=15765
+STEP 300 organs=127 pending=1 rejected=4 paused=21 pairs=95188
+STEP 360 organs=150 pending=2 rejected=11 paused=38 pairs=217755
+STEP 420 organs=195 pending=4 rejected=22 paused=67 pairs=490099
+STEP 480 organs=297 pending=5 rejected=38 paused=117 pairs=879957
+STEP 540 organs=351 pending=6 rejected=107 paused=153 pairs=1436231
+STEP 600 organs=450 pending=6 rejected=157 paused=164 pairs=2126424
+RESULT Carex morrowii 'Variegata' days=100 hours=4 organs=450 rhizomes=42 y=[-0.01,0.20646805] down=24 inverted=1 bytes=37062 contacts=0 cuts=0
+DEATHS natural=0 resources=0 accepted=48 rejected=157
+COUNTS Stem=48 down=0 inverted=0
+COUNTS Petiole=40 down=0 inverted=0
+COUNTS Leaf=320 down=3 inverted=1
+COUNTS Bud=33 down=21 inverted=0
+COUNTS Meristem=9 down=0 inverted=0
+INVERTED organ=320 type=Leaf parent=319 base=<0.4793469, 0.009676439, 0.4524987> dir=<0.39329356, -0.90922797, -0.13647225>

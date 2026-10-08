@@ -1,0 +1,11 @@
+NUMERICS runtime=.NET 8.0.31 version=31 distanceCases=6006 maxRelativeSquaredDistanceError=9.027796614315167E-06 maxAbsoluteSquaredDistanceError=1.368490432085423E-08 maxOldSquaredDistanceError=3.3926654424698555E-07 exactEndpoints=4000 stationaryFrames=8000 oldEndpointChanges=4000
+KERNEL old=True ms=26.3493 allocationsExcludingStopwatch=0 checksum=140.89647447690368
+KERNEL old=False ms=5.5629 allocationsExcludingStopwatch=0 checksum=140.89963224250823
+KERNEL old=False ms=5.4737 allocationsExcludingStopwatch=0 checksum=140.89963224250823
+KERNEL old=True ms=26.3426 allocationsExcludingStopwatch=0 checksum=140.89647447690368
+KERNEL old=True ms=26.2729 allocationsExcludingStopwatch=0 checksum=140.89647447690368
+KERNEL old=False ms=5.5101 allocationsExcludingStopwatch=0 checksum=140.89963224250823
+KERNEL old=False ms=5.8437 allocationsExcludingStopwatch=0 checksum=140.89963224250823
+KERNEL old=True ms=26.1809 allocationsExcludingStopwatch=0 checksum=140.89647447690368
+KERNEL old=True ms=16.6366 allocationsExcludingStopwatch=0 checksum=140.89647447690368
+KERNEL old=False ms=5.7989 allocationsExcludingStopwatch=0 checksum=140.89963224250823

@@ -16,7 +16,10 @@ internal readonly record struct ContactShape(OrganPose Pose, LaminaTemplate? Lam
                 return new(Vector3.Min(a, Vector3.Min(b, c)) - skin, Vector3.Max(a, Vector3.Max(b, c)) + skin);
             }
             var pad = new Vector3(Pose.Radius);
-            return new(Vector3.Min(Pose.Base, Pose.Tip) - pad, Vector3.Max(Pose.Base, Pose.Tip) + pad);
+            var min = Vector3.Min(Pose.Base, Pose.Tip); var max = Vector3.Max(Pose.Base, Pose.Tip);
+            if (Pose.CurvedRod) for (var i = 1; i < 3; ++i)
+            { var node = Pose.RodNode(i); min = Vector3.Min(min,node); max = Vector3.Max(max,node); }
+            return new(min - pad, max + pad);
         }
     }
     public float MotionBound(in ContactShape other)
@@ -31,7 +34,7 @@ internal readonly record struct ContactShape(OrganPose Pose, LaminaTemplate? Lam
     public ContactShape Interpolate(in ContactShape other, float t) => new(Pose.Interpolate(other.Pose, t), Lamina, Feature);
     public Vector3 Support(Vector3 direction)
     {
-        if (Lamina == null) return Vector3.Dot(Pose.Tip - Pose.Base, direction) < 0 ? Pose.Tip : Pose.Base;
+        if (Lamina == null) return Pose.Support(direction);
         if (Feature >= 0)
         {
             Lamina.Triangle(Pose, Feature, out var a, out var b, out var c);
@@ -64,6 +67,28 @@ internal readonly record struct ContactShape(OrganPose Pose, LaminaTemplate? Lam
             growth = longitudinal * MathF.Abs(Pose.Length - other.Pose.Length) + width * MathF.Abs(Pose.Width - other.Pose.Width)
                 + relief * MathF.Abs(Lamina.ReliefScale(Pose.Width)-Lamina.ReliefScale(other.Pose.Width));
         }
+        var change=Vector4.Abs(other.Pose.Deformation-Pose.Deformation);
+        var deformationAngle=change.X+change.Y+change.Z+change.W;
+        if (deformationAngle>0)
+        {
+            // Controls and dimensions interpolate linearly. Every material point is
+            // a sum/integral of rotated vectors, so |p''| <= reach*angle^2 +
+            // 2*growth*angle. The deviation from its endpoint chord is <= |p''|/8.
+            // A first-order travel bound here needlessly subdivided near-flat folds
+            // thousands of times; this bound still encloses the entire nonlinear arc.
+            if (Lamina != null)
+            {
+                var hinge=0f;
+                if(Feature>=0)for(var i=0;i<3;++i)hinge=MathF.Max(hinge,MathF.Abs(Lamina.HingeHeights[Lamina.Indices[Feature*3+i]]));
+                else hinge=Lamina.ReliefReach;
+                // The authored midrib offset and the rotating relative relief are
+                // distinct vectors. Count both, even on a facet below the midrib.
+                reach+=2*hinge*MathF.Max(Lamina.ReliefScale(Pose.Width),Lamina.ReliefScale(other.Pose.Width));
+                growth+=2*hinge*MathF.Abs(Lamina.ReliefScale(Pose.Width)-Lamina.ReliefScale(other.Pose.Width));
+            }
+            var angle=2f*MathF.Atan2(sine,MathF.Abs(delta.W))+deformationAngle;
+            return reach*angle*angle*.125f+growth*angle*.25f+reach*2e-7f;
+        }
         return reach * MathF.Max(0, 1f - MathF.Abs(delta.W)) + growth * sine * 0.5f;
     }
     public Bvh.BoundingBox SweptBounds(in ContactShape other)
@@ -93,6 +118,21 @@ internal static partial class FoliageGeometry
 
     static FoliageContact DistanceUncached(in ContactShape a, in ContactShape b, float search)
     {
+        if (a.Lamina == null && a.Pose.CurvedRod)
+        {
+            var nearest = new FoliageContact(a.Pose.Base,b.Pose.Base,Vector3.UnitY,search,-1,-1);
+            for(var span=0;span<3;++span)
+            {
+                var hit=DistanceUncached(new(a.Pose.RodSpan(span),null),b,nearest.Distance);
+                if(hit.Distance<nearest.Distance) nearest=hit;
+            }
+            return nearest;
+        }
+        if (b.Lamina == null && b.Pose.CurvedRod)
+        {
+            var reverse=DistanceUncached(b,a,search);
+            return new(reverse.B,reverse.A,-reverse.Normal,reverse.Distance,reverse.FeatureB,reverse.FeatureA);
+        }
         if (a.Feature >= 0 && b.Feature >= 0 && a.Lamina != null && b.Lamina != null)
         {
             // Temporal subdivision asks about individual triangle features millions of
@@ -186,7 +226,7 @@ internal static partial class FoliageGeometry
     {
         var vertices = shape.Lamina!.Vertices;
         if (buffer == null || buffer.Length < vertices.Length) buffer = new Vector3[vertices.Length];
-        for (int i = 0; i < vertices.Length; ++i) buffer[i] = shape.Lamina.Transform(shape.Pose, vertices[i]);
+        for (int i = 0; i < vertices.Length; ++i) buffer[i] = shape.Lamina.TransformVertex(shape.Pose, i);
         return buffer.AsSpan(0, vertices.Length);
     }
 
@@ -254,6 +294,8 @@ internal static partial class FoliageGeometry
         if(shape.Lamina!=null){shape.Lamina.ProjectBounds(shape.Pose,axis,out low,out high);return;}
         var a=Vector3.Dot(shape.Pose.Base,axis);var b=Vector3.Dot(shape.Pose.Tip,axis);
         low=MathF.Min(a,b);high=MathF.Max(a,b);
+        if(shape.Pose.CurvedRod) for(var i=1;i<3;++i)
+        { var p=Vector3.Dot(shape.Pose.RodNode(i),axis); low=MathF.Min(low,p); high=MathF.Max(high,p); }
     }
 
     static FoliageContact Make(Vector3 a, Vector3 b, Vector3 p, Vector3 q, Vector3 r, float distance, int fa, int fb)
@@ -273,6 +315,13 @@ internal static partial class FoliageGeometry
         // Returning the search ceiling cannot replace a closer feature or create contact.
         if (float.IsFinite(search) && (PlaneSeparates(na,ab,ac,p-a,q-a,r-a,search)
             || PlaneSeparates(nb,pq,pr,a-p,b-p,c-p,search)))
+        { onA = a; onB = p; return search; }
+        // Near-coplanar facets often overlap in all world axes and on both face
+        // normals while remaining far apart within the blade plane. Edge planes
+        // give a conservative distance lower bound before the 15 closest-feature
+        // calculations. Any separating axis is valid, including for curved facets.
+        if (float.IsFinite(search) && (EdgePlanesSeparate(na, ab, ac, p-a, q-a, r-a, search)
+            || EdgePlanesSeparate(nb, pq, pr, a-p, b-p, c-p, search)))
         { onA = a; onB = p; return search; }
         if (Pierces(a,b,p,pq,pr,nb,out var hit) || Pierces(b,c,p,pq,pr,nb,out hit)
             || Pierces(c,a,p,pq,pr,nb,out hit) || Pierces(p,q,a,ab,ac,na,out hit)
@@ -307,6 +356,11 @@ internal static partial class FoliageGeometry
         var padded = search + Skin * .01f;
         return gap > 0 && gap * gap > padded * padded * size;
     }
+    static bool EdgePlanesSeparate(Vector3 normal, Vector3 ab, Vector3 ac,
+        Vector3 p, Vector3 q, Vector3 r, float search)
+        => PlaneSeparates(Vector3.Cross(normal, ab), ab, ac, p, q, r, search)
+            || PlaneSeparates(Vector3.Cross(normal, ac-ab), ab, ac, p, q, r, search)
+            || PlaneSeparates(Vector3.Cross(normal, ac), ab, ac, p, q, r, search);
     static void Consider(Vector3 a, Vector3 b, ref float best, ref Vector3 onA, ref Vector3 onB)
     {
         var d2 = Vector3.DistanceSquared(a,b);
@@ -325,30 +379,51 @@ internal static partial class FoliageGeometry
         return Vector3.DistanceSquared(hit, StaticCollider.ClosestPointOnTriangle(hit,a,ab,ac)) <= 1e-12f;
     }
 
-    static bool SweepUncached(in ContactShape fromA, in ContactShape toA, in ContactShape fromB, in ContactShape toB, int depth = 0)
+    static MotionResult SweepUncached(in ContactShape fromA, in ContactShape toA, in ContactShape fromB, in ContactShape toB, int depth = 0)
     {
         var intervals = 256;
         return SweepInterval(fromA, toA, fromB, toB, depth, ref intervals);
     }
 
-    static bool SweepInterval(in ContactShape fromA, in ContactShape toA, in ContactShape fromB, in ContactShape toB, int depth, ref int intervals)
+    // Distance is 1-Lipschitz under the combined material-point motion bound.
+    // Use the same finite-thickness tolerance as endpoint admission; an extra
+    // positive skin here unnecessarily subdivides admissible persistent contacts.
+    // Keep a positive core separation even for proxies thinner than the skin.
+    static bool DistanceBoundsMotion(float distance, float reach, float motion)
+        => distance >= MathF.Max(reach - Skin, 1e-9f) + motion;
+
+    static MotionResult SweepInterval(in ContactShape fromA, in ContactShape toA, in ContactShape fromB, in ContactShape toB, int depth, ref int intervals)
     {
         ++IntervalCount;
-        if (--intervals < 0) return false; // Suspend uncertified motion; never skip a required check.
-        if (!fromA.SweptBounds(toA).Intersects(fromB.SweptBounds(toB))) return true;
+        var withinBudget = --intervals >= 0;
+        if (!fromA.SweptBounds(toA).Intersects(fromB.SweptBounds(toB))) return MotionResult.Clear;
+        if (!withinBudget)
+        {
+            // After the expensive-query budget is spent, a facet plane can still
+            // certify the entire finite-thickness path. This does not deepen the
+            // distance recursion or accept an unchecked candidate.
+            if (FacetPlaneSeparates(fromA,toA,fromB,toB) || FacetPlaneSeparates(fromB,toB,fromA,toA))
+                return MotionResult.Clear;
+            return MotionResult.Uncertified;
+        }
         if (depth == 0 && (fromA.Feature < 0 || fromB.Feature < 0))
         {
             // A whole-sheet plane certificate is much cheaper than the triangle distance
             // queried below. It bounds the entire path, including curvature and rotation.
-            if (SweptPlanesSeparate(fromA,toA,fromB,toB)) return true;
+            if (SweptPlanesSeparate(fromA,toA,fromB,toB)) return MotionResult.Clear;
             // Certify small whole-organ motion before splitting a lamina into triangles.
             // Daily growth usually moves only a fraction of the gap to its neighbours;
             // a distance bound proves all vertex/face and edge/edge paths at once.
             var movement = fromA.MotionBound(toA) + fromB.MotionBound(toB);
             var padding = MathF.Max(fromA.Pose.Radius, toA.Pose.Radius)
                 + MathF.Max(fromB.Pose.Radius, toB.Pose.Radius);
-            var separation = Distance(fromA, fromB, padding + movement + Skin).Distance;
-            if (separation >= padding + movement - Skin) return true;
+            var separation = Distance(fromA, fromB, padding + movement + Skin);
+            if (DistanceBoundsMotion(separation.Distance, padding, movement)) return MotionResult.Clear;
+            // Radius interpolates linearly. A separating plane can therefore
+            // certify simultaneous thickening and separation without treating
+            // the final radius as present throughout the interval.
+            if ((fromA.Pose.Radius != toA.Pose.Radius || fromB.Pose.Radius != toB.Pose.Radius)
+                && SeparatingPlane(fromA, toA, fromB, toB, separation.Normal)) return MotionResult.Clear;
         }
         if (fromA.Lamina != null && fromA.Feature < 0)
         {
@@ -356,8 +431,11 @@ internal static partial class FoliageGeometry
             var candidates = SweepFirstTriangles ??= [];
             fromA.Lamina.Query(fromA.Pose, Pad(fromB.SweptBounds(toB), fromA.MotionBound(toA)), candidates);
             foreach (var i in candidates)
-                if (!SweepInterval(fromA with { Feature = i }, toA with { Feature = i }, fromB, toB, depth, ref intervals)) return false;
-            return true;
+            {
+                var result = SweepInterval(fromA with { Feature = i }, toA with { Feature = i }, fromB, toB, depth, ref intervals);
+                if (result != MotionResult.Clear) return result;
+            }
+            return MotionResult.Clear;
         }
         if (fromB.Lamina != null && fromB.Feature < 0)
         {
@@ -365,26 +443,37 @@ internal static partial class FoliageGeometry
             var relative = fromA.SweptBounds(toA);
             fromB.Lamina.Query(fromB.Pose, Pad(relative, fromB.MotionBound(toB) + fromB.Pose.Radius), candidates);
             foreach (var j in candidates)
-                if (!SweepInterval(fromA, toA, fromB with { Feature = j }, toB with { Feature = j }, depth, ref intervals)) return false;
-            return true;
+            {
+                var result = SweepInterval(fromA, toA, fromB with { Feature = j }, toB with { Feature = j }, depth, ref intervals);
+                if (result != MotionResult.Clear) return result;
+            }
+            return MotionResult.Clear;
         }
         var midA = fromA.Interpolate(toA, 0.5f); var midB = fromB.Interpolate(toB, 0.5f);
         var reach = MathF.Max(fromA.Pose.Radius, toA.Pose.Radius) + MathF.Max(fromB.Pose.Radius, toB.Pose.Radius);
         var motion = MathF.Max(fromA.MotionBound(midA), midA.MotionBound(toA)) + MathF.Max(fromB.MotionBound(midB), midB.MotionBound(toB));
         var hit = Distance(midA, midB, reach + motion + Skin);
-        if (hit.Distance >= reach + motion + Skin * 0.5f) return true;
-        if (hit.Distance < reach - Skin) return false;
+        if (DistanceBoundsMotion(hit.Distance, reach, motion)) return MotionResult.Clear;
+        // Maximum endpoint thickness bounds separation over the interval. It
+        // cannot establish a midpoint collision: growing tissue is thinner there.
+        // Otherwise simultaneous thickening and separation can be rejected even
+        // when the actual clearance stays positive throughout the motion.
+        var midpointReach = midA.Pose.Radius + midB.Pose.Radius;
+        if (hit.Distance < midpointReach - Skin) return MotionResult.Intersecting;
         // A separating plane for the WHOLE finite bodies certifies sliding without recursively
         // rejecting every persistent touch. Arc bounds cover quaternion rotation and growth.
         var normal = hit.Normal;
         if (Vector3.Dot(midA.Pose.Base - midB.Pose.Base, normal) < 0) normal = -normal;
         var gap0 = Vector3.Dot(fromA.Support(normal) - fromB.Support(-normal), normal);
         var gap1 = Vector3.Dot(toA.Support(normal) - toB.Support(-normal), normal);
-        if (MathF.Min(gap0, gap1) - fromA.ArcBound(toA) - fromB.ArcBound(toB) >= reach - Skin) return true;
-        if (motion < Skin * 0.25f) return hit.Distance >= reach - Skin;
-        if (depth >= 16) return false; // Uncertified motion is never accepted on budget exhaustion.
-        return SweepInterval(fromA, midA, fromB, midB, depth + 1, ref intervals)
-            && SweepInterval(midA, toA, midB, toB, depth + 1, ref intervals);
+        var clearance0 = gap0 - fromA.Pose.Radius - fromB.Pose.Radius;
+        var clearance1 = gap1 - toA.Pose.Radius - toB.Pose.Radius;
+        if (MathF.Min(clearance0, clearance1) - fromA.ArcBound(toA) - fromB.ArcBound(toB) >= -Skin) return MotionResult.Clear;
+        // A clear midpoint alone cannot certify even a tiny moving interval.
+        // Subdivide it under the same query budget until a full-path bound holds.
+        if (depth >= 16) return MotionResult.Uncertified;
+        var left = SweepInterval(fromA, midA, fromB, midB, depth + 1, ref intervals);
+        return left == MotionResult.Clear ? SweepInterval(midA, toA, midB, toB, depth + 1, ref intervals) : left;
     }
 
     static bool SweptPlanesSeparate(in ContactShape a0, in ContactShape a1, in ContactShape b0, in ContactShape b1)
@@ -397,14 +486,16 @@ internal static partial class FoliageGeometry
 
     static bool SeparatingPlane(in ContactShape a0, in ContactShape a1, in ContactShape b0, in ContactShape b1, Vector3 normal)
     {
-        var reach = MathF.Max(a0.Pose.Radius, a1.Pose.Radius) + MathF.Max(b0.Pose.Radius, b1.Pose.Radius)
-            + a0.ArcBound(a1) + b0.ArcBound(b1) - Skin;
-        var gap0 = Vector3.Dot(a0.Support(normal) - b0.Support(-normal), normal);
-        var gap1 = Vector3.Dot(a1.Support(normal) - b1.Support(-normal), normal);
+        // Each material point stays above its endpoint chord minus ArcBound.
+        // Thickness is linear too, so subtract each endpoint's own thickness
+        // before taking the minimum; using maximum thickness rejects clear paths.
+        var reach = a0.ArcBound(a1) + b0.ArcBound(b1) - Skin;
+        var gap0 = Vector3.Dot(a0.Support(normal) - b0.Support(-normal), normal) - a0.Pose.Radius - b0.Pose.Radius;
+        var gap1 = Vector3.Dot(a1.Support(normal) - b1.Support(-normal), normal) - a1.Pose.Radius - b1.Pose.Radius;
         if (MathF.Min(gap0, gap1) >= reach) return true;
         normal = -normal;
-        gap0 = Vector3.Dot(a0.Support(normal) - b0.Support(-normal), normal);
-        gap1 = Vector3.Dot(a1.Support(normal) - b1.Support(-normal), normal);
+        gap0 = Vector3.Dot(a0.Support(normal) - b0.Support(-normal), normal) - a0.Pose.Radius - b0.Pose.Radius;
+        gap1 = Vector3.Dot(a1.Support(normal) - b1.Support(-normal), normal) - a1.Pose.Radius - b1.Pose.Radius;
         return MathF.Min(gap0, gap1) >= reach;
     }
 }

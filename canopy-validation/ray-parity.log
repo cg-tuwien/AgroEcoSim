@@ -1,0 +1,6 @@
+PASS static/dynamic ray and leaf-area parity with 0 plant primitives
+PASS static/dynamic ray and leaf-area parity with 400 plant primitives
+PASS static/dynamic ray and leaf-area parity with 10000 plant primitives
+PASS static/dynamic ray and leaf-area parity with 30 plant primitives
+PASS static/dynamic ray and leaf-area parity with 0 plant primitives
+RAY BUFFERS before=5803200 after=3264992

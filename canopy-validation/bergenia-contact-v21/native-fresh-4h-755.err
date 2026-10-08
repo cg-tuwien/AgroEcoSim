@@ -1,0 +1,27 @@
+CHECKPOINT /tmp/gf-scape-recovery/production/fresh-4h-day60-v21.bin bytes=51857250
+CHECKPOINT /tmp/gf-scape-recovery/production/fresh-4h-day120-v21.bin bytes=51860462
+CHECKPOINT /tmp/gf-scape-recovery/production/fresh-4h-day240-v21.bin bytes=51875394
+CHECKPOINT /tmp/gf-scape-recovery/production/fresh-4h-day330-v21.bin bytes=51890298
+SCAPE day=570 id=84 lmm=3.465014 rmm=1.3536662 targetLmm=12.956302 targetRmm=5.068748 blocked=False
+SCAPE day=575 id=84 lmm=3.545991 rmm=2.7053323 targetLmm=12.956302 targetRmm=5.068748 blocked=True
+SCAPE day=580 id=84 lmm=3.545991 rmm=2.7053323 targetLmm=12.956302 targetRmm=5.068748 blocked=True
+SCAPE day=585 id=84 lmm=3.545991 rmm=2.7053323 targetLmm=12.956302 targetRmm=5.068748 blocked=True
+SCAPE day=590 id=84 lmm=3.545991 rmm=2.7053323 targetLmm=12.956302 targetRmm=5.068748 blocked=True
+SCAPE day=595 id=84 lmm=3.545991 rmm=2.7053323 targetLmm=12.956302 targetRmm=5.068748 blocked=True
+SCAPE day=600 id=84 lmm=3.545991 rmm=2.7053323 targetLmm=12.956302 targetRmm=5.068748 blocked=True
+SCAPE day=605 id=84 lmm=3.545991 rmm=2.7053323 targetLmm=12.956302 targetRmm=5.068748 blocked=True
+SCAPE day=610 id=84 lmm=3.545991 rmm=2.7053323 targetLmm=12.956302 targetRmm=5.068748 blocked=True
+SCAPE day=615 id=84 lmm=3.5594869 rmm=2.7053323 targetLmm=12.956302 targetRmm=5.068748 blocked=True
+SCAPE day=620 id=84 lmm=3.5594869 rmm=2.7053323 targetLmm=12.956302 targetRmm=5.068748 blocked=True
+SCAPE day=625 id=84 lmm=3.5594869 rmm=2.7053323 targetLmm=12.956302 targetRmm=5.068748 blocked=True
+SCAPE day=630 id=84 lmm=3.5594869 rmm=2.7053323 targetLmm=12.956302 targetRmm=5.068748 blocked=True
+SCAPE day=635 id=84 lmm=3.5594869 rmm=2.7053323 targetLmm=12.956302 targetRmm=5.068748 blocked=True
+SCAPE day=640 id=84 lmm=3.5594869 rmm=2.7053323 targetLmm=12.956302 targetRmm=5.068748 blocked=True
+SCAPE day=645 id=84 lmm=3.5594869 rmm=2.7053323 targetLmm=12.956302 targetRmm=5.068748 blocked=True
+SCAPE day=650 id=84 lmm=3.5594869 rmm=2.7053323 targetLmm=12.956302 targetRmm=5.068748 blocked=True
+SCAPE day=655 id=84 lmm=3.5594869 rmm=2.7053323 targetLmm=12.956302 targetRmm=5.068748 blocked=True
+SCAPE day=660 id=84 lmm=3.5594869 rmm=2.7053323 targetLmm=12.956302 targetRmm=5.068748 blocked=True
+SCAPE day=665 id=84 lmm=3.5594869 rmm=2.7053323 targetLmm=12.956302 targetRmm=5.068748 blocked=False
+SCAPE day=670 id=84 lmm=3.5594869 rmm=2.7053323 targetLmm=12.956302 targetRmm=5.068748 blocked=False
+CHECKPOINT /tmp/gf-scape-recovery/production/fresh-4h-day755-v21.bin bytes=51929186
+DONE mode=archived-exact tick=4 firstPetalDay=-1 elapsed=00:18:28.9033155 everLeaves=52 ever50=9 ever90=7

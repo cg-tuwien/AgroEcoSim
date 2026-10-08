@@ -1,0 +1,94 @@
+{
+  "baseline-1h": {
+    "totalMs": 371.128,
+    "hardMs": 0.191,
+    "foliageMs": 368.912,
+    "developmentMs": 0.002,
+    "allocBytes": 1011824.0,
+    "intervals": 98970.0,
+    "triangles": 560333.0,
+    "samples": 15,
+    "p95TotalMs": 397.498,
+    "startOrgans": [
+      "52"
+    ],
+    "endOrgans": [
+      "52"
+    ],
+    "unresolved": [
+      "0"
+    ],
+    "hashes": [
+      "3D00FA8CE667444B"
+    ]
+  },
+  "corrected-1h": {
+    "totalMs": 377.985,
+    "hardMs": 0.196,
+    "foliageMs": 375.254,
+    "developmentMs": 0.002,
+    "allocBytes": 1010392.0,
+    "intervals": 96724.0,
+    "triangles": 589289.0,
+    "samples": 15,
+    "p95TotalMs": 402.839,
+    "startOrgans": [
+      "52"
+    ],
+    "endOrgans": [
+      "52"
+    ],
+    "unresolved": [
+      "0"
+    ],
+    "hashes": [
+      "3D00FA8CE667444B"
+    ]
+  },
+  "baseline-4h": {
+    "totalMs": 88.794,
+    "hardMs": 0.16,
+    "foliageMs": 85.486,
+    "developmentMs": 0.003,
+    "allocBytes": 865888.0,
+    "intervals": 18802.0,
+    "triangles": 102795.0,
+    "samples": 15,
+    "p95TotalMs": 129.701,
+    "startOrgans": [
+      "41"
+    ],
+    "endOrgans": [
+      "41"
+    ],
+    "unresolved": [
+      "0"
+    ],
+    "hashes": [
+      "EE66A01BC8D5C53E"
+    ]
+  },
+  "corrected-4h": {
+    "totalMs": 84.999,
+    "hardMs": 0.158,
+    "foliageMs": 82.624,
+    "developmentMs": 0.003,
+    "allocBytes": 864248.0,
+    "intervals": 17195.0,
+    "triangles": 103913.0,
+    "samples": 15,
+    "p95TotalMs": 92.237,
+    "startOrgans": [
+      "41"
+    ],
+    "endOrgans": [
+      "41"
+    ],
+    "unresolved": [
+      "0"
+    ],
+    "hashes": [
+      "EE66A01BC8D5C53E"
+    ]
+  }
+}

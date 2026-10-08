@@ -1,0 +1,2 @@
+SpeciesSettings.Init called on Default, BudLength: 0.0075
+PASS .NET 10.0.12 values=1320; omitted defaults, explicit overrides, case insensitive input, zero validation, eight archived species

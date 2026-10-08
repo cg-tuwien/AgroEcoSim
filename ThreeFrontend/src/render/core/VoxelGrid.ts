@@ -372,6 +372,15 @@ export function giStaticDigest(list: InstanceList): { bounds: GridBounds | undef
 
         const box = localBounds(inst.geom);
         if (!box) continue;
+        let foldReach = 0;
+        if (inst.fold) {
+            const s = inst.fold.scale, q = inst.fold.angles;
+            for (let k = 0; k < 4; ++k) signature = mixFloat(signature, q[k]);
+            foldReach = (s[0] * Math.max(Math.abs(box.min.x + 1), Math.abs(box.max.x + 1))
+                + s[1] * Math.max(Math.abs(box.min.y), Math.abs(box.max.y))
+                + s[2] * Math.max(Math.abs(box.min.z), Math.abs(box.max.z)))
+                * (Math.abs(q[0]) + Math.abs(q[1]) + Math.abs(q[2]) + Math.abs(q[3]));
+        }
         //Eight corners through the model matrix: the instance may be rotated, so transforming
         //only min and max would describe a box the geometry does not fit in.
         for (let c = 0; c < 8; ++c) {
@@ -381,10 +390,10 @@ export function giStaticDigest(list: InstanceList): { bounds: GridBounds | undef
             const wx = m[0] * lx + m[4] * ly + m[8] * lz + m[12];
             const wy = m[1] * lx + m[5] * ly + m[9] * lz + m[13];
             const wz = m[2] * lx + m[6] * ly + m[10] * lz + m[14];
-            if (!min || !max) { min = { x: wx, y: wy, z: wz }; max = { x: wx, y: wy, z: wz }; continue; }
-            if (wx < min.x) min.x = wx; else if (wx > max.x) max.x = wx;
-            if (wy < min.y) min.y = wy; else if (wy > max.y) max.y = wy;
-            if (wz < min.z) min.z = wz; else if (wz > max.z) max.z = wz;
+            if (!min || !max) { min = { x: wx - foldReach, y: wy - foldReach, z: wz - foldReach }; max = { x: wx + foldReach, y: wy + foldReach, z: wz + foldReach }; continue; }
+            if (wx - foldReach < min.x) min.x = wx - foldReach; if (wx + foldReach > max.x) max.x = wx + foldReach;
+            if (wy - foldReach < min.y) min.y = wy - foldReach; if (wy + foldReach > max.y) max.y = wy + foldReach;
+            if (wz - foldReach < min.z) min.z = wz - foldReach; if (wz + foldReach > max.z) max.z = wz + foldReach;
         }
     }
 

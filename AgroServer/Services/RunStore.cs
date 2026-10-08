@@ -1676,7 +1676,7 @@ public class RunStore : IRunStore, IDisposable
     /// <summary>
     /// The export flags out of a stored frame's header, without inflating the frame.
     ///
-    /// A V7 frame opens with version, flags and plant count - six bytes - and the frames are
+    /// V7 and V8 frames both open with a version byte and a flags byte. The frames are
     /// zlib streams, so decompressing the first block is enough however large the frame is.
     /// </summary>
     static bool TryReadExportFlags(string framePath, out byte flags)
@@ -1688,7 +1688,7 @@ public class RunStore : IRunStore, IDisposable
             using var zlib = new ZLibStream(input, CompressionMode.Decompress);
             Span<byte> header = stackalloc byte[2];
             if (zlib.ReadAtLeast(header, 2, throwOnEndOfStream: false) < 2) return false;
-            if (header[0] != 7) return false;
+            if (header[0] is not (7 or 8)) return false;
             flags = header[1];
             return true;
         }

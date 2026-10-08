@@ -37,6 +37,8 @@ public static class Fragaria_Vesca_Ruegen
         LeafPitch = 50 * (MathF.PI / 180f),
 
         LeafGrowthTime = 24f * 10f * 2f,
+        // Provisional CPU-light calibration; see LIGHT_GROWTH_CALIBRATION.md.
+        LeafExpansionRateScale = 1.8f,
         LeafGrowthTimeVar = 24f * 4f,
         LeafMaximumAgeHours = 24 * 180,
 
