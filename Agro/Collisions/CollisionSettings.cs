@@ -66,6 +66,32 @@ public static class CollisionSettings
     /// <summary>Clip this tick's elongation of an organ still inside a solid after the pushes.</summary>
     public static bool SolidElongationClip { get; set; } = Environment.GetEnvironmentVariable("AGRO_NoSolidElongationClip") == null;
 
+    // Damping of the soft engine's Jacobi response. Each is a separate switch so it can be A/B
+    // tested; together they are what stops dense foliage from alternating between two poses
+    // every tick (see SOFT_CONTACTS.md, "Shaking").
+    /// <summary>Cap a joint's summed turn at the largest single contribution it received, so k
+    /// contacts resolving the same motion count once instead of k times. Without it the loop gain
+    /// of a joint under k contacts is 0.7k, and from k = 2 the correction overshoots and alternates.</summary>
+    public static bool SoftJointSumRule { get; set; } = Environment.GetEnvironmentVariable("AGRO_NoSoftJointSumRule") == null;
+    /// <summary>Inflate the broad-phase boxes by the skin, so a pair resting inside the band stays a
+    /// candidate and keeps its side memory instead of dropping out and re-entering as a new side.</summary>
+    public static bool SoftBoundsSkin { get; set; } = Environment.GetEnvironmentVariable("AGRO_NoSoftBoundsSkin") == null;
+    /// <summary>Fade the push to zero at the edge of the skin band (x(2-x) of the band deficit) rather
+    /// than pushing at full gain until the pair is fully separated and then letting gravity pull it
+    /// back in: a pair settles at the band asymptotically instead of bouncing across it.</summary>
+    public static bool SoftBandLaw { get; set; } = Environment.GetEnvironmentVariable("AGRO_NoSoftBandLaw") == null;
+    /// <summary>Ramp the tangential slide in over the second quarter of the deep-penetration
+    /// threshold instead of switching it on at half of it: a pair hovering at the threshold no
+    /// longer slides one tick and not the next.</summary>
+    public static bool SoftSlideRamp { get; set; } = Environment.GetEnvironmentVariable("AGRO_NoSoftSlideRamp") == null;
+    /// <summary>Candidate triangle pairs beyond which a blade-to-blade distance is sampled rather than
+    /// taken exactly (see FoliageGeometry.DistanceSampled); zero keeps every query exact.</summary>
+    public static int SoftExactPairBudget { get; set; } = IntFromEnv("AGRO_SoftExactPairBudget", 256, 0, 1 << 20);
+    /// <summary>Time constant, hours, of the low-pass on a remembered contact's witness normal; zero
+    /// follows the witness exactly. Face and edge witnesses alternate on sliding blades and turn the
+    /// push direction by a right angle between ticks; the filter turns it over a few ticks.</summary>
+    public static float SoftNormalFilterHours { get; set; } = FloatFromEnv("AGRO_SoftNormalFilterHours", 12f, 0f, 240f);
+
     static int IntFromEnv(string name, int fallback, int min, int max)
         => int.TryParse(Environment.GetEnvironmentVariable(name), out var value) && value >= min && value <= max ? value : fallback;
     static float FloatFromEnv(string name, float fallback, float min, float max)

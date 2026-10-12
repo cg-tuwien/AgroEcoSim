@@ -12,7 +12,7 @@ using System.Collections;
 
 namespace Agro.DelunayTerrain;
 
-public class SoilFormationTetrahedral : ISoilFormation
+public class SoilFormationTetrahedral : ISoilFormation, ISoilRequestSink
 {
 	const MethodImplOptions AI = MethodImplOptions.AggressiveInlining;
 	AgroWorld World;
@@ -42,7 +42,7 @@ public class SoilFormationTetrahedral : ISoilFormation
 	/// <summary>
 	/// Contains all cells for which a requestexists
 	/// </summary>
-    readonly HashSet<int> RequestsPresent;
+    readonly List<int> RequestsPresent;
 	/// <summary>
     /// Water request in grams. For seed requests, Part is less than zero.
     /// </summary>
@@ -239,7 +239,7 @@ public class SoilFormationTetrahedral : ISoilFormation
         WaterCapacityPerCell = new float[Water_g.Length];
         MinimumWaterToDiffuse = new float[Water_g.Length];
 
-		RequestsPresent = new HashSet<int>(Water_g.Length);
+		RequestsPresent = [];
 		WaterRequests = new List<(PlantFormation2, int, float)>[Water_g.Length];
 		for (int i = 0; i < Water_g.Length; ++i)
 			WaterRequests[i] = [];
@@ -429,7 +429,7 @@ public class SoilFormationTetrahedral : ISoilFormation
         WaterCapacityPerCell = new float[Water_g.Length];
         MinimumWaterToDiffuse = new float[Water_g.Length];
 
-		RequestsPresent = new HashSet<int>(Water_g.Length);
+		RequestsPresent = [];
 		WaterRequests = new List<(PlantFormation2, int, float)>[Water_g.Length];
 		for (int i = 0; i < Water_g.Length; ++i)
 			WaterRequests[i] = [];
@@ -651,11 +651,27 @@ public class SoilFormationTetrahedral : ISoilFormation
 
 	[M(AI)] void IFormation.Census() { }
 
-	[M(AI)] public void DeliverPost(uint timestep)
+	[M(AI)] public void DeliverPost(uint timestep) => DeliverPost(timestep, true);
+
+	public void DeliverPost(uint timestep, bool gatherRequests)
     {
+		if (gatherRequests) SoilRequestRouter.Gather(World, this);
 		ProcessRequests();
 		HasUndeliveredPost = false;
     }
+
+	public ISoilRequestSink? RequestSink(int soilIndex) => soilIndex == 0 ? this : null;
+
+	void ISoilRequestSink.Enqueue(PlantFormation2 plant, int cell, int part, float amount_g)
+	{
+		if (DoVirtual) TotalWaterRequests.Add((plant, part, amount_g));
+		else
+		{
+			var requests = WaterRequests[cell];
+			if (requests.Count == 0) RequestsPresent.Add(cell);
+			requests.Add((plant, part, amount_g));
+		}
+	}
 
 	public bool HasUndeliveredPost { get; private set; } = false;
 	///<summary>
@@ -668,22 +684,8 @@ public class SoilFormationTetrahedral : ISoilFormation
 	{
 		if (!float.IsFinite(amount_g) || amount_g <= 0f || plant == null || part < 0)
 			return;
-		lock(RequestsPresent)
-        {
-            if (DoVirtual)
-            {
-                if (TotalWater_g > 0)
-                    TotalWaterRequests.Add((plant.Plant, part, amount_g));
-            }
-            else
-            {
-                if ((uint)index < (uint)Water_g.Length && FiniteWater_g[index] > 0)
-                {
-                    RequestsPresent.Add(index);
-                    WaterRequests[index].Add((plant.Plant, part, amount_g));
-                }
-            }
-        }
+		// Buffered on the requesting plant: no lock, and a deterministic order. See SoilRequestRouter.
+		if (HasWater(index)) plant.Plant.WaterRequests.Add((index, part, amount_g));
 	}
 
 	[M(AI)]
@@ -691,23 +693,10 @@ public class SoilFormationTetrahedral : ISoilFormation
 	{
 		if (!float.IsFinite(amount_g) || amount_g <= 0f || plant == null)
 			return;
-		lock(RequestsPresent)
-        {
-            if (DoVirtual)
-            {
-                if (TotalWater_g > 0)
-                    TotalWaterRequests.Add((plant, -1, amount_g));
-            }
-            else
-            {
-                if ((uint)index < (uint)Water_g.Length && FiniteWater_g[index] > 0)
-                {
-                    RequestsPresent.Add(index);
-                    WaterRequests[index].Add((plant, -1, amount_g));
-                }
-            }
-        }
+		if (HasWater(index)) plant.WaterRequests.Add((index, -1, amount_g));
 	}
+
+	bool HasWater(int index) => DoVirtual ? TotalWater_g > 0 : (uint)index < (uint)Water_g.Length && FiniteWater_g[index] > 0;
 
     static bool CanReceiveWater((PlantFormation2 Plant, int Part, float Amount_g) request)
     {
@@ -770,6 +759,7 @@ public class SoilFormationTetrahedral : ISoilFormation
         }
         else
         {
+            RequestsPresent.Sort();
             foreach (var i in RequestsPresent)
             {
                 var water = FiniteWater_g[i];

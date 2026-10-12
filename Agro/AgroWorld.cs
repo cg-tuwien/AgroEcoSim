@@ -443,6 +443,12 @@ public class AgroWorld : SimulationWorld
                 Soil.DeliverPost(Timestep);
                 delivered = 1;
             }
+            // A serial scan is cheaper than an empty fork/join: the second round usually finds
+            // nothing, and it was costing a barrier over every plant to learn that.
+            var anyPost = false;
+            for (int i = 0; !anyPost && i < formations.Count; ++i)
+                anyPost = !ReferenceEquals(formations[i], Soil) && formations[i].HasUndeliveredPost;
+            if (!anyPost) break;
             Parallel.For(0, formations.Count, i =>
             {
                 var formation = formations[i];

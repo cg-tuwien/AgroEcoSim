@@ -7,6 +7,12 @@ operational controls and performance regression scenarios are documented in
 per run with `SimulationRequest.ContactEngine = Soft`; see [SOFT_CONTACTS.md](SOFT_CONTACTS.md).
 Nothing below changes under that switch except that none of it runs.
 
+Two general mechanics corrections of 12 October 2026 do change this engine's results, after bloom
+and inside panicles only: a floral axis no longer softens or gains wood density with senescence,
+and a bud collides as a capsule of its own radius rather than a ball of its length (see "Gravity
+and support" in `AGENTS.md`). Byte-identity fixtures recorded before that date differ from that
+point on; the 10-day pre-contact fixture and the checkpoint self-test are unaffected.
+
 ## Growth and survival
 
 Collision handling does not call above-ground organ death. A failed increment

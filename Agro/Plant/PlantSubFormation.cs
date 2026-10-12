@@ -745,9 +745,47 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 					OrganTypes.FlowerStem or OrganTypes.FlowerMeristem => scapeElasticity,
 					_ => Plant.Parameters.FlowerOrganElasticModulus,
 				};
+				//Lignification never SOFTENS: a scape that dries and lignifies after bloom keeps at
+				//least its green stiffness. Blending toward a wood modulus below the species' scape
+				//modulus made a Heuchera scape 1.5x and a Carex culm 8x softer exactly when the
+				//panicle had opened and loaded it, which is why they folded after bloom.
 				elasticity = greenFlowerElasticity * (1f - woodiness) +
-					Plant.Parameters.WoodElasticModulus * woodiness;
+					MathF.Max(greenFlowerElasticity, Plant.Parameters.WoodElasticModulus) * woodiness;
 			}
+			//Negative gravitropism after birth. The elastic bend below is an offset from the rest
+			//frame, and nothing used to move that frame once a segment was born: a scape leaned by
+			//a contact or by its own load stayed leaned. Steer the rest frame toward the set point
+			//at the species' rate - slowly against the 5 %/h elastic response, so the loaded pose
+			//does not overshoot - and carry the subtree rigidly, which is what re-erects a chain
+			//segment by segment without ever feeding the tip's error to every joint at once.
+			//Only base scape segments and stems: panicle branches and pedicels point where the
+			//inflorescence put them.
+			if (IsAboveGround)
+			{
+				ref var above = ref Unsafe.As<T, AboveGroundAgent>(ref agent);
+				var rate = above.Organ is OrganTypes.FlowerStem or OrganTypes.FlowerMeristem && above.FlowerAgent.flowerBase
+					? Plant.Parameters.FlowerSettings.ScapeGravitropicRatePerHour
+					: above.Organ == OrganTypes.Stem ? Plant.Parameters.ShootsGravitropicRatePerHour : 0f;
+				if (rate > 0f && woodiness < 1f && above.Energy > 0f)
+				{
+					var setPoint = above.Organ == OrganTypes.Stem
+						? Plant.Parameters.ShootsGravitropicSetPointAngle
+						: Plant.Parameters.FlowerSettings.ScapeGravitropicSetPointAngle;
+					var k = (1f - MathF.Pow(1f - rate, tickSpeed)) * (1f - woodiness);
+					var aim = AboveGroundAgent.GravitropicSetPointOrientation(agent.baseOrientation, setPoint);
+					var steered = Quaternion.Normalize(Quaternion.Slerp(agent.baseOrientation, aim, k));
+					var steer = Quaternion.Normalize(steered * Quaternion.Conjugate(agent.baseOrientation));
+					if (steer.X * steer.X + steer.Y * steer.Y + steer.Z * steer.Z > 1e-16f)
+					{
+						agent.baseOrientation = steered;
+						agent.restOrientation = Quaternion.Normalize(steer * agent.restOrientation);
+						agent.targetOrientation = Quaternion.Normalize(steer * agent.targetOrientation);
+						agent.SetOrientation(Quaternion.Normalize(steer * agent.Orientation));
+						PropagateToSubtree(dst, i, steer);
+					}
+				}
+			}
+
 			Quaternion rotation = Quaternion.Identity;
 			Quaternion appliedDelta = Quaternion.Identity;
 
@@ -1940,7 +1978,11 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 		else
 		{
 			var woodRatio = src[index].WoodRatio();
-			return (woodRatio * species.DensityDryWood + ((1f - woodRatio) * species.DensityDryStem)) * src[index].Volume() + src[index].Water_g;
+			//A floral axis has no secondary xylem: senescence dries it, it does not turn it into
+			//wood three and a half times as dense. The dry mass stays stem tissue.
+			var dryDensity = IsFloralAxis(src[index].Organ) ? species.DensityDryStem
+				: woodRatio * species.DensityDryWood + (1f - woodRatio) * species.DensityDryStem;
+			return dryDensity * src[index].Volume() + src[index].Water_g;
 		}
 	}
 
@@ -2145,6 +2187,16 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
     /// <summary>
     /// The current and swept bounds an organ occupies in the collision hierarchy.
     /// </summary>
+    /// <summary>Whether the organ is a segment of a scape's base column (not a branch or pedicel of its
+    /// inflorescence). Read-only; for probes.</summary>
+    public bool IsScapeBaseSegment(int index) => IsAboveGround && AgentCount > index
+        && Unsafe.As<T, AboveGroundAgent>(ref Src()[index]) is { Organ: OrganTypes.FlowerStem or OrganTypes.FlowerMeristem, FlowerAgent.flowerBase: true };
+
+    /// <summary>The unloaded rest frame the organ's elastic bend is measured from. Read-only; for probes.</summary>
+    public Quaternion GetBaseOrientation(int index) => ReadTMP
+        ? (AgentCount > index ? AgentsTMP[index].baseOrientation : Quaternion.Identity)
+        : (AgentCount > index ? Agents[index].baseOrientation : Quaternion.Identity);
+
     Bvh.BoundingBox CollisionBounds(int index)
     {
         var bounds = ComputeBounds(index);
@@ -2155,6 +2207,14 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
             var current = new Collisions.ContactShape(GetContactPose(index), template);
             var swept = previous.SweptBounds(current);
             bounds = Bvh.BoundingBox.Merge(bounds, new(swept.Min - FieldOrigin, swept.Max - FieldOrigin));
+        }
+        if (Collisions.CollisionSettings.SoftBoundsSkin && Plant.World.ContactEngine == ContactEngineKind.Soft)
+        {
+            // The soft engine answers pairs inside the skin band; a resting pair whose tight boxes
+            // do not overlap would otherwise drop out of the candidates, lose its side memory,
+            // and come back as a new side - a bang-bang of the skin's amplitude.
+            var skin = new Vector3(Collisions.CollisionSettings.FoliageSkin);
+            bounds = new(bounds.Min - skin, bounds.Max + skin);
         }
         return bounds;
     }

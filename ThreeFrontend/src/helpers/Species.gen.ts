@@ -30,6 +30,7 @@ export class SpeciesBase {
     twigsBendingApical = signal(0.02);
     shootsGravitaxis = signal(0.2);
     shootsGravitropicSetPointAngleDeg = signal(0);
+    shootsGravitropicRatePerHour = signal(0);
     woodGrowthTime = signal(100);
     woodGrowthTimeVar = signal(10);
     leafLength = signal(0.12);
@@ -148,6 +149,7 @@ export class SpeciesBase {
             twigsBendingApical: this.twigsBendingApical.peek(),
             shootsGravitaxis: this.shootsGravitaxis.peek(),
             shootsGravitropicSetPointAngle: this.shootsGravitropicSetPointAngleDeg.peek() * DegToRad,
+            shootsGravitropicRatePerHour: this.shootsGravitropicRatePerHour.peek(),
             woodGrowthTime: this.woodGrowthTime.peek(),
             woodGrowthTimeVar: this.woodGrowthTimeVar.peek(),
             leafLength: this.leafLength.peek(),
@@ -267,6 +269,7 @@ export class SpeciesBase {
         this.twigsBendingApical.value = s.twigsBendingApical;
         this.shootsGravitaxis.value = s.shootsGravitaxis;
         this.shootsGravitropicSetPointAngleDeg.value = s.shootsGravitropicSetPointAngle * RadToDeg;
+        this.shootsGravitropicRatePerHour.value = s.shootsGravitropicRatePerHour;
         this.woodGrowthTime.value = s.woodGrowthTime;
         this.woodGrowthTimeVar.value = s.woodGrowthTimeVar;
         this.leafLength.value = s.leafLength;
@@ -387,6 +390,7 @@ export class SpeciesBase {
             TwigsBendingApical: this.twigsBendingApical.peek(),
             ShootsGravitaxis: this.shootsGravitaxis.peek(),
             ShootsGravitropicSetPointAngle: this.shootsGravitropicSetPointAngleDeg.peek() * DegToRad,
+            ShootsGravitropicRatePerHour: this.shootsGravitropicRatePerHour.peek(),
             WoodGrowthTime: this.woodGrowthTime.peek(),
             WoodGrowthTimeVar: this.woodGrowthTimeVar.peek(),
             LeafLength: this.leafLength.peek(),

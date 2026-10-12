@@ -90,6 +90,15 @@ out over a few ticks instead of stalling.
 | `ContactMemoryGraceEpochs` | 1 tick | `AGRO_ContactMemoryGrace` |
 | `SoftHardPushRounds` | 4 | `AGRO_SoftHardPushRounds` |
 | `SolidElongationClip` | on | `AGRO_NoSolidElongationClip` |
+| `SoftJointSumRule` | on | `AGRO_NoSoftJointSumRule` |
+| `SoftBoundsSkin` | on | `AGRO_NoSoftBoundsSkin` |
+| `SoftBandLaw` | on | `AGRO_NoSoftBandLaw` |
+| `SoftSlideRamp` | on | `AGRO_NoSoftSlideRamp` |
+| `SoftNormalFilterHours` | 12 h (0 follows the witness exactly) | `AGRO_SoftNormalFilterHours` |
+| `SoftExactPairBudget` | 256 candidate triangle pairs (0 = always exact) | `AGRO_SoftExactPairBudget` |
+
+The five `Soft*` damping switches are described under "Shaking" below; `SoftExactPairBudget` under
+"Full-core utilisation".
 
 `SoftCollisions=false` still switches the foliage pass off under either engine; soil and
 obstacle constraints stay.
@@ -107,6 +116,162 @@ was queued every tick and swallowed by the cumulative elastic limit in `EndConta
 whose residual overlap exceeds half `DeepPenetrationThreshold` therefore also gets a tangential
 step that separates the bodies' centres, through the same compliance and caps, the way pressed
 leaves slide until an edge clears (`SoftContactEngine.Slides` counts them).
+
+## Shaking, and the damping that stops it
+
+Reported on playback of dense rosettes: the leaves trembled every tick. The frame is exported after
+the contact pass, so a pair at rest shows the same pose every frame; what alternated was the
+solver. Per tick, `Gravity` relaxes every elastic offset toward its target by `r = 1 - 0.95^HoursPerTick`
+(0.185 at 4 h), then the contact pass queues `0.7 x` the band deficit of every pair and applies the
+**sum** once (Jacobi). With `k` pairs loading one joint the error multiplier per tick is
+`mu = (1 - r)(1 - 0.7k)`: +0.24 for one pair, -0.33 for two, -0.90 for three, -1.47 for four, i.e. a
+sustained period-2 limit cycle bounded only by the caps, and *shorter* ticks are less stable because
+`r` is the only damping. Four smaller switches compounded it: the 1 mm displacement cap was per
+pair, not per joint; the push ran at full gain right up to the band edge, so a pair was pushed across
+the band and pulled back by gravity; the tangential slide switched on and off at exactly 2.5 mm of
+residual overlap; and a blade's witness alternated between a face and an edge, turning the push by
+a right angle between ticks. A fifth was in the broad phase: the boxes had no skin margin, so a pair
+resting inside the band dropped out of the candidates, lost its side memory, and came back as a
+new side.
+
+Each fix is a switch in `CollisionSettings`, so they can be A/B tested one at a time:
+
+- `SoftJointSumRule` - `EndContactSweep` caps a joint's summed turn at the largest single-pair
+  contribution it received and at the displacement cap over its longest lever. Contributions that
+  ask for the same motion count once; contributions on opposite sides still cancel in the sum.
+  `mu` becomes independent of `k`: +0.24 at 4 h, +0.29 at 1 h.
+- `SoftBandLaw` - the push is scaled by `x(2 - x)`, `x` the band deficit over the skin, so the gain
+  fades to zero at the band edge and a pair settles at the band asymptotically. Unchanged at and
+  beyond physical contact. Local gain at most 0.93, so with the joint-sum rule `mu` stays in
+  [+0.06, +0.82] for any `k`.
+- `SoftBoundsSkin` - the swept boxes are inflated by the skin under the soft engine only, so a
+  resting pair stays a candidate. Prerequisite for the band law.
+- `SoftSlideRamp` - the slide ramps in between a quarter and a half of `DeepPenetrationThreshold`
+  instead of switching on at the half.
+- `SoftNormalFilterHours` - a remembered contact's normal follows the witness through a first-order
+  low-pass (`1 - exp(-HoursPerTick / tau)`, the light-guidance filter's form). The reversal test
+  that detects a sheet crossing still runs on the raw witness.
+
+Measured with a probe that runs one plant tick by tick (stored frames with an even frame stride
+alias a period-2 away) and records, per organ keyed by its stable id, the rotation of its axis
+since the previous tick, over the last 430 days of a 730-day run from 1 March, seed 42, 4 h, CPU
+light, all five switches off against all five on (same build):
+
+| per-tick organ rotation | Geranium macrorrhizum off | on | Heuchera off | on |
+| --- | --- | --- | --- | --- |
+| median of the per-tick median | 1.91 deg | **0.08 deg** | 7.45 deg | **0.25 deg** |
+| median of the per-tick 90th percentile | 5.84 | 0.31 | 16.7 | 0.94 |
+| median of the per-tick 99th percentile | 9.68 | 0.71 | 25.5 | 2.39 |
+| fraction of organs turning more than 0.2 deg | 0.83 | 0.24 | 0.99 | 0.56 |
+| sheet crossings over the run | 2.78 M | 1.64 M | 417 k | 105 k |
+| petal days / first petal day | 167 / 86 | 173 / 86 | 155 / 472 | 157 / 473 |
+| leaves at day 730 | 1,136 | 1,068 | 156 | 122 |
+
+Which switch does it: Heuchera again, 730 days, each switch off on its own against all on (final
+build, so the absolute figures differ slightly from the table above):
+
+| variant | median per-tick median | 90th | 99th | leaves at day 730 |
+| --- | --- | --- | --- | --- |
+| all off | 7.50 deg | 16.2 | 22.2 | 162 |
+| all on | 0.20 | 0.87 | 2.33 | 146 |
+| without the joint-sum rule | **7.47** | 13.9 | 20.2 | 144 |
+| without the bounds skin | 0.20 | 0.89 | 2.28 | 144 |
+| without the band law | 0.17 | 0.83 | 2.28 | 148 |
+| without the slide ramp | 0.20 | 0.86 | 2.14 | 128 |
+| without the normal filter | 0.26 | 1.04 | 2.63 | 110 |
+
+The joint-sum rule is the fix; the normal filter is worth a quarter of what remains; the other
+three are neutral within the noise and stay on for the reasons above. The leaf count ranges from
+110 to 162 across variants that differ only in sub-millimetre contact details, so it is a
+sensitive outcome, not a quality trend.
+
+A twenty- to thirty-fold reduction in the motion a viewer sees, with the bloom unchanged. The
+leaf count moves (Heuchera -22 %, Geranium -6 %): leaves that no longer thrash shade each other
+more steadily. The remaining 2 deg at the 99th percentile on Heuchera is real motion of its
+petioles under load, not alternation. Two further levers exist and are not implemented: relaxing
+petals and unloaded joints under the soft engine (`Gravity` skips them), and an under-relaxed
+applied turn (`lerp(previous, queued, beta)`, 12 B per organ of checkpointed state). Rewriting the
+stored frames after a run was rejected: it would need a V8 reader on the server, it would invalidate
+the analytics computed on the true pose, and it would break resume. If residual shaking is still
+visible, the place for a filter is the viewport (a 1-2-1 kernel over three decoded frames removes
+exactly a period-2 and nothing slower), not the store.
+
+## Full-core utilisation
+
+Reported as "threads run only briefly; a 32-core machine is mostly idle". Measured with a probe that
+drives one tick phase by phase through the private tick methods and records wall time, process CPU
+time (so the effective core count per phase) and allocation, after 600 warm-up ticks of a 0.25 m
+grid of Carex and Bergenia at 4 h, CPU light, seed 42 - the frames' SHA-256 are the byte-identity
+fixture for everything below. Before:
+
+| plants (organs) | ms per tick | collisions | light | export | effective cores, collisions |
+| --- | --- | --- | --- | --- | --- |
+| 1 (2,107) | 152 | 138 (91 %) | 8 | 3 | **1.0** |
+| 100 (103 k) | 870 | 642 | 169 | 33 | 18 |
+| 400 (429 k) | 3,169 | 2,226 | 707 | 129 | 24 |
+
+So at a stand the engine already ran on 24 of 32 cores; the complaint is the single plant, which was
+entirely serial, and the serial phases around a stand: the soil's one lock, the neighbour refresh,
+the schedule, the `BeginContactSweep` loop, the epilogue, the export, one deflate thread, and
+contiguous job ranges that parked most workers behind whichever range held the mature plants.
+What changed, in order of effect:
+
+- **Lock-free, ordered soil requests.** Each plant buffers its water requests on itself
+  (`PlantFormation2.WaterRequests`); `SoilRequestRouter` hands them to the soil once per tick in
+  formation order, cells are processed in ascending index. That removed the one lock every root
+  of every plant took during the parallel tick *and* made the parallel tick reproducible: it is
+  byte-identical to the sequential one at 100 and 400 plants over 650 steps, with a 1 h, a 4 h and
+  a worker-cap variation, and on the 4,134-plant facade over 430 steps (two parallel runs and one
+  sequential run, identical frames). `Deterministic` is a diagnostic now; at 400 plants it costs
+  0.8 s of serial plant tick and census per tick for nothing.
+- **`WeightedSchedule`** (`CollisionWorld.Scheduling.cs`): jobs sorted by last tick's measured
+  cost, longest first, each worker pulling the next from a shared cursor. Physics untouched.
+- **One job per plant before and after the cross-plant batches** (`PreparePlant`,
+  `FinishPlant`): three barriers and two serial loops gone; the lamina cache is completed on the
+  plant's own job so later readers never resize it. Stage masks replaced `List.Contains` in the
+  schedule; the facade's 2,502 trays tick and deliver in parallel.
+- **A single plant's own pairs are evaluated in parallel.** `VisitPair` is split into a read-only
+  `EvaluatePair` (distance, side, depth) and a per-plant `RespondPair` (memory, mobility,
+  queueing). With fewer plants than half the workers the sorted pair list is evaluated over
+  fixed 32-pair chunks on all cores and the responses replayed in pair order: bit-identical for
+  any chunking or worker cap (1 against 32 measured), and the per-chunk counters are summed in a
+  fixed order so the diagnostics match too.
+- **A sampled blade-to-blade distance** (`FoliageGeometry.DistanceSampled`, soft engine only).
+  Two blades lying along each other put every triangle of the overlap within the band of every
+  triangle opposite, so the exact query's candidate count is the product of the triangle counts:
+  95 % of a single Carex's contact time went there. Past a budget of candidates the query
+  samples each vertex of either blade against the other's triangle tree, pruned by the best
+  distance so far, then refines exactly around the best vertex and the triangle it landed on. It
+  is an upper bound on the true distance; `Agro --sheet-distance-selftest` compares it against
+  the exact query on 600 random pairs per species (along, crossing, offset, -1 to +3 mm apart):
+  never below the exact minimum, mean overestimate under 5 um, maximum 0.33 mm (Carex 0.000 mm
+  after the second refinement), and the touching verdict never differs. The exact loop also
+  prunes candidates by the current best, which is result-identical and benefits both engines.
+- **Export and storage.** Each plant's frame record is written into its own buffer in parallel
+  and concatenated in order (bytes identical); the run store deflates on a quarter of the cores
+  with one committer keeping the index in step order, and the queue and byte budget scale with
+  it. The simulation loop runs on its own thread, and both entry points set the thread pool's
+  minimum to the core count so the first fork/join of a run is not throttled by pool injection.
+
+Server GC was tried and rejected: at 400 plants it changed nothing (3.16 against 3.17 s per tick)
+and raised the peak working set from 2.9 to 7.6 GB.
+
+After (same probe, same requests; the plant differs where the physics did):
+
+| plants | ms per tick before | after | collisions before | after | effective cores, collisions |
+| --- | --- | --- | --- | --- | --- |
+| 1 | 152 | **53** | 138 | 41 | 3.6 |
+| 100 | 870 | **775** | 642 | 537 | 21.9 |
+| 400 | 3,169 | **2,519** | 2,226 | 1,662 | 29.6 |
+
+The single plant's remaining wall time is its serial half - the pair query and sort, the
+response replay, the solid pass and the epilogue - so it does not reach 32 cores and will not
+without splitting the plant itself. The facade request (4,134 plants in trays, 76,500 organs at
+step 430) ran at 1.2-1.6 s per tick with eight other simulations sharing the machine; 83 % of it
+is the contact pass at 15-24 effective cores.
+
+`AGRO_COLLISION_TIMING=1` now prints the phases (`neighboursMs`, `prepareMs`, `respondMs`,
+`crossMs`, `finishMs`, `batches`) and, for a single plant, the parallel evaluation's wall time.
 
 ## Cost and memory
 
@@ -190,5 +355,8 @@ records one CSV row per day.
 | Carex morrowii 'Variegata', 100 days from 1 March, 4 h and 1 h, soft vs certified on the same request | Both engines: 96 organs, 80 blade segments, no downward or inverted organs, no deaths. Soft: all 80 segments at ≥ 90 % of target, 2.0 s in the foliage pass; certified: 56 at ≥ 90 %, 10,046 rejected motions, 18.2 s |
 | Geranium macrorrhizum, 162 days from 1 March, 4 h, soft vs certified | Both: first buds day 63, first petals day 85, 12 leaves. Soft: petals to day 125, 12 leaves fully expanded, 0.8 s foliage; certified: petals to day 115, 10 fully expanded, 9 organs suspended at the end, 21.2 s |
 | Bergenia with `ContactDeformationMode = 1` (`BroadLeafV1`), 330 days, 4 h, soft | Petals 17 Apr-30 May 2026; 22 leaves, 20 at ≥ 90 %; 44 deformation states with folds persisting across ticks, up to 6.5° on a blade and 8.5° on a petiole; 187 s wall, 43 ms per tick (the V1 narrow phase is about nine times the rigid cost, as under the certified engine) |
+| Parallel against sequential tick, 100 and 400 plants (Carex/Bergenia grid), 650 steps; facade request, 4,134 plants, 430 steps (12 October 2026) | Byte-identical frames in every case; sequential result unchanged by the request buffering; one collision worker against 32 identical on one plant |
+| Shaking, Geranium macrorrhizum and Heuchera, 730 days, damping switches off against on (12 October 2026) | Per-tick median organ rotation 1.9 -> 0.08 deg and 7.4 -> 0.25 deg; see "Shaking" above |
+| Scape posture, Heuchera / Carex / both Geraniums, 730 (Carex 450) days, soft engine, after the mechanics fixes and the species retune (12 October 2026) | Heuchera: base chain tip never below dirY 0.97 through bloom, chain angle at most 13 deg, flowers 41 cm above the foliage (before: tip at -0.27, chain 114 deg); Carex 0.99 / 9 deg; G. x cantabrigiense 0.70 / 46 deg, +12 cm; G. macrorrhizum 0.63 / 51 deg, +19 cm (at 2e8 one peduncle in two still hung at -0.58; 3e8 and a 0.01/h rate hold it). Heuchera under the certified engine: 0.94 / 20 deg |
 
 Add rows as scenarios are run; keep the certified engine's own table in `COLLISIONS.md`.

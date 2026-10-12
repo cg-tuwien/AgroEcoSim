@@ -81,14 +81,18 @@ public sealed partial class LaminaTemplate
     [ThreadStatic] static WorldTree? PairTreeB;
     [ThreadStatic] static Stack<(int A, int B)>? TemplatePairStack;
 
-    internal void QueryPairs(in OrganPose pose, LaminaTemplate other, in OrganPose otherPose,
-        float search, List<(int A, int B)> pairs)
+    /// <param name="maxPairs">Give up, returning false with the list incomplete, once more
+    /// candidate pairs than this have been gathered. A caller with a cheaper fallback for large
+    /// overlaps (the soft engine's sampled sheet distance) stops paying for the gathering it will
+    /// not use.</param>
+    internal bool QueryPairs(in OrganPose pose, LaminaTemplate other, in OrganPose otherPose,
+        float search, List<(int A, int B)> pairs, int maxPairs = int.MaxValue)
     {
         pairs.Clear();
-        if (Triangles.IsEmpty || other.Triangles.IsEmpty) return;
+        if (Triangles.IsEmpty || other.Triangles.IsEmpty) return true;
         var a = PairTreeA ??= new(); var b = PairTreeB ??= new();
         a.Set(this, pose); b.Set(other, otherPose);
-        QueryTrees(a,b,Triangles.Root,other.Triangles.Root,search,pairs,other);
+        return QueryTrees(a,b,Triangles.Root,other.Triangles.Root,search,pairs,other,maxPairs);
     }
 
     internal void QuerySelfSweepPairs(in OrganPose from,in OrganPose to,List<(int A,int B)> pairs)
@@ -99,7 +103,7 @@ public sealed partial class LaminaTemplate
         QueryTrees(a,b,Triangles.Root,Triangles.Root,0,pairs,this);
     }
 
-    void QueryTrees(WorldTree a,WorldTree b,int rootA,int rootB,float search,List<(int A,int B)> pairs,LaminaTemplate other)
+    bool QueryTrees(WorldTree a,WorldTree b,int rootA,int rootB,float search,List<(int A,int B)> pairs,LaminaTemplate other,int maxPairs=int.MaxValue)
     {
         var stack = TemplatePairStack ??= new(); stack.Clear();
         stack.Push((rootA,rootB));
@@ -110,11 +114,12 @@ public sealed partial class LaminaTemplate
             var ba = a.Get(ia); var bb = b.Get(ib);
             if (!new Bvh.BoundingBox(ba.Min - padding, ba.Max + padding).Intersects(bb)) continue;
             ref readonly var na = ref Triangles.Nodes[ia]; ref readonly var nb = ref other.Triangles.Nodes[ib];
-            if (na.IsLeaf && nb.IsLeaf) { pairs.Add((na.AgentIndex, nb.AgentIndex)); continue; }
+            if (na.IsLeaf && nb.IsLeaf) { pairs.Add((na.AgentIndex, nb.AgentIndex)); if (pairs.Count > maxPairs) return false; continue; }
             if (nb.IsLeaf || !na.IsLeaf && (ba.Max - ba.Min).LengthSquared() >= (bb.Max - bb.Min).LengthSquared())
             { stack.Push((na.Left, ib)); stack.Push((na.Right, ib)); }
             else { stack.Push((ia, nb.Left)); stack.Push((ia, nb.Right)); }
         }
         pairs.Sort(static (a, b) => a.A != b.A ? a.A.CompareTo(b.A) : a.B.CompareTo(b.B));
+        return true;
     }
 }

@@ -6,6 +6,12 @@ using AgroServer.Services;
 
 Console.WriteLine("HELLO THERE!");
 
+//A tick is a chain of short fork/join phases over all cores. The pool injects threads beyond
+//the processor count only at about one per half second, so without this the first phases of
+//every run spin up on a handful of threads while the rest of the machine waits for the pool to
+//notice - which reads as "threads run only briefly".
+ThreadPool.SetMinThreads(Environment.ProcessorCount, Environment.ProcessorCount);
+
 var builder = WebApplication.CreateSlimBuilder(args);
 
 //AGRO_-prefixed environment variables, registered FIRST so that everything below can read them.

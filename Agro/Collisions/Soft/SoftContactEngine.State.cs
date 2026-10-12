@@ -22,7 +22,9 @@ public sealed partial class SoftContactEngine
     public long ClearanceSkips { get; private set; }
     public long ApproximationQueries { get; private set; }
     public long ApproximationSeparations { get; private set; }
+    /// <summary>Neighbour refresh, the per-plant preparation jobs and the cross-plant batches.</summary>
     public long FoliageTicks { get; private set; }
+    /// <summary>The per-plant finishing jobs: correction, memory expiry, the solid pass and the epilogue.</summary>
     public long HardTicks { get; private set; }
     public long Ticks { get; private set; }
     public long TickCount { get; private set; }
@@ -54,13 +56,13 @@ public sealed partial class SoftContactEngine
         // Plant order, not dictionary order, so the double sums do not depend on history.
         foreach (var plant in Plants)
         {
-            var w = Work[plant];
-            candidates += w.Candidates; contacts += w.ContactsCount; sides += w.NewSides; crossings += w.Crossings;
-            tunnels += w.SuspectedTunnels; deep += w.DeepPenetrations; clips += w.Clips; clipped += w.ClippedMetres; Slides += w.Slides;
-            overlapping += w.PenetrationCount; penetration += w.PenetrationSum;
-            maxPenetration = MathF.Max(maxPenetration, w.MaxPenetration); maxSolid = MathF.Max(maxSolid, w.MaxSolidPenetration);
+            var w = Work[plant]; ref var s = ref w.Stats;
+            candidates += s.Candidates; contacts += s.Contacts; sides += s.NewSides; crossings += s.Crossings;
+            tunnels += s.SuspectedTunnels; deep += s.DeepPenetrations; clips += w.Clips; clipped += w.ClippedMetres; Slides += w.Slides;
+            overlapping += s.PenetrationCount; penetration += s.PenetrationSum;
+            maxPenetration = MathF.Max(maxPenetration, s.MaxPenetration); maxSolid = MathF.Max(maxSolid, w.MaxSolidPenetration);
             ObstacleContacts += w.Obstacle; SoilContacts += w.Soil; StaticQueries += w.Queries; ClearanceSkips += w.Skips;
-            ApproximationQueries += w.ApproximationQueries; ApproximationSeparations += w.ApproximationSeparations;
+            ApproximationQueries += s.ApproximationQueries; ApproximationSeparations += s.ApproximationSeparations;
             w.ResetCounters();
         }
         FoliageCandidates += candidates; FoliageContacts += contacts; NewSides += sides; Crossings += crossings;

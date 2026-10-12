@@ -89,6 +89,13 @@ the same request. Under the soft engine the archived Bergenia blooms in both spr
 755-day run takes under a minute; under the certified one it never bloomed. Live checkpoint 33
 tags the engine and a checkpoint resumes only under the engine that wrote it.
 
+**The parallel tick is reproducible.** Soil water requests - the only thing in a tick that crosses
+formations - are buffered on each plant and handed to the soil in formation order
+(`Agro/SoilRequests.cs`), and the parallel tick is byte-identical to the sequential one, measured at
+100 and 400 plants and on the 4,134-plant facade. `Deterministic` on the request only forces the
+sequential tick for diagnosis. See "Full-core utilisation" in `Agro/SOFT_CONTACTS.md` for the
+per-phase measurements and what was parallelised; `AGRO_COLLISION_TIMING=1` prints the phases.
+
 Collision and saved-run regression scenarios are documented in
 [`Agro/COLLISIONS.md`](Agro/COLLISIONS.md). In particular, preserve the translated
 tray/blade-edge sweep test, thin-lamina wall crossing, Bergenia scape under a
@@ -138,6 +145,27 @@ older live checkpoints are rejected, while their saved playback remains readable
 - `TurnUpwards` **preserves the main axis** and adjusts only cross-section
   orientation. Use `PlantFormation2.AdjustUpBase(orientation, up: true)` when
   creating a truly vertical culm or shoot.
+- **A loaded column is stable only below its Euler load.** The scape is a chain of
+  cantilever segments whose moment is re-evaluated from the deflected pose every tick,
+  which is correct and therefore includes the P-delta effect: with loop gain
+  `g = (P L^2 / 2 + W L^2 / 6) / EI` above one, any lean grows until the 25 deg per-joint
+  cap folds the chain. Heuchera at 1.5e8 Pa with water-full buds sat at 2.4 and folded
+  after bloom in every run; contacts only supplied the first lean (the floral share of
+  contact turns was zero). Compute `g` before trusting a scape preset.
+- **Lignification never softens, and a scape never turns to wood.** Floral stiffness blends
+  toward `max(green, WoodElasticModulus)` with senescence, and a floral axis keeps
+  `DensityDryStem` whatever its wood ratio. Before, the post-bloom blend toward a wood
+  modulus below the scape modulus made Heuchera 1.5x and Carex 8x *softer* while the dry
+  density rose 3.5x, exactly when the open panicle loaded them.
+- **A bud collides as the capsule it is drawn as.** `GetContactPose` used
+  `max(Radius, Length)` as a bud's radius, so an opened Carex receptacle - 30 mm long, 2 mm
+  wide - was a 30 mm ball on a 1.1 mm culm, pushed by every leaf that brushed it.
+- **Negative gravitropism after birth** is `FlowerSettings.ScapeGravitropicRatePerHour` for
+  base scape segments and `ShootsGravitropicRatePerHour` for stems (both default 0, the
+  historical behaviour). `Gravity` steers the organ's rest frame toward the set point by
+  `1 - (1 - rate)^HoursPerTick`, fading with lignification, and carries the subtree rigidly.
+  Keep the rate well below the 5 %/h elastic response or the loaded pose overshoots the set
+  point; 0.01-0.014 per hour re-erects over three to four days.
 
 ### Flower state and growth
 
@@ -555,7 +583,12 @@ trigonous sedge culm, with Bergenia at 2.5e8 as the deliberately rigid reference
 - **A mean over `FlowerStem` organs is not the scape's posture.** Branch and pedicel
   segments are `FlowerStem` too, and they *should* point outward and down, so the mean
   goes negative as soon as the panicle opens. It looks exactly like a collapsing scape and
-  is not one. Measure the height the topmost `FlowerStem` reaches instead.
+  is not one. Measure the height the topmost `FlowerStem` reaches instead - or the direction
+  of the last base segment: `PlantSubFormation.IsScapeBaseSegment` and `GetBaseOrientation`
+  exist for probes, and `ContactTurnByOrgan` says which tissue the contacts are moving.
+- **Buds weigh what their volume says.** A rod's volume is `4 r^2 L` filled to 0.75 with
+  water, so a 2.5 mm Heuchera bud was 0.1 g against about 6 mg real and a 5 mm Geranium bud
+  nearly a gram; the panicle's tip load, not the scape's own weight, set the loop gain.
 
 ### What is still missing from the flower model
 
@@ -695,6 +728,9 @@ render mode 3, one plant in a 1x1 m field.
 | Campanula, 730 days | Trailing, not climbing | `MaxHeight < 0.35 m`; more than 8 crown axes; more than 5 branch points |
 | Fragaria, 730 days | Rosette, not column | `MaxHeight / LeafMaxRadial < 1.3`; more than 3 crown axes by year two |
 | Bergenia, 730 days | Inflorescence size | Fewer than 400 floral organs per crown; fewer than 100 inverted organs |
+| Heuchera, Carex (450 days), both Geraniums, 730 days, soft engine | Scape posture | Last base segment's `dirY` above 0.7 (Geraniums 0.5) from the first petal to 30 days after the last; base chain angle under 35 deg (Geraniums 60); flowers above the 90th-percentile leaf (Heuchera >= +25 cm); petal dates within 5 days of the table below |
+| Geranium macrorrhizum and Heuchera, 730 days, soft engine | Shaking | Median per-tick organ rotation under 0.3 deg after day 300; see `SOFT_CONTACTS.md` "Shaking" |
+| 100 and 400 plants, parallel against sequential tick, 650 steps | Reproducibility | Byte-identical exported frames |
 | Any species, 1 h vs 4 h ticks, 100 days | Timestep sensitivity | See the note below - treat this as a drift check, not an equality check |
 
 **The model is not timestep invariant, and it was not before these changes either.**
@@ -730,10 +766,16 @@ tip height.
 | Geranium x cantabrigiense | 20.9 | 15-25 | 61.3 | 20-50 | 64 | 636 | 26.0 | +8.3 | 06-06-08-29 | May-Jul |
 
 Scape posture, which is what separates a Geranium peduncle from a Bergenia one:
-`FlowerScapeElasticModulus` runs 4.5e7 (Geranium, arching) - 8e7 (Campanula) - 1.5e8
-(Heuchera and Carex, wiry or trigonous but self-supporting) - 2.5e8 (Bergenia, rigid),
-and only the Geraniums set `ScapeGravitropicSetPointAngle` (20 degrees, approached at
-0.35 per segment).
+`FlowerScapeElasticModulus` runs 8e7 (Campanula) - 2e8 and 3e8 (G. x cantabrigiense and
+G. macrorrhizum, a soft green peduncle whose arch is now an elastic equilibrium) - 2.5e8
+(Bergenia, rigid) - 1e9 (Heuchera, wiry) - 3e9 (Carex, a trigonous culm at the grass end of
+Niklas' range). Only the Geraniums set `ScapeGravitropicSetPointAngle` (20 degrees), and
+Heuchera, Carex and the Geraniums set `ScapeGravitropicRatePerHour` (0.012, 0.012, 0.01 and
+0.005). Measured 12 October 2026 under the soft engine, 730 days: Heuchera's base chain never
+dips below `dirY` 0.97 through bloom and its flowers stand 41 cm above the foliage (before the
+fixes: -0.27 and a 114 deg fold); Carex 0.99; G. x cantabrigiense 0.70 at worst, +12 cm;
+G. macrorrhizum 0.63 at worst with a 51 deg arch, +19 cm (a loop gain near one half is what an
+arching peduncle needs: at 4.5e7 it hung at -0.78).
 
 ## Remaining calibration gaps
 
@@ -1656,14 +1698,17 @@ sending the same request twice:
    by construction. Place seeds explicitly.
 
 What survives: **a single-plant run is byte-identical across runs** - 60 frames, zero differing
-bytes, verified through the run store. Multi-plant determinism is **unmeasured**, because every
-attempt so far compared two different requests.
+bytes, verified through the run store.
 
-A `Deterministic` flag now exists (`SimulationWorld.Deterministic`, `Deterministic` on the
-request, a HUD checkbox) forcing the sequential tick. It is plumbed end to end and recorded in the
-run metadata, but **it has not been shown to deliver reproducibility** - the one run where it was
-enabled still diverged, and that test was itself invalid for reason (2). Treat the flag as
-untested until a fixed-species, fixed-position multi-plant comparison says otherwise.
+**Multi-plant determinism is now measured, and holds.** The parallel tick used to diverge from the
+sequential one at the first step of any multi-plant run (400 plants: 428,706 against 430,638
+organs at step 600) because soil water requests reached the soil in thread-pool order through one
+lock. They are buffered per plant and processed in formation order now (`Agro/SoilRequests.cs`),
+and the parallel tick is byte-identical to the sequential one frame for frame: 100 and 400 plants
+over 650 steps, the 4,134-plant facade over 430 steps, two parallel runs against each other and
+against the sequential run. The `Deterministic` flag (`SimulationWorld.Deterministic`, the
+request field, the HUD checkbox now labelled "Sequential tick") only forces the sequential path for
+diagnosis; it buys nothing and at 400 plants costs 0.8 s per tick.
 
 ## Stage 2: the frames live on the server now
 
@@ -2025,6 +2070,12 @@ work, per step, at four-hour ticks):
 Two things to read off that. **Deflate is the largest single term and it grows fastest** - it
 overtakes the simulation step itself between those two sizes. And **the ratio worsens with scale**,
 which is why the complaint came from the biggest scene rather than from the fixtures.
+
+(Since 12 October 2026 the export writes each plant's record in parallel and concatenates in
+order - 129 -> 37 ms per frame at 400 plants, bytes identical - and the store deflates on a
+quarter of the cores with one committer keeping the index in order; `RunStore.Compressors`,
+`QueueDepth` and `PendingFrameByteBudget` scale together. The rest of this section describes the
+single-threaded version it replaced.)
 
 What was NOT the cause, both measured rather than assumed: LiteDB in `Shared` mode costs 0.73 ms
 per frame (Direct is 0.22, so the connection mode is worth about half a millisecond, not a run);

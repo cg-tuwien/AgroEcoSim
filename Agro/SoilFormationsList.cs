@@ -393,12 +393,24 @@ public partial class SoilFormationsList : ISoilFormation
 
 	public void Census() { }
 
-	public void DeliverPost(uint timestep)
+	public void DeliverPost(uint timestep) => DeliverPost(timestep, true);
+
+	public void DeliverPost(uint timestep, bool gatherRequests)
 	{
-		for (int i = 0; i < Items.Count; ++i)
-			Items[i].DeliverPost(timestep);
+		// One walk over the plants routes every buffered request to its tray; the trays then only
+		// process what they were handed.
+		if (gatherRequests) SoilRequestRouter.Gather(World, this);
+		// Trays are independent and a plant belongs to exactly one, so no two trays ever deliver
+		// into the same plant: the facade's 1,645 trays can process their requests side by side.
+		if (Items.Count >= ParallelTrays) Parallel.For(0, Items.Count, i => Items[i].DeliverPost(timestep, false));
+		else for (int i = 0; i < Items.Count; ++i) Items[i].DeliverPost(timestep, false);
 		HasUndeliveredPost = false;
 	}
+
+	/// <summary>Below this many trays the fork/join costs more than the loop it would split.</summary>
+	const int ParallelTrays = 64;
+
+	public ISoilRequestSink? RequestSink(int soilIndex) => (uint)soilIndex < (uint)Items.Count ? Items[soilIndex].RequestSink(0) : null;
 
 	public float GetMetricGroundDepth(float x, float z, int soilIndex) => soilIndex >= 0 && soilIndex < Items.Count ? Items[soilIndex].GetMetricGroundDepth(x, z, 0) : 0f;
 
@@ -435,8 +447,8 @@ public partial class SoilFormationsList : ISoilFormation
 
 	public void Tick(uint timestep)
 	{
-		for (int i = 0; i < Items.Count; ++i)
-			Items[i].Tick(timestep);
+		if (Items.Count >= ParallelTrays) Parallel.For(0, Items.Count, i => Items[i].Tick(timestep));
+		else for (int i = 0; i < Items.Count; ++i) Items[i].Tick(timestep);
 
 		HasUndeliveredPost = true;
 	}

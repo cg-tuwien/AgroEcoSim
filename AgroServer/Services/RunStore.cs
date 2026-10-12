@@ -325,7 +325,7 @@ sealed class RunWriter
     public required BlockingCollection<(uint Step, byte[] Scene, bool Checkpoint)> Queue { get; init; }
     public required FileStream Index { get; init; }
     public Task? Worker;
-    /// <summary>Written by the worker thread only, read for the periodic metadata flush.</summary>
+    /// <summary>Written by the committer thread only, read for the periodic metadata flush.</summary>
     public uint StoredFrames;
     public uint LastStep;
     public long BytesOnDisk;
@@ -365,17 +365,29 @@ public class RunStore : IRunStore, IDisposable
     const int CurrentMetadataVersion = 3;
 
     /// <summary>
+    /// Frames deflated concurrently per run.
+    ///
+    /// Deflate was the largest single term of storing a frame and it overtook the simulation step
+    /// itself between 400 and 1,600 plants, at which point the single writer's full queue stalled
+    /// the simulation thread. The compressions are independent, so several run at once; the
+    /// commits - file move, index entry, counts - still happen in frame order on one thread, so
+    /// the index stays monotonic. A quarter of the cores, because the simulation wants the rest.
+    /// </summary>
+    public int Compressors { get; set; } = DefaultCompressors;
+    static readonly int DefaultCompressors = Math.Clamp(Environment.ProcessorCount / 4, 2, 8);
+    /// <summary>
     /// Frames that may sit between the simulation and the disk.
     ///
     /// Small on purpose. Each slot holds a whole exported frame - tens of megabytes at production
-    /// plant count - so this is a memory budget, not a throughput knob. One worker deflating at
-    /// ~10 ms a frame keeps up with a simulation step of similar cost; if it ever does not, the
+    /// plant count - so this is a memory budget, not a throughput knob: enough to keep every
+    /// compressor busy and one frame in hand, no more. If the compressors cannot keep up, the
     /// simulation waits, which is the correct failure.
     /// </summary>
-    public int QueueDepth { get; set; } = 3;
+    public int QueueDepth { get; set; } = 2 * DefaultCompressors + 2;
     /// <summary>Global raw-frame budget, including frames currently being compressed. A single
-    /// frame or checkpoint larger than the budget is allowed only while no other snapshot is pending.</summary>
-    public long PendingFrameByteBudget { get; set; } = 128L << 20;
+    /// frame or checkpoint larger than the budget is allowed only while no other snapshot is pending.
+    /// Scaled with the compressors, or a deeper queue would simply block on the budget instead.</summary>
+    public long PendingFrameByteBudget { get; set; } = (128L << 20) * DefaultCompressors;
     readonly object PendingFramesLock = new();
     long PendingFrameBytes;
 
@@ -842,57 +854,57 @@ public class RunStore : IRunStore, IDisposable
         writer.Worker = Task.Factory.StartNew(() => Drain(writer), TaskCreationOptions.LongRunning);
     }
 
+    /// <summary>A frame deflated into its temporary file, waiting for its turn to be committed.</summary>
+    readonly record struct PackedFrame(uint Step, string Path, string Temporary, long StoredBytes, bool Checkpoint = false);
+
+    /// <summary>
+    /// Deflates one queued snapshot on a pool thread into a temporary file next
+    /// to its final name and is moved into place by the committer, in order - checkpoints too, so
+    /// an earlier checkpoint can never overwrite a later one. The raw bytes are released as soon
+    /// as the compression is done, which is when they stop being needed.
+    /// </summary>
+    PackedFrame? Pack(RunWriter writer, uint step, byte[] scene, bool checkpoint)
+    {
+        try
+        {
+            if (checkpoint) return PackCheckpoint(writer.RunId, step, scene) is { } packedCheckpoint ? packedCheckpoint with { Checkpoint = true } : null;
+            var path = FramePath(writer.RunId, step);
+            var temporary = path + ".tmp";
+            long storedBytes;
+            using (var output = new FileStream(temporary, FileMode.Create, FileAccess.Write, FileShare.None))
+            {
+                using (var zlib = new ZLibStream(output, CompressionLevel.Fastest, leaveOpen: true))
+                    zlib.Write(scene);
+                storedBytes = output.Length;
+            }
+            return new(step, path, temporary, storedBytes);
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine($"RunStore: could not store frame {step} of {writer.RunId}: {e.Message}");
+            return null;
+        }
+        finally { ReleaseFrameBytes(scene.LongLength); }
+    }
+
     void Drain(RunWriter writer)
     {
+        //Compressions fan out over the pool, bounded by the gate; the commits queue keeps their
+        //order, and one committer applies them in that order.
+        using var gate = new SemaphoreSlim(Math.Max(1, Compressors));
+        using var commits = new BlockingCollection<Task<PackedFrame?>>(Math.Max(1, QueueDepth));
+        var committer = Task.Factory.StartNew(() => Commit(writer, commits), TaskCreationOptions.LongRunning);
         try
         {
             foreach (var (step, scene, checkpoint) in writer.Queue.GetConsumingEnumerable())
             {
-                try
+                gate.Wait();
+                var packing = Task.Run(() =>
                 {
-                    if (checkpoint)
-                    {
-                        WriteCheckpointCore(writer.RunId, step, scene);
-                        continue; // finally still releases the owned snapshot's byte reservation.
-                    }
-                    var path = FramePath(writer.RunId, step);
-                    var temporary = path + ".tmp";
-                    long storedBytes;
-                    using (var output = new FileStream(temporary, FileMode.Create, FileAccess.Write, FileShare.None))
-                    {
-                        using (var zlib = new ZLibStream(output, CompressionLevel.Fastest, leaveOpen: true))
-                            zlib.Write(scene);
-                        storedBytes = output.Length;
-                    }
-                    File.Move(temporary, path, overwrite: true);
-
-                    Span<byte> entry = stackalloc byte[8];
-                    BitConverter.TryWriteBytes(entry[..4], step);
-                    BitConverter.TryWriteBytes(entry[4..], checked((uint)storedBytes));
-                    writer.Index.Write(entry);
-                    //Flushed per frame so a reader - the client rebuilding its timeline while the
-                    //run computes - sees entries for frames that are actually on disk, and never
-                    //an entry for one that is not.
-                    writer.Index.Flush();
-
-                    //A count, not the step reached: with a frame stride those differ, and a
-                    //listing that says "540 frames" for a run that stored 135 is describing
-                    //storage it does not have.
-                    ++writer.StoredFrames;
-                    writer.LastStep = step + 1;
-                    writer.BytesOnDisk += storedBytes;
-
-                    //Metadata on a timer rather than per frame. It is only a progress figure, and
-                    //LiteDB in Shared mode takes a cross-process mutex for each update - 0.7 ms a
-                    //frame measured, which is small but entirely pointless a thousand times over.
-                    if (DateTime.UtcNow - writer.LastMetadataFlush > MetadataInterval)
-                        FlushMetadata(writer);
-                }
-                catch (Exception e)
-                {
-                    Console.Error.WriteLine($"RunStore: could not store frame {step} of {writer.RunId}: {e.Message}");
-                }
-                finally { ReleaseFrameBytes(scene.LongLength); }
+                    try { return Pack(writer, step, scene, checkpoint); }
+                    finally { gate.Release(); }
+                });
+                commits.Add(packing);
             }
         }
         catch (Exception e) { Console.Error.WriteLine($"RunStore: writer for {writer.RunId} stopped: {e}"); }
@@ -900,8 +912,55 @@ public class RunStore : IRunStore, IDisposable
         {
             writer.Queue.CompleteAdding();
             while (writer.Queue.TryTake(out var abandoned)) ReleaseFrameBytes(abandoned.Scene.LongLength);
+            commits.CompleteAdding();
+            try { committer.Wait(); } catch (Exception e) { Console.Error.WriteLine($"RunStore: committer for {writer.RunId} failed: {e}"); }
             try { FlushMetadata(writer); } catch { /* best effort */ }
             try { writer.Index.Dispose(); } catch { /* best effort */ }
+        }
+    }
+
+    /// <summary>Moves each packed frame into place and appends its index entry, in queue order.</summary>
+    void Commit(RunWriter writer, BlockingCollection<Task<PackedFrame?>> commits)
+    {
+        foreach (var packing in commits.GetConsumingEnumerable())
+        {
+            PackedFrame? packed;
+            try { packed = packing.Result; }
+            catch (Exception e) { Console.Error.WriteLine($"RunStore: packing a frame of {writer.RunId} failed: {e.Message}"); continue; }
+            if (packed is not { } frame) continue; // failed and already reported
+            if (frame.Checkpoint) { CommitCheckpoint(writer.RunId, frame); continue; }
+            var step = frame.Step;
+            try
+            {
+                File.Move(frame.Temporary, frame.Path, overwrite: true);
+                var storedBytes = frame.StoredBytes;
+
+                Span<byte> entry = stackalloc byte[8];
+                BitConverter.TryWriteBytes(entry[..4], step);
+                BitConverter.TryWriteBytes(entry[4..], checked((uint)storedBytes));
+                writer.Index.Write(entry);
+                //Flushed per frame so a reader - the client rebuilding its timeline while the
+                //run computes - sees entries for frames that are actually on disk, and never
+                //an entry for one that is not.
+                writer.Index.Flush();
+
+                //A count, not the step reached: with a frame stride those differ, and a
+                //listing that says "540 frames" for a run that stored 135 is describing
+                //storage it does not have.
+                ++writer.StoredFrames;
+                writer.LastStep = step + 1;
+                writer.BytesOnDisk += storedBytes;
+
+                //Metadata on a timer rather than per frame. It is only a progress figure, and
+                //LiteDB in Shared mode takes a cross-process mutex for each update - 0.7 ms a
+                //frame measured, which is small but entirely pointless a thousand times over.
+                if (DateTime.UtcNow - writer.LastMetadataFlush > MetadataInterval)
+                    FlushMetadata(writer);
+            }
+            catch (Exception e)
+            {
+                Console.Error.WriteLine($"RunStore: could not commit frame {step} of {writer.RunId}: {e.Message}");
+            }
         }
     }
 
@@ -1051,13 +1110,23 @@ public class RunStore : IRunStore, IDisposable
 
     void WriteCheckpointCore(string runId, uint step, byte[] state)
     {
+        var packed = PackCheckpoint(runId, step, state);
+        if (packed is { } frame) CommitCheckpoint(runId, frame);
+    }
+
+    /// <summary>
+    /// Written beside and moved into place by <see cref="CommitCheckpoint"/>. A checkpoint
+    /// truncated by a crash is worse than no checkpoint: it is the one file a resume trusts
+    /// completely, and a half-written one reads back as a world with fewer organs rather than as a
+    /// failure. The temporary carries the step so that two checkpoints packing at once never
+    /// share a file.
+    /// </summary>
+    PackedFrame? PackCheckpoint(string runId, uint step, byte[] state)
+    {
         try
         {
-            //Written beside and moved into place. A checkpoint truncated by a crash is worse than
-            //no checkpoint: it is the one file a resume trusts completely, and a half-written one
-            //reads back as a world with fewer organs rather than as a failure.
             var path = CheckpointPath(runId);
-            var temp = $"{path}.tmp";
+            var temp = $"{path}.{step}.tmp";
             long size;
             using (var output = new FileStream(temp, FileMode.Create, FileAccess.Write, FileShare.None))
             {
@@ -1068,11 +1137,19 @@ public class RunStore : IRunStore, IDisposable
                     gz.Write(state, 0, state.Length);
                 size = output.Length;
             }
+            return new(step, path, temp, size);
+        }
+        catch (Exception e) { Console.Error.WriteLine($"RunStore: could not checkpoint {runId}: {e.Message}"); return null; }
+    }
 
-            var previous = File.Exists(path) ? new FileInfo(path).Length : 0;
-            File.Move(temp, path, overwrite: true);
+    void CommitCheckpoint(string runId, PackedFrame packed)
+    {
+        try
+        {
+            var previous = File.Exists(packed.Path) ? new FileInfo(packed.Path).Length : 0;
+            File.Move(packed.Temporary, packed.Path, overwrite: true);
             //Only the difference: the file replaces itself rather than accumulating.
-            if (size != previous) AddAuxBytes(runId, size - previous);
+            if (packed.StoredBytes != previous) AddAuxBytes(runId, packed.StoredBytes - previous);
         }
         catch (Exception e) { Console.Error.WriteLine($"RunStore: could not checkpoint {runId}: {e.Message}"); }
     }

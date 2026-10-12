@@ -440,6 +440,23 @@ namespace Agro
         /// <value>Zero to one.</value>
         public float ScapeGravitropism { get; init; } = 1f;
 
+        /// <summary>
+        /// Negative gravitropism of the scape after birth: the rate per hour at which each base
+        /// segment's rest frame is steered toward <see cref="ScapeGravitropicSetPointAngle"/>.
+        /// </summary>
+        /// <remarks>
+        /// <see cref="ScapeGravitropism"/> acts once, when a segment is born; nothing afterwards
+        /// referred a scape back to the vertical, so one leaned by a contact or by its own load
+        /// stayed leaned, and a load past the buckling limit folded it to the ground. A real scape
+        /// re-erects by differential growth over one to a few days. Keep the per-tick step well
+        /// below the elastic response (5 %/h): the elastic bend is an offset from the rest frame,
+        /// and a rest frame steered faster than the offset relaxes overshoots the set point. The
+        /// steering fades with lignification and stops on an organ with no energy. Zero, the
+        /// default, is the historical behaviour.
+        /// </remarks>
+        /// <value>Zero to one per hour; 0.01-0.014 is a time constant of three to four days.</value>
+        public float ScapeGravitropicRatePerHour { get; init; }
+
         public LeafPhenology FlowerPhenology { get; init; } = new();
 
         /// <summary>
@@ -562,6 +579,7 @@ namespace Agro
             RequireSrgb(ScapeColor, nameof(ScapeColor));
             RequireAngleDegrees(ScapeGravitropicSetPointAngle * 180f / MathF.PI, 90f, nameof(ScapeGravitropicSetPointAngle));
             RequireProbability(ScapeGravitropism, nameof(ScapeGravitropism));
+            RequireProbability(ScapeGravitropicRatePerHour, nameof(ScapeGravitropicRatePerHour));
             if (PetalMorphology is null)
                 throw new ArgumentNullException(nameof(PetalMorphology));
             RequirePositive(FlowerMaximumAgeHours, nameof(FlowerMaximumAgeHours));

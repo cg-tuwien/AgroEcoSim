@@ -20,6 +20,11 @@ public interface ISoilFormation : IFormation
 
 	float GetMetricGroundDepth(float x, float z, int soilIndex);
 	void ProcessRequests();
+	/// <summary>The cell-level request queue of the soil a plant belongs to, or null when there is none.</summary>
+	ISoilRequestSink? RequestSink(int soilIndex);
+	/// <summary>Processes the water requests. The root soil gathers the plants' buffers first; a soil
+	/// nested in a <see cref="SoilFormationsList"/> is handed its share by the list and must not.</summary>
+	void DeliverPost(uint timestep, bool gatherRequests);
 
 	int IntersectPoint(Vector3 center, int soilIndex);
 	float GetTemperature(int index, int soilIndex);
@@ -45,7 +50,7 @@ public interface ISoilFormation : IFormation
     void AppendSurfaceTriangles(List<Vector3> vertices, List<int> indices);
 }
 
-public class SoilFormationRegularVoxels : IGrid3D, ISoilFormation
+public class SoilFormationRegularVoxels : IGrid3D, ISoilFormation, ISoilRequestSink
 {
 	const MethodImplOptions AI = MethodImplOptions.AggressiveInlining;
 	AgroWorld World;
@@ -103,7 +108,7 @@ public class SoilFormationRegularVoxels : IGrid3D, ISoilFormation
 	/// Water request in gramms
 	/// </summary>
 	//readonly List<(PlantSubFormation<UnderGroundAgent> Plant, int Part, float Amount_g)>[] WaterRequestsRoots;
-	readonly HashSet<int> RequestsPresent;
+	readonly List<int> RequestsPresent;
 	/// <summary>
 	/// Water request in grams. For seed requests Part is less than zero.
 	/// </summary>
@@ -210,7 +215,7 @@ public class SoilFormationRegularVoxels : IGrid3D, ISoilFormation
 		// Only occupied cells need request lists. A large field has millions of
 		// voxels but far fewer roots; eager lists and a full-sized hash table
 		// otherwise dominate the soil memory before any plant grows.
-		RequestsPresent = new HashSet<int>();
+		RequestsPresent = [];
 		WaterRequests = new List<(PlantFormation2, int, float)>?[Water_g.Length];
 
 		Array.Fill(Water_g, (double)CellVolume * 100_000d); //some basic water (100 litres per m³ which is kind of normal soil saturation of loamy soils which retain the an average amount of water)
@@ -507,11 +512,23 @@ public class SoilFormationRegularVoxels : IGrid3D, ISoilFormation
 
 	[M(AI)] void IFormation.Census() { }
 
-	[M(AI)] public void DeliverPost(uint timestep)
+	[M(AI)] public void DeliverPost(uint timestep) => DeliverPost(timestep, true);
+
+	public void DeliverPost(uint timestep, bool gatherRequests)
     {
+		if (gatherRequests) SoilRequestRouter.Gather(World, this);
 		ProcessRequests();
 		HasUndeliveredPost = false;
     }
+
+	public ISoilRequestSink? RequestSink(int soilIndex) => soilIndex == 0 ? this : null;
+
+	void ISoilRequestSink.Enqueue(PlantFormation2 plant, int cell, int part, float amount_g)
+	{
+		var requests = WaterRequests[cell] ??= [];
+		if (requests.Count == 0) RequestsPresent.Add(cell);
+		requests.Add((plant, part, amount_g));
+	}
 
 	public bool HasUndeliveredPost { get; private set; } = false;
 	///<summary>
@@ -525,11 +542,8 @@ public class SoilFormationRegularVoxels : IGrid3D, ISoilFormation
 		if (soilIndex != 0 || (uint)index >= (uint)Water_g.Length ||
 			!float.IsFinite(amount_g) || amount_g <= 0f || plant == null || part < 0)
 			return;
-		lock(RequestsPresent) if (Water_g[index] > 0)
-		{
-			RequestsPresent.Add(index);
-			(WaterRequests[index] ??= []).Add((plant.Plant, part, amount_g));
-		}
+		// Buffered on the requesting plant: no lock, and a deterministic order. See SoilRequestRouter.
+		if (Water_g[index] > 0) plant.Plant.WaterRequests.Add((index, part, amount_g));
 	}
 
 	[M(AI)]
@@ -538,11 +552,7 @@ public class SoilFormationRegularVoxels : IGrid3D, ISoilFormation
 		if (soilIndex != 0 || (uint)index >= (uint)Water_g.Length ||
 			!float.IsFinite(amount_g) || amount_g <= 0f || plant == null)
 			return;
-		lock(RequestsPresent) if (Water_g[index] > 0)
-		{
-			RequestsPresent.Add(index);
-			(WaterRequests[index] ??= []).Add((plant, -1, amount_g));
-		}
+		if (Water_g[index] > 0) plant.WaterRequests.Add((index, -1, amount_g));
 	}
 
 	[M(AI)]
@@ -564,6 +574,9 @@ public class SoilFormationRegularVoxels : IGrid3D, ISoilFormation
 
 	public void ProcessRequests()
 	{
+		// Cells in ascending order and, inside a cell, requests in plant order: the outcome of a
+		// scarce cell shared by several roots no longer depends on which thread asked first.
+		RequestsPresent.Sort();
 		foreach (var i in RequestsPresent)
 		{
 			var reqs = WaterRequests[i]!;

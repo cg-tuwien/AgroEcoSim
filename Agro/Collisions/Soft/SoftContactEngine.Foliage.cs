@@ -10,6 +10,38 @@ public sealed partial class SoftContactEngine
     static readonly bool TraceDeep = Environment.GetEnvironmentVariable("AGRO_TRACE_SOFT_DEEP") != null;
     static int TracedCrossings, TracedDeep;
 
+    /// <summary>Per-pair counters, accumulated per chunk so the totals do not depend on how the
+    /// chunks were spread over threads.</summary>
+    struct PairStats
+    {
+        public long Candidates, Contacts, NewSides, Crossings, SuspectedTunnels, DeepPenetrations, PenetrationCount;
+        public long ApproximationQueries, ApproximationSeparations;
+        public double PenetrationSum;
+        public float MaxPenetration;
+        public void Add(in PairStats o)
+        {
+            Candidates += o.Candidates; Contacts += o.Contacts; NewSides += o.NewSides; Crossings += o.Crossings;
+            SuspectedTunnels += o.SuspectedTunnels; DeepPenetrations += o.DeepPenetrations; PenetrationCount += o.PenetrationCount;
+            ApproximationQueries += o.ApproximationQueries; ApproximationSeparations += o.ApproximationSeparations;
+            PenetrationSum += o.PenetrationSum; MaxPenetration = MathF.Max(MaxPenetration, o.MaxPenetration);
+        }
+    }
+
+    /// <summary>What one pair's geometric evaluation yields; the response is queued from it afterwards.</summary>
+    struct PairRecord
+    {
+        public int I, J, Stop;
+        public FoliageContact Hit;
+        public Vector3 Normal;
+        public float Weight, Depth, Residual;
+        public bool Touching, Crossing;
+        public CollisionWorld.ContactKey Key;
+    }
+
+    /// <summary>Pairs per chunk of the parallel own-pair evaluation. Fixed, so the chunking - and
+    /// with it the order in which the per-chunk counters are summed - never depends on the worker cap.</summary>
+    const int OwnPairChunk = 32;
+
     void VisitOwn(PlantFormation2 plant)
     {
         var ag = plant.AG; var work = Work[plant]; var pairs = work.OwnPairs;
@@ -26,10 +58,49 @@ public sealed partial class SoftContactEngine
         // Stable-ID order makes the accumulation independent of the hierarchy's layout.
         pairs.Sort(work.PairOrder);
         CollisionWorld.UniquePairs(pairs);
-        for (int k = 0; k < pairs.Count; ++k)
+        var n = pairs.Count;
+        var chunks = (n + OwnPairChunk - 1) / OwnPairChunk;
+        if (work.ChunkStats.Length < chunks) Array.Resize(ref work.ChunkStats, chunks);
+        if (ChunkOwnPairs && chunks >= 2)
         {
-            var (a, b) = pairs[k];
-            VisitPair(plant, a, plant, b, work);
+            // Few plants, many pairs: the geometry of this plant's pairs - the expensive half - is
+            // evaluated in parallel over fixed chunks, and only the response, which writes into the
+            // plant, is replayed serially in pair order. Bit-identical to the serial path.
+            if (work.Records.Length < n) Array.Resize(ref work.Records, Math.Max(n, work.Records.Length * 2));
+            var records = work.Records; var stats = work.ChunkStats; var epoch = ContactEpoch;
+            var evalStarted = System.Diagnostics.Stopwatch.GetTimestamp();
+            Parallel.For(0, chunks, c =>
+            {
+                var local = default(PairStats);
+                var last = Math.Min(n, (c + 1) * OwnPairChunk);
+                for (int k = c * OwnPairChunk; k < last; ++k)
+                {
+                    var (a, b) = pairs[k];
+                    EvaluatePair(plant, a, plant, b, epoch, work.Contacts, ref local, out records[k]);
+                }
+                stats[c] = local;
+            });
+            var evaluated = System.Diagnostics.Stopwatch.GetTimestamp();
+            work.LastEvalTicks = evaluated - evalStarted; work.LastChunks = chunks;
+            for (int c = 0; c < chunks; ++c) work.Stats.Add(stats[c]);
+            for (int k = 0; k < n; ++k)
+                if (records[k].Touching) RespondPair(plant, plant, in records[k], work);
+            work.LastRespondTicks = System.Diagnostics.Stopwatch.GetTimestamp() - evaluated;
+        }
+        else
+        {
+            for (int c = 0; c < chunks; ++c)
+            {
+                var local = default(PairStats);
+                var last = Math.Min(n, (c + 1) * OwnPairChunk);
+                for (int k = c * OwnPairChunk; k < last; ++k)
+                {
+                    var (a, b) = pairs[k];
+                    if (EvaluatePair(plant, a, plant, b, ContactEpoch, work.Contacts, ref local, out var record))
+                        RespondPair(plant, plant, in record, work);
+                }
+                work.Stats.Add(local);
+            }
         }
     }
 
@@ -41,34 +112,41 @@ public sealed partial class SoftContactEngine
         pa.AG.CollisionBvh.GetOverlappingPairs(pb.AG.CollisionBvh, pa.AG.FieldOrigin, pb.AG.FieldOrigin, pairs);
         pairs.Sort(job.PairOrder);
         CollisionWorld.UniquePairs(pairs);
+        var local = default(PairStats);
         for (int k = 0; k < pairs.Count; ++k)
         {
             var (i, j) = pairs[k];
-            VisitPair(pa, i, pb, j, job.A);
+            if (EvaluatePair(pa, i, pb, j, ContactEpoch, job.A.Contacts, ref local, out var record))
+                RespondPair(pa, pb, in record, job.A);
         }
+        job.A.Stats.Add(local);
     }
 
     /// <summary>
-    /// One endpoint distance query, a side decision, and a compliance-weighted correction queued
-    /// on both bodies. Nothing here is re-evaluated this tick.
+    /// One endpoint distance query and a side decision. Reads the two plants, last tick's memory
+    /// and the previous poses; writes nothing into either plant, so any number of these can run
+    /// at once. Returns whether the pair touches, in which case <paramref name="record"/> holds
+    /// what <see cref="RespondPair"/> needs.
     /// </summary>
-    void VisitPair(PlantFormation2 pa, int i, PlantFormation2 pb, int j, SoftWork owner)
+    static bool EvaluatePair(PlantFormation2 pa, int i, PlantFormation2 pb, int j, long epoch,
+        Dictionary<CollisionWorld.ContactKey, SoftContactMemory> memories, ref PairStats stats, out PairRecord record)
     {
+        record = default;
         var a = pa.AG; var b = pb.AG;
-        if (!a.IsCollisionEligiblePublic(i) || !b.IsCollisionEligiblePublic(j)) return;
-        ++owner.Candidates;
+        if (!a.IsCollisionEligiblePublic(i) || !b.IsCollisionEligiblePublic(j)) return false;
+        ++stats.Candidates;
         var sa = CollisionWorld.Shape(a, i); var sb = CollisionWorld.Shape(b, j);
         var reach = sa.Pose.Radius + sb.Pose.Radius;
         var skin = CollisionSettings.FoliageSkin;
         var band = reach + skin;
         var key = new CollisionWorld.ContactKey(pa, a.GetOrganId(i), pb, b.GetOrganId(j));
-        var hasMemory = owner.Contacts.TryGetValue(key, out var memory)
-            && memory.Seen >= ContactEpoch - 1 - CollisionSettings.ContactMemoryGraceEpochs;
+        var hasMemory = memories.TryGetValue(key, out var memory)
+            && memory.Seen >= epoch - 1 - CollisionSettings.ContactMemoryGraceEpochs;
         // A remembered pair is queried a little beyond the band, so one that has just separated
         // still reports a witness normal and a reversed one can be counted.
         var search = hasMemory ? band + skin : band;
         var stop = pa == pb ? CollisionWorld.CommonAncestor(a, i, j) : -1;
-        var hit = PairDistance(sa, sb, search, pa.World.CollisionGeometryToleranceM, owner);
+        var hit = PairDistance(sa, sb, search, pa.World.CollisionGeometryToleranceM, ref stats);
         var touching = hit.Distance < band;
         var weight = 1f;
         if (stop >= 0)
@@ -89,37 +167,67 @@ public sealed partial class SoftContactEngine
         }
         if (!touching)
         {
-            if (hasMemory && hit.Distance < search && Vector3.Dot(hit.Normal, memory.Normal) < -.5f) ++owner.SuspectedTunnels;
-            return;
+            if (hasMemory && hit.Distance < search && Vector3.Dot(hit.Normal, memory.Normal) < -.5f) ++stats.SuspectedTunnels;
+            return false;
         }
-        ++owner.ContactsCount;
+        ++stats.Contacts;
         // Overlap inside the attachment exemption is by construction (every organ of a node
         // shares the junction) and is not reported; only weighted pairs count as penetration.
         var residual = weight > 0f ? MathF.Max(0f, reach - hit.Distance) : 0f;
         if (residual > 0f)
         {
-            ++owner.PenetrationCount;
-            owner.PenetrationSum += residual;
-            owner.MaxPenetration = MathF.Max(owner.MaxPenetration, residual);
+            ++stats.PenetrationCount;
+            stats.PenetrationSum += residual;
+            stats.MaxPenetration = MathF.Max(stats.MaxPenetration, residual);
             if (residual > CollisionSettings.DeepPenetrationThreshold)
             {
-                ++owner.DeepPenetrations;
+                ++stats.DeepPenetrations;
                 if (TraceDeep && Interlocked.Increment(ref TracedDeep) <= 400)
                     Console.WriteLine($"SOFT_DEEP t={pa.World.Timestep} {i}:{a.GetOrgan(i)} id={a.GetOrganId(i)} L={a.GetLength(i):F4} / {j}:{b.GetOrgan(j)} id={b.GetOrganId(j)} L={b.GetLength(j):F4} d={hit.Distance * 1000:F3}mm reach={reach * 1000:F3}mm w={weight:F2} stop={stop} fA={hit.FeatureA} fB={hit.FeatureB}");
             }
         }
-        var normal = SideNormal(sa, sb, a, i, b, j, hit, hasMemory, memory.Normal, reach, search, owner, out var crossing);
-        owner.Contacts[key] = new(normal, hit.FeatureA, hit.FeatureB, ContactEpoch);
-        if (weight <= 0f) return;
-        var depth = band - hit.Distance;
-        if (crossing || hit.Distance < 1e-7f)
+        var normal = SideNormal(sa, sb, a, i, b, j, hit, hasMemory, memory.Normal, reach, search, ref stats, out var crossing);
+        var depth = 0f;
+        if (weight > 0f)
         {
-            // The witnesses sit on the wrong side or coincide: measure how far the deepest
-            // material of either body reaches past the other's witness instead.
-            depth = MathF.Max(depth, band - Vector3.Dot(sa.Support(normal) - hit.B, normal));
-            depth = MathF.Max(depth, band - Vector3.Dot(hit.A - sb.Support(-normal), normal));
+            depth = band - hit.Distance;
+            if (crossing || hit.Distance < 1e-7f)
+            {
+                // The witnesses sit on the wrong side or coincide: measure how far the deepest
+                // material of either body reaches past the other's witness instead.
+                depth = MathF.Max(depth, band - Vector3.Dot(sa.Support(normal) - hit.B, normal));
+                depth = MathF.Max(depth, band - Vector3.Dot(hit.A - sb.Support(-normal), normal));
+            }
+            if (CollisionSettings.SoftBandLaw)
+            {
+                // Gain fades to zero at the band edge: a pair settles at the band instead of being
+                // pushed across it at full gain and pulled back by gravity next tick. Unchanged at
+                // and beyond physical contact, where the deficit is the whole skin or more.
+                var x = Math.Clamp((band - hit.Distance) / skin, 0f, 1f);
+                depth *= x * (2f - x);
+            }
+            depth *= CollisionSettings.ContactRelaxation * weight;
         }
-        depth *= CollisionSettings.ContactRelaxation * weight;
+        record = new()
+        {
+            I = i, J = j, Stop = stop, Hit = hit, Normal = normal, Weight = weight, Depth = depth,
+            Residual = residual, Touching = true, Crossing = crossing, Key = key,
+        };
+        return true;
+    }
+
+    /// <summary>
+    /// The side memory and the compliance-weighted correction queued on both bodies from one
+    /// evaluated pair. This is the part that writes into the plants, so for a given plant it runs
+    /// on one thread at a time, in pair order.
+    /// </summary>
+    void RespondPair(PlantFormation2 pa, PlantFormation2 pb, in PairRecord r, SoftWork owner)
+    {
+        var a = pa.AG; var b = pb.AG;
+        var i = r.I; var j = r.J; var stop = r.Stop; var hit = r.Hit; var normal = r.Normal; var weight = r.Weight;
+        owner.Contacts[r.Key] = new(normal, hit.FeatureA, hit.FeatureB, ContactEpoch);
+        if (weight <= 0f) return;
+        var depth = r.Depth;
         if (depth <= 0f) return;
         var cap = CollisionSettings.MaxCorrectionDisplacement > 0f ? CollisionSettings.MaxCorrectionDisplacement : float.PositiveInfinity;
         // Split by mobility: a scape against a petiole moves the petiole, a leaf against a leaf
@@ -130,8 +238,8 @@ public sealed partial class SoftContactEngine
         var sum = ma + mb + shared;
         if (sum > 1e-20 && double.IsFinite(sum))
         {
-            if (ma > 0) a.QueueContactCorrection(i, hit.A, normal, (float)(depth * ma / sum), stop, cap);
-            if (mb > 0) b.QueueContactCorrection(j, hit.B, -normal, (float)(depth * mb / sum), stop, cap);
+            if (ma > 0) a.QueueContactCorrection(i, hit.A, normal, (float)(depth * ma / sum), stop, cap, ma);
+            if (mb > 0) b.QueueContactCorrection(j, hit.B, -normal, (float)(depth * mb / sum), stop, cap, mb);
             if (shared > 0) a.QueueSharedShapeCorrection(stop, i, hit.A, j, hit.B, normal, (float)(depth / sum));
         }
         else
@@ -144,8 +252,11 @@ public sealed partial class SoftContactEngine
         // that state slide along each other until an edge clears, so add a tangential step that
         // separates the bodies' centres. Stateless on purpose: it keys on the residual overlap,
         // not on history, and the usual caps bound it.
-        if (residual > CollisionSettings.DeepPenetrationThreshold * .5f)
+        var residual = r.Residual;
+        var slideThreshold = CollisionSettings.DeepPenetrationThreshold * (CollisionSettings.SoftSlideRamp ? .25f : .5f);
+        if (residual > slideThreshold)
         {
+            var sa = CollisionWorld.Shape(a, i); var sb = CollisionWorld.Shape(b, j);
             var apart = (sa.Pose.Base + sa.Pose.Tip - sb.Pose.Base - sb.Pose.Tip) * .5f;
             var tangent = apart - normal * Vector3.Dot(apart, normal);
             if (tangent.LengthSquared() < 1e-12f) tangent = Vector3.Cross(normal, MathF.Abs(normal.Y) < .9f ? Vector3.UnitY : Vector3.UnitX);
@@ -156,8 +267,10 @@ public sealed partial class SoftContactEngine
             if (tangentSum > 1e-20 && double.IsFinite(tangentSum))
             {
                 var slide = residual * CollisionSettings.ContactRelaxation * weight;
-                if (ta > 0) a.QueueContactCorrection(i, hit.A, tangent, (float)(slide * ta / tangentSum), stop, cap);
-                if (tb > 0) b.QueueContactCorrection(j, hit.B, -tangent, (float)(slide * tb / tangentSum), stop, cap);
+                if (CollisionSettings.SoftSlideRamp)
+                    slide *= SmoothStep(slideThreshold, CollisionSettings.DeepPenetrationThreshold * .5f, residual);
+                if (ta > 0) a.QueueContactCorrection(i, hit.A, tangent, (float)(slide * ta / tangentSum), stop, cap, ta);
+                if (tb > 0) b.QueueContactCorrection(j, hit.B, -tangent, (float)(slide * tb / tangentSum), stop, cap, tb);
                 ++owner.Slides;
             }
         }
@@ -169,9 +282,9 @@ public sealed partial class SoftContactEngine
     /// every tick, whereas passing through a sheet reverses it in one tick. A pair found already
     /// overlapping with no history takes its side from where the bodies were last tick.
     /// </summary>
-    Vector3 SideNormal(in ContactShape sa, in ContactShape sb, PlantSubFormation<AboveGroundAgent> a, int i,
+    static Vector3 SideNormal(in ContactShape sa, in ContactShape sb, PlantSubFormation<AboveGroundAgent> a, int i,
         PlantSubFormation<AboveGroundAgent> b, int j, in FoliageContact hit, bool hasMemory, Vector3 remembered,
-        float reach, float search, SoftWork owner, out bool crossing)
+        float reach, float search, ref PairStats stats, out bool crossing)
     {
         crossing = false;
         var resolved = hit.Distance >= FoliageGeometry.Skin;
@@ -184,25 +297,33 @@ public sealed partial class SoftContactEngine
             {
                 if (resolved)
                 {
-                    crossing = true; ++owner.Crossings;
+                    crossing = true; ++stats.Crossings;
                     if (TraceCrossings && Interlocked.Increment(ref TracedCrossings) <= 400)
                         Console.WriteLine($"SOFT_CROSSING t={a.Plant.World.Timestep} {i}:{a.GetOrgan(i)} id={a.GetOrganId(i)} L={a.GetLength(i):F4} / {j}:{b.GetOrgan(j)} id={b.GetOrganId(j)} L={b.GetLength(j):F4} d={hit.Distance * 1000:F3}mm reach={reach * 1000:F3}mm dot={Vector3.Dot(hit.Normal, remembered):F3} fA={hit.FeatureA} fB={hit.FeatureB}");
                 }
                 return remembered;
             }
-            return resolved ? hit.Normal : remembered;
+            if (!resolved) return remembered;
+            // Follow the witness through a low-pass: face and edge witnesses alternate on a sliding
+            // blade and would otherwise turn the push by a right angle from one tick to the next.
+            var tau = CollisionSettings.SoftNormalFilterHours;
+            if (tau <= 0f) return hit.Normal;
+            var alpha = 1f - MathF.Exp(-a.Plant.World.HoursPerTick / tau);
+            var filtered = Vector3.Lerp(remembered, hit.Normal, alpha);
+            var length = filtered.Length();
+            return length > 1e-3f ? filtered / length : hit.Normal;
         }
         if (hit.Distance < reach - FoliageGeometry.Skin
             && i < a.PreviousGeometry.Length && j < b.PreviousGeometry.Length
             && a.PreviousGeometry[i].Exists && b.PreviousGeometry[j].Exists)
         {
-            ++owner.NewSides;
+            ++stats.NewSides;
             var previous = FoliageGeometry.DistanceUncached(sa with { Pose = a.PreviousGeometry[i].Pose },
                 sb with { Pose = b.PreviousGeometry[j].Pose }, search);
             if (previous.Distance >= FoliageGeometry.Skin && previous.Distance < search)
             {
                 if (!resolved) return previous.Normal;
-                if (Vector3.Dot(hit.Normal, previous.Normal) < 0f) { crossing = true; ++owner.Crossings; return previous.Normal; }
+                if (Vector3.Dot(hit.Normal, previous.Normal) < 0f) { crossing = true; ++stats.Crossings; return previous.Normal; }
                 return hit.Normal;
             }
         }
@@ -212,23 +333,23 @@ public sealed partial class SoftContactEngine
     }
 
     /// <summary>Endpoint distance with the certified engine's level-of-detail rejection prefilter, uncached.</summary>
-    static FoliageContact PairDistance(in ContactShape a, in ContactShape b, float search, float tolerance, SoftWork work)
+    static FoliageContact PairDistance(in ContactShape a, in ContactShape b, float search, float tolerance, ref PairStats stats)
     {
         float ea = 0, eb = 0;
         var ta = a.Lamina?.GetCollisionApproximation(a.Pose, a.Pose, tolerance, out ea);
         var tb = b.Lamina?.GetCollisionApproximation(b.Pose, b.Pose, tolerance, out eb);
         if (ta != a.Lamina || tb != b.Lamina)
         {
-            ++work.ApproximationQueries;
+            ++stats.ApproximationQueries;
             var inflated = search + ea + eb + FoliageGeometry.Skin;
-            var coarse = FoliageGeometry.DistanceUncached(a with { Lamina = ta }, b with { Lamina = tb }, inflated);
+            var coarse = FoliageGeometry.DistanceSampled(a with { Lamina = ta }, b with { Lamina = tb }, inflated, CollisionSettings.SoftExactPairBudget);
             if (coarse.Distance >= inflated)
             {
-                ++work.ApproximationSeparations;
+                ++stats.ApproximationSeparations;
                 return new(a.Pose.Base, b.Pose.Base, Vector3.UnitY, search, -1, -1);
             }
         }
-        var hit = FoliageGeometry.DistanceUncached(a, b, search);
+        var hit = FoliageGeometry.DistanceSampled(a, b, search, CollisionSettings.SoftExactPairBudget);
         // Outside the search radius the witnesses are meaningless; normalise them so no decision
         // can depend on them.
         return hit.Distance >= search ? new(a.Pose.Base, b.Pose.Base, Vector3.UnitY, search, -1, -1) : hit;

@@ -1047,42 +1047,69 @@ public class IrradianceClient
         }
 		//Formations
 		writer.WriteU32(formations.Count - SkipFormations.Count); //WRITE NUMBER OF PLANTS in this system
-		var seasonProgress = -1f;
+		// Each plant's record depends only on that plant, so the records are written concurrently
+		// into per-plant buffers and concatenated in formation order: the bytes are identical to
+		// the sequential export, and the export no longer serialises the whole stand on one core.
+		ExportedPlants.Clear();
 		var skipPointer = 0;
 		for (int pi = 0; pi < formations.Count; ++pi)
 		{
 			if (skipPointer < SkipFormations.Count && SkipFormations[skipPointer] == pi)
 				++skipPointer;
 			else
-			{
-				var plant = formations[pi] as PlantFormation2;
-				var ag = plant.AG;
-				var count = ag.Count;
-				var world = plant.World;
+				ExportedPlants.Add((PlantFormation2)formations[pi]);
+		}
+		while (PlantExportBuffers.Count < ExportedPlants.Count) PlantExportBuffers.Add(new MemoryStream(1 << 12));
+		var roots = flags.HasFlag(ExportFlags.Roots);
+		Parallel.For(0, ExportedPlants.Count, i =>
+		{
+			var buffer = PlantExportBuffers[i];
+			buffer.Position = 0; buffer.SetLength(0);
+			using var plantWriter = new BinaryWriter(buffer, System.Text.Encoding.UTF8, leaveOpen: true);
+			WritePlant(plantWriter, ExportedPlants[i], v8, includeAnalytics, roots);
+		});
+		for (int i = 0; i < ExportedPlants.Count; ++i)
+		{
+			var buffer = PlantExportBuffers[i];
+			writer.Write(buffer.GetBuffer(), 0, (int)buffer.Length);
+		}
+	}
 
-				var sensorsCount = 0;
-				for (int i = 0; i < count; ++i)
-					if (ag.GetOrgan(i) == OrganTypes.Leaf)
-						++sensorsCount;
+	/// <summary>Scratch for the parallel export: one buffer per exported plant, kept at its high-water mark.</summary>
+	readonly List<MemoryStream> PlantExportBuffers = [];
+	readonly List<PlantFormation2> ExportedPlants = [];
 
-				writer.Write(plant.Parameters.Name);
+	/// <summary>One plant's record of a V7/V8 frame. Reads the plant and the irradiance of the
+	/// previous step only, so plants can be written concurrently.</summary>
+	void WritePlant(BinaryWriter writer, PlantFormation2 plant, bool v8, bool includeAnalytics, bool roots)
+	{
+		var ag = plant.AG;
+		var count = ag.Count;
+		var world = plant.World;
+
+		var sensorsCount = 0;
+		for (int i = 0; i < count; ++i)
+			if (ag.GetOrgan(i) == OrganTypes.Leaf)
+				++sensorsCount;
+
+		writer.Write(plant.Parameters.Name);
                 if (v8) writer.Write(SceneGeometryAssets.For(plant.Parameters).Id);
-				writer.WriteU32(count); //WRITE NUMBER OF ABOVE-GROUND SURFACES in this plant
+		writer.WriteU32(count); //WRITE NUMBER OF ABOVE-GROUND SURFACES in this plant
 
-				for (int i = 0; i < count; ++i)
-				{
-					var organ = ag.GetOrgan(i);
-					var center = ag.GetBaseCenterWorld(i) + ag.GetBaseOffset(i);
-					var scale = ag.GetScale(i);
-					var orientation = ag.GetDirection(i);
+		for (int i = 0; i < count; ++i)
+		{
+			var organ = ag.GetOrgan(i);
+			var center = ag.GetBaseCenterWorld(i) + ag.GetBaseOffset(i);
+			var scale = ag.GetScale(i);
+			var orientation = ag.GetDirection(i);
 
-					var x = Vector3.Transform(Vector3.UnitX, orientation);
-					var y = Vector3.Transform(Vector3.UnitY, orientation);
-					var z = Vector3.Transform(Vector3.UnitZ, orientation);
+			var x = Vector3.Transform(Vector3.UnitX, orientation);
+			var y = Vector3.Transform(Vector3.UnitY, orientation);
+			var z = Vector3.Transform(Vector3.UnitZ, orientation);
 
-					var parentIndex = ag.GetParent(i);
-					writer.Write(parentIndex);
-					writer.WriteU8((byte)organ);
+			var parentIndex = ag.GetParent(i);
+			writer.Write(parentIndex);
+			writer.WriteU8((byte)organ);
                     if (v8)
                     {
                         var kind = ag.HasContactDeformation && organ is OrganTypes.Leaf or OrganTypes.Petiole
@@ -1094,149 +1121,147 @@ public class IrradianceClient
                             writer.Write(q.X); writer.Write(q.Y); writer.Write(q.Z); writer.Write(q.W);
                         }
                     }
-					switch (organ)
-					{
-						case OrganTypes.Leaf:
+			switch (organ)
+			{
+				case OrganTypes.Leaf:
                         case OrganTypes.FlowerPadel:
                             {
-								var template = ag.GetLaminaTemplate(i)!;
-								var ax = x * scale.X * 0.5f;
-								var ay = -z * (scale.Z * 0.5f * template.WidthScale);
-								// Served vertices retain their authored width for old playback. New matrices
-								// apply the same correction as the cached collision vertices.
-								// Relief still grows with the physical blade width, independently of that correction.
-								var az = y * template.ReliefScale(scale.Z * .5f);
-								var c = center + ax;
-								writer.WriteM32(ax, ay, az, c);
-								if (includeAnalytics)
-								{
-									writer.Write(Math.Clamp(ag.GetWater(i) / ag.GetWaterEfficientCapacity(world, i), 0, 1));
-									writer.Write(Math.Clamp(ag.GetEnergy(i) / ag.GetEnergyCapacity(i), 0, 1));
-									writer.Write(GetIrradiance(ag, i));
-									writer.Write(ag.GetDailyResourcesInv(i));
-									writer.Write(ag.GetDailyProductionInv(i));
-								}
-								//writer.Write(ag.GetDailyEfficiency(i));
-								//writer.Write(0f);
-								var phenology = organ.Equals(OrganTypes.Leaf)? plant.Parameters.LeafPhenology:plant.Parameters.FlowerSettings.FlowerPhenology;
-								phenology.WriteColor(writer, world.Season, ag.GetAdulcy(i, world.Timestep), ag.GetStress(i), ag.GetSenescence(i, world.Timestep));
-							}
-							break;
-						case OrganTypes.Stem: case OrganTypes.Petiole: case OrganTypes.Meristem: case OrganTypes.FlowerStem:
+						var template = ag.GetLaminaTemplate(i)!;
+						var ax = x * scale.X * 0.5f;
+						var ay = -z * (scale.Z * 0.5f * template.WidthScale);
+						// Served vertices retain their authored width for old playback. New matrices
+						// apply the same correction as the cached collision vertices.
+						// Relief still grows with the physical blade width, independently of that correction.
+						var az = y * template.ReliefScale(scale.Z * .5f);
+						var c = center + ax;
+						writer.WriteM32(ax, ay, az, c);
+						if (includeAnalytics)
+						{
+							writer.Write(Math.Clamp(ag.GetWater(i) / ag.GetWaterEfficientCapacity(world, i), 0, 1));
+							writer.Write(Math.Clamp(ag.GetEnergy(i) / ag.GetEnergyCapacity(i), 0, 1));
+							writer.Write(GetIrradiance(ag, i));
+							writer.Write(ag.GetDailyResourcesInv(i));
+							writer.Write(ag.GetDailyProductionInv(i));
+						}
+						//writer.Write(ag.GetDailyEfficiency(i));
+						//writer.Write(0f);
+						var phenology = organ.Equals(OrganTypes.Leaf)? plant.Parameters.LeafPhenology:plant.Parameters.FlowerSettings.FlowerPhenology;
+						phenology.WriteColor(writer, world.Season, ag.GetAdulcy(i, world.Timestep), ag.GetStress(i), ag.GetSenescence(i, world.Timestep));
+					}
+					break;
+				case OrganTypes.Stem: case OrganTypes.Petiole: case OrganTypes.Meristem: case OrganTypes.FlowerStem:
                         case OrganTypes.FlowerMeristem:
                         case OrganTypes.FlowerPedicel:
                         case OrganTypes.FlowerBud:
                             {
-								writer.Write(scale.X); //length
-								writer.Write(scale.Z * 0.5f); //radius
-								writer.WriteM32(z, x, y, center);
-								#if DEBUG
-								// 2023-10 Mitsuba sometimes complains about non-uniform scaling of cylinders as well as about shearing that should not be present.
-								// The following debugging did not catch anything suspicious so far.
-								// var xl = Math.Abs(1f - x.LengthSquared());
-								// var yl = Math.Abs(1f - y.LengthSquared());
-								// var zl = Math.Abs(1f - z.LengthSquared());
-								// if (xl > 1e-2 || yl > 1e-2 || zl > 1e-2)
-								// {
-								// 	Debug.WriteLine($"stem xyz {xl} {yl} {zl}");
-								// }
-								#endif
-								if (includeAnalytics)
-								{
-									writer.Write(Math.Clamp(ag.GetWater(i) / ag.GetWaterEfficientCapacity(world, i), 0, 1));
-									writer.Write(Math.Clamp(ag.GetEnergy(i) / ag.GetEnergyCapacity(i), 0, 1));
-									writer.Write(Math.Clamp(ag.GetWoodRatio(i), 0, 1));
-									writer.Write(ag.GetDailyResourcesInv(i));
-									writer.Write(ag.GetDailyProductionInv(i));
-								}
-								//writer.Write(organ == OrganTypes.Stem ? ag.GetDailyEfficiency(i) : 0);
-								//Every cylinder organ used to be handed the LEAF phenology, so a scape
-								//went out leaf-green and a flower's centre was the same colour as its
-								//petals. The axis is stem tissue and the centre is its own colour, both
-								//constants of the species rather than phenological curves.
-								var flowerSettings = plant.Parameters.FlowerSettings;
-								if (organ == OrganTypes.FlowerBud && flowerSettings.FlowerCentreColor.HasValue)
-									LeafPhenology.WriteFixedColor(writer, flowerSettings.FlowerCentreColor.Value);
-								else if (flowerSettings.ScapeColor.HasValue &&
-									(organ == OrganTypes.FlowerStem || organ == OrganTypes.FlowerMeristem ||
-									 organ == OrganTypes.FlowerPedicel || organ == OrganTypes.FlowerBud))
-									LeafPhenology.WriteFixedColor(writer, flowerSettings.ScapeColor.Value);
-								else
-									plant.Parameters.LeafPhenology.WriteColor(writer, world.Season, ag.GetAdulcy(i, world.Timestep), ag.GetStress(i), ag.GetSenescence(i, world.Timestep));
-							}
-							break;
-						case OrganTypes.Bud:
+						writer.Write(scale.X); //length
+						writer.Write(scale.Z * 0.5f); //radius
+						writer.WriteM32(z, x, y, center);
+						#if DEBUG
+						// 2023-10 Mitsuba sometimes complains about non-uniform scaling of cylinders as well as about shearing that should not be present.
+						// The following debugging did not catch anything suspicious so far.
+						// var xl = Math.Abs(1f - x.LengthSquared());
+						// var yl = Math.Abs(1f - y.LengthSquared());
+						// var zl = Math.Abs(1f - z.LengthSquared());
+						// if (xl > 1e-2 || yl > 1e-2 || zl > 1e-2)
+						// {
+						// 	Debug.WriteLine($"stem xyz {xl} {yl} {zl}");
+						// }
+						#endif
+						if (includeAnalytics)
+						{
+							writer.Write(Math.Clamp(ag.GetWater(i) / ag.GetWaterEfficientCapacity(world, i), 0, 1));
+							writer.Write(Math.Clamp(ag.GetEnergy(i) / ag.GetEnergyCapacity(i), 0, 1));
+							writer.Write(Math.Clamp(ag.GetWoodRatio(i), 0, 1));
+							writer.Write(ag.GetDailyResourcesInv(i));
+							writer.Write(ag.GetDailyProductionInv(i));
+						}
+						//writer.Write(organ == OrganTypes.Stem ? ag.GetDailyEfficiency(i) : 0);
+						//Every cylinder organ used to be handed the LEAF phenology, so a scape
+						//went out leaf-green and a flower's centre was the same colour as its
+						//petals. The axis is stem tissue and the centre is its own colour, both
+						//constants of the species rather than phenological curves.
+						var flowerSettings = plant.Parameters.FlowerSettings;
+						if (organ == OrganTypes.FlowerBud && flowerSettings.FlowerCentreColor.HasValue)
+							LeafPhenology.WriteFixedColor(writer, flowerSettings.FlowerCentreColor.Value);
+						else if (flowerSettings.ScapeColor.HasValue &&
+							(organ == OrganTypes.FlowerStem || organ == OrganTypes.FlowerMeristem ||
+							 organ == OrganTypes.FlowerPedicel || organ == OrganTypes.FlowerBud))
+							LeafPhenology.WriteFixedColor(writer, flowerSettings.ScapeColor.Value);
+						else
+							plant.Parameters.LeafPhenology.WriteColor(writer, world.Season, ag.GetAdulcy(i, world.Timestep), ag.GetStress(i), ag.GetSenescence(i, world.Timestep));
+					}
+					break;
+				case OrganTypes.Bud:
                             {
-								writer.WriteV32(center);
-								writer.Write(scale.X); //radius
-								if (includeAnalytics)
-								{
-									writer.Write(Math.Clamp(ag.GetWater(i) / ag.GetWaterEfficientCapacity(world, i), 0, 1));
-									writer.Write(Math.Clamp(ag.GetEnergy(i) / ag.GetEnergyCapacity(i), 0, 1));
-								}
-							}
-							break;
+						writer.WriteV32(center);
+						writer.Write(scale.X); //radius
+						if (includeAnalytics)
+						{
+							writer.Write(Math.Clamp(ag.GetWater(i) / ag.GetWaterEfficientCapacity(world, i), 0, 1));
+							writer.Write(Math.Clamp(ag.GetEnergy(i) / ag.GetEnergyCapacity(i), 0, 1));
+						}
+					}
+					break;
 
 
 
 
                         default: throw new NotImplementedException();
-					}
+			}
 
-					if (includeAnalytics)
-					{
-						writer.Write(ag.GetAuxins(i));
-						writer.Write(ag.GetDailyEfficiency(i));
-					}
-				}
+			if (includeAnalytics)
+			{
+				writer.Write(ag.GetAuxins(i));
+				writer.Write(ag.GetDailyEfficiency(i));
+			}
+		}
 
-				if (flags.HasFlag(ExportFlags.Roots))
+		if (roots)
+		{
+			writer.Write(plant.World.VirtualRoots);
+			if (plant.World.VirtualRoots)
+			{
+				writer.WriteV32(plant.UG.Size);
+			}
+			else
+			{
+				var ug = plant.UG as PlantSubFormation<UnderGroundAgent>;
+				count = ug.Count;
+				writer.WriteU32(count); //WRITE NUMBER OF UNDER-GROUND SURFACES in this plant
+				for (int i = 0; i < count; ++i)
 				{
-					writer.Write(plant.World.VirtualRoots);
-					if (plant.World.VirtualRoots)
+					var organ = ug.GetOrgan(i);
+					var center = ug.GetBaseCenterWorld(i);
+					var scale = ug.GetScale(i);
+					var orientation = ug.GetDirection(i);
+
+					var x = Vector3.Transform(Vector3.UnitX, orientation);
+					var y = Vector3.Transform(Vector3.UnitY, orientation);
+					var z = Vector3.Transform(Vector3.UnitZ, orientation);
+
+					var parentIndex = ug.GetParent(i);
+					writer.Write(parentIndex);
+
+					switch (organ)
 					{
-						writer.WriteV32(plant.UG.Size);
-					}
-					else
-					{
-						var ug = plant.UG as PlantSubFormation<UnderGroundAgent>;
-						count = ug.Count;
-						writer.WriteU32(count); //WRITE NUMBER OF UNDER-GROUND SURFACES in this plant
-						for (int i = 0; i < count; ++i)
-						{
-							var organ = ug.GetOrgan(i);
-							var center = ug.GetBaseCenterWorld(i);
-							var scale = ug.GetScale(i);
-							var orientation = ug.GetDirection(i);
-
-							var x = Vector3.Transform(Vector3.UnitX, orientation);
-							var y = Vector3.Transform(Vector3.UnitY, orientation);
-							var z = Vector3.Transform(Vector3.UnitZ, orientation);
-
-							var parentIndex = ug.GetParent(i);
-							writer.Write(parentIndex);
-
-							switch (organ)
+						case OrganTypes.Root:
 							{
-								case OrganTypes.Root:
-									{
-										writer.WriteU8(1); //ORGAN 1 root
-										writer.Write(scale.X); //length
-										writer.Write(scale.Z * 0.5f); //radius
-										writer.WriteM32(z, x, y, center);
-										if (includeAnalytics)
-										{
-											writer.Write(Math.Clamp(ug.GetWater(i) / ug.GetWaterStorageCapacity(i), 0, 1));
-											//writer.Write(ug.GetWater(i));
-											writer.Write(Math.Clamp(ug.GetEnergy(i) / ug.GetEnergyCapacity(i), 0, 1));
-											writer.Write(Math.Clamp(ug.GetWoodRatio(i), 0, 1));
-											writer.Write(ug.GetDailyResourcesInv(i));
-											writer.Write(ug.GetDailyProductionInv(i));
-										}
-									}
-									break;
+								writer.WriteU8(1); //ORGAN 1 root
+								writer.Write(scale.X); //length
+								writer.Write(scale.Z * 0.5f); //radius
+								writer.WriteM32(z, x, y, center);
+								if (includeAnalytics)
+								{
+									writer.Write(Math.Clamp(ug.GetWater(i) / ug.GetWaterStorageCapacity(i), 0, 1));
+									//writer.Write(ug.GetWater(i));
+									writer.Write(Math.Clamp(ug.GetEnergy(i) / ug.GetEnergyCapacity(i), 0, 1));
+									writer.Write(Math.Clamp(ug.GetWoodRatio(i), 0, 1));
+									writer.Write(ug.GetDailyResourcesInv(i));
+									writer.Write(ug.GetDailyProductionInv(i));
+								}
 							}
-						}
+							break;
 					}
 				}
 			}

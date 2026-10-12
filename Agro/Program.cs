@@ -1,3 +1,6 @@
+using Agro.Collisions;
+using System.Diagnostics;
+using System.Numerics;
 using System.Text.Json;
 using Agro;
 using CommandLine;
@@ -17,6 +20,10 @@ internal class Program
         [Option("checkpoint-selftest", Required = false, HelpText =
             "Verify that resuming from a checkpoint is byte-identical to never stopping, and exit.")]
         public bool CheckpointSelfTest { get; set; }
+
+        [Option("sheet-distance-selftest", Required = false, HelpText =
+            "Compare the soft engine's sampled blade-to-blade distance against the exact query on random blade pairs, and exit.")]
+        public bool SheetDistanceSelfTest { get; set; }
     }
 
     /// <summary>
@@ -96,12 +103,77 @@ internal class Program
         return failures == 0 ? 0 : 1;
     }
 
+    /// <summary>
+    /// Measures the soft engine's sampled sheet distance against the exact one.
+    ///
+    /// The sampled query is an upper bound within an edge length times the crossing angle, and
+    /// that bound is what the soft engine's banded response relies on. Random pairs of real leaf
+    /// templates - lying along each other, crossing, offset - at the separations the engine
+    /// actually asks about, with the error distribution and the fraction of pairs whose
+    /// touching verdict differs, so a change to either query is caught here before it shows up
+    /// as a leaf passing through another.
+    /// </summary>
+    static int SheetDistanceSelfTest()
+    {
+        var rng = new Random(42);
+        var failures = 0;
+        const float band = 0.0011f; // two blade radii plus the default skin
+        foreach (var species in SpeciesSettings.Predefined)
+        {
+            var template = LaminaTemplates.For(species, OrganTypes.Leaf);
+            if (template == null) continue;
+            var length = species.LeafLength; var width = species.LeafRadius * 2f;
+            double sumErr = 0, maxErr = 0; int verdictDiffers = 0, sampled = 0, n = 0;
+            long exactTicks = 0, sampledTicks = 0;
+            for (int k = 0; k < 600; ++k)
+            {
+                var baseA = new Vector3(0.3f, 0.2f, 0.3f);
+                var rotA = Quaternion.CreateFromYawPitchRoll((float)(rng.NextDouble() * 6.28), (float)(rng.NextDouble() - .5f), (float)(rng.NextDouble() - .5f));
+                // Three families: along each other, crossing at an angle, and offset by a fraction of the length.
+                var family = k % 3;
+                var tilt = family == 1 ? (float)(rng.NextDouble() * 1.2 - .6) : (float)(rng.NextDouble() * .2 - .1);
+                var rotB = Quaternion.Normalize(Quaternion.CreateFromAxisAngle(Vector3.Transform(Vector3.UnitY, rotA), tilt)
+                    * Quaternion.CreateFromAxisAngle(Vector3.Transform(Vector3.UnitZ, rotA), (float)(rng.NextDouble() * .2 - .1)) * rotA);
+                var gap = (float)(rng.NextDouble() * .004 - .001); // -1 mm (penetrating) to +3 mm
+                var offset = Vector3.Transform(Vector3.UnitY, rotA) * gap
+                    + Vector3.Transform(Vector3.UnitX, rotA) * (family == 2 ? (float)(rng.NextDouble() * length * .8) : (float)(rng.NextDouble() * length * .2))
+                    + Vector3.Transform(Vector3.UnitZ, rotA) * (float)((rng.NextDouble() - .5) * width);
+                var poseA = new OrganPose(baseA, rotA, length, width, AboveGroundAgent.LeafThickness * .5f);
+                var poseB = new OrganPose(baseA + offset, rotB, length, width, AboveGroundAgent.LeafThickness * .5f);
+                var a = new ContactShape(poseA, template); var b = new ContactShape(poseB, template);
+                var t0 = Stopwatch.GetTimestamp();
+                var exact = FoliageGeometry.DistanceUncached(a, b, band * 4);
+                var t1 = Stopwatch.GetTimestamp();
+                var approx = FoliageGeometry.DistanceSampled(a, b, band * 4, 1); // always the sampled path
+                var t2 = Stopwatch.GetTimestamp();
+                exactTicks += t1 - t0; sampledTicks += t2 - t1;
+                if (exact.Distance >= band * 4 && approx.Distance >= band * 4) continue; // both out of range
+                ++n; ++sampled;
+                var err = approx.Distance - exact.Distance;
+                // The exact query stops at the first witness inside the physical radii, so below
+                // them it is not a minimum either; only compare where it is one.
+                if (err < -1e-5f && exact.Distance >= AboveGroundAgent.LeafThickness) { ++failures; Console.WriteLine($"{species.Name}: sampled distance BELOW exact by {-err * 1000:F3} mm at {exact.Distance * 1000:F3} mm"); }
+                sumErr += Math.Max(0, err); maxErr = Math.Max(maxErr, err);
+                if ((exact.Distance < band) != (approx.Distance < band)) ++verdictDiffers;
+            }
+            var scale = 1000.0 / Stopwatch.Frequency;
+            Console.WriteLine($"{species.Name,-32} template {template.Vertices.Length} vertices / {template.Indices.Length / 3} triangles; pairs in range {n,4}: mean overestimate {sumErr / Math.Max(1, n) * 1000:F3} mm, max {maxErr * 1000:F3} mm, touching verdict differs {verdictDiffers} ({100.0 * verdictDiffers / Math.Max(1, n):F1} %); exact {exactTicks * scale:F0} ms, sampled {sampledTicks * scale:F0} ms");
+            if (maxErr > 0.0015) { ++failures; Console.WriteLine($"{species.Name}: max overestimate above 1.5 mm"); }
+        }
+        Console.WriteLine(failures == 0 ? "Sheet distance self-test passed." : $"Sheet distance self-test FAILED ({failures}).");
+        return failures == 0 ? 0 : 1;
+    }
+
     private static int Main(string[] args)
     {
         var exitCode = 0;
+        //See AgroServer/Program.cs: the pool must already hold a thread per core when the first
+        //parallel phase of the first tick asks for them.
+        ThreadPool.SetMinThreads(Environment.ProcessorCount, Environment.ProcessorCount);
         Parser.Default.ParseArguments<Options>(args).WithParsed(options =>
         {
         if (options.CheckpointSelfTest) { exitCode = CheckpointSelfTest(); return; }
+        if (options.SheetDistanceSelfTest) { exitCode = SheetDistanceSelfTest(); return; }
 
         AgroWorld world;
         if (options.ImportFile != null)

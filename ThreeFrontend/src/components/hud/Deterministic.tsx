@@ -2,27 +2,23 @@ import { h } from "preact";
 import appstate from "../../appstate";
 
 /**
- * Reproducibility, traded against throughput.
+ * Forces the sequential tick. A diagnostic, no longer a trade.
  *
- * Not cosmetic and not a debug switch. With more than one plant the simulation ticks its
- * formations in parallel, so cross-formation messages and soil water requests accumulate in
- * whatever order the thread pool produced - and float addition is not associative. Measured: the
- * same request with the same seed is byte-identical for a single plant and diverges at the FIRST
- * timestep once there are several, with 59 of 60 stored frames differing.
- *
- * That is fine for exploring and fatal for continuing or forking a run, which is the whole reason
- * the switch exists. A child does not resume its parent - nothing here stores live world state, so
- * it is computed again from the parent's recorded request. With this on, the shared stretch comes
- * out byte-identical and the two runs are genuinely comparable; with it off the child is a second
- * sample of the same scenario and the difference between them says nothing about what was changed.
+ * The parallel tick used to be irreproducible - formations ticked concurrently and their soil water
+ * requests reached the soil in thread-pool order, so the same request with the same seed diverged
+ * at the first timestep once there were several plants - and this switch bought reproducibility
+ * at the price of throughput, for continuing or forking a run. The requests are now buffered per
+ * plant and processed in formation order, and the parallel tick is byte-identical to the
+ * sequential one (measured at 100 and 400 plants). Every run is reproducible; this only slows it
+ * down, and exists so a divergence between the two paths can still be investigated.
  */
 export function Deterministic() {
     return <div>
         <input type="checkbox" name="deterministic" checked={appstate.deterministic}
             onChange={e => appstate.deterministic.value = e.currentTarget.checked} />
         <label for="deterministic"
-            title="Runs the simulation sequentially so the same seed always gives the same result. Slower with many plants, and required if you want to continue or fork this run later and compare the result against it.">
-            Reproducible run (slower)
+            title="Runs the formations one after another instead of in parallel. Not needed for reproducibility any more - the parallel tick gives the same result - so leave it off unless you are investigating a difference between the two.">
+            Sequential tick (diagnostic, slower)
         </label>
     </div>;
 }

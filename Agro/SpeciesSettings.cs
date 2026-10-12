@@ -178,6 +178,18 @@ public class SpeciesSettings
     public float ShootsGravitropicSetPointAngle { get; set; } = 0f;
 
     /// <summary>
+    /// Negative gravitropism of a stem after birth: the rate per hour at which a stem segment's
+    /// rest frame is steered toward <see cref="ShootsGravitropicSetPointAngle"/>.
+    /// </summary>
+    /// <value>
+    /// Zero to one per hour. Zero, the default, keeps the historical behaviour in which a stem's
+    /// rest frame is set at birth and never referred back to the vertical. See
+    /// FlowerSettings.ScapeGravitropicRatePerHour for the scape's equivalent and the rate to use.
+    /// </value>
+    [SpeciesUILabel("Shoot gravitropic rate per hour")]
+    public float ShootsGravitropicRatePerHour { get; set; } = 0f;
+
+    /// <summary>
     /// Standard wood growth time (in hours)
     /// </summary>
     [SpeciesUILabel("Wood maturing time (hours)")]
@@ -1243,6 +1255,8 @@ public class SpeciesSettings
             throw new ArgumentOutOfRangeException(nameof(ShootsGravitropicSetPointAngle),
                 ShootsGravitropicSetPointAngle, "The set-point angle must lie between zero and pi/2 radians.");
         }
+        if (!float.IsFinite(ShootsGravitropicRatePerHour) || ShootsGravitropicRatePerHour < 0f || ShootsGravitropicRatePerHour > 1f)
+            throw new ArgumentOutOfRangeException(nameof(ShootsGravitropicRatePerHour), ShootsGravitropicRatePerHour, "The rate must lie between zero and one per hour.");
         if (CrownMaximumNodes < 0)
             throw new ArgumentOutOfRangeException(nameof(CrownMaximumNodes), CrownMaximumNodes, "Value must be non-negative.");
         RequireProbability(FloweringSeasonStart, nameof(FloweringSeasonStart));

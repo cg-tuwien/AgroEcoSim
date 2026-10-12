@@ -121,14 +121,15 @@ public sealed partial class CollisionWorld
     }
 
     /// <summary>Bounds on parallelism affect cost only, never candidate order or physics.</summary>
-    static readonly int WorkerLimit = int.TryParse(Environment.GetEnvironmentVariable("AGRO_CollisionWorkers"), out var n)
+    internal static readonly int WorkerLimit = int.TryParse(Environment.GetEnvironmentVariable("AGRO_CollisionWorkers"), out var n)
         ? Math.Clamp(n, 1, Environment.ProcessorCount) : Environment.ProcessorCount;
     static readonly ParallelOptions[] Workers = Enumerable.Range(1, WorkerLimit)
         .Select(n => new ParallelOptions { MaxDegreeOfParallelism = n }).ToArray();
     const int MinimumParallelWork = 256;
+    static int Concurrency(long work) => (int)Math.Min(WorkerLimit, Math.Max(1, (work + MinimumParallelWork - 1) / MinimumParallelWork));
     internal static void RunJobs<T>(List<T> jobs, long work, Action<T> action)
     {
-        var concurrency = (int)Math.Min(WorkerLimit, Math.Max(1, (work + MinimumParallelWork - 1) / MinimumParallelWork));
+        var concurrency = Concurrency(work);
         if (jobs.Count < 2 || concurrency == 1)
         { foreach (var job in jobs) action(job); return; }
         // Contiguous coarse ranges avoid a delegate/partitioner invocation per tiny pair.
@@ -142,6 +143,48 @@ public sealed partial class CollisionWorld
             for (int i = part * jobs.Count / partitions; i < end; ++i) action(jobs[i]);
         });
     }
+    /// <summary>
+    /// Dynamic longest-first scheduling for jobs of very unequal cost. The soft engine's jobs are
+    /// plants, and a seedling against a mature rosette is three to five orders of magnitude of
+    /// pair work; the contiguous ranges of <see cref="RunJobs"/> then leave most workers idle
+    /// behind whichever range holds the expensive plants. Here the jobs are sorted by last tick's
+    /// measured cost (ties by index, so the order is reproducible) and every worker pulls the
+    /// next one from a shared cursor: the cheap tail fills in behind the long jobs. Scheduling
+    /// affects cost only - each job still writes nothing but its own plant and the barrier at the
+    /// end is the same, so the physics is identical for any worker cap.
+    /// </summary>
+    internal sealed class WeightedSchedule
+    {
+        long[] Weights = [];
+        int[] Order = [];
+        readonly IComparer<int> ByWeight;
+        int Next;
+        public WeightedSchedule() => ByWeight = Comparer<int>.Create((a, b) =>
+        {
+            var c = Weights[b].CompareTo(Weights[a]);
+            return c != 0 ? c : a.CompareTo(b);
+        });
+
+        /// <param name="work">The organ count the parallelism threshold is judged on, as in <see cref="RunJobs"/>.</param>
+        /// <param name="weight">Last tick's cost of a job, any monotone unit.</param>
+        public void Run<T>(List<T> jobs, long work, Func<T, long> weight, Action<T> action)
+        {
+            var n = jobs.Count;
+            var concurrency = Concurrency(work);
+            if (n < 2 || concurrency == 1) { foreach (var job in jobs) action(job); return; }
+            if (Order.Length < n) { Array.Resize(ref Order, n); Array.Resize(ref Weights, n); }
+            for (int i = 0; i < n; ++i) { Order[i] = i; Weights[i] = weight(jobs[i]); }
+            Array.Sort(Order, 0, n, ByWeight);
+            Next = -1;
+            var order = Order;
+            Parallel.For(0, concurrency, Workers[concurrency - 1], _ =>
+            {
+                int i;
+                while ((i = Interlocked.Increment(ref Next)) < n) action(jobs[order[i]]);
+            });
+        }
+    }
+
     int PhaseThread;
     long AttributedMainIntervals, AttributedMainTriangles;
     void MeasureJob(PlantWork work, Action action)

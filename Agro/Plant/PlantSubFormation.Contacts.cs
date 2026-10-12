@@ -43,7 +43,24 @@ public partial class PlantSubFormation<T>
         LaminaKnown[index] = true;
         return LaminaCache[index] = LaminaTemplates.For(Plant.Parameters, organ, slice);
     }
+    /// <summary>
+    /// Resolves every lamina template once, on the plant's own job. The cache fills and resizes
+    /// lazily, which is only safe while one thread at a time touches the plant; a job that reads
+    /// this plant concurrently later in the tick must find the cache complete.
+    /// </summary>
+    internal void WarmLaminaCache()
+    {
+        for (int i = 0; i < AgentCount; ++i) GetLaminaTemplate(i);
+    }
+
     Vector3[] ContactTurns = [];
+    /// <summary>Soft engine: the largest single-pair turn queued on a joint this sweep, and the
+    /// longest lever any of them acted through. <see cref="EndContactSweep"/> caps the summed turn
+    /// by them under the joint-sum rule.</summary>
+    float[] ContactTurnPeak = [], ContactLeverMax = [];
+    /// <summary>Diagnostic: the contact turns applied this tick, summed per organ type (radians).
+    /// Says which tissue is yielding - a scape pressed by leaves, or the leaves.</summary>
+    public readonly float[] ContactTurnByOrgan = new float[32];
     Quaternion[] TransportedTurns = [];
     bool BatchingContacts;
     Vector3[] SupportMoments = [];
@@ -63,9 +80,10 @@ public partial class PlantSubFormation<T>
     {
         ref var a = ref Src()[index];
         var blade = a.Organ is OrganTypes.Leaf or OrganTypes.FlowerPadel;
-        var radius = blade ? AboveGroundAgent.LeafThickness * 0.5f
-            : a.Organ is OrganTypes.Bud or OrganTypes.FlowerBud or OrganTypes.FlowerBaseBud or OrganTypes.Fruit
-                ? MathF.Max(a.Radius, a.Length) : a.Radius;
+        //A bud is a rounded capsule of its own radius and length, as it is drawn. The old
+        //max(radius, length) made an opened Carex receptacle, 30 mm long and 2 mm wide, a 30 mm
+        //ball that every leaf brushing the culm pushed against.
+        var radius = blade ? AboveGroundAgent.LeafThickness * 0.5f : a.Radius;
         return new(GetBaseCenterWorld(index) + a.BaseOffset, a.Orientation, a.Length,
             blade ? a.Radius : 0f, radius, a.Organ is OrganTypes.Bud or OrganTypes.FlowerBud or OrganTypes.FlowerBaseBud or OrganTypes.Fruit,
             GetDeformation(index));
@@ -87,6 +105,8 @@ public partial class PlantSubFormation<T>
         var capacity = Math.Max(count, Math.Max(16, PreviousGeometry.Length * 2));
         Array.Resize(ref PreviousGeometry, capacity);
         Array.Resize(ref ContactTurns, capacity);
+        Array.Resize(ref ContactTurnPeak, capacity);
+        Array.Resize(ref ContactLeverMax, capacity);
         Array.Resize(ref TransportedTurns, capacity);
         Array.Resize(ref SupportMoments, capacity);
     }
@@ -109,11 +129,19 @@ public partial class PlantSubFormation<T>
     {
         EnsureContactCapacity(AgentCount);
         Array.Clear(ContactTurns, 0, AgentCount);
+        Array.Clear(ContactTurnPeak, 0, AgentCount);
+        Array.Clear(ContactLeverMax, 0, AgentCount);
+        Array.Clear(ContactTurnByOrgan);
         BeginDeformationSweep();
         BatchingContacts = true;
     }
 
-    internal bool EndContactSweep(float maxAngle)
+    /// <param name="maxAngle">Per-joint cap on this sweep's turn.</param>
+    /// <param name="jointSumRule">Soft engine: cap each joint's summed turn at the largest single
+    /// contribution it received and at the displacement cap over its longest lever. Several contacts
+    /// that ask for the same motion then move the joint once, not several times; contributions on
+    /// opposite sides still cancel in the sum.</param>
+    internal bool EndContactSweep(float maxAngle, bool jointSumRule = false)
     {
         BatchingContacts = false;
         var src = Src();
@@ -146,7 +174,15 @@ public partial class PlantSubFormation<T>
                 }
             }
             var angle = turn.Length();
-            var own = angle > 1e-8f ? Quaternion.CreateFromAxisAngle(turn / angle, MathF.Min(angle, maxAngle)) : Quaternion.Identity;
+            var limit = maxAngle;
+            if (jointSumRule && angle > 1e-8f)
+            {
+                limit = MathF.Min(limit, ContactTurnPeak[i]);
+                if (ContactLeverMax[i] > 0f && CollisionSettings.MaxCorrectionDisplacement > 0f)
+                    limit = MathF.Min(limit, CollisionSettings.MaxCorrectionDisplacement / ContactLeverMax[i]);
+            }
+            var own = angle > 1e-8f ? Quaternion.CreateFromAxisAngle(turn / angle, MathF.Min(angle, limit)) : Quaternion.Identity;
+            if (angle > 1e-8f) ContactTurnByOrgan[(int)src[i].Organ & 31] += MathF.Min(angle, limit);
             var transportedBase = Quaternion.Normalize(carry * src[i].baseOrientation);
             var proposed = Quaternion.Normalize(own * carry * src[i].Orientation);
             var constrained = LimitJointBend(transportedBase, proposed, ContactBendLimit(i));
@@ -622,7 +658,7 @@ public partial class PlantSubFormation<T>
                 * MathF.Exp(-GetAbsDepth(index) * Plant.Parameters.BasalStiffnessAttenuationPerSegment))
                 * (1f - a.WoodRatio()) + Plant.Parameters.WoodElasticModulus * a.WoodRatio();
         if (IsFloralAxis(a.Organ))
-            e = e * (1f - a.WoodRatio()) + Plant.Parameters.WoodElasticModulus * a.WoodRatio();
+            e = e * (1f - a.WoodRatio()) + MathF.Max(e, Plant.Parameters.WoodElasticModulus) * a.WoodRatio(); // never softer, see Gravity
         var inertia = MathF.PI * MathF.Pow(a.Radius, 4) / 4f;
         if (a.Organ is OrganTypes.Leaf or OrganTypes.FlowerPadel)
         {
@@ -765,12 +801,15 @@ public partial class PlantSubFormation<T>
 
     /// <param name="maxDisplacement">Soft contact engine only: largest motion of the witness that
     /// any one joint's turn may cause this tick, metres. The certified engine leaves it infinite.</param>
+    /// <param name="knownMobility">The value <see cref="ContactMobility"/> returns for the same arguments,
+    /// when the caller has just computed it to split a correction between two bodies; NaN to
+    /// compute it here. Nothing a caller queues between the two changes it.</param>
     internal bool QueueContactCorrection(int index, Vector3 contact, Vector3 normal, float depth, int stop = -1,
-        float maxDisplacement = float.PositiveInfinity)
+        float maxDisplacement = float.PositiveInfinity, double knownMobility = double.NaN)
     {
-        if(depth<0)return QueueContactCorrection(index,contact,-normal,-depth,stop,maxDisplacement);
+        if(depth<0)return QueueContactCorrection(index,contact,-normal,-depth,stop,maxDisplacement,knownMobility);
         var src = Src();
-        var total = ContactMobility(index, contact, normal, stop);
+        var total = double.IsNaN(knownMobility) ? ContactMobility(index, contact, normal, stop) : knownMobility;
         // Existing graph segments supply the degrees of freedom. Walk to a rooted anchor;
         // a broad, unsplit blade can therefore deflect through its petiole.
         if (total > 1e-20 && double.IsFinite(total))
@@ -792,6 +831,11 @@ public partial class PlantSubFormation<T>
                 if (maxDisplacement < float.PositiveInfinity) cap = MathF.Min(cap, maxDisplacement / MathF.Max(lever.Length(), 1e-6f));
                 if (angle > cap) response *= cap/angle;
                 ContactTurns[n] += response;
+                if (maxDisplacement < float.PositiveInfinity)
+                {
+                    ContactTurnPeak[n] = MathF.Max(ContactTurnPeak[n], MathF.Min(angle, cap));
+                    ContactLeverMax[n] = MathF.Max(ContactLeverMax[n], lever.Length());
+                }
             }
             return true;
         }
@@ -814,6 +858,11 @@ public partial class PlantSubFormation<T>
         if (maxDisplacement < float.PositiveInfinity)
             axialCap = MathF.Min(axialCap, maxDisplacement / MathF.Max((contact - GetBaseCenterWorld(best) - src[best].BaseOffset).Length(), 1e-6f));
         ContactTurns[best] += bestAxis * MathF.Min(bestAngle, axialCap);
+        if (maxDisplacement < float.PositiveInfinity)
+        {
+            ContactTurnPeak[best] = MathF.Max(ContactTurnPeak[best], MathF.Min(bestAngle, axialCap));
+            ContactLeverMax[best] = MathF.Max(ContactLeverMax[best], (contact - GetBaseCenterWorld(best) - src[best].BaseOffset).Length());
+        }
         return true;
     }
 

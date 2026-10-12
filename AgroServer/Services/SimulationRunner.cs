@@ -367,8 +367,10 @@ public class SimulationRunner : ISimulationRunner
     {
         if (!Pending.TryRemove(runId, out var loop)) return;
         //Deliberately not awaited: the hub invocation returns immediately and frees its slot,
-        //which is the whole reason the loop moved out of it.
-        _ = Task.Run(loop);
+        //which is the whole reason the loop moved out of it. On its own thread rather than a pool
+        //worker: the loop runs for hours and would otherwise hold one of the workers every
+        //parallel phase of the tick is counting on.
+        _ = Task.Factory.StartNew(loop, TaskCreationOptions.LongRunning).Unwrap();
     }
 
     public void Cancel(string runId)

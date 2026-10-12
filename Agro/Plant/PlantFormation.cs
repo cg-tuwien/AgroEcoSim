@@ -16,6 +16,13 @@ public partial class PlantFormation2 : IPlantFormation
 
 	public Vector3 Position { get; private init; }
 	public int SoilIndex { get; private init; }
+	/// <summary>
+	/// Water requests this plant made during its own tick, handed to the soil when the post is
+	/// delivered. They are buffered on the plant rather than in the soil so that plants ticking in
+	/// parallel never contend on one lock and the soil reads them in plant order, which is what
+	/// makes the parallel tick reproducible. Part is -1 for the seed.
+	/// </summary>
+	internal readonly List<(int Cell, int Part, float Amount_g)> WaterRequests = [];
 	bool ReadTMP = false;
 	internal ISoilFormation Soil;
 	protected SeedAgent[] Seed = new SeedAgent[1]; //must be an array due to messaging compaatibility

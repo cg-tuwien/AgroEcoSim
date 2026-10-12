@@ -543,8 +543,7 @@ public partial class PlantSubFormation<T>
 
     internal static OrganPose PoseFor(in AboveGroundAgent a, Vector3 basis) => new(basis + a.BaseOffset,
         a.Orientation, a.Length, a.Organ is OrganTypes.Leaf or OrganTypes.FlowerPadel ? a.Radius : 0,
-        a.Organ is OrganTypes.Leaf or OrganTypes.FlowerPadel ? AboveGroundAgent.LeafThickness * 0.5f
-            : a.Organ is OrganTypes.Bud or OrganTypes.FlowerBud or OrganTypes.FlowerBaseBud or OrganTypes.Fruit ? MathF.Max(a.Radius,a.Length) : a.Radius,
+        a.Organ is OrganTypes.Leaf or OrganTypes.FlowerPadel ? AboveGroundAgent.LeafThickness * 0.5f : a.Radius,
         a.Organ is OrganTypes.Bud or OrganTypes.FlowerBud or OrganTypes.FlowerBaseBud or OrganTypes.Fruit);
 
     void WriteGrowthState(BinaryWriter w)

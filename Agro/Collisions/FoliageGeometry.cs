@@ -185,23 +185,7 @@ internal static partial class FoliageGeometry
         {
             var pairs = TemplatePairs ??= [];
             a.Lamina.QueryPairs(a.Pose, b.Lamina, b.Pose, search, pairs);
-            // In a dense query the same vertex belongs to many candidate facet pairs.
-            // Transform once for this query; no pose hashing occurs in the inner loop.
-            // Sparse queries keep direct transforms so preparing an entire mesh cannot
-            // cost more than the triangle work it replaces.
-            var va = pairs.Count * 3 > a.Lamina.Vertices.Length
-                ? TransformVertices(a, ref TransformedA) : ReadOnlySpan<Vector3>.Empty;
-            var vb = pairs.Count * 3 > b.Lamina.Vertices.Length
-                ? TransformVertices(b, ref TransformedB) : ReadOnlySpan<Vector3>.Empty;
-            foreach (var (i, j) in pairs)
-            {
-                Triangle(a, i, va, out var p, out var q, out var r);
-                Triangle(b, j, vb, out var x, out var y, out var z);
-                var d = TriangleDistance(p, q, r, x, y, z, out var onA, out var onB,best.Distance);
-                if (d < best.Distance) best = Make(onA, onB, x, y, z, d, i, j);
-                if (d <= 1e-9f || d < a.Pose.Radius + b.Pose.Radius - Skin) return best;
-            }
-            return best;
+            return ExactPairs(a, b, pairs, best);
         }
         var hitsA = TrianglesA ??= [];
         if (a.Feature >= 0) { hitsA.Clear(); hitsA.Add(a.Feature); }
@@ -218,6 +202,33 @@ internal static partial class FoliageGeometry
                 if (d < best.Distance) best = Make(onA, onB, x, y, z, d, i, j);
                 if (d <= 1e-9f || d < a.Pose.Radius + b.Pose.Radius - Skin) return best;
             }
+        }
+        return best;
+    }
+
+    /// <summary>The exact minimum over gathered candidate triangle pairs, starting from <paramref name="best"/>.</summary>
+    static FoliageContact ExactPairs(in ContactShape a, in ContactShape b, List<(int A, int B)> pairs, FoliageContact best)
+    {
+        TriangleCount += pairs.Count;
+        // In a dense query the same vertex belongs to many candidate facet pairs.
+        // Transform once for this query; no pose hashing occurs in the inner loop.
+        // Sparse queries keep direct transforms so preparing an entire mesh cannot
+        // cost more than the triangle work it replaces.
+        var va = pairs.Count * 3 > a.Lamina!.Vertices.Length
+            ? TransformVertices(a, ref TransformedA) : ReadOnlySpan<Vector3>.Empty;
+        var vb = pairs.Count * 3 > b.Lamina!.Vertices.Length
+            ? TransformVertices(b, ref TransformedB) : ReadOnlySpan<Vector3>.Empty;
+        foreach (var (i, j) in pairs)
+        {
+            Triangle(a, i, va, out var p, out var q, out var r);
+            Triangle(b, j, vb, out var x, out var y, out var z);
+            // The candidates were gathered at the search radius; once a closer witness is
+            // known, a pair whose boxes are farther apart than that cannot replace it. Same
+            // result as testing it, at a sixth of the arithmetic.
+            if (!Bounds(p, q, r).Intersects(Pad(Bounds(x, y, z), best.Distance))) continue;
+            var d = TriangleDistance(p, q, r, x, y, z, out var onA, out var onB,best.Distance);
+            if (d < best.Distance) best = Make(onA, onB, x, y, z, d, i, j);
+            if (d <= 1e-9f || d < a.Pose.Radius + b.Pose.Radius - Skin) return best;
         }
         return best;
     }

@@ -45,8 +45,13 @@ public sealed partial class SoftContactEngine
     readonly List<List<CrossJob>> Batches = [];
     readonly List<(PlantFormation2 A, PlantFormation2 B)> PreviousNeighbours = [];
     bool ScheduleInvalidated = true;
+    bool FoliageActive;
+    /// <summary>With fewer plants than workers the parallelism has to come from inside a plant.</summary>
+    bool ChunkOwnPairs;
     long ContactEpoch;
     long TotalOrgans;
+    readonly CollisionWorld.WeightedSchedule PlantSchedule = new(), CrossSchedule = new();
+    long NeighbourTicks, PrepareTicks, CrossTicks;
     static readonly bool TraceTiming = Environment.GetEnvironmentVariable("AGRO_COLLISION_TIMING") != null;
 
     internal SoftContactEngine(CollisionWorld world) => World = world;
@@ -58,16 +63,22 @@ public sealed partial class SoftContactEngine
         public readonly Dictionary<CollisionWorld.ContactKey, SoftContactMemory> Contacts = [];
         public readonly List<CollisionWorld.ContactKey> Expired = [];
         public readonly List<(int, int)> OwnPairs = [];
-        public readonly List<int> Stages = [];
+        /// <summary>Cross-plant batches this plant is already in, one bit per stage.</summary>
+        public ulong[] StageMask = new ulong[1];
+        /// <summary>Last tick's measured cost of the two per-plant jobs, for the scheduler.</summary>
+        public long LastPrepareTicks, LastFinishTicks, LastRespondTicks, LastEvalTicks;
+        public int LastChunks;
         public readonly Comparison<(int, int)> PairOrder;
         public readonly Comparison<int> OrganOrder;
         /// <summary>Residual obstacle penetration per organ after this tick's pushes; the thigmomorphogenesis hook.</summary>
         public float[] SolidConfinement = [];
         public long Seen;
-        public long Candidates, ContactsCount, NewSides, Crossings, SuspectedTunnels, DeepPenetrations, PenetrationCount;
-        public double PenetrationSum, ClippedMetres;
-        public float MaxPenetration, MaxSolidPenetration;
-        public long Clips, Obstacle, Soil, Queries, Skips, ApproximationQueries, ApproximationSeparations, Slides;
+        public PairStats Stats;
+        public PairStats[] ChunkStats = [];
+        public PairRecord[] Records = [];
+        public double ClippedMetres;
+        public float MaxSolidPenetration;
+        public long Clips, Obstacle, Soil, Queries, Skips, Slides;
 
         public SoftWork(PlantFormation2 plant)
         {
@@ -82,10 +93,10 @@ public sealed partial class SoftContactEngine
 
         public void ResetCounters()
         {
-            Candidates = ContactsCount = NewSides = Crossings = SuspectedTunnels = DeepPenetrations = PenetrationCount = 0;
-            PenetrationSum = ClippedMetres = 0;
-            MaxPenetration = MaxSolidPenetration = 0;
-            Clips = Obstacle = Soil = Queries = Skips = ApproximationQueries = ApproximationSeparations = Slides = 0;
+            Stats = default;
+            ClippedMetres = 0;
+            MaxSolidPenetration = 0;
+            Clips = Obstacle = Soil = Queries = Skips = Slides = 0;
         }
     }
 
@@ -95,7 +106,7 @@ public sealed partial class SoftContactEngine
         public readonly SoftWork A, B;
         public readonly List<(int, int)> Pairs = [];
         public readonly Comparison<(int, int)> PairOrder;
-        public long Seen;
+        public long Seen, LastTicks;
         public CrossJob(SoftWork a, SoftWork b)
         {
             A = a; B = b;
@@ -116,20 +127,15 @@ public sealed partial class SoftContactEngine
             if (formations[i] is PlantFormation2 p && p.AG.Count > 0) { Plants.Add(p); TotalOrgans += p.AG.Count; }
         PrepareWork();
         var afterPrepare = Stopwatch.GetTimestamp();
-        if (world.SoftCollisions) ResolveFoliage();
+        FoliageActive = world.SoftCollisions;
+        ChunkOwnPairs = Plants.Count * 2 <= CollisionWorld.WorkerLimit;
+        if (FoliageActive) ResolveFoliage();
         var afterFoliage = Stopwatch.GetTimestamp();
-        CollisionWorld.RunJobs(Plants, TotalOrgans, ResolveHard);
+        // Everything after the last cross-plant batch is plant-local, so it is one job per plant:
+        // the correction, the memory expiry, the solid pass and the epilogue, with no barrier
+        // between them and no serial loop after them.
+        PlantSchedule.Run(Plants, TotalOrgans, p => Work[p].LastFinishTicks > 0 ? Work[p].LastFinishTicks : p.AG.Count, FinishPlant);
         var afterHard = Stopwatch.GetTimestamp();
-        foreach (var plant in Plants)
-        {
-            // Same epilogue as the certified engine minus development admission: nothing is
-            // staged under this engine. Construction escrow settles against the accepted volume
-            // (a solid clip refunds its share), new organs get their first recorded pose, and
-            // rhizome-apex arrests (a plant-side mechanism) are released on their retry.
-            plant.AG.SettleConstruction();
-            plant.AG.SealNewGeometry();
-            plant.AG.CompleteGrowthAttempts();
-        }
         FlushCounters();
         FoliageTicks += afterFoliage - afterPrepare;
         HardTicks += afterHard - afterFoliage;
@@ -138,7 +144,9 @@ public sealed partial class SoftContactEngine
         if (TraceTiming)
         {
             var scale = 1000.0 / Stopwatch.Frequency;
-            Console.WriteLine($"SOFT_CONTACT_TIMING step={timestep} foliageMs={(afterFoliage - afterPrepare) * scale:F2} hardMs={(afterHard - afterFoliage) * scale:F2}"
+            Console.WriteLine($"SOFT_CONTACT_TIMING step={timestep} foliageMs={(afterFoliage - afterPrepare) * scale:F2} finishMs={(afterHard - afterFoliage) * scale:F2}"
+                + $" neighboursMs={NeighbourTicks * scale:F2} prepareMs={PrepareTicks * scale:F2} respondMs={RespondTicksSum() * scale:F2} crossMs={CrossTicks * scale:F2} batches={Batches.Count} neighbours={World.Neighbours.Count}"
+                + (Plants.Count == 1 ? $" evalMs={Work[Plants[0]].LastEvalTicks * scale:F2} chunks={Work[Plants[0]].LastChunks}" : "")
                 + $" plants={Plants.Count} organs={TotalOrgans} pairs={LastCandidates} contacts={LastContacts} newSides={LastNewSides} crossings={LastCrossings}"
                 + $" tunnels={LastSuspectedTunnels} maxPenMm={MaxFoliagePenetrationMetres * 1000:F3} meanPenMm={MeanFoliagePenetrationMetres * 1000:F3} deep={LastDeepPenetrations}"
                 + $" clips={LastClips} clippedMm={LastClippedMetres * 1000:F3} maxSolidMm={MaxSolidPenetrationMetres * 1000:F3}");
@@ -171,23 +179,62 @@ public sealed partial class SoftContactEngine
 
     void ResolveFoliage()
     {
+        var t0 = Stopwatch.GetTimestamp();
         World.RefreshNeighbours(Plants);
         RefreshSchedule();
-        foreach (var plant in Plants) plant.AG.BeginContactSweep();
-        CollisionWorld.RunJobs(Plants, TotalOrgans, VisitOwn);
+        NeighbourTicks = Stopwatch.GetTimestamp() - t0;
+        PlantSchedule.Run(Plants, TotalOrgans, p => Work[p].LastPrepareTicks > 0 ? Work[p].LastPrepareTicks : p.AG.Count, PreparePlant);
+        PrepareTicks = Stopwatch.GetTimestamp() - t0 - NeighbourTicks;
         foreach (var batch in Batches)
         {
             if (batch.Count == 0) continue;
             long work = 0;
             foreach (var job in batch) work += job.A.Plant.AG.Count + job.B.Plant.AG.Count;
-            CollisionWorld.RunJobs(batch, work, VisitCross);
+            CrossSchedule.Run(batch, work, j => j.LastTicks > 0 ? j.LastTicks : j.A.Plant.AG.Count + j.B.Plant.AG.Count, VisitCrossTimed);
         }
-        CollisionWorld.RunJobs(Plants, TotalOrgans, ApplyCorrections);
-        CollisionWorld.RunJobs(Plants, TotalOrgans, ExpireContacts);
+        CrossTicks = Stopwatch.GetTimestamp() - t0 - NeighbourTicks - PrepareTicks;
     }
 
-    /// <summary>One Jacobi application of everything queued this tick, capped per joint, then a refit.</summary>
-    static void ApplyCorrections(PlantFormation2 plant) => plant.AG.EndContactSweep(CollisionSettings.MaxCorrectionRadians);
+    /// <summary>The per-plant work before the cross-plant batches: clear the turns, complete the
+    /// lamina cache while this thread owns the plant, then its own pairs.</summary>
+    void PreparePlant(PlantFormation2 plant)
+    {
+        var started = Stopwatch.GetTimestamp();
+        plant.AG.BeginContactSweep();
+        plant.AG.WarmLaminaCache();
+        VisitOwn(plant);
+        Work[plant].LastPrepareTicks = Stopwatch.GetTimestamp() - started;
+    }
+
+    void VisitCrossTimed(CrossJob job)
+    {
+        var started = Stopwatch.GetTimestamp();
+        VisitCross(job);
+        job.LastTicks = Stopwatch.GetTimestamp() - started;
+    }
+
+    /// <summary>
+    /// The per-plant work after the cross-plant batches: one Jacobi application of everything
+    /// queued this tick (capped per joint, then a refit), memory expiry, the solid pass, and the
+    /// same epilogue as the certified engine minus development admission - nothing is staged
+    /// under this engine. Construction escrow settles against the accepted volume (a solid clip
+    /// refunds its share), new organs get their first recorded pose, and rhizome-apex arrests (a
+    /// plant-side mechanism) are released on their retry.
+    /// </summary>
+    void FinishPlant(PlantFormation2 plant)
+    {
+        var started = Stopwatch.GetTimestamp();
+        if (FoliageActive)
+        {
+            plant.AG.EndContactSweep(CollisionSettings.MaxCorrectionRadians, CollisionSettings.SoftJointSumRule);
+            ExpireContacts(plant);
+        }
+        ResolveHard(plant);
+        plant.AG.SettleConstruction();
+        plant.AG.SealNewGeometry();
+        plant.AG.CompleteGrowthAttempts();
+        Work[plant].LastFinishTicks = Stopwatch.GetTimestamp() - started;
+    }
 
     /// <summary>
     /// Greedy edge colouring of the neighbour pairs into batches with no plant twice in a batch.
@@ -200,19 +247,37 @@ public sealed partial class SoftContactEngine
         ScheduleInvalidated = false;
         PreviousNeighbours.Clear(); PreviousNeighbours.AddRange(neighbours);
         foreach (var batch in Batches) batch.Clear();
-        foreach (var plant in Plants) Work[plant].Stages.Clear();
+        foreach (var plant in Plants) Array.Clear(Work[plant].StageMask);
         foreach (var (a, b) in neighbours)
         {
-            var wa = Work[a]; var wb = Work[b]; var stage = 0;
-            while (wa.Stages.Contains(stage) || wb.Stages.Contains(stage)) ++stage;
+            var wa = Work[a]; var wb = Work[b];
+            var stage = FirstFreeStage(wa.StageMask, wb.StageMask);
             while (Batches.Count <= stage) Batches.Add([]);
             if (!CrossJobs.TryGetValue((a, b), out var job)) CrossJobs.Add((a, b), job = new(wa, wb));
             job.Seen = ContactEpoch;
-            Batches[stage].Add(job); wa.Stages.Add(stage); wb.Stages.Add(stage);
+            Batches[stage].Add(job); SetStage(ref wa.StageMask, stage); SetStage(ref wb.StageMask, stage);
         }
         RetiredPairs.Clear();
         foreach (var (pair, job) in CrossJobs) if (job.Seen != ContactEpoch) RetiredPairs.Add(pair);
         foreach (var pair in RetiredPairs) CrossJobs.Remove(pair);
+    }
+
+    long RespondTicksSum() { long sum = 0; foreach (var plant in Plants) sum += Work[plant].LastRespondTicks; return sum; }
+
+    static int FirstFreeStage(ulong[] a, ulong[] b)
+    {
+        for (int w = 0; ; ++w)
+        {
+            var used = (w < a.Length ? a[w] : 0UL) | (w < b.Length ? b[w] : 0UL);
+            if (used != ulong.MaxValue) return w * 64 + System.Numerics.BitOperations.TrailingZeroCount(~used);
+        }
+    }
+
+    static void SetStage(ref ulong[] mask, int stage)
+    {
+        var w = stage >> 6;
+        if (w >= mask.Length) Array.Resize(ref mask, w + 1);
+        mask[w] |= 1UL << (stage & 63);
     }
 
     bool SameNeighbours(List<(PlantFormation2 A, PlantFormation2 B)> neighbours)

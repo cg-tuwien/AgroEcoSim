@@ -32,6 +32,7 @@ export function GeneratedSpeciesFields(props: { species: Species; index: number 
 <SpeciesFloatField max={1} step={0.01} speciesIndex={index} signal={species.twigsBendingApical} label={"Apex bending rate"} />
 <SpeciesFloatField max={1} step={0.01} speciesIndex={index} signal={species.shootsGravitaxis} label={"Shoots gravitaxis"} />
 <SpeciesFloatField max={180} step={0.1} speciesIndex={index} tooltip={"Angle from vertical that a shoot\u0027s own gravitropism steers toward."} signal={species.shootsGravitropicSetPointAngleDeg} label={"Shoot gravitropic set-point angle"} />
+<SpeciesFloatField step={0.1} speciesIndex={index} tooltip={"Negative gravitropism of a stem after birth: the rate per hour at which a stem segment\u0027s rest frame is steered toward \u003Csee cref=\u0022ShootsGravitropicSetPointAngle\u0022/\u003E."} signal={species.shootsGravitropicRatePerHour} label={"Shoot gravitropic rate per hour"} />
 <SpeciesFloatField step={1} speciesIndex={index} tooltip={"Standard wood growth time (in hours)"} signal={species.woodGrowthTime} label={"Wood maturing time (hours)"} variance={{ step: 0.01, signal: species.woodGrowthTimeVar}} />
 <hr/>
 <SpeciesFloatField step={0.001} speciesIndex={index} tooltip={"Leaf axis length from the petiole attachment toward the tip (m); basal lobes can make the total blade longer."} signal={species.leafLength} label={"Leaf length"} variance={{ step: 0.01, signal: species.leafLengthVar}} />
