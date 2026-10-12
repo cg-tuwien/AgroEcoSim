@@ -138,7 +138,10 @@ public static class Carex_Morrowii_Variegata
         // A sedge culm is stiff and erect - "sedges have edges", a solid trigonous stem.
         // Stated explicitly rather than inherited, because the scape and the spikes it
         // carries are no longer the same tissue as far as bending is concerned.
-        FlowerScapeElasticModulus = 8e8f,
+        // A trigonous sedge culm is sclerenchyma-ribbed and self-supporting: 3 GPa, the
+        // grass-culm end of Niklas' range. At 8e8 the 1.1 mm culm sat at a loop gain of 0.9
+        // with its spikes full of water, and any leaf brushing it tipped it over.
+        FlowerScapeElasticModulus = 3e9f,
 
         FlowerSettings = new FlowerSettings
         {
@@ -207,6 +210,7 @@ public static class Carex_Morrowii_Variegata
             // than "slightly taller than the leaves".
             FlowerBaseSegmentLength = 0.085f,
             FlowerBaseSegmentLengthVariance = 0.02f,
+            ScapeGravitropicRatePerHour = 0.012f,
             FlowerBaseSegmentRadius = 0.0011f,
             FlowerBaseSegmentRadiusVariance = 0.0002f,
 

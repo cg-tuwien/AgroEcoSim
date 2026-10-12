@@ -158,7 +158,11 @@ public static class Heuchera_Micrantha_Palace_Purple
         // shared flower modulus a 42 cm scape reached 48 cm, then the panicle opened and
         // the whole thing folded to the ground: 1,977 inverted organs and the flowers
         // back down at 19 cm.
-        FlowerScapeElasticModulus = 1.5e8f,
+        // 1.5e8 still folded it once the panicle held its water: with a 2.2 mm radius the
+        // column's Euler load is 3.6 g against a 4 g panicle plus 8 g of scape, a loop gain
+        // of 2.4, and a gain above one folds whatever starts the lean. Herbaceous stem
+        // tissue runs 0.3-3 GPa (Niklas 1992); a wiry lignified scape is at the top of that.
+        FlowerScapeElasticModulus = 1e9f,
 
         FlowerSettings = new FlowerSettings
         {
@@ -188,7 +192,9 @@ public static class Heuchera_Micrantha_Palace_Purple
             PetalSenescenceDurationHours = 144f,
 
             BudLength = 0.004f,
-            BudRadius = 0.0025f,
+            // FNA: hypanthium 1.5-3.4 mm across, so a 1.5 mm radius; at 2.5 mm the buds
+            // weighed the panicle down nearly three times over.
+            BudRadius = 0.0015f,
             BudBloomDurationHours = 120u,
             FlowerMaximumAgeHours = 600u,
 
@@ -213,6 +219,9 @@ public static class Heuchera_Micrantha_Palace_Purple
             FlowerBaseSegmentLengthVariance = 0.005f,
             // A 0.6 mm scape cannot hold 35 cm upright; the real stalk is 2-3 mm.
             // The research measures the scape at 2.0-2.5 mm at the base.
+            // Re-erects over about three days after a lean, as a living scape does; well below
+            // the 5 %/h elastic response so the loaded pose does not overshoot.
+            ScapeGravitropicRatePerHour = 0.012f,
             FlowerBaseSegmentRadius = 0.0022f,
             FlowerBaseSegmentRadiusVariance = 0.0002f,
 

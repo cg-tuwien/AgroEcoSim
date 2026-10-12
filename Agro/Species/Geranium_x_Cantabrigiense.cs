@@ -120,7 +120,12 @@ public static class Geranium_x_Cantabrigiense
         // A geranium peduncle is green herbaceous tissue and is meant to bow under its
         // own cyme. Sharing FlowerOrganElasticModulus made it as rigid as a Bergenia
         // scape, so it stood dead straight however long it grew.
-        FlowerScapeElasticModulus = 4.5e7f,
+        // The arch has to be an elastic equilibrium, not the 25-degree joint cap reached
+        // segment after segment: at 4.5e7 the peduncle's own weight alone was 1.4 times its
+        // Euler load and it hung instead of arching. 2e8 is a soft green stem (low end of
+        // Niklas' 0.3-3 GPa) and puts the loop gain near 0.5, so a 20-degree set point
+        // arches to roughly twice that and the flowers finish just above the leaves.
+        FlowerScapeElasticModulus = 2e8f,
 
 
         FlowerSettings = new FlowerSettings
@@ -154,7 +159,7 @@ public static class Geranium_x_Cantabrigiense
             PetalSenescenceDurationHours = 168f,
 
             BudLength = 0.005f,
-            BudRadius = 0.003f,
+            BudRadius = 0.0025f,
             BudBloomDurationHours = 140u,
             FlowerMaximumAgeHours = 720u,
 
@@ -175,6 +180,9 @@ public static class Geranium_x_Cantabrigiense
             // each accepted tangent; contact and the offset bloom load supply bending.
             ScapeGravitropicSetPointAngle = 20f * MathF.PI / 180f,
             ScapeGravitropism = 0f, // Continuations follow the accepted tangent, including contact deflection.
+            // Slow: the accepted tangent still dominates, but a peduncle pressed down by leaves
+            // lifts back toward its set point over a week.
+            ScapeGravitropicRatePerHour = 0.005f,
             // Stem green, so the scape reads as the stem tissue it is. Before this every
             // floral organ was handed the leaf phenology on the wire and the viewport
             // then ignored it and greyed the scape towards wood.
