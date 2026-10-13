@@ -52,9 +52,10 @@ public sealed partial class SoftContactEngine
     long TotalOrgans;
     readonly CollisionWorld.WeightedSchedule PlantSchedule = new(), CrossSchedule = new();
     long NeighbourTicks, PrepareTicks, CrossTicks;
+    long LastStaticQueries, LastClearanceSkips, LastSupportSkips, LastObstacleContacts, LastSoilContacts;
     static readonly bool TraceTiming = Environment.GetEnvironmentVariable("AGRO_COLLISION_TIMING") != null;
 
-    internal SoftContactEngine(CollisionWorld world) => World = world;
+    internal SoftContactEngine(CollisionWorld world) { World = world; FoliageGeometry.StageClocks = TraceTiming; }
 
     /// <summary>Per-plant state: a reused pair list, the sparse contact memory and tick counters.</summary>
     sealed class SoftWork
@@ -66,7 +67,7 @@ public sealed partial class SoftContactEngine
         /// <summary>Cross-plant batches this plant is already in, one bit per stage.</summary>
         public ulong[] StageMask = new ulong[1];
         /// <summary>Last tick's measured cost of the two per-plant jobs, for the scheduler.</summary>
-        public long LastPrepareTicks, LastFinishTicks, LastRespondTicks, LastEvalTicks, LastChunkMaxTicks, LastChunkSumTicks;
+        public long LastPrepareTicks, LastFinishTicks, LastRespondTicks, LastEvalTicks, LastChunkMaxTicks, LastChunkSumTicks, LastApplyTicks, LastHardTicks;
         public int LastChunks, LastGcs;
         public long[] ChunkTicks = [], WorstPairTicks = [];
         public (ulong, ulong)[] SortKeys = [];
@@ -75,13 +76,15 @@ public sealed partial class SoftContactEngine
         public readonly Comparison<int> OrganOrder;
         /// <summary>Residual obstacle penetration per organ after this tick's pushes; the thigmomorphogenesis hook.</summary>
         public float[] SolidConfinement = [];
+        public StaticTouch[] ObstacleTouch = [], SoilTouch = [];
         public long Seen;
-        public PairStats Stats;
+        public PairStats Stats, LastStats;
         public PairStats[] ChunkStats = [];
         public PairRecord[] Records = [];
         public double ClippedMetres;
         public float MaxSolidPenetration;
-        public long Clips, Obstacle, Soil, Queries, Skips, Slides;
+        public long Clips, Obstacle, Soil, Queries, Skips, SupportSkips, Slides;
+        public long HardAnchorTicks, HardClearTicks, HardObstacleTicks, HardSoilEligibleTicks, HardSoilTicks, HardSweepTicks, HardClipTicks, HardLoadTicks, HardRounds;
 
         public SoftWork(PlantFormation2 plant)
         {
@@ -96,10 +99,11 @@ public sealed partial class SoftContactEngine
 
         public void ResetCounters()
         {
-            Stats = default;
+            LastStats = Stats; Stats = default;
             ClippedMetres = 0;
             MaxSolidPenetration = 0;
-            Clips = Obstacle = Soil = Queries = Skips = Slides = 0;
+            Clips = Obstacle = Soil = Queries = Skips = SupportSkips = Slides = 0;
+            HardAnchorTicks = HardClearTicks = HardObstacleTicks = HardSoilEligibleTicks = HardSoilTicks = HardSweepTicks = HardClipTicks = HardLoadTicks = HardRounds = 0;
         }
     }
 
@@ -140,6 +144,8 @@ public sealed partial class SoftContactEngine
         // between them and no serial loop after them.
         PlantSchedule.Run(Plants, TotalOrgans, p => Work[p].LastFinishTicks > 0 ? Work[p].LastFinishTicks : p.AG.Count, FinishPlant);
         var afterHard = Stopwatch.GetTimestamp();
+        LastStaticQueries = StaticQueries; LastClearanceSkips = ClearanceSkips; LastSupportSkips = SupportSkips; LastObstacleContacts = ObstacleContacts; LastSoilContacts = SoilContacts;
+        var hardStages = TraceTiming ? HardStages() : "";
         FlushCounters();
         FoliageTicks += afterFoliage - afterPrepare;
         HardTicks += afterHard - afterFoliage;
@@ -150,8 +156,10 @@ public sealed partial class SoftContactEngine
             var scale = 1000.0 / Stopwatch.Frequency;
             Console.WriteLine($"SOFT_CONTACT_TIMING step={timestep} foliageMs={(afterFoliage - afterPrepare) * scale:F2} finishMs={(afterHard - afterFoliage) * scale:F2}"
                 + $" neighboursMs={NeighbourTicks * scale:F2} prepareMs={PrepareTicks * scale:F2} respondMs={RespondTicksSum() * scale:F2} crossMs={CrossTicks * scale:F2} batches={Batches.Count} neighbours={World.Neighbours.Count}"
+                + $" finishCpu(apply/hard/all)Ms={FinishTicksSum().apply * scale:F1}/{FinishTicksSum().hard * scale:F1}/{FinishTicksSum().finish * scale:F1} staticQueries={StaticQueries - LastStaticQueries} skips={ClearanceSkips - LastClearanceSkips} supportSkips={SupportSkips - LastSupportSkips} {hardStages} obstacleContacts={ObstacleContacts - LastObstacleContacts} soilContacts={SoilContacts - LastSoilContacts}"
                 + (Plants.Count == 1 ? $" evalMs={Work[Plants[0]].LastEvalTicks * scale:F2} chunks={Work[Plants[0]].LastChunks} chunkSumMs={Work[Plants[0]].LastChunkSumTicks * scale:F2} chunkMaxMs={Work[Plants[0]].LastChunkMaxTicks * scale:F3} gcs={Work[Plants[0]].LastGcs}" : "")
-                + $" plants={Plants.Count} organs={TotalOrgans} pairs={LastCandidates} contacts={LastContacts} newSides={LastNewSides} crossings={LastCrossings}"
+                + (Plants.Count == 1 ? $" | stages: boundsOut={Work[Plants[0]].LastStats.BoundsOut} ({Work[Plants[0]].LastStats.BoundsTicks * scale:F1}ms) convexOut={Work[Plants[0]].LastStats.ConvexOut} ({Work[Plants[0]].LastStats.ConvexTicks * scale:F1}ms) exact={Work[Plants[0]].LastStats.Exact} ({Work[Plants[0]].LastStats.ExactTicks * scale:F1}ms) sampled={Work[Plants[0]].LastStats.Sampled} ({Work[Plants[0]].LastStats.SampledTicks * scale:F1}ms) touchingMs={Work[Plants[0]].LastStats.TouchingTicks * scale:F1} separatedMs={Work[Plants[0]].LastStats.SeparatedTicks * scale:F1}" : "")
+                + $" plants={Plants.Count} organs={TotalOrgans} pairs={LastCandidates} contacts={LastContacts} staticPairs={LastStaticPairs} staticTouching={LastStaticTouching} newSides={LastNewSides} crossings={LastCrossings}"
                 + $" tunnels={LastSuspectedTunnels} maxPenMm={MaxFoliagePenetrationMetres * 1000:F3} meanPenMm={MeanFoliagePenetrationMetres * 1000:F3} deep={LastDeepPenetrations}"
                 + $" clips={LastClips} clippedMm={LastClippedMetres * 1000:F3} maxSolidMm={MaxSolidPenetrationMetres * 1000:F3}");
         }
@@ -233,11 +241,15 @@ public sealed partial class SoftContactEngine
             plant.AG.EndContactSweep(CollisionSettings.MaxCorrectionRadians, CollisionSettings.SoftJointSumRule);
             ExpireContacts(plant);
         }
+        var applied = Stopwatch.GetTimestamp();
         ResolveHard(plant);
+        var hard = Stopwatch.GetTimestamp();
         plant.AG.SettleConstruction();
         plant.AG.SealNewGeometry();
         plant.AG.CompleteGrowthAttempts();
-        Work[plant].LastFinishTicks = Stopwatch.GetTimestamp() - started;
+        var work = Work[plant];
+        work.LastFinishTicks = Stopwatch.GetTimestamp() - started;
+        work.LastApplyTicks = applied - started; work.LastHardTicks = hard - applied;
     }
 
     /// <summary>
@@ -267,6 +279,14 @@ public sealed partial class SoftContactEngine
     }
 
     long RespondTicksSum() { long sum = 0; foreach (var plant in Plants) sum += Work[plant].LastRespondTicks; return sum; }
+    string HardStages()
+    {
+        long a = 0, c = 0, o = 0, se = 0, s = 0, sw = 0, cl = 0, l = 0, r = 0;
+        foreach (var plant in Plants) { var w = Work[plant]; a += w.HardAnchorTicks; c += w.HardClearTicks; o += w.HardObstacleTicks; se += w.HardSoilEligibleTicks; s += w.HardSoilTicks; sw += w.HardSweepTicks; cl += w.HardClipTicks; l += w.HardLoadTicks; r += w.HardRounds; }
+        var k = 1000.0 / Stopwatch.Frequency;
+        return $"hardCpuMs: anchors={a * k:F0} clear={c * k:F0} obstacle={o * k:F0} soilEligible={se * k:F0} soil={s * k:F0} sweep={sw * k:F0} clip={cl * k:F0} loads={l * k:F0} rounds={r}";
+    }
+    (long apply, long hard, long finish) FinishTicksSum() { long a = 0, h = 0, f = 0; foreach (var plant in Plants) { var w = Work[plant]; a += w.LastApplyTicks; h += w.LastHardTicks; f += w.LastFinishTicks; } return (a, h, f); }
 
     static int FirstFreeStage(ulong[] a, ulong[] b)
     {

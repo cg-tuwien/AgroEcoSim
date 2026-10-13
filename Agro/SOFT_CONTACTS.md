@@ -270,10 +270,10 @@ After (same probe, same requests; the plant differs where the physics did):
 | plants | ms per tick before | after | collisions before | after | effective cores, collisions |
 | --- | --- | --- | --- | --- | --- |
 | 1 | 152 | **28** | 138 | 15 | 4.9 |
-| 100 | 870 | **502** | 642 | 273 | 22.7 |
-| 400 | 3,169 | **1,746** | 2,226 | 914 | 29.2 |
+| 100 | 870 | **470** | 642 | 252 | 24.5 |
+| 400 | 3,169 | **1,631** | 2,226 | 824 | 30.4 |
 
-(12 October, before the tiny-blade capsules: 53, 775 and 2,519 ms per tick.) The parallel tick
+(12 October, before the tiny-blade capsules and the solid-pass carry-over: 53, 775 and 2,519 ms per tick; after the capsules alone 28, 502 and 1,746.) The parallel tick
 stayed byte-identical to the sequential one at 100 plants after every change.
 
 - **Tiny blades meet other organs as capsules** (`SoftTinyLaminaLength`, 13 October 2026). With
@@ -285,6 +285,19 @@ stayed byte-identical to the sequential one at 100 plants after every change.
   evaluation of that plant went from 33-48 ms to 3-4 ms of wall time at 130 -> 70 ms of CPU, and
   the whole contact pass from 41 to about 13 ms. The pair sort materialises its stable-id keys
   once instead of looking both ids up in a delegate per comparison; the order is unchanged.
+
+- **The solid pass carries a contact across its rounds** (13 October 2026). On the facade the
+  contact pass was half solid pass, and the solid pass was 2.2 s of CPU a tick: every push round
+  asked the two-million-triangle scene again about the same 11,000 organs resting on their tray
+  walls, and support detection then asked a third time about all 70,000. A push now remembers
+  its witness in the organ's own frame together with the surface normal; the later rounds of
+  the same tick measure the remaining depth against the plane through them (exact for a tray
+  wall, within the push for anything curved), and support detection takes the push's witness
+  where there was a push and skips the organs whose cached clearance rules a contact out.
+  Facade, 4,134 plants in trays, 70,000 organs, quiet machine: solid pass 2.2 -> 1.3 s of CPU,
+  contact pass 135 -> 99 ms, tick 262 -> 215 ms. The Bergenia under a 25 cm disc still never
+  passes it (0 organ-ticks through, flowers open) and its leaves still spread around its edge.
+  `AGRO_COLLISION_TIMING=1` now also prints the solid pass by stage.
 
 The single plant's remaining wall time is its serial half - the pair query, the response
 replay (about 4.5 ms for 3,800 contacts), the solid pass and the epilogue - so it does not reach
@@ -379,6 +392,8 @@ records one CSV row per day.
 | Bergenia with `ContactDeformationMode = 1` (`BroadLeafV1`), 330 days, 4 h, soft | Petals 17 Apr-30 May 2026; 22 leaves, 20 at ≥ 90 %; 44 deformation states with folds persisting across ticks, up to 6.5° on a blade and 8.5° on a petiole; 187 s wall, 43 ms per tick (the V1 narrow phase is about nine times the rigid cost, as under the certified engine) |
 | Parallel against sequential tick, 100 and 400 plants (Carex/Bergenia grid), 650 steps; facade request, 4,134 plants, 430 steps (12 October 2026) | Byte-identical frames in every case; sequential result unchanged by the request buffering; one collision worker against 32 identical on one plant |
 | Shaking, Geranium macrorrhizum and Heuchera, 730 days, damping switches off against on (12 October 2026) | Per-tick median organ rotation 1.9 -> 0.08 deg and 7.4 -> 0.25 deg; see "Shaking" above |
+| Facade request (`salvaged-run-requests/b886d0a6...json` with `fav11_complete_geometry_model.obj`), 4,134 plants, steps 400-430, quiet 32-core machine (13 October 2026) | 215 ms per tick at 22 effective cores: contacts 99 ms (28 cores), light 57, post 28, tick 16, census 13, export 9; 11 cross-plant batches cost 5 ms, the solid pass 45 ms |
+| Archived Bergenia under a 25 cm disc 25 cm above the seed, 330 days, 4 h (13 October 2026) | No organ tip inside the disc's radius rises above it (tallest 24.6 cm against the 24 cm underside); leaves reach 37 cm around its edge; 22 leaves; petals 7 Apr-17 May; 5,513 elongation clips |
 | Geranium macrorrhizum and G. x cantabrigiense, four plants on a 0.5 m grid, 730 days, soft engine (13 October 2026) | Second-year stand, 542 and 251 scapes: median azimuth excursion of a scape tip about its root 0.05 and 0.08 of a turn, largest 0.17 and 0.19; chain tip `dirY` never below 0.74 and 0.67; inflorescence tops 33-36 and 17-21 cm |
 | Geranium macrorrhizum and G. x cantabrigiense, four plants on a 0.5 m grid, 200 days, soft engine (13 October 2026) | Scape tips circle no more: the azimuth of each scape tip about its root drifts at most 39 degrees over the bloom (before the azimuth-fixed steering: a full 360 degree circle on one scape, 212 degrees with the steering off), 90th-percentile azimuth motion under 2 degrees per tick (before: 4); chain tip `dirY` stays above 0.79 |
 | Scape posture, Heuchera / Carex / both Geraniums, 730 (Carex 450) days, soft engine, after the mechanics fixes and the species retune (12 October 2026) | Heuchera: base chain tip never below dirY 0.97 through bloom, chain angle at most 13 deg, flowers 41 cm above the foliage (before: tip at -0.27, chain 114 deg); Carex 0.99 / 9 deg; G. x cantabrigiense 0.70 / 46 deg, +12 cm; G. macrorrhizum 0.63 / 51 deg, +19 cm (at 2e8 one peduncle in two still hung at -0.58; 3e8 and a 0.01/h rate hold it). Heuchera under the certified engine: 0.94 / 20 deg |

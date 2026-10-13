@@ -15,13 +15,15 @@ public sealed partial class SoftContactEngine
     /// chunks were spread over threads.</summary>
     struct PairStats
     {
-        public long Candidates, Contacts, NewSides, Crossings, SuspectedTunnels, DeepPenetrations, PenetrationCount;
+        public long Candidates, Contacts, NewSides, Crossings, SuspectedTunnels, DeepPenetrations, PenetrationCount, StaticPairs, StaticTouching;
+        public long BoundsTicks, ConvexTicks, ExactTicks, SampledTicks, BoundsOut, ConvexOut, Exact, Sampled, TouchingTicks, SeparatedTicks;
         public long ApproximationQueries, ApproximationSeparations;
         public double PenetrationSum;
         public float MaxPenetration;
         public void Add(in PairStats o)
         {
-            Candidates += o.Candidates; Contacts += o.Contacts; NewSides += o.NewSides; Crossings += o.Crossings;
+            Candidates += o.Candidates; Contacts += o.Contacts; NewSides += o.NewSides; Crossings += o.Crossings; StaticPairs += o.StaticPairs; StaticTouching += o.StaticTouching;
+            BoundsTicks += o.BoundsTicks; ConvexTicks += o.ConvexTicks; ExactTicks += o.ExactTicks; SampledTicks += o.SampledTicks; BoundsOut += o.BoundsOut; ConvexOut += o.ConvexOut; Exact += o.Exact; Sampled += o.Sampled; TouchingTicks += o.TouchingTicks; SeparatedTicks += o.SeparatedTicks;
             SuspectedTunnels += o.SuspectedTunnels; DeepPenetrations += o.DeepPenetrations; PenetrationCount += o.PenetrationCount;
             ApproximationQueries += o.ApproximationQueries; ApproximationSeparations += o.ApproximationSeparations;
             PenetrationSum += o.PenetrationSum; MaxPenetration = MathF.Max(MaxPenetration, o.MaxPenetration);
@@ -80,13 +82,22 @@ public sealed partial class SoftContactEngine
                 var local = default(PairStats);
                 var last = Math.Min(n, (c + 1) * OwnPairChunk);
                 long worst = 0; int worstK = -1;
+                var b0 = FoliageGeometry.StageBoundsTicks; var c0 = FoliageGeometry.StageConvexTicks; var e0 = FoliageGeometry.StageExactTicks; var s0 = FoliageGeometry.StageSampledTicks;
+                var bo0 = FoliageGeometry.StageBoundsOut; var co0 = FoliageGeometry.StageConvexOut; var ex0 = FoliageGeometry.StageExact; var sm0 = FoliageGeometry.StageSampled;
                 for (int k = c * OwnPairChunk; k < last; ++k)
                 {
-                    var pairStarted = TracePairCost ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
+                    var pairStarted = TraceTiming ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
                     var (a, b) = pairs[k];
                     EvaluatePair(plant, a, plant, b, epoch, work.Contacts, ref local, out records[k]);
-                    if (TracePairCost) { var pt = System.Diagnostics.Stopwatch.GetTimestamp() - pairStarted; if (pt > worst) { worst = pt; worstK = k; } }
+                    if (TraceTiming)
+                    {
+                        var pt = System.Diagnostics.Stopwatch.GetTimestamp() - pairStarted;
+                        if (records[k].Touching) local.TouchingTicks += pt; else local.SeparatedTicks += pt;
+                        if (TracePairCost && pt > worst) { worst = pt; worstK = k; }
+                    }
                 }
+                local.BoundsTicks += FoliageGeometry.StageBoundsTicks - b0; local.ConvexTicks += FoliageGeometry.StageConvexTicks - c0; local.ExactTicks += FoliageGeometry.StageExactTicks - e0; local.SampledTicks += FoliageGeometry.StageSampledTicks - s0;
+                local.BoundsOut += FoliageGeometry.StageBoundsOut - bo0; local.ConvexOut += FoliageGeometry.StageConvexOut - co0; local.Exact += FoliageGeometry.StageExact - ex0; local.Sampled += FoliageGeometry.StageSampled - sm0;
                 stats[c] = local;
                 chunkTicks[c] = System.Diagnostics.Stopwatch.GetTimestamp() - chunkStarted;
                 if (TracePairCost) { work.WorstPairTicks[c] = worst; work.WorstPairIndex[c] = worstK; }
@@ -173,6 +184,9 @@ public sealed partial class SoftContactEngine
         var stop = pa == pb ? CollisionWorld.CommonAncestor(a, i, j) : -1;
         var hit = PairDistance(sa, sb, search, pa.World.CollisionGeometryToleranceM, ref stats);
         var touching = hit.Distance < band;
+        if (i < a.PreviousGeometry.Length && j < b.PreviousGeometry.Length && a.PreviousGeometry[i].Exists && b.PreviousGeometry[j].Exists
+            && a.PreviousGeometry[i].Pose == CollisionWorld.Shape(a, i).Pose && b.PreviousGeometry[j].Pose == CollisionWorld.Shape(b, j).Pose)
+        { ++stats.StaticPairs; if (touching) ++stats.StaticTouching; }
         var weight = 1f;
         if (stop >= 0)
         {

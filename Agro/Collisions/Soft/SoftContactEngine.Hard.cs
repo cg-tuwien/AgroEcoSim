@@ -16,8 +16,13 @@ public sealed partial class SoftContactEngine
         if (work.SolidConfinement.Length < ag.Count)
             Array.Resize(ref work.SolidConfinement, Math.Max(ag.Count, work.SolidConfinement.Length * 2));
         Array.Clear(work.SolidConfinement, 0, ag.Count);
+        if (work.ObstacleTouch.Length < ag.Count) { work.ObstacleTouch = new StaticTouch[Math.Max(ag.Count, work.ObstacleTouch.Length * 2)]; work.SoilTouch = new StaticTouch[work.ObstacleTouch.Length]; }
+        for (int i = 0; i < ag.Count; ++i) { work.ObstacleTouch[i].Round = -1; work.SoilTouch[i].Round = -1; }
+        long T() => TraceTiming ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
+        var t0 = T();
         ag.RefreshAnchors(Static);
         ag.ClearSupport();
+        var t1 = T(); work.HardAnchorTicks += t1 - t0;
         for (int round = 0; round < CollisionSettings.SoftHardPushRounds; ++round)
         {
             ag.BeginContactSweep(resetDiagnostics: false);
@@ -26,20 +31,107 @@ public sealed partial class SoftContactEngine
                 if (!CollisionWorld.Eligible(ag, i)) continue;
                 var pose = ag.GetContactPose(i);
                 var trusted = CollisionWorld.TrustedPoint(plant, i);
+                var ta = T();
                 if (CollisionSettings.ObstaclePass && !ClearOfObstacles(ag, i, pose, work))
-                    Correct(ag, i, trusted, StaticSurface.Obstacle, work);
+                {
+                    var tb = T(); work.HardClearTicks += tb - ta;
+                    Correct(ag, i, pose, trusted, StaticSurface.Obstacle, work, round);
+                    ta = T(); work.HardObstacleTicks += ta - tb;
+                }
+                else { var tb = T(); work.HardClearTicks += tb - ta; ta = tb; }
                 if (CollisionSettings.SoilPass && World.SoilEligible(ag, i, pose))
-                    Correct(ag, i, trusted, StaticSurface.Soil, work);
+                {
+                    var tb = T(); work.HardSoilEligibleTicks += tb - ta;
+                    Correct(ag, i, pose, trusted, StaticSurface.Soil, work, round);
+                    work.HardSoilTicks += T() - tb;
+                }
+                else work.HardSoilEligibleTicks += T() - ta;
             }
-            if (!ag.EndContactSweep(CollisionSettings.MaxCorrectionRadians)) break;
+            var te = T();
+            var moved = ag.EndContactSweep(CollisionSettings.MaxCorrectionRadians);
+            work.HardSweepTicks += T() - te; ++work.HardRounds;
+            if (!moved) break;
         }
+        var tc = T();
         if (CollisionSettings.SolidElongationClip && CollisionSettings.ObstaclePass) ClipElongation(plant, work);
-        World.RefreshContactLoads(plant);
+        var tl = T(); work.HardClipTicks += tl - tc;
+        RefreshContactLoads(plant, work);
+        work.HardLoadTicks += T() - tl;
     }
 
-    void Correct(PlantSubFormation<AboveGroundAgent> ag, int i, Vector3 trusted, StaticSurface surface, SoftWork work)
+    /// <summary>
+    /// The certified engine's <see cref="CollisionWorld.RefreshContactLoads"/>, minus one query per
+    /// organ per tick. Support detection asked the static scene about every eligible organ every
+    /// tick - on the facade that was 70,000 queries against two million triangles, 2.2 s of CPU a
+    /// tick and half of the contact pass - although the clearance cache already knew, for nine
+    /// organs in ten, that no obstacle was within reach. An organ whose cached clearance exceeds
+    /// its travel since the measurement plus the support reach cannot be resting on anything, so
+    /// it is not asked.
+    /// </summary>
+    void RefreshContactLoads(PlantFormation2 plant, SoftWork work)
     {
-        if (!Static.ShapeContactUncached(CollisionWorld.Shape(ag, i), trusted, surface, out var point, out var normal, out var depth)) return;
+        var ag = plant.AG;
+        ag.ClearSupport();
+        ag.RefreshMechanicalLoads();
+        var supportReach = CollisionSettings.ContactTolerance + 2 * FoliageGeometry.Skin;
+        for (int i = 0; i < ag.Count; ++i)
+        {
+            if (!CollisionWorld.Eligible(ag, i)) continue;
+            var pose = ag.GetContactPose(i);
+            // An organ pushed against a solid this tick is resting on it if the push came from
+            // below: the push already found the witness and the normal.
+            ref var obstacle = ref work.ObstacleTouch[i];
+            if (obstacle.Round >= 0) { if (obstacle.Normal.Y > 0f) ag.RecordSupportReaction(i, obstacle.Point, obstacle.Normal); }
+            else if (!ProvablyClear(ag, i, pose, supportReach, work)) World.RecordSupport(ag, i, StaticSurface.Obstacle);
+            ref var soil = ref work.SoilTouch[i];
+            if (soil.Round >= 0) { if (soil.Normal.Y > 0f) ag.RecordSupportReaction(i, soil.Point, soil.Normal); }
+            else if (World.SoilEligible(ag, i, pose)) World.RecordSupport(ag, i, StaticSurface.Soil);
+        }
+        ag.UpdateSupportedLoads();
+        ag.RefreshAnchors(Static);
+    }
+
+    /// <summary>Whether the clearance cache proves no obstacle within <paramref name="margin"/> of the
+    /// organ at its current pose, without issuing a query.</summary>
+    bool ProvablyClear(PlantSubFormation<AboveGroundAgent> ag, int i, in OrganPose pose, float margin, SoftWork work)
+    {
+        if (Static.ObstacleTriangles == 0) return true;
+        var template = ag.GetLaminaTemplate(i);
+        var travel = template?.MotionBound(ag.ClearancePose[i], pose) ?? ag.ClearancePose[i].MotionBound(pose);
+        if (ag.StaticClearance[i] > travel + margin) { ++work.SupportSkips; return true; }
+        return false;
+    }
+
+    /// <summary>A solid contact found in a push round this tick: the witness in the organ's own frame,
+    /// the surface normal, and the depth, so that the later rounds and the support detection can
+    /// carry it forward without asking the static scene again.</summary>
+    internal struct StaticTouch { public Vector3 Local, Point, Normal; public float Depth; public int Round; }
+
+    /// <summary>
+    /// One push against a solid. The first round asks the static scene; a later round of the same
+    /// tick carries the first round's witness and normal forward and measures the remaining depth
+    /// against the plane through them. On the facade the second and later rounds were re-querying
+    /// the same tray wall for the same 11,000 organs, two million triangles a query, for 1.2 s of
+    /// CPU a tick; a tray wall is a plane and the push is a millimetre, so the plane is exact for
+    /// it and within the push for anything curved.
+    /// </summary>
+    void Correct(PlantSubFormation<AboveGroundAgent> ag, int i, in OrganPose pose, Vector3 trusted, StaticSurface surface, SoftWork work, int round)
+    {
+        ref var touch = ref (surface == StaticSurface.Obstacle ? ref work.ObstacleTouch[i] : ref work.SoilTouch[i]);
+        Vector3 point, normal; float depth;
+        if (round > 0 && touch.Round == round - 1)
+        {
+            point = pose.Base + Vector3.Transform(touch.Local, pose.Rotation);
+            normal = touch.Normal;
+            depth = touch.Depth - Vector3.Dot(point - touch.Point, normal);
+            if (depth <= 0f) return;
+        }
+        else
+        {
+            if (!Static.ShapeContactUncached(CollisionWorld.Shape(ag, i), trusted, surface, out point, out normal, out depth)) return;
+            touch.Local = Vector3.Transform(point - pose.Base, Quaternion.Conjugate(pose.Rotation));
+        }
+        touch.Point = point; touch.Normal = normal; touch.Depth = depth; touch.Round = round;
         work.MaxSolidPenetration = MathF.Max(work.MaxSolidPenetration, depth);
         if (!ag.QueueContactCorrection(i, point, normal, depth + CollisionSettings.ContactTolerance)) return;
         if (surface == StaticSurface.Obstacle) ++work.Obstacle; else ++work.Soil;

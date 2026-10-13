@@ -20,6 +20,8 @@ public sealed partial class SoftContactEngine
     public long SoilContacts { get; private set; }
     public long StaticQueries { get; private set; }
     public long ClearanceSkips { get; private set; }
+    /// <summary>Support queries the clearance cache made unnecessary.</summary>
+    public long SupportSkips { get; private set; }
     public long ApproximationQueries { get; private set; }
     public long ApproximationSeparations { get; private set; }
     /// <summary>Neighbour refresh, the per-plant preparation jobs and the cross-plant batches.</summary>
@@ -30,6 +32,8 @@ public sealed partial class SoftContactEngine
     public long TickCount { get; private set; }
     // Last tick.
     public long LastCandidates { get; private set; }
+    public long LastStaticPairs { get; private set; }
+    public long LastStaticTouching { get; private set; }
     public long LastContacts { get; private set; }
     public long LastNewSides { get; private set; }
     public long LastCrossings { get; private set; }
@@ -50,24 +54,24 @@ public sealed partial class SoftContactEngine
 
     void FlushCounters()
     {
-        long candidates = 0, contacts = 0, sides = 0, crossings = 0, tunnels = 0, deep = 0, clips = 0, overlapping = 0;
+        long candidates = 0, contacts = 0, sides = 0, crossings = 0, tunnels = 0, deep = 0, clips = 0, overlapping = 0, staticPairs = 0, staticTouching = 0;
         double clipped = 0, penetration = 0;
         float maxPenetration = 0, maxSolid = 0;
         // Plant order, not dictionary order, so the double sums do not depend on history.
         foreach (var plant in Plants)
         {
             var w = Work[plant]; ref var s = ref w.Stats;
-            candidates += s.Candidates; contacts += s.Contacts; sides += s.NewSides; crossings += s.Crossings;
+            candidates += s.Candidates; contacts += s.Contacts; sides += s.NewSides; crossings += s.Crossings; staticPairs += s.StaticPairs; staticTouching += s.StaticTouching;
             tunnels += s.SuspectedTunnels; deep += s.DeepPenetrations; clips += w.Clips; clipped += w.ClippedMetres; Slides += w.Slides;
             overlapping += s.PenetrationCount; penetration += s.PenetrationSum;
             maxPenetration = MathF.Max(maxPenetration, s.MaxPenetration); maxSolid = MathF.Max(maxSolid, w.MaxSolidPenetration);
-            ObstacleContacts += w.Obstacle; SoilContacts += w.Soil; StaticQueries += w.Queries; ClearanceSkips += w.Skips;
+            ObstacleContacts += w.Obstacle; SoilContacts += w.Soil; StaticQueries += w.Queries; ClearanceSkips += w.Skips; SupportSkips += w.SupportSkips;
             ApproximationQueries += s.ApproximationQueries; ApproximationSeparations += s.ApproximationSeparations;
             w.ResetCounters();
         }
         FoliageCandidates += candidates; FoliageContacts += contacts; NewSides += sides; Crossings += crossings;
         SuspectedTunnels += tunnels; DeepFoliagePenetrations += deep; SolidClips += clips; ClippedElongationMetres += clipped;
-        LastCandidates = candidates; LastContacts = contacts; LastNewSides = sides; LastCrossings = crossings;
+        LastCandidates = candidates; LastContacts = contacts; LastNewSides = sides; LastCrossings = crossings; LastStaticPairs = staticPairs; LastStaticTouching = staticTouching;
         LastSuspectedTunnels = tunnels; LastDeepPenetrations = deep; LastClips = clips; LastClippedMetres = clipped;
         MaxFoliagePenetrationMetres = maxPenetration;
         MeanFoliagePenetrationMetres = overlapping > 0 ? (float)(penetration / overlapping) : 0f;

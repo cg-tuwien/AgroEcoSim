@@ -4,6 +4,13 @@ namespace Agro.Collisions;
 
 internal static partial class FoliageGeometry
 {
+    /// <summary>Per-thread stage timers and counts of the soft engine's distance queries, for the
+    /// timing trace. Stopwatch ticks.</summary>
+    [ThreadStatic] internal static long StageBoundsTicks, StageConvexTicks, StageExactTicks, StageSampledTicks;
+    /// <summary>Set by the soft engine when <c>AGRO_COLLISION_TIMING</c> is on; the stage clocks cost a
+    /// timestamp per query otherwise.</summary>
+    internal static bool StageClocks;
+    [ThreadStatic] internal static long StageBoundsOut, StageConvexOut, StageExact, StageSampled;
     [ThreadStatic] static List<int>? SampleHitsA;
     [ThreadStatic] static List<int>? SampleHitsB;
 
@@ -35,16 +42,45 @@ internal static partial class FoliageGeometry
     {
         if (exactPairBudget <= 0 || a.Lamina == null || b.Lamina == null || a.Feature >= 0 || b.Feature >= 0)
             return DistanceUncached(a, b, search);
-        if (BoundsSeparate(a, b, search) || ConvexSeparation(a, b, search))
+        if (!StageClocks)
+        {
+            if (BoundsSeparate(a, b, search) || ConvexSeparation(a, b, search))
+                return new(a.Pose.Base, b.Pose.Base, Vector3.UnitY, search, -1, -1);
+            return Narrow(a, b, search, exactPairBudget, 0);
+        }
+        var t0 = System.Diagnostics.Stopwatch.GetTimestamp();
+        if (BoundsSeparate(a, b, search))
+        {
+            StageBoundsTicks += System.Diagnostics.Stopwatch.GetTimestamp() - t0; ++StageBoundsOut;
             return new(a.Pose.Base, b.Pose.Base, Vector3.UnitY, search, -1, -1);
-        var best = new FoliageContact(a.Pose.Base, b.Pose.Base, Vector3.UnitY, search, -1, -1);
+        }
+        var t1 = System.Diagnostics.Stopwatch.GetTimestamp(); StageBoundsTicks += t1 - t0;
+        if (ConvexSeparation(a, b, search))
+        {
+            StageConvexTicks += System.Diagnostics.Stopwatch.GetTimestamp() - t1; ++StageConvexOut;
+            return new(a.Pose.Base, b.Pose.Base, Vector3.UnitY, search, -1, -1);
+        }
+        var t2 = System.Diagnostics.Stopwatch.GetTimestamp(); StageConvexTicks += t2 - t1;
+        return Narrow(a, b, search, exactPairBudget, t2);
+    }
+
+    static FoliageContact Narrow(in ContactShape a, in ContactShape b, float search, int exactPairBudget, long t2)
+    {
         // Sampling costs about a tree query per vertex of both blades; the exact query costs a
         // triangle test per candidate pair. Stay exact until the candidates outnumber the
         // vertices several times over, whatever the configured floor.
-        var limit = Math.Max(exactPairBudget, 4 * (a.Lamina.Vertices.Length + b.Lamina.Vertices.Length));
+        var best = new FoliageContact(a.Pose.Base, b.Pose.Base, Vector3.UnitY, search, -1, -1);
+        var limit = Math.Max(exactPairBudget, 4 * (a.Lamina!.Vertices.Length + b.Lamina!.Vertices.Length));
         var pairs = TemplatePairs ??= [];
-        if (a.Lamina.QueryPairs(a.Pose, b.Lamina, b.Pose, search, pairs, limit))
-            return ExactPairs(a, b, pairs, best);
+        if (a.Lamina!.QueryPairs(a.Pose, b.Lamina!, b.Pose, search, pairs, limit))
+        {
+            var r = ExactPairs(a, b, pairs, best);
+            if (StageClocks) { StageExactTicks += System.Diagnostics.Stopwatch.GetTimestamp() - t2; ++StageExact; }
+            return r;
+        }
+        var sampledStart = StageClocks ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
+        if (StageClocks) ++StageSampled;
+        try {
         var hits = SampleHitsB ??= [];
         var bestVertex = -1; var bestOnA = true;
         SampleVertices(a, b, true, hits, ref best, ref bestVertex, ref bestOnA);
@@ -92,6 +128,7 @@ internal static partial class FoliageGeometry
             }
         }
         return best;
+        } finally { if (StageClocks) StageSampledTicks += System.Diagnostics.Stopwatch.GetTimestamp() - sampledStart; }
     }
 
     /// <summary>Every vertex of <paramref name="from"/> against the triangles of <paramref name="to"/>
