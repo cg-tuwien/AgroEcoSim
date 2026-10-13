@@ -1305,6 +1305,51 @@ public partial struct AboveGroundAgent : IPlantAgent
 			Quaternion.CreateFromAxisAngle(Vector3.Normalize(rotationAxis), MathF.Acos(cos)) * orientation);
 	}
 
+	/// <summary>
+	/// The orientation a growing organ's negative gravitropism steers its rest frame toward,
+	/// tick after tick: inclined <paramref name="setPointAngle"/> from the vertical in an azimuth
+	/// that belongs to the organ.
+	/// </summary>
+	/// <remarks>
+	/// <see cref="GravitropicSetPointOrientation"/> takes the azimuth from the organ's current
+	/// lean, which is right for a one-off decision at birth and wrong for a restoring force: a
+	/// lean whose azimuth is read back from itself is restored in tilt only, so anything that
+	/// nudges the organ sideways - a neighbour's leaf, a pressed flower head - turns the lean
+	/// around the vertical with nothing to turn it back, and a crowded Geranium peduncle
+	/// precessed in circles at a constant 20 degrees. Here the azimuth is the organ's own
+	/// across axis projected to the horizontal: fixed in the organ, carried with it when a
+	/// parent moves it, and restored along with the tilt. The sign follows the side the organ
+	/// already leans to, so an arch is never steered back through the vertical onto the other
+	/// side; one pushed over to the far side settles there instead of circling.
+	/// </remarks>
+	public static Quaternion GravitropicRestoringOrientation(Quaternion orientation, float setPointAngle)
+	{
+		var axis = Vector3.Transform(Vector3.UnitX, orientation);
+		Vector3 target;
+		if (setPointAngle <= 0f) target = Vector3.UnitY;
+		else
+		{
+			var across = Vector3.Transform(Vector3.UnitZ, orientation);
+			var horizontal = new Vector3(across.X, 0f, across.Z);
+			if (horizontal.LengthSquared() < 1e-8f)
+			{
+				var up = Vector3.Transform(Vector3.UnitY, orientation);
+				horizontal = new Vector3(up.X, 0f, up.Z);
+				if (horizontal.LengthSquared() < 1e-8f) horizontal = Vector3.UnitX;
+			}
+			horizontal = Vector3.Normalize(horizontal);
+			var lean = new Vector3(axis.X, 0f, axis.Z);
+			if (lean.LengthSquared() > 1e-4f && Vector3.Dot(lean, horizontal) < 0f) horizontal = -horizontal;
+			target = horizontal * MathF.Sin(setPointAngle) + Vector3.UnitY * MathF.Cos(setPointAngle);
+		}
+		var cos = Math.Clamp(Vector3.Dot(axis, target), -1f, 1f);
+		if (cos > 0.9999f) return orientation;
+		var rotationAxis = Vector3.Cross(axis, target);
+		if (rotationAxis.LengthSquared() < 1e-8f) return orientation;
+		return Quaternion.Normalize(
+			Quaternion.CreateFromAxisAngle(Vector3.Normalize(rotationAxis), MathF.Acos(cos)) * orientation);
+	}
+
 	public bool CompleteDay(uint timestep, byte ticksPerDay)
 	{
 		var complete = timestep - BirthTime >= ticksPerDay;

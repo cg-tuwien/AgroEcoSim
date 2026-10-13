@@ -125,13 +125,15 @@ public partial class PlantSubFormation<T>
         Array.Clear(PreviousGeometry, survivors, Math.Max(0, newCount - survivors));
     }
 
-    internal void BeginContactSweep()
+    /// <param name="resetDiagnostics">False for the solid pass's extra rounds, so
+    /// <see cref="ContactTurnByOrgan"/> accumulates over the whole tick.</param>
+    internal void BeginContactSweep(bool resetDiagnostics = true)
     {
         EnsureContactCapacity(AgentCount);
         Array.Clear(ContactTurns, 0, AgentCount);
         Array.Clear(ContactTurnPeak, 0, AgentCount);
         Array.Clear(ContactLeverMax, 0, AgentCount);
-        Array.Clear(ContactTurnByOrgan);
+        if (resetDiagnostics) Array.Clear(ContactTurnByOrgan);
         BeginDeformationSweep();
         BatchingContacts = true;
     }

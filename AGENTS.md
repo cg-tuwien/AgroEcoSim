@@ -166,6 +166,16 @@ older live checkpoints are rejected, while their saved playback remains readable
   `1 - (1 - rate)^HoursPerTick`, fading with lignification, and carries the subtree rigidly.
   Keep the rate well below the 5 %/h elastic response or the loaded pose overshoots the set
   point; 0.01-0.014 per hour re-erects over three to four days.
+- **A restoring set point needs an azimuth of its own.** The birth-time steering
+  (`GravitropicSetPointOrientation`) reads the azimuth from the organ's current lean, which is
+  fine once and wrong as a per-tick restoring force: it restores the tilt only, so every
+  sideways nudge from a neighbour's leaf or a pressed flower head turned a Geranium peduncle
+  around the vertical with nothing to turn it back - measured on a four-plant stand, one
+  scape made a full circle in two months at a constant 20 degrees, and the tips' azimuth
+  moved up to 4 degrees per tick. `GravitropicRestoringOrientation` takes the azimuth from
+  the organ's own across axis, fixed in the organ and carried with it, with the sign on the
+  side it already leans to; the same stand then holds every scape within 40 degrees of its
+  azimuth for the whole bloom.
 
 ### Flower state and growth
 

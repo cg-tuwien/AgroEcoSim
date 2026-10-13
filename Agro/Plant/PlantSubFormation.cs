@@ -759,7 +759,8 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 			//does not overshoot - and carry the subtree rigidly, which is what re-erects a chain
 			//segment by segment without ever feeding the tip's error to every joint at once.
 			//Only base scape segments and stems: panicle branches and pedicels point where the
-			//inflorescence put them.
+			//inflorescence put them. The target's azimuth is the organ's own, not its current
+			//lean's - see GravitropicRestoringOrientation for the circling that produced.
 			if (IsAboveGround)
 			{
 				ref var above = ref Unsafe.As<T, AboveGroundAgent>(ref agent);
@@ -772,7 +773,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 						? Plant.Parameters.ShootsGravitropicSetPointAngle
 						: Plant.Parameters.FlowerSettings.ScapeGravitropicSetPointAngle;
 					var k = (1f - MathF.Pow(1f - rate, tickSpeed)) * (1f - woodiness);
-					var aim = AboveGroundAgent.GravitropicSetPointOrientation(agent.baseOrientation, setPoint);
+					var aim = AboveGroundAgent.GravitropicRestoringOrientation(agent.baseOrientation, setPoint);
 					var steered = Quaternion.Normalize(Quaternion.Slerp(agent.baseOrientation, aim, k));
 					var steer = Quaternion.Normalize(steered * Quaternion.Conjugate(agent.baseOrientation));
 					if (steer.X * steer.X + steer.Y * steer.Y + steer.Z * steer.Z > 1e-16f)

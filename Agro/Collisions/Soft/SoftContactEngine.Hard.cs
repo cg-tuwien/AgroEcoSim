@@ -20,7 +20,7 @@ public sealed partial class SoftContactEngine
         ag.ClearSupport();
         for (int round = 0; round < CollisionSettings.SoftHardPushRounds; ++round)
         {
-            ag.BeginContactSweep();
+            ag.BeginContactSweep(resetDiagnostics: false);
             for (int i = 0; i < ag.Count; ++i)
             {
                 if (!CollisionWorld.Eligible(ag, i)) continue;
