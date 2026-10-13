@@ -147,8 +147,12 @@ public static class Heuchera_Micrantha_Palace_Purple
         PreFloweringCommitmentProbabilityPerHour = 0f,
         FloweringCommitmentProbabilityPerHour = 0.045f,
         // Deadheaded plants rebloom sparsely; the lead-time gate keeps whatever is
-        // committed here from opening after dormancy.
-        PostFloweringCommitmentProbabilityPerHour = 0.0008f,
+        // committed here from opening after dormancy. 0.0008 was not sparse: over the
+        // August-October window it committed four crowns in five, and under the soft
+        // contact engine - which no longer stalls those scapes - the last petals opened on
+        // 13 December. At 48 N the plant is frosted by then; a tenth of that rate keeps a
+        // few late scapes in September and nothing after the leaves turn.
+        PostFloweringCommitmentProbabilityPerHour = 0.0001f,
         DormantFloweringCommitmentProbabilityPerHour = 0f,
 
         WoodElasticModulus = 1.0e8f,

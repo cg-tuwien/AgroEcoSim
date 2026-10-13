@@ -95,6 +95,7 @@ out over a few ticks instead of stalling.
 | `SoftBandLaw` | on | `AGRO_NoSoftBandLaw` |
 | `SoftSlideRamp` | on | `AGRO_NoSoftSlideRamp` |
 | `SoftNormalFilterHours` | 12 h (0 follows the witness exactly) | `AGRO_SoftNormalFilterHours` |
+| `SoftRelaxUnloaded` | on | `AGRO_NoSoftRelaxUnloaded` |
 | `SoftExactPairBudget` | 256 candidate triangle pairs (0 = always exact) | `AGRO_SoftExactPairBudget` |
 
 The five `Soft*` damping switches are described under "Shaking" below; `SoftExactPairBudget` under
@@ -184,6 +185,13 @@ The joint-sum rule is the fix; the normal filter is worth a quarter of what rema
 three are neutral within the noise and stay on for the reasons above. The leaf count ranges from
 110 to 162 across variants that differ only in sub-millimetre contact details, so it is a
 sensitive outcome, not a quality trend.
+
+`SoftRelaxUnloaded` (13 October 2026) lets petals and unloaded joints relax their contact turns
+under the soft engine; `Gravity` used to skip petals outright and release unloaded joints only
+under a deformation mode, so a pressed flower head stayed pressed. Measured on the same two
+plants over 730 days, off against on: Heuchera per-tick median 0.197 -> 0.183 deg, 99th
+percentile 2.33 -> 2.23; Geranium 0.074 -> 0.066 and 0.65 -> 0.60; bloom dates unchanged.
+Small, and in the right direction.
 
 A twenty- to thirty-fold reduction in the motion a viewer sees, with the bloom unchanged. The
 leaf count moves (Heuchera -22 %, Geranium -6 %): leaves that no longer thrash shade each other
@@ -357,6 +365,7 @@ records one CSV row per day.
 | Bergenia with `ContactDeformationMode = 1` (`BroadLeafV1`), 330 days, 4 h, soft | Petals 17 Apr-30 May 2026; 22 leaves, 20 at ≥ 90 %; 44 deformation states with folds persisting across ticks, up to 6.5° on a blade and 8.5° on a petiole; 187 s wall, 43 ms per tick (the V1 narrow phase is about nine times the rigid cost, as under the certified engine) |
 | Parallel against sequential tick, 100 and 400 plants (Carex/Bergenia grid), 650 steps; facade request, 4,134 plants, 430 steps (12 October 2026) | Byte-identical frames in every case; sequential result unchanged by the request buffering; one collision worker against 32 identical on one plant |
 | Shaking, Geranium macrorrhizum and Heuchera, 730 days, damping switches off against on (12 October 2026) | Per-tick median organ rotation 1.9 -> 0.08 deg and 7.4 -> 0.25 deg; see "Shaking" above |
+| Geranium macrorrhizum and G. x cantabrigiense, four plants on a 0.5 m grid, 730 days, soft engine (13 October 2026) | Second-year stand, 542 and 251 scapes: median azimuth excursion of a scape tip about its root 0.05 and 0.08 of a turn, largest 0.17 and 0.19; chain tip `dirY` never below 0.74 and 0.67; inflorescence tops 33-36 and 17-21 cm |
 | Geranium macrorrhizum and G. x cantabrigiense, four plants on a 0.5 m grid, 200 days, soft engine (13 October 2026) | Scape tips circle no more: the azimuth of each scape tip about its root drifts at most 39 degrees over the bloom (before the azimuth-fixed steering: a full 360 degree circle on one scape, 212 degrees with the steering off), 90th-percentile azimuth motion under 2 degrees per tick (before: 4); chain tip `dirY` stays above 0.79 |
 | Scape posture, Heuchera / Carex / both Geraniums, 730 (Carex 450) days, soft engine, after the mechanics fixes and the species retune (12 October 2026) | Heuchera: base chain tip never below dirY 0.97 through bloom, chain angle at most 13 deg, flowers 41 cm above the foliage (before: tip at -0.27, chain 114 deg); Carex 0.99 / 9 deg; G. x cantabrigiense 0.70 / 46 deg, +12 cm; G. macrorrhizum 0.63 / 51 deg, +19 cm (at 2e8 one peduncle in two still hung at -0.58; 3e8 and a 0.01/h rate hold it). Heuchera under the certified engine: 0.94 / 20 deg |
 

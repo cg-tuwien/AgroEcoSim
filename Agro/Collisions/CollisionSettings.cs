@@ -84,6 +84,11 @@ public static class CollisionSettings
     /// threshold instead of switching it on at half of it: a pair hovering at the threshold no
     /// longer slides one tick and not the next.</summary>
     public static bool SoftSlideRamp { get; set; } = Environment.GetEnvironmentVariable("AGRO_NoSoftSlideRamp") == null;
+    /// <summary>Under the soft engine, let petals and unloaded joints relax their elastic contact turns
+    /// toward their rest frame at the gravity response, as every loaded joint does. Without it a petal's
+    /// turn, and that of a joint with no gravitational moment, was permanent under the default
+    /// deformation mode, so pressed flower heads stayed pressed.</summary>
+    public static bool SoftRelaxUnloaded { get; set; } = Environment.GetEnvironmentVariable("AGRO_NoSoftRelaxUnloaded") == null;
     /// <summary>Candidate triangle pairs beyond which a blade-to-blade distance is sampled rather than
     /// taken exactly (see FoliageGeometry.DistanceSampled); zero keeps every query exact.</summary>
     public static int SoftExactPairBudget { get; set; } = IntFromEnv("AGRO_SoftExactPairBudget", 256, 0, 1 << 20);

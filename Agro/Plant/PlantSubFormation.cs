@@ -666,6 +666,10 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
         // and relies on its correction rounds to find it again. The soft engine applies one
         // capped increment per tick, so its folds must persist and relax like contact turns.
         var persistentDeformation = HasContactDeformation && Plant.World.ContactEngine == ContactEngineKind.Soft;
+        //Soft engine: petals and unloaded joints relax their contact turns like everything else;
+        //the certified engine keeps its historical behaviour (petals never, unloaded joints only
+        //under a deformation mode).
+        var relaxUnloaded = Collisions.CollisionSettings.SoftRelaxUnloaded && Plant.World.ContactEngine == ContactEngineKind.Soft;
         if (!persistentDeformation) ResetElasticDeformation();
         RefreshMechanicalLoads();
 
@@ -693,7 +697,8 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 			var i = nodesToVisit.Dequeue();
 			ref var agent = ref dst[i];
             agent.LoadLimited = false;
-			if ((GetIsRizome(i) && agent.SoilAnchored) || GetOrgan(i).Equals(OrganTypes.FlowerPadel))
+			var petal = GetOrgan(i).Equals(OrganTypes.FlowerPadel);
+			if ((GetIsRizome(i) && agent.SoilAnchored) || (petal && !relaxUnloaded))
 			{
 				foreach (var child in GetChildren(i))
 					nodesToVisit.Enqueue(child);
@@ -792,7 +797,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 
 			// Surface reactions are applied by the contact solve; all loads remain in the moment sum.
 
-			if (length > 1e-4f && radius > 0f && totalWeight > 0f)
+			if (!petal && length > 1e-4f && radius > 0f && totalWeight > 0f)
 			{
 				var baseDir = Vector3.Transform(Vector3.UnitX, agent.baseOrientation);
 				var isBlade = agent.Organ is OrganTypes.Leaf or OrganTypes.FlowerPadel;
@@ -940,12 +945,12 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 
                 PropagateToSubtree(dst, i, appliedDelta);
             }
-            else if (HasContactDeformation && agent.Orientation != agent.baseOrientation)
+            else if ((HasContactDeformation || relaxUnloaded) && agent.Orientation != agent.baseOrientation)
             {
                 // A tiny or unloaded joint has no gravitational moment, but must
                 // still release a previous elastic contact turn. Keep its unloaded
                 // frame exactly, without repeatedly normalizing an unchanged frame.
-                var released=persistentDeformation
+                var released=persistentDeformation || relaxUnloaded
                     ? Quaternion.Normalize(Quaternion.Slerp(agent.Orientation,agent.baseOrientation,response))
                     : agent.baseOrientation;
                 appliedDelta=Quaternion.Normalize(released*Quaternion.Conjugate(agent.Orientation));
