@@ -150,9 +150,11 @@ public static class Heuchera_Micrantha_Palace_Purple
         // committed here from opening after dormancy. 0.0008 was not sparse: over the
         // August-October window it committed four crowns in five, and under the soft
         // contact engine - which no longer stalls those scapes - the last petals opened on
-        // 13 December. At 48 N the plant is frosted by then; a tenth of that rate keeps a
-        // few late scapes in September and nothing after the leaves turn.
-        PostFloweringCommitmentProbabilityPerHour = 0.0001f,
+        // 13 December. At 48 N the plant is frosted by then, and even a tenth of the rate let
+        // one crown in nine commit at the end of October and open on 1 December: any
+        // post-season commitment at all lands past the frost, so 'Palace Purple', grown for
+        // its foliage, gets none.
+        PostFloweringCommitmentProbabilityPerHour = 0f,
         DormantFloweringCommitmentProbabilityPerHour = 0f,
 
         WoodElasticModulus = 1.0e8f,

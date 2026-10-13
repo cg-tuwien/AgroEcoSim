@@ -8,6 +8,7 @@ public sealed partial class SoftContactEngine
     internal readonly record struct SoftContactMemory(Vector3 Normal, int FeatureA, int FeatureB, long Seen);
     static readonly bool TraceCrossings = Environment.GetEnvironmentVariable("AGRO_TRACE_SOFT_CROSSINGS") != null;
     static readonly bool TraceDeep = Environment.GetEnvironmentVariable("AGRO_TRACE_SOFT_DEEP") != null;
+    static readonly bool TracePairCost = Environment.GetEnvironmentVariable("AGRO_TRACE_SOFT_PAIRCOST") != null;
     static int TracedCrossings, TracedDeep;
 
     /// <summary>Per-pair counters, accumulated per chunk so the totals do not depend on how the
@@ -55,8 +56,10 @@ public sealed partial class SoftContactEngine
             pairs[retained++] = ag.GetOrganId(a) > ag.GetOrganId(b) ? (b, a) : (a, b);
         }
         pairs.RemoveRange(retained, pairs.Count - retained);
-        // Stable-ID order makes the accumulation independent of the hierarchy's layout.
-        pairs.Sort(work.PairOrder);
+        // Stable-ID order makes the accumulation independent of the hierarchy's layout. The keys
+        // are materialised once: a delegate comparison that looked both ids up per compare was
+        // most of the serial time left in a single plant's tick.
+        SortByOrganIds(ag, pairs, ref work.SortKeys);
         CollisionWorld.UniquePairs(pairs);
         var n = pairs.Count;
         var chunks = (n + OwnPairChunk - 1) / OwnPairChunk;
@@ -69,19 +72,39 @@ public sealed partial class SoftContactEngine
             if (work.Records.Length < n) Array.Resize(ref work.Records, Math.Max(n, work.Records.Length * 2));
             var records = work.Records; var stats = work.ChunkStats; var epoch = ContactEpoch;
             var evalStarted = System.Diagnostics.Stopwatch.GetTimestamp();
+            if (work.ChunkTicks.Length < chunks) { work.ChunkTicks = new long[chunks]; work.WorstPairTicks = new long[chunks]; work.WorstPairIndex = new int[chunks]; }
+            var chunkTicks = work.ChunkTicks; var gc0 = GC.CollectionCount(0);
             Parallel.For(0, chunks, c =>
             {
+                var chunkStarted = System.Diagnostics.Stopwatch.GetTimestamp();
                 var local = default(PairStats);
                 var last = Math.Min(n, (c + 1) * OwnPairChunk);
+                long worst = 0; int worstK = -1;
                 for (int k = c * OwnPairChunk; k < last; ++k)
                 {
+                    var pairStarted = TracePairCost ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
                     var (a, b) = pairs[k];
                     EvaluatePair(plant, a, plant, b, epoch, work.Contacts, ref local, out records[k]);
+                    if (TracePairCost) { var pt = System.Diagnostics.Stopwatch.GetTimestamp() - pairStarted; if (pt > worst) { worst = pt; worstK = k; } }
                 }
                 stats[c] = local;
+                chunkTicks[c] = System.Diagnostics.Stopwatch.GetTimestamp() - chunkStarted;
+                if (TracePairCost) { work.WorstPairTicks[c] = worst; work.WorstPairIndex[c] = worstK; }
             });
             var evaluated = System.Diagnostics.Stopwatch.GetTimestamp();
             work.LastEvalTicks = evaluated - evalStarted; work.LastChunks = chunks;
+            long cmax = 0, csum = 0; for (int c = 0; c < chunks; ++c) { cmax = Math.Max(cmax, chunkTicks[c]); csum += chunkTicks[c]; }
+            work.LastChunkMaxTicks = cmax; work.LastChunkSumTicks = csum; work.LastGcs = GC.CollectionCount(0) - gc0;
+            if (TracePairCost && plant.World.Timestep % 50 == 0)
+            {
+                var order = Enumerable.Range(0, chunks).OrderByDescending(c => work.WorstPairTicks[c]).Take(6);
+                foreach (var c in order)
+                {
+                    var k = work.WorstPairIndex[c]; if (k < 0) continue; var (a, b) = pairs[k];
+                    var sa = CollisionWorld.Shape(ag, a); var sb = CollisionWorld.Shape(ag, b);
+                    Console.WriteLine($"SOFT_PAIRCOST t={plant.World.Timestep} {work.WorstPairTicks[c] * 1000.0 / System.Diagnostics.Stopwatch.Frequency:F3}ms {ag.GetOrgan(a)}/{ag.GetOrgan(b)} lamina={sa.Lamina != null}/{sb.Lamina != null} tri={sa.Lamina?.Indices.Length / 3}/{sb.Lamina?.Indices.Length / 3} L={ag.GetLength(a) * 100:F1}/{ag.GetLength(b) * 100:F1}cm d={records[k].Hit.Distance * 1000:F2}mm touching={records[k].Touching} chunkMs={chunkTicks[c] * 1000.0 / System.Diagnostics.Stopwatch.Frequency:F2}");
+                }
+            }
             for (int c = 0; c < chunks; ++c) work.Stats.Add(stats[c]);
             for (int k = 0; k < n; ++k)
                 if (records[k].Touching) RespondPair(plant, plant, in records[k], work);
@@ -110,7 +133,7 @@ public sealed partial class SoftContactEngine
         var pairs = job.Pairs;
         pairs.Clear();
         pa.AG.CollisionBvh.GetOverlappingPairs(pb.AG.CollisionBvh, pa.AG.FieldOrigin, pb.AG.FieldOrigin, pairs);
-        pairs.Sort(job.PairOrder);
+        SortByOrganIds(pa.AG, pb.AG, pairs, ref job.SortKeys);
         CollisionWorld.UniquePairs(pairs);
         var local = default(PairStats);
         for (int k = 0; k < pairs.Count; ++k)
@@ -136,6 +159,8 @@ public sealed partial class SoftContactEngine
         if (!a.IsCollisionEligiblePublic(i) || !b.IsCollisionEligiblePublic(j)) return false;
         ++stats.Candidates;
         var sa = CollisionWorld.Shape(a, i); var sb = CollisionWorld.Shape(b, j);
+        if (sa.Lamina != null && sa.Pose.Length < CollisionSettings.SoftTinyLaminaLength) sa = AsCapsule(sa);
+        if (sb.Lamina != null && sb.Pose.Length < CollisionSettings.SoftTinyLaminaLength) sb = AsCapsule(sb);
         var reach = sa.Pose.Radius + sb.Pose.Radius;
         var skin = CollisionSettings.FoliageSkin;
         var band = reach + skin;
@@ -215,6 +240,23 @@ public sealed partial class SoftContactEngine
         };
         return true;
     }
+
+    /// <summary>Sorts the pairs by (stable id of the first organ, stable id of the second): the same
+    /// order the delegate comparison produced, from keys looked up once per pair.</summary>
+    static void SortByOrganIds(PlantSubFormation<AboveGroundAgent> a, PlantSubFormation<AboveGroundAgent> b, List<(int, int)> pairs, ref (ulong, ulong)[] keys)
+    {
+        var n = pairs.Count;
+        if (keys.Length < n) keys = new (ulong, ulong)[Math.Max(n, keys.Length * 2)];
+        var items = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(pairs);
+        for (int k = 0; k < n; ++k) keys[k] = (a.GetOrganId(items[k].Item1), b.GetOrganId(items[k].Item2));
+        keys.AsSpan(0, n).Sort(items);
+    }
+    static void SortByOrganIds(PlantSubFormation<AboveGroundAgent> ag, List<(int, int)> pairs, ref (ulong, ulong)[] keys) => SortByOrganIds(ag, ag, pairs, ref keys);
+
+    /// <summary>A tiny blade as a capsule of its own half width: a rod the distance kernels answer in
+    /// under a microsecond, against a template query that could take a millisecond.</summary>
+    static ContactShape AsCapsule(in ContactShape s)
+        => new(s.Pose with { Width = 0f, Radius = MathF.Max(s.Pose.Radius, s.Pose.Width * .5f), Rounded = true, Deformation = default }, null);
 
     /// <summary>
     /// The side memory and the compliance-weighted correction queued on both bodies from one

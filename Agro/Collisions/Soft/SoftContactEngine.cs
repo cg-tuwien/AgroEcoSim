@@ -66,8 +66,11 @@ public sealed partial class SoftContactEngine
         /// <summary>Cross-plant batches this plant is already in, one bit per stage.</summary>
         public ulong[] StageMask = new ulong[1];
         /// <summary>Last tick's measured cost of the two per-plant jobs, for the scheduler.</summary>
-        public long LastPrepareTicks, LastFinishTicks, LastRespondTicks, LastEvalTicks;
-        public int LastChunks;
+        public long LastPrepareTicks, LastFinishTicks, LastRespondTicks, LastEvalTicks, LastChunkMaxTicks, LastChunkSumTicks;
+        public int LastChunks, LastGcs;
+        public long[] ChunkTicks = [], WorstPairTicks = [];
+        public (ulong, ulong)[] SortKeys = [];
+        public int[] WorstPairIndex = [];
         public readonly Comparison<(int, int)> PairOrder;
         public readonly Comparison<int> OrganOrder;
         /// <summary>Residual obstacle penetration per organ after this tick's pushes; the thigmomorphogenesis hook.</summary>
@@ -106,6 +109,7 @@ public sealed partial class SoftContactEngine
         public readonly SoftWork A, B;
         public readonly List<(int, int)> Pairs = [];
         public readonly Comparison<(int, int)> PairOrder;
+        public (ulong, ulong)[] SortKeys = [];
         public long Seen, LastTicks;
         public CrossJob(SoftWork a, SoftWork b)
         {
@@ -146,7 +150,7 @@ public sealed partial class SoftContactEngine
             var scale = 1000.0 / Stopwatch.Frequency;
             Console.WriteLine($"SOFT_CONTACT_TIMING step={timestep} foliageMs={(afterFoliage - afterPrepare) * scale:F2} finishMs={(afterHard - afterFoliage) * scale:F2}"
                 + $" neighboursMs={NeighbourTicks * scale:F2} prepareMs={PrepareTicks * scale:F2} respondMs={RespondTicksSum() * scale:F2} crossMs={CrossTicks * scale:F2} batches={Batches.Count} neighbours={World.Neighbours.Count}"
-                + (Plants.Count == 1 ? $" evalMs={Work[Plants[0]].LastEvalTicks * scale:F2} chunks={Work[Plants[0]].LastChunks}" : "")
+                + (Plants.Count == 1 ? $" evalMs={Work[Plants[0]].LastEvalTicks * scale:F2} chunks={Work[Plants[0]].LastChunks} chunkSumMs={Work[Plants[0]].LastChunkSumTicks * scale:F2} chunkMaxMs={Work[Plants[0]].LastChunkMaxTicks * scale:F3} gcs={Work[Plants[0]].LastGcs}" : "")
                 + $" plants={Plants.Count} organs={TotalOrgans} pairs={LastCandidates} contacts={LastContacts} newSides={LastNewSides} crossings={LastCrossings}"
                 + $" tunnels={LastSuspectedTunnels} maxPenMm={MaxFoliagePenetrationMetres * 1000:F3} meanPenMm={MeanFoliagePenetrationMetres * 1000:F3} deep={LastDeepPenetrations}"
                 + $" clips={LastClips} clippedMm={LastClippedMetres * 1000:F3} maxSolidMm={MaxSolidPenetrationMetres * 1000:F3}");

@@ -89,6 +89,12 @@ public static class CollisionSettings
     /// turn, and that of a joint with no gravitational moment, was permanent under the default
     /// deformation mode, so pressed flower heads stayed pressed.</summary>
     public static bool SoftRelaxUnloaded { get; set; } = Environment.GetEnvironmentVariable("AGRO_NoSoftRelaxUnloaded") == null;
+    /// <summary>Blades shorter than this, metres, meet other organs as capsules of their own width
+    /// under the soft engine. A newborn leaf slice a tenth of a millimetre long still carries its
+    /// full 46-triangle template, and a cluster of them at one node - every one within the band of
+    /// every other - was the costliest thing in a Carex tick: 1-2 ms a pair for organs that cannot
+    /// yet touch anything in a way the template resolves.</summary>
+    public static float SoftTinyLaminaLength { get; set; } = FloatFromEnv("AGRO_SoftTinyLaminaMm", 5f, 0f, 100f) * .001f;
     /// <summary>Candidate triangle pairs beyond which a blade-to-blade distance is sampled rather than
     /// taken exactly (see FoliageGeometry.DistanceSampled); zero keeps every query exact.</summary>
     public static int SoftExactPairBudget { get; set; } = IntFromEnv("AGRO_SoftExactPairBudget", 256, 0, 1 << 20);

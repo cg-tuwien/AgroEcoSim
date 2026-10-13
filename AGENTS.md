@@ -803,11 +803,13 @@ Honest list of what still does not match:
   its reach is fixed at compile time while a runner's reach is a function of time. This
   blocks Fragaria vesca proper, F. x ananassa, and the whole stoloniferous ground-cover
   set (Ajuga reptans, Glechoma, Duchesnea, Potentilla reptans, Trifolium repens).
-- **Heuchera's post-season rebloom is now a trickle.** Its `PostFloweringCommitmentProbabilityPerHour`
+- **Heuchera has no post-season rebloom any more.** Its `PostFloweringCommitmentProbabilityPerHour`
   of 0.0008 committed four crowns in five between August and October, and under the soft engine
-  (which no longer stalls those scapes) the last petals opened on 13 December. At 0.0001 the
-  second-year bloom runs 16 June to 16 August, against the Jun-Jul ground truth. The lead-time gate
-  is not at fault: Heuchera's nominal 16-day lead matched the measured commitment-to-petal time.
+  (which no longer stalls those scapes) the last petals opened on 13 December; at a tenth of the
+  rate one crown in nine still committed at the end of October and opened on 1 December. Any
+  post-season commitment lands past the frost, so the rate is zero and the second-year bloom runs
+  16 June to 8 August against the Jun-Jul ground truth. The lead-time gate is not at fault:
+  Heuchera's nominal 16-day lead matched the measured commitment-to-petal time.
 - **Everbearing Fragaria still flowers once, in June, not May to October.** The cause is
   structural: a crown that flowers is spent, and with `CrownMaximumNodes` binding it
   cannot hand over, so the plant waits for a new rhizome crown. Raising the node cap buys

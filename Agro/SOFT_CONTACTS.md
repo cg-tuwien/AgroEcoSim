@@ -97,6 +97,7 @@ out over a few ticks instead of stalling.
 | `SoftNormalFilterHours` | 12 h (0 follows the witness exactly) | `AGRO_SoftNormalFilterHours` |
 | `SoftRelaxUnloaded` | on | `AGRO_NoSoftRelaxUnloaded` |
 | `SoftExactPairBudget` | 256 candidate triangle pairs (0 = always exact) | `AGRO_SoftExactPairBudget` |
+| `SoftTinyLaminaLength` | 5 mm (0 = every blade uses its template) | `AGRO_SoftTinyLaminaMm` |
 
 The five `Soft*` damping switches are described under "Shaking" below; `SoftExactPairBudget` under
 "Full-core utilisation".
@@ -268,13 +269,26 @@ After (same probe, same requests; the plant differs where the physics did):
 
 | plants | ms per tick before | after | collisions before | after | effective cores, collisions |
 | --- | --- | --- | --- | --- | --- |
-| 1 | 152 | **53** | 138 | 41 | 3.6 |
-| 100 | 870 | **775** | 642 | 537 | 21.9 |
-| 400 | 3,169 | **2,519** | 2,226 | 1,662 | 29.6 |
+| 1 | 152 | **28** | 138 | 15 | 4.9 |
+| 100 | 870 | **502** | 642 | 273 | 22.7 |
+| 400 | 3,169 | **1,746** | 2,226 | 914 | 29.2 |
 
-The single plant's remaining wall time is its serial half - the pair query and sort, the
-response replay, the solid pass and the epilogue - so it does not reach 32 cores and will not
-without splitting the plant itself. The facade request (4,134 plants in trays, 76,500 organs at
+(12 October, before the tiny-blade capsules: 53, 775 and 2,519 ms per tick.) The parallel tick
+stayed byte-identical to the sequential one at 100 plants after every change.
+
+- **Tiny blades meet other organs as capsules** (`SoftTinyLaminaLength`, 13 October 2026). With
+  the costliest pairs traced (`AGRO_TRACE_SOFT_PAIRCOST=1`), the single Carex's critical path was
+  newborn leaf slices a tenth of a millimetre long carrying their full 46-triangle templates: a
+  cluster of them at one node, every one within the band of every other, cost 1-2 ms a pair and
+  10-15 ms a chunk while the other chunks took a tenth of that. A blade shorter than 5 mm is now a
+  capsule of its own half width, which the rod kernels answer in under a microsecond. The parallel
+  evaluation of that plant went from 33-48 ms to 3-4 ms of wall time at 130 -> 70 ms of CPU, and
+  the whole contact pass from 41 to about 13 ms. The pair sort materialises its stable-id keys
+  once instead of looking both ids up in a delegate per comparison; the order is unchanged.
+
+The single plant's remaining wall time is its serial half - the pair query, the response
+replay (about 4.5 ms for 3,800 contacts), the solid pass and the epilogue - so it does not reach
+32 cores and will not without splitting the plant itself. The facade request (4,134 plants in trays, 76,500 organs at
 step 430) ran at 1.2-1.6 s per tick with eight other simulations sharing the machine; 83 % of it
 is the contact pass at 15-24 effective cores.
 
