@@ -5,7 +5,10 @@ using Agro.Collisions;
 
 namespace Agro;
 
-public enum OrganDeathReason : byte { Senescence, Resources }
+public enum OrganDeathReason : byte { Senescence, Resources,
+    /// <summary>Born inside a solid with no admissible pose at its attachment (mixed engine); the
+    /// birth is withdrawn and the parent retries later, as the certified engine's staged birth would.</summary>
+    Obstruction }
 
 public partial class PlantSubFormation<T>
 {

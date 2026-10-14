@@ -7,6 +7,16 @@ operational controls and performance regression scenarios are documented in
 per run with `SimulationRequest.ContactEngine = Soft`; see [SOFT_CONTACTS.md](SOFT_CONTACTS.md).
 Nothing below changes under that switch except that none of it runs.
 
+On 14 October 2026 the second half of `ResolveHard` - the admissibility test, redirect, shorten,
+rollback and escalation - was extracted into `EnforceStaticAdmissibility` so the mixed engine can
+run it after its soft pass; the memo moved into `StaticAdmission`, which each engine's per-plant
+work owns, and the clearance counters go through it. Nothing changed for this engine: a Geranium
+beside a wall and in a wall corner, 90 days at 4 h, exports byte-identical frames before and after
+(`D6D31032670EA425`, `5D1F603F4DE8B621`), and the checkpoint self-test now runs under all three
+engines with a wall across the stand. The `shrinkNewborns` branches of that method, and the
+set-aside second escalation, are reached only from the mixed engine. The default engine for a
+request that omits the field is now `Mixed`; pass `Certified` explicitly to run this one.
+
 Two general mechanics corrections of 12 October 2026 do change this engine's results, after bloom
 and inside panicles only: a floral axis no longer softens or gains wood density with senescence,
 and a bud collides as a capsule of its own radius rather than a ball of its length (see "Gravity

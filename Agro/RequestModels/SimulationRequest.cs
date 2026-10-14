@@ -34,7 +34,7 @@ public enum TerrainOrientation : byte { Forward, Right, Backward, Left }
 ///<see cref="TerrainOrientation"/> because the value travels as a plain number in requests,
 ///stored runs and live checkpoints; append new members, never reorder.
 ///</summary>
-public enum ContactEngineKind : byte { Certified = 0, Soft = 1 }
+public enum ContactEngineKind : byte { Certified = 0, Soft = 1, Mixed = 2 }
 
 public static class TerrainOrientationExtensions
 {
@@ -167,19 +167,25 @@ public record SimulationRequest
     public bool? SoftCollisions { get; init; }
 
     ///<summary>
-    ///Which contact engine resolves foliage and solid contacts. (default: Certified)
+    ///Which contact engine resolves foliage and solid contacts. (default: Mixed)
     ///</summary>
     ///<remarks>
-    ///<c>Certified</c> is the existing engine: every growth increment is certified
+    ///<c>Certified</c> is the original engine: every growth increment is certified
     ///non-penetrating along its swept path, uncertified increments are rolled back and
     ///retried later, and births are staged until their geometry is admitted.
     ///<c>Soft</c> is the single-pass engine: contacts bend petioles and stems and fold
     ///leaves through the same joint compliance, but never suspend growth, never defer a
-    ///birth and never roll anything back; residual overlap is reported instead. The
-    ///environment variable <c>AGRO_CONTACT_ENGINE</c> applies when the request omits this.
-    ///Live checkpoints record the engine and refuse to resume under the other one.
+    ///birth and never roll anything back; residual overlap is reported instead - also
+    ///against obstacles and the soil, which it only pushes out of.
+    ///<c>Mixed</c> resolves foliage contacts, within a plant and between plants, the soft
+    ///way and solid contacts the certified way: after the soft pass every organ is
+    ///certified clear of obstacles and soil along its swept path, and what cannot be
+    ///certified is redirected, shortened or rolled back to last tick's geometry and
+    ///retried, exactly as the certified engine does. The environment variable
+    ///<c>AGRO_CONTACT_ENGINE</c> applies when the request omits this. Live checkpoints
+    ///record the engine and refuse to resume under another one.
     ///</remarks>
-    ///<example>0</example>
+    ///<example>2</example>
     public ContactEngineKind? ContactEngine { get; init; }
 
     /// <summary>Steer developing vegetative tissue toward persistent diffuse-light openings.

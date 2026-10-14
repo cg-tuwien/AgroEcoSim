@@ -44,10 +44,14 @@ internal class Program
         const byte flags = 2; //Analytics, matching what the server exports
         var failures = 0;
 
+        // Every engine, because the contact state each one checkpoints is its own; the wall stands
+        // across the stand so the mixed engine's solid pass has something to enforce.
+        foreach (var engine in new[] { ContactEngineKind.Mixed, ContactEngineKind.Certified, ContactEngineKind.Soft })
         foreach (var (steps, hoursPerTick, plants) in new[] { (40, 24, 4), (60, 12, 8), (90, 6, 2) })
         {
             SimulationRequest Request() => new()
             {
+                ContactEngine = engine,
                 HoursPerTick = hoursPerTick,
                 TotalHours = hoursPerTick * steps,
                 FieldSize = new Utils.Json.Vector3XDZ { X = 3, D = 1, Z = 3 },
@@ -60,11 +64,11 @@ internal class Program
                     Position = new Utils.Json.Vector3XYZ
                         { X = 0.4f + 0.3f * (i % 4), Y = -0.01f, Z = 0.4f + 0.3f * (i / 4) },
                 }).ToArray(),
-                Obstacles = [],
+                Obstacles = [new ObstacleRequest { Type = "wall", Length = 3f, Height = 0.5f, Thickness = 0.05f,
+                    Position = new Utils.Json.Vector3XYZ { X = 1.5f, Y = 0f, Z = 0.6f } }],
                 RequestGeometry = true,
                 RenderMode = 0,
-                //Required: the parallel tick is not reproducible, so without this the comparison
-                //would be measuring the thread pool rather than the checkpoint.
+                //The parallel tick is reproducible; sequential only keeps this test's timing stable.
                 Deterministic = true,
             };
 
@@ -92,7 +96,7 @@ internal class Program
 
                 var same = expected.AsSpan().SequenceEqual(actual);
                 if (!same) ++failures;
-                Console.WriteLine($"{steps} steps @{hoursPerTick}h, {plants} plants, resume at {stop,3}: "
+                Console.WriteLine($"{engine,-9} {steps} steps @{hoursPerTick}h, {plants} plants, resume at {stop,3}: "
                     + $"{(same ? "identical" : "DIFFERS")} (checkpoint {checkpoint.Length:N0} B)");
             }
         }

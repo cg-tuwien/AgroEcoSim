@@ -6,6 +6,7 @@ public sealed partial class CollisionWorld
 {
     readonly List<PlantFormation2> ActivePlants = [];
     [ThreadStatic] static List<int>? BlockedOrgans;
+    static readonly bool TraceSolids = Environment.GetEnvironmentVariable("AGRO_TRACE_SOLID_ENFORCE") != null;
 
     void ResolveHard(PlantFormation2 plant)
     {
@@ -21,7 +22,7 @@ public sealed partial class CollisionWorld
                 if (!Eligible(ag, i)) continue;
                 var pose = ag.GetContactPose(i);
                 var trusted = TrustedPoint(plant, i);
-                if (CollisionSettings.ObstaclePass && (HasStaticReaction(ag,i,StaticSurface.Obstacle) || !ClearOfObstacles(ag, i, pose)))
+                if (CollisionSettings.ObstaclePass && (HasStaticReaction(ag,i,StaticSurface.Obstacle) || !ClearOfObstacles(ag, i, pose, Work[plant].Admission)))
                     Correct(ag, i, trusted, StaticSurface.Obstacle);
                 if (CollisionSettings.SoilPass && (HasStaticReaction(ag,i,StaticSurface.Soil) || SoilEligible(ag, i, pose)))
                     Correct(ag, i, trusted, StaticSurface.Soil);
@@ -29,44 +30,119 @@ public sealed partial class CollisionWorld
             if (!ag.EndContactSweep(MaxCorrectionRadians)) break;
         }
 
+        EnforceStaticAdmissibility(plant, Work[plant].Admission, shrinkNewborns: false, out _);
+        RefreshContactLoads(plant);
+    }
+
+    /// <summary>
+    /// The second half of the solid pass: every eligible organ must be admissible against the
+    /// obstacles and the soil - no contact, and a clear swept path from last tick's geometry.
+    /// One that is not is redirected along the surface, shortened to the admissible part of this
+    /// tick's growth, or rolled back to last tick's geometry and marked obstructed so that it
+    /// retries later; a rollback that does not help is escalated to the moving supports that
+    /// carried the organ there. Shared with the mixed engine, which runs it after the soft
+    /// foliage pass, so a solid is a constraint under both and a tolerance only under the soft
+    /// engine. Returns whether any organ had to be touched.
+    /// </summary>
+    /// <param name="shrinkNewborns">The mixed engine's births are not staged, so an organ born
+    /// this tick can already stand inside a solid with no previous geometry to fall back to;
+    /// it is shortened toward its base instead, and when even its base is inside the solid the
+    /// birth is withdrawn (the organ dies unborn and its parent waits a day before growing on),
+    /// which is what the certified engine's staged birth would have refused. Left in place, such
+    /// an organ can never become admissible and the escalation below would roll back every
+    /// moving ancestor every tick to no effect, freezing the branch against the wall. The
+    /// certified engine admits births before they exist and passes false, which leaves its
+    /// behaviour exactly as it was.</param>
+    /// <param name="unresolved">Organs still inadmissible when the escalation gave up: only an
+    /// already inadmissible previous configuration remained to fall back to.</param>
+    internal bool EnforceStaticAdmissibility(PlantFormation2 plant, StaticAdmission admission, bool shrinkNewborns, out int unresolved)
+    {
+        var ag = plant.AG;
         var blocked = BlockedOrgans ??= [];
         blocked.Clear();
+        var touched = false;
+        unresolved = 0;
         for (int i = 0; i < ag.Count; ++i)
         {
-            if (!Eligible(ag, i)) continue;
-            if (!StaticAdmissible(plant, i))
+            if (!Eligible(ag, i) || shrinkNewborns && ag.IsDying(i)) continue;
+            if (!StaticAdmissible(plant, i, admission))
             {
+                touched = true;
                 var affected = new List<int> { i };
                 for (int j = 0; j < affected.Count; ++j) affected.AddRange(ag.GetChildren(affected[j]));
-                bool Accept() => affected.All(k => StaticAdmissible(plant, k));
+                bool Accept() => affected.All(k => StaticAdmissible(plant, k, admission));
                 var shape = Shape(ag, i);
                 Static.ShapeContact(shape, TrustedPoint(plant, i), StaticSurface.Obstacle, out _, out var normal, out _);
+                var outcome = "redirected";
                 if (!ag.TryRedirectGrowth(i, normal, Accept))
                 {
-                    if (!ag.TryShortenGrowth(i, Accept)) blocked.Add(i);
+                    outcome = "shortened";
+                    if (!ag.TryShortenGrowth(i, Accept) && !(shrinkNewborns && ag.TryShrinkNewborn(i, Accept)))
+                    {
+                        if (shrinkNewborns && !ag.PreviousGeometry[i].Exists)
+                        {
+                            if (TraceSolids) Trace(plant, i, "withdrawn birth");
+                            ag.Death(i, force: true, reason: OrganDeathReason.Obstruction);
+                            var parent = ag.GetParent(i);
+                            if (parent >= 0) ag.SetObstruction(parent, true);
+                            continue;
+                        }
+                        outcome = "blocked";
+                        blocked.Add(i);
+                    }
                     ag.SetObstruction(i, true);
                 }
+                if (TraceSolids) Trace(plant, i, outcome);
             }
         }
         if (blocked.Count > 0)
         {
             ag.RestorePreviousGeometry(blocked);
-            // A local rollback cannot undo transport by an obstructed parent. Escalate only
-            // the causally affected branch; unrelated crowns keep their accepted growth.
-            var restored=new HashSet<int>();
-            for (int pass = 0; pass < ag.Count; ++pass)
+            // Mixed engine: an organ whose previous configuration is itself inside a solid - a floral
+            // segment whose base sits on the surface it was born against - can never be freed by a
+            // rollback, and escalating on its behalf would restore its moving ancestors every tick
+            // to no effect, freezing the branch. The escalation runs once in full; whatever it cannot
+            // resolve is then set aside and the escalation is redone without it, from this same
+            // state, so the ancestors keep the tick's growth and the residual stays with the organ
+            // that owns it. The certified engine never reaches this case and takes the single pass.
+            var trial = shrinkNewborns ? ag.SaveContactTrial() : null;
+            var hopeless = Escalate(plant, admission, shrinkNewborns, null, blocked);
+            if (hopeless.Count > 0 && trial != null)
             {
-                var remaining = Enumerable.Range(0,ag.Count).Where(i => Eligible(ag,i) && !StaticAdmissible(plant, i)).ToArray();
-                if (remaining.Length == 0) break;
-                var parents = remaining.SelectMany(ag.ChangedContactComponent).Distinct().ToArray();
-                ag.RestorePreviousGeometry(parents);
-                blocked.Clear(); blocked.AddRange(parents);
-                var changed=false;
-                foreach(var parent in parents) changed |= restored.Add(parent);
-                if(!changed) break; // Only an already inadmissible previous configuration remains.
+                ag.RestoreContactTrial(trial);
+                Escalate(plant, admission, shrinkNewborns, hopeless, blocked);
             }
+            unresolved = hopeless.Count;
         }
-        RefreshContactLoads(plant);
+        return touched;
+    }
+
+    /// <summary>
+    /// A local rollback cannot undo transport by an obstructed parent. Escalate only the causally
+    /// affected branch; unrelated crowns keep their accepted growth. Returns the organs still
+    /// inadmissible when only an already inadmissible previous configuration remained.
+    /// </summary>
+    List<int> Escalate(PlantFormation2 plant, StaticAdmission admission, bool shrinkNewborns, List<int>? ignore, List<int> blocked)
+    {
+        var ag = plant.AG;
+        var restored = new HashSet<int>();
+        var remaining = new List<int>();
+        for (int pass = 0; pass < ag.Count; ++pass)
+        {
+            remaining.Clear();
+            for (int i = 0; i < ag.Count; ++i)
+                if (Eligible(ag, i) && !(shrinkNewborns && ag.IsDying(i)) && ignore?.Contains(i) != true && !StaticAdmissible(plant, i, admission))
+                    remaining.Add(i);
+            if (remaining.Count == 0) break;
+            var parents = remaining.SelectMany(ag.ChangedContactComponent).Distinct().ToArray();
+            if (TraceSolids) foreach (var r in remaining) Trace(plant, r, $"pass {pass} remaining; component [{string.Join(",", parents)}]");
+            ag.RestorePreviousGeometry(parents);
+            blocked.Clear(); blocked.AddRange(parents);
+            var changed = false;
+            foreach (var parent in parents) changed |= restored.Add(parent);
+            if (!changed) break; // Only an already inadmissible previous configuration remains.
+        }
+        return remaining;
     }
 
     internal void RefreshContactLoads(PlantFormation2 plant)
@@ -84,7 +160,7 @@ public sealed partial class CollisionWorld
         ag.RefreshAnchors(Static);
     }
 
-    struct StaticEvaluation
+    internal struct StaticEvaluation
     {
         public bool Used, Admissible, Rhizome, ParentRhizome, ObstaclePass, SoilPass;
         public int Parent;
@@ -94,16 +170,27 @@ public sealed partial class CollisionWorld
         public Vector3 Trusted;
     }
 
-    bool StaticAdmissible(PlantFormation2 plant, int i)
+    /// <summary>The per-plant memo of <see cref="StaticAdmissible"/>, owned by whichever engine's
+    /// per-plant work runs the solid pass.</summary>
+    internal sealed class StaticAdmission
+    {
+        public StaticEvaluation[] Evaluations = [];
+        /// <summary>Admissibility verdicts served from the memo, and the clearance cache's skips and
+        /// scene queries made on this object's behalf; the owner folds them into its own counters.</summary>
+        public long Reused, Skips, Queries;
+    }
+
+    bool StaticAdmissible(PlantFormation2 plant, int i) => StaticAdmissible(plant, i, Work[plant].Admission);
+
+    internal bool StaticAdmissible(PlantFormation2 plant, int i, StaticAdmission work)
     {
         var ag = plant.AG; var shape = Shape(ag, i);
         if (!Eligible(ag, i)) return true;
         var trusted = TrustedPoint(plant, i);
         var previous = Previous(ag, i, shape);
-        var work = Work[plant];
-        if (work.StaticEvaluations.Length < ag.Count)
-            Array.Resize(ref work.StaticEvaluations, Math.Max(ag.Count, work.StaticEvaluations.Length * 3 / 2 + 8));
-        ref var cached = ref work.StaticEvaluations[i];
+        if (work.Evaluations.Length < ag.Count)
+            Array.Resize(ref work.Evaluations, Math.Max(ag.Count, work.Evaluations.Length * 3 / 2 + 8));
+        ref var cached = ref work.Evaluations[i];
         var parent = ag.GetParent(i); var rhizome = ag.GetIsRizome(i);
         var parentRhizome = parent >= 0 && ag.GetIsRizome(parent);
         var id = ag.GetOrganId(i);
@@ -111,8 +198,8 @@ public sealed partial class CollisionWorld
             && cached.ObstaclePass == CollisionSettings.ObstaclePass && cached.SoilPass == CollisionSettings.SoilPass
             && cached.Shape == shape && cached.Previous == previous && cached.Trusted == trusted
             && cached.Parent == parent && cached.Rhizome == rhizome && cached.ParentRhizome == parentRhizome)
-        { ++work.StaticReused; return cached.Admissible; }
-        var admissible = StaticAdmissibleUncached(plant, i, shape, previous, trusted);
+        { ++work.Reused; return cached.Admissible; }
+        var admissible = StaticAdmissibleUncached(plant, i, shape, previous, trusted, work);
         cached = new() { Used = true, Scene = StaticRevision, Id = id, Shape = shape,
             Previous = previous, Trusted = trusted, Parent = parent, Rhizome = rhizome,
             ParentRhizome = parentRhizome, Admissible = admissible,
@@ -121,18 +208,80 @@ public sealed partial class CollisionWorld
     }
 
     bool StaticAdmissibleUncached(PlantFormation2 plant, int i, in ContactShape shape,
-        in ContactShape previous, Vector3 trusted)
+        in ContactShape previous, Vector3 trusted, StaticAdmission work)
     {
         var ag = plant.AG;
         if (ag.HasContactDeformation && ag.GetOrgan(i) == OrganTypes.Leaf && shape.Lamina is { } blade
             && (!blade.WithinStrainTolerance(shape.Pose,shape.Pose.Deformation)
                 || !blade.SelfSweepAdmissible(previous.Pose,shape.Pose))) return false;
-        if (CollisionSettings.ObstaclePass && !ClearOfObstacles(ag, i, shape.Pose)
-            && (Static.ShapeContact(shape, trusted, StaticSurface.Obstacle, out _, out _, out _)
-                || !Static.ShapeSweepClear(previous, shape, StaticSurface.Obstacle))) return false;
-        return !CollisionSettings.SoilPass || !SoilEligible(ag, i, shape.Pose)
-            || (!Static.ShapeContact(shape, trusted, StaticSurface.Soil, out _, out _, out _)
-                && (Static.InsideSoil(previous.Pose.Base, 1f) || Static.ShapeSweepClear(previous, shape, StaticSurface.Soil)));
+        if (!AdmissionClocks)
+        {
+            if (CollisionSettings.ObstaclePass && !ClearOfObstacles(ag, i, shape.Pose, work)
+                && (Static.ShapeContact(shape, trusted, StaticSurface.Obstacle, out _, out _, out _)
+                    || !Static.ShapeSweepClear(previous, shape, StaticSurface.Obstacle))) return false;
+            return !CollisionSettings.SoilPass || !SoilEligible(ag, i, shape.Pose)
+                || (!Static.ShapeContact(shape, trusted, StaticSurface.Soil, out _, out _, out _)
+                    && (Static.InsideSoil(previous.Pose.Base, 1f) || Static.ShapeSweepClear(previous, shape, StaticSurface.Soil)));
+        }
+        // The same tests, each stage on its own clock (AGRO_COLLISION_TIMING).
+        var t0 = System.Diagnostics.Stopwatch.GetTimestamp();
+        if (CollisionSettings.ObstaclePass && !ClearOfObstacles(ag, i, shape.Pose, work))
+        {
+            var t1 = System.Diagnostics.Stopwatch.GetTimestamp(); Interlocked.Add(ref AdmitClearTicks, t1 - t0);
+            var contact = Static.ShapeContact(shape, trusted, StaticSurface.Obstacle, out _, out _, out _);
+            var t2 = System.Diagnostics.Stopwatch.GetTimestamp(); Interlocked.Add(ref AdmitObstacleContactTicks, t2 - t1); Interlocked.Increment(ref AdmitObstacleContacts);
+            if (contact) return false;
+            var clear = Static.ShapeSweepClear(previous, shape, StaticSurface.Obstacle);
+            t0 = System.Diagnostics.Stopwatch.GetTimestamp(); Interlocked.Add(ref AdmitObstacleSweepTicks, t0 - t2); Interlocked.Increment(ref AdmitObstacleSweeps);
+            if (!clear) return false;
+        }
+        else { var t1 = System.Diagnostics.Stopwatch.GetTimestamp(); Interlocked.Add(ref AdmitClearTicks, t1 - t0); t0 = t1; }
+        if (!CollisionSettings.SoilPass || !SoilEligible(ag, i, shape.Pose)) { Interlocked.Add(ref AdmitSoilEligibleTicks, System.Diagnostics.Stopwatch.GetTimestamp() - t0); return true; }
+        var t3 = System.Diagnostics.Stopwatch.GetTimestamp(); Interlocked.Add(ref AdmitSoilEligibleTicks, t3 - t0);
+        var soilContact = Static.ShapeContact(shape, trusted, StaticSurface.Soil, out _, out _, out _);
+        var t4 = System.Diagnostics.Stopwatch.GetTimestamp(); Interlocked.Add(ref AdmitSoilContactTicks, t4 - t3); Interlocked.Increment(ref AdmitSoilContacts);
+        if (soilContact) return false;
+        if (Static.InsideSoil(previous.Pose.Base, 1f)) { Interlocked.Add(ref AdmitSoilSweepTicks, System.Diagnostics.Stopwatch.GetTimestamp() - t4); return true; }
+        var soilClear = Static.ShapeSweepClear(previous, shape, StaticSurface.Soil);
+        Interlocked.Add(ref AdmitSoilSweepTicks, System.Diagnostics.Stopwatch.GetTimestamp() - t4); Interlocked.Increment(ref AdmitSoilSweeps);
+        return soilClear;
+    }
+
+    /// <summary>Stage clocks of the admissibility test, summed over all threads; only under
+    /// <c>AGRO_COLLISION_TIMING</c>, and read by the mixed engine's timing line.</summary>
+    internal static readonly bool AdmissionClocks = TraceTiming;
+    internal static long AdmitClearTicks, AdmitObstacleContactTicks, AdmitObstacleSweepTicks, AdmitSoilEligibleTicks, AdmitSoilContactTicks, AdmitSoilSweepTicks;
+    internal static long AdmitObstacleContacts, AdmitObstacleSweeps, AdmitSoilContacts, AdmitSoilSweeps;
+    internal static string AdmissionStages()
+    {
+        var k = 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+        var s = $"admitCpuMs: clear={AdmitClearTicks * k:F0} obstacleContact={AdmitObstacleContactTicks * k:F0}/{AdmitObstacleContacts} obstacleSweep={AdmitObstacleSweepTicks * k:F0}/{AdmitObstacleSweeps}"
+            + $" soilEligible={AdmitSoilEligibleTicks * k:F0} soilContact={AdmitSoilContactTicks * k:F0}/{AdmitSoilContacts} soilSweep={AdmitSoilSweepTicks * k:F0}/{AdmitSoilSweeps}";
+        AdmitClearTicks = AdmitObstacleContactTicks = AdmitObstacleSweepTicks = AdmitSoilEligibleTicks = AdmitSoilContactTicks = AdmitSoilSweepTicks = 0;
+        AdmitObstacleContacts = AdmitObstacleSweeps = AdmitSoilContacts = AdmitSoilSweeps = 0;
+        return s;
+    }
+
+    void Trace(PlantFormation2 plant, int i, string outcome)
+    {
+        var ag = plant.AG; var previous = ag.PreviousGeometry[i];
+        var hit = Static.ShapeContactUncached(Shape(ag, i), TrustedPoint(plant, i), StaticSurface.Obstacle, out var point, out var normal, out var depth);
+        var pose = ag.GetContactPose(i);
+        Console.WriteLine($"SOLID_ENFORCE t={plant.World.Timestep} organ={i} {ag.GetOrgan(i)} len={ag.GetLength(i) * 1000:F3}mm r={ag.GetBaseRadius(i) * 1000:F3}mm depth={depth * 1000:F3}mm hit={hit} at={point} n={normal} base={pose.Base} tip={pose.Tip} trusted={TrustedPoint(plant, i)} soilDepth={(Static.ShapeContactUncached(Shape(ag, i), TrustedPoint(plant, i), StaticSurface.Soil, out _, out _, out var sd) ? sd * 1000 : 0):F3}"
+            + $" previous={(previous.Exists ? $"len {previous.Pose.Length * 1000:F3} r {previous.Radius * 1000:F3}" : "none")} parent={ag.GetParent(i)} dying={ag.IsDying(i)}: {outcome}");
+    }
+
+    /// <summary>
+    /// For probes: how deep this organ currently sits in the obstacles or the soil, in metres,
+    /// zero when clear. Read-only and uncached; not part of either engine's pass.
+    /// </summary>
+    public float StaticPenetration(PlantFormation2 plant, int organ, StaticSurface surface)
+    {
+        var ag = plant.AG;
+        if (!StaticReady || organ < 0 || organ >= ag.Count || !Eligible(ag, organ)) return 0f;
+        if (surface == StaticSurface.Soil && !SoilEligible(ag, organ, ag.GetContactPose(organ))) return 0f;
+        return Static.ShapeContactUncached(Shape(ag, organ), TrustedPoint(plant, organ), surface, out _, out _, out var depth)
+            ? MathF.Max(0f, depth) : 0f;
     }
 
     internal static bool Eligible(PlantSubFormation<AboveGroundAgent> ag, int i)
@@ -157,7 +306,7 @@ public sealed partial class CollisionWorld
         return parent >= 0 ? ag.GetBaseCenterWorld(parent) : plant.Position + ag.FieldOrigin;
     }
 
-    bool ClearOfObstacles(PlantSubFormation<AboveGroundAgent> ag, int i, in OrganPose pose)
+    bool ClearOfObstacles(PlantSubFormation<AboveGroundAgent> ag, int i, in OrganPose pose, StaticAdmission work)
     {
         if (Static.ObstacleTriangles == 0) return true;
         var previous = ag.PreviousGeometry[i];
@@ -166,9 +315,9 @@ public sealed partial class CollisionWorld
         var travel = Travel(ag.ClearancePose[i], pose);
         if (previous.Exists) travel = MathF.Max(travel, Travel(ag.ClearancePose[i], previous.Pose));
         if (ag.StaticClearance[i] > travel + CollisionSettings.ContactTolerance)
-        { ++Work[ag.Plant].Skips; return true; }
+        { ++work.Skips; return true; }
         if (travel < 1e-12f && ag.StaticClearance[i] <= CollisionSettings.ContactTolerance) return false;
-        ++Work[ag.Plant].Queries;
+        ++work.Queries;
         var deviation = template == null ? 0f : template.WideReach * pose.Width + template.ReliefAt(pose)
             + MathF.Max(0f, template.LongReach - 1f) * pose.Length;
         deviation += template?.DeformationReach(pose) ?? ContactDeformation.MotionBound(pose.Length,0,Vector4.Zero,pose.Deformation);

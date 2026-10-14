@@ -1211,10 +1211,12 @@ class State {
     /**
      * Which contact engine the server runs: 0 the certified engine (growth is certified
      * non-penetrating and suspended otherwise), 1 the soft single-pass engine (contacts bend and
-     * fold but never block growth). Mirrors `ContactEngineKind` on the server; the two are meant
-     * to be compared on the same request. See Agro/SOFT_CONTACTS.md.
+     * fold but never block growth, obstacles included), 2 the mixed engine (soft foliage, hard
+     * obstacles and soil), the default. Mirrors `ContactEngineKind` on the server; they are meant
+     * to be compared on the same request. See Agro/SOFT_CONTACTS.md. A stored run that predates
+     * the field ran under the certified engine, hence the `?? 0` when one is loaded.
      */
-    contactEngine = signal(0);
+    contactEngine = signal(2);
     /** Frames whose payload has been dropped and would have to be re-fetched. */
     evictedFrames = signal(0);
 

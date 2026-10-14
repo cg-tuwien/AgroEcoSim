@@ -55,13 +55,13 @@ public sealed partial class CollisionWorld
         public readonly Comparison<(int, int)> PairOrder;
         public readonly Comparison<int> OrganOrder;
         public GeometryStamp[] Geometry = [];
-        public StaticEvaluation[] StaticEvaluations = [];
+        public readonly StaticAdmission Admission = new();
         public Evaluation[] Evaluations = new Evaluation[64];
         public long GeometryRevision = -1, TopologyRevision = -1, NextStamp, OwnRevision = -1;
         public bool Found;
         public float FoliageResidual, HardCorrectionDepth;
         public long Candidates, ContactsCount, Queries, Skips, Obstacle, Soil, Reused;
-        public long Intervals, Triangles, StaticReused;
+        public long Intervals, Triangles;
         public long ApproximationQueries, ApproximationSeparations;
 
         public PlantWork(PlantFormation2 plant)
@@ -241,10 +241,11 @@ public sealed partial class CollisionWorld
         foreach (var work in Work.Values)
         {
             InterPlantCandidates += work.Candidates; InterPlantContacts += work.ContactsCount;
-            StaticQueries += work.Queries; ClearanceSkips += work.Skips;
+            StaticQueries += work.Queries + work.Admission.Queries; ClearanceSkips += work.Skips + work.Admission.Skips;
+            work.Admission.Queries = work.Admission.Skips = 0;
             ObstacleContacts += work.Obstacle; SoilContacts += work.Soil;
             ReusedPairChecks += work.Reused; SweepIntervals += work.Intervals; TriangleTests += work.Triangles;
-            ReusedStaticChecks += work.StaticReused; work.StaticReused = 0;
+            ReusedStaticChecks += work.Admission.Reused; work.Admission.Reused = 0;
             ApproximationQueries += work.ApproximationQueries; ApproximationSeparations += work.ApproximationSeparations;
             work.Candidates = work.ContactsCount = work.Queries = work.Skips = work.Obstacle = work.Soil = work.Reused = 0;
             work.Intervals = work.Triangles = 0;

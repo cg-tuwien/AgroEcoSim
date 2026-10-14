@@ -272,6 +272,9 @@ public partial class PlantSubFormation<T>
 
     internal float GetObstructionHours(int index) => Src()[index].ObstructionHours;
 
+    /// <summary>Queued for removal at the next Census.</summary>
+    internal bool IsDying(int index) => Deaths.Contains(index);
+
     /// <summary>Rejects a geometry proposal without undoing age, resources, or senescence.</summary>
     internal void RestorePreviousGeometry(IEnumerable<int> rejected)
     {
@@ -457,6 +460,36 @@ public partial class PlantSubFormation<T>
         for (int i = 0; i < Count; ++i)
             if (!PreviousGeometry[i].Exists)
                 PreviousGeometry[i] = new(GetContactPose(i), src[i].baseOrientation, src[i].restOrientation, src[i].targetOrientation, src[i].Radius, true);
+    }
+
+    /// <summary>
+    /// An organ born this tick that already stands inside a solid has no previous geometry to
+    /// fall back to, so it is shortened toward its base instead: the longest admissible fraction of
+    /// its length, down to a tenth of a millimetre, radius unchanged. The mixed engine's births are
+    /// not staged, which is the only way an organ reaches the solid pass without a history; its
+    /// base is the parent's tip, admitted last tick, so a fraction is always found unless the
+    /// parent itself moved into the solid, which the escalating rollback then undoes.
+    /// </summary>
+    internal bool TryShrinkNewborn(int index, Func<bool> admissible)
+    {
+        if (PreviousGeometry[index].Exists) return false;
+        var src = Src(); var length = src[index].Length; var radius = src[index].Radius;
+        const float floor = 1e-4f;
+        if (length <= floor) return false;
+        src[index].SetGeometry(floor, radius);
+        RebaseAndRefit(index);
+        if (!admissible()) { src[index].SetGeometry(length, radius); RebaseAndRefit(index); return false; }
+        float lo = floor, hi = length;
+        for (int step = 0; step < 8; ++step)
+        {
+            var mid = (lo + hi) * 0.5f;
+            src[index].SetGeometry(mid, radius);
+            RebaseAndRefit(index);
+            if (admissible()) lo = mid; else hi = mid;
+        }
+        src[index].SetGeometry(lo, radius);
+        RebaseAndRefit(index);
+        return true;
     }
 
     internal bool TryShortenGrowth(int index, Func<bool> admissible)

@@ -74,9 +74,11 @@ public sealed partial class CollisionWorld
         }
 
 		EnsureStatic((AgroWorld)world);
-        // The soft engine is a separate implementation behind the request switch. Everything
-        // below this line is the certified engine, which it leaves untouched.
-        if (((AgroWorld)world).ContactEngine == ContactEngineKind.Soft)
+        // The soft engine is a separate implementation behind the request switch; the mixed
+        // engine is the soft engine with this engine's solid constraints (ResolveHard's second
+        // half) applied after its pass. Everything below this line is the certified engine,
+        // which both leave untouched.
+        if (((AgroWorld)world).SoftFoliage)
         {
             (Soft ??= new(this)).Tick((AgroWorld)world, timestep, formations);
             return;

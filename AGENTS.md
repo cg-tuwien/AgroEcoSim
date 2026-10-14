@@ -78,16 +78,31 @@ expand only after the targeted scenario behaves correctly.
 
 After dealing with a mismatch of simulated output versus botanical ground truth, add a new regression scenario (if not already present) to assure that the issue does not reappear.
 
-There are **two contact engines**, selected per run by `SimulationRequest.ContactEngine`
-(`Certified`, the default, or `Soft`; `AGRO_CONTACT_ENGINE` applies when the request omits
-it). The certified engine certifies every growth increment along its swept path and suspends
-what it cannot certify; it is what the regression list below describes. The soft engine
+There are **three contact engines**, selected per run by `SimulationRequest.ContactEngine`
+(`Certified`, `Soft` or `Mixed`, the default; `AGRO_CONTACT_ENGINE` applies when the request
+omits it). The certified engine certifies every growth increment along its swept path and
+suspends what it cannot certify; it is what the regression list below describes. The soft engine
 (`Agro/Collisions/Soft/`, [`Agro/SOFT_CONTACTS.md`](Agro/SOFT_CONTACTS.md)) resolves contacts
 in one pass per tick through the same joint compliance and never suspends growth, defers a
-birth or rolls anything back. Keep both runnable: the point of the switch is to compare them on
-the same request. Under the soft engine the archived Bergenia blooms in both springs and a
-755-day run takes under a minute; under the certified one it never bloomed. Live checkpoint 33
-tags the engine and a checkpoint resumes only under the engine that wrote it.
+birth or rolls anything back - and that includes obstacles and soil, which it only pushes out
+of: measured on a Geranium beside a 5 cm wall, leaves and petioles sat up to 24 mm inside it.
+The mixed engine is the soft engine for foliage (within a plant and between plants) and the
+certified engine for solids: after the soft pass every organ is certified clear of obstacles
+and soil along its swept path (`CollisionWorld.EnforceStaticAdmissibility`, the second half of
+the certified solid pass, shared), and what cannot be certified is redirected, shortened or
+rolled back and retried, so an organ never ends a tick inside a wall, a tray or the ground.
+Keep all three runnable: the point of the switch is to compare them on the same request. Under
+the soft and mixed engines the archived Bergenia blooms in both springs and a 755-day run takes
+under a minute; under the certified one it never bloomed. Live checkpoint 33 tags the engine
+and a checkpoint resumes only under the engine that wrote it. Two traps in the mixed solid
+pass, both found by probing: the soft pass carries a push's witness forward as a plane between
+rounds, which is exact for a rod on a tray wall and wrong for a blade that widened or turned
+since - it reads clear while the blade is a millimetre inside, and the admissibility pass then
+rolls the whole branch's tick back - so the organs it leaves inadmissible get exact push rounds
+first (`SoftContactEngine.ExactPushRounds`); and a newborn floral segment whose base already
+sits on a surface has no admissible pose at all, and escalating on its behalf restored its
+moving ancestors every tick, freezing the branch - such organs are set aside
+(`Escalate` runs again without them) and carry a residual of at most their own radius.
 
 **The parallel tick is reproducible.** Soil water requests - the only thing in a tick that crosses
 formations - are buffered on each plant and handed to the soil in formation order
@@ -747,6 +762,7 @@ render mode 3, one plant in a 1x1 m field.
 | Heuchera, Carex (450 days), both Geraniums, 730 days, soft engine | Scape posture | Last base segment's `dirY` above 0.7 (Geraniums 0.5) from the first petal to 30 days after the last; base chain angle under 35 deg (Geraniums 60); flowers above the 90th-percentile leaf (Heuchera >= +25 cm); petal dates within 5 days of the table below |
 | Geranium macrorrhizum and Heuchera, 730 days, soft engine | Shaking | Median per-tick organ rotation under 0.3 deg after day 300; see `SOFT_CONTACTS.md` "Shaking" |
 | 100 and 400 plants, parallel against sequential tick, 650 steps | Reproducibility | Byte-identical exported frames |
+| Geranium macrorrhizum beside a 5 cm wall, in a wall corner and under a 12 cm ceiling; Carex beside a wall; 120 days, 4 h, mixed engine | Obstacles are hard | Zero organ-ticks inside the walls (`CollisionWorld.StaticPenetration`); under the ceiling at most 0.6 mm on newborn floral segments; organ counts equal to the soft engine's; see `SOFT_CONTACTS.md` "The mixed engine" |
 | Any species, 1 h vs 4 h ticks, 100 days | Timestep sensitivity | See the note below - treat this as a drift check, not an equality check |
 
 **The model is not timestep invariant, and it was not before these changes either.**

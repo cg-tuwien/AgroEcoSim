@@ -1010,7 +1010,7 @@ public sealed partial class CollisionWorld
         // V33: one tag byte, then the payload of whichever engine ran. The certified payload
         // below is unchanged from V32.
         writer.Write((byte)engine);
-        if (engine == ContactEngineKind.Soft) { (Soft ??= new(this)).WriteState(writer, formations); return; }
+        if (engine != ContactEngineKind.Certified) { (Soft ??= new(this)).WriteState(writer, formations); return; }
         var indices = formations.Select((f, i) => (f, i)).ToDictionary(x => x.f, x => x.i);
         var contacts = Work.Values.SelectMany(w => w.Contacts).OrderBy(x => indices[x.Key.A]).ThenBy(x => x.Key.OrganA)
             .ThenBy(x => indices[x.Key.B]).ThenBy(x => x.Key.OrganB).ToArray();
@@ -1029,7 +1029,7 @@ public sealed partial class CollisionWorld
         if (saved != engine)
             throw new InvalidDataException($"This checkpoint was written by the {saved} contact engine and the request selects {engine}. "
                 + "Contact state is engine-specific; resume with the engine that wrote it.");
-        if (engine == ContactEngineKind.Soft) { (Soft ??= new(this)).ReadState(reader, formations); return; }
+        if (engine != ContactEngineKind.Certified) { (Soft ??= new(this)).ReadState(reader, formations); return; }
         LastTrialFailure = null;
         Work.Clear(); PairQueries.Clear(); CrossWorkByPair.Clear(); ScheduledBatches.Clear();
         PreviousNeighbours.Clear(); PlantIndices.Clear(); UnresolvedPlants.Clear();

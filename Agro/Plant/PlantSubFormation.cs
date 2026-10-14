@@ -665,11 +665,11 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
         // The certified engine rebuilds every elastic fold from the unloaded shape each tick
         // and relies on its correction rounds to find it again. The soft engine applies one
         // capped increment per tick, so its folds must persist and relax like contact turns.
-        var persistentDeformation = HasContactDeformation && Plant.World.ContactEngine == ContactEngineKind.Soft;
+        var persistentDeformation = HasContactDeformation && Plant.World.SoftFoliage;
         //Soft engine: petals and unloaded joints relax their contact turns like everything else;
         //the certified engine keeps its historical behaviour (petals never, unloaded joints only
         //under a deformation mode).
-        var relaxUnloaded = Collisions.CollisionSettings.SoftRelaxUnloaded && Plant.World.ContactEngine == ContactEngineKind.Soft;
+        var relaxUnloaded = Collisions.CollisionSettings.SoftRelaxUnloaded && Plant.World.SoftFoliage;
         if (!persistentDeformation) ResetElasticDeformation();
         RefreshMechanicalLoads();
 
@@ -2214,7 +2214,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
             var swept = previous.SweptBounds(current);
             bounds = Bvh.BoundingBox.Merge(bounds, new(swept.Min - FieldOrigin, swept.Max - FieldOrigin));
         }
-        if (Collisions.CollisionSettings.SoftBoundsSkin && Plant.World.ContactEngine == ContactEngineKind.Soft)
+        if (Collisions.CollisionSettings.SoftBoundsSkin && Plant.World.SoftFoliage)
         {
             // The soft engine answers pairs inside the skin band; a resting pair whose tight boxes
             // do not overlap would otherwise drop out of the candidates, lose its side memory,

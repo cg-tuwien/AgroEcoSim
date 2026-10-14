@@ -47,6 +47,10 @@ public sealed partial class SoftContactEngine
     public float MeanFoliagePenetrationMetres { get; private set; }
     /// <summary>Largest obstacle or soil penetration seen before this tick's pushes.</summary>
     public float MaxSolidPenetrationMetres { get; private set; }
+    /// <summary>Mixed engine, last tick: organs the admissibility pass could not free, summed over the plants.</summary>
+    public int LastUnresolvedSolids { get; private set; }
+    /// <summary>Mixed engine, cumulative: plant-ticks in which the admissibility pass had to act.</summary>
+    public long EnforcedPlantTicks { get; private set; }
     public int ActiveFoliageContacts
     {
         get { var n = 0; foreach (var work in Work.Values) n += work.Contacts.Count; return n; }
@@ -56,7 +60,7 @@ public sealed partial class SoftContactEngine
     {
         long candidates = 0, contacts = 0, sides = 0, crossings = 0, tunnels = 0, deep = 0, clips = 0, overlapping = 0, staticPairs = 0, staticTouching = 0;
         double clipped = 0, penetration = 0;
-        float maxPenetration = 0, maxSolid = 0;
+        float maxPenetration = 0, maxSolid = 0; int unresolved = 0;
         // Plant order, not dictionary order, so the double sums do not depend on history.
         foreach (var plant in Plants)
         {
@@ -65,7 +69,9 @@ public sealed partial class SoftContactEngine
             tunnels += s.SuspectedTunnels; deep += s.DeepPenetrations; clips += w.Clips; clipped += w.ClippedMetres; Slides += w.Slides;
             overlapping += s.PenetrationCount; penetration += s.PenetrationSum;
             maxPenetration = MathF.Max(maxPenetration, s.MaxPenetration); maxSolid = MathF.Max(maxSolid, w.MaxSolidPenetration);
-            ObstacleContacts += w.Obstacle; SoilContacts += w.Soil; StaticQueries += w.Queries; ClearanceSkips += w.Skips; SupportSkips += w.SupportSkips;
+            unresolved += w.UnresolvedSolids; EnforcedPlantTicks += w.Enforced;
+            ObstacleContacts += w.Obstacle; SoilContacts += w.Soil; StaticQueries += w.Queries + w.Admission.Queries; ClearanceSkips += w.Skips + w.Admission.Skips; SupportSkips += w.SupportSkips;
+            w.Admission.Queries = w.Admission.Skips = 0;
             ApproximationQueries += s.ApproximationQueries; ApproximationSeparations += s.ApproximationSeparations;
             w.ResetCounters();
         }
@@ -76,6 +82,7 @@ public sealed partial class SoftContactEngine
         MaxFoliagePenetrationMetres = maxPenetration;
         MeanFoliagePenetrationMetres = overlapping > 0 ? (float)(penetration / overlapping) : 0f;
         MaxSolidPenetrationMetres = maxSolid;
+        LastUnresolvedSolids = unresolved;
     }
 
     /// <summary>

@@ -6,7 +6,9 @@ namespace Agro.Collisions;
 
 /// <summary>
 /// The single-pass ("soft") contact engine. Selected by <see cref="SimulationRequest.ContactEngine"/>;
-/// the certified engine in <see cref="CollisionWorld"/> stays the default and is left untouched.
+/// the certified engine in <see cref="CollisionWorld"/> is left untouched. The mixed engine, the
+/// default, is this engine with the certified engine's solid constraints run after its pass
+/// (<see cref="AgroWorld.CertifiedSolids"/>): foliage stays soft, obstacles and soil do not.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -50,10 +52,13 @@ public sealed partial class SoftContactEngine
     bool ChunkOwnPairs;
     long ContactEpoch;
     long TotalOrgans;
+    /// <summary>Mixed engine: solids are certified constraints, enforced after the pushes.</summary>
+    bool CertifiedSolids;
     readonly CollisionWorld.WeightedSchedule PlantSchedule = new(), CrossSchedule = new();
     long NeighbourTicks, PrepareTicks, CrossTicks;
     long LastStaticQueries, LastClearanceSkips, LastSupportSkips, LastObstacleContacts, LastSoilContacts;
     static readonly bool TraceTiming = Environment.GetEnvironmentVariable("AGRO_COLLISION_TIMING") != null;
+    static readonly bool TraceSolids = Environment.GetEnvironmentVariable("AGRO_TRACE_SOLID_ENFORCE") != null;
 
     internal SoftContactEngine(CollisionWorld world) { World = world; FoliageGeometry.StageClocks = TraceTiming; }
 
@@ -77,6 +82,8 @@ public sealed partial class SoftContactEngine
         /// <summary>Residual obstacle penetration per organ after this tick's pushes; the thigmomorphogenesis hook.</summary>
         public float[] SolidConfinement = [];
         public StaticTouch[] ObstacleTouch = [], SoilTouch = [];
+        /// <summary>The mixed engine's memo for the certified admissibility pass.</summary>
+        public readonly CollisionWorld.StaticAdmission Admission = new();
         public long Seen;
         public PairStats Stats, LastStats;
         public PairStats[] ChunkStats = [];
@@ -84,7 +91,12 @@ public sealed partial class SoftContactEngine
         public double ClippedMetres;
         public float MaxSolidPenetration;
         public long Clips, Obstacle, Soil, Queries, Skips, SupportSkips, Slides;
-        public long HardAnchorTicks, HardClearTicks, HardObstacleTicks, HardSoilEligibleTicks, HardSoilTicks, HardSweepTicks, HardClipTicks, HardLoadTicks, HardRounds;
+        /// <summary>Mixed engine: ticks in which the admissibility pass had to redirect, shorten or roll something back.</summary>
+        public long Enforced;
+        /// <summary>Mixed engine: organs the admissibility pass left inside a solid this tick, because
+        /// the only configuration to fall back to was already inside it.</summary>
+        public int UnresolvedSolids;
+        public long HardAnchorTicks, HardClearTicks, HardObstacleTicks, HardSoilEligibleTicks, HardSoilTicks, HardSweepTicks, HardClipTicks, HardAdmitTicks, HardLoadTicks, HardRounds, ExactRounds;
 
         public SoftWork(PlantFormation2 plant)
         {
@@ -102,8 +114,8 @@ public sealed partial class SoftContactEngine
             LastStats = Stats; Stats = default;
             ClippedMetres = 0;
             MaxSolidPenetration = 0;
-            Clips = Obstacle = Soil = Queries = Skips = SupportSkips = Slides = 0;
-            HardAnchorTicks = HardClearTicks = HardObstacleTicks = HardSoilEligibleTicks = HardSoilTicks = HardSweepTicks = HardClipTicks = HardLoadTicks = HardRounds = 0;
+            Clips = Obstacle = Soil = Queries = Skips = SupportSkips = Slides = Enforced = 0;
+            HardAnchorTicks = HardClearTicks = HardObstacleTicks = HardSoilEligibleTicks = HardSoilTicks = HardSweepTicks = HardClipTicks = HardAdmitTicks = HardLoadTicks = HardRounds = ExactRounds = 0;
         }
     }
 
@@ -136,6 +148,7 @@ public sealed partial class SoftContactEngine
         PrepareWork();
         var afterPrepare = Stopwatch.GetTimestamp();
         FoliageActive = world.SoftCollisions;
+        CertifiedSolids = world.CertifiedSolids;
         ChunkOwnPairs = Plants.Count * 2 <= CollisionWorld.WorkerLimit;
         if (FoliageActive) ResolveFoliage();
         var afterFoliage = Stopwatch.GetTimestamp();
@@ -145,7 +158,7 @@ public sealed partial class SoftContactEngine
         PlantSchedule.Run(Plants, TotalOrgans, p => Work[p].LastFinishTicks > 0 ? Work[p].LastFinishTicks : p.AG.Count, FinishPlant);
         var afterHard = Stopwatch.GetTimestamp();
         LastStaticQueries = StaticQueries; LastClearanceSkips = ClearanceSkips; LastSupportSkips = SupportSkips; LastObstacleContacts = ObstacleContacts; LastSoilContacts = SoilContacts;
-        var hardStages = TraceTiming ? HardStages() : "";
+        var hardStages = TraceTiming ? HardStages() + " " + CollisionWorld.AdmissionStages() : "";
         FlushCounters();
         FoliageTicks += afterFoliage - afterPrepare;
         HardTicks += afterHard - afterFoliage;
@@ -281,10 +294,10 @@ public sealed partial class SoftContactEngine
     long RespondTicksSum() { long sum = 0; foreach (var plant in Plants) sum += Work[plant].LastRespondTicks; return sum; }
     string HardStages()
     {
-        long a = 0, c = 0, o = 0, se = 0, s = 0, sw = 0, cl = 0, l = 0, r = 0;
-        foreach (var plant in Plants) { var w = Work[plant]; a += w.HardAnchorTicks; c += w.HardClearTicks; o += w.HardObstacleTicks; se += w.HardSoilEligibleTicks; s += w.HardSoilTicks; sw += w.HardSweepTicks; cl += w.HardClipTicks; l += w.HardLoadTicks; r += w.HardRounds; }
+        long a = 0, c = 0, o = 0, se = 0, s = 0, sw = 0, cl = 0, ad = 0, l = 0, r = 0, e = 0, x = 0;
+        foreach (var plant in Plants) { var w = Work[plant]; a += w.HardAnchorTicks; c += w.HardClearTicks; o += w.HardObstacleTicks; se += w.HardSoilEligibleTicks; s += w.HardSoilTicks; sw += w.HardSweepTicks; cl += w.HardClipTicks; ad += w.HardAdmitTicks; l += w.HardLoadTicks; r += w.HardRounds; e += w.Enforced; x += w.ExactRounds; }
         var k = 1000.0 / Stopwatch.Frequency;
-        return $"hardCpuMs: anchors={a * k:F0} clear={c * k:F0} obstacle={o * k:F0} soilEligible={se * k:F0} soil={s * k:F0} sweep={sw * k:F0} clip={cl * k:F0} loads={l * k:F0} rounds={r}";
+        return $"hardCpuMs: anchors={a * k:F0} clear={c * k:F0} obstacle={o * k:F0} soilEligible={se * k:F0} soil={s * k:F0} sweep={sw * k:F0} clip={cl * k:F0} admit={ad * k:F0} loads={l * k:F0} rounds={r} exactRounds={x} enforced={e}";
     }
     (long apply, long hard, long finish) FinishTicksSum() { long a = 0, h = 0, f = 0; foreach (var plant in Plants) { var w = Work[plant]; a += w.LastApplyTicks; h += w.LastHardTicks; f += w.LastFinishTicks; } return (a, h, f); }
 

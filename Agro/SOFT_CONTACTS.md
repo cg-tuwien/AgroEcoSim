@@ -1,11 +1,12 @@
 # The soft contact engine
 
 A second contact engine beside the certified one, selected per run by
-`SimulationRequest.ContactEngine` (`Certified`, the default, or `Soft`) or, when the request
-omits the field, by `AGRO_CONTACT_ENGINE`. The certified engine and its documents
+`SimulationRequest.ContactEngine` (`Certified`, `Soft`, or `Mixed` - the default) or, when the
+request omits the field, by `AGRO_CONTACT_ENGINE`. The certified engine and its documents
 ([COLLISIONS.md](COLLISIONS.md), [COLLISION_PERFORMANCE.md](COLLISION_PERFORMANCE.md),
-[CONTACT_DEFORMATION.md](CONTACT_DEFORMATION.md)) are unchanged; the two are meant to be
-run against each other on the same request.
+[CONTACT_DEFORMATION.md](CONTACT_DEFORMATION.md)) are unchanged; the engines are meant to be
+run against each other on the same request. The mixed engine is this engine with the certified
+engine's solid constraints run after its pass; see "The mixed engine" below.
 
 ## Why a second engine
 
@@ -46,6 +47,73 @@ One pass per tick, after Census and before the light model:
 A pair that still overlaps after a tick is corrected again next tick. Residual overlap is
 measured and reported (`SoftContactEngine.MaxFoliagePenetrationMetres` and friends, and the
 `SOFT_CONTACT_TIMING` line under `AGRO_COLLISION_TIMING=1`); it is never an error.
+
+## The mixed engine
+
+Soft is right for foliage and wrong for solids. A leaf against a leaf bends, folds and tolerates
+a little overlap, and the single pass gives exactly that; a leaf against a tray wall is pushed
+by at most `MaxCorrectionDisplacement` per round and clipped only along its own axis, so a
+blade carried into the wall by its petiole's bend, or by a neighbour's push, stays there.
+Measured on a Geranium macrorrhizum beside a 5 cm wall 12 cm from the seed, 120 days at 4 h
+(the obstacle probe in `AGENTS.md`'s probe workflow, reading
+`CollisionWorld.StaticPenetration`): 2 % of organ-ticks inside the wall, leaves up to 24 mm and
+petioles 15 mm deep - through the middle of it. In a wall corner, 4.7 %. The certified engine
+on the same requests: zero, at eight to twenty times the wall time.
+
+`ContactEngineKind.Mixed` (`AgroWorld.SoftFoliage` and `CertifiedSolids` both true) keeps the
+foliage pass, the carried pushes and the elongation clip above, then runs the certified
+engine's solid constraints on the result, per plant inside `FinishPlant`:
+
+1. **Exact push rounds** for the organs the carried pushes left inadmissible
+   (`SoftContactEngine.ExactPushRounds`, up to `HardRounds`). The carried plane is exact for a
+   rod against a tray wall and cheap on the facade, but a blade that widened or turned since its
+   witness was taken reads clear while its deepest point is a millimetre inside; the certified
+   engine re-measures every round, and so does this, for those organs only. Without it, a
+   seedling leaf pressed on a wall had its whole tick - stem elongation, gravity bend - rolled
+   back every other tick for five days.
+2. **`CollisionWorld.EnforceStaticAdmissibility`**, the second half of the certified solid pass,
+   extracted and shared: every eligible organ must be free of obstacle and soil contact and have
+   a clear swept path from last tick's geometry; one that is not is redirected along the surface,
+   shortened to the admissible part of this tick's growth, or rolled back to last tick's geometry
+   and marked obstructed (daily retries, 72 h after three failures - the plant-side mechanism the
+   soft engine never set), with the escalation to moving ancestors unchanged. The memo lives in
+   `StaticAdmission`, owned by this engine's `SoftWork` as by the certified `PlantWork`.
+3. **Births are still immediate** (`StagesDevelopment` false), which is the one way an organ
+   reaches the solid pass with no history. A newborn inside a solid is shortened toward its base
+   (`TryShrinkNewborn`, down to 0.1 mm); if even that is inside - a floral segment born on a
+   surface - the birth is withdrawn (`OrganDeathReason.Obstruction`, the parent waits a day),
+   which is what the certified engine's staged admission would have refused.
+4. **Unresolvable organs are set aside.** An organ whose previous configuration is itself inside
+   a solid cannot be freed by any rollback, and the escalation would restore its moving ancestors
+   every tick to no effect - the branch froze against the ceiling. The escalation runs once in
+   full; what it cannot resolve is excluded and it runs again from the same state
+   (`SaveContactTrial` / `RestoreContactTrial`), so the ancestors keep the tick and the residual
+   stays with the organ that owns it. `LastUnresolvedSolids` counts them.
+
+Measured, same requests, seed 42, 4 h, render mode 0 (14 October 2026):
+
+| scenario | soft | mixed | certified |
+| --- | --- | --- | --- |
+| Geranium beside a wall, 120 d | 2.06 % of organ-ticks inside, worst 24.3 mm, 5 s | **0**, 4 s | 0, 44 s |
+| Geranium in a wall corner | 4.70 %, worst 24.3 mm | **0**, 5 s | 0, 120 s |
+| Geranium under a 12 cm ceiling beside a wall | pedicels 12.7 mm, buds 10.4 mm, stems 9.8 mm deep | 0.08 % of organ-ticks, worst **0.55 mm** (newborn floral segments on the ceiling), 25 s | 0, 53 s |
+| Carex beside a wall / in a corner, 120 d | - | 0 / 0 (520,743 organ-ticks each), 8-9 s | - |
+| Archived Bergenia, 755 d | blooms 04-12..05-18 and 04-14..05-24, 258 organs | identical dates and counts | never blooms |
+
+The wall and corner plants under the mixed engine end with the same organ count as under the
+soft engine (314 at day 119) - the solid constraints cost the plant nothing it could have had.
+The residual under the ceiling is bounded by the radius of a newborn floral segment (0.25 mm
+rods, 0.55 mm worst) on fewer than one organ-tick in a thousand, and only where an
+inflorescence is pressed against a surface from above.
+
+**Cost, on the facade** (4,134 plants in trays, step 429, 32 cores): 404 ms per tick against
+250 under the soft engine; the contact pass 150 against 62 ms. The admissibility pass is
+5.3 s of CPU per tick, of which 2.8 s are 20,900 obstacle contact queries at 133 us against the
+two-million-triangle scene (organs near a tray wall that the clearance cache cannot clear, plus
+every organ a push moved, re-measured), 0.8 s their swept tests, 0.8 s the soil contact and
+sweep tests (180,000 each, cheap), and 0.3 s the clearance cache. The `admitCpuMs` stages print
+under `AGRO_COLLISION_TIMING=1`. The lever, if it is needed: a soil clearance cache like the
+obstacle one, and trusting the carried plane for rods so a pushed rod is not re-measured.
 
 ### Crossing prevention without continuous collision detection
 
@@ -398,5 +466,10 @@ records one CSV row per day.
 | Geranium macrorrhizum and G. x cantabrigiense, four plants on a 0.5 m grid, 730 days, soft engine (13 October 2026) | Second-year stand, 542 and 251 scapes: median azimuth excursion of a scape tip about its root 0.05 and 0.08 of a turn, largest 0.17 and 0.19; chain tip `dirY` never below 0.74 and 0.67; inflorescence tops 33-36 and 17-21 cm |
 | Geranium macrorrhizum and G. x cantabrigiense, four plants on a 0.5 m grid, 200 days, soft engine (13 October 2026) | Scape tips circle no more: the azimuth of each scape tip about its root drifts at most 39 degrees over the bloom (before the azimuth-fixed steering: a full 360 degree circle on one scape, 212 degrees with the steering off), 90th-percentile azimuth motion under 2 degrees per tick (before: 4); chain tip `dirY` stays above 0.79 |
 | Scape posture, Heuchera / Carex / both Geraniums, 730 (Carex 450) days, soft engine, after the mechanics fixes and the species retune (12 October 2026) | Heuchera: base chain tip never below dirY 0.97 through bloom, chain angle at most 13 deg, flowers 41 cm above the foliage (before: tip at -0.27, chain 114 deg); Carex 0.99 / 9 deg; G. x cantabrigiense 0.70 / 46 deg, +12 cm; G. macrorrhizum 0.63 / 51 deg, +19 cm (at 2e8 one peduncle in two still hung at -0.58; 3e8 and a 0.01/h rate hold it). Heuchera under the certified engine: 0.94 / 20 deg |
+
+| Obstacle penetration, Geranium macrorrhizum beside a 5 cm wall, in a wall corner, and under a 12 cm ceiling; Carex beside a wall and in a corner; 120 days, 4 h, render 0, each engine (14 October 2026) | See "The mixed engine": soft up to 24 mm inside, mixed 0 (ceiling: worst 0.55 mm on newborn floral segments, 0.08 % of organ-ticks), certified 0; mixed organ counts equal the soft engine's |
+| Archived Bergenia, 755 days, mixed against soft (14 October 2026) | Identical petal dates (04-12..05-18, 04-14..05-24) and organ count (258); no obstacle in that request, so the mixed solid pass only enforces the soil |
+| Certified engine before and after the extraction of `EnforceStaticAdmissibility`, Geranium beside a wall and in a corner, 90 days (14 October 2026) | Byte-identical exported frames; soft engine likewise |
+| Checkpoint self-test under all three engines with a wall across the stand (14 October 2026) | Resumed exports byte-identical in every scenario and resume point |
 
 Add rows as scenarios are run; keep the certified engine's own table in `COLLISIONS.md`.

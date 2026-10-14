@@ -6,8 +6,13 @@ public sealed partial class SoftContactEngine
 {
     /// <summary>
     /// Bounded pushes out of obstacles and soil through the same joint compliance, then one
-    /// closed-form clip of this tick's elongation for anything still inside an obstacle. No
-    /// admissibility test, no redirect search, no rollback.
+    /// closed-form clip of this tick's elongation for anything still inside an obstacle. Under the
+    /// soft engine that is all: no admissibility test, no redirect search, no rollback, and an
+    /// organ a push could not free stays inside until the next tick's pushes. Under the mixed
+    /// engine the certified engine's admissibility pass follows
+    /// (<see cref="CollisionWorld.EnforceStaticAdmissibility"/>): whatever is still in contact with
+    /// a solid, or crossed one on its way, is redirected, shortened or rolled back to last tick's
+    /// geometry and retried, so no organ ends a tick inside an obstacle or the soil.
     /// </summary>
     void ResolveHard(PlantFormation2 plant)
     {
@@ -49,14 +54,62 @@ public sealed partial class SoftContactEngine
             }
             var te = T();
             var moved = ag.EndContactSweep(CollisionSettings.MaxCorrectionRadians);
+            if (TraceSolids) Console.WriteLine($"SOLID_PUSH t={plant.World.Timestep} round={round} moved={moved}");
             work.HardSweepTicks += T() - te; ++work.HardRounds;
             if (!moved) break;
         }
         var tc = T();
         if (CollisionSettings.SolidElongationClip && CollisionSettings.ObstaclePass) ClipElongation(plant, work);
-        var tl = T(); work.HardClipTicks += tl - tc;
+        var ta2 = T(); work.HardClipTicks += ta2 - tc;
+        if (CertifiedSolids)
+        {
+            var moved = ExactPushRounds(plant, work);
+            if (World.EnforceStaticAdmissibility(plant, work.Admission, shrinkNewborns: true, out work.UnresolvedSolids)) { moved = true; ++work.Enforced; }
+            // A push, a redirect, a shortening or a rollback moved organs after the carried pushes
+            // measured their witnesses, so the support detection below asks the scene again instead
+            // of reading a witness taken at a pose the organ no longer has.
+            if (moved) for (int i = 0; i < ag.Count; ++i) { work.ObstacleTouch[i].Round = -1; work.SoilTouch[i].Round = -1; }
+        }
+        var tl = T(); work.HardAdmitTicks += tl - ta2;
         RefreshContactLoads(plant, work);
         work.HardLoadTicks += T() - tl;
+    }
+
+    /// <summary>
+    /// Mixed engine: the certified engine's push rounds, exact and for the organs the carried
+    /// pushes left inadmissible only. The rounds above carry a push's witness and normal forward
+    /// as a plane, which is exact for a rod against a tray wall and cheap on the facade, but not
+    /// for a blade that widened or turned since the witness was taken: its deepest point moved,
+    /// the carried depth reads clear, and the blade stays a millimetre inside. Left there, the
+    /// admissibility pass would roll the whole branch's tick back - growth, gravity and all -
+    /// although a push could have freed it. So before that pass the organs still inadmissible
+    /// get what the certified engine gives every touching organ: up to <see cref="CollisionSettings.HardRounds"/>
+    /// rounds, each re-measured. Returns whether anything moved.
+    /// </summary>
+    bool ExactPushRounds(PlantFormation2 plant, SoftWork work)
+    {
+        var ag = plant.AG; var moved = false;
+        for (int round = 0; round < CollisionSettings.HardRounds; ++round)
+        {
+            ag.BeginContactSweep(resetDiagnostics: false);
+            var queued = 0;
+            for (int i = 0; i < ag.Count; ++i)
+            {
+                if (!CollisionWorld.Eligible(ag, i) || World.StaticAdmissible(plant, i, work.Admission)) continue;
+                var shape = CollisionWorld.Shape(ag, i);
+                var trusted = CollisionWorld.TrustedPoint(plant, i);
+                if (CollisionSettings.ObstaclePass && Static.ShapeContact(shape, trusted, StaticSurface.Obstacle, out var point, out var normal, out var depth)
+                    && ag.QueueContactCorrection(i, point, normal, depth + CollisionSettings.ContactTolerance)) { ++queued; ++work.Obstacle; }
+                if (CollisionSettings.SoilPass && World.SoilEligible(ag, i, shape.Pose)
+                    && Static.ShapeContact(shape, trusted, StaticSurface.Soil, out point, out normal, out depth)
+                    && ag.QueueContactCorrection(i, point, normal, depth + CollisionSettings.ContactTolerance)) { ++queued; ++work.Soil; }
+                if (TraceSolids) Console.WriteLine($"SOLID_EXACT t={plant.World.Timestep} round={round} organ={i} {ag.GetOrgan(i)} queued={queued}");
+            }
+            ++work.ExactRounds;
+            if (queued == 0 || !ag.EndContactSweep(CollisionSettings.MaxCorrectionRadians)) break;
+            moved = true;
+        }
+        return moved;
     }
 
     /// <summary>
@@ -133,7 +186,9 @@ public sealed partial class SoftContactEngine
         }
         touch.Point = point; touch.Normal = normal; touch.Depth = depth; touch.Round = round;
         work.MaxSolidPenetration = MathF.Max(work.MaxSolidPenetration, depth);
-        if (!ag.QueueContactCorrection(i, point, normal, depth + CollisionSettings.ContactTolerance)) return;
+        var queued = ag.QueueContactCorrection(i, point, normal, depth + CollisionSettings.ContactTolerance);
+        if (TraceSolids) Console.WriteLine($"SOLID_PUSH t={ag.Plant.World.Timestep} round={round} organ={i} {ag.GetOrgan(i)} {surface} depth={depth * 1000:F3}mm n={normal} queued={queued}");
+        if (!queued) return;
         if (surface == StaticSurface.Obstacle) ++work.Obstacle; else ++work.Soil;
     }
 

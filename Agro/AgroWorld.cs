@@ -135,17 +135,25 @@ public class AgroWorld : SimulationWorld
 	/// geometrically. The soft engine never rejects geometry, so its births go straight to Census;
 	/// with collisions disabled staging only survives for the opt-in construction budget.
 	/// </summary>
-	public bool StagesDevelopment => !(global::Agro.Collisions.CollisionSettings.Enabled && ContactEngine == ContactEngineKind.Soft);
+	public bool StagesDevelopment => !(global::Agro.Collisions.CollisionSettings.Enabled && SoftFoliage);
+	/// <summary>Foliage contacts, within a plant and between plants, resolved by the soft single
+	/// pass: the <see cref="ContactEngineKind.Soft"/> and <see cref="ContactEngineKind.Mixed"/> engines.</summary>
+	public bool SoftFoliage => ContactEngine != ContactEngineKind.Certified;
+	/// <summary>Obstacles and soil enforced as certified constraints - redirect, shorten or roll back,
+	/// never leave an organ inside a solid: the <see cref="ContactEngineKind.Certified"/> and
+	/// <see cref="ContactEngineKind.Mixed"/> engines.</summary>
+	public bool CertifiedSolids => ContactEngine != ContactEngineKind.Soft;
 	/// <summary>Operational backend preference. Auto stays on CPU until the CUDA prototype
 	/// has demonstrated its end-to-end performance gate on the deployment hardware.</summary>
 	public readonly Collisions.CollisionComputeBackend CollisionBackend;
 
-	/// <summary><c>AGRO_CONTACT_ENGINE=Certified|Soft</c> (or 0|1) applies only when the request omits the field.</summary>
+	/// <summary><c>AGRO_CONTACT_ENGINE=Certified|Soft|Mixed</c> (or 0|1|2) applies only when the request
+	/// omits the field; otherwise the default is <see cref="ContactEngineKind.Mixed"/>.</summary>
 	static ContactEngineKind ContactEngineFromEnvironment()
 	{
 		var value = Environment.GetEnvironmentVariable("AGRO_CONTACT_ENGINE");
 		return !string.IsNullOrWhiteSpace(value) && Enum.TryParse<ContactEngineKind>(value.Trim(), ignoreCase: true, out var engine)
-			&& Enum.IsDefined(engine) ? engine : ContactEngineKind.Certified;
+			&& Enum.IsDefined(engine) ? engine : ContactEngineKind.Mixed;
 	}
 
 	public AgroWorld(SimulationRequest? settings = null) : base()
