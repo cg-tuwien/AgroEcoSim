@@ -95,6 +95,12 @@ formations - are buffered on each plant and handed to the soil in formation orde
 100 and 400 plants and on the 4,134-plant facade. `Deterministic` on the request only forces the
 sequential tick for diagnosis. See "Full-core utilisation" in `Agro/SOFT_CONTACTS.md` for the
 per-phase measurements and what was parallelised; `AGRO_COLLISION_TIMING=1` prints the phases.
+One trap in that walk: the server builds a `SoilFormationsList` with a **null world** when the
+OBJ is uploaded and attaches the world later through `SetWorld`, while a probe that passes the
+`ImportedObjDataV2` to `Initialize.World` constructs the list with the world in hand. The list's
+own `World` was `readonly` and `SetWorld` never assigned it, so the request walk crashed on the
+first step of every uploaded-terrain run and on none of the probes. Test the terrain path the
+server takes - construct with `null`, then `SetWorld` - not only the constructor path.
 
 Collision and saved-run regression scenarios are documented in
 [`Agro/COLLISIONS.md`](Agro/COLLISIONS.md). In particular, preserve the translated

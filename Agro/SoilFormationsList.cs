@@ -163,7 +163,7 @@ internal readonly record struct TrayAddr
 public partial class SoilFormationsList : ISoilFormation
 {
 	const MethodImplOptions AI = MethodImplOptions.AggressiveInlining;
-	readonly AgroWorld World;
+	AgroWorld World;
 	readonly List<ISoilFormation> Items;
 	readonly Dictionary<TrayAddr, int> Addresses;
 	readonly List<MeshObstacle> Obstacles;
@@ -456,6 +456,10 @@ public partial class SoilFormationsList : ISoilFormation
 	public Vector3 GetRandomSeedPosition(Pcg rnd, int soilIndex) => Items[soilIndex].GetRandomSeedPosition(rnd, 0);
 	public void SetWorld(AgroWorld world)
 	{
+		// The server builds the list before the world exists (the terrain is uploaded first and
+		// the request arrives later), so the world is attached here. The list itself needs it:
+		// the request walk in DeliverPost reads the world's formation list.
+		World = world;
 		for (int i = 0; i < Items.Count; ++i)
 			Items[i].SetWorld(world);
 		if (Obstacles?.Count > 0)
