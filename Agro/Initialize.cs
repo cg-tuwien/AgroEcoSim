@@ -147,6 +147,8 @@ public static class Initialize
         //pushed out of the walls and troughs rather than geometry that is still inside them.
         world.AddCallback(world.Collisions.Tick);
         world.AddCallback(world.Irradiance.Tick);
+        //After the light, on the same consistent state: a once-a-day walk of the foliage per tray.
+        world.AddCallback(world.Vegetation.Tick);
 
         world.StreamExporterFunc = world.Irradiance.ExportToStream;
         world.RendererName = "unknown";

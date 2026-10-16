@@ -17,14 +17,11 @@ public class SimulationResponse
     public uint TicksPerMillisecond { get; set; } = (uint)TimeSpan.TicksPerMillisecond;
 
     ///<summary>
-    ///Per-obstacle leaf area index and solar load, one record per day and per horizontal band, for
-    ///the obstacles selected by LeafAreaIndexObstacles. Null when none were requested or when no
-    ///internal light model ran. Every record carries its own date, so no separate index is needed.
+    ///The leaf area index document - the measurement on the obstacles selected by
+    ///LeafAreaIndexObstacles and the vegetation survey per tray - serialized through its own
+    ///camelCase, rounded context and embedded whole, so it is the same document the run store
+    ///holds. Budgeted: above the wire budget the per-obstacle series are dropped and the document
+    ///says so. Null when nothing was requested: no filter and no imported tray system.
     ///</summary>
-    public List<ObstacleLightResponse> ObstacleLight { get; set; }
-    ///<summary>What the obstacle light measurement was, so an export of it stands on its own.</summary>
-    public ObstacleLightMetaResponse ObstacleLightMeta { get; set; }
-    ///<summary>The whole selection as one patch. Always present alongside ObstacleLight, and the
-    ///series to plot when the per-obstacle ones were dropped to keep the payload sane.</summary>
-    public ObstacleLightSelectionResponse ObstacleLightSelection { get; set; }
+    public System.Text.Json.JsonElement? ObstacleLight { get; set; }
 }

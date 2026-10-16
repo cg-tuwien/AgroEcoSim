@@ -386,27 +386,23 @@ public class SimulationRunner : ISimulationRunner
     }
 
     /// <summary>
-    /// Writes the complete leaf-area-index measurement to the run store.
+    /// Writes the complete leaf-area-index document to the run store: every weekly series of every
+    /// obstacle and tray, whatever the socket copy had to drop.
     ///
     /// Best-effort and deliberately last: it runs after the result has been assembled, so a failure
-    /// here costs the study its detailed file and nothing else. Serialising sixteen hundred trays
-    /// with a daily series each is not free, which is the other reason it only happens when the
-    /// wire copy was actually truncated.
+    /// here costs the study its file and nothing else. Written whenever there is anything to write -
+    /// a measurement or a tray system - because the file is the deliverable and the socket copy is
+    /// only what the HUD shows.
     /// </summary>
-    void StoreFullObstacleLight(string runId, AgroWorld world, ObstacleLightMetaResponse meta,
-                                ObstacleLightSelectionResponse selection)
+    void StoreFullObstacleLight(string runId, AgroWorld world)
     {
         try
         {
-            var document = new ObstacleLightDocumentResponse
-            {
-                RunId = runId,
-                Meta = meta,
-                Selection = selection,
-                Obstacles = ObstacleLightResponse.From(world.ObstacleLight, out _, unbudgeted: true),
-            };
+            var document = ObstacleLightDocument.From(world, runId, weeklyRecordBudget: null);
+            if (document == null)
+                return;
             Store.WriteObstacleLight(runId, System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(
-                document, ObstacleLightJsonContext.Default.ObstacleLightDocumentResponse));
+                document, ObstacleLightJsonContext.Default.ObstacleLightDocument));
         }
         catch (Exception e)
         {
@@ -519,22 +515,14 @@ public class SimulationRunner : ISimulationRunner
 
             result.Renderer = world.RendererName;
             result.StepTimes = run.StepTimes;
-            result.ObstacleLight = ObstacleLightResponse.From(world.ObstacleLight, out var omitted);
             //Reported whenever a measurement was asked for, even when the filter matched nothing:
             //without it the client cannot tell a mistyped filter from a run that never measured.
-            if (world.ObstacleLightSelection.Filter != null)
-                result.ObstacleLightMeta = ObstacleLightMetaResponse.From(world, world.ObstacleLight, world.ObstacleList);
-            if (result.ObstacleLightMeta != null)
-                result.ObstacleLightMeta.DailySeriesOmitted = omitted;
-            if (world.ObstacleLight != null)
-                result.ObstacleLightSelection = ObstacleLightSelectionResponse.From(world.ObstacleLight);
-
-            //When the wire copy had to drop the per-obstacle series, keep the whole measurement on
-            //disk instead. That budget exists because a browser cannot hold a hundred megabytes of
-            //JSON arriving as one socket message - it is not a statement about how much the study
-            //is allowed to know. Fetched over REST it is a file the browser saves without parsing.
-            if (omitted && world.ObstacleLight != null)
-                StoreFullObstacleLight(run.RunId, world, result.ObstacleLightMeta, result.ObstacleLightSelection);
+            //The socket copy is budgeted - a browser cannot hold tens of megabytes of JSON arriving
+            //as one message - and the complete document goes to the run store, where it is a file
+            //the browser saves without parsing.
+            result.ObstacleLight = ObstacleLightDocument.ToElement(
+                ObstacleLightDocument.From(world, run.RunId, ObstacleLightDocument.WireWeeklyRecordBudget));
+            StoreFullObstacleLight(run.RunId, world);
 
             //Always, however the run ended. On an abort it is what makes the run resumable at all;
             //on a completed one it is what lets the horizon be extended later without recomputing

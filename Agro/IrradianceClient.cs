@@ -151,6 +151,8 @@ public class IrradianceClient
 
 	/// <summary>Per-obstacle leaf area index and solar load series, when they were requested.</summary>
 	public ObstacleLightMeter? ObstacleLight => Solver?.Meter;
+	/// <summary>The compiled leaf area index filter, or null when none was requested.</summary>
+	public ObstacleNameFilter? ObstacleLightFilter => Solver?.ObstacleFilter;
 	/// <summary>Obstacles the leaf area index filter was offered, and how many it matched. Both zero
 	/// when no measurement was requested.</summary>
 	public (string? Filter, int Candidates, int Matches) ObstacleLightSelection

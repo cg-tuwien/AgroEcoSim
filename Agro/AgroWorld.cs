@@ -104,6 +104,28 @@ public class AgroWorld : SimulationWorld
 	/// <summary>The collision phase: hard constraints against obstacles and soil, then foliage.</summary>
 	public readonly Collisions.CollisionWorld Collisions = new();
 
+	/// <summary>The daily geometric survey of the foliage per tray: leaf area, leaf angle, leaf
+	/// size and canopy thickness, aggregated by <see cref="Periods"/>. Runs under every light model.</summary>
+	public readonly Vegetation.TrayVegetationSurvey Vegetation = new();
+
+	PeriodCalendar? CachedPeriods;
+	/// <summary>
+	/// The reporting periods of this run - weeks from the local start date, calendar years, the
+	/// whole run - shared by everything that aggregates by period. A step past the horizon by the
+	/// midpoint rule lands in the last bucket, so no slack is needed.
+	/// </summary>
+	public PeriodCalendar Periods
+	{
+		get
+		{
+			var periods = CachedPeriods;
+			var days = (TotalHours + 23) / 24;
+			if (periods == null || periods.Start != InitialTime.Date || periods.Days != days)
+				CachedPeriods = periods = new PeriodCalendar(InitialTime.Date, days);
+			return periods;
+		}
+	}
+
 	//clouds_coverage, precipitation
 	WeatherStats[] Weather;
 	BitArray Daylight;

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using Agro;
 using AgroServer.Services;
@@ -20,15 +21,8 @@ namespace AgroServer.Models;
 [JsonSerializable(typeof(PreviewResponse))]
 [JsonSerializable(typeof(RunSiteResponse))]
 [JsonSerializable(typeof(PlantResponse))]
-[JsonSerializable(typeof(ObstacleLightResponse))]
-[JsonSerializable(typeof(ObstacleLightMetaResponse))]
-[JsonSerializable(typeof(ObstacleLightSelectionResponse))]
-[JsonSerializable(typeof(ObstacleLightBandResponse))]
-[JsonSerializable(typeof(ObstacleLightSurfaceResponse))]
-[JsonSerializable(typeof(ObstacleLightDayResponse))]
-[JsonSerializable(typeof(ObstacleLightSummaryResponse))]
-[JsonSerializable(typeof(ObstacleLightDocumentResponse))]
-[JsonSerializable(typeof(List<ObstacleLightResponse>))]
+[JsonSerializable(typeof(JsonElement))]
+[JsonSerializable(typeof(JsonElement?))]
 [JsonSerializable(typeof(List<SpeciesSettings>))]
 [JsonSerializable(typeof(string[]))]
 [JsonSerializable(typeof(RunResponse))]
@@ -45,15 +39,17 @@ namespace AgroServer.Models;
 internal partial class AppJsonSerializerContext : JsonSerializerContext { }
 
 /// <summary>
-/// camelCase, for the leaf-area-index document written to the run store.
+/// camelCase and rounded, for the leaf-area-index document - the file in the run store and the
+/// element embedded in the socket result alike.
 ///
-/// A context of its own rather than a naming policy on the one above, which would rename every
-/// wire payload the frontend already reads. ASP.NET and SignalR camelCase their own output through
-/// their serializer options; this document is written directly to a file, so nothing does it for
-/// us - and it came out PascalCase, which parsed to an empty object in the browser without
-/// erroring anywhere. The two must agree because the same reader opens both files.
+/// A context of its own rather than a naming policy or a float converter on the one above, which
+/// would rename and round every wire payload the frontend already reads. ASP.NET and SignalR
+/// camelCase their own output through their serializer options; this document is written directly
+/// to a file, so nothing does it for us - and it once came out PascalCase, which parsed to an empty
+/// object in the browser without erroring anywhere. The socket copy is serialized through this
+/// context first and embedded as a JsonElement, so the two cannot differ.
 /// </summary>
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
-                             Converters = new[] { typeof(Vector2JsonConverter), typeof(Vector3JsonConverter) })]
-[JsonSerializable(typeof(ObstacleLightDocumentResponse))]
+                             Converters = new[] { typeof(SignificantFloatConverter) })]
+[JsonSerializable(typeof(ObstacleLightDocument))]
 internal partial class ObstacleLightJsonContext : JsonSerializerContext { }

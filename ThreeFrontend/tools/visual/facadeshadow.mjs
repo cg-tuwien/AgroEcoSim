@@ -226,21 +226,23 @@ try {
       const names = [];
       for (const o of obs) for (const g of (o.groups || [])) names.push(g.name);
       if (!names.length) return { skipped: 'no named groups' };
-      a.obstacleLight.value = names.map((n, i) => ({
-          name: n, area: 1, exposedArea: 1, dominantOrientation: 'S', azimuthDegrees: 180,
-          tiltDegrees: 90, centroid: [0,0,0], boundsMin: [0,0,0], boundsMax: [1,1,1],
-          days: [], surfaces: [],
-          summary: { days: 1, leafAreaIndex: (i % 2) ? 4 : 0, leafAreaIndexMax: (i % 2) ? 4 : 0,
-                     leafAreaIndexFinal: (i % 2) ? 4 : 0, projectedLeafAreaIndex: (i % 2) ? 4 : 0,
-                     leafAreaIndexFromGaps: (i % 2) ? 4 : 0, shadedFraction: (i % 2) ? 1 : 0,
-                     avoidedTotal_kWh: i % 50, avoided: i % 50, beamTransmittance: 1 - (i % 100) / 100,
-                     diffuseTransmittance: 1 - (i % 80) / 100, gapFractionDiffuse: (i % 90) / 100,
-                     daylightHours: 10, directBeamHours: 5, beamOpenSky: 100, beam: 90,
-                     diffuseOpenSky: 200, diffuse: 180, total: 270, totalOpenSky: 300,
-                     peakOpenSky: 800, peakReduction: 100 } }));
-      a.obstacleLightMeta.value = { initialDate: '2026-02-01', hoursPerTick: 4, dailySeriesOmitted: true,
-                                    renderer: 'Internal', obstaclesMatched: names.length,
-                                    obstaclesAvailable: names.length };
+      const record = i => ({ daylightHours: 10, openSky_kWh_m2: 0.3, avoided_kWh_m2: (i % 50) * 1e-3,
+                             shadedFraction: (i % 2) ? 1 : 0, beamTransmittance: 1 - (i % 100) / 100,
+                             diffuseTransmittance: 1 - (i % 80) / 100, leafAreaIndex: (i % 2) ? 4 : 0,
+                             projectedLeafAreaIndex: (i % 2) ? 4 : 0, leafAreaIndexFromGaps: (i % 2) ? 4 : 0,
+                             peakReduction_W_m2: 100, leafAreaIndexMax: (i % 2) ? 4 : 0 });
+      a.obstacleLight.value = { format: 'greenfdt.leaf-area-index/2', generated: '', runId: null, complete: false,
+          omitted: ['obstacles[].weeks'], definitions: {}, selection: null, facade: null, trays: [],
+          meta: { initialDate: '2026-02-01', hoursPerTick: 4, renderer: 'Internal', filter: '.', filterMode: 'regex',
+                  filterError: null, obstaclesMatched: names.length, obstaclesAvailable: names.length,
+                  coverage: { firstDate: '2026-02-01', lastDate: '2026-02-01', litDays: 1, surveyFirstDate: null, surveyLastDate: null, surveyedDays: 0 },
+                  species: [] },
+          periods: { weekRule: '', yearRule: '', weeks: [{ index: 0, start: '2026-02-01', end: '2026-02-07' }],
+                     years: [{ year: 2026, start: '2026-02-01', end: '2026-02-07' }], total: { start: '2026-02-01', end: '2026-02-07' } },
+          obstacles: names.map((n, i) => ({
+              name: n, area: 1, exposedArea: 1, enclosedArea: 0, dominantOrientation: 'S', azimuthDegrees: 180,
+              tiltDegrees: 90, centroid: [0,0,0], boundsMin: [0,0,0], boundsMax: [1,1,1],
+              weeks: null, years: null, total: record(i), surfaces: [] })) };
       a.obstacleMapping.value = 'leaf area index';
       return { names: names.length, mapping: a.obstacleMapping.value }; })()`);
   if (mapped && !mapped.skipped) await sleep(6000);

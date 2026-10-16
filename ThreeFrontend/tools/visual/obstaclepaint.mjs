@@ -109,27 +109,30 @@ try {
       const obs = a.obstacles.value.filter(o => o.meshData);
       const names = [];
       for (const o of obs) for (const g of (o.groups || [])) names.push(g.name);
-      a.obstacleLight.value = names.map((n, i) => ({
-          name: n, area: 1, exposedArea: 1, dominantOrientation: 'S', azimuthDegrees: 180, tiltDegrees: 90,
-          centroid: [0,0,0], boundsMin: [0,0,0], boundsMax: [1,1,1], days: [], surfaces: [],
-          //Every field the HUD table renders. A partial summary throws inside a component's
-          //render on toFixed of undefined, which then looks like a rendering bug in the thing
-          //under test - the harness's own noise, mistaken for a finding.
-          //(No backticks in here: this whole string is a template literal and one would end it.)
-          //ALTERNATING EXTREMES, not a smooth ramp. A smooth ramp gives neighbouring trays nearly
-          //the same colour, so a depth tie between them resolves to almost the same pixel either
-          //way and the fault is invisible - which is exactly why the first version of this harness
-          //reported "stable" on a scene that flickers violently in front of a person.
-          summary: { days: 1, leafAreaIndex: (i % 2) ? 4 : 0, leafAreaIndexMax: (i % 2) ? 4 : 0,
-                     leafAreaIndexFinal: (i % 2) ? 4 : 0, projectedLeafAreaIndex: (i % 2) ? 4 : 0,
-                     leafAreaIndexFromGaps: (i % 2) ? 4 : 0, shadedFraction: (i % 2) ? 1 : 0,
-                     avoidedTotal_kWh: i % 50, avoided: i % 50, beamTransmittance: 1 - (i % 100) / 100,
-                     diffuseTransmittance: 1 - (i % 80) / 100, gapFractionDiffuse: (i % 90) / 100,
-                     daylightHours: 10, directBeamHours: 5, beamOpenSky: 100, beam: 90,
-                     diffuseOpenSky: 200, diffuse: 180, total: 270, totalOpenSky: 300,
-                     peakOpenSky: 800, peakReduction: 100 } }));
-      a.obstacleLightMeta.value = { initialDate: '2026-02-01', hoursPerTick: 4, dailySeriesOmitted: true,
-                                    renderer: 'Internal', obstaclesMatched: names.length, obstaclesAvailable: names.length };
+      //Every field the HUD table renders. A partial record throws inside a component's render
+      //on toFixed of undefined, which then looks like a rendering bug in the thing under test -
+      //the harness's own noise, mistaken for a finding.
+      //(No backticks in here: this whole string is a template literal and one would end it.)
+      //ALTERNATING EXTREMES, not a smooth ramp. A smooth ramp gives neighbouring trays nearly
+      //the same colour, so a depth tie between them resolves to almost the same pixel either
+      //way and the fault is invisible - which is exactly why the first version of this harness
+      //reported "stable" on a scene that flickers violently in front of a person.
+      const record = i => ({ daylightHours: 10, openSky_kWh_m2: 0.3, avoided_kWh_m2: (i % 50) * 1e-3,
+                             shadedFraction: (i % 2) ? 1 : 0, beamTransmittance: 1 - (i % 100) / 100,
+                             diffuseTransmittance: 1 - (i % 80) / 100, leafAreaIndex: (i % 2) ? 4 : 0,
+                             projectedLeafAreaIndex: (i % 2) ? 4 : 0, leafAreaIndexFromGaps: (i % 2) ? 4 : 0,
+                             peakReduction_W_m2: 100, leafAreaIndexMax: (i % 2) ? 4 : 0 });
+      a.obstacleLight.value = { format: 'greenfdt.leaf-area-index/2', generated: '', runId: null, complete: false,
+          omitted: ['obstacles[].weeks'], definitions: {}, selection: null, facade: null, trays: [],
+          meta: { initialDate: '2026-02-01', hoursPerTick: 4, renderer: 'Internal', filter: '.', filterMode: 'regex',
+                  filterError: null, obstaclesMatched: names.length, obstaclesAvailable: names.length,
+                  coverage: { firstDate: '2026-02-01', lastDate: '2026-02-01', litDays: 1, surveyFirstDate: null, surveyLastDate: null, surveyedDays: 0 },
+                  species: [] },
+          periods: { weekRule: '', yearRule: '', weeks: [{ index: 0, start: '2026-02-01', end: '2026-02-07' }],
+                     years: [{ year: 2026, start: '2026-02-01', end: '2026-02-07' }], total: { start: '2026-02-01', end: '2026-02-07' } },
+          obstacles: names.map((n, i) => ({
+              name: n, area: 1, exposedArea: 1, enclosedArea: 0, dominantOrientation: 'S', azimuthDegrees: 180, tiltDegrees: 90,
+              centroid: [0,0,0], boundsMin: [0,0,0], boundsMax: [1,1,1], weeks: null, years: null, total: record(i), surfaces: [] })) };
       a.obstacleMapping.value = 'leaf area index';
       return { names: names.length, mapping: a.obstacleMapping.value,
                values: a.obstacleMappingValues.value ? a.obstacleMappingValues.value.size : 0 }; })()`);

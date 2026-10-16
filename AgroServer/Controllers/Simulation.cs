@@ -82,11 +82,13 @@ public class SimulationController// : ControllerBase
             return Results.Bytes(bytes, "application/octet-stream");
         });
 
-        //The complete leaf-area-index measurement, with every per-obstacle daily series present.
+        //The complete leaf-area-index document, with every weekly series of every obstacle and
+        //tray present.
         //
-        //The copy that travelled over the socket has them dropped above DailyRecordBudget, because
-        //a browser cannot hold a hundred megabytes of JSON delivered as one message. Here it is a
-        //file to save: served gzipped, never parsed by the page, and as large as the study needs.
+        //The copy that travelled over the socket drops the per-obstacle series above the wire
+        //budget, because a browser cannot hold tens of megabytes of JSON delivered as one message.
+        //Here it is a file to save: served gzipped, never parsed by the page, and as large as the
+        //study needs.
         api.MapGet("/run/{runId}/obstaclelight", (HttpContext http, string runId) =>
         {
             if (!runStore.TryReadObstacleLight(runId, out var gzipped))
@@ -237,23 +239,23 @@ public class SimulationController// : ControllerBase
             }
 
             response.Renderer = world.RendererName;
-            response.ObstacleLight = ObstacleLightResponse.From(world.ObstacleLight, out var omitted);
             //Reported whenever a measurement was asked for, even when the filter matched nothing:
             //without it the client cannot tell a mistyped filter from a run that never measured.
-            if (world.ObstacleLightSelection.Filter != null)
-                response.ObstacleLightMeta = ObstacleLightMetaResponse.From(world, world.ObstacleLight, world.ObstacleList);
-            if (response.ObstacleLightMeta != null)
-                response.ObstacleLightMeta.DailySeriesOmitted = omitted;
-            if (world.ObstacleLight != null)
-                response.ObstacleLightSelection = ObstacleLightSelectionResponse.From(world.ObstacleLight);
+            //This path stores nothing, so there is no run id and nowhere to fetch a dropped series.
+            response.ObstacleLight = ObstacleLightDocument.ToElement(
+                ObstacleLightDocument.From(world, null, ObstacleLightDocument.WireWeeklyRecordBudget));
 
             return response;
         });
 
         api.MapPost("/upload", (SimulationRequest request) =>
         {
-            //TODO Validate the regex
-            return uploadService.Add(request);
+            //A pattern that does not parse is still run - the meter falls back to a substring
+            //match - but the person typing it should hear about it now, not read it in the meta.
+            if (!string.IsNullOrWhiteSpace(request.LeafAreaIndexObstacles)
+                && ObstacleNameFilter.Validate(request.LeafAreaIndexObstacles.Trim()) is string error)
+                return Results.BadRequest($"LeafAreaIndexObstacles is not a valid regular expression: {error}");
+            return Results.Text(uploadService.Add(request));
         });
 
         //api.MapPost("/terrain", (ImportedObjData data) => terrainBuffer.Add(data));

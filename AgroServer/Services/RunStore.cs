@@ -127,13 +127,13 @@ public interface IRunStore
     bool TryReadTerrain(string runId, out byte[] gzipped);
 
     /// <summary>
-    /// Files the run's complete leaf-area-index measurement, gzipped.
+    /// Files the run's complete leaf-area-index document, gzipped.
     ///
-    /// The copy sent over the socket has its per-obstacle daily series dropped above
-    /// `DailyRecordBudget`, because sixteen hundred trays with a series each is a hundred
-    /// megabytes of JSON that no browser should receive in one message. That budget is a property
-    /// of the WIRE, not of the measurement - so the whole thing is written here and fetched over
-    /// REST, where size is the browser's own business and it never has to parse it at all.
+    /// The copy sent over the socket drops its per-obstacle weekly series above the wire budget,
+    /// because hundreds of trays with a series each is more JSON than a browser should receive in
+    /// one message. That budget is a property of the WIRE, not of the measurement - so the whole
+    /// document is written here and fetched over REST, where size is the browser's own business
+    /// and it never has to parse it at all.
     /// </summary>
     void WriteObstacleLight(string runId, byte[] utf8Json);
 
@@ -1293,7 +1293,7 @@ public class RunStore : IRunStore, IDisposable
             using (var gz = new GZipStream(output, CompressionLevel.Optimal, leaveOpen: true))
                 gz.Write(utf8Json, 0, utf8Json.Length);
             AddAuxBytes(runId, output.Length);
-            Console.WriteLine($"RunStore: stored the full leaf area index measurement of {runId} " +
+            Console.WriteLine($"RunStore: stored the leaf area index document of {runId} " +
                               $"({Size(utf8Json.Length)} of JSON, {Size(output.Length)} on disk).");
         }
         catch (Exception e) { Console.Error.WriteLine($"RunStore: could not store the measurement of {runId}: {e.Message}"); }

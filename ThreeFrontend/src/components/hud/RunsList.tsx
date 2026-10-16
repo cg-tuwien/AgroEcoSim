@@ -215,10 +215,18 @@ function RunDetails({ run, busy }: { run: IStoredRun, busy: boolean }) {
                   </div>
                 : null}
             {run.hasObstacleLight
-                ? <div><a href={`${location.protocol}//${BackendURI}/simulation/run/${run.id}/obstaclelight`}
-                          title="The complete leaf area index measurement, with every per-obstacle daily series.">
-                    download the full leaf area index
-                  </a></div>
+                ? <div>
+                    <a href={`${location.protocol}//${BackendURI}/simulation/run/${run.id}/obstaclelight`}
+                       title="The complete leaf area index document: weekly, annual and whole-run readings of every measured obstacle and the foliage of every tray.">
+                      download the leaf area index
+                    </a>
+                    {' '}
+                    <a href={`${location.protocol}//${BackendURI}/simulation/run/${run.id}/obstaclelight/packed`}
+                       download={`leafareaindex-${run.id}.json.gz`}
+                       title="The same document as it is stored, gzipped.">
+                      (.json.gz)
+                    </a>
+                  </div>
                 : null}
 
             {run.hasCheckpoint

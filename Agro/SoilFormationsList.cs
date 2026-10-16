@@ -469,6 +469,17 @@ public partial class SoilFormationsList : ISoilFormation
 
 	[M(AI)] public Vector3 GetFieldOrigin(int soilIndex) => Items[soilIndex].GetFieldOrigin(0);
 
+	/// <summary>The imported object name of one soil, e.g. <c>P001_Y026_T001_S001</c>; the tray it
+	/// sits in is that name without its last <c>_S</c> part. Null when the index is out of range.</summary>
+	public string? SoilName(int soilIndex) => (uint)soilIndex < (uint)Items.Count
+		? Items[soilIndex] switch
+		{
+			SoilFormationTetrahedral tetrahedral => tetrahedral.ID,
+			SoilFormationRegularVoxels voxels => voxels.ID,
+			_ => $"soil{soilIndex}",
+		}
+		: null;
+
 	/// <summary>Delegates to each tray in order; the list itself holds no simulated state.</summary>
 	public void WriteState(BinaryWriter writer)
 	{

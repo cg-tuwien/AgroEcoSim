@@ -2,7 +2,6 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Numerics;
-using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using AgentsSystem;
 
@@ -32,10 +31,11 @@ namespace Agro;
 /// imported mesh cannot be trusted (<see cref="Wall"/>, for one, is wound inwards throughout).
 /// </para>
 /// <para>
-/// Nothing per-step is retained. Each step folds into the running day at all three levels at once,
-/// and a day is closed the moment the local date changes, so memory follows days rather than
-/// simulation steps. Call <see cref="Finish"/> before reading the results, or the last day stays
-/// open.
+/// Nothing per-step and nothing per-day is retained. Each step folds into the week and the
+/// calendar year it falls in (<see cref="PeriodCalendar"/>) at every level at once; the whole-run
+/// total is derived from the years in <see cref="Finish"/>, which must be called before the
+/// results are read. Weekly series are kept for objects, for the selection and for the
+/// facade-parallel surfaces of each object; rims, returns and height bands keep a total only.
 /// </para>
 /// </remarks>
 public sealed class ObstacleLightMeter
@@ -88,10 +88,10 @@ public sealed class ObstacleLightMeter
 		/// <summary>Surface area of the slice, m². Estimated from the area its sensors stand for,
 		/// which is exact up to the sampling of the orientation split.</summary>
 		public float Area_m2 { get; internal set; }
-		public List<ObstacleLightDay> Days { get; } = [];
-		public ObstacleLightSummary Summary { get; internal set; }
+		/// <summary>Whole-run reading. A band is a shape over height rather than a time series.</summary>
+		public ObstacleLightPeriod Total { get; internal set; }
 		internal int[] Sensors = [];
-		internal Accumulator Open;
+		internal Accumulator Acc;
 	}
 
 	/// <summary>One orientation of one object - a facade, a roof, a reveal.</summary>
@@ -129,9 +129,13 @@ public sealed class ObstacleLightMeter
 		/// further from the building.</summary>
 		public float Depth_m { get; internal set; }
 		public Band[] Bands { get; internal set; } = [];
-		public List<ObstacleLightDay> Days { get; } = [];
-		public ObstacleLightSummary Summary { get; internal set; }
-		internal Accumulator Open;
+		/// <summary>Weekly, annual and total readings. Null for an <c>edge</c> side, which keeps only
+		/// <see cref="Total"/>: the facade projection is what a weekly series is for, and a rim's
+		/// series would multiply the file for nothing a reader asks.</summary>
+		public ObstacleLightSeries? Series { get; internal set; }
+		public ObstacleLightPeriod Total { get; internal set; }
+		internal Series? Acc;
+		internal Accumulator EdgeAcc;
 	}
 
 	/// <summary>One named obstacle.</summary>
@@ -166,10 +170,9 @@ public sealed class ObstacleLightMeter
 		/// equal area and only one of them matters.</summary>
 		public Surface[] Surfaces { get; internal set; } = [];
 		/// <summary>Whole-object roll-up. Its energies are exact; its intensive readings mix
-		/// orientations, so quote a <see cref="Surface"/> where that matters.</summary>
-		public List<ObstacleLightDay> Days { get; } = [];
-		public ObstacleLightSummary Summary { get; internal set; }
-		internal Accumulator Open;
+		/// orientations, so quote a <see cref="Surface"/> where that matters. Set by <see cref="Finish"/>.</summary>
+		public ObstacleLightSeries? Series { get; internal set; }
+		internal Series Acc = null!;
 		//Scaffolding: height bands of the whole object, used to place sensors before the scene is
 		//available to say which way they face.
 		internal float[] BandEdges = [];
@@ -177,17 +180,111 @@ public sealed class ObstacleLightMeter
 		internal int[] BandSensorCount = [];
 	}
 
-	/// <summary>The running day of one level. Sums are energies, so closing a day is at most a
-	/// division and nothing has to be revisited.</summary>
+	/// <summary>The running sums of one level over one period. Sums are energies and hour-weighted
+	/// readings, so closing a period is at most a division and nothing has to be revisited - and a
+	/// year folded from the same steps as its weeks closes to the same numbers.</summary>
 	internal struct Accumulator
 	{
-		public DateTime Date;
-		public bool HasData;
-		public int Steps;
-		public double DaylightHours, BeamHours;
+		/// <summary>Sum of the step hours, which is also the weight of the leaf area readings.</summary>
+		public double DaylightHours;
 		public double BeamOpen, Beam, DiffuseOpen, Diffuse;
-		public double LeafAreaSum, ProjectedSum, GapSum, Weight;
-		public float LeafAreaMax, PeakOpen, PeakReduction;
+		public double LeafAreaHours, ProjectedHours, GapHours;
+		public float LeafAreaMax, PeakReduction;
+
+		public void Add(in Accumulator other)
+		{
+			DaylightHours += other.DaylightHours;
+			BeamOpen += other.BeamOpen;
+			Beam += other.Beam;
+			DiffuseOpen += other.DiffuseOpen;
+			Diffuse += other.Diffuse;
+			LeafAreaHours += other.LeafAreaHours;
+			ProjectedHours += other.ProjectedHours;
+			GapHours += other.GapHours;
+			LeafAreaMax = MathF.Max(LeafAreaMax, other.LeafAreaMax);
+			PeakReduction = MathF.Max(PeakReduction, other.PeakReduction);
+		}
+
+		/// <summary>Folds one step's area-weighted sums in. Energies become Wh/m²; the leaf area
+		/// readings are weighted by the step's hours, so every aggregation path agrees.</summary>
+		public void Fold(in Totals totals, float hours)
+		{
+			if (totals.Weight <= 0.0)
+				return;
+			var weight = totals.Weight;
+			var openIrradiance = (totals.BeamOpen + totals.DiffuseOpen) / weight;
+			var vegIrradiance = (totals.Beam + totals.Diffuse) / weight;
+			var leafArea = (float)(totals.LeafArea / weight);
+
+			DaylightHours += hours;
+			BeamOpen += hours * totals.BeamOpen / weight;
+			Beam += hours * totals.Beam / weight;
+			DiffuseOpen += hours * totals.DiffuseOpen / weight;
+			Diffuse += hours * totals.Diffuse / weight;
+			LeafAreaHours += hours * leafArea;
+			ProjectedHours += hours * totals.Projected / weight;
+			GapHours += hours * totals.Gap / weight;
+			LeafAreaMax = MathF.Max(LeafAreaMax, leafArea);
+			PeakReduction = MathF.Max(PeakReduction, (float)(openIrradiance - vegIrradiance));
+		}
+
+		/// <summary>The period's reading. Ratios are taken here and only here.</summary>
+		public ObstacleLightPeriod Close()
+		{
+			var hours = DaylightHours;
+			var open = BeamOpen + DiffuseOpen;
+			var received = Beam + Diffuse;
+			var gap = hours > 0.0 ? (float)(GapHours / hours) : 1f;
+			return new ObstacleLightPeriod(
+				(float)hours,
+				(float)open,
+				(float)(open - received),
+				open > 1e-6 ? (float)(1.0 - received / open) : 0f,
+				BeamOpen > 1e-6 ? (float)(Beam / BeamOpen) : 1f,
+				DiffuseOpen > 1e-6 ? (float)(Diffuse / DiffuseOpen) : 1f,
+				hours > 0.0 ? (float)(LeafAreaHours / hours) : 0f,
+				LeafAreaMax,
+				hours > 0.0 ? (float)(ProjectedHours / hours) : 0f,
+				MathF.Max(0f, -MathF.Log(MathF.Max(gap, 1e-3f)) / BeerLambertExtinction),
+				PeakReduction);
+		}
+	}
+
+	/// <summary>One level's accumulators over every week and every calendar year of the run. A step
+	/// folds into both at once, because a year is not a whole number of weeks; the total is the sum
+	/// of the years.</summary>
+	internal sealed class Series
+	{
+		readonly Accumulator[] Weeks;
+		readonly Accumulator[] Years;
+
+		public Series(PeriodCalendar calendar)
+		{
+			Weeks = new Accumulator[calendar.WeekCount];
+			Years = new Accumulator[calendar.YearCount];
+		}
+
+		public void Fold(int week, int year, in Totals totals, float hours)
+		{
+			//A step past the horizon lands in the last bucket rather than out of bounds.
+			Weeks[Math.Min(week, Weeks.Length - 1)].Fold(in totals, hours);
+			Years[Math.Min(year, Years.Length - 1)].Fold(in totals, hours);
+		}
+
+		public ObstacleLightSeries Close()
+		{
+			var weeks = new ObstacleLightPeriod[Weeks.Length];
+			for (int i = 0; i < weeks.Length; ++i)
+				weeks[i] = Weeks[i].Close();
+			var years = new ObstacleLightPeriod[Years.Length];
+			var total = default(Accumulator);
+			for (int i = 0; i < years.Length; ++i)
+			{
+				years[i] = Years[i].Close();
+				total.Add(in Years[i]);
+			}
+			return new ObstacleLightSeries(weeks, years, total.Close());
+		}
 	}
 
 	readonly struct Sensor
@@ -220,7 +317,6 @@ public sealed class ObstacleLightMeter
 	readonly float[] SensorBeam;
 	readonly float[] SensorDiffuseOpen;
 	readonly float[] SensorDiffuse;
-	readonly float[] SensorBeamHourFraction;
 	readonly float[] SensorGapDiffuse;
 	readonly float[] SensorLeafArea;
 	readonly int[] SensorCrossings;
@@ -230,23 +326,33 @@ public sealed class ObstacleLightMeter
 	//One step's totals per target, so the selection-wide roll-up can be summed sequentially after
 	//the parallel pass and stay bit-identical from run to run.
 	readonly Totals[] StepTotals;
-	Accumulator SelectionOpen;
+	readonly Series SelectionAcc;
+	readonly PeriodCalendar Calendar;
+	/// <summary>Set by a fold, cleared by <see cref="Finish"/>, so results are recomputed only when
+	/// a step came in since they were last read.</summary>
+	bool Dirty = true;
 
 	public IReadOnlyList<Target> Targets => TargetArray;
 	public int SensorCount => Sensors.Length;
+	/// <summary>The rule that selected the targets, with the mode actually in force.</summary>
+	public ObstacleNameFilter Filter { get; }
 
 	/// <summary>
-	/// The whole selection as one patch: the area-weighted daily series over every measured
-	/// obstacle.
+	/// The whole selection as one patch: the area-weighted series over every measured obstacle.
 	/// </summary>
 	/// <remarks>
-	/// Always kept, and cheap, because it is the one series that has to survive. A facade system
-	/// imported as sixteen hundred trays cannot carry a daily series per tray without running to a
-	/// hundred megabytes, but the seasonal curve of the facade as a whole is exactly what the study
-	/// is about.
+	/// Always kept and always sent, because it is the one series that has to survive whatever the
+	/// payload budget does to the per-obstacle ones: the seasonal curve of the facade as a whole is
+	/// what the study is about.
 	/// </remarks>
-	public List<ObstacleLightDay> SelectionDays { get; } = [];
-	public ObstacleLightSummary SelectionSummary { get; private set; }
+	public ObstacleLightSeries? SelectionSeries { get; private set; }
+
+	/// <summary>Local dates of the first and the last measured step, and how many distinct dates
+	/// were measured. The meter is not checkpointed, so a resumed run measures from the resume on,
+	/// and the document has to say which days it actually covers.</summary>
+	public DateTime? FirstDate { get; private set; }
+	public DateTime? LastDate { get; private set; }
+	public int LitDays { get; private set; }
 	/// <summary>Total area of every measured obstacle, and the part of it that carries readings.</summary>
 	public float SelectionArea_m2 { get; private set; }
 	public float SelectionExposedArea_m2 { get; private set; }
@@ -301,8 +407,8 @@ public sealed class ObstacleLightMeter
 	};
 
 	/// <summary>
-	/// Selects the obstacles whose name contains <paramref name="filter"/>, slices them into height
-	/// bands and places the sensors. The orientation split happens later, in
+	/// Selects the obstacles <paramref name="filter"/> matches, slices them into height bands and
+	/// places the sensors. The orientation split happens later, in
 	/// <see cref="Prepare"/>, because it needs normals the scene has corrected.
 	/// </summary>
 	/// <param name="prims">The static primitives before the hierarchy reordered them.</param>
@@ -315,8 +421,10 @@ public sealed class ObstacleLightMeter
 	/// </summary>
 	readonly float WorldAzimuthDegrees;
 
-	public ObstacleLightMeter(IList<IObstacle> obstacles, RayPrimitive[] prims, (int First, int Count)[] ranges, string regexFilter, int sensorBudget, float canopyDepth, float bandHeight, float worldAzimuthDegrees = 0f)
+	public ObstacleLightMeter(IList<IObstacle> obstacles, RayPrimitive[] prims, (int First, int Count)[] ranges, ObstacleNameFilter filter, PeriodCalendar calendar, int sensorBudget, float canopyDepth, float bandHeight, float worldAzimuthDegrees = 0f)
 	{
+		Filter = filter;
+		Calendar = calendar;
 		WorldAzimuthDegrees = worldAzimuthDegrees;
 		CanopyDepth_m = canopyDepth;
 		BandHeight_m = MathF.Max(0.05f, bandHeight);
@@ -325,7 +433,7 @@ public sealed class ObstacleLightMeter
 		var selected = new List<(int Index, string Name, float Area, float[] Edges, List<Vector3>[] Geometry, float[] Areas)>();
 		var totalArea = 0f;
 		for (int o = 0; o < obstacles.Count; ++o)
-			if (Regex.IsMatch(obstacles[0].Name, regexFilter, RegexOptions.IgnoreCase))
+			if (filter.IsMatch(obstacles[o].Name))
 			{
 				var (first, count) = ranges[o];
 				if (count == 0)
@@ -441,6 +549,7 @@ public sealed class ObstacleLightMeter
 				Area_m2 = objectArea,
 				BoundsMin = min,
 				BoundsMax = max,
+				Acc = new Series(calendar),
 				BandEdges = edges,
 				BandFirstSensor = firstSensor,
 				BandSensorCount = sensorCount,
@@ -455,11 +564,11 @@ public sealed class ObstacleLightMeter
 		SensorBeam = new float[Sensors.Length];
 		SensorDiffuseOpen = new float[Sensors.Length];
 		SensorDiffuse = new float[Sensors.Length];
-		SensorBeamHourFraction = new float[Sensors.Length];
 		SensorGapDiffuse = new float[Sensors.Length];
 		SensorLeafArea = new float[Sensors.Length];
 		SensorCrossings = new int[Sensors.Length];
 		StepTotals = new Totals[TargetArray.Length];
+		SelectionAcc = new Series(calendar);
 	}
 
 	/// <summary>
@@ -723,7 +832,7 @@ public sealed class ObstacleLightMeter
 	/// result is reproducible. Returns zero when no axis dominates, which is the honest answer for a
 	/// compact object that has no facade plane.
 	/// </summary>
-	static Vector3 DominantAxis(float xx, float yy, float zz, float xy, float xz, float yz)
+	internal static Vector3 DominantAxis(float xx, float yy, float zz, float xy, float xz, float yz)
 	{
 		var trace = xx + yy + zz;
 		if (trace <= 1e-9f)
@@ -867,6 +976,7 @@ public sealed class ObstacleLightMeter
 				Area_m2 = classArea[k][c],
 				Depth_m = classArea[k][c] > 0f ? classDepth[k][c] / classArea[k][c] : 0f,
 				Bands = [.. bands],
+				Acc = sides[k] == EdgeSide ? null : new Series(Calendar),
 			});
 		}
 		target.Surfaces = [.. surfaces];
@@ -877,13 +987,13 @@ public sealed class ObstacleLightMeter
 	}
 
 	/// <summary>
-	/// Measures every sensor for one simulation step and folds the result into the running day of
-	/// every band, surface and object. <paramref name="staticShading"/> is updated in place with the
-	/// fraction of the open-sky load that still reaches each obstacle, which feeds the indirect light
-	/// of the next step.
+	/// Measures every sensor for one simulation step and folds the result into the running week and
+	/// year of every band, surface and object. <paramref name="staticShading"/> is updated in place
+	/// with the fraction of the open-sky load that still reaches each obstacle, which feeds the
+	/// indirect light of the next step.
 	/// </summary>
-	/// <param name="localStepTime">Start of the step in local time at the site. Days are closed on
-	/// its calendar date, because that is the day an architect means.</param>
+	/// <param name="localStepTime">Start of the step in local time at the site. The step is credited
+	/// to the local date of its midpoint, see <see cref="PeriodCalendar.StepDate"/>.</param>
 	public void Measure(RayScene scene, in SkyDome diffuse, SkyDome[] suns, int sunCount,
 						in SurfaceRadianceModel model, int diffuseSamples, float hoursPerTick,
 						DateTime localStepTime, float[] staticShading)
@@ -915,7 +1025,7 @@ public sealed class ObstacleLightMeter
 				var key = RaySampling.Hash((uint)i, (uint)localStepTime.Ticks, 0x9e3779b9u);
 
 				//Direct beam, sub-sampled over the step because the sun sweeps a long arc in it.
-				float beamOpen = 0f, beam = 0f, beamLitSubSteps = 0f;
+				float beamOpen = 0f, beam = 0f;
 				for (int k = 0; k < sunCount; ++k)
 				{
 					ref readonly var sun = ref suns[k];
@@ -926,7 +1036,6 @@ public sealed class ObstacleLightMeter
 						continue; //the building itself shades this patch, vegetation aside
 					var load = sun.DirectNormal * cosIncidence;
 					beamOpen += load;
-					beamLitSubSteps += 1f;
 					if (!scene.AnyHit(origin, sun.SunDirection, Epsilon, FarDistance, RayScene.MaskPlants))
 						beam += load;
 				}
@@ -962,14 +1071,15 @@ public sealed class ObstacleLightMeter
 				SensorBeam[i] = beam / subSteps;
 				SensorDiffuseOpen[i] = scale * sumOpen;
 				SensorDiffuse[i] = scale * sumVeg;
-				SensorBeamHourFraction[i] = beamLitSubSteps / subSteps;
 				SensorGapDiffuse[i] = freeOfFoliage / samples;
 				SensorCrossings[i] = scene.CountFoliageCrossings(origin, n, Epsilon, depth, out var leafArea);
 				SensorLeafArea[i] = leafArea;
 			}
 		});
 
-		var date = localStepTime.Date;
+		var date = PeriodCalendar.StepDate(localStepTime, hoursPerTick);
+		var week = Calendar.WeekIndex(date);
+		var year = Calendar.YearIndex(date);
 		Parallel.For(0, TargetArray.Length, t =>
 		{
 			var target = TargetArray[t];
@@ -989,18 +1099,20 @@ public sealed class ObstacleLightMeter
 						bandTotals.Beam += SensorBeam[i] * a;
 						bandTotals.DiffuseOpen += SensorDiffuseOpen[i] * a;
 						bandTotals.Diffuse += SensorDiffuse[i] * a;
-						bandTotals.BeamHours += SensorBeamHourFraction[i] * a;
 						bandTotals.LeafArea += SensorLeafArea[i] * a;
 						bandTotals.Projected += SensorCrossings[i] * a;
 						bandTotals.Gap += SensorGapDiffuse[i] * a;
 					}
-					Fold(ref band.Open, band.Days, in bandTotals, date, hoursPerTick);
+					band.Acc.Fold(in bandTotals, hoursPerTick);
 					surfaceTotals.Add(in bandTotals);
 				}
-				Fold(ref surface.Open, surface.Days, in surfaceTotals, date, hoursPerTick);
+				if (surface.Acc != null)
+					surface.Acc.Fold(week, year, in surfaceTotals, hoursPerTick);
+				else
+					surface.EdgeAcc.Fold(in surfaceTotals, hoursPerTick);
 				objectTotals.Add(in surfaceTotals);
 			}
-			Fold(ref target.Open, target.Days, in objectTotals, date, hoursPerTick);
+			target.Acc.Fold(week, year, in objectTotals, hoursPerTick);
 			StepTotals[t] = objectTotals;
 
 			var open = objectTotals.BeamOpen + objectTotals.DiffuseOpen;
@@ -1012,16 +1124,27 @@ public sealed class ObstacleLightMeter
 		var selection = default(Totals);
 		for (int t = 0; t < StepTotals.Length; ++t)
 			selection.Add(in StepTotals[t]);
-		Fold(ref SelectionOpen, SelectionDays, in selection, date, hoursPerTick);
+		SelectionAcc.Fold(week, year, in selection, hoursPerTick);
+
+		if (selection.Weight > 0.0)
+		{
+			FirstDate ??= date;
+			if (LastDate != date)
+			{
+				LastDate = date;
+				++LitDays;
+			}
+		}
+		Dirty = true;
 	}
 
 	/// <summary>Area-weighted sums of one step for one level. Adding a child's totals to a parent's
 	/// is what makes every level's area weighting exact and identical.</summary>
-	struct Totals
+	internal struct Totals
 	{
 		public double Weight;
 		public double BeamOpen, Beam, DiffuseOpen, Diffuse;
-		public double BeamHours, LeafArea, Projected, Gap;
+		public double LeafArea, Projected, Gap;
 
 		public void Add(in Totals other)
 		{
@@ -1030,115 +1153,48 @@ public sealed class ObstacleLightMeter
 			Beam += other.Beam;
 			DiffuseOpen += other.DiffuseOpen;
 			Diffuse += other.Diffuse;
-			BeamHours += other.BeamHours;
 			LeafArea += other.LeafArea;
 			Projected += other.Projected;
 			Gap += other.Gap;
 		}
 	}
 
-	/// <summary>Folds one step into a level's running day, closing the previous one first when the
-	/// date has turned over. The destination list is passed in because an accumulator does not know
-	/// which level owns it.</summary>
-	static void Fold(ref Accumulator open, List<ObstacleLightDay> days, in Totals totals, DateTime date, float hoursPerTick)
-	{
-		if (totals.Weight <= 0.0)
-			return;
-		if (open.HasData && open.Date != date)
-		{
-			days.Add(Close(in open));
-			open = default;
-		}
-		open.Date = date;
-		open.HasData = true;
-		++open.Steps;
-
-		var weight = totals.Weight;
-		var openIrradiance = (totals.BeamOpen + totals.DiffuseOpen) / weight;
-		var vegIrradiance = (totals.Beam + totals.Diffuse) / weight;
-		var leafArea = (float)(totals.LeafArea / weight);
-
-		open.DaylightHours += hoursPerTick;
-		open.BeamHours += hoursPerTick * totals.BeamHours / weight;
-		open.BeamOpen += hoursPerTick * totals.BeamOpen / weight;
-		open.Beam += hoursPerTick * totals.Beam / weight;
-		open.DiffuseOpen += hoursPerTick * totals.DiffuseOpen / weight;
-		open.Diffuse += hoursPerTick * totals.Diffuse / weight;
-		open.LeafAreaSum += leafArea;
-		open.ProjectedSum += totals.Projected / weight;
-		open.GapSum += totals.Gap / weight;
-		open.Weight += 1.0;
-		open.LeafAreaMax = MathF.Max(open.LeafAreaMax, leafArea);
-		open.PeakOpen = MathF.Max(open.PeakOpen, (float)openIrradiance);
-		open.PeakReduction = MathF.Max(open.PeakReduction, (float)(openIrradiance - vegIrradiance));
-	}
-
-	static ObstacleLightDay Close(in Accumulator a)
-	{
-		var totalOpen = a.BeamOpen + a.DiffuseOpen;
-		var total = a.Beam + a.Diffuse;
-		var weight = a.Weight > 0 ? a.Weight : 1.0;
-		var gap = (float)(a.GapSum / weight);
-		return new ObstacleLightDay(
-			a.Date,
-			a.Steps,
-			(float)a.DaylightHours,
-			(float)a.BeamHours,
-			(float)a.BeamOpen,
-			(float)a.Beam,
-			(float)a.DiffuseOpen,
-			(float)a.Diffuse,
-			totalOpen > 1e-6 ? (float)(1.0 - total / totalOpen) : 0f,
-			a.BeamOpen > 1e-6 ? (float)(a.Beam / a.BeamOpen) : 1f,
-			a.DiffuseOpen > 1e-6 ? (float)(a.Diffuse / a.DiffuseOpen) : 1f,
-			gap,
-			(float)(a.LeafAreaSum / weight),
-			a.LeafAreaMax,
-			(float)(a.ProjectedSum / weight),
-			MathF.Max(0f, -MathF.Log(MathF.Max(gap, 1e-3f)) / BeerLambertExtinction),
-			a.PeakOpen,
-			a.PeakReduction);
-	}
-
 	/// <summary>
-	/// Closes the day still in progress at every level and computes the summaries. Must be called
-	/// before the results are read; calling it twice is harmless.
+	/// Closes every level: weekly, annual and total readings for the objects, the facade-parallel
+	/// surfaces and the selection, totals for the rims and the bands. Must be called before the
+	/// results are read. Idempotent, and free when no step was folded since the last call.
 	/// </summary>
 	public void Finish()
 	{
+		if (!Dirty)
+			return;
+		Dirty = false;
+
 		for (int t = 0; t < TargetArray.Length; ++t)
 		{
 			var target = TargetArray[t];
 			foreach (var surface in target.Surfaces)
 			{
 				foreach (var band in surface.Bands)
+					band.Total = band.Acc.Close();
+				if (surface.Acc != null)
 				{
-					FlushInto(ref band.Open, band.Days);
-					band.Summary = ObstacleLightSummary.From(band.Days);
+					surface.Series = surface.Acc.Close();
+					surface.Total = surface.Series.Total;
 				}
-				FlushInto(ref surface.Open, surface.Days);
-				surface.Summary = ObstacleLightSummary.From(surface.Days);
+				else
+					surface.Total = surface.EdgeAcc.Close();
 			}
-			FlushInto(ref target.Open, target.Days);
-			target.Summary = ObstacleLightSummary.From(target.Days);
+			target.Series = target.Acc.Close();
 
 			//Order by the solar load the orientation actually carries, not by its area. A wall
 			//imported as a slab has two faces of identical area, so area leaves the choice of
 			//"the dominant facade" to a tie-break - and it picked the shaded north side of a
 			//planted south wall. Total open-sky energy is what makes a facade matter thermally.
 			Array.Sort(target.Surfaces, (x, y) =>
-				(y.Summary.TotalOpenSky_Wh_m2 * y.Area_m2).CompareTo(x.Summary.TotalOpenSky_Wh_m2 * x.Area_m2));
+				(y.Total.OpenSky_Wh_m2 * y.Area_m2).CompareTo(x.Total.OpenSky_Wh_m2 * x.Area_m2));
 		}
 
-		FlushInto(ref SelectionOpen, SelectionDays);
-		SelectionSummary = ObstacleLightSummary.From(SelectionDays);
-	}
-
-	static void FlushInto(ref Accumulator open, List<ObstacleLightDay> days)
-	{
-		if (!open.HasData)
-			return;
-		days.Add(Close(in open));
-		open = default;
+		SelectionSeries = SelectionAcc.Close();
 	}
 }

@@ -189,6 +189,8 @@ public sealed class CpuLightSolver
 	public int ObstacleMatches { get; private set; }
 	/// <summary>The requested filter, or null when none was.</summary>
 	public string? ObstacleFilterText => ObstacleRegex;
+	/// <summary>The compiled filter, with the mode actually in force; null when none was requested.</summary>
+	public ObstacleNameFilter? ObstacleFilter { get; }
 
 	/// <summary>Number of primitives in the traced scene after the last solve.</summary>
 	public int TracedPrimitives { get; private set; }
@@ -198,6 +200,7 @@ public sealed class CpuLightSolver
 		//An even count keeps the two faces of a leaf equally sampled.
 		DiffuseSamples = Math.Max(2, diffuseSamples + (diffuseSamples & 1));
 		ObstacleRegex = string.IsNullOrWhiteSpace(obstacleRegexFilter) ? null : obstacleRegexFilter.Trim();
+		ObstacleFilter = ObstacleRegex == null ? null : new ObstacleNameFilter(ObstacleRegex);
 		ObstacleSensorBudget = Math.Max(64, obstacleSensorBudget);
 		CanopyDepth = MathF.Max(0.05f, canopyDepth);
 		BandHeight = MathF.Max(0.05f, bandHeight);
@@ -646,7 +649,7 @@ public sealed class CpuLightSolver
 		if (ObstacleRegex != null)
 		{
 			ObstacleCandidates = obstacles.Count;
-			var meter = obstacles.Count > 0 ? new ObstacleLightMeter(obstacles, array, ranges, ObstacleRegex, ObstacleSensorBudget, CanopyDepth, BandHeight, world.Azimuth) : null;
+			var meter = obstacles.Count > 0 ? new ObstacleLightMeter(obstacles, array, ranges, ObstacleFilter!, world.Periods, ObstacleSensorBudget, CanopyDepth, BandHeight, world.Azimuth) : null;
 			//A filter that matched nothing stays null, so callers can tell "no targets" from "no request".
 			Meter = meter?.Targets.Count > 0 ? meter : null;
 			ObstacleMatches = Meter?.Targets.Count ?? 0;
@@ -662,6 +665,9 @@ public sealed class CpuLightSolver
 			else
 				Console.WriteLine($"Leaf area index: \"{ObstacleRegex}\" matched {Meter.Targets.Count} of "
 					+ $"{obstacles.Count} obstacles, {Meter.SensorCount} measurement points.");
+			if (ObstacleFilter!.Error != null)
+				Console.WriteLine($"WARNING: LeafAreaIndexObstacles \"{ObstacleRegex}\" is not a valid regular expression "
+					+ $"({ObstacleFilter.Error}); it was applied as a case-insensitive substring instead.");
 		}
 
 		//The hierarchy reorders its own copy, so the meter had to be built from the list above.

@@ -261,10 +261,16 @@ Units are unchanged: `GetIrradiance` returns Wh/m2 accumulated over the tick.
   index and solar load for the obstacles whose name contains
   `LeafAreaIndexObstacles`. Three things about its data model are load-bearing
   and each was forced by a measurement, not by taste:
-  - **Per day, never per step.** Each step folds into the running day and the day
-    is closed when the local date turns over; nothing per-step is retained. A
-    season of per-step records over a few hundred facade objects is hundreds of
-    megabytes and answers nothing a daily total does not.
+  - **Per week, per calendar year and per run, never per step or per day.** Each
+    step folds into the week and the year it falls in at every level at once
+    (`Agro/PeriodCalendar.cs`, shared with the tray survey: 7-day blocks from the
+    local start date, local calendar years, a step credited to the date of its
+    midpoint) and the total is derived from the years in `Finish()`. A year is not
+    a whole number of weeks, which is why both buckets are folded rather than one
+    derived from the other. Weekly series exist for objects, the selection and the
+    facade-parallel surfaces (`side` outer/inner); rims and height bands keep a
+    total only. The daily model this replaced was tens of megabytes at facade
+    scale and nobody read it; the colleagues asked for weeks.
   - **Resolved per orientation and per height band.** An imported wall is a
     solid, so one number per object averages the planted street face against the
     bare courtyard face: measured on a test wall, 14% shading against the 27% its
@@ -302,17 +308,22 @@ Units are unchanged: `GetIrradiance` returns Wh/m2 accumulated over the tick.
   otherwise. In the FAV11 facade model the trays are `P001_Y026_T001`, their soil
   is `P001_Y026_T001_S001`, so `_T` matches 1645 of 1651 obstacles.
 
-  **Payload is budgeted.** Sixteen hundred trays with a daily series each is
-  ~28 MB of JSON at twelve days and over a hundred at a season, which no socket
-  should carry. Above `DailyRecordBudget` the per-obstacle series are dropped and
-  only summaries are sent; the selection-wide daily series is always kept, because
-  the seasonal curve of the facade as a whole is what the study is about. The
-  viewport mapping falls back to the summary when a series is absent, or it would
-  go blank on exactly the large scenes it is most useful on.
+  **The socket copy is budgeted, the stored one never.** `ObstacleLightDocument`
+  (`AgroServer/Models/ObstacleLightResponse.cs`) is one type for the socket result
+  and for `runs/<id>/obstaclelight.json.gz`, serialized through its own camelCase
+  context with floats at four significant digits and embedded in the result as a
+  `JsonElement`, so the two cannot differ. Above `WireWeeklyRecordBudget` (20,000
+  non-empty weekly records) the per-obstacle and per-surface weekly series are
+  dropped, then the annual ones, and `complete`/`omitted` say so; the selection
+  and tray series and every `total` always travel. The stored file is written
+  whenever a meter or an imported tray system exists. The viewport mapping falls
+  back to the total when a series is absent, or it would go blank on exactly the
+  large scenes it is most useful on. Measured on the 394 FAV11 trays over two
+  weeks: 2.9 MB plain, 0.26 MB gzipped, under the wire budget.
 
-  Call `Finish()` before reading the results, or the last day stays open.
-  `AgroWorld.ObstacleLight` exposes the meter; `ObstacleLightResponse.From`
-  snapshots it for the API and calls `Finish` itself.
+  Call `Finish()` before reading the results; it is idempotent and free when no
+  step was folded since. `AgroWorld.ObstacleLight` exposes the meter;
+  `ObstacleLightDocument.From` snapshots it and the survey and calls `Finish` on both.
 
   **Repainting is gated on a signature, and that is load-bearing.** Picking runs
   on every mouse move and flips an obstacle's hover state, which the renderer host
@@ -326,16 +337,67 @@ Units are unchanged: `GetIrradiance` returns Wh/m2 accumulated over the tick.
   trigger: `rebuildStatics` rebuilds the entire instance list per mouse move, which
   predates this work.
 
-  The frontend reads that series in `helpers/ObstacleLight.ts`, exports it as a
-  self-describing JSON document (daily records, whole-period summaries and a
-  definitions block - the three leaf area index variants differ by a factor of two
-  on the same canopy, so a file that does not say which it carries invites the
-  wrong reading), and colours the measured obstacles from it. Colouring needs the
+  The frontend reads the document in `helpers/ObstacleLight.ts` and colours the
+  measured obstacles from it by the week the playhead is in; the definitions block
+  (the three leaf area index variants differ by a factor of two on the same canopy,
+  so a file that does not say which it carries invites the wrong reading) is
+  written by the server (`ObstacleLightDefinitions.cs`), so there is one text. Colouring needs the
   obstacle group table that terrain blob version 1 appends: imported obstacles are
   merged into one mesh to keep a single draw call, and the table says which
   vertices each named object owns. `core/ObstacleColors.ts` paints them in place,
   because the atlas never reclaims space and re-registering a million-vertex
   facade on every step of playback would grow it without bound.
+
+### The leaf area index document and the tray vegetation survey (15 October 2026)
+
+Three defects found while reshaping the output, all fixed and all worth remembering:
+
+- **The obstacle filter tested the first obstacle's name for every obstacle.**
+  `Regex.IsMatch(obstacles[0].Name, ...)` inside `for (int o ...)` (commit 2aba19c), so a
+  filter selected every obstacle or none. The stored FAV11 runs with filter `_T` had 1645
+  matches - trays, dividers and caps - which happened to look right. `ObstacleNameFilter`
+  compiles the pattern once (case-insensitive, 100 ms match timeout), falls back to a
+  case-insensitive substring match when it does not parse, and reports `filterMode` and
+  `filterError` in the meta; `POST /Simulation/upload` answers 400 for an invalid pattern.
+  On FAV11: `_T` 1645, `_T\d{3}$` 394 (the trays), `BACK_WALL` 6.
+- **The stored file said its series were omitted when they were not.** It reused the
+  wire meta. One document type now serves both.
+- **`side` was never serialized.** The meter keys surfaces by side x orientation x band,
+  and a tray's back wall (inner, facade-parallel) and its front lip (outer) share the
+  orientation. The inner side of a tray is its projection onto the facade: on the facade
+  run its back wall reads LAI 0.084 where the front lip reads 0.000.
+
+**The ray-traced measurement counts only plants, with these edges.** The direct beam
+removes a static-shaded sub-step from both the open-sky and the vegetated sum, so the
+transmittances isolate the vegetation, and every plant organ blocks the beam. The leaf area
+index family is one ray per sensor along the outward normal up to `canopyDepth`, counting
+leaf crossings only (petals and stems excluded) and never testing statics - a leaf behind
+a tray within 3 m is counted. A sensor is admitted once, in `Prepare`: 4 of 64 hemisphere
+rays escaping the static scene, and then with its full area for the whole run; a sensor
+that sees none is excluded entirely (`enclosedArea`). The denominator is `exposedArea`,
+with no partial weighting. The reverse face of a free-standing `Wall` is therefore
+"enclosed" by construction: its sensors are turned to the facade's outward axis and look
+through the slab.
+
+**The tray survey (`Agro/Vegetation/TrayVegetationSurvey.cs`) is geometric and runs under
+every light model.** Once per local day it walks every leaf organ and sums per tray the
+one-sided **outline** area (`LaminaArea.OutlineFactors`: the species' blade outline over
+the rectangle `Length x 2 Radius`, 0.61 Fragaria to 0.97 Heuchera, written to
+`meta.species` - the ray-traced indices use the rectangle and read higher by that factor),
+the area-weighted sine of the blade tilt from `Transform(UnitY, orientation)`, the
+area-weighted equivalent diameter of whole blades (a Carex blade is its chain of
+segments, grouped by walking `GetParent`), and the thickness from the tray's back wall to
+the farthest leaf corner along the facade axis. A plant belongs to the tray named by its
+soil minus the `_S` part (`PlantFormation2.SoilIndex` -> `SoilFormationsList.SoilName`);
+a plain field is one tray named `field`. The facade axis is `DominantAxis` over the tray
+meshes, signed on the first day with foliage by which side of the trays the leaves are on
+- the meshes cannot say, their winding is meaningless - and it agreed with the meter's
+ray vote on FAV11. Weekly records are means of the daily surveys; annual and total add
+max and final. Verified against an independent walk to 1e-4 on Geranium and Carex, and
+the parallel and sequential ticks still produce identical frames and documents.
+
+Neither the meter nor the survey is checkpointed. A resumed run measures from the resume
+on, and `meta.coverage` says which dates the document actually holds.
 
 Cost, measured on 32 cores: about 2.1 us per leaf per step, flat in scale up to
 230k leaves (800 plants, 100 days, 4 h ticks: 508 ms per step at 231k leaves and
@@ -2330,6 +2392,10 @@ component from `c.i [as constructor]`.
 
 ### The leaf area index export was complete, and unreadable
 
+*(Superseded on 15 October 2026: the document is weekly, the server writes it whole and
+always, and the socket copy says `complete: false` with an `omitted` list. The record below
+describes the daily version it replaced.)*
+
 Reported as "empty `days: []` all over the place ... shouldn't there be some data?". The file was
 behaving exactly as designed - and the report was still right, because nothing in the file said so.
 
@@ -3423,6 +3489,14 @@ left showing whatever was in the memory it lost, often other windows' pixels.
 - Chromium is a **snap** and cannot read `/tmp`. Test fixtures must live under
   `$HOME`, and killing the snap wrapper process raises `EACCES` — shut the
   browser down over CDP (`Browser.close`) instead.
+- **The snap chromium (155, revision 3554) aborts half a second after launch** with
+  `FATAL:dbus/bus.cc D-Bus connection was disconnected` on this machine, whatever the
+  session bus, the `XDG_RUNTIME_DIR` or a `dbus-run-session` wrapper, and the harness then
+  reports "chromium did not expose a debugging port" with an empty stderr. The Playwright
+  build in `~/.cache/ms-playwright/chromium-1194/chrome-linux/chrome` is not confined and
+  works: `CHROME=<that path> node tools/visual/laiexport.mjs "http://localhost:8080/?debughook=1" http://127.0.0.1:7215 out.json`.
+  The `?debughook=1` is what exposes `window.__appstate`; without it the harness fails on
+  the first property read.
 - Headless needs `--use-angle=swiftshader` or there is no WebGL2 context.
 - **WebGPU is available in headless here, but only with the right flags.** The
   default set exposes no `navigator.gpu` at all. This works, via SwiftShader's

@@ -1,10 +1,14 @@
-// Is the leaf-area-index export complete, or only summaries?
+// Is the leaf-area-index document complete, or only totals?
 //
-// Reported as "empty days: [] all over the place". The per-obstacle daily series ARE dropped on
-// purpose above `DailyRecordBudget`, and the selection-wide series is meant to survive regardless -
-// so the question is not whether the arrays are empty but whether the file still carries the
-// seasonal curve, and whether it SAYS why the others are gone. Both are checked here, on a run
-// small enough to stay under the budget and again on one large enough to exceed it.
+// The per-obstacle weekly series ARE dropped on purpose above the wire budget, and the selection
+// series and every total are meant to survive regardless - so the question is not whether the
+// arrays are null but whether the document still carries the seasonal curve, whether it SAYS why
+// the others are gone, and whether the complete document is retrievable from the run store. All
+// three are checked here, on a run small enough to stay under the budget and again on one large
+// enough to exceed it (OBSTACLES=... sets how many walls; the budget is 20,000 weekly records).
+//
+// It also checks the vegetation survey: the plain field is one tray named "field" whose leaf area
+// must be there and non-zero by the end of a 30-day summer run.
 import { launch, newPage, collectDiagnostics, sleep, shutdown } from './cdp.mjs';
 import { writeFileSync } from 'node:fs';
 
@@ -35,6 +39,7 @@ try {
   const setup = await ev(page, `(() => { const a = window.__appstate;
       a.totalHours.value = ${process.env.TOTAL_HOURS || 720}; a.hoursPerTick.value = 4;
       a.randomize.value = false; a.initNumber.value = 42; a.renderMode.value = 3;
+      a.initialDate.value = '${process.env.INITIAL_DATE || '2026-05-01'}';
       a.leafAreaIndexObstacles.value = 'wall';
 
       //There is no obstacle to clone a constructor from on a fresh page, so make one through the
@@ -50,11 +55,14 @@ try {
       //the request builder, so check what the request will actually carry rather than assuming.
       const req = a.requestBody();
 
+      //On the +Z side of the walls: that is the face the meter calls outer for a free-standing
+      //slab (its reverse is "enclosed" by construction), so leaves here are the ones its leaf
+      //area index can see. Seeds at 4.6 sat behind the enclosed face and read exactly zero.
       const Seed = a.seeds.value[0].constructor, species = a.species.value[0].name.peek();
       const seeds = [];
       for (let i = 0; i < ${OBSTACLES}; ++i)
         for (let k = 0; k < 4; ++k)
-          seeds.push(new Seed(species, 1 + i * 2.2 + k * 0.4, -0.01, 4.6, 0, false));
+          seeds.push(new Seed(species, 1 + i * 2.2 + k * 0.4, -0.01, 5.35, 0, false));
       a.seeds.value = seeds;
       return { obstacles: a.obstacles.value.length, seeds: a.seeds.value.length,
                filter: a.leafAreaIndexObstacles.value,
@@ -71,81 +79,73 @@ try {
         return r.ok ? (await r.json()).status : 'gone'; })()`, true);
     if (st !== 'running') break;
   }
-  // The measurement rides on the Result message, which lands after the status flips.
-  for (let i = 0; i < 30; ++i) { await sleep(1000); if (await ev(page, `!!window.__appstate.obstacleLightMeta.value`)) break; }
+  // The document rides on the Result message, which lands after the status flips.
+  for (let i = 0; i < 30; ++i) { await sleep(1000); if (await ev(page, `!!window.__appstate.obstacleLight.value`)) break; }
 
-  // Build the export document in the page, exactly as the download does.
-  const doc = await ev(page, `(() => { const a = window.__appstate;
-      const light = a.obstacleLight.value, meta = a.obstacleLightMeta.value, sel = a.obstacleLightSelection.value;
-      if (!light) return { missing: 'obstacleLight is ' + (light === null ? 'null' : 'undefined') };
-      //Built in Node from the run id, not spliced together here: a regex inside a template
-      //literal inside an evaluated string is three levels of escaping and it broke the first time.
-      const runId = a.runId.value;
-      const url = meta && meta.dailySeriesOmitted && runId
-        ? '${backend}' + '/Simulation/run/' + runId + '/obstaclelight'
-        : undefined;
-      return { built: window.__buildObstacleLightExport(meta, light, sel, url), url }; })()`);
-  if (doc.missing) throw new Error(`nothing to export: ${doc.missing}`);
-  const d = doc.built;
+  // The document exactly as the socket delivered it: what the HUD shows and what the export
+  // writes when it is complete.
+  const d = await ev(page, `(() => { const a = window.__appstate; const d = a.obstacleLight.value;
+      return d ? d : { missing: 'obstacleLight is ' + (d === null ? 'null' : 'undefined') }; })()`);
+  if (d.missing) throw new Error(`nothing to export: ${d.missing}`);
   if (outPath) writeFileSync(outPath, JSON.stringify(d, undefined, 1));
 
+  const weeks = d.periods.weeks.length;
   const obstacles = d.obstacles || [];
-  const withDays = obstacles.filter(o => (o.days || []).length > 0).length;
+  const aligned = xs => Array.isArray(xs) && xs.length === weeks;
+  const withWeeks = obstacles.filter(o => aligned(o.weeks)).length;
   const surfaces = obstacles.flatMap(o => o.surfaces || []);
-  const surfacesWithDays = surfaces.filter(s => (s.days || []).length > 0).length;
-  const selDays = d.selection ? (d.selection.days || []).length : -1;
-  const omitted = d.meta ? d.meta.dailySeriesOmitted : null;
-
-  // A day record is only useful if it carries numbers. An array of zeroes is the same emptiness
+  const facadeSides = surfaces.filter(s => s.side !== 'edge');
+  const facadeSidesWithWeeks = facadeSides.filter(s => aligned(s.weeks)).length;
+  const edgesWithoutWeeks = surfaces.filter(s => s.side === 'edge' && s.weeks === null).length;
+  const selWeeks = d.selection ? d.selection.weeks.filter(w => w).length : -1;
+  const sample = selWeeks > 0 ? d.selection.weeks.find(w => w) : null;
+  // A record is only useful if it carries numbers. A record of zeroes is the same emptiness
   // wearing a different shape, and that is exactly the failure this is looking for.
-  const sample = selDays > 0 ? d.selection.days[Math.floor(selDays / 2)] : null;
   const nonZero = sample ? Object.entries(sample).filter(([k, v]) => typeof v === 'number' && v !== 0).length : 0;
+  const tray = (d.trays || [])[0];
+  const trayLeafArea = tray && tray.total ? tray.total.leafArea_m2 : null;
 
-  //And the file the server keeps when the wire copy had to be truncated: it must exist, decode,
-  //and actually carry the series this one is missing. A URL written into an exported file that
-  //404s is worse than no URL at all.
-  let full = null;
-  if (doc.url) {
-    full = await ev(page, `(async () => {
-        const r = await fetch(${JSON.stringify(doc.url)});
-        if (!r.ok) return { httpStatus: r.status };
-        //The browser inflates Content-Encoding: gzip on the way in, so this is plain JSON.
-        const text = await r.text();
-        const parsed = JSON.parse(text);
-        const obs = parsed.obstacles || [];
-        return { httpStatus: r.status, bytesReceived: text.length,
-                 obstacles: obs.length,
-                 obstaclesWithDays: obs.filter(o => (o.days || []).length > 0).length,
-                 daysPerObstacle: obs.length ? (obs[0].days || []).length : 0,
-                 surfacesWithDays: obs.flatMap(o => o.surfaces || []).filter(x => (x.days || []).length > 0).length,
-                 runId: parsed.runId, hasMeta: !!parsed.meta, hasSelection: !!parsed.selection }; })()`, true);
-  }
+  // And the file the server keeps: it must exist, decode, be complete, and carry the series the
+  // socket copy may be missing. A URL that 404s is worse than no URL at all.
+  const full = await ev(page, `(async () => {
+      const r = await fetch('${backend}/Simulation/run/${runId}/obstaclelight');
+      if (!r.ok) return { httpStatus: r.status };
+      //The browser inflates Content-Encoding: gzip on the way in, so this is plain JSON.
+      const text = await r.text();
+      const parsed = JSON.parse(text);
+      const obs = parsed.obstacles || [];
+      const weeks = parsed.periods.weeks.length;
+      return { httpStatus: r.status, bytesReceived: text.length, format: parsed.format, complete: parsed.complete,
+               omitted: parsed.omitted, obstacles: obs.length,
+               obstaclesWithWeeks: obs.filter(o => Array.isArray(o.weeks) && o.weeks.length === weeks).length,
+               weeks, trays: (parsed.trays || []).length, runId: parsed.runId,
+               hasDefinitions: !!parsed.definitions && Object.keys(parsed.definitions).length > 10 }; })()`, true);
 
   console.log(JSON.stringify({
     setup,
     matched: d.meta ? { available: d.meta.obstaclesAvailable, matched: d.meta.obstaclesMatched,
-                        sensors: d.meta.sensors, renderer: d.meta.renderer } : null,
-    dailySeriesOmitted: omitted,
-    obstacles: obstacles.length,
-    obstaclesWithDays: withDays,
-    surfaces: surfaces.length,
-    surfacesWithDays,
-    selectionDays: selDays,
-    selectionSampleNonZeroFields: nonZero,
-    selectionSample: sample,
-    fullSeriesUrl: doc.url || null,
-    fullSeriesFile: full,
-    // The whole point: with the budget NOT exceeded every level should carry days; with it
-    // exceeded the selection series must still be there and the flag must say so.
-    verdict: selDays <= 0 ? 'SELECTION SERIES MISSING - the one that must always survive'
-      //A truncated file is only acceptable if the detail is genuinely retrievable.
-      : omitted === true && withDays === 0 && full && full.obstaclesWithDays === full.obstacles && full.obstacles > 0
-        ? 'BUDGET APPLIED, selection series intact, full series retrievable'
-      : omitted === true && withDays === 0 && doc.url
-        ? 'TRUNCATED AND THE FULL SERIES IS NOT RETRIEVABLE'
-      : omitted === true && withDays === 0 ? 'BUDGET APPLIED, selection series intact'
-      : omitted === false && withDays === obstacles.length ? 'COMPLETE - every level carries days'
-      : omitted === false && withDays === 0 ? 'INCONSISTENT - days dropped but flag says otherwise'
+                        sensors: d.meta.sensors, renderer: d.meta.renderer, filterMode: d.meta.filterMode,
+                        coverage: d.meta.coverage } : null,
+    format: d.format, complete: d.complete, omitted: d.omitted,
+    weeks, obstacles: obstacles.length, obstaclesWithWeeks: withWeeks,
+    facadeSides: facadeSides.length, facadeSidesWithWeeks, edges: surfaces.length - facadeSides.length, edgesWithoutWeeks,
+    selectionWeeks: selWeeks, selectionSampleNonZeroFields: nonZero, selectionSample: sample,
+    trays: (d.trays || []).length, trayName: tray ? tray.name : null, trayLeafArea_m2: trayLeafArea,
+    selectionLeafAreaIndexMax: d.selection ? d.selection.total.leafAreaIndexMax : null,
+    plantedFaceLeafAreaIndexMax: obstacles.length && obstacles[0].surfaces.length ? obstacles[0].surfaces[0].total.leafAreaIndexMax : null,
+    storedDocument: full,
+    // The whole point: under the budget every level carries weeks; over it the selection series
+    // must still be there, the flag must say so, and the stored file must be complete either way.
+    verdict: selWeeks <= 0 ? 'SELECTION SERIES MISSING - the one that must always survive'
+      : !(full && full.httpStatus === 200 && full.complete === true && full.obstaclesWithWeeks === full.obstacles && full.obstacles > 0 && full.hasDefinitions)
+        ? 'STORED DOCUMENT MISSING OR INCOMPLETE'
+      : !(tray && trayLeafArea > 0) ? 'TRAY SURVEY MISSING OR EMPTY'
+      : d.complete === false && withWeeks === 0 && d.omitted.length > 0
+        ? 'BUDGET APPLIED, selection series intact, complete document stored'
+      : d.complete === true && withWeeks === obstacles.length && facadeSidesWithWeeks === facadeSides.length
+        && edgesWithoutWeeks === surfaces.length - facadeSides.length
+        ? 'COMPLETE - every level carries weeks'
+      : d.complete === true && withWeeks < obstacles.length ? 'INCONSISTENT - series dropped but flag says complete'
       : 'PARTIAL',
     errors: logs.filter(l => l.level === 'error' || l.level === 'exception')
       .map(l => l.text.split('\n')[0].slice(0, 200)).filter(t => !/favicon/.test(t)).slice(0, 4),

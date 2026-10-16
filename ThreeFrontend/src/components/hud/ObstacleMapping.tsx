@@ -7,9 +7,9 @@ import { linearToSrgbRGB } from "../../render/core/Color";
 /**
  * Colours the measured obstacles in the viewport by one of their readings, with a legend.
  *
- * The series is daily, so the colours follow the playback date and change as the canopy develops
+ * The series is weekly, so the colours follow the playback date and change as the canopy develops
  * over the season rather than over the hours of a day - which is what these quantities are: a
- * canopy grows over weeks, and a daily solar total is what a shading study reports.
+ * canopy grows over weeks, and a weekly solar total is what the study asked for.
  */
 export function ObstacleMapping() {
     const tooltip = "Colours the obstacles that were measured. Leaf area index is the total one-sided leaf area per \
@@ -17,13 +17,12 @@ unit facade area. Shaded fraction is the share of solar gain the foliage keeps o
 Avoided irradiation is that share as energy. Beam transmittance is how much direct sun still gets through.";
 
     const mapping = appstate.obstacleMapping.value;
-    const light = appstate.obstacleLight.value;
-    //`!= null`, not `!== undefined`. The server sends `obstacleLight: null` whenever a run had no
-    //measured obstacles - `ObstacleLightResponse.From` returns null rather than an empty array -
-    //and `null !== undefined` is true, so the next term read `.length` off null and threw inside
-    //this component's render. A run with no obstacles is the ordinary case, which is why this
-    //shows up as a console error after almost every simulation.
-    const measured = light != null && light.length > 0;
+    const doc = appstate.obstacleLight.value;
+    //`!= null`, not `!== undefined`. The server sends `obstacleLight: null` whenever a run had
+    //nothing to measure, and `null !== undefined` is true, so a stricter test read `.obstacles`
+    //off null and threw inside this component's render - after almost every simulation, since a
+    //run with no obstacles is the ordinary case.
+    const measured = doc != null && doc.obstacles.length > 0;
     const date = appstate.shownObstacleDate.value;
 
     return <>

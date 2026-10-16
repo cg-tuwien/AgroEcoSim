@@ -12,7 +12,7 @@ import { activeRenderer } from "./render/IViewportRenderer";
 import { vec2, addScaled2 } from "./render/core/Vec3";
 import { downloadBinary, downloadBlob, downloadText, timestampedName } from "./helpers/download";
 import {
-    buildObstacleLightExport, IObstacleLight, IObstacleLightMeta, IObstacleLightSelection,
+    IObstacleLightDocument, isObstacleLightDocument,
     obstacleValueOn, ObstacleMappingOptions, obstacleMappingSpec, stepDate,
 } from "./helpers/ObstacleLight";
 import { canDeflate, deflateBytes, inflateBytes } from "./helpers/deflate";
@@ -129,9 +129,7 @@ hubConnection.on("result", (result: ISimResponse) => {
             st.renderer.value = result.renderer;
             st.simLength.value = 0;
             st.historyCount.value = st.history.length;
-            st.obstacleLight.value = result.obstacleLight;
-            st.obstacleLightMeta.value = result.obstacleLightMeta;
-            st.obstacleLightSelection.value = result.obstacleLightSelection;
+            st.obstacleLight.value = result.obstacleLight ?? undefined;
         });
     }
     else
@@ -142,9 +140,7 @@ hubConnection.on("result", (result: ISimResponse) => {
             st.computing.value = false;
             st.renderer.value = result.renderer;
             st.simLength.value = 0;
-            st.obstacleLight.value = result.obstacleLight;
-            st.obstacleLightMeta.value = result.obstacleLightMeta;
-            st.obstacleLightSelection.value = result.obstacleLightSelection;
+            st.obstacleLight.value = result.obstacleLight ?? undefined;
         });
     }
 
@@ -492,10 +488,9 @@ interface ISimResponse
     debug: string,
     stepTimes: Uint32Array,
     ticksPerMillisecond: number,
-    //Only present when the request selected obstacles and the internal light model ran.
-    obstacleLight?: IObstacleLight[],
-    obstacleLightMeta?: IObstacleLightMeta,
-    obstacleLightSelection?: IObstacleLightSelection,
+    //Only present when the request selected obstacles or the terrain was an imported tray
+    //system. The server sends null otherwise.
+    obstacleLight?: IObstacleLightDocument | null,
 }
 
 interface ISimPreview
@@ -858,16 +853,15 @@ class State {
     /** Height of the bands each obstacle is resolved into, metres. */
     leafAreaIndexBandHeight = signal(0.5);
 
-    //RESPONSE of the leaf area index measurement. Arrives once, with the finished run.
-    obstacleLight = signal<IObstacleLight[] | undefined>(undefined);
-    obstacleLightMeta = signal<IObstacleLightMeta | undefined>(undefined);
-    obstacleLightSelection = signal<IObstacleLightSelection | undefined>(undefined);
+    //RESPONSE of the leaf area index measurement: the whole document, budgeted. Arrives once,
+    //with the finished run.
+    obstacleLight = signal<IObstacleLightDocument | undefined>(undefined);
     /** Which measured quantity, if any, colours the obstacles in the viewport. */
     obstacleMapping = signal<ObstacleMappingOptions>(ObstacleMappingOptions.None);
 
     /** Local date the viewport's current step falls on, or undefined before a run has data. */
     shownObstacleDate = computed<string | undefined>(() => {
-        const meta = this.obstacleLightMeta.value;
+        const meta = this.obstacleLight.value?.meta;
         if (!meta) return undefined;
         //playPointer.value is the subscription and timestepAt turns it into the simulated step;
         //passing the value in rather than calling currentTimestep() is deliberate, see timestepAt.
@@ -881,14 +875,14 @@ class State {
      */
     obstacleMappingValues = computed<Map<string, number> | undefined>(() => {
         const mapping = this.obstacleMapping.value;
-        const light = this.obstacleLight.value;
-        if (mapping === ObstacleMappingOptions.None || !light || light.length === 0)
+        const doc = this.obstacleLight.value;
+        if (mapping === ObstacleMappingOptions.None || !doc || doc.obstacles.length === 0)
             return undefined;
 
         const date = this.shownObstacleDate.value;
         const values = new Map<string, number>();
-        for (const item of light) {
-            const value = obstacleValueOn(item, mapping, date);
+        for (const item of doc.obstacles) {
+            const value = obstacleValueOn(doc, item, mapping, date);
             if (value !== undefined)
                 values.set(item.name, value);
         }
@@ -1310,8 +1304,6 @@ class State {
                 //A new run's measurement has not arrived yet; leaving the old one would colour
                 //the obstacles by numbers that belong to a scene that no longer exists.
                 this.obstacleLight.value = undefined;
-                this.obstacleLightMeta.value = undefined;
-                this.obstacleLightSelection.value = undefined;
                 this.evictedFrames.value = 0;
             });
             refreshHistoryBudget();
@@ -1651,8 +1643,6 @@ class State {
             //The measurement is a result, like plants: without it a reloaded session cannot show
             //the leaf area index mapping or re-export the numbers.
             obstacleLight: this.obstacleLight.peek(),
-            obstacleLightMeta: this.obstacleLightMeta.peek(),
-            obstacleLightSelection: this.obstacleLightSelection.peek(),
             obstacleMapping: this.obstacleMapping.peek(),
             historySize: this.historySize.peek(),
             //History is emitted separately, entry by entry - see below.
@@ -1670,7 +1660,7 @@ class State {
         const savedMeasurement = this.archiveMeasurement;
         const fullMeasurement = savedMeasurement
             ? async () => savedMeasurement.stream()
-            : runId && this.obstacleLightMeta.peek()?.dailySeriesOmitted ? async () => {
+            : runId && this.obstacleLight.peek()?.complete === false ? async () => {
                 const response = await fetch(`${location.protocol}//${BackendURI}/simulation/run/${runId}/obstaclelight/packed`);
                 if (!response.ok || !response.body) throw new Error('The full measurement could not be saved.');
                 return response.body;
@@ -1691,51 +1681,37 @@ class State {
     });
 
     /**
-     * Writes the leaf area index and solar load measurement to a JSON file.
+     * Writes the leaf area index document to a JSON file.
      *
-     * Daily records and whole-period summaries at object, surface and band level, with a
-     * definitions block so the file can be read without the source. See helpers/ObstacleLight.ts
-     * for why the per-step series is deliberately absent.
+     * The document the server sent, when it is complete. When the socket copy had to drop the
+     * per-obstacle series for size, the complete document is fetched from the run store instead -
+     * a file the browser saves without parsing, which is why its size does not matter there. A
+     * session loaded from an archive saves the copy embedded in it.
      */
     exportObstacleLight = async () => {
-        const light = this.obstacleLight.peek();
-        if (!light || light.length === 0)
+        const doc = this.obstacleLight.peek();
+        if (!doc)
             return false;
-        const meta = this.obstacleLightMeta.peek();
         const runId = this.runId.peek();
 
-        //Where the complete measurement lives when this file cannot carry it. The server keeps it
-        //for as long as it keeps the run, which is also why the URL is worth writing INTO the file:
-        //a study opened months later can still say where the rest of its own data was.
-        const fullSeriesUrl = meta?.dailySeriesOmitted && runId
-            ? `${location.protocol}//${BackendURI}/simulation/run/${runId}/obstaclelight`
-            : undefined;
-
-        const document_ = buildObstacleLightExport(meta, light, this.obstacleLightSelection.peek(), fullSeriesUrl);
-        downloadBlob(new Blob([JSON.stringify(document_, undefined, 1)], { type: 'application/json' }),
-            '-leafareaindex', 'json');
-
-        //And the detailed one alongside it, if the budget truncated this file.
-        //
-        //Two files rather than one merged document, deliberately. Merging means parsing a hundred
-        //megabytes of JSON in the tab that has just finished a long run - the exact allocation the
-        //budget exists to avoid - whereas this streams straight to disk and the browser never looks
-        //inside it. The small file is the one a person opens; the large one is the one they load
-        //into whatever actually does the analysis.
         if (this.archiveMeasurement) {
-            downloadBlob(this.archiveMeasurement, '-leafareaindex-full', 'json.gz');
-        } else if (fullSeriesUrl) {
+            downloadBlob(this.archiveMeasurement, '-leafareaindex', 'json.gz');
+            return true;
+        }
+        if (!doc.complete && runId) {
             try {
-                const res = await fetch(fullSeriesUrl);
-                if (res.ok)
-                    downloadBlob(await res.blob(), '-leafareaindex-full', 'json');
-                else
-                    console.warn(`The full leaf area index series is not on the server (HTTP ${res.status}). `
-                        + `The summaries and the selection-wide series are complete in the file that was saved.`);
+                const res = await fetch(`${location.protocol}//${BackendURI}/simulation/run/${runId}/obstaclelight`);
+                if (res.ok) {
+                    downloadBlob(await res.blob(), '-leafareaindex', 'json');
+                    return true;
+                }
+                console.warn(`The complete leaf area index document is not on the server (HTTP ${res.status}). `
+                    + `Saving the copy that came over the socket, whose totals are complete; see its "omitted" list.`);
             } catch (err) {
-                console.warn('Could not fetch the full leaf area index series:', err);
+                console.warn('Could not fetch the complete leaf area index document; saving the socket copy instead.', err);
             }
         }
+        downloadBlob(new Blob([JSON.stringify(doc, undefined, 1)], { type: 'application/json' }), '-leafareaindex', 'json');
         return true;
     };
 
@@ -1802,9 +1778,11 @@ class State {
                     self.leafAreaIndexSensors.value = data.leafAreaIndexSensors ?? 32768;
                     self.leafAreaIndexDepth.value = data.leafAreaIndexDepth ?? 3;
                     self.leafAreaIndexBandHeight.value = data.leafAreaIndexBandHeight ?? 0.5;
-                    self.obstacleLight.value = data.obstacleLight;
-                    self.obstacleLightMeta.value = data.obstacleLightMeta;
-                    self.obstacleLightSelection.value = data.obstacleLightSelection;
+                    //Sessions saved before the document existed carry the measurement in an
+                    //older shape; it is dropped rather than half-read into the new one.
+                    self.obstacleLight.value = isObstacleLightDocument(data.obstacleLight) ? data.obstacleLight : undefined;
+                    if (data.obstacleLight && !self.obstacleLight.value)
+                        console.warn('The session carries a leaf area index measurement in an older format, which this build cannot show. Run the simulation again to measure it.');
                     self.obstacleMapping.value = data.obstacleMapping ?? ObstacleMappingOptions.None;
                     //Sessions saved before the ladder became independent switches carry a
                     //single number instead; translate rather than dropping their setting.
@@ -2161,8 +2139,6 @@ class State {
                 //A stored run carries no measurement on the wire. Leaving the previous one would
                 //colour these obstacles by numbers belonging to a scene that is no longer shown.
                 this.obstacleLight.value = undefined;
-                this.obstacleLightMeta.value = undefined;
-                this.obstacleLightSelection.value = undefined;
                 this.plants.value = [];
             });
             this.history.length = 0;

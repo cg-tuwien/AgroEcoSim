@@ -285,3 +285,26 @@ The panel mode checks unresolved foliage contacts every step and retains a
 failure checkpoint and export on the first failure. A completed single-plant or
 seven-plant run does not replace that panel acceptance criterion. Source and
 binary hashes for this implementation are retained with the diagnostic output.
+
+## Outline area factors (15 October 2026)
+
+The tray vegetation survey (`Agro/Vegetation/TrayVegetationSurvey.cs`) reports one-sided
+leaf area per tray using the species' blade **outline**, not the rectangle proxy the light
+tracer, the photosynthesis and the renderer exports stand a lamina in. The factor is the
+flat area of `LaminaTemplates.For(species, Leaf, slice)` at a unit pose over the rectangle
+`Length x 2 Radius`, one per blade slice, computed once per species by
+`Agro/Vegetation/LaminaArea.cs` and written to the document's `meta.species`:
+
+| species | outline / rectangle |
+| --- | --- |
+| Heuchera micrantha | 0.97 |
+| Geranium macrorrhizum | 0.92 |
+| Bergenia cordifolia | 0.86 |
+| Carex morrowii (whole blade) | 0.83 |
+| Campanula poscharskyana | 0.78 |
+| Geranium x cantabrigiense | 0.73 |
+| Fragaria vesca | 0.61 |
+
+The ray-traced leaf area indices in the same document still use the rectangle, so they read
+higher than a leaf area built from the survey by one over this factor. Making the tracer use
+the outline would change growth and is a separate calibration.
