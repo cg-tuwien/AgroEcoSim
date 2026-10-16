@@ -102,6 +102,51 @@ public sealed class CpuLightSolver
 		GuidanceSceneTimestep=uint.MaxValue;
 	}
 
+	/// <summary>
+	/// The carried state of the obstacle measurement: the shading each static surface received on
+	/// the last lit step, which the next step's indirect light reads, and the meter's accumulators.
+	/// Separate from <see cref="WriteState"/> because restoring it needs the world: the static scene
+	/// and the meter are built lazily on the first lit step, and a restored world builds them here
+	/// instead, from the same geometry, so the accumulators have somewhere to land.
+	/// </summary>
+	internal void WriteObstacleLightState(BinaryWriter writer)
+	{
+		writer.Write(StaticReady);
+		if (!StaticReady)
+			return;
+		writer.Write(StaticShading.Length);
+		foreach (var shading in StaticShading)
+			writer.Write(shading);
+		writer.Write(Meter != null);
+		Meter?.WriteState(writer);
+	}
+
+	internal void ReadObstacleLightState(BinaryReader reader, AgroWorld world)
+	{
+		if (!reader.ReadBoolean())
+			return; //the run was checkpointed before its first lit step; the first one builds everything as a fresh run would
+		EnsureStatic(world, world.ObstacleList);
+		var length = reader.ReadInt32();
+		if (length != StaticShading.Length)
+			throw new InvalidDataException(
+				$"The checkpoint shades {length} static surfaces and this scene has {StaticShading.Length}. The obstacles have changed since the run was saved.");
+		for (int i = 0; i < length; ++i)
+			StaticShading[i] = reader.ReadSingle();
+
+		var hasMeter = reader.ReadBoolean();
+		if (hasMeter != (Meter != null))
+			throw new InvalidDataException(hasMeter
+				? "The checkpoint carries a leaf area index measurement and this run's filter selects no obstacle. The scene or the filter has changed since the run was saved."
+				: "The checkpoint carries no leaf area index measurement and this run's filter selects obstacles. The scene or the filter has changed since the run was saved.");
+		if (Meter == null)
+			return;
+		//The sensors are oriented against the static scene alone, so a top level over the static blob
+		//is all Prepare needs; the first lit step rebuilds it with the plants, as every step does.
+		Scene.AllocatePlants([], 0);
+		Scene.BuildPlants();
+		Meter.ReadState(reader, Scene);
+	}
+
 	public void UpdateGrowthGuidance(AgroWorld world, uint timestep, IList<IFormation> formations, IList<IObstacle> obstacles)
 	{
 		if (!world.GrowthLightGuidanceEnabled) return;
@@ -251,7 +296,7 @@ public sealed class CpuLightSolver
 		if (!diffuseDome.IsLit && !guidanceOnly)
 			return false;
 
-		EnsureStatic(world, obstacles);
+		EnsureStatic(world, obstacles as IReadOnlyList<IObstacle> ?? [.. obstacles]);
 		var buildStarted = System.Diagnostics.Stopwatch.GetTimestamp();
 
 		var slots = formations.Count;
@@ -607,7 +652,7 @@ public sealed class CpuLightSolver
         return IntegratedSky;
 	}
 
-	void EnsureStatic(AgroWorld world, IList<IObstacle> obstacles)
+	void EnsureStatic(AgroWorld world, IReadOnlyList<IObstacle> obstacles)
 	{
 		var unchanged = GuidanceStaticObstacles.Length == obstacles.Count;
 		for (int i = 0; unchanged && i < obstacles.Count; ++i)
@@ -632,8 +677,7 @@ public sealed class CpuLightSolver
 		var vertices = new List<Vector3>();
 		var indices = new List<int>();
 		var groups = new List<Collisions.StaticSceneSource.Group>();
-		Collisions.StaticSceneSource.Collect(world.Soil,
-			obstacles as IReadOnlyList<IObstacle> ?? obstacles.ToArray(), vertices, indices, groups);
+		Collisions.StaticSceneSource.Collect(world.Soil, obstacles, vertices, indices, groups);
 		var ranges = new (int First, int Count)[obstacles.Count];
 		var obstacleIndex = 0;
 		foreach (var group in groups)

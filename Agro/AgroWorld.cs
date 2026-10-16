@@ -109,19 +109,33 @@ public class AgroWorld : SimulationWorld
 	public readonly Vegetation.TrayVegetationSurvey Vegetation = new();
 
 	PeriodCalendar? CachedPeriods;
+	int CachedPeriodsHours = -1;
 	/// <summary>
 	/// The reporting periods of this run - weeks from the local start date, calendar years, the
-	/// whole run - shared by everything that aggregates by period. A step past the horizon by the
-	/// midpoint rule lands in the last bucket, so no slack is needed.
+	/// whole run - shared by everything that aggregates by period.
 	/// </summary>
+	/// <remarks>
+	/// The horizon is the last local date any step can be credited to, i.e. the date of the final
+	/// step's midpoint, not the requested hours divided by 24. A 48-hour tick over 168 requested
+	/// hours runs four steps whose last midpoint falls on the day after the request; sized by the
+	/// request, the calendar made that step's bucket depend on the horizon, and a run resumed onto a
+	/// longer horizon filed the same step in a different week than the uninterrupted run. Every
+	/// bucket index is therefore a function of the date alone, which is what lets a checkpoint's
+	/// sparse records be laid onto a longer calendar.
+	/// </remarks>
 	public PeriodCalendar Periods
 	{
 		get
 		{
 			var periods = CachedPeriods;
-			var days = (TotalHours + 23) / 24;
-			if (periods == null || periods.Start != InitialTime.Date || periods.Days != days)
+			if (periods == null || periods.Start != InitialTime.Date || CachedPeriodsHours != TotalHours)
+			{
+				var steps = Math.Max(1, TimestepsTotal());
+				var lastLocal = TimeZoneInfo.ConvertTimeFromUtc(GetTime((uint)(steps - 1)), TimeZone);
+				var days = Math.Max(1, (PeriodCalendar.StepDate(lastLocal, HoursPerTick) - InitialTime.Date).Days + 1);
 				CachedPeriods = periods = new PeriodCalendar(InitialTime.Date, days);
+				CachedPeriodsHours = TotalHours;
+			}
 			return periods;
 		}
 	}
@@ -131,6 +145,19 @@ public class AgroWorld : SimulationWorld
 	BitArray Daylight;
 
 	static readonly int[] DaysPerMonth = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+
+	/// <summary>
+	/// The tick length a request's <c>HoursPerTick</c> actually runs at: whole divisors of a day
+	/// below 24 hours, whole days above. Public because the server has to turn a checkpoint's step
+	/// count back into hours with the same value, not the requested one.
+	/// </summary>
+	public static ushort SnapHoursPerTick(int requested)
+	{
+		var hours = (ushort)Math.Max(0, requested);
+		return hours < 24
+			? (ushort)(hours switch { <= 0 => 1, 5 => 4, 7 => 6, 9 or 10 => 8, 11 => 12, >12 and <= 18 => 12, >18 => 24, _ => hours })
+			: (ushort)(24 * (hours / 24));
+	}
 
 	public int TimestepsTotal()
 	{
@@ -227,11 +254,7 @@ public class AgroWorld : SimulationWorld
 		{
 			if (settings?.HoursPerTick.HasValue ?? false)
 			{
-				HoursPerTick = (ushort)settings.HoursPerTick.Value;
-				if (HoursPerTick < 24)
-					HoursPerTick = HoursPerTick switch { <= 0 => 1, 5 => 4, 7 => 6, 9 or 10 => 8, 11 => 12, >12 and <= 18 => 12, >18 => 24, _ => HoursPerTick };
-				else
-					HoursPerTick = (ushort)(24 * (HoursPerTick / 24));
+				HoursPerTick = SnapHoursPerTick(settings.HoursPerTick.Value);
 
 				StatsBlockLength = (byte)(23 / HoursPerTick + 1);
 
@@ -811,7 +834,10 @@ public class AgroWorld : SimulationWorld
     // V33 writes one contact-engine tag byte ahead of the collision payload. The certified
     // engine's payload after that byte is unchanged; the soft engine stores its sparse
     // contact memories instead. A checkpoint resumes only under the engine that wrote it.
-	public const byte CheckpointVersion = 33;
+    // V34 appends the obstacle light section after the collisions: the renderer name, the static
+    // shading and the leaf area index meter's accumulators, then the tray vegetation survey's. A
+    // resumed run continues both from the original start date instead of measuring from the resume.
+	public const byte CheckpointVersion = 34;
 
 	/// <summary>
 	/// Everything the next step depends on that the request does not determine.
@@ -850,6 +876,10 @@ public class AgroWorld : SimulationWorld
 		//Last, because it is keyed against the formations written above.
 		Irradiance.WriteState(writer, FormationList);
 		Collisions.WriteState(writer, FormationList, ContactEngine);
+		//The measurements aggregate by week from the run's first day, so a resumed run must carry
+		//them on rather than start them over.
+		Irradiance.WriteObstacleLightState(writer, RendererName);
+		Vegetation.WriteState(writer);
 
 		return stream.ToArray();
 	}
@@ -897,6 +927,10 @@ public class AgroWorld : SimulationWorld
 
 		Irradiance.ReadState(reader, FormationList);
 		Collisions.ReadState(reader, FormationList, ContactEngine);
+		//Both build their lazily constructed structure now, from the complete formation and obstacle
+		//lists, so the restored accumulators have their targets and trays to land on.
+		Irradiance.ReadObstacleLightState(reader, this);
+		Vegetation.ReadState(reader, this);
 
 		if (stream.Position != stream.Length)
 			throw new InvalidDataException(

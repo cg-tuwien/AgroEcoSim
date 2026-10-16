@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.IO;
 using System.Numerics;
 using System.Threading.Tasks;
 using AgentsSystem;
@@ -248,6 +249,38 @@ public sealed class ObstacleLightMeter
 				MathF.Max(0f, -MathF.Log(MathF.Max(gap, 1e-3f)) / BeerLambertExtinction),
 				PeakReduction);
 		}
+
+		/// <summary>True when no step was folded in.</summary>
+		public bool IsEmpty => DaylightHours == 0.0 && BeamOpen == 0.0 && Beam == 0.0 && DiffuseOpen == 0.0 && Diffuse == 0.0
+			&& LeafAreaHours == 0.0 && ProjectedHours == 0.0 && GapHours == 0.0 && LeafAreaMax == 0f && PeakReduction == 0f;
+
+		public void Write(BinaryWriter writer)
+		{
+			writer.Write(DaylightHours);
+			writer.Write(BeamOpen);
+			writer.Write(Beam);
+			writer.Write(DiffuseOpen);
+			writer.Write(Diffuse);
+			writer.Write(LeafAreaHours);
+			writer.Write(ProjectedHours);
+			writer.Write(GapHours);
+			writer.Write(LeafAreaMax);
+			writer.Write(PeakReduction);
+		}
+
+		public static Accumulator Read(BinaryReader reader) => new()
+		{
+			DaylightHours = reader.ReadDouble(),
+			BeamOpen = reader.ReadDouble(),
+			Beam = reader.ReadDouble(),
+			DiffuseOpen = reader.ReadDouble(),
+			Diffuse = reader.ReadDouble(),
+			LeafAreaHours = reader.ReadDouble(),
+			ProjectedHours = reader.ReadDouble(),
+			GapHours = reader.ReadDouble(),
+			LeafAreaMax = reader.ReadSingle(),
+			PeakReduction = reader.ReadSingle(),
+		};
 	}
 
 	/// <summary>One level's accumulators over every week and every calendar year of the run. A step
@@ -284,6 +317,56 @@ public sealed class ObstacleLightMeter
 				total.Add(in Years[i]);
 			}
 			return new ObstacleLightSeries(weeks, years, total.Close());
+		}
+
+		/// <summary>Sparse: the array length, then the index and record of every non-empty bucket, so
+		/// a checkpoint from a horizon of another length can be laid onto this one. Week and year
+		/// indices count from the run's start date, which a resume never changes.</summary>
+		public void Write(BinaryWriter writer)
+		{
+			WriteBuckets(writer, Weeks);
+			WriteBuckets(writer, Years);
+		}
+
+		public void Read(BinaryReader reader)
+		{
+			ReadBuckets(reader, Weeks, "week");
+			ReadBuckets(reader, Years, "year");
+		}
+
+		static void WriteBuckets(BinaryWriter writer, Accumulator[] buckets)
+		{
+			writer.Write(buckets.Length);
+			var filled = 0;
+			foreach (var bucket in buckets)
+				if (!bucket.IsEmpty)
+					++filled;
+			writer.Write(filled);
+			for (int i = 0; i < buckets.Length; ++i)
+				if (!buckets[i].IsEmpty)
+				{
+					writer.Write(i);
+					buckets[i].Write(writer);
+				}
+		}
+
+		static void ReadBuckets(BinaryReader reader, Accumulator[] buckets, string unit)
+		{
+			var length = reader.ReadInt32();
+			var filled = reader.ReadInt32();
+			Array.Clear(buckets);
+			for (int k = 0; k < filled; ++k)
+			{
+				var index = reader.ReadInt32();
+				var record = Accumulator.Read(reader);
+				if ((uint)index >= (uint)length)
+					throw new InvalidDataException($"A {unit} record at index {index} lies outside the {length} {unit}s the checkpoint declares.");
+				//A shorter horizon than the one measured would drop history; a resume must reach every
+				//date already measured, which the runner guarantees by never resuming behind the checkpoint.
+				if (index >= buckets.Length)
+					throw new InvalidDataException($"The checkpoint holds a {unit} record at index {index} and this run's horizon has only {buckets.Length} {unit}s. A resumed run must reach every date already measured.");
+				buckets[index] = record;
+			}
 		}
 	}
 
@@ -348,8 +431,8 @@ public sealed class ObstacleLightMeter
 	public ObstacleLightSeries? SelectionSeries { get; private set; }
 
 	/// <summary>Local dates of the first and the last measured step, and how many distinct dates
-	/// were measured. The meter is not checkpointed, so a resumed run measures from the resume on,
-	/// and the document has to say which days it actually covers.</summary>
+	/// were measured. Carried across a checkpoint with the accumulators, so a resumed run continues
+	/// the count from the original start.</summary>
 	public DateTime? FirstDate { get; private set; }
 	public DateTime? LastDate { get; private set; }
 	public int LitDays { get; private set; }
@@ -421,7 +504,7 @@ public sealed class ObstacleLightMeter
 	/// </summary>
 	readonly float WorldAzimuthDegrees;
 
-	public ObstacleLightMeter(IList<IObstacle> obstacles, RayPrimitive[] prims, (int First, int Count)[] ranges, ObstacleNameFilter filter, PeriodCalendar calendar, int sensorBudget, float canopyDepth, float bandHeight, float worldAzimuthDegrees = 0f)
+	public ObstacleLightMeter(IReadOnlyList<IObstacle> obstacles, RayPrimitive[] prims, (int First, int Count)[] ranges, ObstacleNameFilter filter, PeriodCalendar calendar, int sensorBudget, float canopyDepth, float bandHeight, float worldAzimuthDegrees = 0f)
 	{
 		Filter = filter;
 		Calendar = calendar;
@@ -1158,6 +1241,131 @@ public sealed class ObstacleLightMeter
 			Gap += other.Gap;
 		}
 	}
+
+	/// <summary>
+	/// Writes what a resumed run cannot rebuild: the accumulators of every level and the dates they
+	/// cover. Sensors, sides, surfaces and bands are functions of the static scene; <see cref="ReadState"/>
+	/// rebuilds them against the same scene before it lays the accumulators back on them.
+	/// Surfaces are keyed by side and orientation rather than by position, because <see cref="Finish"/>
+	/// reorders them by solar load and the server writes its final checkpoint after it ran.
+	/// </summary>
+	internal void WriteState(BinaryWriter writer)
+	{
+		writer.Write(Prepared);
+		writer.Write(TargetArray.Length);
+		foreach (var target in TargetArray)
+		{
+			writer.Write(target.Name);
+			writer.Write(target.Group);
+			target.Acc.Write(writer);
+			writer.Write(target.Surfaces.Length);
+			foreach (var surface in target.Surfaces)
+			{
+				writer.Write(surface.Side);
+				writer.Write(surface.Orientation);
+				writer.Write(surface.Acc != null);
+				if (surface.Acc != null)
+					surface.Acc.Write(writer);
+				else
+					surface.EdgeAcc.Write(writer);
+				writer.Write(surface.Bands.Length);
+				foreach (var band in surface.Bands)
+				{
+					writer.Write(band.MinY);
+					band.Acc.Write(writer);
+				}
+			}
+		}
+		SelectionAcc.Write(writer);
+		WriteDate(writer, FirstDate);
+		WriteDate(writer, LastDate);
+		writer.Write(LitDays);
+	}
+
+	/// <summary>
+	/// Restores what <see cref="WriteState"/> wrote onto a meter rebuilt from the same request. The
+	/// scene must hold the static geometry with a top level built, because a meter that had already
+	/// oriented its sensors does so again here, against the same geometry, before its surfaces are
+	/// matched. Refuses a checkpoint whose targets or surfaces do not match, rather than reconciling.
+	/// </summary>
+	internal void ReadState(BinaryReader reader, RayScene scene)
+	{
+		var prepared = reader.ReadBoolean();
+		var count = reader.ReadInt32();
+		if (count != TargetArray.Length)
+			throw new InvalidDataException(
+				$"The checkpoint measures {count} obstacles and this run's filter selects {TargetArray.Length}. " +
+				"The scene or the filter has changed since the run was saved.");
+		//A meter that had oriented its sensors does so again, against the same static geometry, so
+		//the surfaces exist to be matched. A static-only top level is enough: Prepare traces no plants.
+		if (prepared)
+			Prepare(scene);
+
+		var byKey = new Dictionary<(string Side, string Orientation), Surface>();
+		foreach (var target in TargetArray)
+		{
+			var name = reader.ReadString();
+			var group = reader.ReadInt32();
+			if (name != target.Name || group != target.Group)
+				throw new InvalidDataException(
+					$"The checkpoint measures obstacle \"{name}\" (group {group}) where this run has \"{target.Name}\" (group {target.Group}). " +
+					"The obstacles have changed since the run was saved.");
+			target.Acc.Read(reader);
+
+			var surfaces = reader.ReadInt32();
+			if (surfaces != target.Surfaces.Length)
+				throw new InvalidDataException(
+					$"The checkpoint resolves \"{target.Name}\" into {surfaces} surfaces and this run into {target.Surfaces.Length}. " +
+					"The static scene has changed since the run was saved.");
+			byKey.Clear();
+			foreach (var surface in target.Surfaces)
+				byKey[(surface.Side, surface.Orientation)] = surface;
+			for (int s = 0; s < surfaces; ++s)
+			{
+				var side = reader.ReadString();
+				var orientation = reader.ReadString();
+				if (!byKey.TryGetValue((side, orientation), out var surface))
+					throw new InvalidDataException(
+						$"The checkpoint has a {side} {orientation} surface on \"{target.Name}\" that this run does not resolve. " +
+						"The static scene has changed since the run was saved.");
+				var hasSeries = reader.ReadBoolean();
+				if (hasSeries != (surface.Acc != null))
+					throw new InvalidDataException($"The {side} {orientation} surface of \"{target.Name}\" changed sides since the run was saved.");
+				if (surface.Acc != null)
+					surface.Acc.Read(reader);
+				else
+					surface.EdgeAcc = Accumulator.Read(reader);
+
+				var bands = reader.ReadInt32();
+				if (bands != surface.Bands.Length)
+					throw new InvalidDataException(
+						$"The {side} {orientation} surface of \"{target.Name}\" has {bands} height bands in the checkpoint and {surface.Bands.Length} here.");
+				for (int b = 0; b < bands; ++b)
+				{
+					var minY = reader.ReadSingle();
+					if (MathF.Abs(minY - surface.Bands[b].MinY) > 1e-4f)
+						throw new InvalidDataException(
+							$"Band {b} of the {side} {orientation} surface of \"{target.Name}\" starts at {minY} m in the checkpoint and at {surface.Bands[b].MinY} m here.");
+					surface.Bands[b].Acc = Accumulator.Read(reader);
+				}
+			}
+		}
+		SelectionAcc.Read(reader);
+		FirstDate = ReadDate(reader);
+		LastDate = ReadDate(reader);
+		LitDays = reader.ReadInt32();
+		Dirty = true;
+	}
+
+	internal static void WriteDate(BinaryWriter writer, DateTime? date)
+	{
+		writer.Write(date.HasValue);
+		if (date.HasValue)
+			writer.Write(date.Value.Ticks);
+	}
+
+	internal static DateTime? ReadDate(BinaryReader reader)
+		=> reader.ReadBoolean() ? new DateTime(reader.ReadInt64(), DateTimeKind.Unspecified) : null;
 
 	/// <summary>
 	/// Closes every level: weekly, annual and total readings for the objects, the facade-parallel

@@ -187,8 +187,8 @@ public class ObstacleLightMetaResponse
     ///inter-reflected part of the load depends on.</summary>
     public float FoliageAlbedo { get; set; }
     public float ObstacleAlbedo { get; set; }
-    ///<summary>Which days were actually measured. Neither the meter nor the survey is checkpointed,
-    ///so a resumed run covers only the days after the resume.</summary>
+    ///<summary>Which days were actually measured. Both the meter and the survey are carried across
+    ///a checkpoint, so a resumed run continues the count from the original start date.</summary>
     public ObstacleLightCoverageResponse Coverage { get; set; }
     ///<summary>Per species present, the one-sided outline area over the rectangle Length x 2 Radius
     ///that the light model stands a blade in, one factor per blade slice. The tray leaf areas use

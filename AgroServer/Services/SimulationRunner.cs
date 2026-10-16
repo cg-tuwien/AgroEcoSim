@@ -292,7 +292,10 @@ public class SimulationRunner : ISimulationRunner
         //The ONLY thing the caller may change. The rest of the scenario is the run's own, because
         //a world restored from a checkpoint was grown under those settings and cannot be
         //retrospectively given different ones.
-        var hoursPerTick = request.HoursPerTick ?? 1;
+        //The SNAPPED tick, as the world ran it: a request for 5 hours ran at 4, and turning its
+        //step count back into hours with the requested value would push the horizon - and the
+        //calendar the restored weekly buckets are laid onto - past what was asked.
+        var hoursPerTick = AgroWorld.SnapHoursPerTick(request.HoursPerTick ?? 1);
         var extended = request with { TotalHours = Math.Max(totalHours, (int)(step * hoursPerTick)) };
 
         var lazyPreviews = !(extended.ExactPreview ?? false);

@@ -422,6 +422,12 @@ memories, each with its age in ticks, so a resumed run makes the same side decis
 first tick as the uninterrupted one. A checkpoint resumes only under the engine that wrote it.
 Recorded playback (V7/V8) is unchanged.
 
+Version 34 (16 October 2026) appends the obstacle light section after the collision payload:
+the renderer name, the static shading, the leaf area index meter's accumulators and the tray
+vegetation survey's, so a resumed run continues its weekly aggregates from the original start
+date. The self-test gained two render-mode-3 scenarios with the wall selected, one resuming onto
+a longer horizon, and compares the closed measurement state beside the frame.
+
 ## Lifecycle changes made alongside, under both engines
 
 These are not part of the engine and are deliberately separate, so an A/B run can include or

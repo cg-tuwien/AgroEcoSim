@@ -93,8 +93,9 @@ the certified solid pass, shared), and what cannot be certified is redirected, s
 rolled back and retried, so an organ never ends a tick inside a wall, a tray or the ground.
 Keep all three runnable: the point of the switch is to compare them on the same request. Under
 the soft and mixed engines the archived Bergenia blooms in both springs and a 755-day run takes
-under a minute; under the certified one it never bloomed. Live checkpoint 33 tags the engine
-and a checkpoint resumes only under the engine that wrote it. Two traps in the mixed solid
+under a minute; under the certified one it never bloomed. Live checkpoint 34 tags the engine,
+carries the leaf area index meter and the tray survey, and resumes only under the engine that
+wrote it. Two traps in the mixed solid
 pass, both found by probing: the soft pass carries a push's witness forward as a plane between
 rounds, which is exact for a rod on a tray wall and wrong for a blade that widened or turned
 since - it reads clear while the blade is a millimetre inside, and the admissibility pass then
@@ -396,8 +397,27 @@ ray vote on FAV11. Weekly records are means of the daily surveys; annual and tot
 max and final. Verified against an independent walk to 1e-4 on Geranium and Carex, and
 the parallel and sequential ticks still produce identical frames and documents.
 
-Neither the meter nor the survey is checkpointed. A resumed run measures from the resume
-on, and `meta.coverage` says which dates the document actually holds.
+**Both are checkpointed (live checkpoint 34), so a resumed run continues the weeks from the
+original start date.** The section sits after the collisions: renderer name, the solver's
+`StaticShading` (the next step's indirect light reads it; without it the first resumed lit step
+differs), the meter's accumulators per target, surface and band, and the survey's per tray. Two
+things made that non-trivial, both found by reading before writing: the meter and the survey are
+built lazily on the first lit step and the first tick, so `RestoreState` builds them itself
+(`CpuLightSolver.EnsureStatic` plus a static-only top level for `Prepare`, and `Setup`) and lays
+the accumulators onto the rebuilt targets and trays; and `Finish()` re-sorts a target's surfaces
+by solar load while the server writes its final checkpoint after `Finish` ran, so surfaces are
+matched by (side, orientation) and never by position. Buckets are written sparsely with the array
+length, so a resume onto a longer horizon lays them onto a longer calendar; a horizon that would
+drop a measured week is refused. **A bucket index must be a function of the date alone**: the
+calendar's horizon is the date of the last step's midpoint, not the requested hours over 24, because
+a 48-hour tick over 168 requested hours credits its last step to the day after the request, and a
+calendar sized by the request clamped that step into its last week while a longer resumed run
+filed it in the next - three independent reviewers found it, the self-test's 48-hour scenario
+resumed from the FINAL checkpoint reproduced it, and the horizon rule fixed it. The runner also
+snaps `HoursPerTick` the way the world does before turning a checkpoint's step count back into
+hours. `Agro --checkpoint-selftest` has three render-mode-3 scenarios with the wall selected, two
+resuming onto a longer horizon including from the final checkpoint, and compares the closed meter
+and survey state as well as the frame.
 
 Cost, measured on 32 cores: about 2.1 us per leaf per step, flat in scale up to
 230k leaves (800 plants, 100 days, 4 h ticks: 508 ms per step at 231k leaves and

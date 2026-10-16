@@ -22,8 +22,8 @@ public static class ObstacleLightDefinitions
         ["periods"] = "weeks: 7-day blocks counted from the local start date, the last one clipped to the run. "
             + "years: local calendar years, the first and last clipped to the run. Dates are local to meta.timeZone "
             + "and inclusive. A simulation step is credited to the date of its midpoint.",
-        ["coverage"] = "Local dates actually measured. Neither measurement is checkpointed: a resumed run covers "
-            + "only the days after the resume, and the weeks before it are null.",
+        ["coverage"] = "Local dates actually measured. Both measurements are carried across a checkpoint, so a "
+            + "resumed run continues from the original start date; a null week is one without a daylight step.",
         ["levels"] = "An obstacle holds surfaces (one per compass orientation and side), each holding height bands. "
             + "An obstacle's energies are exact; its intensive readings average over orientations, so quote a "
             + "surface for those. Surfaces on the facade-parallel sides (outer, inner) carry weekly and annual "

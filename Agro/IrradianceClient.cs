@@ -1441,6 +1441,31 @@ public class IrradianceClient
 		}
 	}
 
+	/// <summary>
+	/// The obstacle measurement's carried state, written after everything keyed against the
+	/// formations: the renderer name, which only step 0 decides and a resumed run never sees, then
+	/// the solver's static shading and leaf area index meter. See
+	/// <see cref="CpuLightSolver.WriteObstacleLightState"/>.
+	/// </summary>
+	internal void WriteObstacleLightState(BinaryWriter writer, string? rendererName)
+	{
+		writer.Write(rendererName ?? string.Empty);
+		writer.Write(Solver != null);
+		Solver?.WriteObstacleLightState(writer);
+	}
+
+	internal void ReadObstacleLightState(BinaryReader reader, AgroWorld world)
+	{
+		var renderer = reader.ReadString();
+		if (renderer.Length > 0)
+			world.RendererName = renderer;
+		if (reader.ReadBoolean())
+		{
+			if (Solver == null) throw new InvalidDataException("Checkpoint obstacle light state does not match the requested light model.");
+			Solver.ReadObstacleLightState(reader, world);
+		}
+	}
+
 	public float GetIrradiance(IFormation formation, int agentIndex)
 	{
 		if (!IsNight && IrradianceFormationOffsets.TryGetValue(formation, out var offset))

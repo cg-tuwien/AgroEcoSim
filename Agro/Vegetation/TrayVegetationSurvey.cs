@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Numerics;
 using System.Threading.Tasks;
 using AgentsSystem;
@@ -78,8 +79,9 @@ public sealed class VegetationSeries
 /// axis is up and the thickness is the canopy height above the seeding level.
 /// </para>
 /// <para>
-/// Not checkpointed, like the light meter: a resumed run surveys from the resume on, and the
-/// document says how many days it covers.
+/// Checkpointed with the light meter: the accumulators, the dates and the settled facade sign are
+/// written, everything else is rebuilt by <see cref="Setup"/> from the same request, so a resumed
+/// run continues the weeks from the original start date.
 /// </para>
 /// </remarks>
 public sealed class TrayVegetationSurvey
@@ -171,6 +173,35 @@ public sealed class TrayVegetationSurvey
 			LeafAreaMax,
 			LeafAreaFinal,
 			ThicknessMax);
+
+		public bool IsEmpty => Days == 0 && LeafArea == 0.0 && AreaSine == 0.0 && AreaDiameter == 0.0 && Blades == 0.0
+			&& Thickness == 0.0 && LeafAreaMax == 0f && LeafAreaFinal == 0f && ThicknessMax == 0f;
+
+		public void Write(BinaryWriter writer)
+		{
+			writer.Write(Days);
+			writer.Write(LeafArea);
+			writer.Write(AreaSine);
+			writer.Write(AreaDiameter);
+			writer.Write(Blades);
+			writer.Write(Thickness);
+			writer.Write(LeafAreaMax);
+			writer.Write(LeafAreaFinal);
+			writer.Write(ThicknessMax);
+		}
+
+		public static Accumulator Read(BinaryReader reader) => new()
+		{
+			Days = reader.ReadInt32(),
+			LeafArea = reader.ReadDouble(),
+			AreaSine = reader.ReadDouble(),
+			AreaDiameter = reader.ReadDouble(),
+			Blades = reader.ReadDouble(),
+			Thickness = reader.ReadDouble(),
+			LeafAreaMax = reader.ReadSingle(),
+			LeafAreaFinal = reader.ReadSingle(),
+			ThicknessMax = reader.ReadSingle(),
+		};
 	}
 
 	/// <summary>Weekly and annual accumulators of one tray; the total is the sum of the years.</summary>
@@ -204,6 +235,53 @@ public sealed class TrayVegetationSurvey
 				total.Add(in Years[i]);
 			}
 			return new VegetationSeries(weeks, years, total.Close());
+		}
+
+		/// <summary>Sparse: the array length, then the index and record of every non-empty bucket, so a
+		/// checkpoint from a horizon of another length can be laid onto this one.</summary>
+		public void Write(BinaryWriter writer)
+		{
+			WriteBuckets(writer, Weeks);
+			WriteBuckets(writer, Years);
+		}
+
+		public void Read(BinaryReader reader)
+		{
+			ReadBuckets(reader, Weeks, "week");
+			ReadBuckets(reader, Years, "year");
+		}
+
+		static void WriteBuckets(BinaryWriter writer, Accumulator[] buckets)
+		{
+			writer.Write(buckets.Length);
+			var filled = 0;
+			foreach (var bucket in buckets)
+				if (!bucket.IsEmpty)
+					++filled;
+			writer.Write(filled);
+			for (int i = 0; i < buckets.Length; ++i)
+				if (!buckets[i].IsEmpty)
+				{
+					writer.Write(i);
+					buckets[i].Write(writer);
+				}
+		}
+
+		static void ReadBuckets(BinaryReader reader, Accumulator[] buckets, string unit)
+		{
+			var length = reader.ReadInt32();
+			var filled = reader.ReadInt32();
+			Array.Clear(buckets);
+			for (int k = 0; k < filled; ++k)
+			{
+				var index = reader.ReadInt32();
+				var record = Accumulator.Read(reader);
+				if ((uint)index >= (uint)length)
+					throw new InvalidDataException($"A {unit} record at index {index} lies outside the {length} {unit}s the checkpoint declares.");
+				if (index >= buckets.Length)
+					throw new InvalidDataException($"The checkpoint holds a {unit} record at index {index} and this run's horizon has only {buckets.Length} {unit}s. A resumed run must reach every date already surveyed.");
+				buckets[index] = record;
+			}
 		}
 	}
 
@@ -264,9 +342,10 @@ public sealed class TrayVegetationSurvey
 		var date = PeriodCalendar.StepDate(local, agro.HoursPerTick);
 		if (LastDate == date)
 			return;
+		var formationList = formations as IReadOnlyList<IFormation> ?? [.. formations];
 		if (!Ready)
-			Setup(agro, formations, obstacles);
-		Survey(formations, date);
+			Setup(agro, formationList, obstacles as IReadOnlyList<IObstacle> ?? [.. obstacles]);
+		Survey(formationList, date);
 		FirstDate ??= date;
 		LastDate = date;
 		++SurveyedDays;
@@ -283,7 +362,7 @@ public sealed class TrayVegetationSurvey
 		return last[0] == 'S' && last.Length > 1 && char.IsDigit(last[1]) ? soilName[..cut] : soilName;
 	}
 
-	void Setup(AgroWorld world, IList<IFormation> formations, IList<IObstacle> obstacles)
+	void Setup(AgroWorld world, IReadOnlyList<IFormation> formations, IReadOnlyList<IObstacle> obstacles)
 	{
 		Ready = true;
 		Calendar = world.Periods;
@@ -419,7 +498,7 @@ public sealed class TrayVegetationSurvey
 		SignKnown = true;
 	}
 
-	void Survey(IList<IFormation> formations, DateTime date)
+	void Survey(IReadOnlyList<IFormation> formations, DateTime date)
 	{
 		if (Partials.Length < formations.Count)
 			Array.Resize(ref Partials, formations.Count);
@@ -552,6 +631,87 @@ public sealed class TrayVegetationSurvey
 			}
 		return result;
 	}
+
+	/// <summary>
+	/// Writes what a resumed run cannot rebuild: every tray's accumulators and latest day, the facade's,
+	/// the settled outward direction and the dates. Trays are keyed by name. Everything else -
+	/// trays, their geometry, the facade axis, the species factors - is a function of the request
+	/// and is rebuilt by <see cref="Setup"/>.
+	/// </summary>
+	internal void WriteState(BinaryWriter writer)
+	{
+		writer.Write(Ready);
+		if (!Ready)
+			return;
+		writer.Write(TrayArray.Length);
+		foreach (var tray in TrayArray)
+		{
+			writer.Write(tray.Name);
+			tray.Acc.Write(writer);
+			WritePeriod(writer, tray.LastDay);
+		}
+		FacadeAcc.Write(writer);
+		writer.Write(SignKnown);
+		writer.Write(Outward.X);
+		writer.Write(Outward.Y);
+		writer.Write(Outward.Z);
+		ObstacleLightMeter.WriteDate(writer, FirstDate);
+		ObstacleLightMeter.WriteDate(writer, LastDate);
+		writer.Write(SurveyedDays);
+	}
+
+	/// <summary>Restores what <see cref="WriteState"/> wrote onto a world rebuilt from the same
+	/// request, running <see cref="Setup"/> first so the trays exist. Refuses a tray set that differs.</summary>
+	internal void ReadState(BinaryReader reader, AgroWorld world)
+	{
+		if (!reader.ReadBoolean())
+			return; //checkpointed before the first step; the first one sets up as a fresh run would
+		if (!Ready)
+			Setup(world, world.FormationList, world.ObstacleList);
+		var count = reader.ReadInt32();
+		if (count != TrayArray.Length)
+			throw new InvalidDataException(
+				$"The checkpoint surveys {count} trays and this run has {TrayArray.Length}. The field model has changed since the run was saved.");
+		var byName = new Dictionary<string, Tray>(StringComparer.Ordinal);
+		foreach (var tray in TrayArray)
+			byName[tray.Name] = tray;
+		for (int t = 0; t < count; ++t)
+		{
+			var name = reader.ReadString();
+			if (!byName.TryGetValue(name, out var tray))
+				throw new InvalidDataException($"The checkpoint surveys a tray \"{name}\" that this run does not have. The field model has changed since the run was saved.");
+			tray.Acc.Read(reader);
+			tray.LastDay = ReadPeriod(reader);
+		}
+		FacadeAcc.Read(reader);
+		var signKnown = reader.ReadBoolean();
+		var outward = new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
+		//After Setup, which settles the sign itself for a vertical or absent axis; a facade's sign was
+		//voted on the first day with foliage, which the resumed run cannot repeat.
+		if (signKnown)
+			SettleSign(outward);
+		FirstDate = ObstacleLightMeter.ReadDate(reader);
+		LastDate = ObstacleLightMeter.ReadDate(reader);
+		SurveyedDays = reader.ReadInt32();
+		Dirty = true;
+	}
+
+	static void WritePeriod(BinaryWriter writer, in VegetationPeriod period)
+	{
+		writer.Write(period.Days);
+		writer.Write(period.LeafArea_m2);
+		writer.Write(period.LeafAngleSine);
+		writer.Write(period.LeafDiameter_m);
+		writer.Write(period.Thickness_m);
+		writer.Write(period.Leaves);
+		writer.Write(period.LeafAreaMax_m2);
+		writer.Write(period.LeafAreaFinal_m2);
+		writer.Write(period.ThicknessMax_m);
+	}
+
+	static VegetationPeriod ReadPeriod(BinaryReader reader) => new(
+		reader.ReadInt32(), reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle(),
+		reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
 
 	/// <summary>Closes every tray and the facade. Idempotent; free when nothing was surveyed since.</summary>
 	public void Finish()

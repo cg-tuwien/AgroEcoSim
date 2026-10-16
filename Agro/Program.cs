@@ -45,15 +45,27 @@ internal class Program
         var failures = 0;
 
         // Every engine, because the contact state each one checkpoints is its own; the wall stands
-        // across the stand so the mixed engine's solid pass has something to enforce.
-        foreach (var engine in new[] { ContactEngineKind.Mixed, ContactEngineKind.Certified, ContactEngineKind.Soft })
-        foreach (var (steps, hoursPerTick, plants) in new[] { (40, 24, 4), (60, 12, 8), (90, 6, 2) })
+        // across the stand so the mixed engine's solid pass has something to enforce. The last two
+        // scenarios run the internal light model with the wall selected for the leaf area index, so
+        // the meter's accumulators, the static shading and the tray survey are carried across; the
+        // last ones resume onto a LONGER horizon, which lays the weekly buckets onto a longer
+        // calendar and crosses into weeks the original run never had. The 48-hour scenario asks for
+        // 168 hours, which is not a multiple of its tick: the last step's midpoint falls on the day
+        // AFTER the requested horizon, so the calendar must reach that day or the step's bucket
+        // depends on the horizon and a resume onto a longer one files it in the wrong week.
+        var scenarios = new (int Steps, int HoursPerTick, int Plants, byte RenderMode, string? Filter, int ExtraSteps, int TotalHours)[]
         {
-            SimulationRequest Request() => new()
+            (40, 24, 4, 0, null, 0, 0), (60, 12, 8, 0, null, 0, 0), (90, 6, 2, 0, null, 0, 0),
+            (40, 24, 4, 3, "wall", 0, 0), (36, 6, 4, 3, "wall", 40, 0), (4, 48, 2, 3, "wall", 4, 168),
+        };
+        foreach (var engine in new[] { ContactEngineKind.Mixed, ContactEngineKind.Certified, ContactEngineKind.Soft })
+        foreach (var (steps, hoursPerTick, plants, renderMode, filter, extraSteps, totalHours) in scenarios)
+        {
+            SimulationRequest Request(bool extended = false) => new()
             {
                 ContactEngine = engine,
                 HoursPerTick = hoursPerTick,
-                TotalHours = hoursPerTick * steps,
+                TotalHours = (totalHours > 0 ? totalHours : hoursPerTick * steps) + (extended ? hoursPerTick * extraSteps : 0),
                 FieldSize = new Utils.Json.Vector3XDZ { X = 3, D = 1, Z = 3 },
                 FieldResolution = 0.5f,
                 Seed = 42,
@@ -67,7 +79,9 @@ internal class Program
                 Obstacles = [new ObstacleRequest { Type = "wall", Length = 3f, Height = 0.5f, Thickness = 0.05f,
                     Position = new Utils.Json.Vector3XYZ { X = 1.5f, Y = 0f, Z = 0.6f } }],
                 RequestGeometry = true,
-                RenderMode = 0,
+                RenderMode = renderMode,
+                LeafAreaIndexObstacles = filter,
+                LeafAreaIndexSensors = 1024,
                 //The parallel tick is reproducible; sequential only keeps this test's timing stable.
                 Deterministic = true,
             };
@@ -79,25 +93,35 @@ internal class Program
                 return world;
             }
 
-            var straight = Fresh(Request());
+            //The straight run already has the extended horizon: a longer weather table has a
+            //byte-identical prefix, so it is the same simulation the resumed one claims to continue.
+            var straight = Fresh(Request(extended: true));
             straight.Run((uint)steps);
             var expected = straight.ExportToStream(flags);
+            var expectedMeasurement = MeasurementState(straight);
 
-            foreach (var stop in new[] { 1, steps / 4, steps / 2, steps - 1 })
+            //The final checkpoint too, when the horizon is extended: that is the server's "continue"
+            //path, the one that resumes a COMPLETED run, and the only one whose last step can have
+            //been credited past the original horizon.
+            var stops = extraSteps > 0 ? new[] { 1, steps / 4, steps / 2, steps - 1, steps } : new[] { 1, steps / 4, steps / 2, steps - 1 };
+            foreach (var stop in stops)
             {
                 var first = Fresh(Request());
                 first.Run((uint)stop);
                 var checkpoint = first.SerializeState();
 
-                var resumed = Fresh(Request());
+                var resumed = Fresh(Request(extended: true));
                 resumed.RestoreState(checkpoint);
                 resumed.Run((uint)(steps - stop));
                 var actual = resumed.ExportToStream(flags);
+                var actualMeasurement = MeasurementState(resumed);
 
                 var same = expected.AsSpan().SequenceEqual(actual);
-                if (!same) ++failures;
-                Console.WriteLine($"{engine,-9} {steps} steps @{hoursPerTick}h, {plants} plants, resume at {stop,3}: "
-                    + $"{(same ? "identical" : "DIFFERS")} (checkpoint {checkpoint.Length:N0} B)");
+                var sameMeasurement = expectedMeasurement.AsSpan().SequenceEqual(actualMeasurement);
+                if (!same || !sameMeasurement) ++failures;
+                var scenario = $"mode {renderMode}{(filter != null ? $", filter \"{filter}\"" : "")}{(extraSteps > 0 ? $", horizon +{extraSteps} steps" : "")}";
+                Console.WriteLine($"{engine,-9} {steps} steps @{hoursPerTick}h, {plants} plants, {scenario}, resume at {stop,3}: "
+                    + $"frame {(same ? "identical" : "DIFFERS")}, measurement {(sameMeasurement ? "identical" : "DIFFERS")} (checkpoint {checkpoint.Length:N0} B)");
             }
         }
 
@@ -105,6 +129,21 @@ internal class Program
             ? "Checkpoint self-test passed: resuming is byte-identical to never stopping."
             : $"Checkpoint self-test FAILED in {failures} case(s).");
         return failures == 0 ? 0 : 1;
+    }
+
+    /// <summary>
+    /// The leaf area index meter's and the tray survey's closed state, which the exported frame does
+    /// not contain: the aggregates a resumed run reports must be the uninterrupted run's, to the byte.
+    /// </summary>
+    static byte[] MeasurementState(AgroWorld world)
+    {
+        world.ObstacleLight?.Finish();
+        world.Vegetation.Finish();
+        using var stream = new MemoryStream();
+        using var writer = new BinaryWriter(stream);
+        world.Irradiance.WriteObstacleLightState(writer, world.RendererName);
+        world.Vegetation.WriteState(writer);
+        return stream.ToArray();
     }
 
     /// <summary>
