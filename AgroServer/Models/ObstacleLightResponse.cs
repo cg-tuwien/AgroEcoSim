@@ -532,6 +532,9 @@ public class VegetationPeriodResponse
     public float Thickness_m { get; set; }
     ///<summary>Mean number of blades.</summary>
     public float Leaves { get; set; }
+    ///<summary>One-sided area of blades killed by drought and still attached, m², mean over the days.
+    ///The other fields describe living blades only.</summary>
+    public float DeadLeafArea_m2 { get; set; }
     ///<summary>Annual and whole-run records only.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public float? LeafAreaMax_m2 { get; set; }
@@ -548,6 +551,7 @@ public class VegetationPeriodResponse
         LeafDiameter_m = p.LeafDiameter_m,
         Thickness_m = p.Thickness_m,
         Leaves = p.Leaves,
+        DeadLeafArea_m2 = p.DeadLeafArea_m2,
         LeafAreaMax_m2 = withExtremes ? p.LeafAreaMax_m2 : null,
         LeafAreaFinal_m2 = withExtremes ? p.LeafAreaFinal_m2 : null,
         ThicknessMax_m = withExtremes ? p.ThicknessMax_m : null,

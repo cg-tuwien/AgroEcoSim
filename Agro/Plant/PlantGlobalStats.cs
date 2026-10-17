@@ -95,6 +95,16 @@ public class PlantGlobalStats
 			ReceivedEnergy[i] = Gathering[i].LifesupportEnergy * Gathering[i].ProductionEfficiency * factor; //in sum over all i: LifeSupportEnergy[i] / energyRequirementTotal yields 1
 	}
 
+	/// <summary>Each organ receives its maintenance times <paramref name="factor"/> (available over
+	/// required), whatever its efficiency. Used by the drought response when the plant is short.</summary>
+	internal void DistributeEnergyByMaintenance(float factor)
+	{
+		ResizeEnergyArray();
+		var limit = Gathering.Count;
+		for(int i = 0; i < limit; ++i)
+			ReceivedEnergy[i] = Gathering[i].LifesupportEnergy * factor;
+	}
+
 	// The photosynthetic forecast has first claim on tissue water. It is not
 	// extra storage: a leaf can hold at most its current anatomical capacity.
 	internal static float WaterPriority(in GatherDataBase data)

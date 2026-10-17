@@ -428,6 +428,15 @@ public class AgroWorld : SimulationWorld
 	///Rainfall in the given timestep in gramm per m²
 	///</summary>
 	internal float GetWater(uint timestep) => Weather[timestep].Precipitation;
+
+	/// <summary>Scales the planned rain of every step, for tests that need a drought on demand. The
+	/// weather is not checkpointed - it is planned again from the seed - so a resumed world must be
+	/// given the same scaling as the one that wrote the checkpoint.</summary>
+	internal void ScalePrecipitation(float factor)
+	{
+		for (int i = 0; i < Weather.Length; ++i)
+			Weather[i] = new WeatherStats(Weather[i].SkyCoverage, Weather[i].Precipitation * factor);
+	}
 	/// <summary>
 	/// Temperature in the given timesttep in degree Celsius
 	/// </summary>
@@ -837,7 +846,10 @@ public class AgroWorld : SimulationWorld
     // V34 appends the obstacle light section after the collisions: the renderer name, the static
     // shading and the leaf area index meter's accumulators, then the tray vegetation survey's. A
     // resumed run continues both from the original start date instead of measuring from the resume.
-	public const byte CheckpointVersion = 34;
+    // V35 appends each plant's drought state after its water budget (stress filter, episode,
+    // reference and target canopy, carry, starvation, last controller step) and the tray survey's
+    // dead-attached leaf area. Leaves in drought senescence reuse the organ's senescence fields.
+	public const byte CheckpointVersion = 35;
 
 	/// <summary>
 	/// Everything the next step depends on that the request does not determine.

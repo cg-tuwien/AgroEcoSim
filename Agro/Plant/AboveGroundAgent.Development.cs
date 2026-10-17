@@ -91,6 +91,6 @@ public partial struct AboveGroundAgent
         var reserve = Math.Clamp(Energy / MathF.Max(1e-12f, EnergyStorageCapacity(species)), 0f, 1f);
         var rate = Organ == OrganTypes.Petiole || Organ is >= OrganTypes.FlowerBud and <= OrganTypes.FlowerBaseBud
             ? MathF.Max(0, limit * GrowthTimeVar) : 2e-5f * plant.World.HoursPerTick * species.HerbaceousGrowthRateScale;
-        Radius = MathF.Max(Radius, MathF.Min(limit, Radius + rate * reserve * Math.Clamp(plant.WaterBalance, 0, 1)));
+        Radius = MathF.Max(Radius, MathF.Min(limit, Radius + rate * reserve * Math.Clamp(plant.GrowthWaterFactor, 0, 1)));
     }
 }

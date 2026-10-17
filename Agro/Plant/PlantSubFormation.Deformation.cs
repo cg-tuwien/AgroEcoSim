@@ -65,11 +65,17 @@ public partial class PlantSubFormation<T>
     static Quaternion AttachmentRotation(in OrganPose pose) => pose.Width == 0 && pose.Deformation != Vector4.Zero
         ? Quaternion.Normalize(pose.Rotation * ContactDeformation.RodRotation(pose.Deformation, 2)) : pose.Rotation;
 
+    /// <summary>Drops the stored deformation of an organ that stopped being deformable this tick.</summary>
+    internal void ForgetDeformation(int index) => Deformations?.Remove(GetOrganId(index));
+
     void PruneDeformationState()
     {
         if (Deformations == null) return;
         RemovedGrowthIds.Clear();
-        foreach (var id in Deformations.Keys) if (!OrganIndices.ContainsKey(id)) RemovedGrowthIds.Add(id);
+        // Also drop organs that stopped being deformable, such as a petiole that became a node bud:
+        // a stored state for them fails the resume check.
+        foreach (var id in Deformations.Keys)
+            if (!OrganIndices.TryGetValue(id, out var index) || !Deformable(index)) RemovedGrowthIds.Add(id);
         foreach (var id in RemovedGrowthIds) Deformations.Remove(id);
     }
 

@@ -74,6 +74,14 @@ public partial class PlantSubFormation<T>
         PruneDeformationState();
     }
 
+    static bool BirthsFoliage(AboveGroundAgent[] children)
+    {
+        foreach (var child in children)
+            if (child.Organ == OrganTypes.Leaf && !child.FlowerAgent.flowerBase)
+                return true;
+        return false;
+    }
+
     internal bool HasPendingDevelopment(int i) => i >= 0 && Developments.ContainsKey(Src()[i].StableId);
 
     // A rejected first scape is a sampled spring commitment. Keep its exact
@@ -309,6 +317,9 @@ public partial class PlantSubFormation<T>
             // A financial delay retains the sampled transaction without treating it
             // as a physical obstruction or consuming another probability draw.
             if (construction > current.Energy) continue;
+            // A drought stops new foliage before it removes any: a leaf-bearing transaction sampled
+            // before the episode waits, like a financial delay, instead of being admitted into it.
+            if (!Plant.CanopyGrowthAllowed && BirthsFoliage(children)) continue;
             if (DevelopmentPoses.Length < children.Length)
             {
                 var capacity = Math.Max(children.Length, Math.Max(8, DevelopmentPoses.Length * 2));

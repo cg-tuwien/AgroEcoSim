@@ -34,7 +34,10 @@ public readonly record struct VegetationPeriod(
 	/// <summary>Leaf area on the last surveyed day of the period, m².</summary>
 	float LeafAreaFinal_m2,
 	/// <summary>Largest daily thickness of the period, metres.</summary>
-	float ThicknessMax_m)
+	float ThicknessMax_m,
+	/// <summary>One-sided area of blades that died of drought and still hang on the plant, m², mean
+	/// over the days. They shade but no longer live; every other field covers living blades only.</summary>
+	float DeadLeafArea_m2)
 {
 	public bool IsEmpty => Days == 0;
 }
@@ -122,7 +125,7 @@ public sealed class TrayVegetationSurvey
 	/// <summary>One day's survey of one tray or of the whole facade.</summary>
 	internal struct Sample
 	{
-		public double LeafArea, AreaSine, AreaDiameter;
+		public double LeafArea, AreaSine, AreaDiameter, DeadLeafArea;
 		public int Blades;
 		public float Thickness;
 	}
@@ -131,7 +134,7 @@ public sealed class TrayVegetationSurvey
 	internal struct Accumulator
 	{
 		public int Days;
-		public double LeafArea, AreaSine, AreaDiameter, Blades, Thickness;
+		public double LeafArea, AreaSine, AreaDiameter, Blades, Thickness, DeadLeafArea;
 		public float LeafAreaMax, LeafAreaFinal, ThicknessMax;
 
 		public void Fold(in Sample sample)
@@ -142,6 +145,7 @@ public sealed class TrayVegetationSurvey
 			AreaDiameter += sample.AreaDiameter;
 			Blades += sample.Blades;
 			Thickness += sample.Thickness;
+			DeadLeafArea += sample.DeadLeafArea;
 			LeafAreaMax = MathF.Max(LeafAreaMax, (float)sample.LeafArea);
 			LeafAreaFinal = (float)sample.LeafArea;
 			ThicknessMax = MathF.Max(ThicknessMax, sample.Thickness);
@@ -158,6 +162,7 @@ public sealed class TrayVegetationSurvey
 			AreaDiameter += other.AreaDiameter;
 			Blades += other.Blades;
 			Thickness += other.Thickness;
+			DeadLeafArea += other.DeadLeafArea;
 			LeafAreaMax = MathF.Max(LeafAreaMax, other.LeafAreaMax);
 			LeafAreaFinal = other.LeafAreaFinal;
 			ThicknessMax = MathF.Max(ThicknessMax, other.ThicknessMax);
@@ -172,10 +177,11 @@ public sealed class TrayVegetationSurvey
 			(float)(Blades / Days),
 			LeafAreaMax,
 			LeafAreaFinal,
-			ThicknessMax);
+			ThicknessMax,
+			(float)(DeadLeafArea / Days));
 
 		public bool IsEmpty => Days == 0 && LeafArea == 0.0 && AreaSine == 0.0 && AreaDiameter == 0.0 && Blades == 0.0
-			&& Thickness == 0.0 && LeafAreaMax == 0f && LeafAreaFinal == 0f && ThicknessMax == 0f;
+			&& Thickness == 0.0 && LeafAreaMax == 0f && LeafAreaFinal == 0f && ThicknessMax == 0f && DeadLeafArea == 0.0;
 
 		public void Write(BinaryWriter writer)
 		{
@@ -188,6 +194,7 @@ public sealed class TrayVegetationSurvey
 			writer.Write(LeafAreaMax);
 			writer.Write(LeafAreaFinal);
 			writer.Write(ThicknessMax);
+			writer.Write(DeadLeafArea);
 		}
 
 		public static Accumulator Read(BinaryReader reader) => new()
@@ -201,6 +208,7 @@ public sealed class TrayVegetationSurvey
 			LeafAreaMax = reader.ReadSingle(),
 			LeafAreaFinal = reader.ReadSingle(),
 			ThicknessMax = reader.ReadSingle(),
+			DeadLeafArea = reader.ReadDouble(),
 		};
 	}
 
@@ -288,7 +296,7 @@ public sealed class TrayVegetationSurvey
 	/// <summary>Sums of one plant's leaves for one day, before they are merged into its tray.</summary>
 	struct Partial
 	{
-		public double LeafArea, AreaSine, AreaDiameter;
+		public double LeafArea, AreaSine, AreaDiameter, DeadLeafArea;
 		public int Blades;
 		/// <summary>Extent of the leaf corners along the unsigned facade axis.</summary>
 		public float AlongMax, AlongMin;
@@ -540,6 +548,7 @@ public sealed class TrayVegetationSurvey
 			sample.LeafArea += partial.LeafArea;
 			sample.AreaSine += partial.AreaSine;
 			sample.AreaDiameter += partial.AreaDiameter;
+			sample.DeadLeafArea += partial.DeadLeafArea;
 			sample.Blades += partial.Blades;
 			if (partial.Blades > 0 && SignKnown)
 			{
@@ -561,6 +570,7 @@ public sealed class TrayVegetationSurvey
 			facade.LeafArea += Samples[t].LeafArea;
 			facade.AreaSine += Samples[t].AreaSine;
 			facade.AreaDiameter += Samples[t].AreaDiameter;
+			facade.DeadLeafArea += Samples[t].DeadLeafArea;
 			facade.Blades += Samples[t].Blades;
 			facade.Thickness = MathF.Max(facade.Thickness, Samples[t].Thickness);
 		}
@@ -576,10 +586,13 @@ public sealed class TrayVegetationSurvey
 		var result = new Partial { AlongMax = float.MinValue, AlongMin = float.MaxValue };
 
 		var count = ag.Count;
+		var timestep = plant.World.Timestep;
+		var droughtResponse = plant.DroughtResponse;
 		for (int i = 0; i < count; ++i)
 		{
 			if (ag.GetOrgan(i) != OrganTypes.Leaf)
 				continue;
+			var dead = droughtResponse && ag.GetAgent(i).IsDeadAttached(timestep);
 			var length = ag.GetLength(i);
 			var halfWidth = ag.GetBaseRadius(i);
 			if (!(length > 0f) || !(halfWidth > 0f))
@@ -596,6 +609,11 @@ public sealed class TrayVegetationSurvey
 					root = p;
 				}
 			var area = (double)factors[Math.Min(slice, factors.Length - 1)] * length * 2f * halfWidth;
+			if (dead)
+			{
+				result.DeadLeafArea += area;
+				continue;
+			}
 
 			var orientation = ag.GetDirection(i);
 			var normal = Vector3.Transform(Vector3.UnitY, orientation);
@@ -707,11 +725,12 @@ public sealed class TrayVegetationSurvey
 		writer.Write(period.LeafAreaMax_m2);
 		writer.Write(period.LeafAreaFinal_m2);
 		writer.Write(period.ThicknessMax_m);
+		writer.Write(period.DeadLeafArea_m2);
 	}
 
 	static VegetationPeriod ReadPeriod(BinaryReader reader) => new(
 		reader.ReadInt32(), reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle(),
-		reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
+		reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
 
 	/// <summary>Closes every tray and the facade. Idempotent; free when nothing was surveyed since.</summary>
 	public void Finish()

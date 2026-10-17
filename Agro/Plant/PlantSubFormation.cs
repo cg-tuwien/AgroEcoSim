@@ -403,6 +403,32 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 
     readonly List<GatherDataBase> Gathering = [];
 	public readonly PlantGlobalStats Gathered = new();
+	/// <summary>Vegetative leaf area not in drought senescence at the last <see cref="Gather"/>, m²
+	/// (2 L R per blade segment). Only maintained under the drought response.</summary>
+	internal float GreenLeafArea { get; private set; }
+
+	/// <summary>Commits one leaf or petiole segment to drought senescence. See <see cref="PlantFormation2.UpdateCanopy"/>.</summary>
+	internal void CommitDroughtSenescence(int index, uint timestep, ushort durationTicks)
+	{
+		Debug.Assert(IsAboveGround);
+		ref var agent = ref Unsafe.As<T, AboveGroundAgent>(ref Src()[index]);
+		if (agent.IsDroughtFoliage)
+			agent.CommitDroughtSenescence(timestep, durationTicks);
+	}
+
+	/// <summary>Reverts a crown base to its dormant crown bud, removing the crown above it.</summary>
+	internal void RevertCrownToBud(int index)
+	{
+		Debug.Assert(IsAboveGround);
+		ref var agent = ref Unsafe.As<T, AboveGroundAgent>(ref Src()[index]);
+		agent.MakeBud((PlantSubFormation<AboveGroundAgent>)(object)this, GetChildren(index));
+		// Back in the rhizome's frame, as the in-tick reversion does: bud break applies CrownPitch
+		// once, so a bud keeping its crown's pitch would come back sideways.
+		agent.SetOrientation(GetDirection(agent.Parent));
+		// The census has already rebuilt bases and bounds; a resumed run rebuilds them from this
+		// state, so the uninterrupted one must too.
+		RebaseAndRefit();
+	}
 
 	public PlantGlobalStats Gather()
 	{
@@ -426,6 +452,12 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 		for(int i = prevLength; i < dst.Length; ++i)
 			Gathering.Add(default);
 
+		// The drought response scales a senescing leaf's maintenance, assimilation forecast and
+		// storage by the tissue it has left, so a dying blade neither costs nor holds what a green
+		// one does, and its demand stops counting towards the plant's water stress.
+		var droughtResponse = IsAboveGround && Plant.DroughtResponse;
+		var timestep = world.Timestep;
+		var greenLeafArea = 0f;
 		for(int i = 0; i < dst.Length; ++i)
 		{
 			//Debug.WriteLine($"{(IsAboveGround ? "⊤" : "⊥")}-{i} Energy {dst[i].Energy} Water {dst[i].Water} Res {dst[i].PreviousDayEnvResourcesInv} / {DailyResourceMax} Prod {dst[i].PreviousDayProductionInv} / {DailyProductionMax} Life {dst[i].LifeSupportPerTick(world)} wStore {dst[i].WaterStorageCapacity()} wStore {dst[i].EnergyStorageCapacity()}");
@@ -436,22 +468,23 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 			energyDiff -= previousEnergy;
 			waterDiff -= src[i].Water_g;
 
-			var lifeSupport = dst[i].LifeSupportPerTick(world, species);
+			var activity = droughtResponse ? dst[i].DroughtActivity(timestep) : 1f;
+			var lifeSupport = dst[i].LifeSupportPerTick(world, species) * activity;
 			energyRequirement += lifeSupport;
 
 			float photosynthSupport;
 			if (IsAboveGround)
 			{
-				photosynthSupport = dst[i].PhotosynthPerTick(world, species);
+				photosynthSupport = dst[i].PhotosynthPerTick(world, species) * activity;
 				waterRequirement += photosynthSupport;
 			}
 			else
 				photosynthSupport = 0;
 
-			var energyStorageCapacity = dst[i].EnergyAllocationWeight(species);
+			var energyStorageCapacity = dst[i].EnergyAllocationWeight(species) * activity;
 			energyCapacity += energyStorageCapacity;
 
-			var waterStorageCapacity = dst[i].WaterStorageCapacity_g();
+			var waterStorageCapacity = dst[i].WaterStorageCapacity_g() * activity;
 			waterCapacity += waterStorageCapacity;
 
             var resEff = DailyResourceMax > 0f ? dst[i].PreviousDayEnvResourcesInvariant / DailyResourceMax : 1f;
@@ -469,7 +502,13 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
                     parent >= 0 && parent < dst.Length && dst[parent].IsRizome;
                 var isFlowerOrgan = dst[i].Organ is OrganTypes.FlowerStem or OrganTypes.FlowerPadel or
                     OrganTypes.FlowerPedicel or OrganTypes.FlowerMeristem or OrganTypes.FlowerBud;
-                if (dst[i].IsRizome || isRhizomeSupportedCrownBase || isFlowerOrgan)
+                // A node bud left by a shed drought leaf has no leaf below it, so its efficiency
+                // would be zero and it could never fund the leaf it is there to regrow.
+                var isNodeBud = droughtResponse && dst[i].Organ == OrganTypes.Bud && !dst[i].IsRizome
+                    && parent >= 0 && parent < dst.Length && !dst[parent].IsRizome;
+                if (droughtResponse)
+                    greenLeafArea += dst[i].GreenLeafArea();
+                if (dst[i].IsRizome || isRhizomeSupportedCrownBase || isFlowerOrgan || isNodeBud)
                 {
                     // Rhizomes translocate stored carbohydrate to attached renewal buds and
                     // establishing crown bases. Allocation cannot depend on downstream leaves
@@ -484,13 +523,17 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 		//this is faster than probing .Contains() for each i
 		foreach(var i in Deaths)
 		{
-			waterPriority -= PlantGlobalStats.WaterPriority(Gathering[i]);
+			// Subtract exactly what was added above, scaled or not.
+			var gathered = Gathering[i];
+			if (droughtResponse) greenLeafArea -= dst[i].GreenLeafArea();
+			waterPriority -= PlantGlobalStats.WaterPriority(gathered);
+			energyRequirement -= gathered.LifesupportEnergy;
+			waterRequirement -= gathered.PhotosynthWater;
+			energyCapacity -= gathered.CapacityEnergy;
+			waterCapacity -= gathered.CapacityWater;
 			Gathering[i] = default;
-			energyRequirement -= dst[i].LifeSupportPerTick(world, species);
-			waterRequirement -= dst[i].PhotosynthPerTick(world, species);
-			energyCapacity -= dst[i].EnergyAllocationWeight(species);
-			waterCapacity -= dst[i].WaterStorageCapacity_g();
 		}
+		GreenLeafArea = Math.Max(0f, greenLeafArea);
 
 		energyDiff += energy; //optimal variant of sum(dst[i] - src[i])
 		waterDiff += water;
@@ -2320,11 +2363,16 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 			Volumes.Clear();
 			Resources.Clear();
 
+			// A leaf that died of drought and is still attached is not a leaf here: counting it
+			// diluted every ancestor's average with its zero light, and its volume diluted their
+			// efficiency.
+			var droughtResponse = Plant.DroughtResponse;
 			for(int i = 0; i < src.Length; ++i)
 			{
 				var complete = src[i].CompleteDay(timestep, ticksPerDay); //for all organs as non-leaves also need to be reset to zero
+				var deadAttached = droughtResponse && src[i].IsDeadAttached(timestep);
 				//assuming only leaves photosynthesize
-				if (src[i].Organ == OrganTypes.Leaf)
+				if (src[i].Organ == OrganTypes.Leaf && !deadAttached)
 				{
 					if (complete)
 					{
@@ -2359,7 +2407,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 					if (children == 0) //for those tips of twigs that have no leaves
 						ReadyNodes0.Add(i);
 				}
-				Volumes.Add(src[i].Volume());
+				Volumes.Add(deadAttached ? 0f : src[i].Volume());
 			}
 
 			if (DailyResourceMax == float.MinValue) //means that all leaves are in incomplete list
@@ -2420,7 +2468,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 				}
 				else
 				{
-					var efficiency = Resources[i] * rcpScale / Volumes[i];
+					var efficiency = Volumes[i] > 0f ? Resources[i] * rcpScale / Volumes[i] : 0f;
 
 					if (efficiency > DailyEfficiencyMax)
 						DailyEfficiencyMax = efficiency;

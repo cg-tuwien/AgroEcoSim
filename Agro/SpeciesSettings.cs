@@ -1166,6 +1166,31 @@ public class SpeciesSettings
     /// </value>
     [SpeciesUILabel("Retain dormant rhizomes")]
     public bool RetainDormantRhizomes { get; set; }
+
+    /// <summary>
+    /// Plant water stress, on the 0-1 scale of <see cref="PlantFormation2.DroughtStress"/>, at which
+    /// a herbaceous plant starts committing existing leaves to drought senescence. Below it a dry
+    /// plant only grows less. See Agro/DROUGHT_RESPONSE.md.
+    /// </summary>
+    [SpeciesUIGroup("Drought")]
+    [SpeciesUILabel("Drought senescence onset")]
+    [SpeciesUITooltip("Water stress (0 = well watered, 1 = no plant water) at which existing leaves start to senesce. Growth slows below it already.")]
+    public float DroughtSenescenceOnset { get; set; } = 0.3f;
+
+    /// <summary>
+    /// Days to remove half of the leaf area above the drought target canopy. Zero switches the
+    /// whole drought response off and restores the earlier behaviour, for comparison.
+    /// </summary>
+    [SpeciesUILabel("Canopy adjustment half-time (days)")]
+    [SpeciesUITooltip("Days to commit half of the excess leaf area above the drought target to senescence. 0 disables the drought response.")]
+    public float CanopyAdjustmentHalfTimeDays { get; set; } = 7f;
+
+    /// <summary>
+    /// Hours a leaf killed by drought senescence stays attached, brown, before it is shed.
+    /// </summary>
+    [SpeciesUILabel("Dead leaf attachment (hours)")]
+    [SpeciesUITooltip("Hours a leaf that completed drought senescence stays attached before it falls; it still shades and collides meanwhile.")]
+    public float DeadLeafAttachmentHours { get; set; } = 336f;
     public static SpeciesSettings Default => Predefined[0];
     public static List<SpeciesSettings> Predefined = [];
 
@@ -1314,6 +1339,14 @@ public class SpeciesSettings
             throw new ArgumentOutOfRangeException(nameof(LeafPoissonRatio));
 
         RequireFinitePositive(LeafMaximumAgeHours, nameof(LeafMaximumAgeHours));
+        if (!float.IsFinite(DroughtSenescenceOnset) || DroughtSenescenceOnset < 0f || DroughtSenescenceOnset >= 1f)
+            throw new ArgumentOutOfRangeException(nameof(DroughtSenescenceOnset), DroughtSenescenceOnset, "The onset must lie in [0, 1).");
+        RequireFiniteNonNegative(CanopyAdjustmentHalfTimeDays, nameof(CanopyAdjustmentHalfTimeDays));
+        RequireFiniteNonNegative(DeadLeafAttachmentHours, nameof(DeadLeafAttachmentHours));
+        RequireFinitePositive(LeafSenescenceStressDuration, nameof(LeafSenescenceStressDuration));
+        RequireFiniteNonNegative(LeafSenescenceStressDurationVar, nameof(LeafSenescenceStressDurationVar));
+        if (LeafSenescenceStressDurationVar >= LeafSenescenceStressDuration)
+            throw new ArgumentOutOfRangeException(nameof(LeafSenescenceStressDurationVar), LeafSenescenceStressDurationVar, "Variance must be smaller than the mean stress senescence duration.");
         RequireColor(YoungLeafColor, nameof(YoungLeafColor));
         RequireColor(SenescentLeafColor, nameof(SenescentLeafColor));
         RequireSeasonalPhases(CrownBudActivationPeriod, nameof(CrownBudActivationPeriod));

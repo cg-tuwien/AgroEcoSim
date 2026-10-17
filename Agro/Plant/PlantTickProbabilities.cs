@@ -7,6 +7,9 @@ namespace Agro;
 internal readonly struct PlantTickProbabilities
 {
     internal readonly float CrownBud, RhizomeAxillarySeason, RhizomeBasal, RhizomeAxillary;
+    /// <summary>A node bud left by a shed drought leaf regrows a leaf after a week on average.</summary>
+    internal readonly float NodeBudRegrowth;
+    internal const float NodeBudRegrowthPerHour = 1f / (7f * 24f);
     readonly (float flower, float crown) PreFlower, Flowering, PostFlower, Dormant;
 
     internal PlantTickProbabilities(SpeciesSettings species, int hoursPerTick)
@@ -17,6 +20,7 @@ internal readonly struct PlantTickProbabilities
             species.RhizomeBudBreakWindowHours, hoursPerTick);
         RhizomeBasal = Pcg.AccumulatedProbability(species.RhizomeBasalBudActivationProbabilityPerHour, hoursPerTick);
         RhizomeAxillary = Pcg.AccumulatedProbability(species.RhizomeAxillaryBudActivationProbabilityPerHour, hoursPerTick);
+        NodeBudRegrowth = Pcg.AccumulatedProbability(NodeBudRegrowthPerHour, hoursPerTick);
         PreFlower = (Pcg.AccumulatedProbability(species.PreFloweringCommitmentProbabilityPerHour, hoursPerTick),
             Pcg.AccumulatedProbability(species.PreFloweringCrownContinuationProbabilityPerHour, hoursPerTick));
         Flowering = (Pcg.AccumulatedProbability(species.FloweringCommitmentProbabilityPerHour, hoursPerTick),

@@ -53,26 +53,40 @@ internal class Program
         // 168 hours, which is not a multiple of its tick: the last step's midpoint falls on the day
         // AFTER the requested horizon, so the calendar must reach that day or the step's bucket
         // depends on the horizon and a resume onto a longer one files it in the wrong week.
-        var scenarios = new (int Steps, int HoursPerTick, int Plants, byte RenderMode, string? Filter, int ExtraSteps, int TotalHours)[]
+        // The last scenarios are a herbaceous plant in a rainless field: the drought response
+        // commits leaves to senescence, kills them, sheds them and regrows node buds within the
+        // first months, and every resume point lands inside that episode. The BroadLeafV1 variant
+        // stores contact deformations keyed by organs that later turn from petiole into bud.
+        var scenarios = new (int Steps, int HoursPerTick, int Plants, byte RenderMode, string? Filter, int ExtraSteps, int TotalHours, string Species, bool Dry, bool Deformable)[]
         {
-            (40, 24, 4, 0, null, 0, 0), (60, 12, 8, 0, null, 0, 0), (90, 6, 2, 0, null, 0, 0),
-            (40, 24, 4, 3, "wall", 0, 0), (36, 6, 4, 3, "wall", 40, 0), (4, 48, 2, 3, "wall", 4, 168),
+            (40, 24, 4, 0, null, 0, 0, "Default", false, false), (60, 12, 8, 0, null, 0, 0, "Default", false, false), (90, 6, 2, 0, null, 0, 0, "Default", false, false),
+            (40, 24, 4, 3, "wall", 0, 0, "Default", false, false), (36, 6, 4, 3, "wall", 40, 0, "Default", false, false), (4, 48, 2, 3, "wall", 4, 168, "Default", false, false),
+            (540, 4, 1, 0, null, 0, 0, "Campanula poscharskyana", true, false), (540, 4, 1, 0, null, 0, 0, "Campanula poscharskyana", true, true),
         };
         foreach (var engine in new[] { ContactEngineKind.Mixed, ContactEngineKind.Certified, ContactEngineKind.Soft })
-        foreach (var (steps, hoursPerTick, plants, renderMode, filter, extraSteps, totalHours) in scenarios)
+        foreach (var (steps, hoursPerTick, plants, renderMode, filter, extraSteps, totalHours, speciesName, dry, deformable) in scenarios)
         {
+            if (deformable && engine != ContactEngineKind.Mixed) continue;
+            SpeciesSettings[]? species = null;
+            if (deformable)
+            {
+                var custom = Agro.Species.Campanula_Poscharskyana.Init();
+                custom.ContactDeformationMode = ContactDeformationMode.BroadLeafV1;
+                species = [custom];
+            }
             SimulationRequest Request(bool extended = false) => new()
             {
                 ContactEngine = engine,
                 HoursPerTick = hoursPerTick,
                 TotalHours = (totalHours > 0 ? totalHours : hoursPerTick * steps) + (extended ? hoursPerTick * extraSteps : 0),
-                FieldSize = new Utils.Json.Vector3XDZ { X = 3, D = 1, Z = 3 },
-                FieldResolution = 0.5f,
+                FieldSize = dry ? new Utils.Json.Vector3XDZ { X = 1, D = 1, Z = 1 } : new Utils.Json.Vector3XDZ { X = 3, D = 1, Z = 3 },
+                FieldResolution = dry ? 0.05f : 0.5f,
                 Seed = 42,
                 InitialDate = new DateTime(2026, 3, 15),
+                Species = species,
                 Plants = Enumerable.Range(0, plants).Select(i => new PlantRequest
                 {
-                    SpeciesName = "Default",
+                    SpeciesName = speciesName,
                     Position = new Utils.Json.Vector3XYZ
                         { X = 0.4f + 0.3f * (i % 4), Y = -0.01f, Z = 0.4f + 0.3f * (i / 4) },
                 }).ToArray(),
@@ -86,10 +100,11 @@ internal class Program
                 Deterministic = true,
             };
 
-            static AgroWorld Fresh(SimulationRequest request)
+            AgroWorld Fresh(SimulationRequest request)
             {
                 var world = Initialize.World(request);
                 world.Deterministic = true;
+                if (dry) world.ScalePrecipitation(0f);
                 return world;
             }
 
@@ -119,7 +134,8 @@ internal class Program
                 var same = expected.AsSpan().SequenceEqual(actual);
                 var sameMeasurement = expectedMeasurement.AsSpan().SequenceEqual(actualMeasurement);
                 if (!same || !sameMeasurement) ++failures;
-                var scenario = $"mode {renderMode}{(filter != null ? $", filter \"{filter}\"" : "")}{(extraSteps > 0 ? $", horizon +{extraSteps} steps" : "")}";
+                var scenario = $"mode {renderMode}{(filter != null ? $", filter \"{filter}\"" : "")}{(extraSteps > 0 ? $", horizon +{extraSteps} steps" : "")}"
+                    + (dry ? $", {speciesName}, no rain{(deformable ? ", BroadLeafV1" : "")}" : "");
                 Console.WriteLine($"{engine,-9} {steps} steps @{hoursPerTick}h, {plants} plants, {scenario}, resume at {stop,3}: "
                     + $"frame {(same ? "identical" : "DIFFERS")}, measurement {(sameMeasurement ? "identical" : "DIFFERS")} (checkpoint {checkpoint.Length:N0} B)");
             }

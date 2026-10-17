@@ -87,6 +87,7 @@ public partial class PlantFormation2 : IPlantFormation
         Console.WriteLine($"PlantFormation2 ctor: {Parameters.Name}, BudLength: {Parameters.FlowerSettings.BudLength}");
         Parameters.Init(hoursPerTick);
 		TickProbabilities = new(Parameters, world.HoursPerTick);
+		InitDroughtResponse();
         Console.WriteLine($"PlantFormation2 after Init: {Parameters.Name}, BudLength: {Parameters.FlowerSettings.BudLength}");
         Soil = soil;
 		Seed[0] = seed;
@@ -156,6 +157,7 @@ public partial class PlantFormation2 : IPlantFormation
 		writer.Write(EnergyProductionMax);
 		writer.Write(UnallocatedWater_g);
 		writer.Write(WaterDemandPerTick_g);
+		WriteDroughtState(writer);
 
 		//The per-plant generator. Reseeding instead would carry the same plants on with different
 		//random decisions - a different experiment that looks like a continuation.
@@ -195,6 +197,7 @@ public partial class PlantFormation2 : IPlantFormation
 		if (!double.IsFinite(UnallocatedWater_g) || UnallocatedWater_g < 0d ||
 			!double.IsFinite(WaterDemandPerTick_g) || WaterDemandPerTick_g < 0d)
 			throw new InvalidDataException("The checkpoint contains an invalid plant water budget.");
+		ReadDroughtState(reader);
 
 		RNG.SetState(reader.ReadUInt64(), reader.ReadUInt64());
 
@@ -220,10 +223,13 @@ public partial class PlantFormation2 : IPlantFormation
 			{
 				UG.NewDay(World.Timestep, World.TicksPerDay);
 				AG.NewDay(World.Timestep, World.TicksPerDay);
+				UpdateCanopy(World.Timestep);
 			}
 
 			var ugGathered = UG.Gather();
 			var agGathered = AG.Gather();
+			if (DroughtResponse)
+				UncommittedLeafArea = AG.GreenLeafArea;
 
 			var energy = agGathered.Energy + ugGathered.Energy;
 			var water = agGathered.Water + ugGathered.Water + UnallocatedWater_g;
@@ -246,7 +252,28 @@ public partial class PlantFormation2 : IPlantFormation
 
 			//Debug.WriteLine($"W: {water} / {waterRequirement}   {globalUG.WaterDiff} + {globalAG.WaterDiff}");
 			//Debug.WriteLine($"E: {energy} / {energyRequirement}   {globalUG.EnergyDiff} + {globalAG.EnergyDiff}");
-			if (energy < energyEmergencyThrehold)
+			if (DroughtResponse)
+			{
+				// No tissue is deleted for energy here. Below its maintenance the plant shares what it
+				// has in proportion to maintenance alone: weighting by production efficiency handed
+				// zero to every zero-maintenance green axis, to every root that absorbed nothing and to
+				// every blade that had a dry day, and the per-organ rules then deleted them. A plant
+				// that stays short is handled by the canopy controller (UpdateCanopy).
+				if (energy >= energyRequirement)
+				{
+					var weights = agGathered.Weights4EnergyDistributionByStorage() + ugGathered.Weights4EnergyDistributionByStorage();
+					var factor = (float)((energy - energyRequirement) / (weights >= zero ? weights : 1));
+					agGathered.DistributeEnergyByStorage(factor);
+					ugGathered.DistributeEnergyByStorage(factor);
+				}
+				else
+				{
+					var factor = (float)(energyRequirement > zero ? energy / energyRequirement : 0d);
+					agGathered.DistributeEnergyByMaintenance(factor);
+					ugGathered.DistributeEnergyByMaintenance(factor);
+				}
+			}
+			else if (energy < energyEmergencyThrehold)
 			{
 				//Debug.WriteLine("E DIST: req!!!");
 				var count = agGathered.Count;
@@ -367,6 +394,7 @@ public partial class PlantFormation2 : IPlantFormation
 			// count only water that fits in tissue when reporting water sufficiency.
 			WaterBalance = waterRequirement > 1e-6
 				? (float)(allocatableWater / waterRequirement) : 1;
+			UpdateDroughtSignals(allocatableWater, waterStorage, energy, energyRequirement);
 			//WaterBalanceUG = WaterBalance * WaterBalance;
 			//WaterBalanceUG = MathF.Pow(WaterBalance, 4f);
 			if (WaterBalance < WaterBalancePrev && WaterBalance < 1f / (1.00001f - Parameters.RootsDensity)) //The constant actually steers the roots sparsity, maybe take over from the species parameter

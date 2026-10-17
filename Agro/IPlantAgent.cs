@@ -96,6 +96,15 @@ public interface IPlantAgent : ITreeAgent
 	float Adulcy(uint timestep);
 	float Stress { get; }
 	float Senescence(uint timestep);
+	/// <summary>Fraction of the organ's tissue still alive and working - 1 unless it is a leaf or
+	/// petiole in drought senescence, 0 once that has finished. Scales maintenance, assimilation
+	/// and storage in the census.</summary>
+	float DroughtActivity(uint timestep);
+	/// <summary>A leaf or petiole that completed drought senescence and has not been shed yet.</summary>
+	bool IsDeadAttached(uint timestep);
+	/// <summary>One-sided area 2 L R of a vegetative blade segment not committed to drought
+	/// senescence; zero for everything else.</summary>
+	float GreenLeafArea();
 
 	Vector3 Scale();
 	float Volume();

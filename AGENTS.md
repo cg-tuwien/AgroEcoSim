@@ -93,9 +93,9 @@ the certified solid pass, shared), and what cannot be certified is redirected, s
 rolled back and retried, so an organ never ends a tick inside a wall, a tray or the ground.
 Keep all three runnable: the point of the switch is to compare them on the same request. Under
 the soft and mixed engines the archived Bergenia blooms in both springs and a 755-day run takes
-under a minute; under the certified one it never bloomed. Live checkpoint 34 tags the engine,
-carries the leaf area index meter and the tray survey, and resumes only under the engine that
-wrote it. Two traps in the mixed solid
+under a minute; under the certified one it never bloomed. Live checkpoint 35 tags the engine,
+carries the leaf area index meter, the tray survey and each plant's drought state, and resumes only
+under the engine that wrote it. Two traps in the mixed solid
 pass, both found by probing: the soft pass carries a push's witness forward as a plane between
 rounds, which is exact for a rod on a tray wall and wrong for a blade that widened or turned
 since - it reads clear while the blade is a millimetre inside, and the admissibility pass then
@@ -409,7 +409,7 @@ ray vote on FAV11. Weekly records are means of the daily surveys; annual and tot
 max and final. Verified against an independent walk to 1e-4 on Geranium and Carex, and
 the parallel and sequential ticks still produce identical frames and documents.
 
-**Both are checkpointed (live checkpoint 34), so a resumed run continues the weeks from the
+**Both are checkpointed (since live checkpoint 34; 35 added the survey's dead leaf area), so a resumed run continues the weeks from the
 original start date.** The section sits after the collisions: renderer name, the solver's
 `StaticShading` (the next step's indirect light reads it; without it the first resumed lit step
 differs), the meter's accumulators per target, surface and band, and the survey's per tray. Two
@@ -429,7 +429,8 @@ resumed from the FINAL checkpoint reproduced it, and the horizon rule fixed it. 
 snaps `HoursPerTick` the way the world does before turning a checkpoint's step count back into
 hours. `Agro --checkpoint-selftest` has three render-mode-3 scenarios with the wall selected, two
 resuming onto a longer horizon including from the final checkpoint, and compares the closed meter
-and survey state as well as the frame.
+and survey state as well as the frame. Two more run a Campanula through a rainless drought (one with
+`BroadLeafV1`), resuming inside the episode - the only scenarios that reach the herbaceous code.
 
 Cost, measured on 32 cores: about 2.1 us per leaf per step, flat in scale up to
 230k leaves (800 plants, 100 days, 4 h ticks: 508 ms per step at 231k leaves and
@@ -451,6 +452,25 @@ and a light model that never refreshed it left the plant hidden from the viewpor
 for the whole run while it grew normally in memory. That failure looks exactly
 like "it never germinates", and it is invisible to a probe that reads
 `PlantFormation2.AG` directly instead of the exported scene. Probe the export.
+
+### Drought (`Agro/DROUGHT_RESPONSE.md`)
+
+- Herbaceous plants restrict growth, then commit whole blades to senescence towards a target
+  canopy (`DroughtSenescenceOnset`, `CanopyAdjustmentHalfTimeDays`; 0 = off, the A/B switch), let
+  them hang dead for `DeadLeafAttachmentHours` and shed them to node buds that regrow leaves.
+  Nothing is deleted for energy under the response.
+- **`Energy = 0` was a kill signal.** Lateral stem termination and spent flowers used to zero an
+  organ's energy and let the `Energy <= 0` rule delete it. That rule is `Energy < 0` now (a funded
+  organ at rest sits at exactly zero), so termination says so explicitly. Check any new kill path
+  against it.
+- **Requirement-weighted distribution zeroes most of the plant.** `DistributeEnergyByRequirement`
+  multiplies maintenance by production efficiency: every zero-maintenance green axis, every root
+  that absorbed nothing and every blade with a dry day gets exactly zero. The response uses
+  `DistributeEnergyByMaintenance`; the legacy path still has the old weighting.
+- **At 4 h ticks the box-field soil is in drought for most of a dry spring; at 1 h it never is.**
+  Water moves `(int)(WaterCellsPerStep + fill)` cells per tick, which truncates to zero at 1 h and
+  to one cell (past the 5 cm root cells) at 4 h. Do not calibrate drought parameters on box-field
+  runs at 4 h ticks until the soil task fixes transport and root uptake.
 
 ## Useful code map
 
@@ -848,6 +868,7 @@ render mode 3, one plant in a 1x1 m field.
 | Every species, 730 days | Out-of-season bloom | `PetalCount == 0` on every snapshot outside the species' documented bloom months |
 | Every species, 730 days | Habit aspect | `MaxHeight / LeafMaxRadial` inside the ground-truth band for that species |
 | Heuchera, Bergenia, both Geraniums, 730 days | Scape clears the foliage | `FlowerMaxHeight - LeafP90Height > 0` at peak bloom |
+| Campanula, run 759ee89b's request, 200 days, drought response on | Gradual canopy adjustment | Largest single-tick leaf loss at most a few blades; senescing, dead-attached and node-bud counts all non-zero in May; leaves regrow after the June rain; identical per-tick counts to the old rules with `CanopyAdjustmentHalfTimeDays = 0` |
 | Campanula, run 759ee89b's request (10 x 10 m field, start 1 Feb), 160 days | Drought mass death | No tick removes more than 2 % of the leaves while the plant's energy pool is positive (it removed 606 at once on day 112) |
 | Carex, 365 days | No dormancy stall | Organ and leaf counts strictly increase from day 91 to day 273 |
 | Carex, 730 days | Annual re-arm | A `Flowering` phase occurs in **both** season years |
@@ -935,8 +956,10 @@ Honest list of what still does not match:
 - **Density and width are coupled**, because both come from stem length. Campanula's mat
   had to be built from many short stems rather than a few long ones to get 2.6x the leaf
   density at the same width; the same trade-off will appear for any mat-former.
-- **No leaf and no node ever dies.** `RenewPetiole` replaces the blade at the same node,
-  so foliage is bounded only by the node count, and `CrownMaximumNodes` is a hard
+- **No leaf and no node ever dies - except to drought.** Since the drought response
+  (`Agro/DROUGHT_RESPONSE.md`) a herbaceous leaf can senesce, hang dead and fall, leaving a
+  node bud that regrows a leaf. Outside a drought `RenewPetiole` still replaces the blade at
+  the same node, so foliage is bounded only by the node count, and `CrownMaximumNodes` is a hard
   ceiling rather than a turnover. A real rosette sheds its oldest leaves and its oldest
   basal nodes each season, which is what lets it flower repeatedly without growing.
   Implementing that is the single most valuable thing left here.
@@ -1991,7 +2014,7 @@ not produce a partial clean-up, it deletes precisely the models that are still i
 `runs/<id>/checkpoint.bin.gz` is the live simulation state, written every
 `AGRO_RunStoreCheckpointStride` steps (default 32) and always at the end however the run finished.
 Restoring it and carrying on is **byte-identical to never having stopped** - `Agro --checkpoint-selftest`
-proves it across three scenarios and four resume points each, and is the only test this can have:
+proves it across eight scenarios on all three engines with four or five resume points each, and is the only test this can have:
 correctness is not a property of any one field but of the whole set, and a miss shows up as a run
 that continues plausibly while diverging from the one it claims to continue.
 

@@ -124,5 +124,9 @@ export function GeneratedSpeciesFields(props: { species: Species; index: number 
 <SpeciesFloatField step={0.001} speciesIndex={index} tooltip={"Target radius of each rhizome segment."} signal={species.rhizomeSegmentRadius} label={"Rhizome segment radius"} />
 <SpeciesFloatField step={0.001} speciesIndex={index} tooltip={"Radius of a dormant basal or axillary rhizome bud."} signal={species.rhizomeBudRadius} label={"Dormant rhizome bud radius"} />
 <SpeciesBoolField speciesIndex={index} tooltip={"Retains a perennial rhizome in the plant graph when its modeled local energy reserve is temporarily depleted."} signal={species.retainDormantRhizomes} label={"Retain dormant rhizomes"} />
+<hr/>
+<SpeciesFloatField max={0.99} step={0.01} speciesIndex={index} tooltip={"Water stress (0 = well watered, 1 = no plant water) at which existing leaves start to senesce. Growth slows below it already."} signal={species.droughtSenescenceOnset} label={"Drought senescence onset"} />
+<SpeciesFloatField step={0.5} speciesIndex={index} tooltip={"Days to commit half of the excess leaf area above the drought target to senescence. 0 disables the drought response."} signal={species.canopyAdjustmentHalfTimeDays} label={"Canopy adjustment half-time (days)"} />
+<SpeciesFloatField step={1} speciesIndex={index} tooltip={"Hours a leaf that completed drought senescence stays attached before it falls; it still shades and collides meanwhile."} signal={species.deadLeafAttachmentHours} label={"Dead leaf attachment (hours)"} />
     </>;
 }

@@ -125,6 +125,9 @@ export class SpeciesBase {
     rhizomeSegmentRadius = signal(0.0025);
     rhizomeBudRadius = signal(0.0005);
     retainDormantRhizomes = signal(false);
+    droughtSenescenceOnset = signal(0.3);
+    canopyAdjustmentHalfTimeDays = signal(7);
+    deadLeafAttachmentHours = signal(336);
 
     public save() {
         return {
@@ -244,6 +247,9 @@ export class SpeciesBase {
             rhizomeSegmentRadius: this.rhizomeSegmentRadius.peek(),
             rhizomeBudRadius: this.rhizomeBudRadius.peek(),
             retainDormantRhizomes: this.retainDormantRhizomes.peek(),
+            droughtSenescenceOnset: this.droughtSenescenceOnset.peek(),
+            canopyAdjustmentHalfTimeDays: this.canopyAdjustmentHalfTimeDays.peek(),
+            deadLeafAttachmentHours: this.deadLeafAttachmentHours.peek(),
         };
     }
 
@@ -364,6 +370,9 @@ export class SpeciesBase {
         this.rhizomeSegmentRadius.value = s.rhizomeSegmentRadius;
         this.rhizomeBudRadius.value = s.rhizomeBudRadius;
         this.retainDormantRhizomes.value = s.retainDormantRhizomes;
+        this.droughtSenescenceOnset.value = s.droughtSenescenceOnset ?? 0.3;
+        this.canopyAdjustmentHalfTimeDays.value = s.canopyAdjustmentHalfTimeDays ?? 7;
+        this.deadLeafAttachmentHours.value = s.deadLeafAttachmentHours ?? 336;
         return this;
     }
 
@@ -485,6 +494,9 @@ export class SpeciesBase {
             RhizomeSegmentRadius: this.rhizomeSegmentRadius.peek(),
             RhizomeBudRadius: this.rhizomeBudRadius.peek(),
             RetainDormantRhizomes: this.retainDormantRhizomes.peek(),
+            DroughtSenescenceOnset: this.droughtSenescenceOnset.peek(),
+            CanopyAdjustmentHalfTimeDays: this.canopyAdjustmentHalfTimeDays.peek(),
+            DeadLeafAttachmentHours: this.deadLeafAttachmentHours.peek(),
         };
     }
 }

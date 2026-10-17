@@ -26,6 +26,10 @@ namespace Agro
                 //TODO growth should reflect temperature
                 var lifeSupportPerHour = agent.LifeSupportPerHour(species);
                 var lifeSupportPerTick = lifeSupportPerHour * world.HoursPerTick;
+                // A senescing leaf maintains only the tissue it has left - the same fraction the
+                // census funded it for, so a funded organ never ends the tick in debt.
+                if (plant.DroughtResponse)
+                    lifeSupportPerTick *= agent.DroughtActivity(timestep);
 
                 agent.Energy -= lifeSupportPerTick; //life support
 
@@ -41,6 +45,14 @@ namespace Agro
                 agent.Photosynthesize(formation, agentID, species, world);
 
                 formation.MarkDevelopmentPhysiology(agent);
+
+                // A leaf in drought senescence no longer grows, renews or starves: it yellows, dies,
+                // hangs on for the attachment period and then falls.
+                if (plant.DroughtResponse && agent.InDroughtSenescence)
+                {
+                    TickDroughtSenescence(ref agent, formation, agentID, children, timestep);
+                    return;
+                }
                 switch (agent.Organ)
                 {
                     //leafs fall off with increasing age
@@ -53,7 +65,7 @@ namespace Agro
                             && formation.GetOrgan(agent.Parent) != OrganTypes.Petiole)
                         {
                             var p = ageHours / (7000 ); //6 months in hours
-                            if (plant.RNG.NextFloatAccum(p * p, world.HoursPerTick))
+                            if (plant.RNG.NextFloatAccum(p * p, world.HoursPerTick) && plant.CanopyGrowthAllowed)
                             {
                                 // A perennial rosette replaces a senescent leaf at its existing node.  Leaving the petiole as an inert Bud
                                 // made every old node permanently bare, which turned Geranium crowns into palm-like stems over time.
@@ -93,6 +105,15 @@ namespace Agro
                         break;
                 }
 
+                //a leaf regrows at a node whose drought-killed leaf fell
+                if (plant.DroughtResponse && agent.Organ == OrganTypes.Bud && !agent.IsRizome
+                    && agent.Parent >= 0 && !formation.GetIsRizome(agent.Parent)
+                    && formation.GetOrgan(agent.Parent) is OrganTypes.Stem or OrganTypes.Meristem)
+                {
+                    TryRegrowNodeLeaf(ref agent, formation, agentID, phase, ageHours);
+                    return;
+                }
+
                 //new crown branches -- bud activation at the rhizome
                 if (!agent.IsRizome && formation.GetIsRizome(agent.Parent) && agent.Organ.Equals(OrganTypes.Bud))
                 {
@@ -106,6 +127,13 @@ namespace Agro
                     flowerHelper.handleAgent(ref agent, agentID, formation, timestep);
                     return;
                 }
+
+                // Under the drought response an organ the census funded below its maintenance is
+                // unfunded, not starved: the census shares a short pool in proportion to maintenance,
+                // so every maintained organ would otherwise end the tick negative together and be
+                // deleted at once. Prolonged shortage is the canopy controller's to handle.
+                if (plant.DroughtResponse && !terminated && agent.Energy < 0f)
+                    agent.Energy = 0f;
 
                 // A blocked apex still experiences the seasonal opportunity to flower.
                 // Its extension stays suspended, and a retained birth is sampled only once;
@@ -136,7 +164,7 @@ namespace Agro
                                 if (currentSize.X < sizeLimit.X || currentSize.Y < sizeLimit.Y)
                                 {
                                     //HoursPerTick are included in GrowthTimeVar
-                                    var growth = Math.Min(1f, plant.WaterBalance) * sizeLimit * agent.GrowthTimeVar * productionFactor * species.LeafExpansionRateScale;
+                                    var growth = plant.GrowthWaterFactor * sizeLimit * agent.GrowthTimeVar * productionFactor * species.LeafExpansionRateScale;
                                     var petioleSizeLimit = !agent.FlowerAgent.flowerBase
                                         ? new Vector2(species.PetioleLength, species.PetioleRadius)
                                         : new Vector2(species.FlowerSettings.FlowerBaseLeafPetioleLength, species.FlowerSettings.FlowerBaseLeafPetioleRadius);
@@ -170,7 +198,7 @@ namespace Agro
                                 if (currentSize.X < sizeLimit.X || currentSize.Y < sizeLimit.Y)
                                 {
                                     //HoursPerTick are included in GrowthTimeVar
-                                    var growth = Math.Min(1f, plant.WaterBalance) * sizeLimit * agent.GrowthTimeVar * productionFactor * species.LeafExpansionRateScale;
+                                    var growth = plant.GrowthWaterFactor * sizeLimit * agent.GrowthTimeVar * productionFactor * species.LeafExpansionRateScale;
                                     var resultingSize = Vector2.Min(currentSize + growth, sizeLimit);
                                     growth = resultingSize - currentSize;
 
@@ -187,7 +215,7 @@ namespace Agro
                                 if (!agent.IsRizome && !agent.GrowthBlocked)
                                 {
                                     var energyReserve = Math.Clamp(agent.Energy / agent.EnergyStorageCapacity(species), 0f, 1f);
-                                    var waterReserve = Math.Min(1f, plant.WaterBalance);
+                                    var waterReserve = plant.GrowthWaterFactor;
                                     var growth = new Vector2(1e-3f, 2e-5f) * (dominanceFactor * energyReserve * waterReserve * world.HoursPerTick * productionFactor * species.HerbaceousGrowthRateScale);
 
                                     //assure not to outgrow the parent unless parent is rizome
@@ -205,7 +233,7 @@ namespace Agro
                                 if (phase != SeasonalPhase.ResetPending)
                                 {
                                     var energyReserve = Math.Clamp(agent.Energy / agent.EnergyStorageCapacity(species), 0f, 1f);
-                                    var growth = 2e-5f * dominanceFactor * energyReserve * Math.Min(plant.WaterBalance, energyReserve) * world.HoursPerTick * species.HerbaceousGrowthRateScale;
+                                    var growth = 2e-5f * dominanceFactor * energyReserve * Math.Min(plant.GrowthWaterFactor, energyReserve) * world.HoursPerTick * species.HerbaceousGrowthRateScale;
 
                                     //assure not to outgrow the parent
                                     var parentRadius = (agent.Parent >= 0 && !formation.GetIsRizome(agent.Parent)) ? formation.GetBaseRadius(agent.Parent) : float.MaxValue;
@@ -273,6 +301,7 @@ namespace Agro
                                 }
 
                                 var committedToFlower = (plant.RNG.NextFloat() < flowerCommitmentProbability) &&
+                                    plant.CanopyGrowthAllowed &&
                                     CommitToFlower(ref agent, formation, agentID, prevResources, prevProduction);
                                 if (committedToFlower)
                                 {
@@ -295,6 +324,7 @@ namespace Agro
                                 }
                                 else if (!agent.GrowthBlocked
                                     && (plant.RNG.NextFloat() < crownContinuationProbability)
+                                    && plant.CanopyGrowthAllowed
                                     && CrownAxisHasRoom(formation, agentID, species))
                                 {
                                     agent.Organ = OrganTypes.Stem;
@@ -415,7 +445,7 @@ namespace Agro
                         {
                             var reserve = Math.Clamp(agent.Energy / Math.Max(1e-12f, agent.EnergyStorageCapacity(species)), 0f, 1f);
                             var radial = 2e-5f * world.HoursPerTick * species.RhizomeGrowthRateScale
-                                * species.GetDominanceFactor(agent.DominanceLevel) * reserve * Math.Clamp(plant.WaterBalance, 0f, 1f);
+                                * species.GetDominanceFactor(agent.DominanceLevel) * reserve * Math.Clamp(plant.GrowthWaterFactor, 0f, 1f);
                             agent.Radius = Math.Max(agent.Radius, Math.Min(species.RhizomeSegmentRadius, agent.Radius + radial));
                         }
                         return;
@@ -487,7 +517,7 @@ namespace Agro
                                     break;
 
                                 var energyReserve = Math.Clamp(agent.Energy / agent.EnergyStorageCapacity(species), 0f, 1f);
-                                var waterReserve = Math.Min(1f, plant.WaterBalance);
+                                var waterReserve = plant.GrowthWaterFactor;
                                 var growth = new Vector2(1e-3f, 2e-5f) * (dominanceFactor * energyReserve * waterReserve * world.HoursPerTick * (agent.IsRizome ? species.RhizomeGrowthRateScale : species.HerbaceousGrowthRateScale));
                                 // Console.WriteLine($"growm {growth.X} {energyReserve} {waterReserve} {agent.PreviousDayProductionInvariant / formation.DailyProductionMax} {agent.PreviousDayProductionInvariant} {formation.DailyProductionMax}");
                                 //assure not to outgrow the parent unless parent is rizome
@@ -558,7 +588,7 @@ namespace Agro
                                 if (phase != SeasonalPhase.ResetPending)
                                 {
                                     var energyReserve = Math.Clamp(agent.Energy / agent.EnergyStorageCapacity(species), 0f, 1f);
-                                    var growth = 2e-5f * dominanceFactor * energyReserve * Math.Min(plant.WaterBalance, energyReserve) * world.HoursPerTick * species.RhizomeGrowthRateScale;
+                                    var growth = 2e-5f * dominanceFactor * energyReserve * Math.Min(plant.GrowthWaterFactor, energyReserve) * world.HoursPerTick * species.RhizomeGrowthRateScale;
 
                                     //assure not to outgrow the parent
                                     var parentRadius = (agent.Parent >= 0 && !formation.GetIsRizome(agent.Parent)) ? formation.GetBaseRadius(agent.Parent) : float.MaxValue;
@@ -583,7 +613,7 @@ namespace Agro
                 {
                     if (HasVegetativeApex(formation, agentID, agentID))
                         agent.FloralHandoverPending = false;
-                    else if (agent.Energy > enoughEnergyState)
+                    else if (agent.Energy > enoughEnergyState && plant.CanopyGrowthAllowed)
                     {
                         var prevResources = agent.PreviousDayEnvResourcesInvariant > 0f
                             ? agent.PreviousDayEnvResourcesInvariant : formation.DailyResourceMax;
@@ -628,7 +658,7 @@ namespace Agro
                 //raise a crown was five years, so only the first shoots ever appeared.
                 //The marker is now claimed only by an activation that actually happens.
                 var activationProbability = plant.TickProbabilities.CrownBud;
-                if (plant.RNG.NextFloat() >= activationProbability)
+                if (plant.RNG.NextFloat() >= activationProbability || !plant.CanopyGrowthAllowed)
                     return false;
 
                 agent.LastCrownActivationCycle = activationCycle;
@@ -994,14 +1024,15 @@ namespace Agro
                     prevResources, prevProduction);
             }
 
-            static void RenewPetiole(ref AboveGroundAgent agent, PlantSubFormation<AboveGroundAgent> formation, int agentID)
+            static void RenewPetiole(ref AboveGroundAgent agent, PlantSubFormation<AboveGroundAgent> formation, int agentID,
+                Quaternion? orientation = null)
             {
                 var plant = formation.Plant;
                 var replacement = new AboveGroundAgent(
                     plant,
                     agent.Parent,
                     OrganTypes.Petiole,
-                    agent.Orientation,
+                    orientation ?? agent.Orientation,
                     0.1f * Math.Max(agent.Energy, 0f),
                     initialResources: agent.PreviousDayEnvResourcesInvariant,
                     initialProduction: agent.PreviousDayProductionInvariant)
@@ -1028,6 +1059,62 @@ namespace Agro
                     agent.PreviousDayEnvResourcesInvariant,
                     agent.PreviousDayProductionInvariant);
                 formation.Death(agentID);
+            }
+
+            /// <summary>
+            /// The leaf unit's owner - its first petiole segment, or the blade's first segment when
+            /// there is no petiole - sheds the dead leaf once it has hung on for the attachment
+            /// period: first its children, then, on a later tick with none left, it becomes a node
+            /// bud that can regrow a leaf. Shortening a petiole that still carried its blade moved
+            /// the dying blade inside the same collision pass.
+            /// </summary>
+            static void TickDroughtSenescence(ref AboveGroundAgent agent, PlantSubFormation<AboveGroundAgent> formation,
+                int agentID, List<int> children, uint timestep)
+            {
+                var parentOrgan = agent.Parent >= 0 ? formation.GetOrgan(agent.Parent) : OrganTypes.Unspecified;
+                var owner = agent.Organ == OrganTypes.Petiole
+                    ? parentOrgan != OrganTypes.Petiole
+                    : parentOrgan != OrganTypes.Leaf && parentOrgan != OrganTypes.Petiole;
+                // A blocked organ has its length restored after the tick, which would undo the bud's
+                // shortening; wait for the block to lift.
+                if (!owner || formation.HasPendingDevelopment(agentID) || agent.GrowthBlocked)
+                    return;
+                var plant = formation.Plant;
+                var attachmentTicks = (int)MathF.Round(plant.Parameters.DeadLeafAttachmentHours / plant.World.HoursPerTick);
+                if (timestep < agent.DroughtDetachTimestep(attachmentTicks))
+                    return;
+                if (agent.Organ == OrganTypes.Leaf)
+                    formation.Death(agentID, reason: OrganDeathReason.Senescence);
+                else if (children.Count > 0)
+                    foreach (var child in children)
+                        formation.Death(child, reason: OrganDeathReason.Senescence);
+                else if (!agent.IsRizome && agent.Parent >= 0 && !formation.GetIsRizome(agent.Parent)
+                    && parentOrgan is OrganTypes.Stem or OrganTypes.Meristem)
+                {
+                    agent.BecomeNodeBud(formation, timestep);
+                    // A bud is not deformable; a stored petiole deformation for it would make a
+                    // checkpoint written before the next topology change unreadable.
+                    formation.ForgetDeformation(agentID);
+                }
+                else
+                    formation.Death(agentID, reason: OrganDeathReason.Senescence);
+            }
+
+            /// <summary>
+            /// A node bud regrows a leaf once the drought allows new foliage again. It takes the
+            /// rest frame of the shed petiole, not its last elastically bent pose.
+            /// </summary>
+            static void TryRegrowNodeLeaf(ref AboveGroundAgent agent, PlantSubFormation<AboveGroundAgent> formation,
+                int agentID, SeasonalPhase phase, float ageHours)
+            {
+                const float MinimumBudAgeHours = 72f;
+                var plant = formation.Plant;
+                if (ageHours < MinimumBudAgeHours || phase == SeasonalPhase.ResetPending || agent.GrowthBlocked
+                    || agent.LoadLimited || agent.Energy < 0f || formation.HasPendingDevelopment(agentID))
+                    return;
+                if (plant.RNG.NextFloat() >= plant.TickProbabilities.NodeBudRegrowth || !plant.CanopyGrowthAllowed)
+                    return;
+                RenewPetiole(ref agent, formation, agentID, agent.restOrientation);
             }
 
             static void ReorientPetiole(PlantSubFormation<AboveGroundAgent> formation, int agentID)

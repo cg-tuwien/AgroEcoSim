@@ -477,6 +477,11 @@ public static partial class Reader
                 sb.AppendLine($"        this.{member.TsName}.value = s.{savedName} ?? 0;");
             else if (member.CSharpName == nameof(SpeciesSettings.LeafPoissonRatio))
                 sb.AppendLine($"        this.{member.TsName}.value = s.{savedName} ?? 0.3;");
+            // Sessions and stored runs saved before the drought response carry no value; they get
+            // the class default, as a request that omits the field does on the server.
+            else if (member.CSharpName is nameof(SpeciesSettings.DroughtSenescenceOnset)
+                or nameof(SpeciesSettings.CanopyAdjustmentHalfTimeDays) or nameof(SpeciesSettings.DeadLeafAttachmentHours))
+                sb.AppendLine($"        this.{member.TsName}.value = s.{savedName} ?? {ToTsDefaultValue(member)};");
             else
                 sb.AppendLine($"        this.{member.TsName}.value = s.{savedName};");
         }
@@ -549,6 +554,13 @@ public static partial class Reader
 
         if (name is nameof(SpeciesSettings.FloweringSeasonStart) or nameof(SpeciesSettings.FloweringSeasonEnd))
             return ("0", "1", "0.01");
+
+        if (name == nameof(SpeciesSettings.DroughtSenescenceOnset))
+            return ("0", "0.99", "0.01");
+        if (name == nameof(SpeciesSettings.CanopyAdjustmentHalfTimeDays))
+            return ("0", null, "0.5");
+        if (name == nameof(SpeciesSettings.DeadLeafAttachmentHours))
+            return ("0", null, "1");
 
         if (name is nameof(SpeciesSettings.RhizomeAxillaryBudsPerSegment) or nameof(SpeciesSettings.InitialBasalRhizomeBuds))
             return ("0", "32", "1");

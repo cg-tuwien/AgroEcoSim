@@ -61,7 +61,9 @@ namespace Agro
                             var sizeLimit = new Vector2(
                                 MathF.Max(currentSize.X, agent.GetLengthVar()),
                                 MathF.Max(currentSize.Y, MathF.Min(agent.GetRadiusVar(), parentRadius)));
-                            var growth = sizeLimit * agent.GrowthTimeVar;
+                            // The scape ignores the one-tick water sufficiency, as it always has, but
+                            // slows with the drought response like every other organ.
+                            var growth = formation.Plant.DroughtGrowthFactor * sizeLimit * agent.GrowthTimeVar;
                             var resultingSize = Vector2.Min(currentSize + growth, sizeLimit);
                             growth = Vector2.Max(resultingSize - currentSize, Vector2.Zero);
                             agent.Length += growth.X;
@@ -72,7 +74,7 @@ namespace Agro
                     case OrganTypes.FlowerPedicel: {
                             var sizeLimit = new Vector2(agent.GetLengthVar(), agent.GetRadiusVar());
 
-                            var growth = Math.Min(1f, formation.Plant.WaterBalance) * sizeLimit * agent.GrowthTimeVar;
+                            var growth = formation.Plant.GrowthWaterFactor * sizeLimit * agent.GrowthTimeVar;
                             var resultingSize = Vector2.Min(currentSize + growth, sizeLimit);
                             growth = resultingSize - currentSize;
 
@@ -90,7 +92,7 @@ namespace Agro
                             if (currentSize.X < sizeLimit.X || currentSize.Y < sizeLimit.Y)
                             {
                                 //HoursPerTick are included in GrowthTimeVar
-                                var growth = Math.Min(1f, formation.Plant.WaterBalance) * sizeLimit * agent.GrowthTimeVar ;
+                                var growth = formation.Plant.GrowthWaterFactor * sizeLimit * agent.GrowthTimeVar ;
 
                                 var resultingSize = Vector2.Min(currentSize + growth, sizeLimit);
                                 growth = resultingSize - currentSize;
@@ -104,7 +106,7 @@ namespace Agro
                         } break;
                     case OrganTypes.FlowerBud: {
                             var sizeLimit = new Vector2(agent.GetLengthVar(), agent.GetRadiusVar());
-                            var growth = Math.Min(1f, formation.Plant.WaterBalance) * sizeLimit * agent.GrowthTimeVar;
+                            var growth = formation.Plant.GrowthWaterFactor * sizeLimit * agent.GrowthTimeVar;
                             var resultingSize = Vector2.Min(currentSize + growth, sizeLimit);
                             growth = Vector2.Max(resultingSize - currentSize, Vector2.Zero);
                             agent.Length += growth.X;
@@ -125,7 +127,7 @@ namespace Agro
                                 ? formation.GetBaseRadius(agent.Parent)
                                 : float.MaxValue;
                             var sizeLimit = new Vector2(agent.GetLengthVar(), MathF.Min(agent.GetRadiusVar(), parentRadius));
-                            var growth = sizeLimit * agent.GrowthTimeVar;
+                            var growth = formation.Plant.DroughtGrowthFactor * sizeLimit * agent.GrowthTimeVar;
                             var resultingSize = Vector2.Min(currentSize + growth, sizeLimit);
                             // A parent thinner than this meristem already is must not shrink it
                             // every tick; the stem and bud branches clamp the same way.

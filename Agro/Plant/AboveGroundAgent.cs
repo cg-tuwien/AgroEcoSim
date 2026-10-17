@@ -370,6 +370,55 @@ public partial struct AboveGroundAgent : IPlantAgent
 		return result < 1f ? result : 1f;
 	}
 
+	/// <summary>A vegetative leaf or petiole that a herbaceous drought response may commit to
+	/// senescence. Floral organs and bracts have their own senescence and are never committed.</summary>
+	internal readonly bool IsDroughtFoliage
+		=> (Organ == OrganTypes.Leaf || Organ == OrganTypes.Petiole) && !FlowerAgent.flowerBase && !IsRizome;
+
+	/// <summary>Whether drought senescence has been committed for this leaf or petiole.</summary>
+	internal readonly bool InDroughtSenescence => SenescenceStart != 0 && IsDroughtFoliage;
+
+	[M(AI)]public readonly float DroughtActivity(uint timestep)
+		=> InDroughtSenescence ? 1f - Senescence(timestep) : 1f;
+
+	[M(AI)]public readonly float GreenLeafArea()
+		=> Organ == OrganTypes.Leaf && IsDroughtFoliage && SenescenceStart == 0 ? Length * Radius * 2f : 0f;
+
+	[M(AI)]public readonly bool IsDeadAttached(uint timestep)
+		=> InDroughtSenescence && SenescenceDuration != 0 && timestep - SenescenceStart >= SenescenceDuration;
+
+	/// <summary>The timestep at which a dead leaf falls: senescence plus the attachment period.</summary>
+	[M(AI)]internal readonly uint DroughtDetachTimestep(int attachmentTicks)
+		=> SenescenceStart + SenescenceDuration + (uint)Math.Max(0, attachmentTicks);
+
+	/// <summary>
+	/// Commits this leaf or petiole to drought senescence. The start is never zero - zero means
+	/// "not started" - and the duration is at least one tick: truncating a duration shorter than
+	/// a tick to zero would leave the organ senescing forever at a 48-hour step.
+	/// </summary>
+	internal void CommitDroughtSenescence(uint timestep, ushort durationTicks)
+	{
+		if (SenescenceStart != 0) return;
+		SenescenceStart = Math.Max(1u, timestep);
+		SenescenceDuration = Math.Max((ushort)1, durationTicks);
+	}
+
+	/// <summary>
+	/// Turns a shed leaf's first petiole segment into a dormant node bud that can regrow a leaf.
+	/// Its children must already be gone: shortening a petiole that still carries its dying blade
+	/// moved the blade with it inside the same collision pass. The bud is newborn - its age gates
+	/// regrowth - and carries no senescence.
+	/// </summary>
+	internal void BecomeNodeBud(PlantSubFormation<AboveGroundAgent> formation, uint timestep)
+	{
+		Organ = OrganTypes.Bud;
+		ParentRadiusAtBirth = formation.GetBaseRadius(Parent);
+		Length = 2.8f * Radius;
+		BirthTime = timestep;
+		SenescenceStart = 0;
+		SenescenceDuration = 0;
+	}
+
 	/// <summary>
 	/// Woodyness ∈ [0, 1].
 	/// </summary>
@@ -619,6 +668,16 @@ public partial struct AboveGroundAgent : IPlantAgent
 		SpeciesSettings species, AgroWorld world)
 	{
 		if (Organ != OrganTypes.Leaf) return;
+		// Under the drought response a senescing blade assimilates with the tissue it has left,
+		// and every blade closes its stomata in proportion to the plant's water stress - which
+		// also slows the water it uses. A dead blade does nothing at all.
+		var activity = 1f;
+		if (formation.Plant.DroughtResponse)
+		{
+			if (IsDeadAttached(world.Timestep)) return;
+			activity = DroughtActivity(world.Timestep)
+				* (1f - PlantFormation2.StomatalStressSensitivity * formation.Plant.DroughtStress);
+		}
 		var irradiance = world.Irradiance.GetIrradiance(formation, agentID); // Wh/m² over this tick
 		if (irradiance <= 0.01f) return;
 		var area = Length * Radius * 2f;
@@ -633,7 +692,7 @@ public partial struct AboveGroundAgent : IPlantAgent
 		CurrentDayEnvResourcesInv += irradiance;
 		if (Water_g <= 0f) return;
 		var glucoseAccounting = ResourceUnits.Enabled(species);
-		var production = ResourceUnits.PhotosynthesizedGlucose(irradiance, area, Water_g, glucoseAccounting);
+		var production = ResourceUnits.PhotosynthesizedGlucose(irradiance, area * activity, Water_g, glucoseAccounting);
 		Water_g -= ResourceUnits.WaterDebit(production, glucoseAccounting);
 		Energy += production;
 		CurrentDayProductionInv += production / area;
@@ -1125,7 +1184,7 @@ public partial struct AboveGroundAgent : IPlantAgent
 				formation.SendProtected(children[i], new PropagateSenescence(SenescenceStart + SenescenceDuration));
     }
 
-    [M(AI)]private void MakeBud(PlantSubFormation<AboveGroundAgent> formation, IList<int>? children)
+    [M(AI)]internal void MakeBud(PlantSubFormation<AboveGroundAgent> formation, IList<int>? children)
     {
         Organ = OrganTypes.Bud;
         ParentRadiusAtBirth = !formation.GetIsRizome(Parent) ? formation.GetBaseRadius(Parent) : float.MaxValue; ;

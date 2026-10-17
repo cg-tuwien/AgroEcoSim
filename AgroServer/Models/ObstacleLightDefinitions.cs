@@ -73,8 +73,8 @@ public static class ObstacleLightDefinitions
         ["facade"] = "Every tray as one patch: leafArea summed, leafAngleSine and leafDiameter weighted by leaf area "
             + "over all trays, thickness the largest of any tray. outward is the unit normal of the facade, "
             + "pointing away from the building, along which the thickness is measured.",
-        ["leafArea_m2"] = "m². One-sided area of every blade in the tray, using the species' blade outline, mean "
-            + "over the period's days. Petals are not leaves. Divide by your own facade cell area for a leaf "
+        ["leafArea_m2"] = "m². One-sided area of every living blade in the tray, using the species' blade outline, mean "
+            + "over the period's days; blades killed by drought are in deadLeafArea_m2. Petals are not leaves. Divide by your own facade cell area for a leaf "
             + "area index; divide by the volume of the vegetation layer for a leaf area density.",
         ["leafAngleSine"] = "Area-weighted mean over the blades of sin(alpha) = sqrt(1 - n_y²), alpha the tilt of "
             + "the blade from the horizontal and n its unit normal: 0 for horizontal foliage, 1 for vertical. The "
@@ -85,6 +85,10 @@ public static class ObstacleLightDefinitions
             + "the facade normal to the farthest leaf corner, as a bounding box would give it; mean over the "
             + "period's days. Without a tray mesh it is the canopy height above the seeding level.",
         ["leaves"] = "Mean number of blades. A segmented blade counts once.",
+        ["deadLeafArea_m2"] = "m². One-sided area of blades that died of drought and still hang on the plant, mean over "
+            + "the period's days. They still shade and are counted by the ray-traced leaf area index, but no longer "
+            + "transpire or assimilate; leafArea, leafAngleSine, leafDiameter, thickness and leaves describe living "
+            + "blades only.",
         ["leafAreaMax_m2"] = "m². Largest daily leaf area of the period. Annual and whole-run records only.",
         ["leafAreaFinal_m2"] = "m². Leaf area on the last surveyed day of the period. Annual and whole-run records only.",
         ["thicknessMax_m"] = "m. Largest daily thickness of the period. Annual and whole-run records only.",

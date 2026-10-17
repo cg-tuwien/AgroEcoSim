@@ -428,6 +428,10 @@ vegetation survey's, so a resumed run continues its weekly aggregates from the o
 date. The self-test gained two render-mode-3 scenarios with the wall selected, one resuming onto
 a longer horizon, and compares the closed measurement state beside the frame.
 
+Version 35 (17 October 2026) appends each plant's drought state after its water budget and the
+tray survey's dead leaf area (`Agro/DROUGHT_RESPONSE.md`). The self-test gained a Campanula in a
+rainless field on every engine plus a `BroadLeafV1` variant, resumed inside the drought episode.
+
 ## Lifecycle changes made alongside, under both engines
 
 These are not part of the engine and are deliberately separate, so an A/B run can include or

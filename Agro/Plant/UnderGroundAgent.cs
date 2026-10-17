@@ -399,6 +399,10 @@ public struct UnderGroundAgent : IPlantAgent
 		// Zero after paying maintenance is a funded resting root. Deleting it
 		// also deletes funded descendants and can erase the entire root system
 		// when allocation assigns a temporarily inactive parent maintenance only.
+		// Under the drought response a root funded below maintenance waits; prolonged shortage is
+		// the canopy controller's to handle, and roots are never removed for energy there.
+		else if (Energy < 0f && plant.DroughtResponse)
+			Energy = 0f;
 		else if (Energy < 0f) // Maintenance could not be paid.
 		{
 			//Console.WriteLine($"Root {formationID} depleeted at time {timestep}");
@@ -568,4 +572,7 @@ public struct UnderGroundAgent : IPlantAgent
     [M(AI)]public readonly float Adulcy(uint timestep) => 0;
 
     [M(AI)]public readonly float Senescence(uint timestep) => 0f;
+    [M(AI)]public readonly float DroughtActivity(uint timestep) => 1f;
+    [M(AI)]public readonly bool IsDeadAttached(uint timestep) => false;
+    [M(AI)]public readonly float GreenLeafArea() => 0f;
 }

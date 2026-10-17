@@ -144,6 +144,8 @@ export interface IVegetationPeriod {
     leafDiameter_m: number;
     thickness_m: number;
     leaves: number;
+    /** One-sided area of blades killed by drought and still attached; absent in documents written before it existed. */
+    deadLeafArea_m2?: number;
     leafAreaMax_m2?: number;
     leafAreaFinal_m2?: number;
     thicknessMax_m?: number;
