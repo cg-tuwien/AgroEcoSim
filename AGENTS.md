@@ -154,6 +154,18 @@ older live checkpoints are rejected, while their saved playback remains readable
   runaway Carex water/mass and apparent gravity failure.
 - Watch for very large water or mass values before changing stiffness values.
   Resource errors can masquerade as bending errors.
+- **A dry day is not a dark day, and an organ at exactly zero energy is funded.** A single
+  Campanula lost 1,490 of 1,584 organs in one tick on day 113 while its energy pool held about
+  1.9 million ticks of maintenance. `Photosynthesize` booked a blade's light only when it had
+  water, so after a dry day 532 blades reported zero resources; their storage-allocation weight
+  (`PreviousDayEnvResourcesInvariant / DailyResourceMax`) became zero against the few that still
+  had water, they received exactly their maintenance, ended the next tick at `Energy == 0`, and
+  the herbaceous `Energy <= 0` rule deleted them. Zero-maintenance green axes with zero weight
+  went the same way, and a starving petiole fell through to the leaf case and deleted
+  `PetioleChainRoot(agent.Parent)` - its own node - taking whole crowns. Light is now booked
+  regardless of water, the rule is `Energy < 0` (lateral termination signals itself explicitly),
+  and a starving leaf or petiole removes only its own leaf (`LeafUnitRoot`). It was not the
+  seven-day emergency branch; check `EnergyBalance` before blaming it.
 
 ### Gravity and support
 
@@ -836,6 +848,7 @@ render mode 3, one plant in a 1x1 m field.
 | Every species, 730 days | Out-of-season bloom | `PetalCount == 0` on every snapshot outside the species' documented bloom months |
 | Every species, 730 days | Habit aspect | `MaxHeight / LeafMaxRadial` inside the ground-truth band for that species |
 | Heuchera, Bergenia, both Geraniums, 730 days | Scape clears the foliage | `FlowerMaxHeight - LeafP90Height > 0` at peak bloom |
+| Campanula, run 759ee89b's request (10 x 10 m field, start 1 Feb), 160 days | Drought mass death | No tick removes more than 2 % of the leaves while the plant's energy pool is positive (it removed 606 at once on day 112) |
 | Carex, 365 days | No dormancy stall | Organ and leaf counts strictly increase from day 91 to day 273 |
 | Carex, 730 days | Annual re-arm | A `Flowering` phase occurs in **both** season years |
 | Campanula, 730 days | Trailing, not climbing | `MaxHeight < 0.35 m`; more than 8 crown axes; more than 5 branch points |

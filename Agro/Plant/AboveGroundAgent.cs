@@ -163,6 +163,34 @@ public partial struct AboveGroundAgent : IPlantAgent
 		return index;
 	}
 
+	/// <summary>
+	/// The organ whose death removes a whole leaf - every blade segment and the petiole it hangs
+	/// from - starting from either a blade segment or a petiole segment.
+	/// </summary>
+	/// <remarks>
+	/// The energy-death branch used to call <see cref="PetioleChainRoot"/> on a starving organ's
+	/// PARENT for petioles and blades alike. For a first petiole segment the parent is the node
+	/// stem, so one starving petiole deleted its node and the whole distal crown; for a blade
+	/// segment of a segmented leaf it deleted only the segments past the parent segment.
+	/// </remarks>
+	internal static int LeafUnitRoot(PlantSubFormation<AboveGroundAgent> formation, int index)
+	{
+		if (formation.GetOrgan(index) == OrganTypes.Petiole)
+			return PetioleChainRoot(formation, index);
+		var bladeRoot = index;
+		for (var guard = 0; guard <= SpeciesSettings.MaximumLeafSegments; ++guard)
+		{
+			var parent = formation.GetParent(bladeRoot);
+			if (parent < 0 || formation.GetOrgan(parent) != OrganTypes.Leaf)
+				break;
+			bladeRoot = parent;
+		}
+		var petiole = formation.GetParent(bladeRoot);
+		return petiole >= 0 && formation.GetOrgan(petiole) == OrganTypes.Petiole
+			? PetioleChainRoot(formation, petiole)
+			: bladeRoot;
+	}
+
 	/// <summary>Total length of a petiole, summed over the segments it is built from.</summary>
 	/// <remarks>
 	/// The support a blade gets is a property of the whole petiole. Reading only the segment the
@@ -590,17 +618,24 @@ public partial struct AboveGroundAgent : IPlantAgent
 	void Photosynthesize(PlantSubFormation<AboveGroundAgent> formation, int agentID,
 		SpeciesSettings species, AgroWorld world)
 	{
-		if (Organ != OrganTypes.Leaf || Water_g <= 0f) return;
+		if (Organ != OrganTypes.Leaf) return;
 		var irradiance = world.Irradiance.GetIrradiance(formation, agentID); // Wh/m² over this tick
 		if (irradiance <= 0.01f) return;
 		var area = Length * Radius * 2f;
 		if (area <= 0f) return;
+		// The light a blade receives is a property of where it is, not of whether it has water.
+		// Booking it only for a watered leaf made a dry day read as a dark day: every dry blade
+		// ended it with zero resources, its allocation weight became zero against the few that
+		// still had water, it received exactly its maintenance and the Energy <= 0 rule deleted
+		// it - 532 leaves of a Campanula in one tick while the plant held a million ticks of
+		// reserve. Production stays water-limited below.
+		CurrentDayEnvResources += irradiance * area;
+		CurrentDayEnvResourcesInv += irradiance;
+		if (Water_g <= 0f) return;
 		var glucoseAccounting = ResourceUnits.Enabled(species);
 		var production = ResourceUnits.PhotosynthesizedGlucose(irradiance, area, Water_g, glucoseAccounting);
 		Water_g -= ResourceUnits.WaterDebit(production, glucoseAccounting);
 		Energy += production;
-		CurrentDayEnvResources += irradiance * area;
-		CurrentDayEnvResourcesInv += irradiance;
 		CurrentDayProductionInv += production / area;
 	}
 

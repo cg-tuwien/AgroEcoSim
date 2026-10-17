@@ -33,6 +33,10 @@ namespace Agro
 
                 var enoughEnergyState = agent.EnoughEnergy(lifeSupportPerHour);
                 var wasMeristem = false;
+                // Lateral termination used to signal itself by zeroing Energy and relying on the
+                // Energy <= 0 rule below. That rule now spares a funded organ at exactly zero, so
+                // the termination says so explicitly.
+                var terminated = false;
 
                 agent.Photosynthesize(formation, agentID, species, world);
 
@@ -77,6 +81,7 @@ namespace Agro
                             if (plant.RNG.NextFloatAccum(p, world.HoursPerTick))
                             {
                                 agent.Energy = 0f;
+                                terminated = true;
                                 Debug.WriteLine($"DEL STEM {agentID} % {p} @ {timestep}");
                             }
                         }
@@ -332,21 +337,27 @@ namespace Agro
                         }
                     }
                 }
-                else if (agent.Energy <= 0f && !agent.IsRizome) //remove organs that drained all their energy
+                // Remove organs whose maintenance went unpaid. Exactly zero is a funded organ at rest:
+                // the census hands every organ at least its maintenance whenever the plant can pay
+                // it, so an organ with no allocation weight - a zero-maintenance green axis, or a
+                // blade whose share of the surplus is zero - ends its tick at exactly 0 after paying
+                // it. Counting that as starvation deleted funded tissue of a plant holding a large
+                // reserve. Genuine shortage (requirement-weighted shares below maintenance) still
+                // leaves the organ negative.
+                else if ((agent.Energy < 0f || terminated) && !agent.IsRizome)
                 {
                     switch (agent.Organ)
                     {
-                        case OrganTypes.Petiole: //agent.MakeBud(formation, children); break; //keep an option for a new leaf
+                        case OrganTypes.Petiole:
                         case OrganTypes.Leaf:
                             {
                                 if (!agent.FlowerAgent.flowerBase)
                                 {
                                     formation.Death(agentID, reason: OrganDeathReason.Resources);
-                                    //The whole petiole, not the segment this organ hangs off - Death
-                                    //cascades to children, so killing the first segment takes the
-                                    //rest of the chain with it. Killing the last one left the
-                                    //earlier segments standing as a bare stub.
-                                    formation.Death(PetioleChainRoot(formation, agent.Parent), reason: OrganDeathReason.Resources);
+                                    //The whole leaf: the first petiole segment if there is a petiole,
+                                    //else the first blade segment. Death cascades, so that takes every
+                                    //segment with it. It must never be the node the petiole hangs from.
+                                    formation.Death(LeafUnitRoot(formation, agentID), reason: OrganDeathReason.Resources);
                                 }
                             }
                             break;
