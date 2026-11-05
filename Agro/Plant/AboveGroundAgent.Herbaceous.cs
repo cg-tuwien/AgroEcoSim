@@ -64,7 +64,8 @@ namespace Agro
                             && formation.GetOrgan(agent.Parent) != OrganTypes.Meristem
                             && formation.GetOrgan(agent.Parent) != OrganTypes.Petiole)
                         {
-                            var p = ageHours / (7000 ); //6 months in hours
+                            // Keep the age ratio fractional below 7000 hours.
+                            var p = ageHours / 7000f;
                             if (plant.RNG.NextFloatAccum(p * p, world.HoursPerTick) && plant.CanopyGrowthAllowed)
                             {
                                 // A perennial rosette replaces a senescent leaf at its existing node.  Leaving the petiole as an inert Bud

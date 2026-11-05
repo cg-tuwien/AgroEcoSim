@@ -1,6 +1,6 @@
 import { h, Fragment } from "preact";
 import appstate from "../../appstate";
-import { IObstacleLight, IObstacleLightDocument, IObstacleLightMeta, IObstacleLightSurface } from "../../helpers/ObstacleLight";
+import { IObstacleLight, IObstacleLightDocument, IObstacleLightMeta, IObstacleLightSurface, totalLeavesShed } from "../../helpers/ObstacleLight";
 
 /**
  * Settings for the leaf area index measurement, and the export of its result.
@@ -26,6 +26,7 @@ get one band per object.";
     //measure, and `null !== undefined` passes straight into `null.obstacles`.
     const measured = doc != null && doc.obstacles.length > 0;
     const surveyed = doc != null && doc.trays.length > 0;
+    const shed = surveyed ? totalLeavesShed(doc!) : undefined;
 
     return <>
         <div>
@@ -58,6 +59,9 @@ get one band per object.";
                 Export leaf area index (json)
             </button>
         </div>
+        {surveyed ? <div><small title="Whole ordinary foliage blades removed during the run, including age replacement and stress shedding. Floral bracts and dead blades still attached are excluded.">
+            {shed === undefined ? "Leaf shedding was not recorded in this run." : `Leaves shed during run: ${shed.toLocaleString()}.`}
+        </small></div> : null}
         {measured
             ? <LeafAreaIndexTable doc={doc!} />
             : <Nothing meta={doc?.meta} surveyed={surveyed} />}
@@ -138,7 +142,7 @@ function LeafAreaIndexTable({ doc }: { doc: IObstacleLightDocument }) {
                     <th title="Name of the imported object">obstacle</th>
                     <th title="Exposed area, m²">m²</th>
                     <th title="Side and orientation of the surface carrying the most solar load">face</th>
-                    <th title="Total one-sided leaf area per unit area of that surface, at its maximum">LAI</th>
+                    <th title="Total one-sided leaf area per unit area of that surface, at its maximum during the run">peak LAI</th>
                     <th title="Share of the solar gain the foliage keeps off that surface">shaded</th>
                     <th title="Solar energy the foliage kept off the whole object">kWh</th>
                 </tr>

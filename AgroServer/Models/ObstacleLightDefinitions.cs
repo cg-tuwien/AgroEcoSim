@@ -68,10 +68,12 @@ public static class ObstacleLightDefinitions
             + "much as noon. Leaf area indices are means over daylight hours; peaks and maxima are maxima. A year "
             + "is folded from the same steps as its weeks and the total from the years, so the levels agree.",
         ["trays"] = "The foliage of every plant rooted in each planting tray, surveyed once per local day from the "
-            + "geometry and averaged over the period. Independent of the light model. A tray is the imported "
+            + "geometry and averaged over the period; leavesShed is a period total instead. Independent of the "
+            + "light model. A tray is the imported "
             + "object whose soils carry its name with an _S part; a plain field is one tray named field.",
         ["facade"] = "Every tray as one patch: leafArea summed, leafAngleSine and leafDiameter weighted by leaf area "
-            + "over all trays, thickness the largest of any tray. outward is the unit normal of the facade, "
+            + "over all trays, thickness the largest of any tray, leavesShed summed over trays. outward is the "
+            + "unit normal of the facade, "
             + "pointing away from the building, along which the thickness is measured.",
         ["leafArea_m2"] = "m². One-sided area of every living blade in the tray, using the species' blade outline, mean "
             + "over the period's days; blades killed by drought are in deadLeafArea_m2. Petals are not leaves. Divide by your own facade cell area for a leaf "
@@ -85,6 +87,11 @@ public static class ObstacleLightDefinitions
             + "the facade normal to the farthest leaf corner, as a bounding box would give it; mean over the "
             + "period's days. Without a tray mesh it is the canopy height above the seeding level.",
         ["leaves"] = "Mean number of blades. A segmented blade counts once.",
+        ["leavesShed"] = "Total number of ordinary foliage blades physically removed during the period, including "
+            + "age replacement, stress shedding and removal with an ancestor. A segmented blade counts once; "
+            + "floral bracts are excluded. Dead blades still attached do not count until removed. This is a sum, "
+            + "not a daily mean: weekly and annual counts add to the whole-run total. Historical documents "
+            + "without this field did not record shedding; missing does not mean zero.",
         ["deadLeafArea_m2"] = "m². One-sided area of blades that died of drought and still hang on the plant, mean over "
             + "the period's days. They still shade and are counted by the ray-traced leaf area index, but no longer "
             + "transpire or assimilate; leafArea, leafAngleSine, leafDiameter, thickness and leaves describe living "
@@ -99,6 +106,6 @@ public static class ObstacleLightDefinitions
             + "Length x 2 Radius the light model stands a blade in, one factor per blade slice. The tray leaf "
             + "areas use the outline; the ray-traced leaf area indices use the rectangle, so they read higher "
             + "by one over this factor.",
-        ["precision"] = "Readings are written with four significant digits; coordinates in full.",
+        ["precision"] = "Floating-point readings are written with four significant digits; coordinates and integer counts in full.",
     };
 }

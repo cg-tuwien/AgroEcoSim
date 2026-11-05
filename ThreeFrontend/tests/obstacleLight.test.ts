@@ -1,7 +1,7 @@
 import fixture from './__fixtures__/obstacle-light.json';
 import {
     IObstacleLight, IObstacleLightDocument, IObstacleLightPeriod, isObstacleLightDocument,
-    obstacleValueOn, ObstacleMappingOptions, OBSTACLE_LIGHT_FORMAT, stepDate, weekIndexOn,
+    obstacleValueOn, ObstacleMappingOptions, OBSTACLE_LIGHT_FORMAT, stepDate, totalLeavesShed, weekIndexOn,
 } from '../src/helpers/ObstacleLight';
 import { writeObstacleColors, unmappedObstacleColor, unmeasuredObstacleColor } from '../src/render/core/ObstacleColors';
 import type { MeshData as MeshDataType } from '../src/render/core/Geometry';
@@ -45,6 +45,32 @@ describe('the document, as the backend actually writes it', () => {
             if (s.weeks) expect(s.weeks.length).toBe(weeks.length);
         expect(doc.trays[0].weeks.length).toBe(weeks.length);
         expect(doc.facade!.weeks.length).toBe(weeks.length);
+    });
+
+    it('preserves shedding totals in new documents while historical counts remain unknown', () => {
+        expect(totalLeavesShed(doc)).toBeUndefined();
+        const withShedding: IObstacleLightDocument = {
+            ...doc,
+            facade: {
+                ...doc.facade!,
+                weeks: doc.facade!.weeks.map((week, i) => week && ({ ...week, leavesShed: i === 0 ? 2 : i === 1 ? 5 : 0 })),
+                years: doc.facade!.years.map(year => ({ ...year, leavesShed: 7 })),
+                total: { ...doc.facade!.total!, leavesShed: 7 },
+            },
+            trays: doc.trays.map(tray => ({ ...tray, total: { ...tray.total!, leavesShed: 7 } })),
+        };
+        const restored = JSON.parse(JSON.stringify(withShedding)) as IObstacleLightDocument;
+        expect(isObstacleLightDocument(restored)).toBe(true);
+        expect(totalLeavesShed(restored)).toBe(7);
+        //Unlike the daily means, weekly removal counts add directly, without weighting by days.
+        expect(restored.facade!.weeks.reduce((total, week) => total + (week?.leavesShed ?? 0), 0)).toBe(7);
+        expect(restored.facade!.years[0].leavesShed).toBe(7);
+        expect(restored.facade!.total!.leaves).toBe(doc.facade!.total!.leaves);
+        expect(doc.facade!.total!.leavesShed).toBeUndefined();
+
+        expect(totalLeavesShed({ ...restored, facade: null })).toBe(7);
+        expect(totalLeavesShed({ ...restored, facade: null, trays: [...restored.trays, doc.trays[0]] })).toBeUndefined();
+        expect(totalLeavesShed({ ...restored, facade: null, trays: [] })).toBeUndefined();
     });
 
     it('resolves the wall by side and orientation, with series on the facade sides only', () => {

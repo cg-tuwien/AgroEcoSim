@@ -318,6 +318,16 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 			Debug.Assert(newCount >= 0);
 			EnsureAgentCapacity(newCount);
 			var src = Src();
+			// Count accepted, previously live blade roots before compaction changes their parents.
+			// Death requests can be staged or repeated; only this commit actually sheds foliage.
+			if (IsAboveGround)
+				foreach (var index in Deaths)
+				{
+					ref var blade = ref Unsafe.As<T, AboveGroundAgent>(ref src[index]);
+					if (blade.Organ == OrganTypes.Leaf && !blade.FlowerAgent.flowerBase
+						&& (blade.Parent < 0 || blade.Parent >= src.Length || src[blade.Parent].Organ != OrganTypes.Leaf))
+						++FoliageBladesShed;
+				}
 			var dst = (ReadTMP ? Agents : AgentsTMP).AsSpan(0, newCount);
 			if (Deaths.Count > 0)
 			{

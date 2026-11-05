@@ -53,6 +53,9 @@ public partial class PlantSubFormation<T>
     public long AcceptedDevelopments { get; private set; }
     public long NaturalDeaths { get; private set; }
     public long ResourceDeaths { get; private set; }
+    /// <summary>Whole ordinary foliage blades physically removed at Census, across all causes.
+    /// Segments count once, floral bracts and uncommitted births do not count.</summary>
+    public long FoliageBladesShed { get; private set; }
     public int PausedGrowthCount => GrowthRetries.Count;
     public int PendingDevelopmentCount => Developments.Count;
     internal ulong GetOrganId(int i) => Src()[i].StableId;
@@ -563,6 +566,7 @@ public partial class PlantSubFormation<T>
     void WriteGrowthState(BinaryWriter w)
     {
         w.Write(RejectedDevelopments); w.Write(AcceptedDevelopments); w.Write(NaturalDeaths); w.Write(ResourceDeaths);
+        w.Write(FoliageBladesShed);
         w.Write(GrowthRetries.Count);
         foreach (var (id, r) in GrowthRetries.OrderBy(x => x.Key))
         { w.Write(id); w.Write(r.NextHour); w.Write(r.Failures); WriteValue(w, r.LastPose); }
@@ -582,6 +586,7 @@ public partial class PlantSubFormation<T>
     void ReadGrowthState(BinaryReader r)
     {
         RejectedDevelopments = r.ReadInt64(); AcceptedDevelopments = r.ReadInt64(); NaturalDeaths = r.ReadInt64(); ResourceDeaths = r.ReadInt64();
+        FoliageBladesShed = r.ReadInt64();
         GrowthRetries.Clear(); Developments.Clear();
         var count = r.ReadInt32();
         for (int i = 0; i < count; ++i)

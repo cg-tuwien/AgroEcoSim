@@ -209,6 +209,21 @@ share of the tick's demand on top of its free storage) belongs to the soil task.
 
 ## Verification
 
+- See [the leaf-turnover audit](LEAF_TURNOVER.md) for the species eligibility settings,
+  corrected age-probability arithmetic and the physical shedding counter.
+- Healthy leaf-age turnover: with seed 42 and render mode 0, compare 1 h and 4 h ticks for
+  Campanula (150-day eligibility), Fragaria (180 days) and Heuchera (200 days). Track stable IDs
+  of whole vegetative blades, excluding floral bracts and counting a segmented blade once.
+  Age-driven renewal must not occur before the configured eligibility age; after it, the
+  per-hour probability must be positive even below 7000 hours. In particular, unsigned
+  `ageHours / 7000` used to truncate it to zero until 291.67 days. Check the generic Default's
+  `ageHours / 4032f` path below 4032 hours as well. Probability over a tick remains
+  `1 - (1 - min(1, p * p))^HoursPerTick` through `NextFloatAccum`.
+  Keep the existing eligibility gates: only the first petiole renews, a Meristem-parented
+  petiole waits, pending development waits, and herbaceous renewal requires canopy growth to
+  be allowed. Use a wet control and check the drought/carbon signals so these gates cannot
+  masquerade as an age-probability failure. Under certified contacts, check actual retirement
+  after replacement admission; an attempted renewal is not yet a shed blade.
 - Probe (outside the repository): `/tmp/greenfdt-drought-probe` - mode A replays a stored request,
   B overrides the weather for a wet or dry control, C runs the 730-day habit metrics, D compares the
   parallel and sequential ticks.

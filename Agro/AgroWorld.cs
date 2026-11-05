@@ -849,7 +849,9 @@ public class AgroWorld : SimulationWorld
     // V35 appends each plant's drought state after its water budget (stress filter, episode,
     // reference and target canopy, carry, starvation, last controller step) and the tray survey's
     // dead-attached leaf area. Leaves in drought senescence reuse the organ's senescence fields.
-	public const byte CheckpointVersion = 35;
+	// V38 stores committed whole-blade shedding counts and the survey's per-period totals and
+	// recorded formation counters. Earlier live states cannot reconstruct historical shedding.
+	public const byte CheckpointVersion = 38;
 
 	/// <summary>
 	/// Everything the next step depends on that the request does not determine.

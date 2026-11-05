@@ -36,10 +36,13 @@ public readonly record struct VegetationPeriod(
 	/// <summary>Largest daily thickness of the period, metres.</summary>
 	float ThicknessMax_m,
 	/// <summary>One-sided area of blades that died of drought and still hang on the plant, m², mean
-	/// over the days. They shade but no longer live; every other field covers living blades only.</summary>
-	float DeadLeafArea_m2)
+	/// over the days. They shade but no longer live; the geometric fields cover living blades only.</summary>
+	float DeadLeafArea_m2,
+	// Whole ordinary foliage blades removed during the period, summed rather than averaged.
+	// Includes age replacement and stress shedding; excludes floral bracts.
+	long LeavesShed = 0)
 {
-	public bool IsEmpty => Days == 0;
+	public bool IsEmpty => Days == 0 && LeavesShed == 0;
 }
 
 /// <summary>Weekly, annual and whole-run readings of one tray, dense and aligned with
@@ -136,6 +139,7 @@ public sealed class TrayVegetationSurvey
 		public int Days;
 		public double LeafArea, AreaSine, AreaDiameter, Blades, Thickness, DeadLeafArea;
 		public float LeafAreaMax, LeafAreaFinal, ThicknessMax;
+		public long LeavesShed;
 
 		public void Fold(in Sample sample)
 		{
@@ -151,10 +155,10 @@ public sealed class TrayVegetationSurvey
 			ThicknessMax = MathF.Max(ThicknessMax, sample.Thickness);
 		}
 
-		/// <summary>Years are added in order, so the later one's final value wins.</summary>
+		/// <summary>Years are added in order, so the later surveyed year's final value wins.</summary>
 		public void Add(in Accumulator other)
 		{
-			if (other.Days == 0)
+			if (other.IsEmpty)
 				return;
 			Days += other.Days;
 			LeafArea += other.LeafArea;
@@ -164,24 +168,27 @@ public sealed class TrayVegetationSurvey
 			Thickness += other.Thickness;
 			DeadLeafArea += other.DeadLeafArea;
 			LeafAreaMax = MathF.Max(LeafAreaMax, other.LeafAreaMax);
-			LeafAreaFinal = other.LeafAreaFinal;
+			if (other.Days > 0)
+				LeafAreaFinal = other.LeafAreaFinal;
 			ThicknessMax = MathF.Max(ThicknessMax, other.ThicknessMax);
+			LeavesShed += other.LeavesShed;
 		}
 
-		public VegetationPeriod Close() => Days == 0 ? default : new VegetationPeriod(
+		public VegetationPeriod Close() => IsEmpty ? default : new VegetationPeriod(
 			Days,
-			(float)(LeafArea / Days),
+			Days > 0 ? (float)(LeafArea / Days) : 0f,
 			LeafArea > 0.0 ? (float)(AreaSine / LeafArea) : 0f,
 			LeafArea > 0.0 ? (float)(AreaDiameter / LeafArea) : 0f,
-			(float)(Thickness / Days),
-			(float)(Blades / Days),
+			Days > 0 ? (float)(Thickness / Days) : 0f,
+			Days > 0 ? (float)(Blades / Days) : 0f,
 			LeafAreaMax,
 			LeafAreaFinal,
 			ThicknessMax,
-			(float)(DeadLeafArea / Days));
+			Days > 0 ? (float)(DeadLeafArea / Days) : 0f,
+			LeavesShed);
 
 		public bool IsEmpty => Days == 0 && LeafArea == 0.0 && AreaSine == 0.0 && AreaDiameter == 0.0 && Blades == 0.0
-			&& Thickness == 0.0 && LeafAreaMax == 0f && LeafAreaFinal == 0f && ThicknessMax == 0f && DeadLeafArea == 0.0;
+			&& Thickness == 0.0 && LeafAreaMax == 0f && LeafAreaFinal == 0f && ThicknessMax == 0f && DeadLeafArea == 0.0 && LeavesShed == 0;
 
 		public void Write(BinaryWriter writer)
 		{
@@ -195,6 +202,7 @@ public sealed class TrayVegetationSurvey
 			writer.Write(LeafAreaFinal);
 			writer.Write(ThicknessMax);
 			writer.Write(DeadLeafArea);
+			writer.Write(LeavesShed);
 		}
 
 		public static Accumulator Read(BinaryReader reader) => new()
@@ -209,6 +217,7 @@ public sealed class TrayVegetationSurvey
 			LeafAreaFinal = reader.ReadSingle(),
 			ThicknessMax = reader.ReadSingle(),
 			DeadLeafArea = reader.ReadDouble(),
+			LeavesShed = reader.ReadInt64(),
 		};
 	}
 
@@ -228,6 +237,12 @@ public sealed class TrayVegetationSurvey
 		{
 			Weeks[Math.Min(week, Weeks.Length - 1)].Fold(in sample);
 			Years[Math.Min(year, Years.Length - 1)].Fold(in sample);
+		}
+
+		public void RecordShedding(int week, int year, long count)
+		{
+			Weeks[Math.Min(week, Weeks.Length - 1)].LeavesShed += count;
+			Years[Math.Min(year, Years.Length - 1)].LeavesShed += count;
 		}
 
 		public VegetationSeries Close()
@@ -311,6 +326,7 @@ public sealed class TrayVegetationSurvey
 
 	bool Ready;
 	int[] TrayOfFormation = [];
+	long[] RecordedShedTotals = [];
 	Tray[] TrayArray = [];
 	Partial[] Partials = [];
 	Sample[] Samples = [];
@@ -341,23 +357,47 @@ public sealed class TrayVegetationSurvey
 	public DateTime? LastSurveyedDate => LastDate;
 	public int SurveyedDays { get; private set; }
 
-	/// <summary>Simulation callback. Surveys on the first step of every local date.</summary>
+	/// <summary>Simulation callback. Surveys geometry on the first step of every local date and
+	/// records physical shedding every step in the period containing that step's midpoint.</summary>
 	public void Tick(SimulationWorld world, uint timestep, IList<IFormation> formations, IList<IObstacle> obstacles)
 	{
 		if (world is not AgroWorld agro)
 			return;
 		var local = TimeZoneInfo.ConvertTimeFromUtc(agro.GetTime(timestep), agro.TimeZone);
 		var date = PeriodCalendar.StepDate(local, agro.HoursPerTick);
-		if (LastDate == date)
-			return;
 		var formationList = formations as IReadOnlyList<IFormation> ?? [.. formations];
 		if (!Ready)
 			Setup(agro, formationList, obstacles as IReadOnlyList<IObstacle> ?? [.. obstacles]);
-		Survey(formationList, date);
-		FirstDate ??= date;
-		LastDate = date;
-		++SurveyedDays;
-		Dirty = true;
+		if (LastDate != date)
+		{
+			Survey(formationList, date);
+			FirstDate ??= date;
+			LastDate = date;
+			++SurveyedDays;
+			Dirty = true;
+		}
+		RecordShedding(formationList, date);
+	}
+
+	void RecordShedding(IReadOnlyList<IFormation> formations, DateTime date)
+	{
+		var week = Calendar.WeekIndex(date);
+		var year = Calendar.YearIndex(date);
+		for (int f = 0; f < TrayOfFormation.Length; ++f)
+		{
+			var t = TrayOfFormation[f];
+			if (t < 0 || formations[f] is not PlantFormation2 plant)
+				continue;
+			var total = plant.AG.FoliageBladesShed;
+			var count = total - RecordedShedTotals[f];
+			RecordedShedTotals[f] = total;
+			if (count <= 0)
+				continue;
+			TrayArray[t].Acc.RecordShedding(week, year, count);
+			FacadeAcc.RecordShedding(week, year, count);
+			TrayArray[t].LastDay = TrayArray[t].LastDay with { LeavesShed = TrayArray[t].LastDay.LeavesShed + count };
+			Dirty = true;
+		}
 	}
 
 	/// <summary>The tray an imported soil belongs to: the name without its last <c>_S</c> part.</summary>
@@ -381,6 +421,7 @@ public sealed class TrayVegetationSurvey
 		var byName = new Dictionary<string, int>(StringComparer.Ordinal);
 		var seedPoints = new List<List<Vector3>>();
 		TrayOfFormation = new int[formations.Count];
+		RecordedShedTotals = new long[formations.Count];
 		Array.Fill(TrayOfFormation, -1);
 		for (int f = 0; f < formations.Count; ++f)
 		{
@@ -676,6 +717,9 @@ public sealed class TrayVegetationSurvey
 		ObstacleLightMeter.WriteDate(writer, FirstDate);
 		ObstacleLightMeter.WriteDate(writer, LastDate);
 		writer.Write(SurveyedDays);
+		writer.Write(RecordedShedTotals.Length);
+		foreach (var count in RecordedShedTotals)
+			writer.Write(count);
 	}
 
 	/// <summary>Restores what <see cref="WriteState"/> wrote onto a world rebuilt from the same
@@ -711,6 +755,11 @@ public sealed class TrayVegetationSurvey
 		FirstDate = ObstacleLightMeter.ReadDate(reader);
 		LastDate = ObstacleLightMeter.ReadDate(reader);
 		SurveyedDays = reader.ReadInt32();
+		var formations = reader.ReadInt32();
+		if (formations != RecordedShedTotals.Length)
+			throw new InvalidDataException("The checkpoint's foliage shedding counters belong to a different formation list.");
+		for (int f = 0; f < formations; ++f)
+			RecordedShedTotals[f] = reader.ReadInt64();
 		Dirty = true;
 	}
 
@@ -726,11 +775,12 @@ public sealed class TrayVegetationSurvey
 		writer.Write(period.LeafAreaFinal_m2);
 		writer.Write(period.ThicknessMax_m);
 		writer.Write(period.DeadLeafArea_m2);
+		writer.Write(period.LeavesShed);
 	}
 
 	static VegetationPeriod ReadPeriod(BinaryReader reader) => new(
 		reader.ReadInt32(), reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle(),
-		reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
+		reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle(), reader.ReadInt64());
 
 	/// <summary>Closes every tray and the facade. Idempotent; free when nothing was surveyed since.</summary>
 	public void Finish()

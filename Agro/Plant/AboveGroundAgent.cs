@@ -916,7 +916,7 @@ public partial struct AboveGroundAgent : IPlantAgent
 			{
 				if (ageHours > 36 && formation.GetOrgan(Parent) != OrganTypes.Meristem)
 				{
-					var p = ageHours / 4032; //6 months in hours
+					var p = ageHours / 4032f; //168 days in hours
 					if (plant.RNG.NextFloatAccum(p * p, world.HoursPerTick))
 						InitSenescence(timestep, plant, species, formation, children, world.HoursPerTick, stressReason: false);
 				}

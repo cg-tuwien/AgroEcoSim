@@ -532,8 +532,11 @@ public class VegetationPeriodResponse
     public float Thickness_m { get; set; }
     ///<summary>Mean number of blades.</summary>
     public float Leaves { get; set; }
+    ///<summary>Total ordinary foliage blades physically removed during this period, counted once
+    ///per whole blade. Excludes floral bracts and blades that remain attached after dying.</summary>
+    public long LeavesShed { get; set; }
     ///<summary>One-sided area of blades killed by drought and still attached, m², mean over the days.
-    ///The other fields describe living blades only.</summary>
+    ///The geometric foliage fields describe living blades only; LeavesShed counts removals.</summary>
     public float DeadLeafArea_m2 { get; set; }
     ///<summary>Annual and whole-run records only.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -551,6 +554,7 @@ public class VegetationPeriodResponse
         LeafDiameter_m = p.LeafDiameter_m,
         Thickness_m = p.Thickness_m,
         Leaves = p.Leaves,
+        LeavesShed = p.LeavesShed,
         DeadLeafArea_m2 = p.DeadLeafArea_m2,
         LeafAreaMax_m2 = withExtremes ? p.LeafAreaMax_m2 : null,
         LeafAreaFinal_m2 = withExtremes ? p.LeafAreaFinal_m2 : null,

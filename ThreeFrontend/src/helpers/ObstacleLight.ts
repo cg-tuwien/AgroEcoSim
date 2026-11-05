@@ -144,6 +144,9 @@ export interface IVegetationPeriod {
     leafDiameter_m: number;
     thickness_m: number;
     leaves: number;
+    /** Whole ordinary foliage blades physically removed during the period; a total, not a daily mean.
+     * Absent in historical documents that did not record shedding. */
+    leavesShed?: number;
     /** One-sided area of blades killed by drought and still attached; absent in documents written before it existed. */
     deadLeafArea_m2?: number;
     leafAreaMax_m2?: number;
@@ -198,6 +201,20 @@ export function isObstacleLightDocument(value: unknown): value is IObstacleLight
     return typeof value === 'object' && value !== null
         && (value as { format?: unknown }).format === OBSTACLE_LIGHT_FORMAT
         && Array.isArray((value as { obstacles?: unknown }).obstacles);
+}
+
+/** Whole-run foliage removals; historical documents without counts remain unknown. */
+export function totalLeavesShed(doc: IObstacleLightDocument): number | undefined {
+    const facade = doc.facade?.total?.leavesShed;
+    if (facade !== undefined) return facade;
+    if (doc.trays.length === 0) return undefined;
+    let total = 0;
+    for (const tray of doc.trays) {
+        const count = tray.total?.leavesShed;
+        if (count === undefined) return undefined;
+        total += count;
+    }
+    return total;
 }
 
 /** What the viewport can colour obstacles by. */
