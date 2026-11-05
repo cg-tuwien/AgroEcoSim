@@ -39,9 +39,10 @@ blades. Neither zero dead area nor steady net LAI establishes absence of turnove
 The HUD labels its maximum explicitly as **peak LAI** and shows the shedding total.
 Historical documents without the new count mean **not recorded**, not zero.
 
-Live checkpoint version 38 stores both the organ-removal counter and survey
+Live checkpoint version 38 introduced both the organ-removal counter and survey
 accumulators/baselines. Earlier live checkpoints are rejected; their saved
-playback and LAI documents remain readable.
+playback and LAI documents remain readable. Version 39 additionally requires the corrected
+soil transport, probability arithmetic and physiological timing.
 
 ## Botanical evidence and retained settings
 

@@ -467,10 +467,12 @@ like "it never germinates", and it is invisible to a probe that reads
   multiplies maintenance by production efficiency: every zero-maintenance green axis, every root
   that absorbed nothing and every blade with a dry day gets exactly zero. The response uses
   `DistributeEnergyByMaintenance`; the legacy path still has the old weighting.
-- **At 4 h ticks the box-field soil is in drought for most of a dry spring; at 1 h it never is.**
-  Water moves `(int)(WaterCellsPerStep + fill)` cells per tick, which truncates to zero at 1 h and
-  to one cell (past the 5 cm root cells) at 4 h. Do not calibrate drought parameters on box-field
-  runs at 4 h ticks until the soil task fixes transport and root uptake.
+- **Regular voxel transport uses hourly substeps and fractional transfers.** The former integer
+  cutoff left water immobile at 1 h while draining root cells at 4 h. Regression: a half-full
+  5 cm column over four hours conserves water and produces identical soil-only results with
+  1 h and 4 h external ticks; repeat across 256 parallel columns. Plant uptake and weather
+  averaging still depend on the external timestep, so this is not whole-plant timestep invariance.
+  See `Agro/NUMERICAL_REGRESSIONS.md`.
 
 ## Useful code map
 

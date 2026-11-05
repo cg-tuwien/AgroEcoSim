@@ -46,7 +46,7 @@ describe('opening a stored run', () => {
         asked = [];
         (global as any).fetch = jest.fn(async (url: string) => {
             asked.push(url);
-            const ok = (body: any) => ({ ok: true, json: async () => body, arrayBuffer: async () => body });
+            const ok = (body: any) => ({ ok: true, json: async () => body, text: async () => JSON.stringify(body), arrayBuffer: async () => body });
             if (url.endsWith('/terrain')) return ok(terrainBytes.buffer.slice(
                 terrainBytes.byteOffset, terrainBytes.byteOffset + terrainBytes.byteLength));
             if (url.endsWith('/request')) return ok(REQUEST);
@@ -62,13 +62,34 @@ describe('opening a stored run', () => {
     /** Re-points the fake server at one run that has no stored terrain. */
     function serve(run: any) {
         (global as any).fetch = jest.fn(async (url: string) => {
-            const ok = (body: any) => ({ ok: true, json: async () => body, arrayBuffer: async () => body });
+            const ok = (body: any) => ({ ok: true, json: async () => body, text: async () => JSON.stringify(body), arrayBuffer: async () => body });
             if (url.endsWith('/request')) return ok({ ...REQUEST, FieldModelPath: run.fieldModelName ?? '' });
             if (url.endsWith('/index')) return ok(indexBytes([0, 1, 2]));
             if (url.includes('/simulation/run/')) return ok(run);
             return { ok: true, json: async () => [], arrayBuffer: async () => new ArrayBuffer(0) };
         });
     }
+
+    it('preserves tray zero when placing one seed in each tray', async () => {
+        expect(await appstate.loadStoredRun('abc123')).toBe(true);
+        appstate.terrainList = [appstate.terrainList[0], appstate.terrainList[0]];
+        const { Seed } = require('../src/helpers/Seed');
+        const random = jest.spyOn(Math, 'random').mockReturnValue(0.75);
+        try {
+            const species = [{ name: { peek: () => 'Default' } }];
+            expect([0, 1].map(i => Seed.rndItem(species, 0, i).fieldIndex.peek())).toEqual([0, 1]);
+        } finally { random.mockRestore(); }
+    });
+
+    it('reopens a legacy numeric seed and submits every bit unchanged', async () => {
+        const previousFetch = global.fetch;
+        (global as any).fetch = jest.fn(async (url: string) => url.endsWith('/request')
+            ? { ok: true, text: async () => JSON.stringify(REQUEST).replace('"Seed":42', '"Seed":18446744073709551615') }
+            : previousFetch(url));
+        expect(await appstate.loadStoredRun('abc123')).toBe(true);
+        expect(appstate.initNumber.value).toBe('18446744073709551615');
+        expect(appstate.requestBody().Seed).toBe('18446744073709551615');
+    });
 
     it('restores the trays and the imported obstacles', async () => {
         expect(await appstate.loadStoredRun('abc123')).toBe(true);

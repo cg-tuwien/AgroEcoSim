@@ -14,6 +14,8 @@
  *   tray       the plants rooted in one imported tray: leaf area, angle, size, thickness
  */
 
+import { simulationClock, DEFAULT_TIME_ZONE } from './Sun';
+
 export const OBSTACLE_LIGHT_FORMAT = 'greenfdt.leaf-area-index/2';
 
 /** One period's light and foliage readings on one patch. */
@@ -305,12 +307,8 @@ export function obstacleValueOn(doc: IObstacleLightDocument, light: IObstacleLig
 }
 
 /** Local calendar date of a simulation step, as the backend would have labelled it. */
-export function stepDate(initialDate: string, hoursPerTick: number, step: number): string {
-    //InitialDate is local midnight at the site and steps advance in whole hours from it, so the
-    //date only needs day arithmetic - no time zone conversion, which the backend already did.
-    //The backend credits a step to the date of its midpoint, so the half step is added here too.
-    const hours = step * hoursPerTick + hoursPerTick / 2;
-    const base = new Date(`${initialDate}T00:00:00Z`);
-    base.setUTCHours(base.getUTCHours() + Math.floor(hours));
-    return base.toISOString().slice(0, 10);
+export function stepDate(initialDate: string, hoursPerTick: number, step: number, timeZone = DEFAULT_TIME_ZONE): string {
+    // Match PeriodCalendar.StepDate: convert the START to local time, then add the half tick.
+    const start = simulationClock(initialDate, timeZone)(step * hoursPerTick);
+    return new Date(start.getTime() + hoursPerTick * 1800_000).toISOString().slice(0, 10);
 }

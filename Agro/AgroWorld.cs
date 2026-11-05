@@ -153,7 +153,9 @@ public class AgroWorld : SimulationWorld
 	/// </summary>
 	public static ushort SnapHoursPerTick(int requested)
 	{
-		var hours = (ushort)Math.Max(0, requested);
+		if (requested < 1 || requested > ushort.MaxValue)
+			throw new ArgumentOutOfRangeException(nameof(requested), "HoursPerTick must be between 1 and 65535.");
+		var hours = (ushort)requested;
 		return hours < 24
 			? (ushort)(hours switch { <= 0 => 1, 5 => 4, 7 => 6, 9 or 10 => 8, 11 => 12, >12 and <= 18 => 12, >18 => 24, _ => hours })
 			: (ushort)(24 * (hours / 24));
@@ -851,7 +853,9 @@ public class AgroWorld : SimulationWorld
     // dead-attached leaf area. Leaves in drought senescence reuse the organ's senescence fields.
 	// V38 stores committed whole-blade shedding counts and the survey's per-period totals and
 	// recorded formation counters. Earlier live states cannot reconstruct historical shedding.
-	public const byte CheckpointVersion = 38;
+	// V39 corrects soil transport, probability arithmetic and physiological timing. Older live
+	// runs cannot continue with the same dynamics; recorded playback remains readable.
+	public const byte CheckpointVersion = 39;
 
 	/// <summary>
 	/// Everything the next step depends on that the request does not determine.

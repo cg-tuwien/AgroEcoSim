@@ -250,6 +250,8 @@ public class SimulationController// : ControllerBase
 
         api.MapPost("/upload", (SimulationRequest request) =>
         {
+            if (request.HoursPerTick is < 1 or > ushort.MaxValue)
+                return Results.BadRequest("HoursPerTick must be between 1 and 65535.");
             //A pattern that does not parse is still run - the meter falls back to a substring
             //match - but the person typing it should hear about it now, not read it in the meta.
             if (!string.IsNullOrWhiteSpace(request.LeafAreaIndexObstacles)

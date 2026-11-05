@@ -5,6 +5,7 @@ import BinaryReader from "./helpers/BinaryReader";
 import { PlantModel } from "./helpers/Scene";
 import * as SignalR from "@microsoft/signalr";
 import { Seed } from "./helpers/Seed";
+import { exactSeed, parseSeedJson } from "./helpers/ExactSeed";
 import { Obstacle } from "./helpers/Obstacle";
 import { BaseRequestObject } from "./helpers/BaseRequestObject";
 import { VisualMappingOptions } from "./render/core/PlantColors";
@@ -16,7 +17,7 @@ import {
     obstacleValueOn, ObstacleMappingOptions, obstacleMappingSpec, stepDate,
 } from "./helpers/ObstacleLight";
 import { canDeflate, deflateBytes, inflateBytes } from "./helpers/deflate";
-import { ALTITUDE, AZIMUTH, AZIMUTH_OFFSETS, DEFAULT_INITIAL_DATE, LATITUDE, LONGITUDE, SolarSite } from "./helpers/Sun";
+import { ALTITUDE, AZIMUTH, AZIMUTH_OFFSETS, DEFAULT_INITIAL_DATE, LATITUDE, LONGITUDE, SolarSite, snapHoursPerTick } from "./helpers/Sun";
 import { convertCoordsTo_RH_rightPX_upPY } from "./helpers/CoordinateSystem";
 import { LIGHTING_OFF, LightingOptions, SHADOW_NORMAL_OFFSET_TEXELS, lightingFromLegacyTier } from "./render/core/Lighting";
 import { Species } from "./helpers/Species";
@@ -833,7 +834,7 @@ class State {
     fieldCellsD = computed(() => Math.ceil(this.fieldSizeD.value / this.fieldResolution.value));
     terrainList: ITerrainItem[] = [];
     terrainTimestamp = signal(Date.now());
-    initNumber = signal(42);
+    initNumber = signal<string | number>("42");
     randomize = signal(false);
     renderMode = signal(3); //3 is Internal CPU
 
@@ -865,7 +866,7 @@ class State {
         if (!meta) return undefined;
         //playPointer.value is the subscription and timestepAt turns it into the simulated step;
         //passing the value in rather than calling currentTimestep() is deliberate, see timestepAt.
-        return stepDate(meta.initialDate, meta.hoursPerTick, this.timestepAt(this.playPointer.value));
+        return stepDate(meta.initialDate, meta.hoursPerTick, this.timestepAt(this.playPointer.value), meta.timeZone);
     });
 
     /**
@@ -1246,7 +1247,7 @@ class State {
         TotalHours: Math.trunc(this.totalHours.peek()),
         FieldResolution: this.fieldResolution.peek(),
         FieldSize: { X: this.fieldSizeX.peek(), D: this.fieldSizeD.peek(), Z: this.fieldSizeZ.peek() },
-        Seed: Math.trunc(this.randomize.peek() ? Math.random() * 4294967295 : this.initNumber.peek()),
+        Seed: exactSeed(this.randomize.peek() ? Math.floor(Math.random() * 4294967296) : this.initNumber.peek()),
         InitialDate: this.initialDate.peek(),
         Latitude: this.latitude.peek(),
         Longitude: this.longitude.peek(),
@@ -1289,7 +1290,7 @@ class State {
             hubConnection.invoke("abort");
         else
         {
-            this.simHoursPerTick = this.hoursPerTick.peek();
+            this.simHoursPerTick = snapHoursPerTick(this.hoursPerTick.peek());
             //console.log(this.scene);
             batch(() => {
                 this.computing.value = true;
@@ -1729,7 +1730,7 @@ class State {
             try {
                 const archive = await readRunArchive(file);
                 this.archiveMeasurement = archive?.fullMeasurement;
-                const data = archive?.metadata ?? JSON.parse(await file.text());
+                const data = archive?.metadata ?? parseSeedJson(await file.text());
                 const seeds = self.seeds.peek();
                 for(let i = seeds.length - 1; i >= 0; --i)
                     self.removeSeedAt(i);
@@ -1760,7 +1761,7 @@ class State {
                     //the signal already holds - which is no change, so the viewport keeps drawing
                     //the terrain the file was supposed to replace.
                     self.bumpTerrain();
-                    self.initNumber.value = data.initNumber;
+                    self.initNumber.value = exactSeed(data.initNumber ?? "42");
                     self.randomize.value = data.randomize;
                     self.renderMode.value = data.renderMode;
                     self.initialDate.value = data.initialDate ?? DEFAULT_INITIAL_DATE;
@@ -2262,7 +2263,7 @@ class State {
         await speciesReady;
         const res = await fetch(`${location.protocol}//${BackendURI}/simulation/run/${runId}/request`);
         if (!res.ok) throw new Error(`the stored request is missing (HTTP ${res.status})`);
-        const response = await res.json();
+        const response = parseSeedJson(await res.text());
 
         //Replaced wholesale rather than removed one at a time. `removeSeedAt` copies the whole
         //array and writes the signal for EACH removal, so clearing a 4,134-plant stand that way is
@@ -2281,7 +2282,7 @@ class State {
             }
             //`randomize` off, because the stored seed is the point: a run reopened to be forked
             //should start from the number that produced it, not from a fresh random one.
-            this.initNumber.value = Number(response.Seed ?? 42);
+            this.initNumber.value = exactSeed(response.Seed ?? "42");
             this.randomize.value = false;
             //A CALENDAR DAY, not an instant. The request stores a C# DateTime, so this arrives as
             //"2026-02-01T00:00:00", while everything downstream treats initialDate as YYYY-MM-DD:

@@ -13,7 +13,7 @@ public class SimulationResponse
     public string Renderer { get; set; }
     public string Debug { get; set; }
 
-    public List<uint> StepTimes { get; set; }
+    public List<long> StepTimes { get; set; }
     public uint TicksPerMillisecond { get; set; } = (uint)TimeSpan.TicksPerMillisecond;
 
     ///<summary>

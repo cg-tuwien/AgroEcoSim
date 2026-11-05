@@ -182,15 +182,20 @@ both roots survived, and no organ died of resources.
 
 ## Soil: what drives the stress in a box field
 
-The signal is only as good as the plant's water supply, and in the regular voxel soil that supply is
-dominated by a tick-length artefact, measured on the incident request:
+The following measurements describe the historical integer-truncated transport, before the
+numerical correction in checkpoint 39. See [numerical regressions](NUMERICAL_REGRESSIONS.md)
+for the replacement: fractional transport in fixed hourly substeps, with mass and capacity checks.
+Plant uptake still occurs on the external tick; soil-only agreement does not establish whole-plant
+timestep invariance.
+
+Historical measurements on the incident request:
 
 | ticks | root cells dry | plant fill in May | drought episode |
 | --- | --- | --- | --- |
 | 1 h | 0 of 29-95 | 0.98-0.99 | never |
 | 4 h | all, from week 2 | 0.0-0.3 | from mid-April |
 
-`GravityDiffusion` moves a cell's water `(int)(WaterCellsPerStep + min(1, fill))` cells down per
+The former `GravityDiffusion` moved a cell's water `(int)(WaterCellsPerStep + min(1, fill))` cells down per
 tick, with `WaterCellsPerStep = 1.2 cm/h x hours / cell height`. At 1 h and 5 cm cells that is
 `(int)(0.24 + fill)`: nothing moves until a cell is three-quarters full, so rain stays in the root
 cells. At 4 h it is `(int)(0.96 + fill)`: almost any water moves a cell down every tick, past the

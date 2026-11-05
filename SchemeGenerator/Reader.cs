@@ -358,14 +358,17 @@ public static partial class Reader
 
     private static string ConvertAngleInitializerToDegrees(string expr)
     {
-        expr = NormalizeNumberSyntax(expr);
+        // Preserve numeric suffixes and integer division until C# constant evaluation.
 
-        if (expr.Contains("* DegToRad"))
-            return expr.Replace("* DegToRad", "").Trim();
-
-        if (expr.Contains("DegToRad *"))
-            return expr.Replace("DegToRad *", "").Trim();
-
+        // Preserve a degree-authored constant without exposing float conversion noise in the
+        // editor. Still evaluate its arithmetic as C#, including integer division.
+        var syntax = SyntaxFactory.ParseExpression(expr);
+        if (syntax is BinaryExpressionSyntax multiply && multiply.IsKind(SyntaxKind.MultiplyExpression))
+        {
+            var degrees = multiply.Right.ToString() == "DegToRad" ? multiply.Left
+                : multiply.Left.ToString() == "DegToRad" ? multiply.Right : null;
+            if (degrees != null) return FormatNumber(TryEvaluateSimpleNumericExpression(degrees.ToString())!.Value);
+        }
         // If the C# default is already a raw radian number, convert it.
         var numericValue = TryEvaluateSimpleNumericExpression(expr);
         if (numericValue is not null)
@@ -376,7 +379,7 @@ public static partial class Reader
 
     private static string ConvertNumericExpression(string expr)
     {
-        expr = NormalizeNumberSyntax(expr);
+        // Preserve numeric suffixes and integer division until C# constant evaluation.
 
         var value = TryEvaluateSimpleNumericExpression(expr);
         if (value is not null)
@@ -385,42 +388,31 @@ public static partial class Reader
         return expr;
     }
 
-    private static string NormalizeNumberSyntax(string expr)
-    {
-        if (expr == "float.MaxValue")
-            return float.MaxValue.ToString();
-        else if (expr == "float.MinValue")
-            return float.MinValue.ToString();
-        else if (expr == "double.MaxValue")
-            return double.MaxValue.ToString();
-        else if (expr == "double.MinValue")
-            return double.MinValue.ToString();
-
-        return expr
-            .Replace("_", "")
-            .Replace("MathF.PI", Math.PI.ToString(System.Globalization.CultureInfo.InvariantCulture))
-            .Replace("Math.PI", Math.PI.ToString(System.Globalization.CultureInfo.InvariantCulture))
-            .Replace("DegToRad", $"({Math.PI.ToString(System.Globalization.CultureInfo.InvariantCulture)} / 180.0)")
-            .Replace("f", "", StringComparison.OrdinalIgnoreCase);
-    }
+    private static readonly MetadataReference[] NumericReferences =
+        ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
+            .Select(path => MetadataReference.CreateFromFile(path)).ToArray();
 
     private static double? TryEvaluateSimpleNumericExpression(string expr)
     {
-        try
-        {
-            var table = new System.Data.DataTable();
-            var value = table.Compute(expr, "");
-            return Convert.ToDouble(value, System.Globalization.CultureInfo.InvariantCulture);
-        }
-        catch
-        {
-            return null;
-        }
+        var tree = CSharpSyntaxTree.ParseText("using System; class NumericDefault { "
+            + "const float DegToRad = MathF.PI / 180f; object Value = " + expr + "; }");
+        var compilation = CSharpCompilation.Create("NumericDefault", [tree], NumericReferences,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+        var initializer = tree.GetRoot().DescendantNodes().OfType<VariableDeclaratorSyntax>()
+            .Single(v => v.Identifier.Text == "Value").Initializer!.Value;
+        var constant = compilation.GetSemanticModel(tree).GetConstantValue(initializer);
+        if (!constant.HasValue || constant.Value is null)
+            throw new InvalidOperationException($"Species default is not a supported C# constant: {expr}");
+        // The shortest round-trip representation of a float parses back to the same C# value,
+        // without turning an authored 0.04f into a browser field displaying 0.0399999991.
+        return constant.Value is float single
+            ? double.Parse(single.ToString("R", System.Globalization.CultureInfo.InvariantCulture), System.Globalization.CultureInfo.InvariantCulture)
+            : Convert.ToDouble(constant.Value, System.Globalization.CultureInfo.InvariantCulture);
     }
 
     private static string FormatNumber(double value)
     {
-        return value.ToString("0.##########", System.Globalization.CultureInfo.InvariantCulture);
+        return value.ToString("R", System.Globalization.CultureInfo.InvariantCulture);
     }
 
     public static string GenerateInterface(IEnumerable<SpeciesMember> members)

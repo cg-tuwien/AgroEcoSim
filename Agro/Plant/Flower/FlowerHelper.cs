@@ -161,7 +161,7 @@ namespace Agro
                         agent.flowerSupport = false;
                     else if (agent.Organ.Equals(OrganTypes.FlowerPadel) && !formation.GetHasFlowerSupport(agent.Parent))
                         agent.flowerSupport = false;
-                    else if (agent.Organ.Equals(OrganTypes.FlowerBud) && formation.Plant.RNG.NextFloat(0, 1) < 0.05f)
+                    else if (agent.Organ.Equals(OrganTypes.FlowerBud) && formation.Plant.RNG.NextFloatAccum(0.05f, formation.Plant.World.HoursPerTick))
                         agent.flowerSupport = false;
 
                 }
@@ -190,9 +190,9 @@ namespace Agro
                         // Start senescence once — colour fade is handled by FlowerPhenology.WriteColor
                         if (agent.SenescenceStart == 0)
                         {
-                            agent.SenescenceStart = formation.Plant.World.Timestep;
+                            agent.SenescenceStart = Math.Max(1u, formation.Plant.World.Timestep);
                             // Convert hours → ticks correctly
-                            agent.SenescenceDuration = (ushort)(_settings.PetalSenescenceDurationHours / formation.Plant.World.HoursPerTick);
+                            agent.SenescenceDuration = SenescenceTicks(_settings.PetalSenescenceDurationHours, formation.Plant.World.HoursPerTick);
                         }
                         // Die only once the senescence curve has completed
                         if (agent.Senescence(formation.Plant.World.Timestep) >= 1f)

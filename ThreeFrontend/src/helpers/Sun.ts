@@ -129,31 +129,41 @@ export function timeOfTimestep(initialDate: string, timestep: number, hoursPerTi
  * failure shifts the sun by the zone offset rather than producing nonsense.
  */
 export function localMidnightToUtc(initialDate: string, timeZone = DEFAULT_TIME_ZONE): Date {
-    const [y, m, d] = initialDate.split('-').map(Number);
-    const naive = Date.UTC(y, (m ?? 1) - 1, d ?? 1, 0, 0, 0);
-
-    try {
-        //Ask what that UTC instant reads as in the target zone, and correct by the difference.
-        //Doing it this way avoids hard-coding DST rules.
-        const offsetMs = zoneOffsetMs(new Date(naive), timeZone);
-        return new Date(naive - offsetMs);
-    } catch {
-        return new Date(naive);
+    const naive = Date.parse(`${initialDate}T00:00:00Z`);
+    if (!Number.isFinite(naive)) throw new Error('Invalid simulation start date.');
+    // Sample both sides of a transition, then verify the offset at the resulting instant.
+    const candidates: number[] = [];
+    for (const delta of [-36, 0, 36]) {
+        const candidate = naive - zoneOffsetMs(new Date(naive + delta * 3600_000), timeZone);
+        if (candidate + zoneOffsetMs(new Date(candidate), timeZone) === naive) candidates.push(candidate);
     }
+    if (!candidates.length) throw new Error('The simulation start falls in a missing local midnight.');
+    return new Date(Math.max(...candidates));
 }
 
+const zoneFormatters = new Map<string, Intl.DateTimeFormat>();
 function zoneOffsetMs(at: Date, timeZone: string): number {
-    const parts = new Intl.DateTimeFormat('en-US', {
-        timeZone, hour12: false,
-        year: 'numeric', month: '2-digit', day: '2-digit',
-        hour: '2-digit', minute: '2-digit', second: '2-digit',
-    }).formatToParts(at);
-
+    let formatter = zoneFormatters.get(timeZone);
+    if (!formatter) {
+        try { formatter = new Intl.DateTimeFormat('en-US', {
+            timeZone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit', second: '2-digit',
+        }); } catch { return 0; } // preserve the historical UTC fallback for an unknown zone
+        zoneFormatters.set(timeZone, formatter);
+    }
+    const parts = formatter.formatToParts(at);
     const get = (type: string) => Number(parts.find(p => p.type === type)?.value);
-    //Intl renders midnight as hour 24 in some engines.
-    const hour = get('hour') % 24;
-    const asUtc = Date.UTC(get('year'), get('month') - 1, get('day'), hour, get('minute'), get('second'));
-    return asUtc - at.getTime();
+    const asUtc = Date.UTC(get('year'), get('month') - 1, get('day'), get('hour') % 24, get('minute'), get('second'));
+    return asUtc - Math.floor(at.getTime() / 1000) * 1000;
+}
+
+/** Wall-clock components represented on a UTC Date, for local calendar arithmetic only. */
+export function simulationClock(initialDate: string, timeZone = DEFAULT_TIME_ZONE): (hours: number) => Date {
+    const start = localMidnightToUtc(initialDate, timeZone).getTime();
+    return hours => {
+        const instant = new Date(start + hours * 3600_000);
+        return new Date(instant.getTime() + zoneOffsetMs(instant, timeZone));
+    };
 }
 
 export type SolarPosition = {

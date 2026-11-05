@@ -39,7 +39,7 @@
   <!--
     Regenerates the species TypeScript from SpeciesSettings.cs.
 
-    This is a BUILD INSIDE A BUILD: `dotnet run` compiles SchemeGenerator, which references Agro,
+    This is a BUILD INSIDE A BUILD: a single-worker build compiles SchemeGenerator, which references Agro,
     so without a private artifacts path the nested build writes Agro's own bin/obj - the same files
     the outer build, the IDE's design-time build and a second target framework's copy of this very
     target are all writing at that moment. The result is an intermittent
@@ -61,6 +61,7 @@
   <Target Name="GenerateSpeciesTypescript" AfterTargets="CoreCompile" Condition="'$(SkipSpeciesGeneration)' != 'true'">
     <Message Importance="high" Text="Generating Species.generated.ts from SpeciesSettings.cs" />
 
-    <Exec Command="dotnet run --framework $(TargetFramework) --artifacts-path &quot;$(MSBuildProjectDirectory)/../SchemeGenerator/artifacts&quot; --project &quot;$(MSBuildProjectDirectory)/../SchemeGenerator/SchemeGenerator.csproj&quot; -- &quot;$(MSBuildProjectDirectory)/../Agro/SpeciesSettings.cs&quot; &quot;$(MSBuildProjectDirectory)/../ThreeFrontend/src/helpers/Species.gen.ts&quot; &quot;$(MSBuildProjectDirectory)/../ThreeFrontend/src/components/hud/Species.gen.tsx&quot;" />
+    <Exec Command="dotnet build &quot;$(MSBuildProjectDirectory)/../SchemeGenerator/SchemeGenerator.csproj&quot; --framework $(TargetFramework) --configuration $(Configuration) --artifacts-path &quot;$(MSBuildProjectDirectory)/../SchemeGenerator/artifacts&quot; -m:1 -p:NuGetAudit=false -v:minimal" />
+    <Exec Command="dotnet run --no-build --configuration $(Configuration) --framework $(TargetFramework) --artifacts-path &quot;$(MSBuildProjectDirectory)/../SchemeGenerator/artifacts&quot; --project &quot;$(MSBuildProjectDirectory)/../SchemeGenerator/SchemeGenerator.csproj&quot; -- &quot;$(MSBuildProjectDirectory)/../Agro/SpeciesSettings.cs&quot; &quot;$(MSBuildProjectDirectory)/../ThreeFrontend/src/helpers/Species.gen.ts&quot; &quot;$(MSBuildProjectDirectory)/../ThreeFrontend/src/components/hud/Species.gen.tsx&quot;" />
   </Target>
 </Project>

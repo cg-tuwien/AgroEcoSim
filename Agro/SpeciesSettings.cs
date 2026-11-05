@@ -307,7 +307,7 @@ public class SpeciesSettings
     /// leaf of a species is divided the same way regardless of its own length variance.
     ///</summary>
     public int LeafSegmentCount => LeafSegmentLength > 0f && LeafLength > LeafSegmentLength
-        ? Math.Min(MaximumLeafSegments, (int)MathF.Ceiling(LeafLength / LeafSegmentLength - CountEpsilon))
+        ? (int)Math.Min(MaximumLeafSegments, Math.Ceiling((double)LeafLength / LeafSegmentLength - CountEpsilon))
         : 1;
 
     /// <summary>Slack on the segment-count division, so a length that divides exactly does not get

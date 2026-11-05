@@ -290,7 +290,7 @@ namespace Agro
                                 && (agent.Length > agent.LengthVar || agent.GrowthBlocked))
                             {
                                 float prevResources, prevProduction;
-                                if (timestep - agent.BirthTime > world.HoursPerTick)
+                                if (agent.HasCompletedResourceDay(world, timestep))
                                 {
                                     prevResources = agent.PreviousDayEnvResourcesInvariant;
                                     prevProduction = agent.PreviousDayProductionInvariant;
@@ -458,7 +458,7 @@ namespace Agro
                     }
 
                     float prevResources, prevProduction;
-                    if (timestep - agent.BirthTime > world.HoursPerTick)
+                    if (agent.HasCompletedResourceDay(world, timestep))
                     {
                         prevResources = agent.PreviousDayEnvResourcesInvariant;
                         prevProduction = agent.PreviousDayProductionInvariant;

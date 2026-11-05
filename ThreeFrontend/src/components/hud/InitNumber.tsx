@@ -4,7 +4,7 @@ import appstate from "../../appstate";
 
 export function InitNumber() {
     return <div>
-        <input min={1} type="number" name="initNumber" value={appstate.initNumber} onChange={e => appstate.initNumber.value = parseInt(e.currentTarget.value)} disabled={appstate.randomize.value} />
+        <input type="text" inputMode="numeric" name="initNumber" value={appstate.initNumber.value} onChange={e => appstate.initNumber.value = e.currentTarget.value} disabled={appstate.randomize.value} />
         <label for="initNumber">Initial random number that controls the simulation</label>
     </div>;
 }

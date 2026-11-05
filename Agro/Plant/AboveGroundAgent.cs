@@ -364,7 +364,7 @@ public partial struct AboveGroundAgent : IPlantAgent
 
 	[M(AI)]public readonly float Senescence(uint timestep)
 	{
-		if (SenescenceStart == 0 || SenescenceDuration == 0) return 0f;
+		if (SenescenceStart == 0 || SenescenceDuration == 0 || timestep < SenescenceStart) return 0f;
 		float t = timestep - SenescenceStart;
 		var result = t / SenescenceDuration;
 		return result < 1f ? result : 1f;
@@ -640,8 +640,8 @@ public partial struct AboveGroundAgent : IPlantAgent
 
 	public readonly static Quaternion OrientationUp = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, MathF.PI * 0.5f);
 
-	public const float GrowthRatePerHour = 1 + 1/12; //Let us assume this plant can double volume in 12 hours
-	[M(AI)]public readonly float GrowthRatePerTick(AgroWorld world) => GrowthRatePerHour * world.HoursPerTick; //Let us assume this plant can double volume in 12 hours
+	public static readonly float GrowthRatePerHour = MathF.Pow(2f, 1f / 12f);
+	[M(AI)]public readonly float GrowthRatePerTick(AgroWorld world) => MathF.Pow(2f, world.HoursPerTick / 12f);
 
     [M(AI)]public readonly float LifeSupportPerHour() => Length * Radius * (Organ == OrganTypes.Leaf ? LeafThickness : Radius * WoodFactor);
 	[M(AI)]public readonly float LifeSupportPerTick(AgroWorld world) => LifeSupportPerHour() * world.HoursPerTick;
@@ -886,9 +886,9 @@ public partial struct AboveGroundAgent : IPlantAgent
 		//Senescence
 		if (SenescenceStart > 0)
 		{
-			if (SenescenceDuration == 0) //was added over a message
-				InitSenescence(timestep, plant, species, formation, children, world.HoursPerTick, false);
-			else if (Senescence(timestep) >= 1f)
+			var deadlineExpired = SenescenceDuration == 0
+				&& InitSenescence(timestep, plant, species, formation, children, world.HoursPerTick, false);
+			if (deadlineExpired || Senescence(timestep) >= 1f)
 				switch (Organ)
 				{
 					case OrganTypes.Petiole: MakeBud(formation, children); break; //keep an option for a new leaf
@@ -1087,7 +1087,7 @@ public partial struct AboveGroundAgent : IPlantAgent
 						GrowthTimeVar = world.HoursPerTick / (species.WoodGrowthTime + plant.RNG.NextFloatVar(species.WoodGrowthTimeVar));
 						wasMeristem = true;
 						float prevResources, prevProduction;
-						if (timestep - BirthTime > world.HoursPerTick)
+						if (HasCompletedResourceDay(world, timestep))
 						{
 							prevResources = PreviousDayEnvResourcesInvariant;
 							prevProduction = PreviousDayProductionInvariant;
@@ -1171,17 +1171,29 @@ public partial struct AboveGroundAgent : IPlantAgent
         Auxins = wasMeristem || Organ == OrganTypes.Meristem ? species.AuxinsProduction : 0;
 	}
 
-    [M(AI)]private void InitSenescence(uint timestep, PlantFormation2 plant, SpeciesSettings species, PlantSubFormation<AboveGroundAgent> formation, IList<int>? children, ushort hoursPerTick, bool stressReason)
+    internal readonly bool HasCompletedResourceDay(AgroWorld world, uint timestep)
     {
-		if (SenescenceStart > 0 && SenescenceDuration == 0)
-			SenescenceDuration = (ushort)(SenescenceStart - timestep - 1);
-		else
-			SenescenceDuration = (ushort)((species.LeafSenescenceSeasonalDuration + plant.RNG.NextFloatVar(species.LeafSenescenceSeasonalDurationVar)) / hoursPerTick);
+        if (timestep == 0) return false;
+        var lastCompleted = ((timestep - 1) / world.StatsBlockLength) * world.StatsBlockLength;
+        return lastCompleted >= BirthTime && lastCompleted - BirthTime >= world.TicksPerDay;
+    }
 
-		SenescenceStart = timestep;
-		if (children != null)
-			for(int i = 0; i < children.Count; ++i)
-				formation.SendProtected(children[i], new PropagateSenescence(SenescenceStart + SenescenceDuration));
+    internal static ushort SenescenceTicks(double hours, ushort hoursPerTick) =>
+        (ushort)Math.Clamp(Math.Ceiling(hours / hoursPerTick), 1d, ushort.MaxValue);
+
+    [M(AI)]private bool InitSenescence(uint timestep, PlantFormation2 plant, SpeciesSettings species, PlantSubFormation<AboveGroundAgent> formation, IList<int>? children, ushort hoursPerTick, bool stressReason)
+    {
+        var inherited = SenescenceStart > 0 && SenescenceDuration == 0;
+        var deadline = SenescenceStart;
+        SenescenceDuration = inherited
+            ? (ushort)Math.Clamp((long)deadline - timestep, 1L, ushort.MaxValue)
+            : SenescenceTicks(species.LeafSenescenceSeasonalDuration + plant.RNG.NextFloatVar(species.LeafSenescenceSeasonalDurationVar), hoursPerTick);
+        SenescenceStart = Math.Max(1u, timestep);
+        if (children != null)
+            for (int i = 0; i < children.Count; ++i)
+                formation.SendProtected(children[i], new PropagateSenescence(
+                    (uint)Math.Min(uint.MaxValue, (ulong)SenescenceStart + SenescenceDuration)));
+        return inherited && deadline <= timestep;
     }
 
     [M(AI)]internal void MakeBud(PlantSubFormation<AboveGroundAgent> formation, IList<int>? children)

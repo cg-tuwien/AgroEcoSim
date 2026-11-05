@@ -60,7 +60,8 @@ public class SimulationWorld
 
 	public void RunSequential(uint simulationLength)
 	{
-		for(int i = 0; i < simulationLength; ++i, ++Timestep)
+		if (simulationLength > uint.MaxValue - Timestep) throw new ArgumentOutOfRangeException(nameof(simulationLength));
+		for(uint i = 0; i < simulationLength; ++i, ++Timestep)
 		{
 			TickSequential();
 			DeliverPostSequential();
@@ -72,7 +73,8 @@ public class SimulationWorld
 
 	public void RunParallel(uint simulationLength)
 	{
-		for(int i = 0; i < simulationLength; ++i, ++Timestep)
+		if (simulationLength > uint.MaxValue - Timestep) throw new ArgumentOutOfRangeException(nameof(simulationLength));
+		for(uint i = 0; i < simulationLength; ++i, ++Timestep)
 		{
 			TickParallel();
 			DeliverPostParallel();

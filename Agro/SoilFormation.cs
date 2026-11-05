@@ -121,6 +121,11 @@ public class SoilFormationRegularVoxels : IGrid3D, ISoilFormation, ISoilRequestS
 		if (size.X >= ushort.MaxValue - 1 || size.Y >= ushort.MaxValue - 1 || size.Z >= ushort.MaxValue - 1)
 			throw new Exception($"Grid resolution in any direction may not exceed {ushort.MaxValue - 1}");
 		//Z is depth
+		if (size.X <= 0 || size.Y <= 0 || size.Z <= 0
+			|| !float.IsFinite(metricSize.X) || !float.IsFinite(metricSize.Y) || !float.IsFinite(metricSize.Z)
+			|| metricSize.X <= 0 || metricSize.Y <= 0 || metricSize.Z <= 0
+			|| (long)size.X * size.Z * (size.Y + 1L) > Array.MaxLength)
+			throw new ArgumentOutOfRangeException(nameof(size), "Soil dimensions must form a finite, representable positive grid.");
 		Size = size;
 		SizeXZ = size.X * size.Z;
 
@@ -129,6 +134,9 @@ public class SoilFormationRegularVoxels : IGrid3D, ISoilFormation, ISoilRequestS
 		CellSize4Intersect = new(CellSize.X, -CellSize.Y, CellSize.Z);
 		CellSurface = CellSize.X * CellSize.Z;
 		CellVolume = CellSurface * CellSize.Y;
+		if (!(CellSurface > 0f) || !float.IsFinite(CellSurface)
+			|| !(CellVolume > 0f) || !float.IsFinite(CellVolume * 200f * 1000f))
+			throw new ArgumentOutOfRangeException(nameof(metricSize), "Soil cell volume and water capacity must be representable.");
 
 		//Just for fun a not yet random heightfield
 		// var heightfield = new float[size.X, size.Y];
@@ -235,7 +243,7 @@ public class SoilFormationRegularVoxels : IGrid3D, ISoilFormation, ISoilRequestS
 		WaterCapacityPerCell = CellVolume * 200f * 1000;
 		MinimumWaterToDiffuse = WaterCapacityPerCell * 0.001f;
 		if (world != null)
-			WaterCellsPerStep = WaterTravelDistPerTick() / CellSize.Y;
+			WaterCellsPerHour = WaterTravelDistPerTick(1) / CellSize.Y;
 
 		// WaterTransactions = new List<(int dst, float amount_g)>[Water_g.Length];
 		// for (int i = 0; i < Water_g.Length; ++i)
@@ -376,114 +384,59 @@ public class SoilFormationRegularVoxels : IGrid3D, ISoilFormation, ISoilRequestS
 	readonly float MinimumWaterToDiffuse;
 
 	/// <summary>
-	/// Number of cells water can pass in one time step. Since initial cell saturation is added at computation time, this is stored as a float.
+	/// Number of cells water can pass in one internal hour. Initial cell saturation is added at computation time.
 	/// </summary>
-	float WaterCellsPerStep;
+	float WaterCellsPerHour;
 
 	public void Tick(uint timestep)
 	{
-		//float[] waterSrc, waterTarget, steamSrc, steamTarget, temperatureSrc, temperatureTarget;
-
-		var surfaceTemp = Math.Max(0f, World.GetTemperature(timestep));
-		var evaporizationFactorPerHour = 0 * 1e-4f;
-		var evaporizationSoilFactorPerStep = MathF.Pow(1f - evaporizationFactorPerHour, World.HoursPerTick);
-		var evaporizationSurfaceFactorPerStep = MathF.Pow(1f - Math.Min(1f, evaporizationFactorPerHour * (surfaceTemp * surfaceTemp) / 10), World.HoursPerTick);
-
-		//var sumBefore = Water.Sum();
-
-		//1. Receive RAIN
-		var rainPerCell_g = World.GetWater(timestep) * CellSurface; // grams per exposed cell
-		// Different columns occupy disjoint contiguous water ranges, so their
-		// rain and downward transport commute exactly. AgroWorld finishes the soil
-		// tick before parallel plant ticks, preventing uptake reads during transport.
-		if (GroundAddr.Length >= 256)
+		// The same hourly transport operator is used for every external tick size.
+		// Columns are independent; never exchange water across parallel workers.
+		var hours = World.HoursPerTick;
+		var rainPerHour = World.GetWater(timestep) * CellSurface / hours;
+		void TransportColumn(int c)
 		{
-			Parallel.For(0, GroundAddr.Length, c =>
+			var depth = GroundLevels[c];
+			var ground = GroundAddr[c];
+			for (int hour = 0; hour < hours; ++hour)
 			{
-				var depth = GroundLevels[c];
-				var ground = GroundAddr[c];
-				if (rainPerCell_g > 0)
-					Water_g[ground] += rainPerCell_g;
+				if (rainPerHour > 0d) Water_g[ground] += rainPerHour;
 				for (int d = depth - 1; d > 0; --d)
 				{
-					var srcIdx = ground - d;
-					Debug.Assert(Coords(srcIdx).Y == d);
-					var distribute = Water_g[srcIdx] * evaporizationSoilFactorPerStep;
-					if (distribute > MinimumWaterToDiffuse)
-						GravityDiffusion(srcIdx, distribute - MinimumWaterToDiffuse, depth, d);
+					var src = ground - d;
+					var mobile = Water_g[src] - MinimumWaterToDiffuse;
+					if (mobile > 0d) GravityDiffusion(src, mobile, depth, d);
 				}
-				var surfaceDistribute = Water_g[ground] * evaporizationSurfaceFactorPerStep;
-				if (surfaceDistribute > 0)
-					GravityDiffusion(ground, surfaceDistribute, depth, 0);
-			});
-		}
-		else
-		{
-			if (rainPerCell_g > 0)
-				foreach (var ground in GroundAddr)
-					Water_g[ground] += rainPerCell_g;
-
-			//3. Soak the water from bottom to the top
-			for (int d = MaxLevel - 1; d > 0; --d)
-			{
-				int c = 0;
-				for (int z = 0; z < Size.Z; ++z) //should be in this order to keep adjacency
-					for (int x = 0; x < Size.X; ++x)
-					{
-						var depth = GroundLevels[c]; //GroundLevel(x, z);
-						if (d < depth)
-						{
-							var srcIdx = GroundAddr[c] - d; //Index(x, d, z);
-							Debug.Assert(Coords(srcIdx).Y == d);
-							var distribute = Water_g[srcIdx] * evaporizationSoilFactorPerStep;
-
-							if (distribute > MinimumWaterToDiffuse)
-								GravityDiffusion(srcIdx, distribute - MinimumWaterToDiffuse, depth, d);
-						}
-						++c;
-					}
+				if (Water_g[ground] > 0d) GravityDiffusion(ground, Water_g[ground], depth, 0);
 			}
-
-			//4. Soak in the rain
-			//1 inch of rain can penetate 6-12 inches deep
-			//soil can take up 0.2-6.0 inches of water per hour
-
-			//25400 g of rain can penetrate 0.1524 - 0.3048 m deep
-			//soil can take up 5080 - 152.400 g of water per hour
-			//1 m3 of water weights 1.000.000 g
-			//by the type of soil, saturation is 30-60% so 300.000 - 600.000 g/m³
-
-			for (int i = 0; i < GroundAddr.Length; ++i)
-			{
-				var srcIdx = GroundAddr[i];
-				var distribute = Water_g[srcIdx] * evaporizationSurfaceFactorPerStep;
-				if (distribute > 0)
-					GravityDiffusion(srcIdx, distribute, GroundLevels[i], 0);
-			}
-
 		}
-
-		HasUndeliveredPost = true; //enforcing ProcessRequests() this way, since it must wait until all other agents have made requests, it needs to be part of the post delivery
+		if (GroundAddr.Length >= 256) Parallel.For(0, GroundAddr.Length, TransportColumn);
+		else for (int c = 0; c < GroundAddr.Length; ++c) TransportColumn(c);
+		HasUndeliveredPost = true;
 	}
 
 	private void GravityDiffusion(int srcIdx, double distribute, ushort groundLevel, int currentDepth)
 	{
 		// The coefficient table stops at the deepest soil column. A coarse tick
 		// can travel farther than a shallow field is deep; cap that reach here.
-		var cellsPerStep = Math.Min(MaxLevel,
-			(int)(WaterCellsPerStep + Math.Min(1d, Water_g[srcIdx] / WaterCapacityPerCell)));
-		if (cellsPerStep > 0)
+		var reach = Math.Min(MaxLevel,
+			WaterCellsPerHour + Math.Min(1d, Water_g[srcIdx] / WaterCapacityPerCell));
+		var lower = (int)Math.Floor(reach);
+		var upper = (int)Math.Ceiling(reach);
+		if (upper > 0)
 		{
-			//simple scaling of what portion of water can reach what depth
-			var length = Math.Min(cellsPerStep, groundLevel - currentDepth);
-
+			var length = Math.Min(upper, groundLevel - currentDepth);
+			var lowerLength = Math.Min(lower, length);
+			var fraction = reach - lower;
+			var low = DiffusionCoefs[lower][lowerLength];
+			var high = DiffusionCoefs[upper][length];
 			var resolved = 0d;
-			var coefs = DiffusionCoefs[cellsPerStep][length];
 			for (int h = 0; h < length; ++h)
 			{
 				// The precomputed float coefficients can sum a few ulps above one.
 				// Cap the last transfer to the actual source budget before writing it.
-				var requested = Math.Min(distribute - resolved, distribute * coefs[h]);
+				var coefficient = (h < lowerLength ? low[h] * (1d - fraction) : 0d) + high[h] * fraction;
+				var requested = Math.Min(distribute - resolved, distribute * coefficient);
 				if (requested <= 0d) break;
 				var target = srcIdx - h - 1;
 				var occupied = Water_g[target];
@@ -619,7 +572,7 @@ public class SoilFormationRegularVoxels : IGrid3D, ISoilFormation, ISoilRequestS
 		World = world;
 		if (World != null)
         {
-            WaterCellsPerStep = WaterTravelDistPerTick() / CellSize.Y;
+            WaterCellsPerHour = WaterTravelDistPerTick(1) / CellSize.Y;
             ComputeDiffusionCoefs();
         }
     }
@@ -632,7 +585,7 @@ public class SoilFormationRegularVoxels : IGrid3D, ISoilFormation, ISoilRequestS
 
         DiffusionCoefs = new float[maxGroundLevel + 1][][];
         DiffusionCoefs[0] = [[]];
-        DiffusionCoefs[1] = [[], [1f]];
+        if (maxGroundLevel > 0) DiffusionCoefs[1] = [[], [1f]];
 
         for (int targetTravel = 2; targetTravel <= maxGroundLevel; ++targetTravel)
 		{

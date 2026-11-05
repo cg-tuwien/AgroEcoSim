@@ -119,6 +119,9 @@ public record SimulationRequest
     ///Seed number that controls all pseudo-random decisions in the simulation. (default: 42)
     ///</summary>
     ///<example>42</example>
+    [System.Text.Json.Serialization.JsonNumberHandling(
+        System.Text.Json.Serialization.JsonNumberHandling.AllowReadingFromString |
+        System.Text.Json.Serialization.JsonNumberHandling.WriteAsString)]
     public ulong? Seed { get; init; }
 
     /// <summary>

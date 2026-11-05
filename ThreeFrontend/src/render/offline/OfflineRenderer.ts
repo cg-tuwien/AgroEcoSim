@@ -191,7 +191,7 @@ export function frameCount(): number {
     const history = appstate.history;
     if (!history?.length) return 0;
     const to = settings.to.peek();
-    return buildFrameMap(history, {
+    try { return buildFrameMap(history, {
         mode: settings.timing.peek(),
         from: settings.from.peek(),
         to: to < 0 ? history.length - 1 : to,
@@ -199,7 +199,8 @@ export function frameCount(): number {
         fps: settings.fps.peek(),
         hoursPerSecond: settings.hoursPerSecond.peek(),
         hoursPerTick: appstate.simHoursPerTick,
-    }).length;
+        initialDate: appstate.initialDate.peek(), timeZone: appstate.solarSite().timeZone,
+    }).length; } catch { return 0; }
 }
 
 /**
@@ -238,7 +239,8 @@ export async function renderAnimation(): Promise<void> {
     const fps = settings.fps.peek();
     const to = settings.to.peek();
 
-    const map = buildFrameMap(history, {
+    let map: ReturnType<typeof buildFrameMap>;
+    try { map = buildFrameMap(history, {
         mode: settings.timing.peek(),
         from: settings.from.peek(),
         to: to < 0 ? history.length - 1 : to,
@@ -246,8 +248,13 @@ export async function renderAnimation(): Promise<void> {
         fps,
         hoursPerSecond: settings.hoursPerSecond.peek(),
         hoursPerTick: appstate.simHoursPerTick,
+        initialDate: appstate.initialDate.peek(), timeZone: appstate.solarSite().timeZone,
     });
 
+    } catch (error) {
+        progress.value = { state: 'error', message: String(error) };
+        return;
+    }
     if (map.length === 0) {
         progress.value = { state: 'error', message: 'The selected frame range is empty.' };
         return;
@@ -289,7 +296,7 @@ export async function renderAnimation(): Promise<void> {
             if (cancelRequested) break;
             const started = performance.now();
 
-            const { scene, reused } = await source.at(map[i].historyIndex);
+            const { scene, reused } = await source.at(map.at(i).historyIndex);
 
             //Start pulling the NEXT frame across the wire before rendering this one.
             //
@@ -298,16 +305,16 @@ export async function renderAnimation(): Promise<void> {
             //is the long pole, so overlapping the fetch with it is close to free. Only the bytes
             //are prefetched - into the browser's own cache, since frames are immutable - so this
             //does not resurrect the buffering the frame source deliberately avoids.
-            if (i + 1 < map.length && map[i + 1].historyIndex !== map[i].historyIndex)
-                void prefetchFrame(map[i + 1].historyIndex);
+            if (i + 1 < map.length && map.at(i + 1).historyIndex !== map.at(i).historyIndex)
+                void prefetchFrame(map.at(i + 1).historyIndex);
 
             if (!reused || !lastPixels) {
                 //Writing appstate.scene runs the rebuild effects synchronously, so the
                 //renderer is up to date by the time renderToPixels is called.
                 appstate.scene.value = scene;
                 //The sun belongs to the frame being rendered, not to where the playhead is.
-                renderer.setLighting?.(lightingFor(map[i].historyIndex));
-                renderer.setSky?.(skyFor(map[i].historyIndex));
+                renderer.setLighting?.(lightingFor(map.at(i).historyIndex));
+                renderer.setSky?.(skyFor(map.at(i).historyIndex));
                 lastPixels = await renderer.renderToPixels!(width, height, ssaa, msaa, path.poseAt(i, map.length));
             }
 

@@ -19,7 +19,7 @@ public static class PcgSeed
 	[M(AI)]public static ulong GuidBasedSeed()
 	{
 		ulong upper = (ulong)(Environment.TickCount ^ Guid.NewGuid().GetHashCode()) << 32;
-		ulong lower = (ulong)(Environment.TickCount ^ Guid.NewGuid().GetHashCode());
+		ulong lower = unchecked((uint)(Environment.TickCount ^ Guid.NewGuid().GetHashCode()));
 		return upper | lower;
 	}
 
@@ -109,11 +109,10 @@ public class Pcg
 
 	public int Next(int max, bool maxExclusive = true)
 	{
-		Debug.Assert((maxExclusive && max >= 0) || max > 0);
-		if ((maxExclusive && max < 0) || max <= 0)
+		if (max < 0 || (maxExclusive && max == 0))
 			throw new ArgumentException("Max Exclusive must be positive");
 
-		uint uMaxExclusive = (uint)(maxExclusive ? max : max + 1);
+		uint uMaxExclusive = (uint)max + (maxExclusive ? 0U : 1U);
 		uint threshold = (uint)(-uMaxExclusive) % uMaxExclusive;
 
 		while (true)
@@ -127,10 +126,11 @@ public class Pcg
 	public int Next(int min, int max, bool maxExclusive = true)
 	{
 		Debug.Assert((maxExclusive && min < max) || min <= max);
-		if ((maxExclusive && max < min) || max <= min)
+		if ((maxExclusive && max <= min) || max < min)
 			throw new ArgumentException("MaxExclusive must be larger than MinInclusive");
 
 		uint uMaxExclusive = unchecked((uint)(max - min + (maxExclusive ? 0 : 1)));
+		if (uMaxExclusive == 0) return unchecked((int)NextUInt()); // full signed range
 		uint threshold = (uint)(-uMaxExclusive) % uMaxExclusive;
 
 		while (true)
@@ -195,6 +195,7 @@ public class Pcg
 
 	public uint NextUInt(uint max, bool maxExclusive = true)
 	{
+		if (!maxExclusive && max == uint.MaxValue) return NextUInt();
 		if (!maxExclusive) ++max;
 
 		if (max == 0) return 0;
@@ -218,7 +219,7 @@ public class Pcg
 			throw new ArgumentException();
 
 		uint diff = max - min + (maxExclusive ? 0U : 1U);
-		if (diff == 0) return min;
+		if (diff == 0) return NextUInt(); // full inclusive uint range
 		else
 		{
 			uint threshold = (uint)(-diff) % diff;
@@ -270,7 +271,7 @@ public class Pcg
 
 	[M(AI)]public ulong NextULong() => (((ulong)NextUInt()) << 32) | NextUInt();
 
-	[M(AI)]public float NextFloat() => (float)(NextUInt() * ToDouble01);
+	[M(AI)]public float NextFloat() => Math.Min(MathF.BitDecrement(1f), (float)(NextUInt() * ToDouble01));
 
 	[M(AI)]public float NextPositiveFloat(float maxInclusive)
 	{
@@ -398,6 +399,11 @@ public class Pcg
 			sum += r;
 		}
 
+		if (sum == 0d)
+		{
+			Array.Fill(resultA, targetSum / count);
+			return resultA;
+		}
 		var factor = targetSum / sum;
 		for (int i = 0; i < count; i++)
 			resultA[i] *= factor;
@@ -494,9 +500,20 @@ public class Pcg
 		_increment = reader.ReadUInt64();
 	}
 
-	[M(AI)]public static float AccumulatedProbability(float singleProbability, int tryouts) => 1f - MathF.Pow(singleProbability > 1f ? 0f : 1f - singleProbability, tryouts);
-	[M(AI)]public static uint AccumulatedProbabilityUInt(float singleProbability, int tryouts) => (uint)((1f - MathF.Pow(singleProbability > 1f ? 0f : 1f - singleProbability, tryouts)) * uint.MaxValue);
+	public static float AccumulatedProbability(float singleProbability, int tryouts)
+	{
+		if (tryouts <= 0 || !(singleProbability > 0f)) return 0f;
+		if (singleProbability >= 1f) return 1f;
+		// Keep small hazards when 1-p rounds to one, including on .NET 8.
+		double p = singleProbability;
+		var logSurvival = p < 1e-4 ? -p * (1d + p * (0.5d + p / 3d)) : Math.Log(1d - p);
+		var x = logSurvival * tryouts;
+		return (float)(x > -1e-4 ? -x * (1d + x * (0.5d + x / 6d)) : 1d - Math.Exp(x));
+	}
+	[M(AI)]public static uint AccumulatedProbabilityUInt(float singleProbability, int tryouts) =>
+		(uint)((double)AccumulatedProbability(singleProbability, tryouts) * uint.MaxValue);
 
-	[M(AI)]public bool NextFloatAccum(float singleProbability, int tryouts) => NextFloat() < AccumulatedProbability(singleProbability, tryouts);
+	[M(AI)]public bool NextFloatAccum(float singleProbability, int tryouts) =>
+		NextUInt() * (1d / 4294967296d) < AccumulatedProbability(singleProbability, tryouts);
 	[M(AI)]public bool NextFloatVarAccum(float variance, float singleProbability, int tryouts) => NextFloatVar(variance) < AccumulatedProbability(singleProbability, tryouts);
 }

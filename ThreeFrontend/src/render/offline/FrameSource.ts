@@ -1,7 +1,8 @@
 //Maps simulation history onto output video frames, and decodes scenes on demand.
 //Renderer-neutral; no three.
 
-import { FrameMap, TimingMode } from './types';
+import { FrameMap, FrameMapEntry, TimingMode } from './types';
+import { simulationClock, DEFAULT_TIME_ZONE, DEFAULT_INITIAL_DATE } from '../../helpers/Sun';
 
 export type HistoryEntry = { t: number; s: unknown };
 
@@ -19,38 +20,49 @@ export function mapUniform(history: HistoryEntry[], from: number, to: number, st
  * has nothing new. Use when the gaps between stored timesteps are uneven and `uniform` would
  * therefore play at a lurching pace.
  */
+export class FramePlan implements Iterable<FrameMapEntry> {
+    readonly length: number;
+    private readonly read: (index: number) => FrameMapEntry;
+    constructor(length: number, read: (index: number) => FrameMapEntry) { this.length = length; this.read = read; }
+    at(index: number): FrameMapEntry {
+        if (!Number.isSafeInteger(index) || index < 0 || index >= this.length) throw new RangeError('Frame index out of range.');
+        return this.read(index);
+    }
+    *[Symbol.iterator](): Iterator<FrameMapEntry> { for (let i = 0; i < this.length; ++i) yield this.at(i); }
+}
+const planFrom = (entries: FrameMap) => new FramePlan(entries.length, i => entries[i]);
+
+function validRange(from: number, to: number, hoursPerTick: number): void {
+    if (!Number.isSafeInteger(from) || !Number.isSafeInteger(to) || !Number.isFinite(hoursPerTick) || hoursPerTick <= 0)
+        throw new Error('Frame range and timestep must be finite positive values.');
+}
+
 export function mapSimTime(
     history: HistoryEntry[], from: number, to: number,
     fps: number, hoursPerSecond: number, hoursPerTick: number,
-): FrameMap {
-    const last = Math.min(to, history.length - 1);
-    const first = Math.max(0, from);
-    if (last < first) return [];
-
-    //`t` is only trustworthy if it increases. The preview handler pushes to history
-    //unconditionally while the result handler guards on t, so duplicates and regressions are
-    //both possible; a non-monotonic series would produce a stuttering, arbitrary mapping, so
-    //fall back rather than emit something subtly wrong.
-    if (!isMonotonic(history, first, last))
-        return mapUniform(history, first, last, 1, hoursPerTick);
-
-    const startHours = hoursPerTick * history[first].t;
-    const endHours = hoursPerTick * history[last].t;
-    const durationSeconds = Math.max(1 / fps, (endHours - startHours) / Math.max(1e-9, hoursPerSecond));
-    //The +1 makes the range inclusive of its end. Without it the final frame lands just
-    //short of endHours and the last history entry never appears - which would silently drop
-    //the mature plant, i.e. the whole point of the run, from the end of every video.
-    const frameCount = Math.max(1, Math.round(durationSeconds * fps) + 1);
-
-    const map: FrameMap = [];
-    let cursor = first;
-    for (let f = 0; f < frameCount; ++f) {
-        const wantHours = startHours + (f / fps) * hoursPerSecond;
-        //History is sorted, so a forward-only scan is enough.
-        while (cursor + 1 <= last && hoursPerTick * history[cursor + 1].t <= wantHours) cursor++;
-        map.push({ historyIndex: cursor, simHours: wantHours });
-    }
-    return map;
+): FramePlan {
+    validRange(from, to, hoursPerTick);
+    if (!Number.isFinite(fps) || fps <= 0 || !Number.isFinite(hoursPerSecond) || hoursPerSecond <= 0)
+        throw new Error('Frame rate and simulated hours per second must be finite and greater than zero.');
+    const last = Math.min(to, history.length - 1), first = Math.max(0, from);
+    if (last < first) return planFrom([]);
+    for (let i = first; i <= last; ++i)
+        if (!Number.isFinite(history[i].t * hoursPerTick)) throw new Error('Invalid history timestamp.');
+    if (!isMonotonic(history, first, last)) return planFrom(mapUniform(history, first, last, 1, hoursPerTick));
+    const startHours = hoursPerTick * history[first].t, endHours = hoursPerTick * history[last].t;
+    const count = Math.ceil((endHours - startHours) / hoursPerSecond * fps) + 1;
+    if (!Number.isSafeInteger(count) || count < 1) throw new Error('The requested animation has too many frames.');
+    return new FramePlan(count, f => {
+        const wantHours = f === count - 1 ? endHours : Math.min(endHours, startHours + f / fps * hoursPerSecond);
+        // Indexed access also supports prefetch and out-of-order inspection without mutable state.
+        let low = first, high = last;
+        while (low < high) {
+            const mid = Math.ceil((low + high) / 2);
+            if (hoursPerTick * history[mid].t <= wantHours) low = mid;
+            else high = mid - 1;
+        }
+        return { historyIndex: low, simHours: wantHours };
+    });
 }
 
 export function isMonotonic(history: HistoryEntry[], from: number, to: number): boolean {
@@ -61,12 +73,15 @@ export function isMonotonic(history: HistoryEntry[], from: number, to: number): 
 
 export function buildFrameMap(
     history: HistoryEntry[],
-    opts: { mode: TimingMode; from: number; to: number; step: number; fps: number; hoursPerSecond: number; hoursPerTick: number },
-): FrameMap {
-    if (opts.mode === 'noon') return mapNoon(history, opts.from, opts.to, opts.hoursPerTick);
+    opts: { mode: TimingMode; from: number; to: number; step: number; fps: number; hoursPerSecond: number; hoursPerTick: number; initialDate?: string; timeZone?: string },
+): FramePlan {
+    validRange(opts.from, opts.to, opts.hoursPerTick);
+    if (!Number.isFinite(opts.fps) || opts.fps <= 0 || !Number.isSafeInteger(opts.step) || opts.step < 1)
+        throw new Error('Frame rate and frame stride must be positive.');
+    if (opts.mode === 'noon') return planFrom(mapNoon(history, opts.from, opts.to, opts.hoursPerTick, opts.initialDate, opts.timeZone));
     return opts.mode === 'simTime'
         ? mapSimTime(history, opts.from, opts.to, opts.fps, opts.hoursPerSecond, opts.hoursPerTick)
-        : mapUniform(history, opts.from, opts.to, opts.step, opts.hoursPerTick);
+        : planFrom(mapUniform(history, opts.from, opts.to, opts.step, opts.hoursPerTick));
 }
 
 /**
@@ -81,7 +96,10 @@ export function buildFrameMap(
  * not divide 24, the offset from noon drifts through the run, and taking the nearest keeps it
  * bounded at half a tick instead of letting it wander a whole one.
  */
-export function mapNoon(history: HistoryEntry[], from: number, to: number, hoursPerTick: number): FrameMap {
+export function mapNoon(history: HistoryEntry[], from: number, to: number, hoursPerTick: number,
+                        initialDate = DEFAULT_INITIAL_DATE, timeZone = DEFAULT_TIME_ZONE): FrameMap {
+    validRange(from, to, hoursPerTick);
+    const clock = simulationClock(initialDate, timeZone);
     const last = Math.min(to, history.length - 1);
     const start = Math.max(0, from);
     if (last < start) return [];
@@ -90,11 +108,13 @@ export function mapNoon(history: HistoryEntry[], from: number, to: number, hours
     const best = new Map<number, { index: number; distance: number; simHours: number }>();
     for (let i = start; i <= last; ++i) {
         const simHours = hoursPerTick * history[i].t;
-        const day = Math.floor(simHours / 24);
-        const distance = Math.abs((simHours - day * 24) - 12);
+        if (!Number.isFinite(simHours)) throw new Error('Invalid history timestamp.');
+        const local = clock(simHours);
+        const day = Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate());
+        const distance = Math.abs((local.getTime() - day) / 3600_000 - 12);
         const current = best.get(day);
         //Ties go to the earlier step, so the choice does not depend on iteration order.
-        if (!current || distance < current.distance) best.set(day, { index: i, distance, simHours });
+        if (!current || distance < current.distance || (distance === current.distance && simHours < current.simHours)) best.set(day, { index: i, distance, simHours });
     }
 
     return Array.from(best.keys()).sort((a, b) => a - b)

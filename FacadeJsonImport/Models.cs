@@ -63,13 +63,13 @@ public readonly struct Slot
 public class Tray
 {
     public readonly Slot[] Slots;
-    public readonly byte[] Segments;
+    public readonly int[] Segments;
     public readonly int FirstX;
     public readonly int LastX;
 
 
     // public Tray(int slots) => Slots = new Slot[slots];
-    public Tray(List<Slot> slots, List<byte> segments, int firstX, int lastX)
+    public Tray(List<Slot> slots, List<int> segments, int firstX, int lastX)
     {
         Slots = [.. slots];
         Segments = [..segments];
@@ -85,7 +85,7 @@ public class Row
     {
         var result = new List<Tray>();
         var buffer = new List<Slot>();
-        var segments = new List<byte>(){0};
+        var segments = new List<int>(){0};
         var prevX = -1;
         var startX = -1;
 
@@ -93,7 +93,7 @@ public class Row
         {
             if (input[i].X - prevX > 1 && buffer.Count > 0)
             {
-                segments.Add((byte)buffer.Count);
+                segments.Add(buffer.Count);
                 result.Add(new(buffer, segments, startX, input[i].X));
                 buffer.Clear();
                 segments.Clear();
@@ -106,14 +106,14 @@ public class Row
                 {
 
                     if (buffer.Count > 0)
-                        segments.Add((byte)buffer.Count);
+                        segments.Add(buffer.Count);
                     break;
                 }
                 case "||": case "|||": case "🭽": case "🭰": case "🭼": case " ": case "":
                 {
                     if (buffer.Count > 0)
                     {
-                        segments.Add((byte)buffer.Count);
+                        segments.Add(buffer.Count);
                         result.Add(new(buffer, segments, startX, input[i].X));
                         buffer.Clear();
                         segments.Clear();

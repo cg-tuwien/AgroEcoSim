@@ -362,7 +362,7 @@ public class RunStore : IRunStore, IDisposable
     volatile bool Stopping;
 
     /// <summary>The shape <see cref="Reconcile"/> brings older rows up to.</summary>
-    const int CurrentMetadataVersion = 3;
+    const int CurrentMetadataVersion = 4; // reconcile actual tick duration on historical rows
 
     /// <summary>
     /// Frames deflated concurrently per run.
@@ -635,12 +635,15 @@ public class RunStore : IRunStore, IDisposable
                     Models.AppJsonSerializerContext.Default.SimulationRequest);
                 if (request != null)
                 {
-                    if (run.HoursPerTick == 0) run.HoursPerTick = (ushort)(request.HoursPerTick ?? 1);
+                    // Historical requests were narrowed before snapping. Preserve what actually
+                    // ran (including old overflowing inputs); new requests store the resolved tick.
+                    var legacyHours = unchecked((ushort)Math.Max(0, request.HoursPerTick ?? 1));
+                    run.HoursPerTick = Agro.AgroWorld.SnapHoursPerTick(Math.Max(1, (int)legacyHours));
                     run.TotalHours = request.TotalHours ?? 0;
                     //Sliced, not formatted: the stored request holds a C# DateTime literal
                     //"2026-02-01T00:00:00", and its first ten characters ARE the day.
                     run.InitialDay = request.InitialDate?.ToString("yyyy-MM-dd") ?? "";
-                    run.Seed = request.Seed ?? 0;
+                    run.Seed = request.Seed ?? 42UL;
                     run.RenderMode = request.RenderMode ?? 0;
                     //`?? 1` because a request with no Plants array plants exactly one centred
                     //plant - see Initialize.SecondStageInit - so zero would be wrong, not unknown.

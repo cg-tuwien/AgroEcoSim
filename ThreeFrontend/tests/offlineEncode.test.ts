@@ -12,14 +12,14 @@ const hist = (ts: number[]) => ts.map(t => ({ t, s: `frame${t}` }));
 describe('mapUniform', () => {
     test('one output frame per history entry', () => {
         const m = mapUniform(hist([0, 1, 2, 3]), 0, 3, 1, 4);
-        expect(m.map(x => x.historyIndex)).toEqual([0, 1, 2, 3]);
+        expect(Array.from(m, x => x.historyIndex)).toEqual([0, 1, 2, 3]);
         //simHours is the timestep scaled by hoursPerTick.
         expect(m.map(x => x.simHours)).toEqual([0, 4, 8, 12]);
     });
 
     test('honours the step and clamps to the end of history', () => {
         const m = mapUniform(hist([0, 1, 2, 3, 4, 5]), 0, 99, 2, 1);
-        expect(m.map(x => x.historyIndex)).toEqual([0, 2, 4]);
+        expect(Array.from(m, x => x.historyIndex)).toEqual([0, 2, 4]);
     });
 
     test('a step of zero does not hang', () => {
@@ -32,7 +32,7 @@ describe('mapSimTime', () => {
     test('always ends on the last history entry', () => {
         //Otherwise the final simulation state - the mature plant - never appears in the video.
         const m = mapSimTime(hist([0, 10]), 0, 1, 2, 1, 1);
-        expect(m[m.length - 1].historyIndex).toBe(1);
+        expect(m.at(m.length - 1).historyIndex).toBe(1);
     });
 
     test('holds the previous entry while the simulation has nothing new', () => {
@@ -40,11 +40,11 @@ describe('mapSimTime', () => {
         //video must come from two entries, holding the first for most of it.
         const m = mapSimTime(hist([0, 10]), 0, 1, 2 /*fps*/, 1 /*h per s*/, 1);
         expect(m.length).toBeGreaterThan(2);
-        expect(m[0].historyIndex).toBe(0);
-        expect(m[m.length - 1].historyIndex).toBe(1);
+        expect(m.at(0).historyIndex).toBe(0);
+        expect(m.at(m.length - 1).historyIndex).toBe(1);
         //Monotonic and never skipping backwards.
         for (let i = 1; i < m.length; ++i)
-            expect(m[i].historyIndex).toBeGreaterThanOrEqual(m[i - 1].historyIndex);
+            expect(m.at(i).historyIndex).toBeGreaterThanOrEqual(m.at(i - 1).historyIndex);
     });
 
     test('falls back to uniform when timestamps are not monotonic', () => {
@@ -53,7 +53,7 @@ describe('mapSimTime', () => {
         const messy = hist([0, 5, 5, 3, 9]);
         expect(isMonotonic(messy, 0, 4)).toBe(false);
         const m = mapSimTime(messy, 0, 4, 25, 100, 1);
-        expect(m.map(x => x.historyIndex)).toEqual([0, 1, 2, 3, 4]);
+        expect(Array.from(m, x => x.historyIndex)).toEqual([0, 1, 2, 3, 4]);
     });
 
     test('detects strictly increasing series', () => {

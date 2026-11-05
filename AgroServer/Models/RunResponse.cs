@@ -32,7 +32,9 @@ public sealed record RunResponse(
     uint LastStep,
     int TotalHours,
     string InitialDay,
-    ulong Seed,
+    [property: System.Text.Json.Serialization.JsonNumberHandling(
+        System.Text.Json.Serialization.JsonNumberHandling.AllowReadingFromString |
+        System.Text.Json.Serialization.JsonNumberHandling.WriteAsString)] ulong Seed,
     byte RenderMode,
     uint Plants,
     uint Trays,

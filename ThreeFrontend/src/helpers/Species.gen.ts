@@ -60,7 +60,7 @@ export class SpeciesBase {
     leafSenescenceSeasonalDurationVar = signal(120);
     leafSenescenceStressDuration = signal(140);
     leafSenescenceStressDurationVar = signal(60);
-    seasonalSenescence = signal(0.7090909091);
+    seasonalSenescence = signal(0.70909095);
     rootsDensity = signal(0.5);
     rootsGravitaxis = signal(0.2);
     densityDryWood = signal(700000);
@@ -71,8 +71,8 @@ export class SpeciesBase {
     cytokininsReach = signal(1);
     auxinsThreshold = signal(1);
     floweringStartAgeHours = signal(1080);
-    floweringSeasonStart = signal(0.1818181818);
-    floweringSeasonEnd = signal(0.4545454545);
+    floweringSeasonStart = signal(0.18181819);
+    floweringSeasonEnd = signal(0.45454547);
     floweringPhaseDurationHours = signal(720);
     preFloweringCommitmentProbabilityPerHour = signal(0.0005);
     floweringCommitmentProbabilityPerHour = signal(0.045);
@@ -102,11 +102,11 @@ export class SpeciesBase {
     crownBudRadius = signal(0.0005);
     crownNodeHeightAboveSoil = signal(0.005);
     minimumInternodeLength = signal(0.001);
-    crownPitchDeg = signal(90);
+    crownPitchDeg = signal(90.00000419434348);
     crownMaximumNodes = signal(0);
     herbaceousGrowthRateScale = signal(0.2);
     shootMaximumRadius = signal(0.0005);
-    petioleReorientationMaximumAngleDeg = signal(54);
+    petioleReorientationMaximumAngleDeg = signal(54.000005954352844);
     petioleReorientationStepAngleDeg = signal(0);
     petioleSegmentLength = signal(0);
     maximumPetioleSegments = signal(8);

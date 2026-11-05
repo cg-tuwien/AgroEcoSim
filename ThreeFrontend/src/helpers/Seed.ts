@@ -67,7 +67,7 @@ export class Seed extends BaseRequestObject
         let fieldSize : Vec3;
         if (appstate.terrainList?.length > 1)
         {
-            if (!fieldIndex || fieldIndex < 0 || fieldIndex >= appstate.terrainList?.length) //select a random index if none or a negative or a too large one was specified
+            if (!Number.isInteger(fieldIndex) || fieldIndex < 0 || fieldIndex >= appstate.terrainList?.length) //select a random index if none or a negative or a too large one was specified
                 fieldIndex = Math.floor(Math.random() * appstate.terrainList.length);
 
             fieldSize = vec3(appstate.terrainList[fieldIndex].sx(), appstate.terrainList[fieldIndex].sy(), appstate.terrainList[fieldIndex].sz());

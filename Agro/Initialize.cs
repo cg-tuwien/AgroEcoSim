@@ -49,7 +49,15 @@ public static class Initialize
     {
         ISoilFormation soil;
         var cellCounts = new Vector3(world.FieldSize.X, world.FieldSize.Z, world.FieldSize.Y) / world.FieldResolution;
-        var cellCountsInt = new Vector3i((int)Math.Round(cellCounts.X), (int)Math.Round(cellCounts.Y), (int)Math.Round(cellCounts.Z));
+        int Count(float cells)
+        {
+            if (!float.IsFinite(cells) || cells <= 0f || cells >= ushort.MaxValue - 1)
+                throw new ArgumentOutOfRangeException(nameof(world), "Field size and resolution must form a finite positive grid.");
+            return Math.Max(1, (int)Math.Round(cells));
+        }
+        if (!float.IsFinite(world.FieldResolution) || world.FieldResolution <= 0f)
+            throw new ArgumentOutOfRangeException(nameof(world), "Field resolution must be finite and positive.");
+        var cellCountsInt = new Vector3i(Count(cellCounts.X), Count(cellCounts.Y), Count(cellCounts.Z));
         soil = new SoilFormationRegularVoxels(world, "DEFAULT", cellCountsInt, new(world.FieldSize.X, world.FieldSize.Z, world.FieldSize.Y));
         return soil;
     }

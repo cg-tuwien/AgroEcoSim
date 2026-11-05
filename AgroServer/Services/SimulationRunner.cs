@@ -87,7 +87,7 @@ class RunState
     public uint StartStep { get; init; }
     public volatile bool Preview;
     public volatile bool Abort;
-    public List<uint> StepTimes { get; } = new(1000);
+    public List<long> StepTimes { get; } = new(1000);
     /// <summary>The connection currently watching. Empty while nobody is attached.</summary>
     public volatile string ConnectionId = "";
     /// <summary>When the last client detached, or null while one is attached.</summary>
@@ -181,7 +181,7 @@ public class SimulationRunner : ISimulationRunner
         world.Deterministic = request.Deterministic ?? false;
         // Persist the resolved numerical tolerance so a later replay does not inherit
         // a different default from the server version installed at that time.
-        request = request with { CollisionGeometryToleranceM = world.CollisionGeometryToleranceM };
+        request = request with { CollisionGeometryToleranceM = world.CollisionGeometryToleranceM, HoursPerTick = world.HoursPerTick, Seed = request.Seed ?? 42UL };
 
         //Counted off the BUILT WORLD, not off the request, because for an imported facade the two
         //are not the same measurement. The request carries a single 'mesh' obstacle standing for
@@ -194,13 +194,13 @@ public class SimulationRunner : ISimulationRunner
         var runId = Store.BeginRun(new RunSpec
         {
             RequestJson = System.Text.Json.JsonSerializer.Serialize(request, AppJsonSerializerContext.Default.SimulationRequest),
-            HoursPerTick = (ushort)(request.HoursPerTick ?? 1),
+            HoursPerTick = world.HoursPerTick,
             TotalSteps = (uint)world.TimestepsTotal(),
             Analytics = (exportFlags & ExportFlags.Analytics) != 0,
             Deterministic = world.Deterministic,
             TotalHours = request.TotalHours ?? 0,
             InitialDay = (request.InitialDate ?? default).ToString("yyyy-MM-dd"),
-            Seed = request.Seed ?? 0,
+            Seed = request.Seed ?? 42UL,
             RenderMode = request.RenderMode ?? 0,
             Plants = (uint)plants,
             Trays = (uint)world.SoilFieldsCount,
@@ -461,9 +461,9 @@ public class SimulationRunner : ISimulationRunner
 
                 if (lazyPreviews || run.Preview)
                 {
-                    var prevTime = DateTime.UtcNow.Ticks;
+                    var prevTime = Stopwatch.GetTimestamp();
                     world.Run(1U);
-                    run.StepTimes.Add((uint)(DateTime.UtcNow.Ticks - prevTime));
+                    run.StepTimes.Add(Stopwatch.GetElapsedTime(prevTime).Ticks);
                     _ = to.Progress(i, simulationLength);
 
                     //The export is the one part of storing a frame that cannot leave this thread:

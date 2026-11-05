@@ -21,7 +21,7 @@ export interface IStoredRun {
     totalHours: number;
     /** The simulated start date as a calendar day, yyyy-MM-dd. Not an instant - see formatDay. */
     initialDay: string;
-    seed: number;
+    seed: string | number;
     renderMode: number;
     plants: number;
     /** Soil fields. 0 means NOT RECORDED - see `trayLabel`. */

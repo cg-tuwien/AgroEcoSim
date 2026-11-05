@@ -2180,7 +2180,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 	//THERE ARE NO WRITE METHODS ALLOWED except for these via messages.
 	#endregion
 
-	readonly List<byte> ChildrenToWaitFor = [];
+	readonly List<int> ChildrenToWaitFor = [];
 	readonly List<uint> LeavesCount = [];
 	readonly List<float> Volumes = [];
 	readonly List<float> Resources = [];
@@ -2399,8 +2399,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 					//bubbling stopped there and every ancestor lost its share of the tree's
 					//resources and volume. The assertion below is what catches it in a debug build;
 					//in release it corrupts the distribution silently.
-					Debug.Assert(GetChildren(i).Count < 255);
-					var leafChildren = (byte)GetChildren(i).Count;
+					var leafChildren = GetChildren(i).Count;
 					ChildrenToWaitFor.Add(leafChildren);
 					if (leafChildren == 0)
 						ReadyNodes0.Add(i);
@@ -2409,8 +2408,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 				}
 				else
 				{
-					Debug.Assert(GetChildren(i).Count < 255);
-					var children = (byte)GetChildren(i).Count;
+					var children = GetChildren(i).Count;
 					ChildrenToWaitFor.Add(children);
 					LeavesCount.Add(0);
 					Resources.Add(0);
