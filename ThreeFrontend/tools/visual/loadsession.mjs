@@ -35,7 +35,7 @@ try {
   const rect = await page.send('Runtime.evaluate', {
     returnByValue: true,
     expression: `(() => {
-      const b = Array.from(document.querySelectorAll('button')).find(x => x.textContent.trim() === 'Load');
+      const b = Array.from(document.querySelectorAll('button')).find(x => ['Load', 'Load run'].includes(x.textContent.trim()));
       if (!b) return null;
       const r = b.getBoundingClientRect();
       return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };

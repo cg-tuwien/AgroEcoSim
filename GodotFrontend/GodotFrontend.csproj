@@ -1,0 +1,31 @@
+<Project Sdk="Godot.NET.Sdk/4.7.2">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>GodotFrontend</RootNamespace>
+    <AssemblyName>GodotFrontend</AssemblyName>
+    <!-- Core/, Tests/ and Harness/ are sibling projects nested in the Godot folder; keep them out of this
+         assembly's **/*.cs glob (the .gdignore files keep the editor out of them). -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);Core/**;Tests/**;Harness/**;build/**;.godot/**</DefaultItemExcludes>
+    <!-- Agro (reached through Core) is OutputType Exe; Godot's export publishes self-contained and that
+         global property would otherwise trip NETSDK1150/1151 on the executable reference. -->
+    <ValidateExecutableReferencesMatchSelfContained>false</ValidateExecutableReferencesMatchSelfContained>
+    <!-- The self-contained export reaches Agro twice (as Release through Core, and with the export's own
+         configuration and runtime identifier), so its apphost and runtimeconfig - which the app never runs - are
+         offered twice. Agro.dll is identical in both. -->
+    <ErrorOnDuplicatePublishOutputFiles>false</ErrorOnDuplicatePublishOutputFiles>
+    <!-- The first frame of a run decodes a million primitives; JIT loop-heavy methods straight to optimised code
+         instead of running them at tier 0 first (measured: 450 ms -> see AGENTS.md for the current figure). -->
+    <TieredCompilationQuickJitForLoops>false</TieredCompilationQuickJitForLoops>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Godot builds in Debug/ExportDebug/ExportRelease; map the export configurations onto the ones the
+         plain SDK projects understand so Core and Agro are optimised in an exported binary. -->
+    <ProjectReference Include="Core/GodotFrontend.Core.csproj"
+                      SetConfiguration="Configuration=$([System.String]::Copy('$(Configuration)').Replace('Export',''))"
+                      GlobalPropertiesToRemove="RuntimeIdentifier;SelfContained" />
+  </ItemGroup>
+</Project>

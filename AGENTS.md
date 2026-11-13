@@ -983,6 +983,18 @@ Honest list of what still does not match:
 
 ---
 
+# GodotFrontend
+
+`GodotFrontend/` is a standalone Godot 4.7 (.NET, C#) viewer with the web viewport's core features, a client of
+AgroServer like `ThreeFrontend/`. Its camera is a line-by-line port of the three.js OrbitControls the web uses and
+is verified against it pose for pose (`ThreeFrontend/tools/visual/cameraprobe.mjs`). Build, test, run, the debug
+command line and the traps found while porting (Godot's clockwise front faces, the albedo Godot applies after
+`light()`) are in [`GodotFrontend/AGENTS.md`](GodotFrontend/AGENTS.md). Its engine-free core
+(`GodotFrontend/Core`) references `Agro/Agro.csproj` for the request and species models, so a change to
+`SimulationRequest` or `SpeciesSettings` is picked up there too.
+
+---
+
 # ThreeFrontend agent guide
 
 The web viewport in `ThreeFrontend/`. Preact 10 + `@preact/signals`, built by

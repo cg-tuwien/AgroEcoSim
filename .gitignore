@@ -52,3 +52,8 @@ runstore/
 # The species codegen builds itself (and Agro) in here, deliberately apart from everyone else's
 # bin/obj - see the GenerateSpeciesTypescript target in AgroServer.csproj.
 SchemeGenerator/artifacts/
+
+# GodotFrontend (Godot .NET keeps bin/obj under .godot/mono/temp; exports go to build/)
+GodotFrontend/.godot/
+!GodotFrontend/export_presets.cfg
+GodotFrontend/Tests/TestResults/

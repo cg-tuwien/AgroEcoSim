@@ -1,0 +1,33 @@
+; Engine configuration file.
+; It's best edited using the editor UI and not directly,
+; since the parameters that go here are not all obvious.
+;
+; Format:
+;   [section] ; section goes between []
+;   param=value ; assign values to parameters
+
+config_version=5
+
+[application]
+
+config/name="GreenFDT Viewport"
+run/main_scene="res://Main.tscn"
+config/features=PackedStringArray("4.7", "C#", "Forward Plus")
+run/low_processor_mode=true
+config/icon="res://icon.svg"
+
+[display]
+
+window/size/viewport_width=1600
+window/size/viewport_height=900
+window/dpi/allow_hidpi=true
+
+[dotnet]
+
+project/assembly_name="GodotFrontend"
+
+[rendering]
+
+renderer/rendering_method="forward_plus"
+rendering_device/driver="vulkan"
+lights_and_shadows/directional_shadow/size=4096

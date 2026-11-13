@@ -52,7 +52,7 @@ try {
     // Load the fixture through the app's own Load button.
     const chooser = new Promise(r => page.on(m => { if (m.method === 'Page.fileChooserOpened') r(m.params); }));
     await page.send('Page.setInterceptFileChooserDialog', { enabled: true });
-    const pt = await ev(`(() => { const b=Array.from(document.querySelectorAll('button')).find(x=>x.textContent.trim()==='Load'); const r=b.getBoundingClientRect(); return {x:Math.round(r.left+r.width/2),y:Math.round(r.top+r.height/2)}; })()`);
+    const pt = await ev(`(() => { const b=Array.from(document.querySelectorAll('button')).find(x=>['Load','Load run'].includes(x.textContent.trim())); const r=b.getBoundingClientRect(); return {x:Math.round(r.left+r.width/2),y:Math.round(r.top+r.height/2)}; })()`);
     for (const type of ['mousePressed','mouseReleased'])
       await page.send('Input.dispatchMouseEvent', { type, x: pt.x, y: pt.y, button: 'left', clickCount: 1 });
     const ch = await Promise.race([chooser, sleep(8000).then(()=>null)]);

@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <RootNamespace>GodotFrontend.Core</RootNamespace>
+    <AssemblyName>GodotFrontend.Core</AssemblyName>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <!-- The decoder, packer and picker are the hot path at 1M+ primitives; optimise them even in Godot's Debug builds. -->
+    <Optimize>true</Optimize>
+    <!-- Engine-free by construction: this project must never reference GodotSharp. -->
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="8.0.11" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Shared request/species models, organ enums, hours-per-tick snapping and the sky dome maths.
+         Agro is an Exe multi-targeting net8.0;net10.0; the nearest-TFM rule picks its net8.0 build. -->
+    <ProjectReference Include="../../Agro/Agro.csproj"
+                      SetConfiguration="Configuration=$([System.String]::Copy('$(Configuration)').Replace('Export',''))"
+                      GlobalPropertiesToRemove="RuntimeIdentifier;SelfContained" />
+  </ItemGroup>
+</Project>
