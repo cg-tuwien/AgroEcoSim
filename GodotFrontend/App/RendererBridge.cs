@@ -83,8 +83,13 @@ public sealed class RendererBridge : IFrameSink
 
     public void ShowFieldBox(float sizeX, float sizeD, float sizeZ)
     {
-        if (app.Terrain.Terrain != null) return; // a loaded terrain wins over the plain box
         app.Terrain.ShowFieldBox(sizeX, sizeD, sizeZ);
+        SceneChanged?.Invoke();
+    }
+
+    public void ClearTerrain()
+    {
+        app.Terrain.Clear();
         SceneChanged?.Invoke();
     }
 }

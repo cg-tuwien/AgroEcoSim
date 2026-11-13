@@ -17,6 +17,7 @@ import { resolveLighting } from './core/Lighting';
 import { resolveSky, type SkyCube } from './core/SkyTexture';
 import type { SolarSite } from '../helpers/Sun';
 import { GI_HEADROOM, type GIFrameInputs, type VoxelDebugOptions } from './core/VoxelGrid';
+import { saveStereoOptions, type StereoOptions } from './core/Stereo';
 import { Geom, leafGeomKey } from './core/GeometryIds';
 import { registerGeometry } from './core/GeometryStore';
 import { ThreeRenderer } from './three/ThreeRenderer';
@@ -73,7 +74,7 @@ export default function RendererHost() {
     //The most recent inputs each effect computed. Two jobs: it pins the signal reads ahead of
     //the guard (see the note on visibilityInputs), and it gives the mount path the current
     //state to catch up on without recomputing it from peeks.
-    const latest = useRef<{ visibility?: VisibilityInputs; voxels?: VoxelDebugRequest; sky?: SkyCube }>({});
+    const latest = useRef<{ visibility?: VisibilityInputs; voxels?: VoxelDebugRequest; sky?: SkyCube; stereo?: StereoOptions }>({});
     const carriedPose = useRef<CameraPose | undefined>(undefined);
     //Read through .value so the component re-renders - and the mount effect re-runs - when
     //either changes.
@@ -180,6 +181,7 @@ export default function RendererHost() {
             const voxels = latest.current.voxels ?? voxelDebugRequest();
             renderer.setVoxelDebug?.(voxels.show, voxels.options, voxels.inputs);
             renderer.refreshVisibility(latest.current.visibility ?? visibilityInputs());
+            renderer.setStereo?.(latest.current.stereo ?? stereoRequest());
         })();
 
         return () => {
@@ -281,6 +283,13 @@ export default function RendererHost() {
     useSignalEffect(() => {
         const request = latest.current.voxels = voxelDebugRequest();
         rendererRef.current?.setVoxelDebug?.(request.show, request.options, request.inputs);
+    });
+
+    useSignalEffect(() => {
+        //Assigned before the guarded call, like the others, so the reads survive minification.
+        const stereo = latest.current.stereo = stereoRequest();
+        saveStereoOptions(stereo);
+        rendererRef.current?.setStereo?.(stereo);
     });
 
     useSignalEffect(() => {
@@ -444,6 +453,18 @@ function siteInputs(): SolarSite {
         altitudeM: appstate.altitude.value,
         azimuthDeg: appstate.azimuth.value,
         timeZone: appstate.siteTimeZone.value,
+    };
+}
+
+/** The stereo settings, read through .value so the calling effect subscribes to every one of them. */
+function stereoRequest(): StereoOptions {
+    return {
+        mode: appstate.stereoMode.value,
+        eyeSeparation: appstate.stereoEyeSeparation.value,
+        convergeOnTarget: appstate.stereoConvergeOnTarget.value,
+        convergence: appstate.stereoConvergence.value,
+        swapEyes: appstate.stereoSwapEyes.value,
+        testPattern: appstate.stereoTestPattern.value,
     };
 }
 

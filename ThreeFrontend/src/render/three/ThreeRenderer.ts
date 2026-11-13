@@ -43,6 +43,8 @@ import { toThreeColor } from './ThreeColor';
 import { applyInstanceMaterial, newInstanceMaterial } from './ThreeMaterials';
 import { ThreeDensityField } from './ThreeDensityField';
 import { ThreeSky } from './ThreeSky';
+import { ThreeStereo } from './ThreeStereo';
+import type { StereoOptions } from '../core/Stereo';
 import { bindFold, disposeFold, cloneFoldedScene } from './ThreeContactDeformation';
 import '../core/StaticGeometry';   // side effect: fills the static geometry table
 
@@ -93,6 +95,7 @@ export class ThreeRenderer implements IViewportRenderer {
     /** rAF handle for the coalesced render; 0 when none is queued. */
     private renderPending = 0;
     private hemiLight: THREE.HemisphereLight | undefined;
+    private stereo = new ThreeStereo();
 
     //--- lifecycle -------------------------------------------------------------------------
 
@@ -185,6 +188,7 @@ export class ThreeRenderer implements IViewportRenderer {
         this.gizmo?.dispose();
 
         this.skyView.dispose();
+        this.stereo.dispose();
         this.disposeGroup(this.objPlants);
         this.disposeGroup(this.objSeeds);
         this.disposeGroup(this.objObstacles);
@@ -249,9 +253,19 @@ export class ThreeRenderer implements IViewportRenderer {
         this.renderPending = requestAnimationFrame(() => {
             this.renderPending = 0;
             if (this.disposed || !this.renderer || !this.camera) return;
+            if (this.stereo.active && this.controls
+                && this.stereo.render(this.renderer, this.scene, this.camera, this.controls.target)) return;
             this.renderer.render(this.scene, this.camera);
         });
     };
+
+    setStereo(options: StereoOptions) {
+        const was = this.stereo.active;
+        this.stereo.options = options;
+        //Two full-size multisampled targets are not worth keeping around in mono.
+        if (was && !this.stereo.active) this.stereo.release();
+        this.renderOnce();
+    }
 
     //--- camera ----------------------------------------------------------------------------
 

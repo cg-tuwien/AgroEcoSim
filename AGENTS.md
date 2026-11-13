@@ -989,7 +989,7 @@ Honest list of what still does not match:
 AgroServer like `ThreeFrontend/`. Its camera is a line-by-line port of the three.js OrbitControls the web uses and
 is verified against it pose for pose (`ThreeFrontend/tools/visual/cameraprobe.mjs`). Build, test, run, the debug
 command line and the traps found while porting (Godot's clockwise front faces, the albedo Godot applies after
-`light()`) are in [`GodotFrontend/AGENTS.md`](GodotFrontend/AGENTS.md). Its engine-free core
+`light()`), and its checkerboard stereo for the LED wall, are in [`GodotFrontend/AGENTS.md`](GodotFrontend/AGENTS.md). Its engine-free core
 (`GodotFrontend/Core`) references `Agro/Agro.csproj` for the request and species models, so a change to
 `SimulationRequest` or `SpeciesSettings` is picked up there too.
 
@@ -1330,6 +1330,41 @@ line-comparable: same constant names, same order, same citations.
   jest measurement of the same loop reads ~16 ms - that is ts-jest, not the code.
 - Night is genuinely black and heavy cloud genuinely grey. Both are the model being honest, and
   both look like bugs if you do not know.
+
+## Analysis versus Rendering, and stereo
+
+The HUD's Analysis tab is **what** the view shows (visual mapping, shown classes, picking, obstacle mapping, leaf area
+index); the Rendering tab is **how** it is drawn (lighting effects, the density-field overlay, the GPU API, stereo).
+Both carry the transport bar.
+
+Stereo (`render/core/Stereo.ts`, `IViewportRenderer.setStereo`) offers Mono, Stereo Checkerboard and a disabled
+"Stereo OpenXR (future)". The checkerboard is for the institute's stereo LED wall, after the RadFoam viewer
+(github.com/gramegnadominik/vr-radfoam): every canvas pixel carries one eye, **left when x + y is even counting rows
+from the top** - even rows L R L R ..., odd rows R L R L ... - with off-axis frusta (no toe-in) converging on the orbit
+target or a fixed distance, 6 cm default separation, swap eyes, and a red/blue test pattern. The settings are stored
+per browser (`localStorage` `agro.stereo`, never in a session; the test pattern is never stored).
+`GodotFrontend/Core/Stereo/Stereo.cs` is the same module; keep them diffable.
+
+- **WebGL** (`three/ThreeStereo.ts`) renders each eye into a half-float multisampled target (sRGB8 fallback) with
+  `PerspectiveCamera.filmOffset` carrying the off-axis shift, then one full-screen pass interleaves them. gl_FragCoord
+  is bottom-up there, so the composite counts rows as `height - 1 - y`. A render target receives LINEAR colour in r152
+  and so does the clear, so the composite applies the one `LinearTosRGB` the canvas would; off the edges an eye equals
+  the mono view exactly. Edges differ (7,445 of 1,024,000 pixels on the fixture, all anti-aliased): the eyes resolve
+  their samples in linear, the canvas resolves samples it already encoded.
+- **WebGPU** (`webgpu/Stereo.ts`) runs the whole view path per eye - prepass, GTAO, cone trace, main pass - and
+  **submits each eye on its own**: every per-view uniform goes through `queue.writeBuffer`, which lands before the
+  next submit, so one submit for both eyes gives both the second eye's camera. The eyes reuse the canvas-sized MSAA
+  and occlusion targets in turn. GTAO, the cone trace and the sky rebuild rays from NDC, so each takes the eye's
+  NDC shift (`offAxis.x` in `AoParams` and `Trace`, a shifted ray fan in `Sky.draw`). The density-field overlay stays
+  mono-only. `readStereoPixels()` is the harness's way in, because headless never composites a WebGPU canvas.
+- **Checking it** (`tools/visual/stereocheck.mjs`, both backends): the test pattern is exact on all 1,024,000 pixels,
+  swapped too; zero separation equals mono (WebGPU: byte-identical); 6 cm gives crossed disparity on the near soil,
+  identical on both backends; and with every lighting effect on, the left eye equals a mono render from the eye's
+  position shifted by the whole 8 pixels the chosen separation produces - 0 flat pixels and 33 (WebGPU) / 158 (WebGL)
+  edge pixels differ. Dropping the shift from the lighting passes raised that to 8,189, which the bound catches.
+- **The HUD floats over the canvas**, so a live-canvas screenshot measures the HUD as well; the harness hides it for
+  each shot. On the wall itself the interleave needs one canvas pixel per display pixel: browser zoom at 100 % and
+  full screen.
 
 ## The site is a per-run setting
 

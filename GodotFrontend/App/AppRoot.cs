@@ -14,6 +14,7 @@ using GodotFrontend.Core.Persist;
 using GodotFrontend.Core.Picking;
 using GodotFrontend.Core.Run;
 using GodotFrontend.Core.Scene;
+using GodotFrontend.Core.Stereo;
 using GodotFrontend.Core.Time;
 using Ray = GodotFrontend.Core.Math.Ray;
 
@@ -44,6 +45,7 @@ public partial class AppRoot : Control
     public RendererBridge Bridge { get; private set; } = null!;
     public RunController Controller { get; private set; } = null!;
     public LightingRig Lighting { get; private set; } = null!;
+    public StereoRig Stereo { get; private set; } = null!;
     public double LastUploadMs { get; set; }
 
     private SeedMarkers seedMarkers = null!;
@@ -55,6 +57,12 @@ public partial class AppRoot : Control
     private ScreenshotRunner? screenshot;
     private int screenshotIndex = -2;
     private bool dirty = true;
+    /// <summary>Set when --mapping, --lighting or a stereo flag forced the view: nothing about the view is persisted then.</summary>
+    private bool viewFromCommandLine;
+    private const double KeepDrawingSeconds = 1.0;
+    /// <summary>The project's low-processor setting, restored once a burst of continuous drawing ends.</summary>
+    private bool lowProcessorMode = true;
+    private ulong keepDrawingUntilUs;
     private string lightingKey = "";
     private int framesSinceReady;
     private double timeoutLeft;
@@ -80,7 +88,9 @@ public partial class AppRoot : Control
         }
         foreach (var u in Args.Unknown) GD.PrintErr($"command line: unknown argument '{u}'");
         timeoutLeft = Args.TimeoutSeconds;
-        Settings = Settings.Load(System.IO.Path.Combine(OS.GetUserDataDir(), "settings.json"));
+        lowProcessorMode = OS.LowProcessorUsageMode;
+        Settings = Settings.Load(Args.SettingsPath is { } settingsPath ? ProjectSettings.GlobalizePath(settingsPath)
+            : System.IO.Path.Combine(OS.GetUserDataDir(), "settings.json"));
         Theme = AppTheme.Build();
         RestoreWindow();
 
@@ -100,6 +110,7 @@ public partial class AppRoot : Control
         var cache = new DiskFrameCache(System.IO.Path.Combine(OS.GetUserDataDir(), "framecache"), (Settings.FrameCacheMb ?? 2048) << 20);
 
         BuildViewport();
+        Stereo = new StereoRig(this, World, ViewportPanel, Rig);
         Bridge = new RendererBridge(this);
         Controller = new RunController(Main, rest, hub, Bridge, cache);
         ApplySettingsToView();
@@ -134,9 +145,12 @@ public partial class AppRoot : Control
             AddChild(screenshot);
         }
 
+        if (Args.TransitionProbe is { } probeDir) AddChild(new TransitionProbe(this, ProjectSettings.GlobalizePath(probeDir)));
+
         ApplyCliView();
         Controller.LoadSpeciesAtStartup();
         if (Args.Simulate is int hours) _ = SimulateFromCli(hours);
+        else if (Args.OpenRun is { } runId) _ = OpenRunFromCli(runId);
         else if (Args.Load is { } load) LoadSession(ProjectSettings.GlobalizePath(load));
         else if (Args.FrameFile is { } frameFile) LoadFrameFile(ProjectSettings.GlobalizePath(frameFile));
         else
@@ -163,7 +177,8 @@ public partial class AppRoot : Control
             Name = "World",
             OwnWorld3D = true,
             HandleInputLocally = false,
-            RenderTargetUpdateMode = SubViewport.UpdateMode.WhenParentVisible,
+            // InputRouter draws this texture itself; nothing else would ask for it to be rendered.
+            RenderTargetUpdateMode = SubViewport.UpdateMode.Always,
             Msaa3D = Viewport.Msaa.Msaa4X,
         };
         World.AddChild(Rig);
@@ -183,8 +198,13 @@ public partial class AppRoot : Control
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
             SizeFlagsVertical = SizeFlags.ExpandFill,
             WheelAccumulate = Args.WheelAccumulate,
+            View = World,
         };
         ViewportPanel.AddChild(World);
+        // Low-processor mode draws once per change; a resize needs a few frames (the held image, the render at the
+        // new size, the effects' history) and a window manager sends several sizes for one fullscreen toggle.
+        ViewportPanel.SizeChanging += () => KeepDrawing(KeepDrawingSeconds);
+        GetTree().Root.SizeChanged += () => KeepDrawing(KeepDrawingSeconds);
         ViewportPanel.Pointer += (pos, phase) =>
         {
             if (phase == InputRouter.PointerPhase.Move) pendingMove = pos;
@@ -206,6 +226,7 @@ public partial class AppRoot : Control
         tabs.Add(new HomePanel(this));
         tabs.Add(new SimulationPanel(this));
         tabs.Add(new AnalysisPanel(this));
+        tabs.Add(new RenderingPanel(this));
         tabs.Add(new RunsPanel(this));
         foreach (var t in tabs) tabContainer.AddChild(t);
         tabContainer.CurrentTab = System.Math.Clamp(Settings.ActiveTab ?? 0, 0, tabs.Count - 1);
@@ -219,8 +240,9 @@ public partial class AppRoot : Control
     private void LayoutSidePanel()
     {
         if (SidePanel == null) return;
-        // At most a quarter of the window, never narrower than 320 px (style/index.css).
-        var width = System.Math.Max(320f, Size.X * 0.25f);
+        // At most a quarter of the window, never narrower than 320 px (style/index.css). Whole pixels, so the 3D view
+        // next to it maps one to one onto the window: the stereo checkerboard does not survive any resampling.
+        var width = MathF.Round(System.Math.Max(320f, Size.X * 0.25f));
         SidePanel.CustomMinimumSize = new Vector2(width, 0);
     }
 
@@ -264,6 +286,12 @@ public partial class AppRoot : Control
         }
         ReplayInputStep();
         ProcessPointer();
+        Stereo.Sync();
+        if (keepDrawingUntilUs != 0 && Time.GetTicksUsec() > keepDrawingUntilUs)
+        {
+            keepDrawingUntilUs = 0;
+            OS.LowProcessorUsageMode = lowProcessorMode;
+        }
         if (!dirty) return;
         dirty = false;
         UpdateLighting();
@@ -535,6 +563,12 @@ public partial class AppRoot : Control
         raycaster.ShowTerrain = v.ShowTerrain;
         raycaster.ShowSeeds = v.ShowSeeds;
         raycaster.ShowObstacles = v.ShowObstacles;
+        Stereo.Apply(v.Stereo);
+        ViewportPanel.KeepPixelParity = v.Stereo.Active;
+        dirty = true;
+        // A view forced from the command line is for that one run; persisting it would hand the next interactive
+        // start a scripted mapping, lighting or stereo setup (it did: a capture with --eye-separation 0 stuck).
+        if (viewFromCommandLine) return;
         Settings.VisualMapping = PlantColors.MappingName(v.Mapping);
         Settings.ShowLeaves = v.ShowLeaves; Settings.ShowRoots = v.ShowRoots; Settings.ShowTerrain = v.ShowTerrain;
         Settings.ShowSeeds = v.ShowSeeds; Settings.ShowObstacles = v.ShowObstacles; Settings.PerformPicking = v.PerformPicking;
@@ -544,7 +578,12 @@ public partial class AppRoot : Control
             Daylight = l.Daylight, Shadows = l.Shadows, Occlusion = l.Occlusion, Indirect = l.Indirect, SecondBounce = l.SecondBounce,
             LeafTranslucency = l.LeafTranslucency, Sky = l.Sky, ShadowBiasTexels = (float)l.ShadowBiasTexels,
         };
-        dirty = true;
+        var st = v.Stereo;
+        Settings.Stereo = new StereoSettings
+        {
+            Mode = StereoOptions.Name(st.Mode), EyeSeparation = st.EyeSeparation, ConvergeOnTarget = st.ConvergeOnTarget,
+            Convergence = st.Convergence, SwapEyes = st.SwapEyes,
+        };
     }
 
     private void ApplySettingsToView()
@@ -555,6 +594,11 @@ public partial class AppRoot : Control
         v.ShowSeeds = Settings.ShowSeeds; v.ShowObstacles = Settings.ShowObstacles; v.PerformPicking = Settings.PerformPicking;
         var l = Settings.Lighting;
         v.Lighting = new LightingOptions(l.Daylight, l.Shadows, l.Occlusion, l.Indirect, l.SecondBounce, l.LeafTranslucency, l.Sky, l.ShadowBiasTexels);
+        var st = Settings.Stereo;
+        // OpenXR is listed but not built yet; a stored choice of it opens in mono
+        var mode = StereoOptions.Parse(st.Mode);
+        v.Stereo = new StereoOptions(mode == StereoMode.OpenXr ? StereoMode.Mono : mode, System.Math.Max(0, st.EyeSeparation), st.ConvergeOnTarget,
+            System.Math.Max(0.05, st.Convergence), st.SwapEyes, false);
         ViewChanged();
     }
 
@@ -634,14 +678,48 @@ public partial class AppRoot : Control
             v.Lighting = new LightingOptions(on.Contains("daylight"), on.Contains("shadows"), on.Contains("occlusion"), on.Contains("indirect"),
                 on.Contains("bounce"), on.Contains("translucency"), on.Contains("sky"));
         }
-        if (Args.Mapping != null || Args.Lighting != null)
+        var stereoArgs = Args.Stereo != null || Args.StereoSwap || Args.StereoPattern || Args.EyeSeparation != null || Args.Convergence != null;
+        if (stereoArgs)
         {
-            var saved = Settings.Lighting;
-            var savedMapping = Settings.VisualMapping;
-            ViewChanged();
-            Settings.Lighting = saved;
-            Settings.VisualMapping = savedMapping;
+            var st = v.Stereo;
+            if (Args.Stereo is { } mode) st = st with { Mode = StereoOptions.Parse(mode) == StereoMode.Checkerboard ? StereoMode.Checkerboard : StereoMode.Mono };
+            if (Args.StereoSwap) st = st with { SwapEyes = true };
+            if (Args.StereoPattern) st = st with { TestPattern = true };
+            if (Args.EyeSeparation is { } sep) st = st with { EyeSeparation = System.Math.Max(0, sep) };
+            if (Args.Convergence is { } conv) st = st with { ConvergeOnTarget = false, Convergence = System.Math.Max(0.05, conv) };
+            v.Stereo = st;
         }
+        if (Args.Mapping != null || Args.Lighting != null || stereoArgs)
+        {
+            viewFromCommandLine = true;
+            ViewChanged();
+        }
+    }
+
+    /// <summary>F11 toggles fullscreen and F10 the side panel: what putting the view on the whole LED wall takes.</summary>
+    public override void _UnhandledKeyInput(InputEvent e)
+    {
+        if (e is not InputEventKey { Pressed: true, Echo: false } key) return;
+        if (key.Keycode == Key.F11)
+        {
+            var full = DisplayServer.WindowGetMode() is DisplayServer.WindowMode.Fullscreen or DisplayServer.WindowMode.ExclusiveFullscreen;
+            DisplayServer.WindowSetMode(full ? DisplayServer.WindowMode.Windowed : DisplayServer.WindowMode.Fullscreen);
+            KeepDrawing(KeepDrawingSeconds);
+            GetViewport().SetInputAsHandled();
+        }
+        else if (key.Keycode == Key.F10)
+        {
+            SidePanel.Visible = !SidePanel.Visible;
+            KeepDrawing(KeepDrawingSeconds);
+            GetViewport().SetInputAsHandled();
+        }
+    }
+
+    /// <summary>Draws every frame for the next <paramref name="seconds"/> instead of only when something changed.</summary>
+    public void KeepDrawing(double seconds)
+    {
+        keepDrawingUntilUs = System.Math.Max(keepDrawingUntilUs, Time.GetTicksUsec() + (ulong)(seconds * 1e6));
+        OS.LowProcessorUsageMode = false;
     }
 
     /// <summary>--simulate HOURS: one run from the default request; with --screenshot the last frame is captured.</summary>
@@ -662,6 +740,21 @@ public partial class AppRoot : Control
             }
         };
         await Controller.StartAsync();
+    }
+
+    /// <summary>--open-run ID: view a stored run; with --screenshot the frame shown after opening (or --frame N) is captured.</summary>
+    private async Task OpenRunFromCli(string runId)
+    {
+        await Controller.SpeciesReady;
+        if (screenshot != null && Args.Frame is null) screenshotIndex = int.MaxValue;
+        var ok = await Controller.OpenStoredAsync(runId);
+        if (!ok) { if (screenshot != null) GetTree().Quit(5); return; }
+        if (Args.Frame is int f && Controller.History.Count > 0)
+        {
+            var target = f < 0 ? Controller.History.Count - 1 : System.Math.Min(f, Controller.History.Count - 1);
+            screenshotIndex = target;
+            Controller.Seek(target);
+        }
     }
 
     public async void LoadSession(string path)

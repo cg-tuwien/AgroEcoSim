@@ -82,7 +82,9 @@ public sealed class MeshBvh
         var axis = ex >= ey && ex >= ez ? 0 : ey >= ez ? 1 : 2;
         var keys = new float[count];
         for (var i = 0; i < count; ++i) keys[i] = centroid[tri[start + i] * 3 + axis];
-        Array.Sort(keys, tri, start, count);
+        // Array.Sort(keys, items, index, length) applies the index to BOTH arrays; keys holds only this node's range,
+        // so the sort has to run on the two spans.
+        MemoryExtensions.Sort(keys.AsSpan(), tri.AsSpan(start, count));
         var half = count / 2;
         var left = Build(centroid, start, half);
         var right = Build(centroid, start + half, count - half);

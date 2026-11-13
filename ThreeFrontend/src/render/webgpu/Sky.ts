@@ -118,7 +118,7 @@ export class Sky {
      * live bug in the voxel overlay next door; this is written not to inherit it.)
      */
     draw(pass: GPURenderPassEncoder, format: GPUTextureFormat, sampleCount: number,
-         depthFormat: GPUTextureFormat, cube: SkyCube, pose: CameraPose, aspect: number) {
+         depthFormat: GPUTextureFormat, cube: SkyCube, pose: CameraPose, aspect: number, ndcShiftX = 0) {
         this.upload(cube);
 
         //The same basis core/Mat4.lookAt builds, so the horizon lines up with the terrain:
@@ -147,7 +147,10 @@ export class Sky {
         const f = this.data;
         f[0] = rx * tanY * aspect; f[1] = ry * tanY * aspect; f[2] = rz * tanY * aspect; f[3] = 0;
         f[4] = ux * tanY; f[5] = uy * tanY; f[6] = uz * tanY; f[7] = 0;
-        f[8] = fx; f[9] = fy; f[10] = fz; f[11] = 0;
+        //An off-axis stereo eye sees pixel x along (x + shift) * tan * aspect, so the shift moves
+        //the whole ray fan sideways; the sky is at infinity, so the eye's translation does not.
+        const sx = ndcShiftX * tanY * aspect;
+        f[8] = fx + rx * sx; f[9] = fy + ry * sx; f[10] = fz + rz * sx; f[11] = 0;
         this.device.queue.writeBuffer(this.uniform, 0, f.buffer, 0, f.byteLength);
 
         pass.setPipeline(this.pipeline(format, sampleCount, depthFormat));

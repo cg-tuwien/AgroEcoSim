@@ -449,6 +449,8 @@ struct AoParams {
   projParams : vec4f,
   //x: radius in world units, y: intensity, zw: full-resolution size.
   settings   : vec4f,
+  //x: horizontal NDC shift of an off-axis stereo eye's frustum (core/Stereo.ts), 0 in mono.
+  offAxis    : vec4f,
 };
 
 @group(0) @binding(0) var<uniform> ao : AoParams;
@@ -464,7 +466,7 @@ const ANGLE_BIAS : f32 = 0.05;
 fn viewPosFrom(uv : vec2f, dist : f32) -> vec3f {
   //uv has a top-left origin, clip space is y-up.
   let ndc = vec2f(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0);
-  return vec3f(ndc.x * ao.projParams.x, ndc.y * ao.projParams.y, -1.0) * dist;
+  return vec3f((ndc.x + ao.offAxis.x) * ao.projParams.x, ndc.y * ao.projParams.y, -1.0) * dist;
 }
 
 @compute @workgroup_size(8, 8)

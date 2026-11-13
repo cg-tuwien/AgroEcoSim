@@ -1,5 +1,6 @@
 using GodotFrontend.Core.Color;
 using GodotFrontend.Core.Lighting;
+using GodotFrontend.Core.Stereo;
 
 namespace GodotFrontend.Core.Model;
 
@@ -13,4 +14,6 @@ public sealed class ViewState
     public LightingOptions Lighting = LightingOptions.Off;
     /// <summary>The web's obstacleMapping select ("none", "lai", ...); carried through sessions for the deferred panel.</summary>
     public string ObstacleMapping = "none";
+    /// <summary>How the viewport is presented (mono or a stereo mode). A display setting, kept in the app settings and never in sessions.</summary>
+    public StereoOptions Stereo = StereoOptions.Default;
 }

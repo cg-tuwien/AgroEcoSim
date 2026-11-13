@@ -61,6 +61,16 @@ public partial class SteppedNumberField : HBoxContainer
     public double Value => value;
     public string Note { set => note.Text = value; }
 
+    public bool Disabled
+    {
+        set
+        {
+            edit.Editable = !value;
+            minus.Disabled = value;
+            plus.Disabled = value;
+        }
+    }
+
     public void SetSilently(double v)
     {
         value = integer ? System.Math.Round(v) : v;
@@ -107,6 +117,9 @@ public partial class ChoiceField : HBoxContainer
     }
 
     public void SelectSilently(int index) => option.Select(index);
+
+    /// <summary>Lists a choice that cannot be picked yet (shown greyed out).</summary>
+    public void SetItemDisabled(int index, bool disabled) => option.SetItemDisabled(index, disabled);
 }
 
 public partial class TextField : HBoxContainer

@@ -38,6 +38,12 @@ public static class AppTheme
         theme.SetStylebox("focus", "LineEdit", edit);
         var tabPanel = new StyleBoxFlat { BgColor = Panel, ContentMarginLeft = 6, ContentMarginRight = 6, ContentMarginTop = 6, ContentMarginBottom = 6 };
         theme.SetStylebox("panel", "TabContainer", tabPanel);
+        // Compact tabs: five of them have to fit the 25 % side panel without scroll arrows.
+        StyleBoxFlat Tab(Color bg) => new() { BgColor = bg, ContentMarginLeft = 6, ContentMarginRight = 6, ContentMarginTop = 4, ContentMarginBottom = 4, CornerRadiusTopLeft = 3, CornerRadiusTopRight = 3 };
+        theme.SetStylebox("tab_selected", "TabContainer", Tab(Panel));
+        theme.SetStylebox("tab_unselected", "TabContainer", Tab(Background));
+        theme.SetStylebox("tab_hovered", "TabContainer", Tab(new Color(0.2f, 0.2f, 0.22f)));
+        theme.SetStylebox("tab_disabled", "TabContainer", Tab(Background));
         theme.SetColor("font_selected_color", "TabContainer", Accent);
         theme.SetColor("font_unselected_color", "TabContainer", Muted);
         return theme;

@@ -26,6 +26,48 @@ public class PickingRaycastTests
     }
 
     [Fact]
+    public void BvhAgreesWithBruteForceOnALargeMesh()
+    {
+        // A mesh deep enough for the build to recurse into right-hand children, where the sort works on a range that
+        // does not start at zero. It once threw there, on every imported facade, and never on the small fixtures.
+        var rng = new Random(7);
+        const int tris = 6000;
+        var pos = new float[tris * 9];
+        var idx = new int[tris * 3];
+        for (var t = 0; t < tris; ++t)
+        {
+            float cx = (float)(rng.NextDouble() * 20 - 10), cy = (float)(rng.NextDouble() * 4), cz = (float)(rng.NextDouble() * 20 - 10);
+            for (var k = 0; k < 3; ++k)
+            {
+                pos[t * 9 + k * 3] = cx + (float)(rng.NextDouble() - 0.5) * 0.6f;
+                pos[t * 9 + k * 3 + 1] = cy + (float)(rng.NextDouble() - 0.5) * 0.6f;
+                pos[t * 9 + k * 3 + 2] = cz + (float)(rng.NextDouble() - 0.5) * 0.6f;
+                idx[t * 3 + k] = t * 3 + k;
+            }
+        }
+        var offset = new Vec3(1, -2, 3);
+        var bvh = new MeshBvh(pos, idx, offset);
+        Assert.Equal(tris, bvh.TriangleCount);
+        var hits = 0;
+        for (var r = 0; r < 400; ++r)
+        {
+            var origin = new Vec3(rng.NextDouble() * 30 - 15, 8 + rng.NextDouble() * 4, rng.NextDouble() * 30 - 15);
+            var dir = new Vec3(rng.NextDouble() - 0.5, -1, rng.NextDouble() - 0.5).Normalized();
+            double? brute = null;
+            for (var t = 0; t < tris; ++t)
+            {
+                Vec3 V(int k) => new Vec3(pos[t * 9 + k * 3], pos[t * 9 + k * 3 + 1], pos[t * 9 + k * 3 + 2]) + offset;
+                var h = RayMath.Triangle(origin, dir, V(0), V(1), V(2));
+                if (h is { } d && (brute == null || d < brute)) brute = d;
+            }
+            var got = bvh.Raycast(new Ray(origin, dir));
+            Assert.Equal(brute.HasValue, got.HasValue);
+            if (brute is { } b) { Assert.Equal(b, got!.Value, 9); ++hits; }
+        }
+        Assert.True(hits > 50, $"only {hits} rays hit; the test would prove little");
+    }
+
+    [Fact]
     public void PicksTheStemItIsAimedAt()
     {
         var lib = new GeometryLibrary();

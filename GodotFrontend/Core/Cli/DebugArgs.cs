@@ -11,6 +11,8 @@ public sealed class DebugArgs
 {
     public string? Server;
     public string? Load;
+    /// <summary>Open a run stored on the server, as the Runs tab's View button does.</summary>
+    public string? OpenRun;
     /// <summary>A single stored frame (.g zlib or raw scene bytes) to show without a session or a server.</summary>
     public string? FrameFile;
     /// <summary>Timeline index to display after loading; -1 means the last frame.</summary>
@@ -37,6 +39,17 @@ public sealed class DebugArgs
     public string? Mapping;
     /// <summary>Start a run of this many simulated hours on startup (with --screenshot: capture its last frame).</summary>
     public int? Simulate;
+    /// <summary>--stereo mono|checkerboard: force the presentation mode.</summary>
+    public string? Stereo;
+    public bool StereoSwap;
+    public bool StereoPattern;
+    public double? EyeSeparation;
+    /// <summary>--convergence M: converge at a fixed distance instead of the orbit target.</summary>
+    public double? Convergence;
+    /// <summary>--transition-probe DIR: script F10 and window resizes and save every frame drawn afterwards.</summary>
+    public string? TransitionProbe;
+    /// <summary>--settings PATH: read and write the preferences there instead of user://settings.json (test runs).</summary>
+    public string? SettingsPath;
     public readonly List<string> Unknown = new();
 
     public static DebugArgs Parse(IReadOnlyList<string> args)
@@ -71,6 +84,7 @@ public sealed class DebugArgs
             {
                 case "server": a.Server = Next(); break;
                 case "load": a.Load = Next(); break;
+                case "open-run": a.OpenRun = Next(); break;
                 case "frame-file": a.FrameFile = Next(); break;
                 case "frame": a.Frame = int.Parse(Next(), CultureInfo.InvariantCulture); break;
                 case "camera":
@@ -100,7 +114,15 @@ public sealed class DebugArgs
                 case "mapping": a.Mapping = Next(); break;
                 case "debug-lighting": break;
                 case "debug-picking": break;
+                case "debug-stereo": break;
+                case "transition-probe": a.TransitionProbe = Next(); break;
+                case "settings": a.SettingsPath = Next(); break;
                 case "simulate": a.Simulate = int.Parse(Next(), CultureInfo.InvariantCulture); break;
+                case "stereo": a.Stereo = Next(); break;
+                case "stereo-swap": a.StereoSwap = true; break;
+                case "stereo-pattern": a.StereoPattern = true; break;
+                case "eye-separation": a.EyeSeparation = double.Parse(Next(), CultureInfo.InvariantCulture); break;
+                case "convergence": a.Convergence = double.Parse(Next(), CultureInfo.InvariantCulture); break;
                 default: a.Unknown.Add(arg); break;
             }
         }

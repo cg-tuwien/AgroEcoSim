@@ -30,6 +30,7 @@ import { OfflineRender } from './hud/OfflineRender';
 import { ViewportBackend } from './hud/ViewportBackend';
 import { Lighting } from './hud/Lighting';
 import { VoxelDebugControl } from './hud/VoxelDebugControl';
+import { Stereo } from './hud/Stereo';
 import { SamplesPerPixel } from './hud/SamplesPerPixel';
 import { FieldModelUpload } from './hud/FieldModelUpload';
 import { FieldItemRegex } from './hud/FieldItemRegex';
@@ -53,6 +54,7 @@ const App = () => {
 				<li role="presentation"><a role="tab" onClick={e => appstate.activeTab.value = "tab-plants"} aria-selected={appstate.activeTab.value.endsWith("tab-plants")}>Plants</a></li>
 				<li role="presentation"><a role="tab" onClick={e => appstate.activeTab.value = "tab-obstacles"} aria-selected={appstate.activeTab.value.endsWith("tab-obstacles")}>Obstacles</a></li>
 				<li role="presentation"><a role="tab" onClick={e => appstate.activeTab.value = "tab-analysis"} aria-selected={appstate.activeTab.value.endsWith("tab-analysis")}>Analysis</a></li>
+				<li role="presentation"><a role="tab" onClick={e => appstate.activeTab.value = "tab-rendering"} aria-selected={appstate.activeTab.value.endsWith("tab-rendering")}>Rendering</a></li>
 				<li role="presentation"><a role="tab" onClick={e => appstate.activeTab.value = "tab-export"} aria-selected={appstate.activeTab.value.endsWith("tab-export")}>Export</a></li>
 				<li role="presentation"><a role="tab" onClick={e => appstate.activeTab.value = "tab-runs"} aria-selected={appstate.activeTab.value.endsWith("tab-runs")}>Runs</a></li>
 				{() => "TODO: make analysis a separate panel always visible"}
@@ -95,16 +97,24 @@ const App = () => {
 			<div role="tabpanel" id="tab-obstacles" aria-selected={appstate.activeTab.value.endsWith("tab-obstacles")}>
 				<Obstacles/>
 			</div>
+			{/* Analysis is WHAT the view shows: data mappings, which classes are drawn, picking. */}
 			<div role="tabpanel" id="tab-analysis" aria-selected={appstate.activeTab.value.endsWith("tab-analysis")}>
 				<Start inclStats={false}/>
 				<VisualMapping/>
 				<ObstacleMapping/>
-				<Lighting/>
-				<VoxelDebugControl/>
-				<ViewportBackend/>
 				<PickedDetails/>
 				<h4>Leaf area index on obstacles</h4>
 				<LeafAreaIndex/>
+			</div>
+
+			{/* Rendering is HOW it is drawn: lighting effects, their diagnostics, the GPU API and stereo. */}
+			<div role="tabpanel" id="tab-rendering" aria-selected={appstate.activeTab.value.endsWith("tab-rendering")}>
+				<Start inclStats={false} />
+				<Lighting />
+				<VoxelDebugControl />
+				<ViewportBackend />
+				<h4>Stereo</h4>
+				<Stereo />
 			</div>
 
 			<div role="tabpanel" id="tab-export" aria-selected={appstate.activeTab.value.endsWith("tab-export")}>

@@ -33,6 +33,17 @@ if (args.Length >= 2 && args[0] == "--bench")
     return 0;
 }
 
+if (args.Length >= 2 && args[0] == "--terrain")
+{
+    // decode a stored terrain (terrain.bin.gz or raw) and report what it holds
+    var bytesT = RestClient.Gunzip(File.ReadAllBytes(args[1]));
+    var swT = Stopwatch.StartNew();
+    var t = TerrainDecoder.Decode(bytesT);
+    Console.WriteLine($"terrain v{t.Version}: {t.Items.Count} items ({t.Items.Count(i => i is BoxTerrainItem)} boxes), " +
+                      $"obstacle mesh {t.ObstacleMesh?.VertexCount ?? 0} vertices, {t.Groups.Count} groups, {swT.Elapsed.TotalMilliseconds:F0} ms");
+    return 0;
+}
+
 var server = "http://127.0.0.1:7215";
 var hours = 240;
 byte renderMode = 3;
@@ -109,6 +120,8 @@ Check(decodedPlants >= 0, $"last frame decoded with {decodedPlants} plant(s)");
 // ---- open the same run again purely over REST
 var opened = Run(controller.OpenStoredAsync(liveRunId));
 Check(opened, "stored run opened");
+Check(sink.Soil == "box", $"a plain-field run is drawn on its own field box (soil: {sink.Soil})");
+Check(controller.Request.Seeds.Count == 1, $"the run's own seed is shown ({controller.Request.Seeds.Count})");
 Check(Wait(() => controller.History.Count >= expectedSteps, 60), $"stored timeline has {controller.History.Count} frames");
 Check(controller.History.EvictedCount == controller.History.Count, "stored frames are fetched on demand (none resident)");
 controller.Seek(controller.History.Count / 2);
@@ -127,6 +140,22 @@ var runs = Run(rest.GetRunsAsync());
 Check(runs.Any(r => r.Id == liveRunId), $"runs listing contains the live run ({runs.Count} runs)");
 var store = Run(rest.GetStoreAsync());
 Check(store != null && store.Enabled, "store enabled");
+
+// A run built on an imported model is drawn on its trays, or on nothing when the server holds none - never on the
+// field box of whatever scenario was on screen before.
+foreach (var modelRun in runs.Where(r => !string.IsNullOrEmpty(r.FieldModelName) && r.StoredFrames > 0).Take(2))
+{
+    Run(controller.OpenStoredAsync(liveRunId));
+    var ok = Run(controller.OpenStoredAsync(modelRun.Id));
+    Check(ok && sink.Soil == (modelRun.HasTerrain ? "terrain" : "none"),
+        $"model run {modelRun.Id} opened over a box run shows {sink.Soil} (terrain stored: {modelRun.HasTerrain})");
+}
+// Two opens in flight: the later one wins, whatever order the server answers in.
+{
+    var first = controller.OpenStoredAsync(liveRunId);
+    var second = controller.OpenStoredAsync(liveRunId);
+    Check(!Run(first) && Run(second), "an open superseded by a later one reports false and leaves the later one standing");
+}
 
 Console.WriteLine(failures.Count == 0 ? "ALL PASSED" : $"{failures.Count} FAILED");
 // The hub is disposed after this line; nothing drains the pump any more, so let continuations use the thread pool.
@@ -147,6 +176,9 @@ sealed class RecordingSink : IFrameSink
     }
 
     public void ShowNothing() { }
-    public void ShowTerrain(TerrainData terrain) => Terrains++;
-    public void ShowFieldBox(float sizeX, float sizeD, float sizeZ) => FieldBoxes++;
+    public void ShowTerrain(TerrainData terrain) { Terrains++; Soil = "terrain"; }
+    public void ShowFieldBox(float sizeX, float sizeD, float sizeZ) { FieldBoxes++; Soil = "box"; }
+    public void ClearTerrain() => Soil = "none";
+    /// <summary>What the soil on screen is after the last call: box, terrain or none.</summary>
+    public string Soil = "box";
 }

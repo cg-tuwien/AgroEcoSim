@@ -18,6 +18,8 @@ public sealed class LightingRig
     private readonly ShaderMaterial skyMaterial;
     private readonly MaterialSet materials;
     private static readonly Color Background = Color.Color8(250, 250, 250);
+    /// <summary>The flat theme background; also what fills the margins of a held image while the view resizes.</summary>
+    public static Color BackgroundColor => Background;
     /// <summary>The ground tint of the dome below the horizon: DAY_GROUND normalised by its luma.</summary>
     private static readonly Vector3 GroundTint;
 

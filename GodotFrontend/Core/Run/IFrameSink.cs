@@ -13,5 +13,7 @@ public interface IFrameSink
     void ShowNothing();
     void ShowTerrain(TerrainData terrain);
     void ShowFieldBox(float sizeX, float sizeD, float sizeZ);
+    /// <summary>No soil at all: no trays, no imported obstacles, no field box.</summary>
+    void ClearTerrain();
     event Action<int>? FramePresented;
 }

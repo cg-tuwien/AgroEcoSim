@@ -41,7 +41,6 @@ public sealed class TerrainBuilder
     public void ShowFieldBox(float sizeX, float sizeD, float sizeZ)
     {
         Clear();
-        Terrain = null;
         var box = new MeshInstance3D
         {
             Name = "FieldBox",
@@ -100,8 +99,10 @@ public sealed class TerrainBuilder
         }
     }
 
+    /// <summary>Removes the trays, the field box and the imported obstacles.</summary>
     public void Clear()
     {
+        Terrain = null;
         foreach (var t in trays) t.QueueFree();
         trays.Clear();
         obstacles?.QueueFree();

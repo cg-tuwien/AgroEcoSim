@@ -25,12 +25,16 @@ import { IObjImport, Parse } from "./helpers/ObjParser";
 import { BoxTerrainItem, ITerrainItem, MeshTerrainItem } from "./helpers/Terrain";
 import { CoordinateSystem } from "./helpers/CoordinateSystem";
 import { IStoredRun, camelizeTopLevel } from "./helpers/StoredRun";
+import { loadStereoOptions, type StereoMode } from "./render/core/Stereo";
 
 interface RetryContext {
     readonly previousRetryCount: number; //The number of consecutive failed tries so far.
     readonly elapsedMilliseconds: number; // The amount of time in milliseconds spent retrying so far.
     readonly retryReason: Error; // The error that forced the upcoming retry.
 }
+
+/** The stereo setup this browser last used; see `stereoMode`. */
+const initialStereo = loadStereoOptions();
 
 const InfiniteHubRetry = {
     nextRetryDelayInMilliseconds(retryContext: RetryContext): number | null {
@@ -1019,6 +1023,18 @@ class State {
      * and no field resolveLighting has to be told to ignore.
      */
     lightSky = signal(false);
+    /**
+     * Stereo presentation of the viewport (core/Stereo.ts). A display setting: stored per browser
+     * in localStorage and never in a session, so opening a colleague's session cannot switch this
+     * screen into a checkerboard, and the LED wall's browser keeps its own setup.
+     */
+    stereoMode = signal<StereoMode>(initialStereo.mode);
+    stereoEyeSeparation = signal(initialStereo.eyeSeparation);
+    stereoConvergeOnTarget = signal(initialStereo.convergeOnTarget);
+    stereoConvergence = signal(initialStereo.convergence);
+    stereoSwapEyes = signal(initialStereo.swapEyes);
+    /** Left eye red, right eye blue: a calibration aid, never stored. */
+    stereoTestPattern = signal(false);
     /**
      * Cloud cover per timestep, 0 = clear .. 1 = fully overcast: the server's
      * Weather[t].SkyCoverage, which is planned in full before step 0 and sent once for the run.

@@ -32,6 +32,8 @@ import { Vec3 } from '../core/Vec3';
 import { createGpuContext, GpuContext } from './Device';
 import { OcclusionTargets, Targets, SAMPLE_COUNT, DEPTH_CLEAR_VALUE, DEPTH_FORMAT } from './Targets';
 import { Sky } from './Sky';
+import { WebGPUStereo } from './Stereo';
+import { convergenceDistance, eyeFrustum, MONO, stereoActive, type Eye, type StereoOptions } from '../core/Stereo';
 import type { SkyCube } from '../core/SkyTexture';
 import { forceOpaque, reportOpaque, warnIfFlat } from '../offline/opaque';
 import { VoxelField } from './gi/VoxelField';
@@ -140,6 +142,11 @@ export class WebGPURenderer implements IViewportRenderer {
     private voxels: VoxelField | undefined;
     private voxelDebug: VoxelDebug | undefined;
     private sky: Sky | undefined;
+    private stereo: WebGPUStereo | undefined;
+    private stereoOptions: StereoOptions = MONO;
+    private eyeView: Mat4 = createMat4();
+    private eyeProj: Mat4 = createMat4();
+    private eyeViewProj: Mat4 = createMat4();
     /**
      * The sky the background currently shows, or undefined for the flat clear colour.
      *
@@ -155,17 +162,17 @@ export class WebGPURenderer implements IViewportRenderer {
     /** rAF handle for the coalesced render; 0 when none is queued. */
     private renderPending = 0;
     private traceBuffer: GPUBuffer | undefined;
-    //projParams, settings, gridOrigin, gridCell, sunDir, then a 4x4 invView. The order
-    //MUST match struct Trace; see FRAME_MEMBERS for what a mismatch costs.
-    //projParams, settings, gridOrigin, gridCell, gridExtent, sunDir, then invView. The order
-    //MUST match `struct Trace`; see the FRAME_MEMBERS note for what a silent mismatch costs.
-    private traceData = new Float32Array(4 * 6 + 16);
+    //projParams, settings, gridOrigin, gridCell, gridExtent, sunDir, invView, then offAxis. The
+    //order MUST match `struct Trace`; see the FRAME_MEMBERS note for what a silent mismatch costs.
+    private traceData = new Float32Array(4 * 6 + 16 + 4);
     private traceBind: GPUBindGroup | undefined;
     private traceBoundView: GPUTextureView | undefined;
     private traceBoundGi: GPUTextureView | undefined;
     private voxelSampler: GPUSampler | undefined;
     private invViewScratch: Mat4 = createMat4();
-    private aoData = new Float32Array(8);
+    //projParams, settings, offAxis: `struct AoParams`. The blur declares only the first two,
+    //which is fine - a binding may be larger than the struct it feeds.
+    private aoData = new Float32Array(12);
     private lightViewProj: Mat4 = createMat4();
     private lightViewScratch: Mat4 = createMat4();
     private lightProjScratch: Mat4 = createMat4();
@@ -276,6 +283,7 @@ export class WebGPURenderer implements IViewportRenderer {
         this.statics.destroy();
         this.obstacleIndexVersions.clear();
         this.sky?.dispose();
+        this.stereo?.dispose();
         this.frameBuffer?.destroy();
         this.aoBuffer?.destroy();
         this.traceBuffer?.destroy();
@@ -442,7 +450,7 @@ export class WebGPURenderer implements IViewportRenderer {
         return this.lighting.ambientOcclusion || this.lighting.voxelGI || this.lighting.shadows;
     }
 
-    private renderOcclusion(occ: OcclusionTargets, binds: OcclusionBinds, frameBindBasic: GPUBindGroup) {
+    private renderOcclusion(occ: OcclusionTargets, binds: OcclusionBinds, frameBindBasic: GPUBindGroup, ndcShiftX = 0) {
         if (!this.gpu || !this.pipelines || !this.needsPrepass()) return;
         if (!this.atlas!.vertexBuffer || !this.atlas!.indexBuffer) return;
 
@@ -486,7 +494,7 @@ export class WebGPURenderer implements IViewportRenderer {
             return;
         }
 
-        this.writeAoUniform(occ);
+        this.writeAoUniform(occ, ndcShiftX);
         const compute = encoder.beginComputePass();
         const groupsX = Math.ceil(occ.aoWidth / 8);
         const groupsY = Math.ceil(occ.aoHeight / 8);
@@ -503,7 +511,7 @@ export class WebGPURenderer implements IViewportRenderer {
         device.queue.submit([encoder.finish()]);
     }
 
-    private writeAoUniform(occ: OcclusionTargets) {
+    private writeAoUniform(occ: OcclusionTargets, ndcShiftX = 0) {
         if (!this.gpu) return;
         const aspect = occ.width / Math.max(1, occ.height);
         const tanHalf = Math.tan((this.camera.fovY * Math.PI) / 360);
@@ -518,6 +526,8 @@ export class WebGPURenderer implements IViewportRenderer {
         f[5] = 1.4;                      // intensity
         f[6] = occ.width;
         f[7] = occ.height;
+        //Off-axis stereo eyes reconstruct view positions through their shifted frustum.
+        f[8] = ndcShiftX;
         this.gpu.device.queue.writeBuffer(this.aoBuffer!, 0, f.buffer, 0, f.byteLength);
     }
 
@@ -571,20 +581,40 @@ export class WebGPURenderer implements IViewportRenderer {
 
     private renderFrame() {
         if (this.disposed || !this.gpu || !this.targets?.colorView || !this.pipelines) return;
-        const { device, context } = this.gpu;
-
+        const { context } = this.gpu;
+        if (stereoActive(this.stereoOptions)) {
+            this.renderStereo(context.getCurrentTexture().createView(), this.gpu.format);
+            return;
+        }
         const aspect = this.targets.width / Math.max(1, this.targets.height);
         const view = this.camera.view();
-        this.prepareFrame(this.camera.viewProjection(aspect), view);
+        this.renderView(this.camera.viewProjection(aspect), view, context.getCurrentTexture().createView(),
+                        this.camera.getPose(), 0, true);
+    }
 
-        this.renderOcclusion(this.targets!.occlusion!, this.aoBinds!, this.frameBindBasic!);
-        this.renderConeTrace(this.targets!.occlusion!, view);
+    /**
+     * One complete view into `resolveTarget`, which has the canvas' size and format: the frame
+     * uniform, the prepass and occlusion, the cone trace, then the visible pass.
+     *
+     * `ndcShiftX` is the horizontal shift of an off-axis stereo eye's projection (element 8);
+     * the occlusion and trace passes rebuild view positions through it, and the sky shifts its
+     * ray fan by it. Zero in mono, which keeps the mono path exactly what it was.
+     */
+    private renderView(viewProj: Mat4, view: Mat4, resolveTarget: GPUTextureView, pose: CameraPose,
+                       ndcShiftX: number, overlays: boolean) {
+        const { device } = this.gpu!;
+        const targets = this.targets!;
+        this.prepareFrame(viewProj, view);
 
+        this.renderOcclusion(targets.occlusion!, this.aoBinds!, this.frameBindBasic!, ndcShiftX);
+        this.renderConeTrace(targets.occlusion!, view, ndcShiftX);
+
+        const aspect = targets.width / Math.max(1, targets.height);
         const encoder = device.createCommandEncoder();
         const pass = encoder.beginRenderPass({
             colorAttachments: [{
-                view: this.targets.colorView,
-                resolveTarget: context.getCurrentTexture().createView(),
+                view: targets.colorView!,
+                resolveTarget,
                 //The canvas format is non-sRGB, so this is the raw CSS byte value, exactly
                 //what WebGLBackground clears to.
                 clearValue: { r: CLEAR_COLOR.r, g: CLEAR_COLOR.g, b: CLEAR_COLOR.b, a: 1 },
@@ -592,7 +622,7 @@ export class WebGPURenderer implements IViewportRenderer {
                 storeOp: 'store',
             }],
             depthStencilAttachment: {
-                view: this.targets.depthView!,
+                view: targets.depthView!,
                 depthClearValue: DEPTH_CLEAR_VALUE,
                 depthLoadOp: 'clear',
                 depthStoreOp: 'store',
@@ -601,8 +631,7 @@ export class WebGPURenderer implements IViewportRenderer {
 
         //First, so every depth-tested draw below covers it. The clear still happens and is
         //still what shows when the sky is switched off.
-        this.drawSky(pass, this.gpu.format, SAMPLE_COUNT, DEPTH_FORMAT, this.camera.getPose(),
-                     this.targets.width / Math.max(1, this.targets.height));
+        this.drawSky(pass, this.gpu!.format, SAMPLE_COUNT, DEPTH_FORMAT, pose, aspect, ndcShiftX);
 
         //The pass still runs with nothing to draw: that is what clears the canvas on the
         //first frame, before any geometry has been registered.
@@ -615,11 +644,83 @@ export class WebGPURenderer implements IViewportRenderer {
             this.drawSet(pass, this.plants, this.plantBind, false);
         }
 
-        this.drawVoxelOverlay(pass, this.gpu.format, SAMPLE_COUNT, DEPTH_FORMAT,
-                              this.targets.width / Math.max(1, this.targets.height));
+        //The density-field overlay is drawn from the centre camera, so it would sit at the wrong
+        //depth in a stereo pair; it is a diagnostic and stays mono-only.
+        if (overlays) this.drawVoxelOverlay(pass, this.gpu!.format, SAMPLE_COUNT, DEPTH_FORMAT, aspect);
 
         pass.end();
         device.queue.submit([encoder.finish()]);
+    }
+
+    //--- stereo ----------------------------------------------------------------------------
+
+    setStereo(options: StereoOptions) {
+        const was = stereoActive(this.stereoOptions);
+        this.stereoOptions = options;
+        //Two canvas-sized textures are not worth keeping around in mono.
+        if (was && !stereoActive(options)) this.stereo?.releaseEyes();
+        this.renderOnce();
+    }
+
+    /**
+     * Both eyes through the ordinary view path, each submitted on its own (see webgpu/Stereo.ts
+     * for why), then interleaved into `dest`. The eyes reuse the canvas-sized MSAA and occlusion
+     * targets one after the other, which the submit order makes safe.
+     */
+    private renderStereo(dest: GPUTextureView, destFormat: GPUTextureFormat) {
+        const { device, format } = this.gpu!;
+        const t = this.targets!;
+        this.stereo ??= new WebGPUStereo(device);
+        this.stereo.ensureEyes(t.width, t.height, format);
+        const aspect = t.width / Math.max(1, t.height);
+        const pose = this.camera.getPose();
+        const o = this.stereoOptions;
+        const convergence = convergenceDistance(o, Math.hypot(pose.position.x - pose.target.x,
+            pose.position.y - pose.target.y, pose.position.z - pose.target.z));
+        (['left', 'right'] as Eye[]).forEach((side, i) => {
+            const f = eyeFrustum(side, o.eyeSeparation, convergence, pose.near, pose.fovY, aspect);
+            //The eye sits `lateralOffset` along the camera's right axis, which is view-space x.
+            this.eyeView.set(this.camera.view());
+            this.eyeView[12] -= f.lateralOffset;
+            this.eyeProj.set(this.camera.projection(aspect));
+            this.eyeProj[8] = f.ndcShift;
+            multiply(this.eyeProj, this.eyeView, this.eyeViewProj);
+            this.renderView(this.eyeViewProj, this.eyeView, this.stereo!.eyeViews[i], pose, f.ndcShift, false);
+        });
+        this.stereo.composite(dest, destFormat, o.swapEyes, o.testPattern);
+    }
+
+    /**
+     * The interleaved stereo frame, read back. For the visual harness: headless Chromium never
+     * composites a WebGPU canvas, so the live canvas cannot be screenshotted there - this runs the
+     * same passes with only the final target swapped for a readable texture.
+     */
+    async readStereoPixels(): Promise<PixelReadback | undefined> {
+        if (!this.gpu || !this.targets?.colorView || !this.pipelines || !stereoActive(this.stereoOptions)) return undefined;
+        const { device } = this.gpu;
+        const width = this.targets.width, height = this.targets.height;
+        const texture = device.createTexture({
+            label: 'stereo-readback', size: { width, height }, format: 'rgba8unorm',
+            usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
+        });
+        const bytesPerRow = Math.ceil(width * 4 / 256) * 256;
+        const buffer = device.createBuffer({ size: bytesPerRow * height, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+        try {
+            this.renderStereo(texture.createView(), 'rgba8unorm');
+            const encoder = device.createCommandEncoder();
+            encoder.copyTextureToBuffer({ texture }, { buffer, bytesPerRow }, { width, height });
+            device.queue.submit([encoder.finish()]);
+            await buffer.mapAsync(GPUMapMode.READ);
+            const src = new Uint8Array(buffer.getMappedRange());
+            const data = new Uint8ClampedArray(width * height * 4);
+            for (let y = 0; y < height; ++y)
+                data.set(src.subarray(y * bytesPerRow, y * bytesPerRow + width * 4), y * width * 4);
+            buffer.unmap();
+            return { data, width, height };
+        } finally {
+            texture.destroy();
+            buffer.destroy();
+        }
     }
 
     //--- voxel GI ------------------------------------------------------------------------
@@ -667,12 +768,12 @@ export class WebGPURenderer implements IViewportRenderer {
      * low-frequency by construction - the sharp detail comes from the shadow map and the
      * screen-space AO, which is the whole reason the lighting is split across three scales.
      */
-    private renderConeTrace(occ: OcclusionTargets, view: Mat4) {
+    private renderConeTrace(occ: OcclusionTargets, view: Mat4, ndcShiftX = 0) {
         if (!this.gpu || !this.pipelines || !this.voxels?.view) return;
         if (!this.lighting.shadows && !this.lighting.voxelGI) return;
 
         const device = this.gpu.device;
-        this.writeTraceUniform(occ, view);
+        this.writeTraceUniform(occ, view, ndcShiftX);
         if (!this.traceBind || this.traceBoundView !== this.voxels.view || this.traceBoundGi !== occ.giView) {
             this.traceBind = device.createBindGroup({
                 layout: this.pipelines.coneTraceLayout,
@@ -698,7 +799,7 @@ export class WebGPURenderer implements IViewportRenderer {
         device.queue.submit([encoder.finish()]);
     }
 
-    private writeTraceUniform(occ: OcclusionTargets, view: Mat4) {
+    private writeTraceUniform(occ: OcclusionTargets, view: Mat4, ndcShiftX = 0) {
         const grid = this.voxels!.grid;
         const aspect = occ.width / Math.max(1, occ.height);
         const tanHalf = Math.tan((this.camera.fovY * Math.PI) / 360);
@@ -728,6 +829,7 @@ export class WebGPURenderer implements IViewportRenderer {
         //The gbuffer is in view space and the field is in world space; this takes it back.
         invertRigid(view, this.invViewScratch);
         f.set(this.invViewScratch, 24);
+        f[40] = ndcShiftX;
         this.gpu!.device.queue.writeBuffer(this.traceBuffer!, 0, f.buffer, 0, f.byteLength);
     }
 
@@ -745,10 +847,10 @@ export class WebGPURenderer implements IViewportRenderer {
      * hazard around mount, and a viewport that never switches the sky on never allocates it.
      */
     private drawSky(pass: GPURenderPassEncoder, format: GPUTextureFormat, sampleCount: number,
-                    depthFormat: GPUTextureFormat, pose: CameraPose, aspect: number) {
+                    depthFormat: GPUTextureFormat, pose: CameraPose, aspect: number, ndcShiftX = 0) {
         if (!this.skyCube || !this.gpu) return;
         this.sky ??= new Sky(this.gpu.device);
-        this.sky.draw(pass, format, sampleCount, depthFormat, this.skyCube, pose, aspect);
+        this.sky.draw(pass, format, sampleCount, depthFormat, this.skyCube, pose, aspect, ndcShiftX);
     }
 
     private drawVoxelOverlay(pass: GPURenderPassEncoder, format: GPUTextureFormat, sampleCount: number,

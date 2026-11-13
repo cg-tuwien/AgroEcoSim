@@ -19,6 +19,7 @@ public class SessionTests
         public void ShowNothing() { }
         public void ShowTerrain(TerrainData terrain) { }
         public void ShowFieldBox(float sizeX, float sizeD, float sizeZ) { }
+        public void ClearTerrain() { }
     }
 
     private static (RunController c, ManualPump pump) Controller()

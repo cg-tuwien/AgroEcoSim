@@ -363,3 +363,21 @@ the large `P001`–`P006` panels are unmeasured context and share a plane with t
 Counting distinct Z coordinates across the model does not measure separation of overlapping
 surfaces. Nor does the number of pixels changed by moving the camera isolate flicker: ordinary
 silhouette motion changes pixels too. Check interior colours against a geometry reference.
+
+## stereocheck.mjs
+
+The stereo checkerboard (Rendering tab) on whichever backend the URL selects, driven through
+the tab's own controls. WebGL is measured on the live canvas, with the floating HUD hidden for
+each shot; WebGPU through `__renderer.readStereoPixels()`, because headless never composites a
+WebGPU canvas.
+
+    CHROME=/snap/bin/chromium TMPDIR=$HOME/agro-tmp node stereocheck.mjs "http://localhost:8080/?debughook=1&gpu=0" ~/agro-tmp/fixture-session.json
+    CHROME_EXTRA_FLAGS="--enable-unsafe-webgpu --enable-features=Vulkan --use-webgpu-adapter=swiftshader" \
+      CHROME=/snap/bin/chromium TMPDIR=$HOME/agro-tmp node stereocheck.mjs "http://localhost:8080/?debughook=1&gpu=1" ~/agro-tmp/fixture-session.json
+
+It checks the test pattern pixel by pixel (left where x + y is even, rows from the top), swap
+eyes, zero separation against mono, crossed disparity on the near soil, and - with every
+lighting effect on - the left eye against a mono render from the eye's position shifted by
+the 8 whole pixels the chosen separation produces. That last check is what proves the off-axis
+shift reaches the occlusion, the cone trace and the sky: removing it there took the differing
+pixels from 33 to 8,189. `SKIP_SHIFT=1` skips it.

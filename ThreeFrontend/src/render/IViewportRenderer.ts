@@ -16,6 +16,7 @@ import type { VisualMappingOptions } from './core/PlantColors';
 import type { FrameLighting } from './core/Lighting';
 import type { SkyCube } from './core/SkyTexture';
 import type { GIFrameInputs, VoxelDebugOptions } from './core/VoxelGrid';
+import type { StereoOptions } from './core/Stereo';
 
 /** A camera state that can be snapshotted, transferred between backends, or scripted. */
 export type CameraPose = {
@@ -143,6 +144,13 @@ export interface IViewportRenderer {
     setVoxelDebug?(show: boolean, options: VoxelDebugOptions, inputs: GIFrameInputs): void;
     /** Raw per-cell leaf area in square metres, for the visual harness's analytic check. */
     readVoxelArea?(): Promise<Float32Array | undefined>;
+
+    /**
+     * Mono, or a stereo presentation (core/Stereo.ts). In checkerboard mode the backend renders the
+     * scene once per eye through off-axis frusta and interleaves the two pixel by pixel on the
+     * canvas. Picking, the gizmo and offline renders stay mono: they use the centre camera.
+     */
+    setStereo?(options: StereoOptions): void;
 
     /** Resolve what is under the cursor and drive the selection FSM. May complete async. */
     pick(clientX: number, clientY: number, clicks: Clicks): void;

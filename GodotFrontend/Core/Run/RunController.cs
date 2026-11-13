@@ -44,6 +44,9 @@ public sealed class RunController
     private readonly IFrameSink sink;
     private readonly Random rng = new();
     private int showToken;
+    /// <summary>Bumped by every operation that replaces the scene (open a stored run, load a session, start a run), so an
+    /// open still awaiting the server cannot draw over whatever replaced it.</summary>
+    private int sceneGeneration;
     private bool previewAfterShow;
     private bool timelineSyncing;
     private DateTime lastTimelineSync = DateTime.MinValue;
@@ -152,6 +155,7 @@ public sealed class RunController
     public async Task StartAsync()
     {
         if (Session.Computing) return;
+        ++sceneGeneration;
         Session.SimHoursPerTick = Time.SimClock.Snap(Request.HoursPerTick);
         Session.InitialDate = Request.InitialDate;
         ResetForNewRun();
@@ -500,13 +504,21 @@ public sealed class RunController
     public async Task<bool> OpenStoredAsync(string runId, bool allowEmpty = false)
     {
         if (Session.Computing) { Log?.Invoke("stop the running simulation first"); return false; }
+        var generation = ++sceneGeneration;
         RunDto? meta;
         try { meta = await Rest.GetRunAsync(runId).ConfigureAwait(true); }
         catch (Exception ex) { Log?.Invoke($"run {runId}: {ex.Message}"); return false; }
+        if (generation != sceneGeneration) return false;
         if (meta == null) { Log?.Invoke($"run {runId} is not on the server"); return false; }
         if (meta.StoredFrames == 0 && !allowEmpty) { Log?.Invoke($"run {runId} stored no frames"); return false; }
 
         ResetForNewRun();
+        // The whole scene goes, not only the plants: the soil, the imported obstacles and the seeds all belong to the
+        // scenario that was on screen, and drawing this run's plants over them is the wrong answer even for the few
+        // hundred milliseconds the terrain takes to arrive.
+        Terrain = null;
+        sink.ClearTerrain();
+        Request.Seeds.Clear();
         Session.RunId = runId;
         Session.RunStored = true;
         Session.ViewingRunId = runId;
@@ -517,9 +529,12 @@ public sealed class RunController
         RememberRun?.Invoke(runId);
         Changed?.Invoke();
 
-        await RestoreStoredTerrainAsync(runId, meta.HasTerrain).ConfigureAwait(true);
-        await RestoreStoredScenarioAsync(runId).ConfigureAwait(true);
+        var plainField = await RestoreStoredTerrainAsync(runId, meta, generation).ConfigureAwait(true);
+        if (generation != sceneGeneration) return false;
+        await RestoreStoredScenarioAsync(runId, plainField, generation).ConfigureAwait(true);
+        if (generation != sceneGeneration) return false;
         var count = await SyncTimelineAsync(runId, true).ConfigureAwait(true);
+        if (generation != sceneGeneration) return false;
         if (count == 0 && !allowEmpty) { Log?.Invoke($"run {runId} has no readable frames"); }
         if (meta.IsRunning)
         {
@@ -529,30 +544,54 @@ public sealed class RunController
         return true;
     }
 
-    private async Task RestoreStoredTerrainAsync(string runId, bool hasTerrain)
+    /// <summary>
+    /// Shows the trays and imported obstacles a stored run was built on. Returns true when the run's soil is the plain
+    /// field box, which is drawn once the run's own request has given its size. A run that names a field model whose
+    /// trays the server cannot provide gets no soil at all rather than a box that was never part of it.
+    /// </summary>
+    private async Task<bool> RestoreStoredTerrainAsync(string runId, RunDto meta, int generation)
     {
-        if (!hasTerrain) { SetTerrain(null); return; }
-        try
+        var builtOnModel = !string.IsNullOrEmpty(meta.FieldModelName) || meta.HasFieldModel;
+        if (meta.HasTerrain)
         {
-            var bytes = await Rest.GetTerrainAsync(runId).ConfigureAwait(true);
-            if (bytes != null) SetTerrain(TerrainDecoder.Decode(bytes));
+            try
+            {
+                var bytes = await Rest.GetTerrainAsync(runId).ConfigureAwait(true);
+                if (generation != sceneGeneration) return false;
+                if (bytes != null)
+                {
+                    var terrain = await Task.Run(() => TerrainDecoder.Decode(bytes)).ConfigureAwait(true);
+                    if (generation != sceneGeneration) return false;
+                    SetTerrain(terrain);
+                    return false;
+                }
+            }
+            catch (Exception ex)
+            {
+                if (generation != sceneGeneration) return false;
+                Log?.Invoke($"terrain of run {runId}: {ex.Message}");
+            }
         }
-        catch (Exception ex) { Log?.Invoke($"terrain of run {runId}: {ex.Message}"); }
+        if (builtOnModel)
+            Log?.Invoke($"run {runId} was built on '{meta.FieldModelName}' and the server holds no trays for it; showing the plants without soil");
+        return !builtOnModel;
     }
 
-    private async Task RestoreStoredScenarioAsync(string runId)
+    private async Task RestoreStoredScenarioAsync(string runId, bool plainField, int generation)
     {
         try
         {
             await SpeciesReady.ConfigureAwait(true);
             var request = await Rest.GetRequestAsync(runId).ConfigureAwait(true);
+            if (generation != sceneGeneration) return;
             if (request != null)
             {
                 Request.FromRequest(request);
                 SpeciesChanged?.Invoke(Request.Species);
-                if (Terrain == null) sink.ShowFieldBox(Request.FieldSizeX, Request.FieldSizeD, Request.FieldSizeZ);
+                if (plainField && Terrain == null) sink.ShowFieldBox(Request.FieldSizeX, Request.FieldSizeD, Request.FieldSizeZ);
             }
             var site = await Rest.GetSiteAsync(runId).ConfigureAwait(true);
+            if (generation != sceneGeneration) return;
             if (site != null) OnRunSite(site);
         }
         catch (Exception ex) { Log?.Invoke($"scenario of run {runId}: {ex.Message}"); }
@@ -597,6 +636,7 @@ public sealed class RunController
     public async Task LoadSessionAsync(string path)
     {
         if (Session.Computing) throw new InvalidOperationException("stop the running simulation first");
+        var generation = ++sceneGeneration;
         RunArchiveReader? reader = null;
         System.Text.Json.Nodes.JsonNode meta;
         List<(uint Step, byte[] Bytes)>? legacy = null;
@@ -612,6 +652,7 @@ public sealed class RunController
             legacy = read.Frames;
         }
         await SpeciesReady.ConfigureAwait(true);
+        if (generation != sceneGeneration) { reader?.Dispose(); return; }
         var contents = SessionMeta.Apply(meta, Request.Species);
 
         ResetForNewRun();

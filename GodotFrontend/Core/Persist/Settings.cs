@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using GodotFrontend.Core.Stereo;
 
 namespace GodotFrontend.Core.Persist;
 
@@ -19,6 +20,7 @@ public sealed class Settings
     public int? ActiveTab { get; set; }
     public float? SidePanelWidth { get; set; }
     public LightingSettings Lighting { get; set; } = new();
+    public StereoSettings Stereo { get; set; } = new();
     public string VisualMapping { get; set; } = "natural";
     public bool ShowLeaves { get; set; } = true;
     public bool ShowRoots { get; set; } = true;
@@ -63,4 +65,14 @@ public sealed class LightingSettings
     public bool LeafTranslucency { get; set; }
     public bool Sky { get; set; }
     public float ShadowBiasTexels { get; set; } = 4;
+}
+
+/// <summary>The stereo presentation of the viewport. The test pattern is a calibration aid and is never stored.</summary>
+public sealed class StereoSettings
+{
+    public string Mode { get; set; } = "mono";
+    public double EyeSeparation { get; set; } = StereoOptions.DefaultEyeSeparation;
+    public bool ConvergeOnTarget { get; set; } = true;
+    public double Convergence { get; set; } = StereoOptions.DefaultConvergence;
+    public bool SwapEyes { get; set; }
 }
