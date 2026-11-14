@@ -43,6 +43,12 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 	ulong NextOrganId = 1;
 
 	readonly TreeCacheData TreeCache = new();
+	/// <summary>
+	/// The rhizome organs, in organ order. An organ is a rhizome from birth or never
+	/// (<see cref="IPlantAgent.IsRizome"/> is set by the constructor alone), so the list is
+	/// rebuilt with the tree cache, wherever the set of organs changes.
+	/// </summary>
+	readonly List<int> RhizomeOrgans = [];
 	// Derived cache generations; deliberately excluded from live checkpoints.
 	internal long TopologyRevision { get; private set; }
 	internal long CollisionGeometryRevision { get; private set; }
@@ -249,8 +255,12 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 		InvalidateStaticClearance();
 		var live = Agents.AsSpan(0, count);
 		TreeCache.Clear(count);
+		RhizomeOrgans.Clear();
 		for (int i = 0; i < count; ++i)
+		{
 			TreeCache.AddChild(live[i].Parent, i);
+			if (live[i].IsRizome) RhizomeOrgans.Add(i);
+		}
 		TreeCache.FinishUpdate(this);
 		TreeCache.UpdateBases(this);
 		HeightDirty = false;
@@ -375,8 +385,12 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 
 			InvalidateStaticClearance();
 			TreeCache.Clear(newCount);
+			RhizomeOrgans.Clear();
 			for (int i = 0; i < newCount; ++i)
+			{
 				TreeCache.AddChild(dst[i].Parent, i);
+				if (dst[i].IsRizome) RhizomeOrgans.Add(i);
+			}
 			TreeCache.FinishUpdate(this);
 			TreeCache.UpdateBases(this);
 			++TopologyRevision;
@@ -1350,52 +1364,80 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 	private void refitChildrens(int i)
 	{
 		++CollisionGeometryRevision;
-        var children = CollisionChildren;
-        children.Clear();
-		children.Enqueue(i);
-        CollisionBvh.UpdateLeafBounds(i, CollisionBounds(i));
-		if (GetIsRizome(i)) RhizomeBvh.UpdateLeafBounds(i, ComputeBounds(i));
-        while (children.Count > 0)
-        {
-			var index = children.Dequeue();
-            foreach (var child in GetChildren(index))
-            {
-                children.Enqueue(child);
-                CollisionBvh.UpdateLeafBounds(child, CollisionBounds(child));
-				if (GetIsRizome(child)) RhizomeBvh.UpdateLeafBounds(child, ComputeBounds(child));
-            }
-
-        }
-        CollisionBvh.RefitUpdatedLeaves();
-		RhizomeBvh.RefitUpdatedLeaves();
-    }
+		RefitSubtree(i);
+	}
 
 	/// <summary>Refits every organ. The previous whole-tree refit passed index 0, which skipped
 	/// agent 0's own bounds and any subtree under a second root.</summary>
 	private void refitAllBounds()
 	{
 		++CollisionGeometryRevision;
-        var children = CollisionChildren;
-        children.Clear();
-        foreach (var root in GetRoots())
-        {
-            children.Enqueue(root);
-            CollisionBvh.UpdateLeafBounds(root, CollisionBounds(root));
-            if (GetIsRizome(root)) RhizomeBvh.UpdateLeafBounds(root, ComputeBounds(root));
-        }
-        while (children.Count > 0)
-        {
-            var index = children.Dequeue();
-            foreach (var child in GetChildren(index))
-            {
-                children.Enqueue(child);
-                CollisionBvh.UpdateLeafBounds(child, CollisionBounds(child));
-                if (GetIsRizome(child)) RhizomeBvh.UpdateLeafBounds(child, ComputeBounds(child));
-            }
-        }
-        CollisionBvh.RefitUpdatedLeaves();
-        RhizomeBvh.RefitUpdatedLeaves();
-    }
+		RefitSubtree(-1);
+	}
+
+	readonly List<int> RefitOrgans = [];
+	Bvh.BoundingBox[] OrganBounds = [];
+	/// <summary>Organs from which their collision bounds are computed on all cores.</summary>
+	const int ParallelBoundsMinimum = 4096;
+
+	/// <summary>
+	/// The collision bounds of the first <paramref name="count"/> organs that
+	/// <paramref name="wanted"/> selects, into <see cref="OrganBounds"/> at their own index, on all
+	/// cores. A bound is a function of its own organ alone.
+	/// </summary>
+	void ComputeOrganBounds(int count, Func<int, bool> wanted)
+	{
+		if (OrganBounds.Length < count) OrganBounds = new Bvh.BoundingBox[Math.Max(count, OrganBounds.Length * 2)];
+		var bounds = OrganBounds;
+		WarmLaminaCache(); // filled lazily, which only one thread at a time may do
+		Parallel.ForEach(System.Collections.Concurrent.Partitioner.Create(0, count, 2048), range =>
+		{
+			for (int i = range.Item1; i < range.Item2; ++i)
+				if (wanted(i)) bounds[i] = CollisionBounds(i);
+		});
+	}
+
+	/// <summary>
+	/// Gives an organ and everything below it - every organ, for a negative
+	/// <paramref name="root"/> - their current bounds in both hierarchies.
+	/// </summary>
+	/// <remarks>
+	/// When a contact sweep has turned a trunk the subtree is the tree. A large subtree's bounds
+	/// are therefore computed on all cores and found by a scan over the organs instead of a walk
+	/// from the root; what is written into the hierarchy is the same, and the hierarchy does not
+	/// depend on the order in which its leaves are written.
+	/// </remarks>
+	void RefitSubtree(int root)
+	{
+		if ((root < 0 ? AgentCount : TreeCache.SubtreeSize(root)) >= ParallelBoundsMinimum)
+			RefitLargeSubtree(root);
+		else
+		{
+			var organs = RefitOrgans;
+			organs.Clear();
+			if (root < 0) organs.AddRange(GetRoots()); else organs.Add(root);
+			for (int k = 0; k < organs.Count; ++k) organs.AddRange(GetChildren(organs[k]));
+			foreach (var organ in organs) CollisionBvh.UpdateLeafBounds(organ, CollisionBounds(organ));
+			if (RhizomeOrgans.Count > 0)
+				foreach (var organ in organs)
+					if (GetIsRizome(organ)) RhizomeBvh.UpdateLeafBounds(organ, ComputeBounds(organ));
+		}
+		CollisionBvh.RefitUpdatedLeaves();
+		RhizomeBvh.RefitUpdatedLeaves();
+	}
+
+	/// <summary>Kept apart from the per-contact refit of a small subtree, which must not allocate.</summary>
+	void RefitLargeSubtree(int root)
+	{
+		bool Covered(int organ) => root < 0 || organ == root || TreeCache.IsDescendant(root, organ);
+		var count = AgentCount;
+		ComputeOrganBounds(count, Covered);
+		for (int i = 0; i < count; ++i)
+			if (Covered(i)) CollisionBvh.UpdateLeafBounds(i, OrganBounds[i]);
+		foreach (var organ in RhizomeOrgans)
+			if (Covered(organ)) RhizomeBvh.UpdateLeafBounds(organ, ComputeBounds(organ));
+	}
+
     /// <summary>
     /// Turns one organ about its base so that <paramref name="contact"/> moves
     /// <paramref name="distance"/> along <paramref name="direction"/>.
@@ -2366,17 +2408,21 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
         rhizomes.Clear();
 
         AggregatedPetals = 0;
-        for (int i = 0; i < dst.Length; ++i)
+        // Slots past the count are empty: never eligible and never a rhizome.
+        var count = AgentCount;
+        var prepared = count >= ParallelBoundsMinimum;
+        if (prepared) ComputeOrganBounds(count, IsCollisionEligible);
+        for (int i = 0; i < count; ++i)
         {
             if (IsCollisionEligible(i))
             {
                 // A broad receptacle box does not make its narrow-phase sphere represent
                 // the petals. Keep their actual sheets so aggregation cannot hide crossings.
-                leaves.Add((i, CollisionBounds(i)));
+                leaves.Add((i, prepared ? OrganBounds[i] : CollisionBounds(i)));
             }
-            if (GetIsRizome(i))
-                rhizomes.Add((i, ComputeBounds(i)));
         }
+        foreach (var i in RhizomeOrgans)
+            rhizomes.Add((i, ComputeBounds(i)));
 
         CollisionBodies = leaves.Count;
         if (!CollisionBvh.TryRefit(CollectionsMarshal.AsSpan(leaves)))

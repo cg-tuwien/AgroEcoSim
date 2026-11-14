@@ -131,7 +131,7 @@ public class Bvh
         leaves.CopyTo(items);
         // Stable binned partitions avoid sorting every recursive subtree (N log squared N).
         // Consumers that accumulate responses order their leaf pairs independently of topology.
-        root = BuildRecursive(items, -1);
+        root = leaves.Length >= ParallelBuildMinimum && ReserveLeaves(items) ? BuildOnAllCores(leaves.Length) : BuildRecursive(items, -1);
         if (pendingRefit.Length < nodes.Count)
             Array.Resize(ref pendingRefit, Math.Max(nodes.Count, pendingRefit.Length + pendingRefit.Length / 2));
         buildQuality = Quality();
@@ -174,7 +174,7 @@ public class Bvh
             return index;
         }
 
-        int mid = Partition(leaves);
+        int mid = Partition(leaves, partitionItems.AsSpan(0, leaves.Length));
 
         var nodeIndex = nodes.Count;
         nodes.Add(default);
@@ -187,6 +187,84 @@ public class Bvh
         return nodeIndex;
     }
 
+    /// <summary>Leaves from which the hierarchy is built on several cores, and the number of
+    /// leaves under a node from which its two halves are built side by side.</summary>
+    const int ParallelBuildMinimum = 16384, ParallelBuildGrain = 4096;
+
+    /// <summary>
+    /// Makes room in the leaf map for every leaf about to be built and checks that no agent
+    /// occurs twice, which is what lets the builders write their leaves without a shared count.
+    /// False, with the map empty again, when one does.
+    /// </summary>
+    bool ReserveLeaves(ReadOnlySpan<(int agentIndex, BoundingBox bounds)> leaves)
+    {
+        const int reserved = -2;
+        var largest = -1;
+        foreach (var leaf in leaves) largest = Math.Max(largest, leaf.agentIndex);
+        if (largest >= leafOfAgent.Length)
+        {
+            var old = leafOfAgent.Length;
+            Array.Resize(ref leafOfAgent, Math.Max(largest + 1, Math.Max(8, old + old / 2)));
+            leafOfAgent.AsSpan(old).Fill(-1);
+        }
+        for (int k = 0; k < leaves.Length; ++k)
+        {
+            ref var slot = ref leafOfAgent[leaves[k].agentIndex];
+            if (slot == reserved)
+            {
+                for (int undo = 0; undo < k; ++undo) leafOfAgent[leaves[undo].agentIndex] = -1;
+                return false;
+            }
+            slot = reserved;
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// The build of <see cref="BuildRecursive"/> on several cores, node for node the same.
+    /// </summary>
+    /// <remarks>
+    /// The recursion numbers a node, then its whole left subtree, then its right one, and a
+    /// subtree over k leaves has 2k - 1 nodes. So where every node goes is known as soon as the
+    /// split above it is: the left child follows its parent, the right child comes 2 * (leaves
+    /// on the left) after it. The two halves of a split share nothing - their leaves, their
+    /// nodes and their scratch are disjoint ranges - and are built side by side.
+    /// </remarks>
+    int BuildOnAllCores(int count)
+    {
+        CollectionsMarshal.SetCount(nodes, 2 * count - 1);
+        BuildSubtree(0, count, -1, 0);
+        leafCount = count;
+        return 0;
+    }
+
+    void BuildSubtree(int first, int count, int parent, int nodeIndex)
+    {
+        var leaves = buildItems.AsSpan(first, count);
+        if (count == 1)
+        {
+            var (agentIndex, bounds) = leaves[0];
+            CollectionsMarshal.AsSpan(nodes)[nodeIndex] = new Node(bounds, -1, -1, parent, agentIndex);
+            leafOfAgent[agentIndex] = nodeIndex;
+            return;
+        }
+        int mid = Partition(leaves, partitionItems.AsSpan(first, count));
+        int left = nodeIndex + 1, right = nodeIndex + 2 * mid;
+        if (count >= ParallelBuildGrain) BuildHalvesSideBySide(first, mid, count, nodeIndex);
+        else
+        {
+            BuildSubtree(first, mid, nodeIndex, left);
+            BuildSubtree(first + mid, count - mid, nodeIndex, right);
+        }
+        var all = CollectionsMarshal.AsSpan(nodes);
+        all[nodeIndex] = new Node(BoundingBox.Merge(all[left].Bounds, all[right].Bounds), left, right, parent, -1);
+    }
+
+    /// <summary>Kept apart from <see cref="BuildSubtree"/> so that only the splits that fork pay for a closure.</summary>
+    void BuildHalvesSideBySide(int first, int mid, int count, int nodeIndex) => Parallel.Invoke(
+        () => BuildSubtree(first, mid, nodeIndex, nodeIndex + 1),
+        () => BuildSubtree(first + mid, count - mid, nodeIndex, nodeIndex + 2 * mid));
+
     struct Bin
     {
         public int Count;
@@ -197,7 +275,9 @@ public class Bvh
         }
     }
 
-    int Partition(Span<(int agentIndex, BoundingBox bounds)> leaves)
+    /// <summary>Splits the leaves in place and returns how many went left. The scratch is as
+    /// long as the leaves and its contents are not kept.</summary>
+    static int Partition(Span<(int agentIndex, BoundingBox bounds)> leaves, Span<(int agentIndex, BoundingBox bounds)> scratch)
     {
         if (leaves.Length <= 8)
         {
@@ -253,7 +333,6 @@ public class Bvh
         if (bestAxis < 0) return leaves.Length / 2;
         var factor = binCount / (hi[bestAxis] - lo[bestAxis]);
         var first = 0; var second = bestCount;
-        var scratch = partitionItems.AsSpan(0, leaves.Length);
         foreach (var leaf in leaves)
         {
             var bin = Math.Clamp((int)((leaf.bounds.Center[bestAxis] - lo[bestAxis]) * factor), 0, binCount - 1);
@@ -491,6 +570,60 @@ public class Bvh
                 pairStack.Push((a.Left, b.Right));
                 pairStack.Push((a.Right, b.Left));
                 pairStack.Push((a.Right, b.Right));
+            }
+        }
+    }
+
+    /// <summary>Nodes in the hierarchy, leaves and internal ones, numbered from zero.</summary>
+    internal int NodeCount => nodes.Count;
+
+    /// <summary>
+    /// The overlapping leaf pairs that have their lowest common ancestor among the nodes
+    /// <paramref name="from"/> to <paramref name="to"/> (exclusive): for each internal node in the
+    /// range, the pairs with one leaf under its left child and the other under its right.
+    /// </summary>
+    /// <remarks>
+    /// Every leaf pair has exactly one lowest common ancestor, so ranges that partition the nodes
+    /// partition the pairs, and <see cref="GetOverlappingPairs(List{ValueTuple{int, int}}, Func{int, int, bool}?, bool, int, uint)"/>
+    /// - which seeds one stack with every internal node's children and descends it - finds the
+    /// same pairs the same number of times. This form only reads the hierarchy and keeps its
+    /// state in the caller's stack and list, so disjoint ranges can run on different threads.
+    /// The pairs come out as (smaller agent index, larger agent index), in no particular order.
+    /// </remarks>
+    internal void CollectOverlapsUnder(int from, int to, Stack<(int a, int b)> stack, List<(int first, int second)> result)
+    {
+        var all = CollectionsMarshal.AsSpan(nodes);
+        for (int index = from; index < to; ++index)
+        {
+            ref readonly var seed = ref all[index];
+            if (seed.IsLeaf) continue;
+            stack.Push((seed.Left, seed.Right));
+            while (stack.Count > 0)
+            {
+                var (aIndex, bIndex) = stack.Pop();
+                ref readonly var a = ref all[aIndex];
+                ref readonly var b = ref all[bIndex];
+                if (!a.Bounds.Intersects(in b.Bounds)) continue;
+                bool aLeaf = a.IsLeaf, bLeaf = b.IsLeaf;
+                if (aLeaf && bLeaf)
+                    result.Add(a.AgentIndex < b.AgentIndex ? (a.AgentIndex, b.AgentIndex) : (b.AgentIndex, a.AgentIndex));
+                else if (aLeaf)
+                {
+                    stack.Push((aIndex, b.Left));
+                    stack.Push((aIndex, b.Right));
+                }
+                else if (bLeaf)
+                {
+                    stack.Push((a.Left, bIndex));
+                    stack.Push((a.Right, bIndex));
+                }
+                else
+                {
+                    stack.Push((a.Left, b.Left));
+                    stack.Push((a.Left, b.Right));
+                    stack.Push((a.Right, b.Left));
+                    stack.Push((a.Right, b.Right));
+                }
             }
         }
     }

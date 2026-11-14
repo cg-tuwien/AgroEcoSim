@@ -1,4 +1,5 @@
 using System.Numerics;
+using System.Runtime.InteropServices;
 
 namespace Agro.Collisions;
 
@@ -39,30 +40,146 @@ public sealed partial class SoftContactEngine
         public float Weight, Depth, Residual;
         public bool Touching, Crossing;
         public CollisionWorld.ContactKey Key;
+        /// <summary>The two bodies' mobilities along the normal, when they were measured with the
+        /// geometry (<see cref="MeasureMobility"/>) instead of by the response.</summary>
+        public double MobilityA, MobilityB;
+        public bool MobilityKnown;
     }
 
     /// <summary>Pairs per chunk of the parallel own-pair evaluation. Fixed, so the chunking - and
     /// with it the order in which the per-chunk counters are summed - never depends on the worker cap.</summary>
     const int OwnPairChunk = 32;
 
+    /// <summary>Hierarchy nodes per block of the parallel own-pair search. Small enough that the
+    /// few heavy nodes near the root do not decide the balance, large enough to amortise a task.</summary>
+    const int OwnPairBlockNodes = 1024;
+    [ThreadStatic] static Stack<(int, int)>? OwnPairStack;
+
+    /// <summary>
+    /// A plant's own candidate pairs in stable-id order, found and ordered on all cores. Returns
+    /// false, leaving the list empty, when the serial search has to be used instead.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The serial search walked the whole hierarchy on one thread, looked two stable ids up per
+    /// pair and then sorted a million pairs by them: a third of a mature tree's foliage pass. The
+    /// result it produces is a set in a canonical order - every overlapping, unconnected pair,
+    /// oriented and sorted by stable id, once - so any way of producing that set in that order
+    /// is the same result.
+    /// </para>
+    /// <para>
+    /// The set: each pair belongs to exactly one node of the hierarchy, so blocks of nodes are
+    /// searched independently (<see cref="Bvh.CollectOverlapsUnder"/>). The order: organs are born
+    /// with increasing ids and a census keeps the survivors in order, so id order is normally
+    /// index order, and sorting pairs by index needs no comparison sort - they are dropped into
+    /// one bucket per first organ and each small bucket is sorted by the second. That the ids
+    /// ascend strictly with the index is checked on every call, not assumed; when they do not,
+    /// the serial search runs exactly as before.
+    /// </para>
+    /// </remarks>
+    bool CollectOwnPairsParallel(PlantSubFormation<AboveGroundAgent> ag, SoftWork work)
+    {
+        var bvh = ag.CollisionBvh; var nodes = bvh.NodeCount; var count = ag.Count;
+        var blocks = (nodes + OwnPairBlockNodes - 1) / OwnPairBlockNodes;
+        if (blocks < 4) return false;
+        var started = System.Diagnostics.Stopwatch.GetTimestamp();
+        var previous = 0UL;
+        for (int i = 0; i < count; ++i)
+        {
+            var id = ag.GetOrganId(i);
+            if (id <= previous) return false;
+            previous = id;
+        }
+        if (work.BlockPairs.Length < blocks)
+        {
+            var old = work.BlockPairs.Length;
+            Array.Resize(ref work.BlockPairs, blocks);
+            for (int k = old; k < blocks; ++k) work.BlockPairs[k] = [];
+        }
+        var lists = work.BlockPairs;
+        // Index order is id order here, and the search emits (lower index, higher index).
+        Parallel.For(0, blocks, block =>
+        {
+            var found = lists[block]; found.Clear();
+            bvh.CollectOverlapsUnder(block * OwnPairBlockNodes, Math.Min(nodes, (block + 1) * OwnPairBlockNodes), OwnPairStack ??= new(), found);
+            var items = CollectionsMarshal.AsSpan(found);
+            var retained = 0;
+            for (int k = 0; k < items.Length; ++k)
+                if (!CollisionWorld.Connected(ag, items[k].Item1, items[k].Item2)) items[retained++] = items[k];
+            found.RemoveRange(retained, found.Count - retained);
+        });
+        var discovered = System.Diagnostics.Stopwatch.GetTimestamp();
+        var total = 0;
+        for (int k = 0; k < blocks; ++k) total += lists[k].Count;
+        // One bucket per first organ: count, place, then sort and deduplicate each bucket.
+        if (work.BucketStart.Length < count + 1)
+        {
+            work.BucketStart = new int[Math.Max(count + 1, work.BucketStart.Length * 2)];
+            work.BucketFill = new int[work.BucketStart.Length];
+        }
+        if (work.Seconds.Length < total) work.Seconds = new int[Math.Max(total, work.Seconds.Length * 2)];
+        var start = work.BucketStart; var fill = work.BucketFill; var seconds = work.Seconds;
+        Array.Clear(start, 0, count + 1);
+        for (int k = 0; k < blocks; ++k)
+            foreach (var (a, _) in CollectionsMarshal.AsSpan(lists[k])) ++start[a + 1];
+        for (int i = 0; i < count; ++i) { start[i + 1] += start[i]; fill[i] = start[i]; }
+        for (int k = 0; k < blocks; ++k)
+            foreach (var (a, b) in CollectionsMarshal.AsSpan(lists[k])) seconds[fill[a]++] = b;
+        // From here fill[i] is the number of distinct partners of organ i.
+        Parallel.ForEach(System.Collections.Concurrent.Partitioner.Create(0, count, 4096), range =>
+        {
+            for (int i = range.Item1; i < range.Item2; ++i)
+            {
+                var from = start[i]; var length = start[i + 1] - from;
+                if (length > 1) Array.Sort(seconds, from, length);
+                var kept = Math.Min(length, 1);
+                for (int k = 1; k < length; ++k)
+                    if (seconds[from + k] != seconds[from + kept - 1]) seconds[from + kept++] = seconds[from + k];
+                fill[i] = kept;
+            }
+        });
+        var unique = 0;
+        for (int i = 0; i < count; ++i) unique += fill[i];
+        var pairs = work.OwnPairs;
+        CollectionsMarshal.SetCount(pairs, unique);
+        var output = CollectionsMarshal.AsSpan(pairs);
+        var at = 0;
+        for (int i = 0; i < count; ++i)
+        {
+            var from = start[i];
+            for (int k = 0; k < fill[i]; ++k) output[at++] = (i, seconds[from + k]);
+        }
+        work.LastDiscoverTicks = discovered - started; work.LastFilterTicks = 0;
+        work.LastSortTicks = System.Diagnostics.Stopwatch.GetTimestamp() - discovered;
+        return true;
+    }
+
     void VisitOwn(PlantFormation2 plant)
     {
         var ag = plant.AG; var work = Work[plant]; var pairs = work.OwnPairs;
         pairs.Clear();
-        ag.CollisionBvh.GetOverlappingPairs(pairs, collisionsOnly: false);
-        var retained = 0;
-        for (int k = 0; k < pairs.Count; ++k)
+        var visitStarted = System.Diagnostics.Stopwatch.GetTimestamp();
+        if (!(ChunkOwnPairs && CollectOwnPairsParallel(ag, work)))
         {
-            var (a, b) = pairs[k];
-            if (CollisionWorld.Connected(ag, a, b)) continue;
-            pairs[retained++] = ag.GetOrganId(a) > ag.GetOrganId(b) ? (b, a) : (a, b);
+            ag.CollisionBvh.GetOverlappingPairs(pairs, collisionsOnly: false);
+            var discovered = System.Diagnostics.Stopwatch.GetTimestamp();
+            var retained = 0;
+            for (int k = 0; k < pairs.Count; ++k)
+            {
+                var (a, b) = pairs[k];
+                if (CollisionWorld.Connected(ag, a, b)) continue;
+                pairs[retained++] = ag.GetOrganId(a) > ag.GetOrganId(b) ? (b, a) : (a, b);
+            }
+            pairs.RemoveRange(retained, pairs.Count - retained);
+            var filtered = System.Diagnostics.Stopwatch.GetTimestamp();
+            // Stable-ID order makes the accumulation independent of the hierarchy's layout. The keys
+            // are materialised once: a delegate comparison that looked both ids up per compare was
+            // most of the serial time left in a single plant's tick.
+            SortByOrganIds(ag, pairs, ref work.SortKeys);
+            CollisionWorld.UniquePairs(pairs);
+            work.LastDiscoverTicks = discovered - visitStarted; work.LastFilterTicks = filtered - discovered;
+            work.LastSortTicks = System.Diagnostics.Stopwatch.GetTimestamp() - filtered;
         }
-        pairs.RemoveRange(retained, pairs.Count - retained);
-        // Stable-ID order makes the accumulation independent of the hierarchy's layout. The keys
-        // are materialised once: a delegate comparison that looked both ids up per compare was
-        // most of the serial time left in a single plant's tick.
-        SortByOrganIds(ag, pairs, ref work.SortKeys);
-        CollisionWorld.UniquePairs(pairs);
         var n = pairs.Count;
         var chunks = (n + OwnPairChunk - 1) / OwnPairChunk;
         if (work.ChunkStats.Length < chunks) Array.Resize(ref work.ChunkStats, chunks);
@@ -76,6 +193,8 @@ public sealed partial class SoftContactEngine
             var evalStarted = System.Diagnostics.Stopwatch.GetTimestamp();
             if (work.ChunkTicks.Length < chunks) { work.ChunkTicks = new long[chunks]; work.WorstPairTicks = new long[chunks]; work.WorstPairIndex = new int[chunks]; }
             var chunkTicks = work.ChunkTicks; var gc0 = GC.CollectionCount(0);
+            // A plant whose organs only turn: its mobilities do not depend on what is queued.
+            var rigid = !ag.HasContactDeformation;
             Parallel.For(0, chunks, c =>
             {
                 var chunkStarted = System.Diagnostics.Stopwatch.GetTimestamp();
@@ -88,7 +207,8 @@ public sealed partial class SoftContactEngine
                 {
                     var pairStarted = TraceTiming ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
                     var (a, b) = pairs[k];
-                    EvaluatePair(plant, a, plant, b, epoch, work.Contacts, ref local, out records[k]);
+                    if (EvaluatePair(plant, a, plant, b, epoch, work.Contacts, ref local, out records[k]) && rigid)
+                        MeasureMobility(ag, ref records[k]);
                     if (TraceTiming)
                     {
                         var pt = System.Diagnostics.Stopwatch.GetTimestamp() - pairStarted;
@@ -167,33 +287,35 @@ public sealed partial class SoftContactEngine
     {
         record = default;
         var a = pa.AG; var b = pb.AG;
-        if (!a.IsCollisionEligiblePublic(i) || !b.IsCollisionEligiblePublic(j)) return false;
+        var first = a.ContactOrganAt(i); var second = b.ContactOrganAt(j);
+        if (!first.Eligible || !second.Eligible) return false;
         ++stats.Candidates;
-        var sa = CollisionWorld.Shape(a, i); var sb = CollisionWorld.Shape(b, j);
+        var sa = first.Shape; var sb = second.Shape;
         if (sa.Lamina != null && sa.Pose.Length < CollisionSettings.SoftTinyLaminaLength) sa = AsCapsule(sa);
         if (sb.Lamina != null && sb.Pose.Length < CollisionSettings.SoftTinyLaminaLength) sb = AsCapsule(sb);
         var reach = sa.Pose.Radius + sb.Pose.Radius;
         var skin = CollisionSettings.FoliageSkin;
         var band = reach + skin;
-        var key = new CollisionWorld.ContactKey(pa, a.GetOrganId(i), pb, b.GetOrganId(j));
+        var key = new CollisionWorld.ContactKey(pa, first.Id, pb, second.Id);
         var hasMemory = memories.TryGetValue(key, out var memory)
             && memory.Seen >= epoch - 1 - CollisionSettings.ContactMemoryGraceEpochs;
         // A remembered pair is queried a little beyond the band, so one that has just separated
         // still reports a witness normal and a reversed one can be counted.
         var search = hasMemory ? band + skin : band;
-        var stop = pa == pb ? CollisionWorld.CommonAncestor(a, i, j) : -1;
         var hit = PairDistance(sa, sb, search, pa.World.CollisionGeometryToleranceM, ref stats);
         var touching = hit.Distance < band;
-        if (i < a.PreviousGeometry.Length && j < b.PreviousGeometry.Length && a.PreviousGeometry[i].Exists && b.PreviousGeometry[j].Exists
-            && a.PreviousGeometry[i].Pose == CollisionWorld.Shape(a, i).Pose && b.PreviousGeometry[j].Pose == CollisionWorld.Shape(b, j).Pose)
-        { ++stats.StaticPairs; if (touching) ++stats.StaticTouching; }
+        if (first.Unmoved && second.Unmoved) { ++stats.StaticPairs; if (touching) ++stats.StaticTouching; }
+        // The common ancestor decides how a pair that touches is weighted, and lets two rods
+        // that share a junction be sampled along their length. A pair with a blade that does
+        // not touch needs neither, and most candidate pairs are of that kind.
+        var stop = pa == pb && (touching || sa.Lamina == null && sb.Lamina == null) ? CollisionWorld.CommonAncestor(a, i, j) : -1;
         var weight = 1f;
         if (stop >= 0)
         {
             // Siblings and descendants of one node are exempt right at the junction, where every
             // organ overlaps by construction, and fully weighted twice that far out. The ramp is
             // what keeps the response continuous as a tip grows past the junction region.
-            var junction = a.GetContactPose(stop);
+            var junction = a.ContactOrganAt(stop).Shape.Pose;
             var rAtt = MathF.Max(.002f, 2f * junction.Radius + sa.Pose.Radius + sb.Pose.Radius);
             weight = touching ? AttachmentWeight(junction.Tip, rAtt, hit.A, hit.B) : 0f;
             // Two rods leaving one junction always have their nearest points at that junction,
@@ -255,6 +377,26 @@ public sealed partial class SoftContactEngine
         return true;
     }
 
+    /// <summary>
+    /// How readily each body of a touching pair yields along the contact normal: the walk from
+    /// the organ to the common ancestor that <see cref="RespondPair"/> splits the correction by.
+    /// </summary>
+    /// <remarks>
+    /// The walk reads the joints as they stand - their stiffness, their bend, where they sit -
+    /// and a response only queues turns on them, which nothing reads before the sweep ends. So
+    /// for a plant whose organs do not change shape under contact the mobility is the same
+    /// whether it is measured here, with the geometry and on all cores, or later, one pair
+    /// after another. A plant with contact deformation is left to the response: there a queued
+    /// correction does change what the next pair finds.
+    /// </remarks>
+    static void MeasureMobility(PlantSubFormation<AboveGroundAgent> ag, ref PairRecord r)
+    {
+        if (r.Weight <= 0f || r.Depth <= 0f) return;
+        r.MobilityA = ag.ContactMobility(r.I, r.Hit.A, r.Normal, r.Stop);
+        r.MobilityB = ag.ContactMobility(r.J, r.Hit.B, -r.Normal, r.Stop);
+        r.MobilityKnown = true;
+    }
+
     /// <summary>Sorts the pairs by (stable id of the first organ, stable id of the second): the same
     /// order the delegate comparison produced, from keys looked up once per pair.</summary>
     static void SortByOrganIds(PlantSubFormation<AboveGroundAgent> a, PlantSubFormation<AboveGroundAgent> b, List<(int, int)> pairs, ref (ulong, ulong)[] keys)
@@ -288,8 +430,8 @@ public sealed partial class SoftContactEngine
         var cap = CollisionSettings.MaxCorrectionDisplacement > 0f ? CollisionSettings.MaxCorrectionDisplacement : float.PositiveInfinity;
         // Split by mobility: a scape against a petiole moves the petiole, a leaf against a leaf
         // moves both. The walk stops at the common ancestor, so shared supports never move.
-        var ma = a.ContactMobility(i, hit.A, normal, stop);
-        var mb = b.ContactMobility(j, hit.B, -normal, stop);
+        var ma = r.MobilityKnown ? r.MobilityA : a.ContactMobility(i, hit.A, normal, stop);
+        var mb = r.MobilityKnown ? r.MobilityB : b.ContactMobility(j, hit.B, -normal, stop);
         var shared = a.SharedShapeMobility(stop, i, hit.A, j, hit.B, normal);
         var sum = ma + mb + shared;
         if (sum > 1e-20 && double.IsFinite(sum))

@@ -22,55 +22,58 @@ public sealed partial class SoftContactEngine
             Array.Resize(ref work.SolidConfinement, Math.Max(ag.Count, work.SolidConfinement.Length * 2));
         Array.Clear(work.SolidConfinement, 0, ag.Count);
         if (work.ObstacleTouch.Length < ag.Count) { work.ObstacleTouch = new StaticTouch[Math.Max(ag.Count, work.ObstacleTouch.Length * 2)]; work.SoilTouch = new StaticTouch[work.ObstacleTouch.Length]; }
+        if (work.SolidAnswers.Length < ag.Count) work.SolidAnswers = new byte[Math.Max(ag.Count, work.SolidAnswers.Length * 2)];
         for (int i = 0; i < ag.Count; ++i) { work.ObstacleTouch[i].Round = -1; work.SoilTouch[i].Round = -1; }
         long T() => TraceTiming ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
         var t0 = T();
         ag.RefreshAnchors(Static);
         ag.ClearSupport();
         var t1 = T(); work.HardAnchorTicks += t1 - t0;
+        // The first round asks about every organ. A later round asks about the organs whose
+        // answer can have changed: the ones the round before moved, and the ones that have
+        // touched a solid this tick, whose contact is carried from round to round. For any other
+        // organ the round would repeat the question it asked last time, of the same pose, and
+        // get the same answer - that it touches nothing - so it queues nothing either way.
+        var asked = work.RoundOrgans; var all = true;
+        work.Touched.Clear();
         for (int round = 0; round < CollisionSettings.SoftHardPushRounds; ++round)
         {
             ag.BeginContactSweep(resetDiagnostics: false);
-            for (int i = 0; i < ag.Count; ++i)
-            {
-                if (!CollisionWorld.Eligible(ag, i)) continue;
-                var pose = ag.GetContactPose(i);
-                var trusted = CollisionWorld.TrustedPoint(plant, i);
-                var ta = T();
-                if (CollisionSettings.ObstaclePass && !ClearOfObstacles(ag, i, pose, work))
-                {
-                    var tb = T(); work.HardClearTicks += tb - ta;
-                    Correct(ag, i, pose, trusted, StaticSurface.Obstacle, work, round);
-                    ta = T(); work.HardObstacleTicks += ta - tb;
-                }
-                else { var tb = T(); work.HardClearTicks += tb - ta; ta = tb; }
-                // Out of the soil's reach the push would ask the scene and find nothing (see
-                // StaticCollider.AboveSoilReach). A push that carries a contact from the round
-                // before does not ask, so it is left alone.
-                var carried = round > 0 && work.SoilTouch[i].Round == round - 1;
-                if (CollisionSettings.SoilPass
-                    && (carried || !Static.AboveSoilReach(new ContactShape(pose, ag.GetLaminaTemplate(i))))
-                    && World.SoilEligible(ag, i, pose))
-                {
-                    var tb = T(); work.HardSoilEligibleTicks += tb - ta;
-                    Correct(ag, i, pose, trusted, StaticSurface.Soil, work, round);
-                    work.HardSoilTicks += T() - tb;
-                }
-                else work.HardSoilEligibleTicks += T() - ta;
-            }
+            // Whether an organ needs a push is a question about that organ alone, and is asked
+            // of a large plant on all cores. The pushes queue turns on joints the organs share,
+            // so they are made one after another, in organ order.
+            var ta = T();
+            if (all) AskAboutSolids(plant, work, round);
+            else foreach (var i in asked) work.SolidAnswers[i] = SolidQuestions(plant, i, work, round);
+            work.HardAskTicks += T() - ta;
+            if (all) { for (int i = 0; i < ag.Count; ++i) PushOutOfSolids(plant, i, work, round); }
+            else foreach (var i in asked) PushOutOfSolids(plant, i, work, round);
             var te = T();
             var moved = ag.EndContactSweep(CollisionSettings.MaxCorrectionRadians);
             if (TraceSolids) Console.WriteLine($"SOLID_PUSH t={plant.World.Timestep} round={round} moved={moved}");
             work.HardSweepTicks += T() - te; ++work.HardRounds;
             if (!moved) break;
+            asked.Clear();
+            all = !ag.CollectSweptOrgans(asked, ag.Count / 4);
+            if (all) continue;
+            // In organ order, once each: the order in which corrections are queued on a shared joint.
+            asked.AddRange(work.Touched);
+            asked.Sort();
+            var kept = 0;
+            for (int k = 0; k < asked.Count; ++k)
+                if (kept == 0 || asked[k] != asked[kept - 1]) asked[kept++] = asked[k];
+            asked.RemoveRange(kept, asked.Count - kept);
         }
         var tc = T();
         if (CollisionSettings.SolidElongationClip && CollisionSettings.ObstaclePass) ClipElongation(plant, work);
         var ta2 = T(); work.HardClipTicks += ta2 - tc;
         if (CertifiedSolids)
         {
-            var moved = ExactPushRounds(plant, work);
-            if (World.EnforceStaticAdmissibility(plant, work.Admission, shrinkNewborns: true, out work.UnresolvedSolids)) { moved = true; ++work.Enforced; }
+            // Both steps start by asking every organ whether it is admissible. A large plant is
+            // asked once, on all cores; when nothing is inadmissible neither step has a walk to do.
+            var allAdmissible = World.AllStaticallyAdmissible(plant, work.Admission);
+            var moved = ExactPushRounds(plant, work, allAdmissible);
+            if (World.EnforceStaticAdmissibility(plant, work.Admission, shrinkNewborns: true, out work.UnresolvedSolids, allAdmissible)) { moved = true; ++work.Enforced; }
             // A push, a redirect, a shortening or a rollback moved organs after the carried pushes
             // measured their witnesses, so the support detection below asks the scene again instead
             // of reading a witness taken at a pose the organ no longer has.
@@ -79,6 +82,66 @@ public sealed partial class SoftContactEngine
         var tl = T(); work.HardAdmitTicks += tl - ta2;
         RefreshContactLoads(plant, work);
         work.HardLoadTicks += T() - tl;
+    }
+
+    const byte ObstacleQuestion = 1, SoilQuestion = 2, ObstacleReaction = 4, SoilReaction = 8;
+    /// <summary>Organs from which the per-organ questions of the solid pass are asked on all cores.</summary>
+    const int ParallelQuestionsMinimum = 4096;
+
+    /// <summary>Which solids an organ has to be pushed out of this round, if any: the obstacles
+    /// unless the clearance cache proves it clear of them, the soil unless it is out of its reach.</summary>
+    byte SolidQuestions(PlantFormation2 plant, int i, SoftWork work, int round)
+    {
+        var ag = plant.AG;
+        if (!CollisionWorld.Eligible(ag, i)) return 0;
+        var pose = ag.GetContactPose(i);
+        byte answer = 0;
+        if (CollisionSettings.ObstaclePass && !ClearOfObstacles(ag, i, pose, work)) answer |= ObstacleQuestion;
+        // Out of the soil's reach the push would ask the scene and find nothing (see
+        // StaticCollider.AboveSoilReach). A push that carries a contact from the round
+        // before does not ask, so it is left alone.
+        var carried = round > 0 && work.SoilTouch[i].Round == round - 1;
+        if (CollisionSettings.SoilPass
+            && (carried || !Static.AboveSoilReach(new ContactShape(pose, ag.GetLaminaTemplate(i))))
+            && World.SoilEligible(ag, i, pose)) answer |= SoilQuestion;
+        return answer;
+    }
+
+    void AskAboutSolids(PlantFormation2 plant, SoftWork work, int round)
+    {
+        var count = plant.AG.Count;
+        if (count >= ParallelQuestionsMinimum) { AskOnAllCores(plant, work, round, float.NaN); return; }
+        for (int i = 0; i < count; ++i) work.SolidAnswers[i] = SolidQuestions(plant, i, work, round);
+    }
+
+    /// <summary>The push questions of a round, or - given a support reach - the support questions,
+    /// for every organ of a large plant. Kept apart so that a small plant pays for no closure.</summary>
+    void AskOnAllCores(PlantFormation2 plant, SoftWork work, int round, float supportReach)
+    {
+        var answers = work.SolidAnswers;
+        plant.AG.WarmLaminaCache(); // filled lazily, which only one thread at a time may do
+        Parallel.ForEach(System.Collections.Concurrent.Partitioner.Create(0, plant.AG.Count, 2048), range =>
+        {
+            for (int i = range.Item1; i < range.Item2; ++i)
+                answers[i] = float.IsNaN(supportReach) ? SolidQuestions(plant, i, work, round) : SupportQuestions(plant, i, supportReach, work);
+        });
+    }
+
+    /// <summary>One organ's pushes out of the obstacles and out of the soil, in one push round,
+    /// as <see cref="SolidQuestions"/> answered for it.</summary>
+    void PushOutOfSolids(PlantFormation2 plant, int i, SoftWork work, int round)
+    {
+        var answer = work.SolidAnswers[i];
+        if (answer == 0) return;
+        long T() => TraceTiming ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
+        var ag = plant.AG;
+        var pose = ag.GetContactPose(i);
+        var trusted = CollisionWorld.TrustedPoint(plant, i);
+        var ta = T();
+        if ((answer & ObstacleQuestion) != 0) Correct(ag, i, pose, trusted, StaticSurface.Obstacle, work, round);
+        var tb = T(); work.HardObstacleTicks += tb - ta;
+        if ((answer & SoilQuestion) != 0) Correct(ag, i, pose, trusted, StaticSurface.Soil, work, round);
+        work.HardSoilTicks += T() - tb;
     }
 
     /// <summary>
@@ -90,16 +153,18 @@ public sealed partial class SoftContactEngine
     /// admissibility pass would roll the whole branch's tick back - growth, gravity and all -
     /// although a push could have freed it. So before that pass the organs still inadmissible
     /// get what the certified engine gives every touching organ: up to <see cref="CollisionSettings.HardRounds"/>
-    /// rounds, each re-measured. Returns whether anything moved.
+    /// rounds, each re-measured. Returns whether anything moved. When every eligible organ is
+    /// known to be admissible as the plant stands (<paramref name="allAdmissible"/>), the first
+    /// round has nothing to queue and its walk is left out.
     /// </summary>
-    bool ExactPushRounds(PlantFormation2 plant, SoftWork work)
+    bool ExactPushRounds(PlantFormation2 plant, SoftWork work, bool allAdmissible = false)
     {
         var ag = plant.AG; var moved = false;
         for (int round = 0; round < CollisionSettings.HardRounds; ++round)
         {
             ag.BeginContactSweep(resetDiagnostics: false);
             var queued = 0;
-            for (int i = 0; i < ag.Count; ++i)
+            for (int i = 0; !allAdmissible && i < ag.Count; ++i)
             {
                 if (!CollisionWorld.Eligible(ag, i) || World.StaticAdmissible(plant, i, work.Admission)) continue;
                 var shape = CollisionWorld.Shape(ag, i);
@@ -129,25 +194,46 @@ public sealed partial class SoftContactEngine
     /// </summary>
     void RefreshContactLoads(PlantFormation2 plant, SoftWork work)
     {
-        var ag = plant.AG;
+        var ag = plant.AG; var count = ag.Count; var answers = work.SolidAnswers;
         ag.ClearSupport(); // the loads are summed when the first resting organ needs them
         var supportReach = CollisionSettings.ContactTolerance + 2 * FoliageGeometry.Skin;
-        for (int i = 0; i < ag.Count; ++i)
+        // As in the push rounds: what there is to record is asked per organ, on all cores for a
+        // large plant; recording adds to moments along the stem and stays in organ order.
+        if (count < ParallelQuestionsMinimum)
+            for (int i = 0; i < count; ++i) answers[i] = SupportQuestions(plant, i, supportReach, work);
+        else AskOnAllCores(plant, work, 0, supportReach);
+        for (int i = 0; i < count; ++i)
         {
-            if (!CollisionWorld.Eligible(ag, i)) continue;
-            var pose = ag.GetContactPose(i);
-            // An organ pushed against a solid this tick is resting on it if the push came from
-            // below: the push already found the witness and the normal.
-            ref var obstacle = ref work.ObstacleTouch[i];
-            if (obstacle.Round >= 0) { if (obstacle.Normal.Y > 0f) ag.RecordSupportReaction(i, obstacle.Point, obstacle.Normal); }
-            else if (!ProvablyClear(ag, i, pose, supportReach, work)) World.RecordSupport(ag, i, StaticSurface.Obstacle);
-            ref var soil = ref work.SoilTouch[i];
-            if (soil.Round >= 0) { if (soil.Normal.Y > 0f) ag.RecordSupportReaction(i, soil.Point, soil.Normal); }
-            else if (!Static.AboveSoilReach(new ContactShape(pose, ag.GetLaminaTemplate(i))) && World.SoilEligible(ag, i, pose))
-                World.RecordSupport(ag, i, StaticSurface.Soil);
+            var answer = answers[i];
+            if (answer == 0) continue;
+            if ((answer & ObstacleReaction) != 0) ag.RecordSupportReaction(i, work.ObstacleTouch[i].Point, work.ObstacleTouch[i].Normal);
+            else if ((answer & ObstacleQuestion) != 0) World.RecordSupport(ag, i, StaticSurface.Obstacle);
+            if ((answer & SoilReaction) != 0) ag.RecordSupportReaction(i, work.SoilTouch[i].Point, work.SoilTouch[i].Normal);
+            else if ((answer & SoilQuestion) != 0) World.RecordSupport(ag, i, StaticSurface.Soil);
         }
         ag.UpdateSupportedLoads();
         ag.RefreshAnchors(Static);
+    }
+
+    /// <summary>
+    /// What an organ may be resting on. An organ pushed against a solid this tick is resting on
+    /// it if the push came from below - the push already found the witness and the normal; any
+    /// other organ has to ask the scene, unless it is provably out of reach.
+    /// </summary>
+    byte SupportQuestions(PlantFormation2 plant, int i, float supportReach, SoftWork work)
+    {
+        var ag = plant.AG;
+        if (!CollisionWorld.Eligible(ag, i)) return 0;
+        var pose = ag.GetContactPose(i);
+        byte answer = 0;
+        ref var obstacle = ref work.ObstacleTouch[i];
+        if (obstacle.Round >= 0) { if (obstacle.Normal.Y > 0f) answer |= ObstacleReaction; }
+        else if (!ProvablyClear(ag, i, pose, supportReach, work)) answer |= ObstacleQuestion;
+        ref var soil = ref work.SoilTouch[i];
+        if (soil.Round >= 0) { if (soil.Normal.Y > 0f) answer |= SoilReaction; }
+        else if (!Static.AboveSoilReach(new ContactShape(pose, ag.GetLaminaTemplate(i))) && World.SoilEligible(ag, i, pose))
+            answer |= SoilQuestion;
+        return answer;
     }
 
     /// <summary>Whether the clearance cache proves no obstacle within <paramref name="margin"/> of the
@@ -157,7 +243,7 @@ public sealed partial class SoftContactEngine
         if (Static.ObstacleTriangles == 0) return true;
         var template = ag.GetLaminaTemplate(i);
         var travel = template?.MotionBound(ag.ClearancePose[i], pose) ?? ag.ClearancePose[i].MotionBound(pose);
-        if (ag.StaticClearance[i] > travel + margin) { ++work.SupportSkips; return true; }
+        if (ag.StaticClearance[i] > travel + margin) { Interlocked.Increment(ref work.SupportSkips); return true; }
         return false;
     }
 
@@ -191,6 +277,7 @@ public sealed partial class SoftContactEngine
             touch.Local = Vector3.Transform(point - pose.Base, Quaternion.Conjugate(pose.Rotation));
         }
         touch.Point = point; touch.Normal = normal; touch.Depth = depth; touch.Round = round;
+        work.Touched.Add(i);
         work.MaxSolidPenetration = MathF.Max(work.MaxSolidPenetration, depth);
         var queued = ag.QueueContactCorrection(i, point, normal, depth + CollisionSettings.ContactTolerance);
         if (TraceSolids) Console.WriteLine($"SOLID_PUSH t={ag.Plant.World.Timestep} round={round} organ={i} {ag.GetOrgan(i)} {surface} depth={depth * 1000:F3}mm n={normal} queued={queued}");
@@ -210,9 +297,10 @@ public sealed partial class SoftContactEngine
         float Travel(OrganPose a, OrganPose b) => template?.MotionBound(a, b) ?? a.MotionBound(b);
         var travel = Travel(ag.ClearancePose[i], pose);
         if (previous.Exists) travel = MathF.Max(travel, Travel(ag.ClearancePose[i], previous.Pose));
-        if (ag.StaticClearance[i] > travel + CollisionSettings.ContactTolerance) { ++work.Skips; return true; }
+        // Counted with interlocked steps: the questions of a large plant are asked on all cores.
+        if (ag.StaticClearance[i] > travel + CollisionSettings.ContactTolerance) { Interlocked.Increment(ref work.Skips); return true; }
         if (travel < 1e-12f && ag.StaticClearance[i] <= CollisionSettings.ContactTolerance) return false;
-        ++work.Queries;
+        Interlocked.Increment(ref work.Queries);
         var deviation = template == null ? 0f : template.WideReach * pose.Width + template.ReliefAt(pose)
             + MathF.Max(0f, template.LongReach - 1f) * pose.Length;
         deviation += template?.DeformationReach(pose) ?? ContactDeformation.MotionBound(pose.Length, 0, Vector4.Zero, pose.Deformation);

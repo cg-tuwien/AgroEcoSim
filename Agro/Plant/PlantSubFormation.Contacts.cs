@@ -1,5 +1,6 @@
 using System.Numerics;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using Agro.Collisions;
 
 namespace Agro;
@@ -208,7 +209,27 @@ public partial class PlantSubFormation<T>
     /// </summary>
     internal void WarmLaminaCache()
     {
-        for (int i = 0; i < AgentCount; ++i) GetLaminaTemplate(i);
+        var count = AgentCount;
+        // Several passes of a tick ask for this, and after the first there is nothing to fill:
+        // a large plant is checked on all cores before it is walked on one.
+        if (count >= SweepBlock * 2 && LaminaCache.Length >= count && LaminaCacheComplete(count)) return;
+        for (int i = 0; i < count; ++i) GetLaminaTemplate(i);
+    }
+
+    bool LaminaCacheComplete(int count)
+    {
+        var missing = 0;
+        Parallel.For(0, (count + SweepBlock - 1) / SweepBlock, block =>
+        {
+            var last = Math.Min(count, (block + 1) * SweepBlock);
+            for (int i = block * SweepBlock; i < last; ++i)
+            {
+                var organ = GetOrgan(i);
+                if ((organ is OrganTypes.Leaf or OrganTypes.FlowerPadel or OrganTypes.Fruit or OrganTypes.FruitWing)
+                    && !(LaminaKnown[i] && LaminaKinds[i] == organ)) { Volatile.Write(ref missing, 1); return; }
+            }
+        });
+        return missing == 0;
     }
 
     Vector3[] ContactTurns = [];
@@ -266,6 +287,8 @@ public partial class PlantSubFormation<T>
         Array.Resize(ref ContactTurnPeak, capacity);
         Array.Resize(ref ContactLeverMax, capacity);
         Array.Resize(ref TransportedTurns, capacity);
+        Array.Resize(ref SweepVisit, capacity);
+        Array.Resize(ref SweepApplied, capacity);
         Array.Resize(ref SupportMoments, capacity);
     }
 
@@ -288,6 +311,7 @@ public partial class PlantSubFormation<T>
     internal void BeginContactSweep(bool resetDiagnostics = true)
     {
         EnsureContactCapacity(AgentCount);
+        ContactSweepPrepared = false;
         Array.Clear(ContactTurns, 0, AgentCount);
         Array.Clear(ContactTurnPeak, 0, AgentCount);
         Array.Clear(ContactLeverMax, 0, AgentCount);
@@ -303,98 +327,286 @@ public partial class PlantSubFormation<T>
     /// opposite sides still cancel in the sum.</param>
     internal bool EndContactSweep(float maxAngle, bool jointSumRule = false)
     {
+        var sweepStarted = System.Diagnostics.Stopwatch.GetTimestamp();
         BatchingContacts = false;
-        var src = Src();
-        var queue = CollisionChildren;
-        queue.Clear();
-        foreach (var root in GetRoots()) queue.Enqueue(root);
+        ContactSweepPrepared = false; // the sweep turns the joints the descriptions were taken from
         var moved = false;
         ContactMovedRoots.Clear();
         // The pose before the sweep is only read back for an organ whose shape deformed, and only
-        // a plant with contact deformation has such organs. A tree runs this sweep five times a
-        // tick over every organ, almost all of which take the no-op branch below.
+        // a plant with contact deformation has such organs.
         var shapesDeform = Deformations != null || HasContactDeformation;
-        while (queue.Count > 0)
+        if (shapesDeform || AgentCount < TreeCacheData.ParallelWalkMinimum)
         {
-            var i = queue.Dequeue();
-            var parent = src[i].Parent;
-            var carry = parent >= 0 ? TransportedTurns[parent] : Quaternion.Identity;
-            var oldPose = shapesDeform ? GetContactPose(i) : default;
-            var deformed = ApplyDeformationIncrement(i);
-            var turn = ContactTurns[i];
-            if (!deformed && turn == Vector3.Zero && carry == Quaternion.Identity)
+            // Parents before children, breadth first.
+            var src = Src();
+            var queue = CollisionChildren;
+            queue.Clear();
+            foreach (var root in GetRoots()) queue.Enqueue(root);
+            while (queue.Count > 0)
             {
-                // No load correction and no parent transport: a joint safely inside
-                // its limit is an exact no-op. Re-normalizing such frames every solver
-                // pass created tiny artificial motions and invalidated clearance caches.
-                var basis = src[i].baseOrientation; var orientation = src[i].Orientation;
-                var norm = MathF.Sqrt(basis.LengthSquared() * orientation.LengthSquared());
-                var cosineLimit = MathF.Cos(ContactBendLimit(i) * .5f);
-                if (norm > 0 && MathF.Abs(Quaternion.Dot(basis, orientation)) > (cosineLimit + 1e-6f) * norm)
-                {
-                    TransportedTurns[i] = Quaternion.Identity;
-                    foreach (var child in GetChildren(i)) queue.Enqueue(child);
-                    continue;
-                }
+                var i = queue.Dequeue();
+                var parent = src[i].Parent;
+                var applied = TurnJoint(i, parent >= 0 ? TransportedTurns[parent] : Quaternion.Identity, maxAngle, jointSumRule, shapesDeform, ref moved, ContactMovedRoots);
+                if (!(applied < 0f)) ContactTurnByOrgan[(int)src[i].Organ & 31] += applied;
+                foreach (var child in GetChildren(i)) queue.Enqueue(child);
             }
-            var angle = turn.Length();
-            var limit = maxAngle;
-            if (jointSumRule && angle > 1e-8f)
+        }
+        else if (!TurnQueuedJointsOnly(maxAngle, jointSumRule, ref moved))
+            TurnJointsOnAllCores(maxAngle, jointSumRule, ref moved);
+        var walked = System.Diagnostics.Stopwatch.GetTimestamp();
+        if (moved)
+            foreach (var root in ContactMovedRoots) RebaseAndRefit(root);
+        ContactWalkTicks += walked - sweepStarted;
+        ContactRefitTicks += System.Diagnostics.Stopwatch.GetTimestamp() - walked;
+        return moved;
+    }
+
+    /// <summary>Time spent in <see cref="EndContactSweep"/>: the walk that turns the joints, and
+    /// rebasing and refitting what moved. Diagnostic; never feeds the simulation.</summary>
+    public long ContactWalkTicks, ContactRefitTicks;
+
+    /// <summary>
+    /// Whether a sweep passes over a joint that has no turn queued and whose parent did not move:
+    /// one safely inside its bend limit is an exact no-op. Re-normalizing such frames every solver
+    /// pass created tiny artificial motions and invalidated clearance caches.
+    /// </summary>
+    bool RestsWithinBendLimit(int i)
+    {
+        ref var a = ref Src()[i];
+        var basis = a.baseOrientation; var orientation = a.Orientation;
+        var norm = MathF.Sqrt(basis.LengthSquared() * orientation.LengthSquared());
+        var cosineLimit = MathF.Cos(ContactBendLimit(i) * .5f);
+        return norm > 0 && MathF.Abs(Quaternion.Dot(basis, orientation)) > (cosineLimit + 1e-6f) * norm;
+    }
+
+    /// <summary>
+    /// One joint of a contact sweep: applies the turn queued on it and the rotation its parent
+    /// carries down (<paramref name="carry"/>), within the joint's bend limit, and leaves in
+    /// <see cref="TransportedTurns"/> what its own children are carried by. A joint that moved
+    /// while its parent carried nothing is the top of a subtree to rebase and is added to
+    /// <paramref name="movedRoots"/>.
+    /// </summary>
+    /// <returns>The turn applied from the joint's own queue, radians, for the per-tissue
+    /// diagnostic; negative when it had none.</returns>
+    float TurnJoint(int i, Quaternion carry, float maxAngle, bool jointSumRule, bool shapesDeform, ref bool moved, List<int> movedRoots)
+    {
+        var src = Src();
+        var oldPose = shapesDeform ? GetContactPose(i) : default;
+        var deformed = ApplyDeformationIncrement(i);
+        var turn = ContactTurns[i];
+        if (!deformed && turn == Vector3.Zero && carry == Quaternion.Identity && RestsWithinBendLimit(i))
+        {
+            TransportedTurns[i] = Quaternion.Identity;
+            return -1f;
+        }
+        var angle = turn.Length();
+        var limit = maxAngle;
+        if (jointSumRule && angle > 1e-8f)
+        {
+            limit = MathF.Min(limit, ContactTurnPeak[i]);
+            if (ContactLeverMax[i] > 0f && CollisionSettings.MaxCorrectionDisplacement > 0f)
+                limit = MathF.Min(limit, CollisionSettings.MaxCorrectionDisplacement / ContactLeverMax[i]);
+        }
+        var own = angle > 1e-8f ? Quaternion.CreateFromAxisAngle(turn / angle, MathF.Min(angle, limit)) : Quaternion.Identity;
+        var applied = angle > 1e-8f ? MathF.Min(angle, limit) : -1f;
+        var transportedBase = Quaternion.Normalize(carry * src[i].baseOrientation);
+        var proposed = Quaternion.Normalize(own * carry * src[i].Orientation);
+        var constrained = LimitJointBend(transportedBase, proposed, ContactBendLimit(i));
+        var delta = Quaternion.Normalize(constrained * Quaternion.Conjugate(src[i].Orientation));
+        TransportedTurns[i] = delta;
+        if (Plant.Parameters.Behavior == Behavior.Woody && carry != Quaternion.Identity)
+        {
+            // The attachment belongs to the parent's frame, independent of this
+            // joint's own elastic bend (which may even cancel the parent's rotation).
+            var offset = Vector3.Transform(src[i].BaseOffset, carry);
+            moved |= offset != src[i].BaseOffset;
+            SetContactOffset(ref src[i], offset);
+            src[i].baseOrientation = Quaternion.Normalize(carry * src[i].baseOrientation);
+            src[i].restOrientation = Quaternion.Normalize(carry * src[i].restOrientation);
+            src[i].targetOrientation = Quaternion.Normalize(carry * src[i].targetOrientation);
+        }
+        if (delta.X * delta.X + delta.Y * delta.Y + delta.Z * delta.Z > 1e-16f)
+        {
+            src[i].SetOrientation(Quaternion.Normalize(delta * src[i].Orientation));
+            // The ancestor transform transports this joint's rest frame. Its own contact
+            // deformation is elastic and must relax after contact is released.
+            if (Plant.Parameters.Behavior != Behavior.Woody)
             {
-                limit = MathF.Min(limit, ContactTurnPeak[i]);
-                if (ContactLeverMax[i] > 0f && CollisionSettings.MaxCorrectionDisplacement > 0f)
-                    limit = MathF.Min(limit, CollisionSettings.MaxCorrectionDisplacement / ContactLeverMax[i]);
-            }
-            var own = angle > 1e-8f ? Quaternion.CreateFromAxisAngle(turn / angle, MathF.Min(angle, limit)) : Quaternion.Identity;
-            if (angle > 1e-8f) ContactTurnByOrgan[(int)src[i].Organ & 31] += MathF.Min(angle, limit);
-            var transportedBase = Quaternion.Normalize(carry * src[i].baseOrientation);
-            var proposed = Quaternion.Normalize(own * carry * src[i].Orientation);
-            var constrained = LimitJointBend(transportedBase, proposed, ContactBendLimit(i));
-            var delta = Quaternion.Normalize(constrained * Quaternion.Conjugate(src[i].Orientation));
-            TransportedTurns[i] = delta;
-            if (Plant.Parameters.Behavior == Behavior.Woody && carry != Quaternion.Identity)
-            {
-                // The attachment belongs to the parent's frame, independent of this
-                // joint's own elastic bend (which may even cancel the parent's rotation).
-                var offset = Vector3.Transform(src[i].BaseOffset, carry);
-                moved |= offset != src[i].BaseOffset;
-                SetContactOffset(ref src[i], offset);
                 src[i].baseOrientation = Quaternion.Normalize(carry * src[i].baseOrientation);
                 src[i].restOrientation = Quaternion.Normalize(carry * src[i].restOrientation);
                 src[i].targetOrientation = Quaternion.Normalize(carry * src[i].targetOrientation);
             }
-            if (delta.X * delta.X + delta.Y * delta.Y + delta.Z * delta.Z > 1e-16f)
-            {
-                src[i].SetOrientation(Quaternion.Normalize(delta * src[i].Orientation));
-                // The ancestor transform transports this joint's rest frame. Its own contact
-                // deformation is elastic and must relax after contact is released.
-                if (Plant.Parameters.Behavior != Behavior.Woody)
-                {
-                    src[i].baseOrientation = Quaternion.Normalize(carry * src[i].baseOrientation);
-                    src[i].restOrientation = Quaternion.Normalize(carry * src[i].restOrientation);
-                    src[i].targetOrientation = Quaternion.Normalize(carry * src[i].targetOrientation);
-                }
-                if (carry == Quaternion.Identity) ContactMovedRoots.Add(i);
-                moved = true;
-            }
-            else TransportedTurns[i] = Quaternion.Identity;
-            if(Deformable(i) && GetOrgan(i)==OrganTypes.Petiole)
-            {
-                var current=GetDeformation(i);var limited=LimitedShape(i,current);
-                if(current!=limited){SetDeformation(i,limited);deformed=true;}
-            }
-            if (deformed)
-            {
-                TransportedTurns[i] = Quaternion.Normalize(AttachmentRotation(GetContactPose(i))
-                    * Quaternion.Conjugate(AttachmentRotation(oldPose)));
-                if (carry == Quaternion.Identity && !ContactMovedRoots.Contains(i)) ContactMovedRoots.Add(i);
-                moved = true;
-            }
-            foreach (var child in GetChildren(i)) queue.Enqueue(child);
+            if (carry == Quaternion.Identity) movedRoots.Add(i);
+            moved = true;
         }
-        if (moved)
-            foreach (var root in ContactMovedRoots) RebaseAndRefit(root);
-        return moved;
+        else TransportedTurns[i] = Quaternion.Identity;
+        if(Deformable(i) && GetOrgan(i)==OrganTypes.Petiole)
+        {
+            var current=GetDeformation(i);var limited=LimitedShape(i,current);
+            if(current!=limited){SetDeformation(i,limited);deformed=true;}
+        }
+        if (deformed)
+        {
+            TransportedTurns[i] = Quaternion.Normalize(AttachmentRotation(GetContactPose(i))
+                * Quaternion.Conjugate(AttachmentRotation(oldPose)));
+            if (carry == Quaternion.Identity && !movedRoots.Contains(i)) movedRoots.Add(i);
+            moved = true;
+        }
+        return applied;
+    }
+
+    /// <summary>
+    /// The organs the last contact sweep can have moved: every subtree it rebased, an organ more
+    /// than once when one moved subtree holds another. False, with the list incomplete, when
+    /// there are more than <paramref name="limit"/>.
+    /// </summary>
+    internal bool CollectSweptOrgans(List<int> into, int limit)
+    {
+        foreach (var root in ContactMovedRoots)
+        {
+            var first = into.Count;
+            into.Add(root);
+            for (int k = first; k < into.Count; ++k)
+            {
+                foreach (var child in GetChildren(into[k])) into.Add(child);
+                if (into.Count > limit) return false;
+            }
+        }
+        return true;
+    }
+
+    /// <summary>Per organ, the last <see cref="SweepPass"/> that visited it.</summary>
+    int[] SweepVisit = [];
+    int SweepPass;
+    /// <summary>Per organ, what <see cref="TurnJoint"/> returned in a sweep on several cores.</summary>
+    float[] SweepApplied = [];
+    List<int>[] SweepActive = [];
+    readonly PriorityQueue<int, int> SweepQueue = new();
+    readonly List<int> SweepBranches = [];
+    /// <summary>Organs per block of the scan for joints a sweep has work on.</summary>
+    const int SweepBlock = 8192;
+
+    /// <summary>
+    /// The contact sweep over the joints that have something to do, instead of over the plant.
+    /// Returns false, having changed nothing, when the whole walk is to run instead.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A tree's solid pass ends a sweep four times a tick and each walked a quarter of a million
+    /// organs to turn a few dozen: the walk passes over a joint that has no turn queued, rests
+    /// within its bend limit and whose parent did not move, and all it writes for such a joint is
+    /// the identity its children are carried by.
+    /// </para>
+    /// <para>
+    /// So the joints are found first - a read-only scan, on all cores - and only they and what
+    /// they carry are visited. A joint's result depends on its own state and its parent's
+    /// transported turn alone, and the walk visits parents before children breadth first; the
+    /// queue here hands out the joints by their rank in that same order
+    /// (<see cref="TreeCacheData.BreadthRanks"/>), so every joint sees the same parent turn, and
+    /// the two things that do depend on the order of visits - the per-tissue turn sum and the
+    /// list of moved subtrees - are built in the order the whole walk builds them. A parent this
+    /// sweep did not visit carries nothing, which is what the whole walk would have written for it.
+    /// </para>
+    /// </remarks>
+    bool TurnQueuedJointsOnly(float maxAngle, bool jointSumRule, ref bool moved)
+    {
+        var count = AgentCount;
+        var blocks = (count + SweepBlock - 1) / SweepBlock;
+        if (SweepActive.Length < blocks)
+        {
+            var old = SweepActive.Length;
+            Array.Resize(ref SweepActive, blocks);
+            for (int k = old; k < blocks; ++k) SweepActive[k] = [];
+        }
+        var active = SweepActive; var turns = ContactTurns;
+        Parallel.For(0, blocks, block =>
+        {
+            var found = active[block]; found.Clear();
+            var last = Math.Min(count, (block + 1) * SweepBlock);
+            for (int i = block * SweepBlock; i < last; ++i)
+                if (turns[i] != Vector3.Zero || !RestsWithinBendLimit(i)) found.Add(i);
+        });
+        var total = 0;
+        for (int k = 0; k < blocks; ++k) total += active[k].Count;
+        // A sweep that turns much of the plant is cheaper as a walk over all of it.
+        if (total > count / 8) return false;
+        var src = Src(); var rank = TreeCache.BreadthRanks(); var visit = SweepVisit; var pass = ++SweepPass;
+        var queue = SweepQueue; queue.Clear();
+        for (int k = 0; k < blocks; ++k)
+            foreach (var i in active[k]) { visit[i] = pass; queue.Enqueue(i, rank[i]); }
+        while (queue.TryDequeue(out var i, out _))
+        {
+            var parent = src[i].Parent;
+            var carry = parent >= 0 && visit[parent] == pass ? TransportedTurns[parent] : Quaternion.Identity;
+            var applied = TurnJoint(i, carry, maxAngle, jointSumRule, shapesDeform: false, ref moved, ContactMovedRoots);
+            if (!(applied < 0f)) ContactTurnByOrgan[(int)src[i].Organ & 31] += applied;
+            if (TransportedTurns[i] == Quaternion.Identity) continue;
+            foreach (var child in GetChildren(i))
+                if (visit[child] != pass) { visit[child] = pass; queue.Enqueue(child, rank[child]); }
+        }
+        return true;
+    }
+
+    /// <summary>Turns the joints of one subtree, its root first, for a sweep on several cores.</summary>
+    void TurnBranch(int root, SweepWorker worker, float maxAngle, bool jointSumRule)
+    {
+        var src = Src(); var applied = SweepApplied; var pending = worker.Pending;
+        pending.Push(root);
+        while (pending.TryPop(out var i))
+        {
+            var parent = src[i].Parent;
+            applied[i] = TurnJoint(i, parent >= 0 ? TransportedTurns[parent] : Quaternion.Identity, maxAngle, jointSumRule, shapesDeform: false, ref worker.Moved, worker.MovedRoots);
+            foreach (var child in GetChildren(i)) pending.Push(child);
+        }
+    }
+
+    /// <summary>What one worker of a sweep on several cores collects.</summary>
+    sealed class SweepWorker
+    {
+        public readonly Stack<int> Pending = new();
+        public readonly List<int> MovedRoots = [];
+        public bool Moved;
+    }
+
+    /// <summary>
+    /// The contact sweep over every joint, on several cores.
+    /// </summary>
+    /// <remarks>
+    /// A contact between two limbs turns the joints all the way down to their fork, however
+    /// little, and everything above a turned joint is carried: on a mature tree nearly every
+    /// organ takes the full step. A joint needs its parent's transported turn and nothing else,
+    /// so the joints that carry most of the tree are turned one after another and the subtrees
+    /// left over side by side (<see cref="TreeCacheData.SplitForWalk"/>). The two results that
+    /// depend on the order of visits are put back into the order of the plain walk afterwards:
+    /// the moved subtrees are sorted by breadth-first rank, and the per-tissue turn sum is added
+    /// up in breadth-first order from the turns the workers noted per joint.
+    /// </remarks>
+    void TurnJointsOnAllCores(float maxAngle, bool jointSumRule, ref bool moved)
+    {
+        var src = Src(); var applied = SweepApplied; var branches = SweepBranches; var roots = ContactMovedRoots;
+        foreach (var i in TreeCache.SplitForWalk(CollectionsMarshal.AsSpan(GetRoots()), branches))
+        {
+            var parent = src[i].Parent;
+            applied[i] = TurnJoint(i, parent >= 0 ? TransportedTurns[parent] : Quaternion.Identity, maxAngle, jointSumRule, shapesDeform: false, ref moved, roots);
+        }
+        var anyMoved = moved;
+        Parallel.For(0, branches.Count, () => new SweepWorker(), (branch, _, worker) =>
+        {
+            TurnBranch(branches[branch], worker, maxAngle, jointSumRule);
+            return worker;
+        }, worker =>
+        {
+            lock (roots)
+            {
+                roots.AddRange(worker.MovedRoots);
+                anyMoved |= worker.Moved;
+            }
+        });
+        moved = anyMoved;
+        var rank = TreeCache.BreadthRanks();
+        roots.Sort((first, second) => rank[first].CompareTo(rank[second]));
+        foreach (var i in TreeCache.BreadthFirst())
+            if (!(applied[i] < 0f)) ContactTurnByOrgan[(int)src[i].Organ & 31] += applied[i];
     }
 
     internal bool IsMechanicallyAnchored(int index) => Src()[index].SoilAnchored;
@@ -403,9 +615,8 @@ public partial class PlantSubFormation<T>
     internal void RefreshAnchors(StaticCollider scene)
     {
         var src = Src();
-        for (int i = 0; i < src.Length; ++i)
+        foreach (var i in RhizomeOrgans)
         {
-            if (!src[i].IsRizome) continue;
             var pose = GetContactPose(i);
             // Only embedded spans are fixed. A tip outside the hull is a cantilever even when
             // its base is still buried; an isolated surface contact is a unilateral constraint.
@@ -419,10 +630,24 @@ public partial class PlantSubFormation<T>
         // Whatever moved the organs or their water since the loads were last summed, this is
         // where a new support solve starts: it must not reuse them.
         LoadsFresh = false;
+        var length = Src().Length;
+        if (length < SweepBlock * 2) ClearSupported(0, length);
+        else
+        {
+            var organs = length; // captured here, so that a small plant pays for no closure
+            Parallel.For(0, (organs + SweepBlock - 1) / SweepBlock, block => ClearSupported(block * SweepBlock, Math.Min(organs, (block + 1) * SweepBlock)));
+        }
+        EnsureContactCapacity(length);
+        Array.Clear(SupportMoments, 0, length);
+    }
+
+    /// <summary>Only the organs that were supported are written to: on a tree that is a handful,
+    /// and reading a flag does not take a quarter of a million cache lines away from the other cores.</summary>
+    void ClearSupported(int from, int to)
+    {
         var src = Src();
-        for (int i = 0; i < src.Length; ++i) src[i].GroundSupported = false;
-        EnsureContactCapacity(src.Length);
-        Array.Clear(SupportMoments, 0, src.Length);
+        for (int i = from; i < to; ++i)
+            if (src[i].GroundSupported) src[i].GroundSupported = false;
     }
 
     internal void SetObstruction(int index, bool blocked)
@@ -883,7 +1108,51 @@ public partial class PlantSubFormation<T>
     internal float ContactCompliance(int index, Vector3 turn)
         => Vector3.Dot(turn, ComplianceVector(index,turn));
 
-    Vector3 ComplianceVector(int index, Vector3 torque)
+    /// <summary>
+    /// Everything a joint's elastic response to a torque depends on except the torque: the
+    /// tissue's stiffness, the section and the organ's axes.
+    /// </summary>
+    /// <remarks>
+    /// A contact asks every joint between the organ and the common ancestor for its response
+    /// three times, and a crown has a few hundred thousand contacts over paths tens of joints
+    /// long. The stiffness is an exponential and a fourth power of nothing but the joint's own
+    /// state, so it is described once per joint and sweep (<see cref="PrepareContactSweep"/>)
+    /// and applied per torque. There is one description and one application, used with and
+    /// without the cache, so the cached answer is the uncached one bit for bit.
+    /// </remarks>
+    readonly struct JointCompliance
+    {
+        /// <summary>A rod's axis; a blade's across axis.</summary>
+        public readonly Vector3 First;
+        /// <summary>A blade's second in-plane axis; unused for a rod.</summary>
+        public readonly Vector3 Second;
+        /// <summary>A blade's two second moments of area, about <see cref="First"/> and <see cref="Second"/>.</summary>
+        public readonly float FirstInertia, SecondInertia;
+        /// <summary>Length over stiffness: L/(E I) for a rod, L/E for a blade.</summary>
+        public readonly float Scale;
+        /// <summary>Three for a deformable organ, whose shape takes part of the load; otherwise one.</summary>
+        public readonly float Divisor;
+        public readonly bool Blade;
+
+        public JointCompliance(Vector3 axis, float scale, float divisor)
+        { First = axis; Second = default; FirstInertia = SecondInertia = 0f; Scale = scale; Divisor = divisor; Blade = false; }
+
+        public JointCompliance(Vector3 first, Vector3 second, float firstInertia, float secondInertia, float scale, float divisor)
+        { First = first; Second = second; FirstInertia = firstInertia; SecondInertia = secondInertia; Scale = scale; Divisor = divisor; Blade = true; }
+
+        public Vector3 Respond(Vector3 torque)
+        {
+            if (Blade)
+            {
+                var inverse = First * (Vector3.Dot(torque, First) / FirstInertia)
+                    + Second * (Vector3.Dot(torque, Second) / SecondInertia);
+                return inverse * Scale / Divisor;
+            }
+            return (torque - First * Vector3.Dot(torque, First)) * Scale / Divisor;
+        }
+    }
+
+    JointCompliance DescribeCompliance(int index)
     {
         ref var a = ref Src()[index];
         var e = a.Organ == OrganTypes.Petiole ? Plant.Parameters.PetioleElasticModulus
@@ -896,19 +1165,134 @@ public partial class PlantSubFormation<T>
                 * (1f - a.WoodRatio()) + Plant.Parameters.WoodElasticModulus * a.WoodRatio();
         if (IsFloralAxis(a.Organ))
             e = e * (1f - a.WoodRatio()) + MathF.Max(e, Plant.Parameters.WoodElasticModulus) * a.WoodRatio(); // never softer, see Gravity
-        var inertia = MathF.PI * MathF.Pow(a.Radius, 4) / 4f;
+        var divisor = Deformable(index) ? 3f : 1f;
         if (a.Organ is OrganTypes.Leaf or OrganTypes.FlowerPadel or OrganTypes.FruitWing)
         {
             e = Plant.Parameters.LeafElasticModulus > 0f ? Plant.Parameters.LeafElasticModulus : Plant.Parameters.GreenElasticModulus;
             var z = Vector3.Transform(Vector3.UnitZ, a.Orientation);
             var y = Vector3.Transform(Vector3.UnitY, a.Orientation);
             var keel = BladeKeelAt(index);
-            var inverse = z * (Vector3.Dot(torque,z) / MathF.Max(1e-25f,BladeInertia(a.Radius,keel)))
-                + y * (Vector3.Dot(torque,y) / MathF.Max(1e-25f,BladeInertiaMajor(a.Radius,keel)));
-            return inverse * (a.Length / MathF.Max(1f,e)) / (Deformable(index) ? 3f : 1f);
+            return new(z, y, MathF.Max(1e-25f,BladeInertia(a.Radius,keel)), MathF.Max(1e-25f,BladeInertiaMajor(a.Radius,keel)),
+                a.Length / MathF.Max(1f,e), divisor);
         }
+        var inertia = MathF.PI * MathF.Pow(a.Radius, 4) / 4f;
         var axis = Vector3.Transform(Vector3.UnitX,a.Orientation);
-        return (torque-axis*Vector3.Dot(torque,axis)) * (a.Length / MathF.Max(1e-20f,e*inertia)) / (Deformable(index) ? 3f : 1f);
+        return new(axis, a.Length / MathF.Max(1e-20f,e*inertia), divisor);
+    }
+
+    Vector3 ComplianceVector(int index, Vector3 torque)
+        => ContactSweepPrepared ? ContactJoints[index].Compliance.Respond(torque) : DescribeCompliance(index).Respond(torque);
+
+    /// <summary>How far a joint is already bent from its base frame, and whether that is its
+    /// limit: a joint at its limit only yields to a torque that unbends it.</summary>
+    readonly struct JointBend
+    {
+        public readonly Vector3 Bend;
+        public readonly bool Saturated;
+        public JointBend(Vector3 bend, bool saturated) { Bend = bend; Saturated = saturated; }
+        public bool Yields(Vector3 axis) => !(Saturated && Vector3.Dot(Bend, axis) > 0);
+    }
+
+    JointBend DescribeBend(int index)
+    {
+        ref var a = ref Src()[index];
+        var delta = Quaternion.Normalize(a.Orientation * Quaternion.Conjugate(a.baseOrientation));
+        if (delta.W < 0) delta = new(-delta.X, -delta.Y, -delta.Z, -delta.W);
+        var bend = new Vector3(delta.X, delta.Y, delta.Z);
+        return new(bend, 2f * MathF.Atan2(bend.Length(), delta.W) >= ContactBendLimit(index) - 1e-5f);
+    }
+
+    /// <summary>
+    /// One joint as a contact walks over it: where it sits, how stiff it is, how far it is bent,
+    /// and which joint comes next on the way to the root.
+    /// </summary>
+    /// <remarks>
+    /// A walk from an organ to the common ancestor reads every joint on the way, and a crown
+    /// runs half a million such walks a tick. Read from the organs themselves, a joint is spread
+    /// over the agent, the tree cache and the soil that owns the field origin; described once
+    /// per sweep it is two cache lines side by side.
+    /// </remarks>
+    readonly struct ContactJoint
+    {
+        public readonly JointCompliance Compliance;
+        public readonly JointBend Bend;
+        /// <summary>The organ's base in the world, and its offset from it, kept apart because
+        /// a lever subtracts them one after the other.</summary>
+        public readonly Vector3 Base, Offset;
+        public readonly int Parent;
+        /// <summary>Fixed in the soil: a walk ends before it.</summary>
+        public readonly bool Anchored;
+
+        public ContactJoint(JointCompliance compliance, JointBend bend, Vector3 basePoint, Vector3 offset, int parent, bool anchored)
+        { Compliance = compliance; Bend = bend; Base = basePoint; Offset = offset; Parent = parent; Anchored = anchored; }
+
+        /// <summary>Elastic angular compliance about a unit axis, zero when the joint is at its
+        /// limit against it.</summary>
+        public float Available(Vector3 axis) => Bend.Yields(axis) ? Vector3.Dot(axis, Compliance.Respond(axis)) : 0;
+    }
+
+    ContactJoint DescribeJoint(int index)
+    {
+        ref var a = ref Src()[index];
+        return new(DescribeCompliance(index), DescribeBend(index), GetBaseCenterWorld(index), a.BaseOffset, a.Parent, a.SoilAnchored);
+    }
+
+    /// <summary>
+    /// One organ as the evaluation of a candidate pair reads it: its shape, its stable id,
+    /// whether it takes part in contacts and whether it stands where the last tick left it.
+    /// </summary>
+    /// <remarks>
+    /// An organ is in ten candidate pairs on average, and each asked the agent, the tree cache,
+    /// the lamina cache and the previous geometry for the same answers.
+    /// </remarks>
+    internal readonly struct ContactOrgan
+    {
+        public readonly ContactShape Shape;
+        public readonly ulong Id;
+        public readonly bool Eligible, Unmoved;
+        public ContactOrgan(ContactShape shape, ulong id, bool eligible, bool unmoved)
+        { Shape = shape; Id = id; Eligible = eligible; Unmoved = unmoved; }
+    }
+
+    ContactOrgan DescribeOrgan(int index)
+    {
+        var shape = new ContactShape(GetContactPose(index), GetLaminaTemplate(index));
+        return new(shape, GetOrganId(index), IsCollisionEligible(index),
+            index < PreviousGeometry.Length && PreviousGeometry[index].Exists && PreviousGeometry[index].Pose == shape.Pose);
+    }
+
+    internal ContactOrgan ContactOrganAt(int index) => ContactSweepPrepared ? ContactOrgans[index] : DescribeOrgan(index);
+
+    ContactJoint[] ContactJoints = [];
+    ContactOrgan[] ContactOrgans = [];
+    /// <summary>The two arrays above describe every joint and organ as it is now. True from
+    /// <see cref="PrepareContactSweep"/> until the sweep that will turn the joints begins.</summary>
+    bool ContactSweepPrepared;
+
+    /// <summary>
+    /// Describes every joint and organ once for the contacts about to be evaluated and queued
+    /// on this plant. Only valid while nothing turns, grows, stiffens or re-anchors an organ: the
+    /// caller evaluates pairs, queues corrections and then ends the sweep, which drops the
+    /// descriptions before it moves anything.
+    /// </summary>
+    internal void PrepareContactSweep()
+    {
+        var count = AgentCount;
+        if (ContactJoints.Length < count)
+        {
+            var capacity = Math.Max(count, Math.Max(16, ContactJoints.Length * 2));
+            ContactJoints = new ContactJoint[capacity];
+            ContactOrgans = new ContactOrgan[capacity];
+        }
+        WarmLaminaCache(); // filled lazily, which only one thread at a time may do
+        void Describe(int from, int to)
+        {
+            for (int i = from; i < to; ++i) { ContactJoints[i] = DescribeJoint(i); ContactOrgans[i] = DescribeOrgan(i); }
+        }
+        if (count >= 4096 && Environment.ProcessorCount > 1)
+            Parallel.ForEach(System.Collections.Concurrent.Partitioner.Create(0, count, 2048), range => Describe(range.Item1, range.Item2));
+        else Describe(0, count);
+        ContactSweepPrepared = true;
     }
 
     float ContactBendLimit(int index) => GetOrgan(index) == OrganTypes.Petiole && Plant.Parameters.PetioleContactBendDegrees > 0
@@ -927,25 +1311,22 @@ public partial class PlantSubFormation<T>
         => ContactTurnAvailable(index, axis) ? ContactCompliance(index, axis) : 0;
 
     bool ContactTurnAvailable(int index, Vector3 axis)
-    {
-        ref var a = ref Src()[index];
-        var delta = Quaternion.Normalize(a.Orientation * Quaternion.Conjugate(a.baseOrientation));
-        if (delta.W < 0) delta = new(-delta.X, -delta.Y, -delta.Z, -delta.W);
-        var bend = new Vector3(delta.X, delta.Y, delta.Z);
-        if (2f * MathF.Atan2(bend.Length(), delta.W) >= ContactBendLimit(index) - 1e-5f
-            && Vector3.Dot(bend, axis) > 0) return false;
-        return true;
-    }
+        => ContactSweepPrepared ? ContactJoints[index].Bend.Yields(axis) : DescribeBend(index).Yields(axis);
 
     internal double ContactMobility(int index, Vector3 contact, Vector3 normal, int stop = -1)
     {
-        double total = 0; var src = Src();
-        for (var n = index; n >= 0 && n != stop && !src[n].SoilAnchored; n = src[n].Parent)
+        double total = 0;
+        var ready = ContactSweepPrepared; var joints = ContactJoints; var described = default(ContactJoint);
+        for (var n = index; n >= 0 && n != stop; )
         {
-            var cross = Vector3.Cross(contact - GetBaseCenterWorld(n) - src[n].BaseOffset, normal);
+            if (!ready) described = DescribeJoint(n);
+            ref readonly var joint = ref (ready ? ref joints[n] : ref described);
+            if (joint.Anchored) break;
+            var cross = Vector3.Cross(contact - joint.Base - joint.Offset, normal);
             var gain = cross.Length();
-            if (gain > 1e-8f) total += AvailableCompliance(n, cross / gain) * (double)gain * gain;
+            if (gain > 1e-8f) total += joint.Available(cross / gain) * (double)gain * gain;
             total += ShapeMobility(n, index, contact, normal);
+            n = joint.Parent;
         }
         return total;
     }
@@ -1052,16 +1433,21 @@ public partial class PlantSubFormation<T>
         if (total > 1e-20 && double.IsFinite(total))
         {
             var lambda = depth / total;
-            for (var n = index; n >= 0 && n != stop && !src[n].SoilAnchored; n = src[n].Parent)
+            var ready = ContactSweepPrepared; var joints = ContactJoints; var described = default(ContactJoint);
+            for (int n = index, next; n >= 0 && n != stop; n = next)
             {
-                var lever = contact - GetBaseCenterWorld(n) - src[n].BaseOffset;
+                if (!ready) described = DescribeJoint(n);
+                ref readonly var joint = ref (ready ? ref joints[n] : ref described);
+                if (joint.Anchored) break;
+                next = joint.Parent;
+                var lever = contact - joint.Base - joint.Offset;
                 var cross = Vector3.Cross(lever, normal);
                 var gain = cross.Length();
                 QueueShapeCorrection(n, index, contact, normal, (float)lambda);
                 if (gain <= 1e-8f) continue;
                 var axis = cross / gain;
-                if (AvailableCompliance(n,axis) <= 0) continue;
-                var response = ComplianceVector(n,cross) * (float)lambda;
+                if (joint.Available(axis) <= 0) continue;
+                var response = joint.Compliance.Respond(cross) * (float)lambda;
                 var angle = response.Length();
                 // A turn of θ about this joint moves the witness by at most θ·|lever|.
                 var cap = CollisionSettings.MaxCorrectionRadians;
@@ -1142,9 +1528,9 @@ public partial class PlantSubFormation<T>
     internal void UpdateSupportedLoads()
     {
         var src = Src();
-        for (int i = 0; i < Count; ++i)
+        foreach (var i in RhizomeOrgans)
         {
-            if (!src[i].IsRizome || src[i].SoilAnchored) continue;
+            if (src[i].SoilAnchored) continue;
             EnsureMechanicalLoads();
             var torque = Vector3.Cross(WeightedCentroids[i] - GetBaseCenter(i) * Weights[i], -Vector3.UnitY) + SupportMoments[i];
             var axis = Vector3.Transform(Vector3.UnitX, src[i].Orientation);

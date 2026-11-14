@@ -55,14 +55,18 @@ public sealed partial class CollisionWorld
     /// behaviour exactly as it was.</param>
     /// <param name="unresolved">Organs still inadmissible when the escalation gave up: only an
     /// already inadmissible previous configuration remained to fall back to.</param>
-    internal bool EnforceStaticAdmissibility(PlantFormation2 plant, StaticAdmission admission, bool shrinkNewborns, out int unresolved)
+    /// <param name="allAdmissible">The caller has just established, with
+    /// <see cref="AllStaticallyAdmissible"/> and nothing moved since, that every eligible organ
+    /// is admissible, so the walk that looks for one that is not is left out.</param>
+    internal bool EnforceStaticAdmissibility(PlantFormation2 plant, StaticAdmission admission, bool shrinkNewborns, out int unresolved,
+        bool allAdmissible = false)
     {
         var ag = plant.AG;
         var blocked = BlockedOrgans ??= [];
         blocked.Clear();
         var touched = false;
         unresolved = 0;
-        for (int i = 0; i < ag.Count; ++i)
+        for (int i = 0; !allAdmissible && i < ag.Count; ++i)
         {
             if (!Eligible(ag, i) || shrinkNewborns && ag.IsDying(i)) continue;
             if (!StaticAdmissible(plant, i, admission))
@@ -206,6 +210,52 @@ public sealed partial class CollisionWorld
     }
 
     bool StaticAdmissible(PlantFormation2 plant, int i) => StaticAdmissible(plant, i, Work[plant].Admission);
+
+    /// <summary>Organs from which a plant's admissibility is evaluated on all cores.</summary>
+    const int ParallelAdmissionMinimum = 4096;
+
+    /// <summary>
+    /// Evaluates the admissibility of every eligible organ on all cores, into the memo
+    /// <see cref="StaticAdmissible(PlantFormation2, int, StaticAdmission)"/> answers from, and
+    /// returns whether all of them are admissible. False without evaluating anything for a plant
+    /// too small to be worth it, or one whose blades fold.
+    /// </summary>
+    /// <remarks>
+    /// The mixed engine's solid pass asks about every organ twice, one after another: once to
+    /// find what the pushes left inadmissible and once to enforce it. A verdict is a function of
+    /// the organ's own shape, its previous shape and the static scene, and nothing moves between
+    /// this evaluation and the first asking, so the answers are the ones the first asking would
+    /// have computed; it finds them in the memo, as the second asking always did. On a tree in
+    /// the open nothing is inadmissible on almost every tick, and then neither walk has to run.
+    /// </remarks>
+    internal bool AllStaticallyAdmissible(PlantFormation2 plant, StaticAdmission work)
+        => plant.AG.Count >= ParallelAdmissionMinimum && !plant.AG.HasContactDeformation && EvaluateAdmissibility(plant, work);
+
+    bool EvaluateAdmissibility(PlantFormation2 plant, StaticAdmission work)
+    {
+        var ag = plant.AG; var count = ag.Count;
+        if (work.Evaluations.Length < count)
+            Array.Resize(ref work.Evaluations, Math.Max(count, work.Evaluations.Length * 3 / 2 + 8));
+        ag.EnsureClearanceCapacity(count);
+        ag.WarmLaminaCache(); // filled lazily, which only one thread at a time may do
+        var inadmissible = 0;
+        // The memo has one slot per organ; the counters are per worker and added up at the end.
+        Parallel.ForEach(System.Collections.Concurrent.Partitioner.Create(0, count, 2048),
+            () => new StaticAdmission { Evaluations = work.Evaluations },
+            (range, _, local) =>
+            {
+                for (int i = range.Item1; i < range.Item2; ++i)
+                    if (Eligible(ag, i) && !StaticAdmissible(plant, i, local)) Interlocked.Increment(ref inadmissible);
+                return local;
+            },
+            local =>
+            {
+                Interlocked.Add(ref work.Reused, local.Reused);
+                Interlocked.Add(ref work.Skips, local.Skips);
+                Interlocked.Add(ref work.Queries, local.Queries);
+            });
+        return inadmissible == 0;
+    }
 
     internal bool StaticAdmissible(PlantFormation2 plant, int i, StaticAdmission work)
     {

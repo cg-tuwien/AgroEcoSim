@@ -459,7 +459,9 @@ public partial struct AboveGroundAgent : IPlantAgent
 	//So far same as for undergrounds
 	public const float WaterTransportRatio = 1.8f;
 
-    public bool IsRizome { get; set; } = false;
+    /// <summary>Set at birth and never afterwards: <c>PlantSubFormation.RhizomeOrgans</c> lists
+    /// the rhizome organs once per census and relies on it.</summary>
+    public bool IsRizome { get; init; } = false;
 
 	/// <summary>Developmental state used only by rhizome segments and buds.</summary>
 	public struct RhizomeDevelopmentState

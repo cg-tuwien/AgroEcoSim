@@ -73,9 +73,20 @@ public sealed partial class SoftContactEngine
         public ulong[] StageMask = new ulong[1];
         /// <summary>Last tick's measured cost of the two per-plant jobs, for the scheduler.</summary>
         public long LastPrepareTicks, LastFinishTicks, LastRespondTicks, LastEvalTicks, LastChunkMaxTicks, LastChunkSumTicks, LastApplyTicks, LastHardTicks;
+        /// <summary>The serial stages of the own-pair visit, for the timing line.</summary>
+        public long LastBeginTicks, LastDescribeTicks, LastDiscoverTicks, LastFilterTicks, LastSortTicks;
         public int LastChunks, LastGcs;
         public long[] ChunkTicks = [], WorstPairTicks = [];
         public (ulong, ulong)[] SortKeys = [];
+        /// <summary>Solid pass: the organs a push round asks about, and every organ that has
+        /// touched a solid so far this tick.</summary>
+        public readonly List<int> RoundOrgans = [], Touched = [];
+        /// <summary>Solid pass: per organ, what it has to be pushed out of or may be resting on.</summary>
+        public byte[] SolidAnswers = [];
+        /// <summary>Scratch of the parallel own-pair search: one pair list per block of hierarchy
+        /// nodes, and the buckets of the sort by first organ.</summary>
+        public List<(int, int)>[] BlockPairs = [];
+        public int[] BucketStart = [], BucketFill = [], Seconds = [];
         public int[] WorstPairIndex = [];
         public readonly Comparison<(int, int)> PairOrder;
         public readonly Comparison<int> OrganOrder;
@@ -96,7 +107,7 @@ public sealed partial class SoftContactEngine
         /// <summary>Mixed engine: organs the admissibility pass left inside a solid this tick, because
         /// the only configuration to fall back to was already inside it.</summary>
         public int UnresolvedSolids;
-        public long HardAnchorTicks, HardClearTicks, HardObstacleTicks, HardSoilEligibleTicks, HardSoilTicks, HardSweepTicks, HardClipTicks, HardAdmitTicks, HardLoadTicks, HardRounds, ExactRounds;
+        public long HardAnchorTicks, HardAskTicks, HardObstacleTicks, HardSoilTicks, HardSweepTicks, HardClipTicks, HardAdmitTicks, HardLoadTicks, HardRounds, ExactRounds;
 
         public SoftWork(PlantFormation2 plant)
         {
@@ -115,7 +126,7 @@ public sealed partial class SoftContactEngine
             ClippedMetres = 0;
             MaxSolidPenetration = 0;
             Clips = Obstacle = Soil = Queries = Skips = SupportSkips = Slides = Enforced = 0;
-            HardAnchorTicks = HardClearTicks = HardObstacleTicks = HardSoilEligibleTicks = HardSoilTicks = HardSweepTicks = HardClipTicks = HardAdmitTicks = HardLoadTicks = HardRounds = ExactRounds = 0;
+            HardAnchorTicks = HardAskTicks = HardObstacleTicks = HardSoilTicks = HardSweepTicks = HardClipTicks = HardAdmitTicks = HardLoadTicks = HardRounds = ExactRounds = 0;
         }
     }
 
@@ -171,6 +182,7 @@ public sealed partial class SoftContactEngine
                 + $" neighboursMs={NeighbourTicks * scale:F2} prepareMs={PrepareTicks * scale:F2} respondMs={RespondTicksSum() * scale:F2} crossMs={CrossTicks * scale:F2} batches={Batches.Count} neighbours={World.Neighbours.Count}"
                 + $" finishCpu(apply/hard/all)Ms={FinishTicksSum().apply * scale:F1}/{FinishTicksSum().hard * scale:F1}/{FinishTicksSum().finish * scale:F1} staticQueries={StaticQueries - LastStaticQueries} skips={ClearanceSkips - LastClearanceSkips} supportSkips={SupportSkips - LastSupportSkips} {hardStages} obstacleContacts={ObstacleContacts - LastObstacleContacts} soilContacts={SoilContacts - LastSoilContacts}"
                 + (Plants.Count == 1 ? $" evalMs={Work[Plants[0]].LastEvalTicks * scale:F2} chunks={Work[Plants[0]].LastChunks} chunkSumMs={Work[Plants[0]].LastChunkSumTicks * scale:F2} chunkMaxMs={Work[Plants[0]].LastChunkMaxTicks * scale:F3} gcs={Work[Plants[0]].LastGcs}" : "")
+                + (Plants.Count == 1 ? $" ownMs: begin={Work[Plants[0]].LastBeginTicks * scale:F1} describe={Work[Plants[0]].LastDescribeTicks * scale:F1} discover={Work[Plants[0]].LastDiscoverTicks * scale:F1} filter={Work[Plants[0]].LastFilterTicks * scale:F1} sort={Work[Plants[0]].LastSortTicks * scale:F1}" : "")
                 + (Plants.Count == 1 ? $" | stages: boundsOut={Work[Plants[0]].LastStats.BoundsOut} ({Work[Plants[0]].LastStats.BoundsTicks * scale:F1}ms) convexOut={Work[Plants[0]].LastStats.ConvexOut} ({Work[Plants[0]].LastStats.ConvexTicks * scale:F1}ms) exact={Work[Plants[0]].LastStats.Exact} ({Work[Plants[0]].LastStats.ExactTicks * scale:F1}ms) sampled={Work[Plants[0]].LastStats.Sampled} ({Work[Plants[0]].LastStats.SampledTicks * scale:F1}ms) touchingMs={Work[Plants[0]].LastStats.TouchingTicks * scale:F1} separatedMs={Work[Plants[0]].LastStats.SeparatedTicks * scale:F1}" : "")
                 + $" plants={Plants.Count} organs={TotalOrgans} pairs={LastCandidates} contacts={LastContacts} staticPairs={LastStaticPairs} staticTouching={LastStaticTouching} newSides={LastNewSides} crossings={LastCrossings}"
                 + $" tunnels={LastSuspectedTunnels} maxPenMm={MaxFoliagePenetrationMetres * 1000:F3} meanPenMm={MeanFoliagePenetrationMetres * 1000:F3} deep={LastDeepPenetrations}"
@@ -226,9 +238,14 @@ public sealed partial class SoftContactEngine
     {
         var started = Stopwatch.GetTimestamp();
         plant.AG.BeginContactSweep();
-        plant.AG.WarmLaminaCache();
+        var begun = Stopwatch.GetTimestamp();
+        // Also completes the lamina cache, which the cross-plant jobs read concurrently later.
+        plant.AG.PrepareContactSweep();
+        var described = Stopwatch.GetTimestamp();
         VisitOwn(plant);
-        Work[plant].LastPrepareTicks = Stopwatch.GetTimestamp() - started;
+        var work = Work[plant];
+        work.LastBeginTicks = begun - started; work.LastDescribeTicks = described - begun;
+        work.LastPrepareTicks = Stopwatch.GetTimestamp() - started;
     }
 
     void VisitCrossTimed(CrossJob job)
@@ -294,10 +311,10 @@ public sealed partial class SoftContactEngine
     long RespondTicksSum() { long sum = 0; foreach (var plant in Plants) sum += Work[plant].LastRespondTicks; return sum; }
     string HardStages()
     {
-        long a = 0, c = 0, o = 0, se = 0, s = 0, sw = 0, cl = 0, ad = 0, l = 0, r = 0, e = 0, x = 0;
-        foreach (var plant in Plants) { var w = Work[plant]; a += w.HardAnchorTicks; c += w.HardClearTicks; o += w.HardObstacleTicks; se += w.HardSoilEligibleTicks; s += w.HardSoilTicks; sw += w.HardSweepTicks; cl += w.HardClipTicks; ad += w.HardAdmitTicks; l += w.HardLoadTicks; r += w.HardRounds; e += w.Enforced; x += w.ExactRounds; }
+        long a = 0, c = 0, o = 0, s = 0, sw = 0, cl = 0, ad = 0, l = 0, r = 0, e = 0, x = 0;
+        foreach (var plant in Plants) { var w = Work[plant]; a += w.HardAnchorTicks; c += w.HardAskTicks; o += w.HardObstacleTicks; s += w.HardSoilTicks; sw += w.HardSweepTicks; cl += w.HardClipTicks; ad += w.HardAdmitTicks; l += w.HardLoadTicks; r += w.HardRounds; e += w.Enforced; x += w.ExactRounds; }
         var k = 1000.0 / Stopwatch.Frequency;
-        return $"hardCpuMs: anchors={a * k:F0} clear={c * k:F0} obstacle={o * k:F0} soilEligible={se * k:F0} soil={s * k:F0} sweep={sw * k:F0} clip={cl * k:F0} admit={ad * k:F0} loads={l * k:F0} rounds={r} exactRounds={x} enforced={e}";
+        return $"hardCpuMs: anchors={a * k:F0} ask={c * k:F0} obstacle={o * k:F0} soil={s * k:F0} sweep={sw * k:F0} clip={cl * k:F0} admit={ad * k:F0} loads={l * k:F0} rounds={r} exactRounds={x} enforced={e}";
     }
     (long apply, long hard, long finish) FinishTicksSum() { long a = 0, h = 0, f = 0; foreach (var plant in Plants) { var w = Work[plant]; a += w.LastApplyTicks; h += w.LastHardTicks; f += w.LastFinishTicks; } return (a, h, f); }
 

@@ -119,6 +119,116 @@ Not optimisations, but needed on the way: `AGRO_UnwatchedGraceMinutes` (0 = neve
 several hours survives a closed laptop - the server stopped any run nobody had watched for five
 minutes.
 
+## The contact pass on all cores (14 November 2026)
+
+After the list above a mature tree still spent 1.4 of its 2.15 s per tick in the contact pass, on
+one core for most of it: only the geometry of the candidate pairs ran in parallel. The second round
+went through everything around that evaluation. Same checkpoints, same idle machine, 30 ticks:
+
+| checkpoint | organs | baseline | first round | now | against baseline |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Celtis, year 14, mid-August | 270,633 | 2,742 ms | 2,150 ms | 1,075 ms | -61 % |
+| Celtis, year 13, 1 February | 75,392 | 392 ms | 290 ms | 203 ms | -48 % |
+| Acer, year 12, mid-August | 55,633 | 743 ms | 659 ms | 378 ms | -49 % |
+| Amelanchier, year 12, mid-August | 21,826 | 352 ms | 308 ms | 175 ms | -50 % |
+
+Where the tick of the 269k-organ Celtis goes now, in milliseconds, with the figure before this
+round in brackets: foliage contacts 304 (810), solid pass and the application of the
+foliage turns 103 (620), census 145 (312), gravity 165, organ tick
+109, light 211. The tree now keeps twelve cores busy instead of six.
+
+Every item is a way of getting the same numbers. Three patterns carry all of them:
+
+- **A question about one organ is asked on all cores; what it leads to is done in organ order.**
+  Whether an organ needs a push, is admissible, rests on something, what its bounds are: none of
+  these reads anything another organ's answer writes. The pushes, the support reactions and the
+  hierarchy updates that follow add into joints and nodes the organs share, so they stay serial
+  and in the order they always had.
+- **A walk that passes over almost every organ is replaced by a scan for the organs it does not
+  pass over.** The scan is read-only and parallel; the organs it finds are then visited in the
+  order the walk would have reached them.
+- **A result that depends on the order of visits is put back into that order.** The per-tissue
+  turn sum (`ContactTurnByOrgan`) is a float sum, so even this diagnostic is added up in the walk's
+  breadth-first order after a parallel sweep, from values noted per joint.
+
+9. **The plant's own candidate pairs are found and ordered on all cores**
+   (`SoftContactEngine.CollectOwnPairsParallel`, `Bvh.CollectOverlapsUnder`). The serial search
+   walked the whole hierarchy, looked up two stable ids per pair and sorted 1.4 million pairs by
+   them: 245 ms. The result is a set in a canonical order, so any way of producing it is the same
+   result. Each pair belongs to exactly one node of the hierarchy, so blocks of nodes are searched
+   independently; and organs are born with increasing ids and a census keeps them in order, so id
+   order is index order and the sort becomes one bucket per first organ. That the ids ascend
+   strictly with the index is checked on every call; when they do not, the serial search runs as
+   before. 245 to 20 ms.
+10. **Every joint and organ is described once per sweep** (`PlantSubFormation.PrepareContactSweep`,
+    `ContactJoint`, `ContactOrgan`). A contact asks every joint between the organ and the common
+    ancestor for its stiffness, its bend and its position, three times, and an organ is in ten
+    candidate pairs that each ask for its shape, its id and whether it moved. Read from the organs
+    these are spread over the 400-byte agent, the tree cache, the lamina cache, the previous
+    geometry and the soil that owns the field origin; described once they are two cache lines.
+    There is one description and one use of it, with and without the cache
+    (`DescribeJoint`, `DescribeOrgan`), so the cached answer is the uncached one. The descriptions
+    are dropped by the sweep that turns the joints, before it turns anything.
+11. **A pair's mobilities are measured with its geometry** (`MeasureMobility`). The split of a
+    correction between two bodies walks both paths to the common ancestor; it reads the joints
+    and writes nothing, and a response only queues turns that nothing reads before the sweep
+    ends. For a plant whose organs do not change shape under contact the walk therefore gives the
+    same value in the parallel evaluation as in the serial replay. Plants with contact deformation
+    keep the serial order, because there a queued correction does change the next pair's answer.
+    The replay went from 355 to 80 ms with items 10 and 11.
+12. **The common ancestor is looked up only where it is used**: for a pair that touches, and for
+    two rods, which can still be found touching by sampling along them. Most candidate pairs have a
+    blade and do not touch.
+13. **A sweep that turns a few joints visits a few joints** (`TurnQueuedJointsOnly`). The solid
+    pass ends a sweep four times a tick, and each walked every organ to turn a few dozen: joints
+    bent past their limit are clamped again every round. A parallel scan finds the joints that
+    have a turn queued or stand outside their limit; they, and what they carry, are visited in
+    breadth-first rank through a priority queue, which is the order of the walk. 140 to 8 ms.
+14. **The sweep that turns everything runs on several cores** (`TurnJointsOnAllCores`,
+    `TreeCacheData.SplitForWalk`). A contact between two limbs turns the joints down to their
+    fork, however little, and everything above a turned joint is carried, so the foliage sweep
+    takes the full step on nearly every organ. A joint needs its parent's transported turn and
+    nothing else: the nodes that carry most of the tree are turned one after another, the subtrees
+    left over side by side. The moved subtrees are then sorted by breadth-first rank and the
+    turn sum is added in breadth-first order (`TreeCacheData.BreadthFirst`, built once per
+    topology). 97 to 32 ms.
+15. **A large moved subtree is rebased and refitted on all cores** (`TreeCacheData.UpdateBases`,
+    `PlantSubFormation.RefitSubtree`). A node's base is its parent's base plus the parent's reach,
+    in any order that takes parents first; a bound is a function of its own organ; and the
+    hierarchy does not depend on the order in which its leaves are written. 131 to 30 ms.
+16. **A later push round asks about the organs whose answer can have changed**
+    (`SoftContactEngine.ResolveHard`): the ones the round before moved and the ones that have
+    touched a solid this tick, whose contact is carried from round to round. For any other organ
+    the round would repeat the question it asked last time, of the same pose, and get the same
+    answer. The clearance cache's skip and query counters now count what was asked, which on a
+    scene with walls is less than before; they are diagnostics.
+17. **The solid pass's questions are asked on all cores** (`SolidQuestions`, `SupportQuestions`),
+    and the admissibility of every organ is evaluated once, in parallel, into the memo both later
+    walks read (`CollisionWorld.AllStaticallyAdmissible`). When nothing is inadmissible - a tree in
+    the open, on almost every tick - neither walk runs. The solid pass went from 400 to 45 ms; what
+    is left is mostly the load sum the rhizome base's support test needs.
+18. **The rhizome organs are listed once per census** (`PlantSubFormation.RhizomeOrgans`) instead
+    of being looked for among all organs five times a tick. An organ is a rhizome from birth or
+    never: `AboveGroundAgent.IsRizome` is now `init`-only, so the compiler holds that.
+19. **The collision hierarchy is built on several cores, node for node the same**
+    (`Bvh.BuildOnAllCores`). The serial recursion numbers a node, then its whole left subtree,
+    then its right one, and a subtree over k leaves has 2k - 1 nodes, so where every node goes is
+    known as soon as the split above it is. The two halves of a split share no leaves, nodes or
+    scratch. With the leaf bounds computed in parallel as well, the census's hierarchy build went
+    from 168 to 37 ms.
+
+Two things that went wrong on the way and are worth knowing:
+
+- **A lambda in a recursive method allocates on every call, not only where it runs.** C# creates
+  the closure object where the captured variables are declared, and captured parameters are
+  declared at the method's entry. The first parallel hierarchy build allocated 26 MB a tick - one
+  closure for each of 538,000 nodes, of which 130 forked. Keep the fork in its own method
+  (`BuildHalvesSideBySide`, `PlaceBelowOnAllCores`, `RefitLargeSubtree`); the per-contact rebase
+  and refit of a small subtree must not allocate at all.
+- **A sweep's stage clock can hide the stage.** The evaluation's stage clocks start the "sampled"
+  stage after the candidate gathering that decided to sample, so the gathering - the larger half
+  of a sampled blade pair - appeared nowhere. Time the pair, then the stages.
+
 ## How "exact" is checked
 
 The tree implementation is not committed, so "the previous code" exists as a frozen copy:
@@ -130,13 +240,21 @@ bloom) and early November (leaf fall). Three checks, all against that baseline:
 - `ab.sh 24 200 -- celtis/y11-summer ...` restores a checkpoint in both builds, runs 24 and 200
   ticks and compares the state and the exported frame. Twenty-one checkpoints of the three species -
   winter, flush and bloom, summer and leaf fall, 5,543 to 225,026 organs - all identical with every
-  change above in.
+  change of the first round in; twenty-six, from 113 organs up, with the second round in as well.
 - `scenarios.sh` runs seventeen scenarios from seed in both builds and compares the soil's water and
   the exported frame after **every** tick: the soil alone at 1, 4 and 24 h ticks on serial and
   parallel fields, Carex over 100 and 450 days, Geranium, Campanula, a stand of four species beside
   a wall under each of the three engines in the parallel and in the sequential tick, and three young
   trees. All identical.
 - `Agro --checkpoint-selftest`: 100 resume cases identical.
+- `stress.sh` builds the working tree with every "large plant" threshold lowered to a few organs
+  (the block of the pair search, the sweep's scan block, the minimum sizes of the parallel walk,
+  bounds, questions, admissibility and hierarchy build) and restores the sources. The parallel
+  paths written for a quarter of a million organs then run on every Carex, Geranium and Campanula
+  of the scenario suite, beside walls and under all three engines - the certified one ends contact
+  sweeps too - and through every resume of the self-test. The trees in an open field never touch a
+  solid, so this is the only check of those paths with real pushes, supports and inadmissible
+  organs. Same expectations: identical on every tick.
 
 **A raw checkpoint is not reproducible, and that is not a difference.** Agents are written as raw
 memory, and the padding of a newborn agent (10 of a shoot agent's 400 bytes, 6 of a root agent's
@@ -151,23 +269,29 @@ first set.
 
 ## What is left, by measured share
 
-At 271k organs (Celtis, year 14, August) after the changes: foliage contacts 810 ms, solid pass 536,
-census and organ tick about 425, gravity 168, leaf gather 133, of 2,150. The tree keeps under six
-cores busy.
+At 269k organs (Celtis, year 14, August), of 1,075 ms: contacts 408 (evaluation
+192, replay 80, the rest 136), light 211, gravity 165, census
+145, organ tick 109.
 
-- **Foliage pass.** Its evaluation is already parallel; pair discovery, the sort and the response
-  replay are serial (the replay alone is 56-88 ms of an Amelanchier's 136-186). Planned: parallel
-  discovery and sort, an O(1) common-ancestor query, a replay partitioned by branch so that each
-  joint still receives its turns in pair order.
-- **Solid pass.** What remains is the sweep itself, run up to four times because joints bent past
-  their limit are clamped again each round, and the foliage turns' application. Planned: restrict the
-  later rounds to subtrees that hold a turn, and parallel per-organ scans with a serial queue.
-- **Census.** Every tick with a birth rebuilds the organ tree, its index and the collision hierarchy
-  from scratch; in season that is every tick. Planned: append on births, remap on deaths, and a
-  parallel hierarchy build with the same node layout.
+- **Pair evaluation.** Parallel, and bound by the sixteen physical cores: 6.3 s of thread time a
+  tick. By kind of pair: blade on blade, touching, 42 % (18,500 pairs at 144 us); rod and blade,
+  apart, 26 %; the rest under 10 % each. Half of the touching blade pairs' time is the gathering of
+  candidate triangle pairs that ends in the decision to sample instead - exact as it stands, since
+  the decision is the count. Getting it cheaper means a count that does not enumerate; nothing
+  simpler than that was found. Removing the oriented-box prefilter for rods is *not* exact: its
+  projections carry a micrometre of rounding at ten metres, more than the margin it tests against,
+  so it can call a pair apart that the distance kernel would find just inside the band.
+- **Replay.** 80 ms, serial: 190,000 contacts, two walks each to the common ancestor. Each joint
+  has to receive its turns in pair order. A replay partitioned into connected blocks of the tree,
+  each block applying the path segments that cross it in pair order, keeps that; it needs a block
+  decomposition per topology and the segments emitted by the mobility walk.
+- **Gravity** (165 ms, serial): the same fork over subtrees as the contact sweep, plus the
+  load sum in a precomputed order (it is also what the solid pass's last 22 ms wait for).
+- **Census** apart from the hierarchy (113 ms): every tick with a birth rebuilds the organ
+  tree and its index from scratch. Append on births, remap on deaths.
+- **Organ tick** (109 ms): one random stream per plant drawn in organ order; not parallel.
 - **Acer's light scene** (a fifth of its tick): fill the plant's primitives in parallel at offsets
   from a prefix sum.
-- **Gravity**: fork over branch subtrees below the trunk; each organ's arithmetic is unchanged.
 
 Not exact, designed and set aside: fewer light rays or sun positions, a sky radiance table, a refit
 of the ray hierarchy (a different tree shape can change which of two equidistant hits wins), growth

@@ -1010,6 +1010,34 @@ Honest list of what still does not match:
 - **The default field's soil has no drainage, runoff or evaporation**: it is full by the end of the
   first year and its surface cells then accumulate rain without bound. A tree on it never meets a
   water limit after its first summer. Keep that in mind when tuning a water response.
+- **Inside one plant the contact pass runs on all cores, and every parallel piece follows one of
+  three rules** (section "The contact pass on all cores" of the record). A question about one organ
+  - its bounds, whether it needs a push, is admissible, rests on something - is asked in parallel
+  and what it leads to is done serially in organ order, because pushes and reactions add into
+  joints the organs share. A walk that passes over nearly every organ is replaced by a parallel
+  scan for the organs it does not pass over, visited afterwards in the walk's own order
+  (`TurnQueuedJointsOnly`, by breadth-first rank). And whatever depends on the order of visits is
+  put back into that order, down to the float sum of the `ContactTurnByOrgan` diagnostic. A new
+  per-organ step in the solid pass belongs in `SolidQuestions`/`SupportQuestions` if it only reads
+  its own organ and in the serial loop after them if it writes anything shared.
+- **`PrepareContactSweep` describes every joint and organ once** (`ContactJoint`, `ContactOrgan`)
+  and the descriptions are valid only until the sweep turns the joints. Anything new that moves,
+  grows, stiffens or re-anchors an organ between the preparation and `EndContactSweep` must drop
+  them (`ContactSweepPrepared = false`), or the walks read stale stiffness and positions.
+- **`IsRizome` is set at birth and nowhere else** (`init`-only on the shoot agent):
+  `PlantSubFormation.RhizomeOrgans` is rebuilt with the tree cache and replaces five scans a tick.
+  The breadth-first order (`TreeCacheData.BreadthFirst`) is likewise per topology.
+- **The parallel paths only switch on above a few thousand organs, so the herbaceous scenarios
+  never reach them.** `~/greenfdt-fixtures/tree-accel/stress.sh` builds the working tree with every
+  such threshold lowered to a few organs and restores the sources; run the scenario suite, the
+  checkpoint self-test and a few small-tree A/Bs on that build after touching any of them. It is
+  the only check of those paths with walls, real pushes and inadmissible organs, and under the
+  certified engine. A new threshold needs a line in that script.
+- **A lambda in a hot method allocates on every call, not only where it runs**: C# creates the
+  closure where the captured variables are declared, and a captured parameter is declared at the
+  method's entry. The first parallel hierarchy build allocated 26 MB a tick that way. Put the
+  parallel branch in its own method; the per-contact rebase and refit of a small subtree must not
+  allocate at all.
 
 ## Troubleshooting
 

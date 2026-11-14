@@ -10,6 +10,14 @@ internal class TreeCacheData
 	ushort[] DepthNodes;
 	Vector3[] PointNodes;
 	int[] Preorder = new int[2], SubtreeEnd = new int[2], CrownAncestor = new int[2];
+	/// <summary>The nodes in breadth-first order and each node's place in it; filled on demand
+	/// (<see cref="BreadthFirst"/>), once per topology.</summary>
+	int[] BreadthOrder = new int[2], BreadthRank = new int[2];
+	bool BreadthKnown;
+	readonly List<int> HeavyNodes = [], LightRoots = [];
+	[ThreadStatic] static Stack<int>? WalkStack;
+	/// <summary>Nodes from which a walk over a subtree is spread over the cores.</summary>
+	internal const int ParallelWalkMinimum = 16384;
 	readonly Stack<(int index, ushort depth, int crown, bool exit)> TopologyStack = new();
 	readonly Stack<int> TraversalStack = new();
 	readonly HashSet<int> Targets = [], StartNodes = [];
@@ -43,7 +51,10 @@ internal class TreeCacheData
 			Array.Resize(ref Preorder, capacity);
 			Array.Resize(ref SubtreeEnd, capacity);
 			Array.Resize(ref CrownAncestor, capacity);
+			Array.Resize(ref BreadthOrder, capacity);
+			Array.Resize(ref BreadthRank, capacity);
 		}
+		BreadthKnown = false;
 		Count = newSize;
 		for(int i = 0; i < newSize; ++i)
 			ChildrenNodes[i].Clear();
@@ -93,6 +104,55 @@ internal class TreeCacheData
 		for(int i = 0; i < Count; ++i)
 			if (ChildrenNodes[i].Count == 0)
 				Leaves.Add(i);
+	}
+
+	/// <summary>
+	/// The nodes in breadth-first order from the roots: the order in which a walk that keeps its
+	/// frontier in a queue visits them, every parent before its children.
+	/// </summary>
+	internal ReadOnlySpan<int> BreadthFirst()
+	{
+		if (!BreadthKnown)
+		{
+			var order = BreadthOrder; var filled = 0;
+			foreach (var root in Roots) order[filled++] = root;
+			for (int k = 0; k < filled; ++k)
+				foreach (var child in ChildrenNodes[order[k]]) order[filled++] = child;
+			for (int k = 0; k < filled; ++k) BreadthRank[order[k]] = k;
+			BreadthKnown = true;
+		}
+		return BreadthOrder.AsSpan(0, Count);
+	}
+
+	/// <summary>Each node's place in <see cref="BreadthFirst"/>.</summary>
+	internal int[] BreadthRanks()
+	{
+		BreadthFirst();
+		return BreadthRank;
+	}
+
+	/// <summary>Nodes in the subtree of <paramref name="node"/>, itself included.</summary>
+	internal int SubtreeSize(int node) => SubtreeEnd[node] - Preorder[node];
+
+	/// <summary>
+	/// Splits the subtrees under <paramref name="roots"/> for a walk that visits parents before
+	/// children on several cores. The result holds, parents first, every node whose subtree is
+	/// larger than the grain - to be visited one after another - and <paramref name="light"/>
+	/// receives the roots of the subtrees left over, which no longer depend on one another.
+	/// </summary>
+	internal List<int> SplitForWalk(ReadOnlySpan<int> roots, List<int> light)
+	{
+		var heavy = HeavyNodes;
+		heavy.Clear(); light.Clear();
+		var total = 0;
+		foreach (var root in roots) total += SubtreeSize(root);
+		// Small enough that the cores stay busy to the end, large enough to be worth a task.
+		var grain = Math.Clamp(total / (8 * Environment.ProcessorCount), 256, 4096);
+		foreach (var root in roots) (SubtreeSize(root) > grain ? heavy : light).Add(root);
+		for (int k = 0; k < heavy.Count; ++k)
+			foreach (var child in ChildrenNodes[heavy[k]])
+				(SubtreeSize(child) > grain ? heavy : light).Add(child);
+		return heavy;
 	}
 
 	// The strict ancestor relation excludes a node from its own descendants.
@@ -210,32 +270,55 @@ internal class TreeCacheData
 
 	/// <summary>Rebases a single subtree. The collision solver calls this per contact, so it must
 	/// not allocate and must not run the O(Count) height pass.</summary>
+	/// <remarks>
+	/// A node's base is its parent's base plus the parent's reach, so nodes can be placed in any
+	/// order that takes parents first. A large subtree - a contact sweep that turned a trunk
+	/// moves the whole tree - is placed on several cores: the nodes that carry most of it one
+	/// after another, then the subtrees left over side by side.
+	/// </remarks>
 	internal void UpdateBases<T>(PlantSubFormation<T> formation, int index) where T : struct, IPlantAgent
 	{
 		if (index < 0 || index >= Count)
 			return;
 
-		var stack = TraversalStack;
-		stack.Clear();
 		var parent = formation.GetParent(index);
 		PointNodes[index] = parent >= 0
 			? PointNodes[parent] + formation.GetAttachmentOffset(parent)
 			: formation.Plant.Position;
 
-		stack.Push(index);
+		if (SubtreeSize(index) < ParallelWalkMinimum) PlaceBelow(formation, index, TraversalStack);
+		else PlaceBelowOnAllCores(formation, index);
+	}
+
+	/// <summary>Kept apart from the per-contact rebase, which must not allocate.</summary>
+	void PlaceBelowOnAllCores<T>(PlantSubFormation<T> formation, int index) where T : struct, IPlantAgent
+	{
+		var light = LightRoots;
+		foreach (var node in SplitForWalk([index], light)) PlaceChildren(formation, node);
+		Parallel.For(0, light.Count, k => PlaceBelow(formation, light[k], WalkStack ??= new()));
+	}
+
+	void PlaceChildren<T>(PlantSubFormation<T> formation, int node) where T : struct, IPlantAgent
+	{
+		var children = GetChildren(node);
+		if (children.Count == 0)
+			return;
+		var point = PointNodes[node] + formation.GetAttachmentOffset(node);
+		foreach (var child in children)
+			PointNodes[child] = point;
+	}
+
+	/// <summary>Places every node below <paramref name="root"/>, whose own base is already set.</summary>
+	void PlaceBelow<T>(PlantSubFormation<T> formation, int root, Stack<int> stack) where T : struct, IPlantAgent
+	{
+		stack.Clear();
+		stack.Push(root);
 		while (stack.Count > 0)
 		{
 			var node = stack.Pop();
-			var children = GetChildren(node);
-			if (children.Count == 0)
-				continue;
-
-			var point = PointNodes[node] + formation.GetAttachmentOffset(node);
-			foreach (var child in children)
-			{
-				PointNodes[child] = point;
+			PlaceChildren(formation, node);
+			foreach (var child in GetChildren(node))
 				stack.Push(child);
-			}
 		}
 	}
 
