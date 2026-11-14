@@ -233,6 +233,19 @@ namespace Agro
         public int PetalCount { get; init; } = 5;
 
         /// <summary>
+        /// Concentric rings across the receptacle. One preserves the ordinary corolla;
+        /// more than one represents an all-ligulate composite head, with PetalCount
+        /// counting the displayed ligulate florets across all rings, not per ring.
+        /// </summary>
+        public int PetalRingCount { get; set; } = 1;
+
+        /// <summary>Innermost ligule length relative to the outer ring; intermediate rings interpolate.</summary>
+        public float InnerPetalLengthRatio { get; set; } = 1f;
+
+        /// <summary>Innermost ligule angle from the head axis. Used only with multiple rings.</summary>
+        public float InnerPetalPitchDegrees { get; set; } = 35f;
+
+        /// <summary>
         /// Time for a petal or pedicel to reach its target size.
         /// </summary>
         /// <value>Hours; must be greater than zero.</value>
@@ -563,6 +576,11 @@ namespace Agro
             RequirePositive(PetalRadius, nameof(PetalRadius));
             if (PetalCount < 1)
                 throw new ArgumentOutOfRangeException(nameof(PetalCount), PetalCount, "At least one petal or floral scale is required.");
+            if (PetalRingCount < 1 || PetalRingCount > PetalCount)
+                throw new ArgumentOutOfRangeException(nameof(PetalRingCount), PetalRingCount, "Each petal ring must contain at least one floret.");
+            RequirePositive(InnerPetalLengthRatio, nameof(InnerPetalLengthRatio));
+            RequireProbability(InnerPetalLengthRatio, nameof(InnerPetalLengthRatio));
+            RequireAngleDegrees(InnerPetalPitchDegrees, 180f, nameof(InnerPetalPitchDegrees));
             RequirePositive(PetalAndPedicelGrowthDurationHours, nameof(PetalAndPedicelGrowthDurationHours));
             RequireVariance(PetalAndPedicelGrowthDurationVarianceHours, PetalAndPedicelGrowthDurationHours, nameof(PetalAndPedicelGrowthDurationVarianceHours));
             RequirePositive(BudLength, nameof(BudLength));
@@ -612,6 +630,7 @@ namespace Agro
         Pome,
 
         /// <summary>A stone fruit with a lignified inner pericarp.</summary>
-        Drupe
+        Drupe,
+        Samara
     }
 }

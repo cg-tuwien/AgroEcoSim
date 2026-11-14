@@ -10,17 +10,16 @@ namespace Agro.Vegetation;
 /// </summary>
 /// <remarks>
 /// <para>
-/// The light tracer, the photosynthesis and the renderer exports all treat a lamina as the
-/// rectangle <c>Length x 2 Radius</c>; the outline a species is drawn with covers 0.61 (Fragaria)
-/// to 0.97 (Heuchera) of it. A survey that reports leaf area to someone who will build a leaf area
-/// density from it must report the outline, not the proxy - and say so, which is why the factors
-/// travel in the document's meta.
+/// An organ's nominal area is the rectangle <c>Length x 2 Radius</c>; its flat outline covers
+/// 0.61 (Fragaria) to 0.97 (Heuchera) of it. The tray survey reports this outline and carries the
+/// factors in the document's meta. Direct ray-traced leaf area indices use the curved mesh
+/// surface instead, so these factors do not convert those indices to the survey's flat area.
 /// </para>
 /// <para>
 /// One factor per blade slice, because a segmented blade (Carex) is a chain of organs each carrying
 /// its own part of the outline. Computed once per species from the same immutable templates the
-/// contact geometry uses, at a unit pose with the relief ignored: relief is a camber a few per cent
-/// of the width and the one-sided area a canopy model wants is the flat one.
+/// contact geometry uses, at a unit pose with the relief ignored, because the survey reports
+/// the flat blade outline rather than the curved mesh surface.
 /// </para>
 /// </remarks>
 public static class LaminaArea

@@ -21,11 +21,11 @@ internal static class ConstructionBudget
 
     /// <summary>Limits an expansion to the available reserve and returns its debit.</summary>
     internal static float Fund(Vector2 before, ref Vector2 proposed, bool blade, float available,
-        SpeciesSettings species, float woodRatio)
+        SpeciesSettings species, float woodRatio, float volumeFactor = 1f)
     {
         if (species.ConstructionEnergyPerDryGram == 0f) return 0f;
         var initial = Volume(before, blade);
-        var coefficient = (double)Density(species, woodRatio) * species.ConstructionEnergyPerDryGram;
+        var coefficient = (double)Density(species, woodRatio) * species.ConstructionEnergyPerDryGram * volumeFactor;
         var required = Math.Max(0d, Volume(proposed, blade) - initial) * coefficient;
         if (required == 0d) return 0f;
         available = MathF.Max(0f, available);

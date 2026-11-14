@@ -15,9 +15,11 @@ namespace Agro;
 /// directionally correct first bounce, scaled by the shading factor that the obstacle meter
 /// measured for that object in the previous step (1 where nothing was measured). The ground
 /// reflected term inside that formula already carries a second bounce.</item>
-/// <item>Vegetation reflects the mean irradiance its own plant received in the previous step.
-/// Indirect light does not need per-organ resolution, and a per-plant scalar sidesteps the question
-/// of whether organ indices survived the births and deaths of the last step.</item>
+/// <item>Existing vegetation and non-lamina woody organs retain the per-plant mean irradiance
+/// approximation. Woody laminae instead carry their own measured light by stable organ identity,
+/// avoiding redistribution between bright and dark parts of a large crown. Their summed two-face
+/// incident energy is divided between two emitted hemispheres. This is a lumped shortwave model,
+/// not separate spectral reflection and transmission on the two leaf surfaces.</item>
 /// </list>
 /// Because the estimate for each step is built from the previous one, the effective path length
 /// grows as the simulation runs, in the spirit of progressive radiosity.
@@ -28,13 +30,21 @@ public readonly struct SurfaceRadianceModel
 	readonly float[] StaticShading;
 	readonly float[] PlantRadiosity;
 	readonly int FirstPlantGroup;
+	readonly float[]? WoodyLaminaRadiosity;
+	readonly int FirstWoodyLaminaGroup;
 
 	public SurfaceRadianceModel(float[] staticAlbedo, float[] staticShading, float[] plantRadiosity, int firstPlantGroup)
+		: this(staticAlbedo, staticShading, plantRadiosity, firstPlantGroup, null, int.MaxValue) { }
+
+	public SurfaceRadianceModel(float[] staticAlbedo, float[] staticShading, float[] plantRadiosity, int firstPlantGroup,
+        float[]? woodyLaminaRadiosity, int firstWoodyLaminaGroup)
 	{
 		StaticAlbedo = staticAlbedo;
 		StaticShading = staticShading;
 		PlantRadiosity = plantRadiosity;
 		FirstPlantGroup = firstPlantGroup;
+		WoodyLaminaRadiosity = woodyLaminaRadiosity;
+		FirstWoodyLaminaGroup = firstWoodyLaminaGroup;
 	}
 
 	/// <summary>Radiance leaving the hit surface, in W/m²/sr.</summary>
@@ -42,6 +52,11 @@ public readonly struct SurfaceRadianceModel
 	{
 		if (hit.IsPlant)
 		{
+			if (WoodyLaminaRadiosity != null && hit.Group >= FirstWoodyLaminaGroup)
+			{
+				var leaf = hit.Group - FirstWoodyLaminaGroup;
+				return leaf < WoodyLaminaRadiosity.Length ? WoodyLaminaRadiosity[leaf] : 0f;
+			}
 			var plant = hit.Group - FirstPlantGroup;
 			return plant >= 0 && plant < PlantRadiosity.Length ? PlantRadiosity[plant] : 0f;
 		}
@@ -54,6 +69,11 @@ public readonly struct SurfaceRadianceModel
     {
         if (hit.IsPlant)
         {
+            if (WoodyLaminaRadiosity != null && hit.Group >= FirstWoodyLaminaGroup)
+            {
+                var leaf = hit.Group - FirstWoodyLaminaGroup;
+                return leaf < WoodyLaminaRadiosity.Length ? WoodyLaminaRadiosity[leaf] : 0f;
+            }
             var plant = hit.Group - FirstPlantGroup;
             return plant >= 0 && plant < PlantRadiosity.Length ? PlantRadiosity[plant] : 0f;
         }

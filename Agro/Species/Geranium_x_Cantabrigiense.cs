@@ -33,6 +33,11 @@ public static class Geranium_x_Cantabrigiense
         LeafGrowthTime = 24f * 7f * 2f,
         // Provisional CPU-light calibration; see LIGHT_GROWTH_CALIBRATION.md.
         LeafExpansionRateScale = 1.25f,
+        // Provisional development response; see SEASONAL_GROWTH.md. Adult sizes stay intact.
+        VegetativeTemperatureResponseEnabled = true,
+        VegetativeGrowthBaseTemperatureC = 5f,
+        VegetativeGrowthFullTemperatureC = 20f,
+        VegetativeGrowthLightReferenceWhM2 = 6000f,
         LeafGrowthTimeVar = 24f * 3f,
         LeafMaximumAgeHours = 24 * 365,
 

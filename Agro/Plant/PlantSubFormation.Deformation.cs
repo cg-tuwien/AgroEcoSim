@@ -57,9 +57,13 @@ public partial class PlantSubFormation<T>
     internal Vector3 GetAttachmentOffset(int index)
     {
         var q = GetDeformation(index);
-        if (q == Vector4.Zero || GetOrgan(index) != OrganTypes.Petiole)
-            return Vector3.Transform(Vector3.UnitX, GetDirection(index)) * GetLength(index);
-        return Vector3.Transform(ContactDeformation.RodPoint(1, GetLength(index), q), GetDirection(index));
+        // A displaced tree organ carries its descendants from its actual tip. This is
+        // essential for compressed leafy shoots, staggered flower stalks and paired fruit.
+        var tip = q == Vector4.Zero || GetOrgan(index) != OrganTypes.Petiole
+            ? Vector3.Transform(Vector3.UnitX, GetDirection(index)) * GetLength(index)
+            : Vector3.Transform(ContactDeformation.RodPoint(1, GetLength(index), q), GetDirection(index));
+        return IsAboveGround && Plant.Parameters.Behavior == Behavior.Woody
+            ? GetBaseOffset(index) + tip : tip;
     }
 
     static Quaternion AttachmentRotation(in OrganPose pose) => pose.Width == 0 && pose.Deformation != Vector4.Zero

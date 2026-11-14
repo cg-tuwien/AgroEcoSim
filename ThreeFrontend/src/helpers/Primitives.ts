@@ -1,9 +1,9 @@
-export enum Primitives { Disk, Rectangle, Cylinder, Sphere, Box }
+export enum Primitives { Disk, Rectangle, Cylinder, Sphere, Box, Ellipsoid }
 
 //Keep in sync with OrganTypes in Agro/Organs.cs. The organ code is written as a single
 //byte in front of every primitive record and decides the record layout, so any divergence
 //desynchronizes the whole binary stream, not just the affected organ.
-export enum Organs { Unspecified = 0, Seed = 1, Bud = 2, Root = 3, Stem = 4, Leaf = 5, Petiole = 6, Fruit = 7, Meristem = 8, RizomeMeristem = 9, FlowerBud = 10, FlowerStem = 11, FlowerPadel = 12, FlowerPedicel = 13, FlowerMeristem = 14, FlowerBaseBud = 15 }
+export enum Organs { Unspecified = 0, Seed = 1, Bud = 2, Root = 3, Stem = 4, Leaf = 5, Petiole = 6, Fruit = 7, Meristem = 8, RizomeMeristem = 9, FlowerBud = 10, FlowerStem = 11, FlowerPadel = 12, FlowerPedicel = 13, FlowerMeristem = 14, FlowerBaseBud = 15, FruitWing = 16 }
 
 type StatsBase = {
     //water, energy, irradiance, dailyResources, dailyProduction, color for leaves
@@ -57,4 +57,10 @@ export type Box = PrimitiveBase & {
     radius: number;
 }
 
-export type Primitive = Disk | Rectangle | Cylinder | Sphere | Box;
+/** A fruit body: its recorded matrix already includes all three physical semiaxes. */
+export type Ellipsoid = PrimitiveBase & {
+    type: Primitives.Ellipsoid;
+    color: string;
+};
+
+export type Primitive = Disk | Rectangle | Cylinder | Sphere | Box | Ellipsoid;

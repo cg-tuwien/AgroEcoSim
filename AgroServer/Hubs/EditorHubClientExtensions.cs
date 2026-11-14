@@ -21,6 +21,9 @@ public static class EditorHubClientExtensions
     public static Task Progress(this IClientProxy client, uint step, uint length)
         => client.SendAsync(nameof(IEditorHub.Progress), step, length);
 
+    public static Task Preparation(this IClientProxy client, uint step, uint totalSteps)
+        => client.SendAsync(nameof(IEditorHub.Preparation), step, totalSteps);
+
     public static Task Result(this IClientProxy client, SimulationResponse response)
         => client.SendAsync(nameof(IEditorHub.Result), response);
 

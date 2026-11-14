@@ -1,13 +1,53 @@
 import { Component, h, Fragment } from "preact";
+import { useMemo } from "preact/hooks";
 import appstate from "../../appstate";
 import { Seed } from "../../helpers/Seed";
 import { SelectionState, backgroundColor, neutralColor } from "../../helpers/Selection";
+import { effectiveStartOffsetHours, formatClock, PlantAgeUnit, plantAgeInHours, plantAgeInUnit } from "../../helpers/TimeUnits";
+import { DEFAULT_TIME_ZONE, timeOfTimestep } from "../../helpers/Sun";
 
 const hoverColor = backgroundColor.clone().lerpHSL(neutralColor, 0.25).toArray().map(x => Math.round(255*x));
 const hoverColorStr = `rgb(${hoverColor[0]}, ${hoverColor[1]}, ${hoverColor[2]})`;
 
 function compareSeeds(x: Seed, y: Seed) {
     return x.fieldIndex.value - y.fieldIndex.value;
+}
+
+function PlantAge(props: { seed: Seed, index: number }) {
+    const seed = props.seed;
+    const hours = seed.startOffsetHours.value;
+    const unit = seed.ageUnit.value;
+    const valid = Number.isFinite(hours);
+    const effective = valid ? effectiveStartOffsetHours(hours, appstate.hoursPerTick.value) : 0;
+    const initialDate = appstate.initialDate.value;
+    const timeZone = appstate.siteTimeZone.value ?? DEFAULT_TIME_ZONE;
+    // Hovering any seed redraws the list. Resolve the site's calendar only when its inputs change.
+    const seedDate = useMemo(() => {
+        if (!valid) return "";
+        try {
+            return formatClock(timeOfTimestep(initialDate, effective, 1, timeZone), timeZone);
+        } catch { return "outside the supported calendar"; }
+    }, [valid, effective, initialDate, timeZone]);
+    return <div>
+        <label for={`seedage-${props.index}`}>Age:</label>
+        <input id={`seedage-${props.index}`} name={`seedage-${props.index}`} type="number" step="any"
+            value={valid ? plantAgeInUnit(hours, unit) : ""} aria-invalid={!valid || undefined}
+            aria-describedby={`seedage-help-${props.index}`}
+            onInput={e => seed.startOffsetHours.value = plantAgeInHours(e.currentTarget.valueAsNumber, unit)} />
+        <select aria-label={`Age unit for plant ${props.index}`} value={unit}
+            onChange={e => seed.ageUnit.value = e.currentTarget.value as PlantAgeUnit}>
+            <option value="days">Days</option>
+            <option value="years">Years</option>
+        </select>
+        <small id={`seedage-help-${props.index}`} style={{ display: "block" }}>
+            Negative: growing before start. Zero: seed at start. Positive: seed introduced later. A year is 365 days.
+        </small>
+        {!valid ? <small role="alert">Enter a finite Age.</small>
+            : <small style={{ display: "block" }}>
+                {effective !== hours ? `Effective: ${plantAgeInUnit(effective, unit)} ${unit} (${effective} h). ` : ""}
+                Seed date: {seedDate}
+            </small>}
+    </div>;
 }
 
 export class Seeds extends Component
@@ -50,6 +90,7 @@ export class Seeds extends Component
                         <label for={`seedfi-${i}`}>f:</label>
                         <input min={0} max={appstate.terrainList?.length} step={1} type="number" name={`seedfi-${i}`} value={+x.fieldIndex.value} onChange={e => x.fieldIndex.value = parseInt(e.currentTarget.value)}  />
                     </div>
+                    <PlantAge seed={x} index={i} />
                 </li>))}
             </ul>
         </>;

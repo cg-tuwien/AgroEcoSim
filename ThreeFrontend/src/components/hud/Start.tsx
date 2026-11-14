@@ -1,7 +1,8 @@
 import { Component, h, Fragment } from "preact";
 import appstate, { PlayState } from "../../appstate";
 import { batch } from "@preact/signals-core";
-import { encodeTime } from "../../helpers/TimeUnits";
+import { formatClock, formatElapsed } from "../../helpers/TimeUnits";
+import { DEFAULT_TIME_ZONE, snapHoursPerTick, timeOfTimestep } from "../../helpers/Sun";
 import { sceneStats, leafGeomIdFor } from "../../render/core/SceneStats";
 //import "wired-elements"
 //import Button from 'preact-material-components/Button';
@@ -32,14 +33,35 @@ export function Start(props: { inclStats: boolean }) {
     //at 7,700 plants the inline version was ~2.5M iterations every time the HUD redrew.
     const stats = () => sceneStats(appstate.scene.value, leafGeomIdFor);
 
+    /**
+     * Where the playhead is on the simulated clock: the exact elapsed time and the wall-clock
+     * instant at the site, from the same step so the two can never disagree.
+     *
+     * The tick is snapped the way the server snaps it - the run's own value is what advances the
+     * clock - and the zone is the site's, which only the server can derive from the coordinates.
+     */
     const time = () => {
-        let playPointer = Math.max(0, Math.min(appstate.playPointer.value, appstate.history.length - 1));
-        return appstate.simHoursPerTick * (appstate.history.length > 0 ? appstate.history[playPointer].t : 0);
+        const playPointer = Math.max(0, Math.min(appstate.playPointer.value, appstate.history.length - 1));
+        const step = appstate.history.length > 0 ? appstate.history[playPointer].t : 0;
+        const hoursPerTick = snapHoursPerTick(appstate.simHoursPerTick);
+        const when = timeOfTimestep(appstate.initialDate.value, step, hoursPerTick,
+                                    appstate.siteTimeZone.value ?? DEFAULT_TIME_ZONE);
+        const hours = step * hoursPerTick;
+        return {
+            hours,
+            elapsed: formatElapsed(hours),
+            clock: formatClock(when, appstate.siteTimeZone.value ?? DEFAULT_TIME_ZONE),
+            iso: when.toISOString(),
+        };
     }
+
+    const t = time();
 
     return <p>
         <span>
-            <button title="Simulate" onClick={async () => await appstate.run()}>{appstate.computing.value ? "⏹︎" : "🚀"}</button>&nbsp;
+            <button title={!appstate.computing.value && appstate.seedAgeError.value ? appstate.seedAgeError.value : "Simulate"}
+                disabled={!appstate.computing.value && !!appstate.seedAgeError.value}
+                onClick={async () => await appstate.run()}>{appstate.computing.value ? "⏹︎" : "🚀"}</button>&nbsp;
             <button title="Seek to start" onClick={async () => await appstate.play(PlayState.SeekBackward)} disabled={appstate.historyCount.value == 0 || appstate.playPointer.value <= 0}>⏮︎</button>
             <button title="Previous frame" onClick={async () => await appstate.play(PlayState.NextBackward)} disabled={appstate.playing.value != PlayState.None || appstate.historyCount.value == 0 || appstate.playPointer.value <= 0} class="stepBtn">◃</button>
             <button title="Play backward" onClick={async () => await appstate.play(PlayState.Backward)} disabled={appstate.playing.value == PlayState.Backward || appstate.historyCount.value == 0 || appstate.playPointer.value <= 0}>⏴︎</button>
@@ -48,7 +70,7 @@ export function Start(props: { inclStats: boolean }) {
             <button title="Next frame" onClick={async () => await appstate.play(PlayState.NextForward)} disabled={atLiveEdge() || appstate.playing.value != PlayState.None || appstate.historyCount.value == 0 || appstate.playPointer.value >= appstate.history.length - 1} class="stepBtn">▹</button>
             <button title="Seek to end" onClick={async () => await appstate.play(PlayState.SeekForward)} disabled={atLiveEdge() || appstate.historyCount.value == 0 || appstate.playPointer.value >= appstate.history.length - 1}> ⏭︎</button>
         </span>
-        <span>
+        <span class="timeline">
             <input title="Seek a frame" min={0} max={appstate.history.length - 1} type="range" name="frameslider" disabled={appstate.history.length == 0} value={appstate.playPointer} onChange={e => {
                 batch(() => {
                     appstate.playPointer.value = parseInt(e.currentTarget.value);
@@ -56,7 +78,13 @@ export function Start(props: { inclStats: boolean }) {
                     appstate.playing.value = PlayState.Seek;
                 });
             }}/>
-            <label for="frameslider">{time()} h ({encodeTime(time())})</label>
+            {/* Two short lines beside the slider rather than one long one under it: the date is
+                what a run is compared by, the elapsed time what its growth is judged by, and the
+                exact hour count stays one hover away. */}
+            <div class="clock" title={`${t.hours} h since the start of the run\n${t.iso}`}>
+                <time dateTime={t.iso}>{t.clock}</time>
+                <small>+{t.elapsed}</small>
+            </div>
         </span>
         {props.inclStats ? <span>
             <div>Seeds: {appstate.seeds.value.length}</div>

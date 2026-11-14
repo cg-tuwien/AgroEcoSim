@@ -96,6 +96,13 @@ if (long.TryParse(builder.Configuration["RunStoreModelBytes"], out var modelByte
     runStoreService.ModelRetentionBytes = modelBytes;
     Console.WriteLine($"RunStore field model budget set to {modelBytes / (1024 * 1024)} MB.");
 }
+//Free space the store keeps on its volume. A run that reaches it is stopped cleanly with a final
+//checkpoint and can be resumed once there is room; what is left of the reserve keeps the metadata
+//database and the event log writable, so the stop can be recorded at all. Without it the deployed
+//store filled its disk, froze a 56 GB run without a word and disabled itself at the next start.
+//Zero turns the guard off - on a volume nothing else writes to, the budget alone may be enough.
+if (long.TryParse(builder.Configuration["RunStoreMinFreeBytes"], out var minFreeBytes) && minFreeBytes >= 0)
+    runStoreService.MinFreeBytes = minFreeBytes;
 builder.Services.AddSingleton<ISimulationUploadService>(simulationUploeadService);
 builder.Services.AddSingleton<ITerrainBuffer>(terainBufferService);
 builder.Services.AddSingleton<IRunStore>(runStoreService);

@@ -48,7 +48,7 @@ public class SimulationWorld
 
     public void Add(IObstacle obstacle) => Obstacles.Add(obstacle);
 
-    public void Run(uint simulationLength)
+    public virtual void Run(uint simulationLength)
 	{
 		#if !DEBUG
 		if (Formations.Count > 1 && !Deterministic)

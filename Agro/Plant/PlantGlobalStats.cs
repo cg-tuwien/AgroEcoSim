@@ -15,6 +15,8 @@ public class PlantGlobalStats
 	public double EnergyRequirementPerTick{ get; set; }
 	public double WaterRequirementPerTick { get; set; }
 	public double WaterPriorityPerTick { get; set; }
+	/// <summary>Root-system throughflow into the shoot, counting basal axes only.</summary>
+	internal double BasalWaterFlowPerTick { get; set; }
 
 	public List<GatherDataBase> Gathering = [];
 	public int Count => Gathering.Count;
@@ -145,9 +147,10 @@ public class PlantGlobalStats
 		return total;
 	}
 
-    internal float ReceivedEnergySum()
+    internal double ReceivedEnergySum()
     {
-        var result = 0f;
+        // Accumulate in double so large organ counts do not create a false conservation failure.
+        var result = 0d;
 		var limit = Gathering.Count;
 		for(int i = 0; i < limit; ++i)
 			result += ReceivedEnergy[i];

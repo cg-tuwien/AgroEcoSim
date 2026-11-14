@@ -100,11 +100,29 @@ public partial class PlantSubFormation<T>
         return false;
     }
 
+    internal Vector3 TreeUnitGrowthTarget(int index, in AboveGroundAgent agent, bool atTip = false)
+        => agent.WoodyUnitProgrammeTarget(Plant.Parameters, atTip: atTip, module: TreeModuleStepFor(agent));
+
+    internal Vector3? TreeUnitLightCue(int index)
+    {
+        if (Plant.World.GrowthLightGuidanceEnabled && TryGetGrowthLight(index, out var measured, out var confidence))
+            return measured * confidence;
+        return null;
+    }
+
     void ApplyGrowthLight(int index, ref AboveGroundAgent agent, float oldLength)
     {
+        // Finite woody units apply the same programme and bounded light response
+        // inside TickWoody, before a conversion/birth transaction is captured.
+        // This also supplies intrinsic shape under constant-light RenderMode0.
+        if (Plant.Parameters.Behavior == Behavior.Woody && Plant.Parameters.TreeGrowthUnitsEnabled
+            && agent.Organ is OrganTypes.Meristem or OrganTypes.Stem)
+            return;
         if (!Plant.World.GrowthLightGuidanceEnabled || agent.IsRizome || agent.GrowthBlocked
             || agent.Organ is not (OrganTypes.Meristem or OrganTypes.Petiole) || agent.Length <= oldLength
             || !TryGetGrowthLight(index, out var light, out _)) return;
+        if (Plant.Parameters.Behavior == Behavior.Woody && agent.Organ == OrganTypes.Meristem)
+            light = agent.WoodyGrowthLightTarget(light, Plant.Parameters.TreePhototropicWeight);
         var current = Vector3.Transform(Vector3.UnitX, agent.Orientation);
         var angle = MathF.Acos(Math.Clamp(Vector3.Dot(current, light), -1, 1));
         if (angle < MathF.PI / 90f) return;

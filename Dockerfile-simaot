@@ -53,8 +53,15 @@ RUN addgroup -g 61000 docker && adduser -g 61000 -H -D -s /bin/false -u 61000 do
 #nothing writes to and sets a retention budget for a store that is not running. This is the image
 #buildDocker actually builds and compose actually runs, so the equivalent block in Dockerfile-sim was
 #protecting an image nobody ships.
-RUN mkdir -p /data/runstore && chown -R 61000:61000 /data
-ENV AGRO_RunStoreRoot=/data/runstore
+#
+#And it must be INSIDE the directory the volume is mounted on - the same path docker-compose mounts
+#and the image declares below. It was /data/runstore while compose mounted the volume at
+#/data/AgroEcoStorage, so every run went to the anonymous volume Docker made for the old VOLUME /data,
+#on the host's root disk: a 56 GB run filled it, froze, and took the store down at the next start,
+#with the named volume sitting empty beside it. Created here and owned by the server's user so that an
+#empty named volume mounted on it is seeded with that ownership.
+RUN mkdir -p /data/AgroEcoStorage/runstore && chown -R 61000:61000 /data
+ENV AGRO_RunStoreRoot=/data/AgroEcoStorage/runstore
 
 #Listen on every interface, not just loopback.
 #
@@ -63,7 +70,9 @@ ENV AGRO_RunStoreRoot=/data/runstore
 #container can reach it, however the port is published. The default stays loopback because the API
 #has no authentication; a container is the place that opts in.
 ENV AGRO_ListenAnyIP=true
-VOLUME /data
+#The store's own directory and nothing above it: declaring /data made Docker create an anonymous volume
+#there whenever compose mounted the named one anywhere else, and that is where the runs went.
+VOLUME /data/AgroEcoStorage
 
 USER docker
 

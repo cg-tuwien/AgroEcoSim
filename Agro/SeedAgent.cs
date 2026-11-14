@@ -94,14 +94,22 @@ public struct SeedAgent : IAgent
 	}
 
 	public void Tick(IFormation _formation, int formationID, uint timestep)
+		=> Tick(_formation, formationID, timestep, established: false);
+
+	/// <summary>A historical establishment begins with a hydrated, germinated propagule.
+	/// Its water and reserve are initial stocks, not water drawn from the current soil.</summary>
+	internal void Establish(PlantFormation2 plant, uint timestep)
+		=> Tick(plant, 0, timestep, established: true);
+
+	void Tick(IFormation _formation, int formationID, uint timestep, bool established)
 	{
 		var plant = (PlantFormation2)_formation;
 		var world = plant.World;
 		// A seed hydrated at the boundary germinates before another interval's loss.
 		// Otherwise a request capped at the threshold could never germinate.
-		if (Water_g < GerminationThreshold)
+		if (!established && Water_g < GerminationThreshold)
 			Water_g -= Radius * Radius * Radius * world.HoursPerTick; // Empirical hydration loss, g/h.
-		if (Water_g <= 0) // Dehydration, not carbon starvation.
+		if (!established && Water_g <= 0) // Dehydration, not carbon starvation.
 		{
 			Water_g = 0f;
 			Energy = 0f;
@@ -110,14 +118,20 @@ public struct SeedAgent : IAgent
 		}
 		else
 		{
-			if (Water_g >= GerminationThreshold) //GERMINATION
+			if (established || Water_g >= GerminationThreshold) //GERMINATION
 			{
 				//Debug.WriteLine($"GERMINATION at {timestep}");
 				const float rootReserveFraction = 0.3f;
 				const float rhizomeReserveFraction = 0.3f;
 				const float aerialReserveFraction = 1f - rootReserveFraction - rhizomeReserveFraction;
 				var seedReserve = Energy;
-				var seedWater = Water_g;
+				var seedWater = established ? Math.Max(Water_g, GerminationThreshold) : Water_g;
+				if (AboveGroundAgent.TryEstablishWoody(plant, seedReserve, seedWater))
+				{
+					plant.SeedDeath();
+					Water_g = Energy = 0f;
+					return;
+				}
 				var initialYawAngle = plant.RNG.NextFloat(-MathF.PI, MathF.PI);
 				var initialYaw = Quaternion.CreateFromAxisAngle(Vector3.UnitY, initialYawAngle);
 				plant.UGBirth(new UnderGroundAgent(plant, timestep, -1,

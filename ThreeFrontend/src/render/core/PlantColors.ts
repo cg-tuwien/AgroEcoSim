@@ -58,15 +58,17 @@ function sharedMapping(mapping: VisualMappingOptions, stats: Float32Array): Orga
 export function leafColor(primitive: Primitive, index: number, mapping: VisualMappingOptions): OrganColor {
     if (mapping === VisualMappingOptions.Natural)
         return {
-            color: primitive.type === Primitives.Rectangle && primitive.color
+            color: (primitive.type === Primitives.Rectangle || primitive.type === Primitives.Ellipsoid) && primitive.color
                 ? fromHex(primitive.color)
                 : greenColors[index % greenColors.length],
             emissive: black,
         };
 
-    //Irradiance is leaf-only: stems and roots reuse stats[4] for woodRatio.
+    //Fruit bodies and dry wings cast shade but do not gather irradiance.
     if (mapping === VisualMappingOptions.Irradiance)
-        return { emissive: IrradianceColor(primitive.stats[S_IRRADIANCE_OR_WOOD] * 1e-3), color: black };
+        return primitive.type !== Primitives.Sphere && (primitive.organ === Organs.Fruit || primitive.organ === Organs.FruitWing)
+            ? { color: neutral, emissive: black }
+            : { emissive: IrradianceColor(primitive.stats[S_IRRADIANCE_OR_WOOD] * 1e-3), color: black };
 
     return sharedMapping(mapping, primitive.stats) ?? { color: neutral, emissive: black };
 }
@@ -85,12 +87,21 @@ const backendColoredCylinders = new Set<number>([
     Organs.FlowerBud,
 ]);
 
-export function stemColor(primitive: Primitive, mapping: VisualMappingOptions): OrganColor {
+//Provisional visual bark colour, guided by Celtis' grey/pale-brown bark references.
+//This cached sRGB swatch is an authored appearance, not measured reflectance.
+const naturalBarkColors = new Map<string, RGB>([
+    ['Celtis australis', fromHex('#929087')],
+]);
+
+export function stemColor(primitive: Primitive, mapping: VisualMappingOptions, species?: string): OrganColor {
+    const bark = mapping === VisualMappingOptions.Natural && species && primitive.type === Primitives.Cylinder
+        && (primitive.organ === Organs.Stem || primitive.organ === Organs.Meristem)
+        ? naturalBarkColors.get(species) : undefined;
     if (mapping === VisualMappingOptions.Natural)
         return {
             color: primitive.type === Primitives.Cylinder && backendColoredCylinders.has(primitive.organ) && primitive.color
                 ? fromHex(primitive.color)
-                : lerpHSL(greenColor, woodColor, primitive.stats[S_IRRADIANCE_OR_WOOD]),
+                : lerpHSL(greenColor, bark ?? woodColor, primitive.stats[S_IRRADIANCE_OR_WOOD]),
             emissive: black,
         };
 

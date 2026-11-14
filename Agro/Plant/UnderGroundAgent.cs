@@ -100,6 +100,11 @@ public struct UnderGroundAgent : IPlantAgent
 	float mWaterAbsorbtionFactor;
 	// A successful branching opportunity survives a temporary construction shortage.
 	bool PendingConstructionBranch;
+	/// <summary>
+	/// Marks a lateral axis's origin segment. Later serial segments on that axis
+	/// are false and inherit their parent's full radius ceiling.
+	/// </summary>
+	public bool StartsLateralAxis { get; private init; }
 
 	/// <summary>
 	/// Woodyness ∈ [0, 1].
@@ -273,6 +278,9 @@ public struct UnderGroundAgent : IPlantAgent
 		CurrentDayEnvResourcesInvariant = 0f;
 
 		LengthVar = PlantFormation2.RootSegmentLength * 0.6f + plant.RNG.NextFloatVar(PlantFormation2.RootSegmentLength * 0.4f);
+		// A dominant primary storage axis, with the ordinary finer root network
+		// branching from it. This target is a model scale, not an adult depth cap.
+		if (plant.Parameters.Taproot && parent < 0) LengthVar = 0.25f;
 	}
 
 	/// <summary>
@@ -324,6 +332,8 @@ public struct UnderGroundAgent : IPlantAgent
 		//Debug.WriteLine($"{timestep} / {formationID}  W {Water} E {Energy} L {Length} R {Radius}");
 		//var waterFactor = Math.Clamp(Water / WaterStorageCapacity(), 0f, 1f);
 		var resourcesAvailability = formation.DailyResourceMax > 1e-6f ? PreviousDayEnvResourcesInvariant / formation.DailyResourceMax : 0f;
+		var woody = species.Behavior == Behavior.Woody;
+		var woodyEnvironment = woody ? WoodyGrowthEnvironment(formation, formationID) : 1f;
 		///////////////////////////
 		#region Growth
 		///////////////////////////
@@ -334,7 +344,13 @@ public struct UnderGroundAgent : IPlantAgent
 			if (formation.DailyProductionMax > 1e-6f)
 			{
 				var growthBase = (PreviousDayProductionInvariant / formation.DailyProductionMax + resourcesAvailability) * 0.5f;
-				var radiusChildGrowth = childrenCount <= 1 ? 1 : MathF.Pow(childrenCount, GrowthDeclineByExpChildren / 2);
+				if (woody)
+					growthBase = Math.Clamp(growthBase, 0f, 1f) * woodyEnvironment;
+				// A woody axis must keep conducting/support tissue as it branches.
+				// Lateral-origin taper already limits the new axis's radius;
+				// neither subdivision nor branching slows the parent's cambium.
+				var radiusChildGrowth = woody || childrenCount <= 1
+					? 1f : MathF.Pow(childrenCount, GrowthDeclineByExpChildren / 2);
 				// The empirical coefficients are rates per hour. Resource invariants
 				// are daily ratios; they do not already contain the tick duration.
 				var (radiusGrowthBase, lengthGrowthBase) = (1e-5f * growthBase * world.HoursPerTick, 2e-4f * growthBase * world.HoursPerTick);
@@ -347,10 +363,22 @@ public struct UnderGroundAgent : IPlantAgent
 				if (volume * newWaterAbsorbtion < 288)
 				{
 					float maxRadius = Parent == -1 ? plant.AG.GetBaseRadius(0) * 1.25f : formation.GetBaseRadius(Parent);
+					// Serial segments retain the mother's full ceiling even after a
+					// lateral is added beside them. Only a lateral origin receives the
+					// branch ratio. This is a morphological ceiling, not an area-
+					// conserving pipe or hydraulic-pressure network model.
+					if (Parent >= 0 && (!woody || StartsLateralAxis))
+						maxRadius *= species.RootRadiusTaper;
 					if (Radius <= maxRadius)
 					{
 						var d = 1f - 0.7f * formation.GetRelDepth(formationID);
-						var radiusGrowth = radiusGrowthBase * d * d / (radiusChildGrowth * MathF.Pow(ld * Radius, 0.2f));
+						// The legacy inverse-volume factor diverges at a newborn root's
+						// micron dimensions. Woody secondary growth instead has a finite
+						// annual rate; distal tissue stays thinner because it is younger.
+						// Physical rates do not change when an axis is subdivided.
+						var radiusGrowth = woody
+							? species.TreeAnnualRadiusGrowth * world.HoursPerTick / (365f * 24f) * growthBase / radiusChildGrowth
+							: radiusGrowthBase * d * d / (radiusChildGrowth * MathF.Pow(ld * Radius, 0.2f));
 						radiusGrowth = MathF.Min(radiusGrowth, MathF.Max(0f, maxRadius - Radius));
 						Radius += radiusGrowth;
 						newWaterAbsorbtion -= radiusGrowth * childrenCount;  //become wood faster with children
@@ -358,7 +386,17 @@ public struct UnderGroundAgent : IPlantAgent
 					}
 
 					if (childrenCount == 1)
-						Length += lengthGrowthBase / MathF.Pow(volume, 0.1f);
+						Length += woody
+							? species.TreeRootAnnualExtension * world.HoursPerTick / (365f * 24f) * growthBase
+							: lengthGrowthBase / MathF.Pow(volume, 0.1f);
+					if (species.Taproot || species.Behavior == Behavior.Woody)
+					{
+						Length = MathF.Min(Length, LengthVar);
+						var tip = formation.GetBaseCenter(formationID)
+							+ Vector3.Transform(Vector3.UnitX, Orientation) * Length;
+						if (plant.Soil.IntersectPoint(tip, plant.SoilIndex) < 0)
+							Length = beforeSize.X;
+					}
 				}
 
 				if (species.ConstructionEnergyPerDryGram > 0f)
@@ -376,12 +414,18 @@ public struct UnderGroundAgent : IPlantAgent
 			if (children.Count == 0 && Length >= LengthVar)
 			{
 				var energy = EnergyCapacityFunc(InitialRadius, InitialLength);
-				BirthFundedRoot(formation, formationID, timestep, energy);
+				BirthFundedRoot(formation, formationID, timestep, energy, lateral: false);
 				//Console.WriteLine($"New root chained to {formationID} at time {timestep}");
 			}
 
 			//Branching
-			if (childrenCount > 0 && childrenCount < 8 && Radius > 1e-3f)
+			// The woody capacity-relative branch signal is independent of stored
+			// water's legacy reporting fallback. Require biological water demand
+			// before initiating a lateral. Existing axes may extend/thicken while
+			// leafless, and a retained branch waits without being discarded/redrawn.
+			if ((!woody || (plant.WaterDemandPerTick_g > 0d && woodyEnvironment > 0f))
+				&& childrenCount > 0 && childrenCount < 8 && Radius > 1e-3f
+				&& (!species.Taproot || children.Count > 0 || Length >= LengthVar))
 			{
 				// const float yFactor = 0.5f;
 				// const float zFactor = 0.2f;
@@ -391,7 +435,7 @@ public struct UnderGroundAgent : IPlantAgent
 				if (PendingConstructionBranch || plant.RNG.NextFloatAccum(resourcesAvailability * species.RootsDensity / (plant.WaterBalanceUG * BranchingByChildren[childrenCount]), world.HoursPerTick))
 				{
 					var energy = EnergyCapacityFunc(InitialRadius, InitialLength);
-					PendingConstructionBranch = !BirthFundedRoot(formation, formationID, timestep, energy);
+					PendingConstructionBranch = !BirthFundedRoot(formation, formationID, timestep, energy, lateral: true);
 					//Console.WriteLine($"New root branched to {formationID} at time {timestep}");
 				}
 			}
@@ -414,14 +458,18 @@ public struct UnderGroundAgent : IPlantAgent
 		///////////////////////////
 		#region Absorb WATER from soil
 		///////////////////////////
-		// Seed hydration can exceed the new organs' tiny tissue capacity.
-		// Draw from that reserve before taking more soil water. Rounding remainders
-		// much smaller than one tick's demand must not suppress uptake indefinitely.
-		if (mWaterAbsorbtionFactor > 0f &&
-			plant.UnallocatedWater_g <= Math.Max(1e-6d, plant.WaterDemandPerTick_g))
+		// Woody roots can pass water onward during a tick even when their own
+		// storage is full. The router shares the plant's conserved demand budget
+		// across eligible soil cells and caps transit by basal-root flow, so serial
+		// segments do not multiply the whole plant's conducting capacity.
+		// Other behaviors retain their reserve guard and local-storage-only limit.
+		if (mWaterAbsorbtionFactor > 0f && plant.CanRequestSoilWater)
 		{
 			var waterCapacity = WaterStorageCapacity_g();
-			if (Water_g < waterCapacity)
+			var uptakeCapacity = woody
+				? MathF.Max(0f, waterCapacity - Water_g) + WaterFlowToParentPerTick_g(world)
+				: waterCapacity - Water_g;
+			if (uptakeCapacity > 0f)
 			{
 				var soil = plant.Soil;
 				var baseCenter = formation.GetBaseCenter(formationID);
@@ -439,7 +487,7 @@ public struct UnderGroundAgent : IPlantAgent
 					{
 						if (soilTemperature < vegetativeTemp.Y)
 							amount *= (soilTemperature - vegetativeTemp.X) / (vegetativeTemp.Y - vegetativeTemp.X);
-						soil.RequestWater(source, Math.Min(waterCapacity - Water_g, amount), formation, formationID, plant.SoilIndex); //TODO change to tube surface!
+						soil.RequestWater(source, Math.Min(uptakeCapacity, amount), formation, formationID, plant.SoilIndex); //TODO change to tube surface!
 					}
 
 					CurrentDayEnvResourcesInvariant += soil.GetWater_g(source, plant.SoilIndex);
@@ -448,13 +496,30 @@ public struct UnderGroundAgent : IPlantAgent
 					formation.Death(formationID);
 			}
 		}
-		// A full root or a plant with retained seed water makes no request this
-		// tick. Neither condition converts absorptive tissue into wood: that
+		// An inactive request does not convert absorptive tissue into wood: that
 		// would prevent uptake permanently after the stored water is consumed.
 		#endregion
 	}
 
-	bool BirthFundedRoot(PlantSubFormation<UnderGroundAgent> formation, int parent, uint timestep, float reserve)
+	readonly float WoodyGrowthEnvironment(PlantSubFormation<UnderGroundAgent> formation, int id)
+	{
+		var plant = formation.Plant;
+		var species = plant.Parameters;
+		var capacity = WaterStorageCapacity_g();
+		var hydration = capacity > 0f ? Math.Clamp(Water_g / capacity, 0f, 1f) : 0f;
+		if (hydration <= 0f || !species.VegetativeTemperatureResponseEnabled)
+			return hydration;
+		var sample = formation.GetBaseCenter(id) + Vector3.Transform(Vector3.UnitX, Orientation) * Length * .75f;
+		var cell = plant.Soil.IntersectPoint(sample, plant.SoilIndex);
+		if (cell < 0)
+			return 0f;
+		var temperature = plant.Soil.GetTemperature(cell, plant.SoilIndex);
+		var thermal = Math.Clamp((temperature - species.VegetativeGrowthBaseTemperatureC)
+			/ (species.VegetativeGrowthFullTemperatureC - species.VegetativeGrowthBaseTemperatureC), 0f, 1f);
+		return hydration * thermal;
+	}
+
+	bool BirthFundedRoot(PlantSubFormation<UnderGroundAgent> formation, int parent, uint timestep, float reserve, bool lateral)
 	{
 		var plant = formation.Plant;
 		var species = plant.Parameters;
@@ -462,8 +527,19 @@ public struct UnderGroundAgent : IPlantAgent
 			? ConstructionBudget.Cost(4d * InitialLength * InitialRadius * InitialRadius, species, 0f)
 			: reserve; // Preserve the historical birth overhead when the budget is disabled.
 		if (species.ConstructionEnergyPerDryGram > 0f && Energy < reserve + cost) return false;
-		formation.Birth(new(plant, timestep, parent, RandomOrientation(plant, species, Orientation), reserve,
-			initialResources: PreviousDayEnvResourcesInvariant, initialProduction: PreviousDayProductionInvariant));
+		var orientation = RandomOrientation(plant, species, Orientation);
+		if (species.Behavior == Behavior.Woody)
+		{
+			var baseCenter = formation.GetTipPosition(parent);
+			var tip = baseCenter + Vector3.Transform(Vector3.UnitX, orientation) * InitialLength;
+			if (plant.Soil.IntersectPoint(baseCenter, plant.SoilIndex) < 0 || plant.Soil.IntersectPoint(tip, plant.SoilIndex) < 0)
+				return false;
+		}
+		formation.Birth(new(plant, timestep, parent, orientation, reserve,
+			initialResources: PreviousDayEnvResourcesInvariant, initialProduction: PreviousDayProductionInvariant)
+		{
+			StartsLateralAxis = species.Behavior == Behavior.Woody && lateral
+		});
 		Energy -= reserve + cost;
 		return true;
 	}
@@ -474,12 +550,31 @@ public struct UnderGroundAgent : IPlantAgent
 		//var factor = species.TwigsBending * range;
 		var a = plant.RNG.NextFloatVar(0.8f);
 		var b = plant.RNG.NextFloatVar(0.8f);
-		orientation *= Quaternion.CreateFromAxisAngle(Vector3.UnitY, a) * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, b);
+		var noise = Quaternion.CreateFromAxisAngle(Vector3.UnitY, a) * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, b);
+		var woody = species.Behavior == Behavior.Woody;
+		orientation = woody ? Quaternion.Normalize(Quaternion.Normalize(orientation) * noise) : orientation * noise;
 
 		var y = Vector3.Transform(Vector3.UnitX, orientation).Y;
 
-		orientation = Quaternion.Slerp(orientation, PlantFormation2.AdjustUpBase(orientation, up: false), plant.RNG.NextPositiveFloat(y > 0 ? y : species.RootsGravitaxis));
-		return orientation;
+		orientation = Quaternion.Slerp(orientation,
+			woody ? RootDownOrientation(orientation) : PlantFormation2.AdjustUpBase(orientation, up: false),
+			plant.RNG.NextPositiveFloat(y > 0 ? y : species.RootsGravitaxis));
+		return woody ? Quaternion.Normalize(orientation) : orientation;
+	}
+
+	private static Quaternion RootDownOrientation(Quaternion orientation)
+	{
+		// Keep the root's across direction in the horizontal plane. A unit
+		// orthogonal frame is required before quaternion interpolation.
+		var across = Vector3.Transform(Vector3.UnitZ, orientation);
+		across.Y = 0;
+		across = across.LengthSquared() < 1e-12f ? Vector3.UnitZ : Vector3.Normalize(across);
+		var side = Vector3.Cross(across, -Vector3.UnitY);
+		return Quaternion.Normalize(Quaternion.CreateFromRotationMatrix(new Matrix4x4(
+			0, -1, 0, 0,
+			side.X, side.Y, side.Z, 0,
+			across.X, 0, across.Z, 0,
+			0, 0, 0, 1)));
 	}
 
 	public bool CompleteDay(uint timestep, byte ticksPerDay)

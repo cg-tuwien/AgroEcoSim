@@ -39,7 +39,7 @@ namespace Agro;
 /// the one-sided leaf area, expects.
 /// </para>
 /// </remarks>
-public sealed class CpuLightSolver
+public sealed partial class CpuLightSolver
 {
 	/// <summary>Broadband shortwave reflectance of a leaf: near 0.1 in the visible band and near
 	/// 0.4 in the near infrared, so about 0.2 over the shortwave band the simulation accounts in.</summary>
@@ -54,7 +54,7 @@ public sealed class CpuLightSolver
 	/// Newborn organs are otherwise degenerate and their surface normal is undefined.</summary>
 	const float MinExtent = 1e-4f;
 
-	enum PrimitiveClass : byte { None, Lamina, Cylinder, Sphere }
+	enum PrimitiveClass : byte { None, Lamina, Cylinder, Sphere, FruitMesh }
 
 	readonly struct LeafSensor
 	{
@@ -76,6 +76,7 @@ public sealed class CpuLightSolver
     int SensorSlots;
 
 	readonly RayScene Scene = new();
+	readonly LeafRayScene LeafAreaScene = new();
 	uint GuidanceSceneTimestep = uint.MaxValue;
 
 	// Previous-step foliage radiosity is temporal state, not reconstructible geometry.
@@ -88,6 +89,7 @@ public sealed class CpuLightSolver
 		writer.Write(count);
 		for(int i=0;i<count;++i)
 		{ writer.Write(PlantRadiosity[i]); writer.Write(PlantRadiosityKnown[i]); }
+		WriteWoodyRadiosity(writer);
 	}
 
 	internal void ReadState(BinaryReader reader)
@@ -99,6 +101,7 @@ public sealed class CpuLightSolver
 		Array.Clear(PlantRadiosityKnown);
 		for(int i=0;i<count;++i)
 		{ PlantRadiosity[i]=reader.ReadSingle(); PlantRadiosityKnown[i]=reader.ReadBoolean(); }
+		ReadWoodyRadiosity(reader);
 		GuidanceSceneTimestep=uint.MaxValue;
 	}
 
@@ -319,6 +322,7 @@ public sealed class CpuLightSolver
                         ++sensors; break;
 					case PrimitiveClass.Cylinder: prims += ag.GetContactPose(k).CurvedRod ? 5 : 1; break;
                     case PrimitiveClass.Sphere: ++prims; break;
+                    case PrimitiveClass.FruitMesh: prims += ag.GetLaminaTemplate(k)!.Indices.Length / 3; break;
 				}
 			PrimCounts[i] = prims;
 			SensorCounts[i] = sensors;
@@ -357,7 +361,8 @@ public sealed class CpuLightSolver
 			organs.AsSpan(ag.Count).Fill(-1);
             FoldedLeafSensor[]? folded=null;
             FoldedSensors?.TryGetValue(i,out folded);
-			FillPlant(ag, FirstPlantGroup + i, Scene.PlantPrimitives(i), organs.AsSpan(0, ag.Count), SensorFirst[i],folded);
+			FillPlant(ag, FirstPlantGroup + i, Scene.PlantPrimitives(i), organs.AsSpan(0, ag.Count), SensorFirst[i],folded,
+                ((PlantFormation2)formations[i]).Parameters.Behavior == Behavior.Woody ? FirstPlantGroup + slots : -1);
 			OffsetArrays[i] = organs;
 		});
 
@@ -383,7 +388,9 @@ public sealed class CpuLightSolver
 			if (!PlantRadiosityKnown[i])
 				PlantRadiosity[i] = seededRadiosity;
 
-		var model = new SurfaceRadianceModel(StaticAlbedo, StaticShading, PlantRadiosity, FirstPlantGroup);
+		var woodyValues = PrepareWoodyRadiosity(formations, slots, seededRadiosity);
+		var model = new SurfaceRadianceModel(StaticAlbedo, StaticShading, PlantRadiosity, FirstPlantGroup,
+            woodyValues, FirstPlantGroup + slots);
 		var hoursPerTick = (float)world.HoursPerTick;
 
 		if (SensorTotal > 0 && gatherLeaves)
@@ -413,15 +420,20 @@ public sealed class CpuLightSolver
 					sum += SensorValues[first + k];
 				PlantRadiosity[i] = FoliageAlbedo * (float)(sum / count) / (hoursPerTick * MathF.PI);
 				PlantRadiosityKnown[i] = true;
+				UpdateWoodyRadiosity(formations, i, hoursPerTick);
 			});
 			LeafGatherTicks += System.Diagnostics.Stopwatch.GetTimestamp() - gatherStarted;
 		}
 
-		if (Meter != null)
+		if (Meter != null && !world.IsPreparing)
 		{
+			// Only direct/projected LAI uses the real leaf surface. Its separate hierarchy
+			// must not change the light tracer's bounds, traversal order or shading feedback.
+			if (Meter.SensorCount > 0)
+				LeafAreaScene.Build(formations);
 			//Days are closed on the local calendar date at the site, so the meter needs local time.
 			var localStart = TimeZoneInfo.ConvertTimeFromUtc(world.GetTime(timestep), world.TimeZone);
-			Meter.Measure(Scene, in diffuseDome, SunDomes, SunSubSteps, in model, DiffuseSamples,
+			Meter.Measure(Scene, LeafAreaScene, in diffuseDome, SunDomes, SunSubSteps, in model, DiffuseSamples,
 				hoursPerTick, localStart, StaticShading);
 		}
 		return true;
@@ -528,16 +540,17 @@ public sealed class CpuLightSolver
 
 	static PrimitiveClass Classify(OrganTypes organ) => organ switch
 	{
+		OrganTypes.Fruit or OrganTypes.FruitWing => PrimitiveClass.FruitMesh,
 		OrganTypes.Leaf or OrganTypes.FlowerPadel => PrimitiveClass.Lamina,
 		OrganTypes.Stem or OrganTypes.Petiole or OrganTypes.Meristem or OrganTypes.RizomeMeristem
 			or OrganTypes.FlowerStem or OrganTypes.FlowerMeristem or OrganTypes.FlowerPedicel => PrimitiveClass.Cylinder,
-		OrganTypes.Bud or OrganTypes.FlowerBud or OrganTypes.FlowerBaseBud or OrganTypes.Fruit
+		OrganTypes.Bud or OrganTypes.FlowerBud or OrganTypes.FlowerBaseBud
 			or OrganTypes.Seed => PrimitiveClass.Sphere,
 		_ => PrimitiveClass.None,
 	};
 
 	void FillPlant(PlantSubFormation<AboveGroundAgent> ag, int group, Span<RayPrimitive> destination,
-				   Span<int> organOffsets, int sensorFirst,FoldedLeafSensor[]? folded)
+				   Span<int> organOffsets, int sensorFirst,FoldedLeafSensor[]? folded, int woodyFirstGroup = -1)
 	{
 		var count = ag.Count;
 		int prim = 0, sensor = 0;
@@ -559,8 +572,23 @@ public sealed class CpuLightSolver
 
 			switch (kind)
 			{
+                case PrimitiveClass.FruitMesh:
+                {
+                    // Fruit and dry wings occlude the same triangles exported for playback.
+                    // They are neither photosynthetic sensors nor LAI foliage.
+                    var template = ag.GetLaminaTemplate(i)!;
+                    var pose = ag.GetContactPose(i);
+                    for (var triangle = 0; triangle < template.Indices.Length / 3; ++triangle)
+                    {
+                        template.Triangle(pose, triangle, out var a, out var b, out var c);
+                        destination[prim++] = new RayPrimitive { P = a, U = b - a, V = c - a,
+                            Group = group, Kind = RayPrimitiveKind.Triangle, Flags = RayScene.FlagPlant };
+                    }
+                    break;
+                }
 				case PrimitiveClass.Lamina:
 				{
+                    var laminaGroup = woodyFirstGroup >= 0 ? woodyFirstGroup + sensorFirst + sensor : group;
                     if(ag.HasContactDeformation && organ==OrganTypes.Leaf)
                     {
                         var template=ag.GetLaminaTemplate(i)!;var pose=ag.GetContactPose(i);var area=0f;
@@ -568,7 +596,7 @@ public sealed class CpuLightSolver
                         {
                             template.Triangle(pose,triangle,out var a,out var b,out var c);
                             area+=Vector3.Cross(b-a,c-a).Length()*.5f;
-                            destination[prim++]=new RayPrimitive {P=a,U=b-a,V=c-a,Group=group,Kind=RayPrimitiveKind.Triangle,
+                            destination[prim++]=new RayPrimitive {P=a,U=b-a,V=c-a,Group=laminaGroup,Kind=RayPrimitiveKind.Triangle,
                                 Flags=(byte)(RayScene.FlagPlant|RayScene.FlagFoliage)};
                         }
                         var foldedIndex=sensorFirst+sensor++;organOffsets[i]=foldedIndex;
@@ -583,7 +611,7 @@ public sealed class CpuLightSolver
 						P = center,
 						U = u,
 						V = v,
-						Group = group,
+						Group = laminaGroup,
 						Kind = RayPrimitiveKind.Quad,
 						//Petals are laminae too, but a leaf area index counts leaves.
 						Flags = (byte)(RayScene.FlagPlant | (organ == OrganTypes.Leaf ? RayScene.FlagFoliage : 0)),

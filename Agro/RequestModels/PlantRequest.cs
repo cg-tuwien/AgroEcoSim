@@ -7,6 +7,11 @@ namespace Agro;
 ///</summary>
 public class PlantRequest
 {
+    /// <summary>Signed establishment time relative to the recorded start, in hours.
+    /// Negative introduces a germinated juvenile during shared preparation; zero or positive
+    /// introduces an ungerminated seed. Missing values preserve the historical seed start.</summary>
+    public double StartOffsetHours { get; set; }
+
     [JsonPropertyName("S")]
     public string? SpeciesName { get; set; }
 

@@ -112,6 +112,25 @@ describe('opening a stored run', () => {
         expect(appstate.terrainTimestamp.value).not.toBe(before);
     });
 
+    it('keeps dated air temperatures when rerunning a stored scenario and clears them for an older one', async () => {
+        const temperatures = [
+            { Date: '2025-11-01T00:00:00', MeanC: 0 },
+            { Date: '2025-11-02T00:00:00', MeanC: -3.5 },
+        ];
+        const previousFetch = global.fetch;
+        (global as any).fetch = jest.fn(async (url: string) => url.endsWith('/request')
+            ? { ok: true, text: async () => JSON.stringify({ ...REQUEST, DailyAirTemperatures: temperatures }) }
+            : previousFetch(url));
+
+        expect(await appstate.loadStoredRun('abc123')).toBe(true);
+        expect(appstate.dailyAirTemperatures.value).toEqual(temperatures);
+        expect(appstate.requestBody().DailyAirTemperatures).toEqual(temperatures);
+
+        global.fetch = previousFetch;
+        expect(await appstate.loadStoredRun('abc123')).toBe(true);
+        expect(JSON.parse(JSON.stringify(appstate.requestBody()))).not.toHaveProperty('DailyAirTemperatures');
+    });
+
     it('keeps the loaded trays when the run names the same model they came from', async () => {
         //A run stored before terrains were cached, whose model the tab already has open. Clearing
         //would show nothing where the right trays are already on screen, which is the worse of the

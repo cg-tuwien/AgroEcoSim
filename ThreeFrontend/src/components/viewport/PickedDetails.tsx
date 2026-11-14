@@ -1,15 +1,14 @@
 import { Component, h, Fragment } from "preact";
 import appstate from "../../appstate";
 import { DecodePlantName } from "../../helpers/Plant";
-import { Primitive, Primitives } from "../../helpers/Primitives";
-import { Seed } from "src/helpers/Seed";
+import { Organs, Primitive, Primitives } from "../../helpers/Primitives";
 
 const fixedPrecision = 4;
 
 export function PickedDetails()
 {
     const seedPick = appstate.seedPick.value;
-    if (seedPick >= 0 && seedPick <= appstate.seeds.value.length)
+    if (seedPick >= 0 && seedPick < appstate.seeds.value.length)
     {
         const seed = appstate.seeds.value[seedPick];
         //Computed from the model rather than read back off a mesh, so this panel works
@@ -38,30 +37,32 @@ export function PickedDetails()
         const index = DecodePlantName(pickName);
         let primitive : Primitive = undefined;
         let affineTransform : Float32Array = undefined;
-        let seed: Seed = undefined;
+        let species: string = undefined;
         if (appstate.scene.value.length > index.entity)
         {
             const ent = appstate.scene.value[index.entity];
             if (ent.primitives.length > index.primitive)
                 primitive = ent.primitives[index.primitive];
 
-            if (primitive.type != Primitives.Sphere)
+            if (primitive && primitive.type != Primitives.Sphere)
                 affineTransform = primitive.affineTransform;
 
-            seed = appstate.seeds.peek()[index.entity];
+            // Pending, dead or inactive plants are absent from the recorded scene, so
+            // a scene entity index is not an index into the original planting request.
+            species = ent.species;
         }
 
         return primitive ? (<>
             <p>Plant part: {appstate.plantPick.value}</p>
-            <p>Species: {seed.species.value}</p>
+            <p>Species: {species}</p>
             <ul style={{listStyleType: "none"}}>
                 <li>Water ratio: {primitive.stats[0]}</li>
                 <li>Energy ratio: {primitive.stats[1]}</li>
                 <li>Auxins: {primitive.stats[2]}</li>
                 <li>Cytokinins: {primitive.stats[3]}</li>
                 {primitive.type == Primitives.Cylinder || primitive.type == Primitives.Box ? <li>Wood ratio: {primitive.stats[4]}</li> : <></>}
-                {primitive.type == Primitives.Rectangle ? <li>Irradiance: {primitive.stats[4]}</li> : <></>}
-                {primitive.type == Primitives.Rectangle || primitive.type == Primitives.Box || primitive.type == Primitives.Cylinder
+                {primitive.type == Primitives.Rectangle && primitive.organ !== Organs.FruitWing ? <li>Irradiance: {primitive.stats[4]}</li> : <></>}
+                {primitive.type == Primitives.Rectangle || primitive.type == Primitives.Ellipsoid || primitive.type == Primitives.Box || primitive.type == Primitives.Cylinder
                     ? <><li>Resources availability: {primitive.stats[5]}</li>
                         <li>Production efficiency: {primitive.stats[6]}</li>
                         <li>Relative Resources: {primitive.stats[7]}</li>

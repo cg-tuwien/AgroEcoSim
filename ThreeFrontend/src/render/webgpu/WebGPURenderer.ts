@@ -15,7 +15,6 @@ import { buildPlants } from '../core/BuildScene';
 import { Geom } from '../core/GeometryIds';
 import { registerGeometry } from '../core/GeometryStore';
 import { deformLeaf } from '../core/ContactDeformation';
-import { exportGeometry } from '../core/GeometryExport';
 import { writeObstacleColors } from '../core/ObstacleColors';
 //Side effect: fills the static geometry table. Imported here and not left to the Three
 //adapter, which used to be the only thing populating it - so the WebGPU path silently
@@ -945,8 +944,6 @@ export class WebGPURenderer implements IViewportRenderer {
         }
         return out;
     }
-
-    exportGLTF(save: (json: string) => void) { save(exportGeometry([this.staticList, this.plantList])); }
 
     private drawSet(pass: GPURenderPassEncoder, set: InstanceBuffers, bind: GPUBindGroup | undefined, picking: boolean) {
         if (!bind || set.count === 0) return;

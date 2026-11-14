@@ -23,6 +23,8 @@ public partial class PlantFormation2 : IPlantFormation
 	/// makes the parallel tick reproducible. Part is -1 for the seed.
 	/// </summary>
 	internal readonly List<(int Cell, int Part, float Amount_g)> WaterRequests = [];
+	// Reused routing scratch; empty at a checkpoint boundary and not persisted.
+	readonly Dictionary<int, (double Demand, double Scale)> WaterRequestsByCell = [];
 	bool ReadTMP = false;
 	internal ISoilFormation Soil;
 	protected SeedAgent[] Seed = new SeedAgent[1]; //must be an array due to messaging compaatibility
@@ -47,19 +49,26 @@ public partial class PlantFormation2 : IPlantFormation
 	/// </summary>
 	internal float WaterBalance = 0f;
 	/// <summary>
-	/// The ratio of available water to the required water, adapted for the needs of underground agents.
+	/// Branching resistance for underground agents. Woody plants derive it from
+	/// root versus shoot storage capacity; other behaviors retain water sufficiency.
 	/// </summary>
 	internal float WaterBalanceUG = 0f;
 	/// <summary>
 	/// Hydrated seed water and other water not yet held by organ tissue. The
-	/// census releases it as anatomical capacity grows; roots do not draw more
-	/// soil water while this reserve remains. This is counted exactly once in
+	/// census releases it as anatomical capacity grows. This is counted exactly once in
 	/// the plant water budget and is not an organ's storage capacity.
 	/// </summary>
 	internal double UnallocatedWater_g { get; private set; }
+	internal void RetainWaterReserve(double water_g) => UnallocatedWater_g += water_g;
 	// The previous census' biological water demand, retained for the next root
 	// tick so tiny rounding remnants do not suppress genuine soil uptake.
 	internal double WaterDemandPerTick_g { get; private set; }
+	// Next-tick uptake is bounded by tissue deficit/forecast and basal transport,
+	// including conserved reserve. The census already gathers every input.
+	double WoodySoilWaterRequestBudget_g;
+	internal bool CanRequestSoilWater => Parameters.Behavior == Behavior.Woody
+		? WoodySoilWaterRequestBudget_g > 0d
+		: UnallocatedWater_g <= Math.Max(1e-6d, WaterDemandPerTick_g);
 
 	/// <summary>
 	/// The ratio of available energy to the required energy. If > 1, there is more production than need.
@@ -146,6 +155,7 @@ public partial class PlantFormation2 : IPlantFormation
 	/// </summary>
 	public void WriteState(BinaryWriter writer)
 	{
+		WriteEstablishmentState(writer);
 		writer.Write(SeedAlive);
 		if (SeedAlive) writer.Write(MemoryMarshal.AsBytes(SrcDst_Seed().Item1.AsSpan(0, 1)));
 		writer.Write(DeathSeed);
@@ -157,6 +167,7 @@ public partial class PlantFormation2 : IPlantFormation
 		writer.Write(EnergyProductionMax);
 		writer.Write(UnallocatedWater_g);
 		writer.Write(WaterDemandPerTick_g);
+		writer.Write(WoodySoilWaterRequestBudget_g);
 		WriteDroughtState(writer);
 
 		//The per-plant generator. Reseeding instead would carry the same plants on with different
@@ -171,6 +182,7 @@ public partial class PlantFormation2 : IPlantFormation
 
 	public void ReadState(BinaryReader reader)
 	{
+		ReadEstablishmentState(reader);
 		ReadTMP = false;
 		var seedAlive = reader.ReadBoolean();
 		if (seedAlive)
@@ -194,8 +206,10 @@ public partial class PlantFormation2 : IPlantFormation
 		EnergyProductionMax = reader.ReadSingle();
 		UnallocatedWater_g = reader.ReadDouble();
 		WaterDemandPerTick_g = reader.ReadDouble();
+		WoodySoilWaterRequestBudget_g = reader.ReadDouble();
 		if (!double.IsFinite(UnallocatedWater_g) || UnallocatedWater_g < 0d ||
-			!double.IsFinite(WaterDemandPerTick_g) || WaterDemandPerTick_g < 0d)
+			!double.IsFinite(WaterDemandPerTick_g) || WaterDemandPerTick_g < 0d ||
+			!double.IsFinite(WoodySoilWaterRequestBudget_g) || WoodySoilWaterRequestBudget_g < 0d)
 			throw new InvalidDataException("The checkpoint contains an invalid plant water budget.");
 		ReadDroughtState(reader);
 
@@ -212,6 +226,21 @@ public partial class PlantFormation2 : IPlantFormation
 
 	public void Census()
 	{
+		if (!IsActive) return;
+		WoodySoilWaterRequestBudget_g = 0d;
+		if (Seed.Length == 0 && AG.CompletedMonocarpicLife(World.Timestep))
+		{
+			for (var i = 0; i < AG.Count; ++i)
+				if (AG.GetParent(i) < 0) AG.Death(i);
+			if (UG is PlantSubFormation<UnderGroundAgent> roots)
+			{
+				for (var i = 0; i < roots.Count; ++i)
+					if (roots.GetParent(i) < 0) roots.Death(i);
+			}
+			else if (UG is VirtualRootsFormation virtualRoots)
+				virtualRoots.EndLife();
+			UnallocatedWater_g = 0d;
+		}
 		UG.Census();
 		AG.Census();
 
@@ -252,7 +281,7 @@ public partial class PlantFormation2 : IPlantFormation
 
 			//Debug.WriteLine($"W: {water} / {waterRequirement}   {globalUG.WaterDiff} + {globalAG.WaterDiff}");
 			//Debug.WriteLine($"E: {energy} / {energyRequirement}   {globalUG.EnergyDiff} + {globalAG.EnergyDiff}");
-			if (DroughtResponse)
+			if (DroughtResponse || Parameters.Behavior == Behavior.Woody)
 			{
 				// No tissue is deleted for energy here. Below its maintenance the plant shares what it
 				// has in proportion to maintenance alone: weighting by production efficiency handed
@@ -384,29 +413,53 @@ public partial class PlantFormation2 : IPlantFormation
 				agGathered.DistributeWaterByStorage(factor);
 				ugGathered.DistributeWaterByStorage(factor);
 			}
-			UnallocatedWater_g = Math.Max(0d, water -
-				(agGathered.ReceivedWaterSum() + ugGathered.ReceivedWaterSum()));
+			var receivedShootWater = agGathered.ReceivedWaterSum();
+			var receivedRootWater = ugGathered.ReceivedWaterSum();
+			UnallocatedWater_g = Math.Max(0d, water - (receivedShootWater + receivedRootWater));
 
 			UG.Distribute(ugGathered);
 			AG.Distribute(agGathered);
+			if (Parameters.Behavior == Behavior.Woody)
+			{
+				var wholePlantDemand = Math.Max(0d, waterStorage + WaterDemandPerTick_g - water);
+				// Gathered water precedes redistribution. The next root tick sees
+				// the received water, so calculate its free storage from that pool.
+				var rootStorageGap = Math.Max(0d, ugGathered.WaterCapacity - receivedRootWater);
+				WoodySoilWaterRequestBudget_g = Math.Min(wholePlantDemand,
+					rootStorageGap + ugGathered.BasalWaterFlowPerTick);
+			}
 
 			// The unallocated reserve cannot be consumed by a leaf this tick;
 			// count only water that fits in tissue when reporting water sufficiency.
 			WaterBalance = waterRequirement > 1e-6
 				? (float)(allocatableWater / waterRequirement) : 1;
 			UpdateDroughtSignals(allocatableWater, waterStorage, energy, energyRequirement);
-			//WaterBalanceUG = WaterBalance * WaterBalance;
-			//WaterBalanceUG = MathF.Pow(WaterBalance, 4f);
-			if (WaterBalance < WaterBalancePrev && WaterBalance < 1f / (1.00001f - Parameters.RootsDensity)) //The constant actually steers the roots sparsity, maybe take over from the species parameter
+			if (Parameters.Behavior == Behavior.Woody)
 			{
- 				var trend = WaterBalancePrev / WaterBalance;
-				WaterBalanceUG = Math.Min(trend, WaterBalance);
+				// Additional root capacity reduces the allocation signal instead of
+				// creating its own demand. Use the already gathered capacities, not
+				// a per-tick photosynthetic forecast or another tree traversal. This
+				// only controls new lateral trials; storage recharge and the growth
+				// of existing tissue retain their independent resource conditions.
+				var drive = agGathered.WaterCapacity > 0d
+					? Math.Clamp(1d - ugGathered.WaterCapacity / agGathered.WaterCapacity, 0d, 1d)
+					: 0d;
+				WaterBalanceUG = drive > 0d
+					? (float)Math.Min(float.MaxValue, 1d / drive) : float.MaxValue;
 			}
 			else
-				WaterBalanceUG = WaterBalance;
+			{
+				if (WaterBalance < WaterBalancePrev && WaterBalance < 1f / (1.00001f - Parameters.RootsDensity)) //The constant actually steers the roots sparsity, maybe take over from the species parameter
+				{
+					var trend = WaterBalancePrev / WaterBalance;
+					WaterBalanceUG = Math.Min(trend, WaterBalance);
+				}
+				else
+					WaterBalanceUG = WaterBalance;
+				WaterBalanceUG *= WaterBalanceUG;
+			}
 
 			WaterBalancePrev = WaterBalance;
-			WaterBalanceUG *= WaterBalanceUG;
 
 			EnergyBalance = energyRequirement > 1e-6 ? (float)(energy / energyRequirement) : 1;
 			//Debug.WriteLine($"{timestep}\twater: {WaterBalance}\tP_roots: {1f / WaterBalanceUG}\tenergy: {EnergyBalance}");
@@ -420,8 +473,47 @@ public partial class PlantFormation2 : IPlantFormation
 		}
 	}
 
+	/// <summary>
+	/// Share the woody uptake budget across all eligible sources, rather than
+	/// letting the first root consume it. Existing soil grants still arbitrate
+	/// competition between plants. Only queued requests are visited here.
+	/// </summary>
+	internal void NormalizeSoilWaterRequests()
+	{
+		if (Parameters.Behavior != Behavior.Woody || SeedAlive) return;
+		WaterRequestsByCell.Clear();
+		for (var i = 0; i < WaterRequests.Count; ++i)
+		{
+			var request = WaterRequests[i];
+			if (request.Part < 0 || !(request.Amount_g > 0f)) continue;
+			WaterRequestsByCell.TryGetValue(request.Cell, out var cell);
+			WaterRequestsByCell[request.Cell] = (cell.Demand + request.Amount_g, 0d);
+		}
+		var eligibleTotal = 0d;
+		foreach (var entry in WaterRequestsByCell)
+		{
+			var eligible = Math.Min(entry.Value.Demand, Math.Max(0d, Soil.GetWater_g(entry.Key, SoilIndex)));
+			eligibleTotal += eligible;
+			ref var cell = ref CollectionsMarshal.GetValueRefOrNullRef(WaterRequestsByCell, entry.Key);
+			cell.Scale = eligible / cell.Demand;
+		}
+		var scale = eligibleTotal > 0d ? Math.Min(1d, WoodySoilWaterRequestBudget_g / eligibleTotal) : 0d;
+		for (var i = 0; i < WaterRequests.Count; ++i)
+		{
+			var request = WaterRequests[i];
+			if (request.Part < 0) continue;
+			var amount = WaterRequestsByCell.TryGetValue(request.Cell, out var cell)
+				? request.Amount_g * cell.Scale * scale : 0d;
+			var rounded = (float)amount;
+			if (rounded > amount) rounded = MathF.BitDecrement(rounded);
+			WaterRequests[i] = (request.Cell, request.Part, rounded);
+		}
+		WaterRequestsByCell.Clear();
+	}
+
 	public void Tick(uint timestep)
 	{
+		if (!ActivateForTick(timestep)) return;
 		if (DeathSeed && !UG.Alive && !AG.Alive)
 			return;
 
@@ -479,7 +571,10 @@ public partial class PlantFormation2 : IPlantFormation
 			// }
 
 			AG.Tick(timestep);
-			AG.Hormones(true);
+			// Woody bud opportunities use age, light and reserves; they do not consume the
+			// generic auxin field. Avoid its repeated neighbourhood walks on long tree axes.
+			if (Parameters.Behavior != Behavior.Woody)
+				AG.Hormones(true);
 
 			//Physics (work in progress)
 			AG.Gravity();
@@ -598,8 +693,8 @@ public partial class PlantFormation2 : IPlantFormation
 		return up ? result : UpsideDown * result;
     }
 
-	public bool HasUndeliveredPost => PostboxSeed.AnyMessages || UG.HasUndeliveredPost || AG.HasUndeliveredPost;// || NeedsGathering;
-	public int Count => SeedAlive ? 1 : UG.Count + AG.Count;
+	public bool HasUndeliveredPost => IsActive && (PostboxSeed.AnyMessages || UG.HasUndeliveredPost || AG.HasUndeliveredPost);
+	public int Count => !IsActive ? 0 : SeedAlive ? 1 : UG.Count + AG.Count;
 
 	public void UGBirth(UnderGroundAgent agent)
 	{

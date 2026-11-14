@@ -41,7 +41,7 @@ public readonly struct WeatherStats
 	}
 }
 
-public class AgroWorld : SimulationWorld
+public partial class AgroWorld : SimulationWorld
 {
 	public readonly ushort HoursPerTick = 1;
 	public readonly byte TicksPerDay = 24;
@@ -131,7 +131,7 @@ public class AgroWorld : SimulationWorld
 			if (periods == null || periods.Start != InitialTime.Date || CachedPeriodsHours != TotalHours)
 			{
 				var steps = Math.Max(1, TimestepsTotal());
-				var lastLocal = TimeZoneInfo.ConvertTimeFromUtc(GetTime((uint)(steps - 1)), TimeZone);
+				var lastLocal = TimeZoneInfo.ConvertTimeFromUtc(GetTime(RecordedStartStep + (uint)(steps - 1)), TimeZone);
 				var days = Math.Max(1, (PeriodCalendar.StepDate(lastLocal, HoursPerTick) - InitialTime.Date).Days + 1);
 				CachedPeriods = periods = new PeriodCalendar(InitialTime.Date, days);
 				CachedPeriodsHours = TotalHours;
@@ -143,8 +143,7 @@ public class AgroWorld : SimulationWorld
 	//clouds_coverage, precipitation
 	WeatherStats[] Weather;
 	BitArray Daylight;
-
-	static readonly int[] DaysPerMonth = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+	readonly AirTemperatureProfile AirTemperatures;
 
 	/// <summary>
 	/// The tick length a request's <c>HoursPerTick</c> actually runs at: whole divisors of a day
@@ -209,6 +208,7 @@ public class AgroWorld : SimulationWorld
 
 	public AgroWorld(SimulationRequest? settings = null) : base()
 	{
+		AirTemperatures = new(settings?.DailyAirTemperatures);
 		CollisionGeometryToleranceM = settings?.CollisionGeometryToleranceM ?? .0005f;
 		if (!float.IsFinite(CollisionGeometryToleranceM) || CollisionGeometryToleranceM < 0f || CollisionGeometryToleranceM > .0005f)
 			throw new ArgumentOutOfRangeException(nameof(SimulationRequest.CollisionGeometryToleranceM),
@@ -216,6 +216,7 @@ public class AgroWorld : SimulationWorld
 		CollisionBackend = global::Agro.Collisions.CudaCollisionBackend.RequestedBackend();
 		ContactEngine = settings?.ContactEngine ?? ContactEngineFromEnvironment();
 		Deterministic = settings?.Deterministic ?? false;
+		VirtualRoots = settings?.VirtualRoots ?? false;
 
 		//The site has to be settled BEFORE the time-zone lookup below and before Init(), both of
 		//which read it: the zone is derived from the coordinates, and Init() builds the daylight
@@ -299,6 +300,7 @@ public class AgroWorld : SimulationWorld
 				"ignore the rotation unless it reads the Az header, so its irradiance will not " +
 				"match the internal solver's.");
 
+		InitializeHistory(settings);
 		Init();
 	}
 
@@ -342,7 +344,7 @@ public class AgroWorld : SimulationWorld
 		// var avgLowTemperature = new float []{-2, -2, 1, 5, 9, 12, 14, 14, 11, 6, 2, -1};
 		// var avgColdNightTemperature = new float[]{-10, -8, -5, -2, 2 ,5, 9, 8, 5, -2, -4, -8};
 
-		var tsTotal = TimestepsTotal();
+		var tsTotal = checked(TimestepsTotal() + (int)RecordedStartStep);
 		Weather = new WeatherStats[tsTotal];
 		var tsCounter = 0;
 		// Weather planning must not advance the plant/soil random stream.  Its
@@ -350,31 +352,45 @@ public class AgroWorld : SimulationWorld
 		// fixed seed grow a different plant merely because it is simulated for
 		// longer.
 		var weatherRng = RNG.NextRNG();
+		var historyWeatherState = weatherRng.GetState();
+		var recordingMonth = new DateTime(InitialTime.Year, InitialTime.Month, 1);
 
-		var month = 0;
+		var weatherStartUtc = GetTime(0);
+		var plannedMonth = DateTime.MinValue;
+		WeatherStats[] monthly = [];
+		var elapsedHours = 0;
 		var timestepHours = 0;
 		var timestepPrecipitation = 0.0;
 		var timestepCoverage = 0.0;
 		while(tsCounter < tsTotal)
 		{
-			var monthly = PlanCloudsSingleMonth(weatherRng, month + 1, DaysPerMonth[month], sunnyDays[month], cloudyDays[month], dullDays[month], precipitationMM[month], dailyPrecipitation[month]);
-			for (var h = 0; h < monthly.Length && tsCounter < tsTotal; ++h)
+			// Generate complete calendar months, then sample the actual local date/hour. Starting
+			// mid-month skips its prefix; DST repeats/skips the matching local hour. The stream
+			// depends on calendar months and seed, never tick size or the requested horizon.
+			var localHour = TimeZoneInfo.ConvertTimeFromUtc(weatherStartUtc.AddHours(elapsedHours++), TimeZone);
+			var monthStart = new DateTime(localHour.Year, localHour.Month, 1);
+			if (monthStart != plannedMonth)
 			{
-				timestepPrecipitation += monthly[h].Precipitation;
-				timestepCoverage += monthly[h].SkyCoverage;
-				++timestepHours;
-
-				if (timestepHours != HoursPerTick)
-					continue;
-
-				Weather[tsCounter++] = new WeatherStats(timestepCoverage / timestepHours, timestepPrecipitation);
-				timestepHours = 0;
-				timestepPrecipitation = 0.0;
-				timestepCoverage = 0.0;
+				var month = localHour.Month - 1;
+				// Earlier months have independent deterministic streams. They cannot advance the
+				// existing recorded weather stream or change it when another old plant is added.
+				var monthRng = monthStart < recordingMonth
+					? HistoryWeatherRng(historyWeatherState.State, historyWeatherState.Increment, monthStart)
+					: weatherRng;
+				monthly = PlanCloudsSingleMonth(monthRng, month + 1, DateTime.DaysInMonth(localHour.Year, localHour.Month),
+					sunnyDays[month], cloudyDays[month], dullDays[month], precipitationMM[month], dailyPrecipitation[month]);
+				plannedMonth = monthStart;
 			}
-
-			month = month < 11 ? month + 1 : 0;
+			var hour = (localHour.Day - 1) * 24 + localHour.Hour;
+			timestepPrecipitation += monthly[hour].Precipitation;
+			timestepCoverage += monthly[hour].SkyCoverage;
+			if (++timestepHours != HoursPerTick) continue;
+			Weather[tsCounter++] = new WeatherStats(timestepCoverage / timestepHours, timestepPrecipitation);
+			timestepHours = 0;
+			timestepPrecipitation = 0.0;
+			timestepCoverage = 0.0;
 		}
+		AirTemperatures.PlanUtc(GetTime(0), TimeZone, HoursPerTick, tsTotal);
 
 		if (HoursPerTick < 24 || Math.Abs(Latitude) > 66)
 		{
@@ -424,7 +440,7 @@ public class AgroWorld : SimulationWorld
 		// its conversion and publish both together for parallel plant readers.
 		if (origin == null || origin.Local != initial || origin.Local.Kind != initial.Kind)
 			CachedCalendarOrigin = origin = new(initial, TimeZoneInfo.ConvertTimeToUtc(initial, TimeZone));
-		return origin.Utc + TimeSpan.FromHours(timestep * HoursPerTick);
+		return origin.Utc + TimeSpan.FromHours(((long)timestep - RecordedStartStep) * HoursPerTick);
 	}
 	///<summary>
 	///Rainfall in the given timestep in gramm per m²
@@ -440,9 +456,14 @@ public class AgroWorld : SimulationWorld
 			Weather[i] = new WeatherStats(Weather[i].SkyCoverage, Weather[i].Precipitation * factor);
 	}
 	/// <summary>
-	/// Temperature in the given timesttep in degree Celsius
+	/// Time-weighted daily mean air temperature over the tick, in degrees Celsius. Missing
+	/// observations use an interpolated Vienna climate normal, not observed weather.
 	/// </summary>
-	internal float GetTemperature(uint timestep) => 20;
+	internal float GetTemperature(uint timestep) => AirTemperatures.MeanC(timestep);
+	/// <summary>Time-weighted daily vegetative thermal response; applies the clamp before
+	/// averaging so a cold day cannot cancel a warm day's development in a multi-day tick.</summary>
+	internal float GetVegetativeTemperatureFactor(uint timestep, float baseC, float fullC) =>
+		AirTemperatures.VegetativeFactor(timestep, baseC, fullC, HoursPerTick);
 	internal float GetAmbientLight(uint timestep) => 1f - Weather[timestep].SkyCoverage;
 
 	/// <summary>
@@ -458,9 +479,9 @@ public class AgroWorld : SimulationWorld
 	public float[] SkyCoverageSeries()
 	{
 		if (Weather == null) return [];
-		var result = new float[Weather.Length];
-		for (int i = 0; i < Weather.Length; ++i)
-			result[i] = Weather[i].SkyCoverage;
+		var result = new float[TimestepsTotal()];
+		for (int i = 0; i < result.Length; ++i)
+			result[i] = Weather[RecordedStartStep + i].SkyCoverage;
 		return result;
 	}
 	internal bool GetDaylight(uint timestep) => Daylight?.Get((int)timestep) ?? true;
@@ -851,11 +872,27 @@ public class AgroWorld : SimulationWorld
     // V35 appends each plant's drought state after its water budget (stress filter, episode,
     // reference and target canopy, carry, starvation, last controller step) and the tray survey's
     // dead-attached leaf area. Leaves in drought senescence reuse the organ's senescence fields.
+	// V36 changes weather to the requested calendar and air temperature/development to dated
+	// observations or climate normals. Those inputs alter continuation; playback is unchanged.
+	// V37 measures direct/projected leaf area indices with the low-resolution leaf mesh. Earlier
+	// meter accumulators use the light scene's geometry and cannot be mixed with the new readings.
 	// V38 stores committed whole-blade shedding counts and the survey's per-period totals and
 	// recorded formation counters. Earlier live states cannot reconstruct historical shedding.
 	// V39 corrects soil transport, probability arithmetic and physiological timing. Older live
 	// runs cannot continue with the same dynamics; recorded playback remains readable.
-	public const byte CheckpointVersion = 39;
+	// V40 adds shared establishment history, pending plants and woody/reproductive state.
+	// V41 persists each woody shoot's gravity-relative inclination so light steering cannot
+	// erase its inherited branch habit over successive internodes.
+	// V42 measures woody graft, clear-trunk and crown height from the local soil surface.
+	// V48 adds opt-in axillary short-shoot clustering and revised Obelisk foliage.
+	// Earlier live histories use different development; saved playback is retained.
+	// V58 binds effective mainline selection and training controls; Auto resolves
+	// once before establishment. Earlier live histories are not converted.
+	// V59 retains a completed monopodial internode as wood and gives it a
+	// separate terminal bud. V58 live histories used different shoot topology.
+	// V62 corrects ordinary lateral-unit trials and skips private V60/V61 histories.
+	// V9 playback and the 400-byte AG / 160-byte UG layouts are unchanged.
+	public const byte CheckpointVersion = 62;
 
 	/// <summary>
 	/// Everything the next step depends on that the request does not determine.
@@ -870,6 +907,8 @@ public class AgroWorld : SimulationWorld
 
 		writer.Write(CheckpointVersion);
 		writer.Write(Timestep);
+		writer.Write(RecordedStartStep);
+		writer.Write(HistoryCompleted);
 		//The world generator. It is consumed only while the world is being built - the weather table
 		//forks a stream from it - so a rebuilt world already has it in the right place. Written
 		//anyway, at sixteen bytes, so that the day something draws from it during a run this
@@ -922,6 +961,11 @@ public class AgroWorld : SimulationWorld
 				$"A run saved by a different build of the simulation cannot be resumed.");
 
 		var timestep = reader.ReadUInt32();
+		if (reader.ReadUInt32() != RecordedStartStep)
+			throw new InvalidDataException("The checkpoint establishment history differs from the request.");
+		HistoryCompleted = reader.ReadBoolean();
+		if (timestep < PreparationStartStep || timestep > RecordedStartStep + (uint)TimestepsTotal() || HistoryCompleted && timestep < RecordedStartStep)
+			throw new InvalidDataException("The checkpoint clock is outside the requested horizon.");
 		RNG.SetState(reader.ReadUInt64(), reader.ReadUInt64());
 		var count = reader.ReadInt32();
 		if (count != Count)

@@ -5,7 +5,7 @@
 //one function is the point: two renderers reimplementing this independently would drift, and
 //the failure mode (organs offset by half their length) is subtle enough to ship unnoticed.
 
-import { Box, Cylinder, Disk, Primitive, Primitives, Rectangle } from '../../helpers/Primitives';
+import { Box, Cylinder, Disk, Ellipsoid, Primitive, Primitives, Rectangle } from '../../helpers/Primitives';
 import { Mat4, fromRowMajor3x4, scaleInPlace, setPosition } from './Mat4';
 
 /**
@@ -37,7 +37,7 @@ export function decodeCylinderish(p: Cylinder | Box, out: Mat4): Mat4 {
  * as relief in metres, so it must not be scaled again. See the ExportV7 lamina branch in
  * Agro/IrradianceClient.cs.
  */
-export function decodePlanar(p: Disk | Rectangle | Cylinder | Box, out: Mat4): Mat4 {
+export function decodePlanar(p: Disk | Rectangle | Cylinder | Box | Ellipsoid, out: Mat4): Mat4 {
     return fromRowMajor3x4(p.affineTransform, out);
 }
 

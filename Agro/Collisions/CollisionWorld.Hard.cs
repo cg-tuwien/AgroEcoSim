@@ -114,6 +114,32 @@ public sealed partial class CollisionWorld
             }
             unresolved = hopeless.Count;
         }
+        // A support rollback can carry an immediate module birth back into a
+        // solid AFTER the initial newborn branch above has already seen it
+        // clear. Recheck only this explicitly tracked, same-tick replacement
+        // cohort at its final pose. Legacy hopeless floral residuals retain
+        // their existing policy; disabled module forms allocate/scan nothing.
+        if (shrinkNewborns && ag.TreeModulesEnabled)
+        {
+            var roots = ag.FinalProvisionalTreeModules();
+            while (roots.MoveNext(out var i))
+            {
+                if (StaticAdmissible(plant, i, admission)) continue;
+                touched = true;
+                if (TraceSolids) Trace(plant, i, "final provisional birth inadmissible");
+                bool Accept() => StaticAdmissible(plant, i, admission);
+                Static.ShapeContact(Shape(ag, i), TrustedPoint(plant, i), StaticSurface.Obstacle, out _, out var normal, out _);
+                if (!ag.TryRedirectGrowth(i, normal, Accept) && !ag.TryShortenGrowth(i, Accept)
+                    && !ag.TryShrinkNewborn(i, Accept))
+                {
+                    if (TraceSolids) Trace(plant, i, "withdrawn birth");
+                    ag.Death(i, force: true, reason: OrganDeathReason.Obstruction);
+                    var parent = ag.GetParent(i);
+                    if (parent >= 0) ag.SetObstruction(parent, true);
+                }
+                else if (TraceSolids) Trace(plant, i, "final provisional birth admitted");
+            }
+        }
         return touched;
     }
 

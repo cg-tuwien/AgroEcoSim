@@ -39,13 +39,14 @@ namespace Agro
                     Quaternion.CreateFromAxisAngle(Vector3.UnitX, azimuth) *
                     Quaternion.CreateFromAxisAngle(Vector3.UnitZ, -inclination);
             }
-            public void grow(ref AboveGroundAgent agent, int agentID, PlantSubFormation<AboveGroundAgent> formation)
+            public void grow(ref AboveGroundAgent agent, int agentID, PlantSubFormation<AboveGroundAgent> formation, float environmentFactor = 1f)
             {
                 //A flower on a shoot that is stuck in a wall does not keep growing either.
                 if (agent.GrowthBlocked)
                     return;
 
                 var currentSize = new Vector2(agent.Length, agent.Radius);
+                var growthTime = agent.GrowthTimeVar * environmentFactor;
 
                 switch (agent.Organ)
                 {
@@ -63,7 +64,7 @@ namespace Agro
                                 MathF.Max(currentSize.Y, MathF.Min(agent.GetRadiusVar(), parentRadius)));
                             // The scape ignores the one-tick water sufficiency, as it always has, but
                             // slows with the drought response like every other organ.
-                            var growth = formation.Plant.DroughtGrowthFactor * sizeLimit * agent.GrowthTimeVar;
+                            var growth = formation.Plant.DroughtGrowthFactor * sizeLimit * growthTime;
                             var resultingSize = Vector2.Min(currentSize + growth, sizeLimit);
                             growth = Vector2.Max(resultingSize - currentSize, Vector2.Zero);
                             agent.Length += growth.X;
@@ -74,7 +75,7 @@ namespace Agro
                     case OrganTypes.FlowerPedicel: {
                             var sizeLimit = new Vector2(agent.GetLengthVar(), agent.GetRadiusVar());
 
-                            var growth = formation.Plant.GrowthWaterFactor * sizeLimit * agent.GrowthTimeVar;
+                            var growth = formation.Plant.GrowthWaterFactor * sizeLimit * growthTime;
                             var resultingSize = Vector2.Min(currentSize + growth, sizeLimit);
                             growth = resultingSize - currentSize;
 
@@ -92,7 +93,7 @@ namespace Agro
                             if (currentSize.X < sizeLimit.X || currentSize.Y < sizeLimit.Y)
                             {
                                 //HoursPerTick are included in GrowthTimeVar
-                                var growth = formation.Plant.GrowthWaterFactor * sizeLimit * agent.GrowthTimeVar ;
+                                var growth = formation.Plant.GrowthWaterFactor * sizeLimit * growthTime;
 
                                 var resultingSize = Vector2.Min(currentSize + growth, sizeLimit);
                                 growth = resultingSize - currentSize;
@@ -106,7 +107,7 @@ namespace Agro
                         } break;
                     case OrganTypes.FlowerBud: {
                             var sizeLimit = new Vector2(agent.GetLengthVar(), agent.GetRadiusVar());
-                            var growth = formation.Plant.GrowthWaterFactor * sizeLimit * agent.GrowthTimeVar;
+                            var growth = formation.Plant.GrowthWaterFactor * sizeLimit * growthTime;
                             var resultingSize = Vector2.Min(currentSize + growth, sizeLimit);
                             growth = Vector2.Max(resultingSize - currentSize, Vector2.Zero);
                             agent.Length += growth.X;
@@ -127,7 +128,7 @@ namespace Agro
                                 ? formation.GetBaseRadius(agent.Parent)
                                 : float.MaxValue;
                             var sizeLimit = new Vector2(agent.GetLengthVar(), MathF.Min(agent.GetRadiusVar(), parentRadius));
-                            var growth = formation.Plant.DroughtGrowthFactor * sizeLimit * agent.GrowthTimeVar;
+                            var growth = formation.Plant.DroughtGrowthFactor * sizeLimit * growthTime;
                             var resultingSize = Vector2.Min(currentSize + growth, sizeLimit);
                             // A parent thinner than this meristem already is must not shrink it
                             // every tick; the stem and bud branches clamp the same way.
@@ -375,6 +376,9 @@ namespace Agro
                         else if (_settings.FlowerBranchMaximumDepth <= 0)
                         {
                             createFlower(ref agent, agentID, formation, _settings.FlowersPerCluster, agent.Orientation, _settings.FlowerClusterMaximumSpreadDegrees);
+                            // The unbranched scape is complete. Falling through to the
+                            // terminal-branch case below emitted the same cluster twice.
+                            return;
                         }
                         else if (_settings.CreateLeavesOnFlowerBase) {
                             agent.CreateFlowerBaseLeaves(agent, formation.Plant, 25f, agentID);
@@ -509,6 +513,12 @@ namespace Agro
                     float pitchVarRange = _settings.PetalPitchVarianceDegrees * DegreesToRadians;
                     float rollVarRange = _settings.PetalRollVarianceDegrees * DegreesToRadians;
 
+                    if (_settings.PetalRingCount > 1)
+                    {
+                        CreateLigulateHead(ref agent, agentID, formation);
+                        return;
+                    }
+
                     for (int i = 0; i < petalCount; i++)
                     {
 
@@ -529,6 +539,55 @@ namespace Agro
                         agent.Energy *= 0.9f;
                     }
                 }
+            }
+
+            private void CreateLigulateHead(ref AboveGroundAgent agent, int agentID,
+                PlantSubFormation<AboveGroundAgent> formation)
+            {
+                // Asteraceae heads consist of separate florets. The existing lamina organ
+                // represents each floret's exposed ligule; the tubular bases and stamens
+                // remain unresolved. Keep total count fixed as ring count changes.
+                var rings = _settings.PetalRingCount;
+                var remaining = _settings.PetalCount;
+                var remainingWeight = (double)rings * (rings + 1) * .5;
+                var floretEnergy = agent.Energy * (.1f / _settings.PetalCount);
+                var pitchJitter = _settings.PetalPitchVarianceDegrees * DegreesToRadians;
+                var rollJitter = _settings.PetalRollVarianceDegrees * DegreesToRadians;
+                for (int ring = 0; ring < rings; ++ring)
+                {
+                    var weight = rings - ring;
+                    var count = ring == rings - 1 ? remaining : Math.Clamp(
+                        (int)(remaining * weight / remainingWeight), 1, remaining - (weight - 1));
+                    remaining -= count;
+                    remainingWeight -= weight;
+                    var inward = ring / (float)(rings - 1);
+                    var lengthScale = 1f + (_settings.InnerPetalLengthRatio - 1f) * inward;
+                    var pitch = (_settings.PetalPitchDegrees +
+                        (_settings.InnerPetalPitchDegrees - _settings.PetalPitchDegrees) * inward) * DegreesToRadians;
+                    var rim = agent.Radius * _settings.PetalRimFraction * (1f - inward);
+                    for (int i = 0; i < count; ++i)
+                    {
+                        // Stagger adjacent rings so their tips do not line up into spokes.
+                        var azimuth = MathF.Tau * (i + .5f * ring) / count;
+                        var orientation = agent.Orientation *
+                            Quaternion.CreateFromAxisAngle(Vector3.UnitX, azimuth) *
+                            Quaternion.CreateFromAxisAngle(Vector3.UnitZ,
+                                pitch + formation.Plant.RNG.NextFloatVar(pitchJitter)) *
+                            Quaternion.CreateFromAxisAngle(Vector3.UnitX,
+                                formation.Plant.RNG.NextFloatVar(rollJitter));
+                        var offset = Vector3.Transform(new Vector3(0f,
+                            MathF.Cos(azimuth) * rim, MathF.Sin(azimuth) * rim), agent.Orientation);
+                        var floret = new AboveGroundAgent(formation.Plant, agentID, OrganTypes.FlowerPadel,
+                            orientation, floretEnergy, initialResources: formation.DailyResourceMax,
+                            initialProduction: formation.DailyProductionMax)
+                        { DominanceLevel = agent.DominanceLevel, BaseOffset = offset };
+                        floret.RetargetSize(floret.GetLengthVar() * lengthScale, floret.GetRadiusVar());
+                        formation.Birth(floret);
+                    }
+                }
+                // Allocate the head's ten-percent birth budget once, independently of how
+                // many florets are drawn. Repeatedly debiting it would drain a dense head.
+                agent.Energy *= .9f;
             }
 
             private void createFlower(ref AboveGroundAgent agent, int agentID, PlantSubFormation<AboveGroundAgent> formation, int clustersize, Quaternion baseOr, float clusterMaximumSpreadDegrees)

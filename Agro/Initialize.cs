@@ -111,6 +111,7 @@ public static class Initialize
                 var species = GetSpecies(settings, i);
                 Console.WriteLine($"Species lookup: {species?.Name ?? "null"}, BudLength: {species?.FlowerSettings.BudLength ?? -1}");
                 plantsFormation[i] = new PlantFormation2(world, species ?? SpeciesSettings.Default, soil, seed, rnd, world.HoursPerTick);
+                plantsFormation[i].ConfigureEstablishment(settings.Plants[i].StartOffsetHours);
             }
         }
         else
@@ -145,6 +146,13 @@ public static class Initialize
                     case "mesh": break; //should be already added in SetWorld
                     default: throw new ArgumentException($"There is no such obstacle type as {obstacle.Type}.");
                 }
+
+        // Historical establishment can occur in the first formation tick, before the
+        // collision callback. Build its terrain on this serial path before any juvenile
+        // samples it. The condition depends on establishment, not a pending species:
+        // adding a future tree must not change another plant's initial terrain queries.
+        if (settings?.Plants?.Any(plant => plant.StartOffsetHours < 0) == true)
+            world.Collisions.EnsureStatic(world);
 
         return world;
     }

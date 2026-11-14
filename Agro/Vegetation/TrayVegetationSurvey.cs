@@ -361,7 +361,7 @@ public sealed class TrayVegetationSurvey
 	/// records physical shedding every step in the period containing that step's midpoint.</summary>
 	public void Tick(SimulationWorld world, uint timestep, IList<IFormation> formations, IList<IObstacle> obstacles)
 	{
-		if (world is not AgroWorld agro)
+		if (world is not AgroWorld agro || agro.IsPreparing)
 			return;
 		var local = TimeZoneInfo.ConvertTimeFromUtc(agro.GetTime(timestep), agro.TimeZone);
 		var date = PeriodCalendar.StepDate(local, agro.HoursPerTick);
@@ -398,6 +398,15 @@ public sealed class TrayVegetationSurvey
 			TrayArray[t].LastDay = TrayArray[t].LastDay with { LeavesShed = TrayArray[t].LastDay.LeavesShed + count };
 			Dirty = true;
 		}
+	}
+
+	/// <summary>Historical shedding belongs to preparation, not the first recorded day.</summary>
+	internal void BeginRecording(AgroWorld world)
+	{
+		if (!Ready) Setup(world, world.FormationList, world.ObstacleList);
+		for (int i = 0; i < world.FormationList.Count; ++i)
+			if (world.FormationList[i] is PlantFormation2 plant)
+				RecordedShedTotals[i] = plant.AG.FoliageBladesShed;
 	}
 
 	/// <summary>The tray an imported soil belongs to: the name without its last <c>_S</c> part.</summary>

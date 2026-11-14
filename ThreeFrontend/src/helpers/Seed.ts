@@ -5,13 +5,17 @@ import { MeshTerrainItem } from "./Terrain";
 import { Species } from "./Species";
 import { makeSelectionPalette } from "../render/core/SelectionPalette";
 import { Vec3, distanceSq, vec3 } from "../render/core/Vec3";
+import { PlantAgeUnit, readStartOffsetHours } from "./TimeUnits";
 
 const seedPalette = makeSelectionPalette("#008");
 
 export class Seed extends BaseRequestObject
 {
     species: Signal<string>;
-    constructor(spec: string, x: number, y: number, z: number, fieldIndex: number, globalCoordinates: boolean) {
+    startOffsetHours: Signal<number>;
+    ageUnit: Signal<PlantAgeUnit>;
+    constructor(spec: string, x: number, y: number, z: number, fieldIndex: number, globalCoordinates: boolean,
+                startOffsetHours = 0, ageUnit: PlantAgeUnit = "days") {
         if (appstate.terrainList[fieldIndex] instanceof MeshTerrainItem && globalCoordinates)
         {
             y += appstate.terrainList[fieldIndex].sy() - 0.01;
@@ -24,6 +28,8 @@ export class Seed extends BaseRequestObject
 
         super(x, y, z, seedPalette, fieldIndex);
         this.species = signal(spec);
+        this.startOffsetHours = signal(readStartOffsetHours(startOffsetHours));
+        this.ageUnit = signal(ageUnit === "years" ? "years" : "days");
 
         appstate.needsRender.value = true;
     }
@@ -55,7 +61,24 @@ export class Seed extends BaseRequestObject
             px: this.px.peek(),
             py: this.py.peek(),
             pz: this.pz.peek(),
-            fi: this.fieldIndex.peek()
+            fi: this.fieldIndex.peek(),
+            startOffsetHours: readStartOffsetHours(this.startOffsetHours.peek()),
+            ageUnit: this.ageUnit.peek()
+        };
+    }
+
+    static load(saved: ReturnType<Seed["save"]>) {
+        return new Seed(saved.species, saved.px, saved.py, saved.pz, saved.fi, false,
+            saved.startOffsetHours, saved.ageUnit);
+    }
+
+    /** Keep raw hours on the wire; tick quantization belongs to simulation scheduling. */
+    public request() {
+        return {
+            S: this.species.peek(),
+            P: { X: this.px.peek(), Y: this.py.peek(), Z: this.pz.peek() },
+            F: this.fieldIndex.peek(),
+            StartOffsetHours: readStartOffsetHours(this.startOffsetHours.peek())
         };
     }
 

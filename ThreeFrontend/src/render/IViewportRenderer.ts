@@ -164,8 +164,6 @@ export interface IViewportRenderer {
     attachGizmo?(target: unknown): void;
     detachGizmo?(target: unknown): void;
 
-    exportGLTF?(save: (json: string) => void): void;
-
     /** Offscreen render at an arbitrary size. Used by the offline animation renderer. */
     renderToPixels?(width: number, height: number, ssaa: number, msaa: 1 | 4, pose: CameraPose): Promise<PixelReadback>;
 }

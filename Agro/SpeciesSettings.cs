@@ -4,7 +4,9 @@ using Agro.Species;
 
 namespace Agro;
 
-public enum Behavior : byte { Default, Herbaceous }
+public enum Behavior : byte { Default, Herbaceous, Woody }
+public enum TreeCrownHabit : byte { Broad, Columnar, Globe }
+public enum TreeMainlineModuleMode : byte { Off = 0, RealAxillary = 1, Auto = 2 }
 
 public class SpeciesSettings
 {
@@ -46,10 +48,204 @@ public class SpeciesSettings
     /// </summary>
     public Behavior Behavior { get; set; } = Behavior.Default;
 
+    [SpeciesUIGroup("Trees")]
+    [SpeciesUITooltip("0: broad crown; 1: narrow ascending crown; 2: rounded grafted crown.")]
+    public TreeCrownHabit TreeCrownHabit { get; set; } = TreeCrownHabit.Broad;
+    /// <summary>Typical mature crown radius in metres; a developmental envelope, not pruning.</summary>
+    public float TreeCrownRadius { get; set; } = 5f;
+    /// <summary>Leader extension in a favourable growing season, metres. Provisional calibration.</summary>
+    public float TreeAnnualExtension { get; set; } = .65f;
+    /// <summary>Maximum annual extension of an active explicit woody root tip in metres, before soil temperature, hydration and resource limitations. This provisional model rate is calibrated against nursery development; it is not a root depth limit.</summary>
+    [SpeciesUILabel("Annual root extension (m)")]
+    [SpeciesUITooltip("Maximum active explicit root-tip extension per nominal 365-day year, before temperature, hydration and resource limitations. Provisional nursery-calibrated rate; does not cap root depth or length.")]
+    public float TreeRootAnnualExtension { get; set; } = .65f;
+    /// <summary>Maximum annual radial increment, metres, reduced by age, resources and branch order.</summary>
+    public float TreeAnnualRadiusGrowth { get; set; } = .004f;
+    public float TreeMatureAgeYears { get; set; } = 40f;
+    public float TreeFloweringAgeYears { get; set; } = 5f;
+    /// <summary>Use a distal axillary relay after a completed growth unit, rather than a perpetually renewing terminal apex.</summary>
+    [SpeciesUILabel("Pseudo-terminal shoot renewal")]
+    [SpeciesUITooltip("Close each growth unit and renew from a distal axillary bud. The managed primary axis keeps its upright training; lateral units retain their anatomical frame. Disabled preserves terminal renewal.")]
+    public bool TreeSympodialRenewal { get; set; }
+    [SpeciesUILabel("Dorsiventral foliage sprays")]
+    [SpeciesUITooltip("Keep two alternating leaf ranks and lateral sites in a carried branch plane. Each new lateral axis starts with its dorsal plane as level as its heading allows, then carries that frame as it develops.")]
+    public bool TreeDorsiventralShoots { get; set; }
+    /// <summary>Select the shoot architecture once, before establishment. Missing values preserve existing growth.</summary>
+    [SpeciesUILabel("Mainline model")]
+    [SpeciesUITooltip("Automatic uses real axillary growth for compatible single-stem, ungrafted forms and existing growth for other forms. Real axillary requires a compatible form.")]
+    public TreeMainlineModuleMode TreeMainlineModuleMode { get; set; } = TreeMainlineModuleMode.Off;
+    /// <summary>Explicit trial nursery-training endpoint above ground; not a natural age or mature dimension.</summary>
+    [SpeciesUILabel("Explicit training height (m)")]
+    [SpeciesUITooltip("Real axillary only. Automatic uses clear-trunk height; existing growth ignores this control.")]
+    public float TreeMainlineTrainingHeightM { get; set; }
+    /// <summary>Provisional gravity-relative reference inclination of each new mainline module.</summary>
+    public float TreeMainlineReferenceInclinationDegrees { get; set; } = 35f;
+    /// <summary>Provisional fraction of a finite unit devoted to appressed-bud opening.</summary>
+    public float TreeMainlineOpeningFraction { get; set; } = .25f;
+    internal bool TreeMainlineModulesEnabled { get; private set; }
+    internal float EffectiveTreeMainlineTrainingHeightM { get; private set; }
+    internal float TreeMainlineReferenceInclinationRadians { get; private set; }
+    /// <summary>Provisional instantaneous sinusoidal maturation-strain amplitude. Zero is the exact disabled path; not a measured Celtis coefficient.</summary>
+    public float TreeSecondaryMaturationStrainAmplitude { get; set; }
+    /// <summary>Trial proximal material fraction frozen after a real successor commits; not a botanical onset measurement.</summary>
+    public float TreeSecondaryProximalFraction { get; set; } = .25f;
+    /// <summary>Provisional length scale in the local angle/curvature feedback. Used only when strain is positive.</summary>
+    public float TreeSecondaryProprioceptiveLengthM { get; set; } = 1f;
+    internal bool TreeSecondaryErectionEnabled { get; private set; }
+    [SpeciesUILabel("Lateral growth-unit arch (degrees)")]
+    [SpeciesUITooltip("Provisional intrinsic tangent change across one lateral growth unit, from accepted extension. Zero disables it. Does not move established wood or set a mature crown boundary.")]
+    public float TreeLateralUnitArchDegrees { get; set; }
+    [SpeciesUILabel("Light response per growth unit (degrees)")]
+    [SpeciesUITooltip("Maximum accumulated light-driven turn across one growth unit, including inclination and azimuth. The response follows accepted new length and is carried into the next internode. Applies when the growth-unit model is enabled.")]
+    public float TreeUnitLightDeviationDegrees { get; set; } = 10f;
+    [SpeciesUILabel("Axillary bud activation probability")]
+    [SpeciesUITooltip("One annual activation decision before an axillary bud expands, flowers or produces leaves. Existing wood and fruit are retained. One preserves the original path; terminal or relay axes always flush. Provisional site-resolution coefficient.")]
+    public float TreeAxillaryFlushProbability { get; set; } = 1f;
+    /// <summary>Preferred mature blade angle below horizontal. Zero preserves the original leaf-pitch path.</summary>
+    [SpeciesUILabel("Mature blade declination (degrees)")]
+    [SpeciesUITooltip("Preferred downward blade angle after expansion. Zero keeps the original leaf pitch. The blade approaches this pose as it grows; petiole phyllotaxy, contacts and elastic bending still apply.")]
+    public float TreeLeafDeclinationDegrees { get; set; }
+    [SpeciesUILabel("Blade declination variation (degrees)")]
+    [SpeciesUITooltip("Symmetric variation sampled once per blade. Provisional morphology coefficient; it does not change the blade dimensions.")]
+    public float TreeLeafDeclinationVariationDegrees { get; set; }
+    /// <summary>Establishment age when an ungrafted broad crown starts releasing apical control. Provisional, independent of reproductive maturity.</summary>
+    [SpeciesUILabel("Crown maturation start (years)")]
+    [SpeciesUITooltip("Start age for gradual release of the leader's control of branch extension and angle. Ungrafted broad crowns only. Provisional coefficient, independent of flowering age.")]
+    public float TreeApicalControlStartYears { get; set; }
+    /// <summary>Establishment age when the crown maturation response is complete. Zero disables it and preserves the original hierarchy.</summary>
+    [SpeciesUILabel("Crown maturation end (years)")]
+    [SpeciesUITooltip("Age when the crown maturation response is complete. Zero disables it. This controls branching, rather than setting a mature size.")]
+    public float TreeApicalControlEndYears { get; set; }
+    [SpeciesUILabel("Mature leader extension fraction")]
+    [SpeciesUITooltip("Fraction of the leader's extension allowance after crown maturation, before the usual light, water, temperature, support and contact constraints.")]
+    public float TreeMatureLeaderExtensionFraction { get; set; } = .2f;
+    [SpeciesUILabel("Mature branch extension fraction")]
+    [SpeciesUITooltip("Extension allowance for higher-order axes at full crown maturation, relative to the species' annual extension. Provisional coefficient.")]
+    public float TreeMatureBranchExtensionFraction { get; set; } = 1f;
+    [SpeciesUILabel("Mature framework angle fraction")]
+    [SpeciesUITooltip("Fraction of the original lateral pitch for newly born branches on the primary axes. Existing wood keeps its orientation. Provisional coefficient.")]
+    public float TreeMatureFrameworkPitchFraction { get; set; } = .5f;
+    /// <summary>Rootstock height in metres. Zero means an ungrafted tree; the scion is mature material.</summary>
+    [SpeciesUILabel("Graft height (m)")]
+    [SpeciesUITooltip("Rootstock height; zero selects an ungrafted tree. The scion uses mature cultivar material.")]
+    public float TreeGraftHeight { get; set; }
+    /// <summary>Managed clear trunk height in metres. Basal stems retain their leaves while establishing.</summary>
+    [SpeciesUILabel("Clear trunk height (m)")]
+    [SpeciesUITooltip("Managed height without permanent low branches; establishment leaves remain until the crown develops.")]
+    public float TreeClearTrunkHeight { get; set; }
+    [SpeciesUILabel("Basal stem count")]
+    public int TreeStemCount { get; set; } = 1;
+    public int TreeMaximumBranchOrder { get; set; } = 4;
+    public float TreeBranchProbability { get; set; } = .16f;
+    /// <summary>Annual probability that an exposed perennial short shoot forms an axillary short-shoot daughter. Zero preserves isolated spurs. Provisional model coefficient.</summary>
+    [SpeciesUILabel("Short-shoot branching probability")]
+    [SpeciesUITooltip("Annual trial for an exposed short shoot to form one axillary short-shoot daughter; reduced by measured light. Provisional coefficient, not a measured cultivar rate.")]
+    public float TreeShortShootBranchProbability { get; set; }
+    /// <summary>Active-season days of sustained asymmetric shade before a spur retires at its next spring renewal. Zero disables this provisional response.</summary>
+    [SpeciesUILabel("Short-shoot shade budget (days)")]
+    [SpeciesUITooltip("Cumulative active-season shade budget before retirement at the next spring renewal; bright periods restore it. Winter preserves the budget. Zero disables the response. Provisional coefficient.")]
+    public float TreeShortShootShadeDiebackDays { get; set; }
+    /// <summary>Absolute low-light threshold as a fraction of the vegetative daily light reference. The relative crown threshold must also be met.</summary>
+    [SpeciesUILabel("Short-shoot low-light fraction")]
+    public float TreeShortShootShadeLightFraction { get; set; } = .05f;
+    /// <summary>Relative low-light threshold as a fraction of this crown's daily leaf mean; uniform whole-tree shade alone does not retire a spur.</summary>
+    [SpeciesUILabel("Short-shoot relative shade fraction")]
+    public float TreeShortShootShadeRelativeFraction { get; set; } = .15f;
+    [SpeciesUILabel("Shoot phototropic weight")]
+    [SpeciesUITooltip("Blend of measured light inclination (1) and the shoot's inherited architectural inclination (0). Provisional model coefficient.")]
+    public float TreePhototropicWeight { get; set; } = .25f;
+    [SpeciesUILabel("Short-shoot node count")]
+    [SpeciesUITooltip("Compressed nodes renewed each spring; each carries the configured alternate leaf or opposite pair.")]
+    public int TreeShortShootNodes { get; set; } = 2;
+    [SpeciesUILabel("Short-shoot length (m)")]
+    public float TreeShortShootLength { get; set; } = .025f;
+    /// <summary>Season fractions measured from 1 March, as AgroWorld.Season.</summary>
+    public float TreeBudBreakSeason { get; set; } = .08f;
+    public float TreeGrowthEndSeason { get; set; } = .46f;
+    public int TreeFlowersPerCluster { get; set; } = 6;
+    /// <summary>Optional sterile male clusters alongside solitary fruit-bearing flowers; zero disables them.</summary>
+    public int TreeMaleFlowersPerCluster { get; set; }
+
+    // Branch orders are bounded to six. Evaluate the original power expressions once,
+    // preserving their exact float results without a power call for every stem/tick.
+    static readonly float[] TreeRadiusOrderFactors = BuildTreeOrderFactors(.65f);
+    float[]? TreeExtensionOrderFactors;
+    bool TreeApicalControlEnabled;
+    float TreeLeaderExtensionReduction, TreeFrameworkPitchReduction;
+    internal float TreeLeafInclinationRadians { get; private set; }
+    internal float TreeLeafInclinationVariationRadians { get; private set; }
+    internal bool TreeGrowthUnitsEnabled { get; private set; }
+    internal float TreeLateralUnitArchRadians { get; private set; }
+    internal float TreeUnitLightDeviationRadians { get; private set; }
+    static float[] BuildTreeOrderFactors(float basis)
+    {
+        var factors = new float[6];
+        for (var i = 0; i < factors.Length; ++i) factors[i] = MathF.Pow(basis, i);
+        return factors;
+    }
+    internal static float TreeRadiusByOrder(byte order)
+        => TreeRadiusOrderFactors[Math.Clamp(order - 1, 0, 5)];
+    internal float TreeExtensionByOrder(byte order)
+        => (TreeExtensionOrderFactors ??= BuildTreeOrderFactors(DominanceFactor))[Math.Clamp(order - 1, 0, 5)];
+
+    internal float TreeApicalControlRelease(float ageYears)
+    {
+        if (!TreeApicalControlEnabled) return 0f;
+        var phase = Math.Clamp((ageYears - TreeApicalControlStartYears)
+            / (TreeApicalControlEndYears - TreeApicalControlStartYears), 0f, 1f);
+        return phase * phase * (3f - 2f * phase);
+    }
+
+    internal float TreeExtensionByOrder(byte order, float release)
+    {
+        // Exact original arithmetic for disabled profiles and juvenile trees.
+        var original = TreeExtensionByOrder(order);
+        if (release <= 0f) return original;
+        return order == 1 ? 1f - TreeLeaderExtensionReduction * release
+            : original * (1f - release) + TreeMatureBranchExtensionFraction * release;
+    }
+
+    internal float TreeFrameworkPitch(float release)
+        => release <= 0f ? LateralPitch : LateralPitch * (1f - TreeFrameworkPitchReduction * release);
+
+    /// <summary>Hours of establishment before a compressed rosette starts a leafy bolting axis. Zero disables the transition.</summary>
+    [SpeciesUIGroup("Herbaceous architecture")]
+    [SpeciesUILabel("Bolting age (hours)")]
+    public float BoltingAgeHours { get; set; }
+
+    /// <summary>Internode length during the pre-bolting rosette, in metres.</summary>
+    [SpeciesUILabel("Rosette node distance (m)")]
+    public float RosetteNodeDistance { get; set; } = 0.002f;
+
+    /// <summary>Maximum leafy nodes before bolting; the apex waits without being removed.</summary>
+    [SpeciesUILabel("Rosette node limit")]
+    public int RosetteMaximumNodes { get; set; } = 8;
+
+    /// <summary>Probability of one axillary leafy branch at each new node, not per tick.</summary>
+    [SpeciesUILabel("Branch probability per node")]
+    public float HerbaceousBranchProbability { get; set; }
+
+    /// <summary>Maximum leafy shoot order, including the main shoot as order one.</summary>
+    [SpeciesUILabel("Maximum shoot order")]
+    public int HerbaceousBranchMaximumOrder { get; set; } = 2;
+
+    /// <summary>Independent flower stalks leave the basal rosette apex vegetative.</summary>
+    [SpeciesUILabel("Independent rosette scapes")]
+    public bool RosetteScapes { get; set; }
+
+    /// <summary>Die after the first completed reproductive season, rather than rearming next spring.</summary>
+    [SpeciesUILabel("Single reproductive season")]
+    public bool Monocarpic { get; set; }
+
+    /// <summary>Explicit roots retain a dominant storage axis with finer lateral roots. Virtual roots remain an aggregate proxy.</summary>
+    [SpeciesUILabel("Dominant taproot")]
+    public bool Taproot { get; set; }
+
     ///<summary>
     /// Mean height of the plant (in meters). This is a descriptive growth hint,
     /// not a hard geometric constraint.
     ///</summary>
+    [SpeciesUIGroup("Name")]
     [SpeciesUILabel("Mean height")]
     public float Height { get; set; } = 10f;
 
@@ -377,11 +573,36 @@ public class SpeciesSettings
     public float LeafGrowthTime { get; set; } = 480f;
 
     /// <summary>CPU-light calibration multiplier for blade and petiole expansion.
-    /// Retains the actual energy budget, relative production allocation and support limits.
+    /// Retains the actual energy budget, environmental response and support limits.
     /// One preserves the previous rate; this is not extra photosynthetic energy.
     /// Applies to herbaceous blades and petioles under every light model.</summary>
     [SpeciesUILabel("Leaf expansion rate scale")]
     public float LeafExpansionRateScale { get; set; } = 1f;
+
+    /// <summary>Apply the empirical air-temperature response to vegetative development.
+    /// Disabled for custom/older species unless explicitly configured. This controls tissue
+    /// development, not frost survival, soil temperature or photosynthesis.</summary>
+    [SpeciesUIGroup("Seasonal growth")]
+    [SpeciesUILabel("Temperature-limited vegetative growth")]
+    public bool VegetativeTemperatureResponseEnabled { get; set; } = false;
+
+    /// <summary>Air temperature in degrees Celsius at which vegetative development stops.
+    /// The Geranium default of 5 C is provisional, not a measured cultivar threshold.</summary>
+    [SpeciesUILabel("Vegetative growth base temperature (C)")]
+    public float VegetativeGrowthBaseTemperatureC { get; set; } = 5f;
+
+    /// <summary>Air temperature in degrees Celsius at which the empirical developmental
+    /// multiplier reaches one. The response is linear between base and full temperature,
+    /// capped at one; it does not model heat injury.</summary>
+    [SpeciesUILabel("Vegetative growth full-rate temperature (C)")]
+    public float VegetativeGrowthFullTemperatureC { get; set; } = 20f;
+
+    /// <summary>Previous-day incident light in Wh/m2 at which vegetative development reaches
+    /// its nominal rate. Zero retains legacy relative-production expansion. Positive values
+    /// use the propagated absolute leaf exposure, including at petioles and crown supports.
+    /// This empirical developmental response does not create or debit assimilates.</summary>
+    [SpeciesUILabel("Vegetative growth reference light (Wh/m2/day)")]
+    public float VegetativeGrowthLightReferenceWhM2 { get; set; } = 0f;
 
     /// <summary>
     /// Experimental construction debit in grams of glucose equivalent per gram
@@ -390,6 +611,7 @@ public class SpeciesSettings
     /// retains the legacy carbon-accounting mode; general water-routing fixes still apply.
     /// Covers expansion and committed births; initial germination biomass is an initial condition.
     /// </summary>
+    [SpeciesUIGroup("Leafs")]
     [SpeciesUILabel("Construction cost (g glucose/g dry tissue)")]
     public float ConstructionEnergyPerDryGram { get; set; }
 
@@ -433,6 +655,10 @@ public class SpeciesSettings
     [SpeciesUIGroup("Roots")]
     [SpeciesUILabel("Roots density")]
     public float RootsDensity { get; set; } = 0.5f;
+
+    /// <summary>Maximum child-root radius relative to its parent. Woody roots apply this ratio at branching junctions; serial segments share their parent's ceiling. Other behaviors apply it at every segment. One retains the historical untapered root network.</summary>
+    [SpeciesUILabel("Root radius taper")]
+    public float RootRadiusTaper { get; set; } = 1f;
 
     ///<summary>
     /// Correction factor to point the roots growth downwards
@@ -1205,6 +1431,12 @@ public class SpeciesSettings
         Predefined.Add(Campanula_Poscharskyana.Init());
         Predefined.Add(Carex_Morrowii_Variegata.Init());
         Predefined.Add(Fragaria_Vesca_Ruegen.Init());
+        Predefined.Add(Persicaria_Minor.Init());
+        Predefined.Add(Lactuca_Serriola.Init());
+        Predefined.Add(Taraxacum_Officinale.Init());
+        Predefined.Add(Celtis_Australis.Init());
+        Predefined.Add(Amelanchier_Alnifolia_Obelisk.Init());
+        Predefined.Add(Acer_Platanoides_Globosum.Init());
     }
 
     // Runtime coefficients must not overwrite public request values. Saved requests
@@ -1220,6 +1452,26 @@ public class SpeciesSettings
         if (!Initialized)
         {
             Validate();
+            TreeMainlineModulesEnabled = UsesRealAxillaryMainline;
+            EffectiveTreeMainlineTrainingHeightM = TreeMainlineModulesEnabled
+                ? TreeMainlineModuleMode == global::Agro.TreeMainlineModuleMode.Auto ? TreeClearTrunkHeight : TreeMainlineTrainingHeightM
+                : 0f;
+            TreeMainlineReferenceInclinationRadians = TreeMainlineReferenceInclinationDegrees * DegToRad;
+            TreeSecondaryErectionEnabled = TreeMainlineModulesEnabled && TreeSecondaryMaturationStrainAmplitude > 0f;
+
+            if (Behavior == Behavior.Woody)
+            {
+                TreeExtensionOrderFactors = BuildTreeOrderFactors(DominanceFactor);
+                TreeApicalControlEnabled = TreeCrownHabit == TreeCrownHabit.Broad
+                    && TreeGraftHeight == 0f && TreeApicalControlEndYears > 0f;
+                TreeLeaderExtensionReduction = 1f - TreeMatureLeaderExtensionFraction;
+                TreeFrameworkPitchReduction = 1f - TreeMatureFrameworkPitchFraction;
+                TreeLeafInclinationRadians = MathF.PI * .5f + TreeLeafDeclinationDegrees * DegToRad;
+                TreeLeafInclinationVariationRadians = TreeLeafDeclinationVariationDegrees * DegToRad;
+                TreeGrowthUnitsEnabled = TreeSympodialRenewal || TreeLateralUnitArchDegrees > 0f;
+                TreeLateralUnitArchRadians = TreeLateralUnitArchDegrees * DegToRad;
+                TreeUnitLightDeviationRadians = TreeUnitLightDeviationDegrees * DegToRad;
+            }
 
             // AuxinsDegradationPerTick = AuxinsReach * hoursPerTick;
             // CytokininsDegradationPerTick = CytokininsReach * hoursPerTick;
@@ -1236,8 +1488,18 @@ public class SpeciesSettings
         }
     }
 
+    // Resolve from form, rather than the species name. An automatic fallback is
+    // a whole-plant choice before any tissue or random fate is created.
+    bool HasRealAxillaryForm => Behavior == Behavior.Woody && TreeSympodialRenewal && TreeDorsiventralShoots
+        && TreeStemCount == 1 && TreeGraftHeight == 0f && LateralsPerNode == 1
+        && MathF.Abs(LateralRoll - MathF.PI) <= 1e-5f;
+    bool UsesRealAxillaryMainline => TreeMainlineModuleMode == global::Agro.TreeMainlineModuleMode.RealAxillary
+        || TreeMainlineModuleMode == global::Agro.TreeMainlineModuleMode.Auto && HasRealAxillaryForm && TreeClearTrunkHeight > 0f;
+
     private void Validate()
     {
+        if (TreeMainlineModuleMode != global::Agro.TreeMainlineModuleMode.Off && Behavior != Behavior.Woody)
+            throw new ArgumentException("Mainline modules are an opt-in woody-tree behavior.");
         static void RequireFiniteNonNegative(float value, string name)
         {
             if (!float.IsFinite(value) || value < 0f)
@@ -1254,6 +1516,76 @@ public class SpeciesSettings
         {
             if (!float.IsFinite(value) || value < 0f || value > 1f)
                 throw new ArgumentOutOfRangeException(name, value, "Probability must be between zero and one.");
+        }
+
+        RequireFiniteNonNegative(TreeSecondaryMaturationStrainAmplitude, nameof(TreeSecondaryMaturationStrainAmplitude));
+        if (TreeSecondaryMaturationStrainAmplitude > 0f && Behavior != Behavior.Woody)
+            throw new ArgumentException("Secondary erection requires woody real mainline modules.");
+        if (Behavior == Behavior.Woody)
+        {
+            RequireFinitePositive(Height, nameof(Height));
+            if (!Enum.IsDefined(TreeCrownHabit))
+                throw new ArgumentOutOfRangeException(nameof(TreeCrownHabit));
+            RequireFinitePositive(TreeCrownRadius, nameof(TreeCrownRadius));
+            RequireFinitePositive(TreeAnnualExtension, nameof(TreeAnnualExtension));
+            RequireFinitePositive(TreeRootAnnualExtension, nameof(TreeRootAnnualExtension));
+            RequireFinitePositive(TreeAnnualRadiusGrowth, nameof(TreeAnnualRadiusGrowth));
+            RequireFinitePositive(TreeMatureAgeYears, nameof(TreeMatureAgeYears));
+            RequireFiniteNonNegative(TreeApicalControlStartYears, nameof(TreeApicalControlStartYears));
+            RequireFiniteNonNegative(TreeApicalControlEndYears, nameof(TreeApicalControlEndYears));
+            RequireFiniteNonNegative(TreeLateralUnitArchDegrees, nameof(TreeLateralUnitArchDegrees));
+            RequireProbability(TreeSecondaryProximalFraction, nameof(TreeSecondaryProximalFraction));
+            RequireFinitePositive(TreeSecondaryProprioceptiveLengthM, nameof(TreeSecondaryProprioceptiveLengthM));
+            if (TreeSecondaryMaturationStrainAmplitude > 0f && (TreeMainlineModuleMode == global::Agro.TreeMainlineModuleMode.Off
+                || TreeSecondaryProximalFraction <= 0f))
+                throw new ArgumentException("Secondary erection requires a real or automatic mainline model and a positive frozen proximal fraction.");
+            if (TreeMainlineModuleMode != global::Agro.TreeMainlineModuleMode.Off
+                && TreeMainlineModuleMode != global::Agro.TreeMainlineModuleMode.RealAxillary
+                && TreeMainlineModuleMode != global::Agro.TreeMainlineModuleMode.Auto)
+                throw new ArgumentOutOfRangeException(nameof(TreeMainlineModuleMode));
+            if (UsesRealAxillaryMainline)
+            {
+                if (TreeMainlineModuleMode == global::Agro.TreeMainlineModuleMode.RealAxillary)
+                    RequireFinitePositive(TreeMainlineTrainingHeightM, nameof(TreeMainlineTrainingHeightM));
+                RequireFinitePositive(TreeMainlineReferenceInclinationDegrees, nameof(TreeMainlineReferenceInclinationDegrees));
+                RequireProbability(TreeMainlineOpeningFraction, nameof(TreeMainlineOpeningFraction));
+                if (!HasRealAxillaryForm
+                    || TreeMainlineOpeningFraction <= 0f || TreeMainlineOpeningFraction >= 1f
+                    || TreeMainlineReferenceInclinationDegrees + TreeLateralUnitArchDegrees >= 180f)
+                    throw new ArgumentException("Real axillary mainline modules require an ungrafted, single-stem distichous sympodial tree and a finite bounded opening program.");
+            }
+            RequireFiniteNonNegative(TreeUnitLightDeviationDegrees, nameof(TreeUnitLightDeviationDegrees));
+            RequireProbability(TreeAxillaryFlushProbability, nameof(TreeAxillaryFlushProbability));
+            if (TreeLateralUnitArchDegrees > 90f || TreeUnitLightDeviationDegrees > 45f)
+                throw new ArgumentException("Growth-unit arch must not exceed 90 degrees and its light-turn budget must not exceed 45 degrees.");
+            RequireFiniteNonNegative(TreeLeafDeclinationDegrees, nameof(TreeLeafDeclinationDegrees));
+            RequireFiniteNonNegative(TreeLeafDeclinationVariationDegrees, nameof(TreeLeafDeclinationVariationDegrees));
+            if (TreeLeafDeclinationDegrees > 85f || TreeLeafDeclinationVariationDegrees > 45f
+                || TreeLeafDeclinationDegrees > 0f && (TreeLeafDeclinationDegrees - TreeLeafDeclinationVariationDegrees <= 0f
+                    || TreeLeafDeclinationDegrees + TreeLeafDeclinationVariationDegrees > 85f))
+                throw new ArgumentException("Enabled blade declination and its variation must remain between zero and 85 degrees below horizontal.");
+            RequireProbability(TreeMatureLeaderExtensionFraction, nameof(TreeMatureLeaderExtensionFraction));
+            RequireProbability(TreeMatureBranchExtensionFraction, nameof(TreeMatureBranchExtensionFraction));
+            RequireProbability(TreeMatureFrameworkPitchFraction, nameof(TreeMatureFrameworkPitchFraction));
+            if (TreeApicalControlEndYears > 0f && TreeApicalControlEndYears <= TreeApicalControlStartYears)
+                throw new ArgumentException("Crown maturation must end after it starts, or end at zero to disable the response.");
+            RequireFinitePositive(TreeShortShootLength, nameof(TreeShortShootLength));
+            RequireFiniteNonNegative(TreeFloweringAgeYears, nameof(TreeFloweringAgeYears));
+            RequireFiniteNonNegative(TreeGraftHeight, nameof(TreeGraftHeight));
+            RequireFiniteNonNegative(TreeClearTrunkHeight, nameof(TreeClearTrunkHeight));
+            RequireProbability(TreeBranchProbability, nameof(TreeBranchProbability));
+            RequireProbability(TreeShortShootBranchProbability, nameof(TreeShortShootBranchProbability));
+            RequireFiniteNonNegative(TreeShortShootShadeDiebackDays, nameof(TreeShortShootShadeDiebackDays));
+            RequireProbability(TreeShortShootShadeLightFraction, nameof(TreeShortShootShadeLightFraction));
+            RequireProbability(TreeShortShootShadeRelativeFraction, nameof(TreeShortShootShadeRelativeFraction));
+            RequireProbability(TreePhototropicWeight, nameof(TreePhototropicWeight));
+            RequireProbability(TreeBudBreakSeason, nameof(TreeBudBreakSeason));
+            RequireProbability(TreeGrowthEndSeason, nameof(TreeGrowthEndSeason));
+            if (TreeStemCount is < 1 or > 8 || TreeMaximumBranchOrder is < 1 or > 6 || TreeFlowersPerCluster is < 1 or > 32 || TreeMaleFlowersPerCluster is < 0 or > 8 || TreeShortShootNodes is < 1 or > 8)
+                throw new ArgumentOutOfRangeException(nameof(TreeStemCount), "Tree stem counts must be 1..8, branch orders 1..6, short-shoot nodes 1..8, fertile cluster counts 1..32 and male cluster counts 0..8.");
+            if (TreeGrowthEndSeason <= TreeBudBreakSeason || TreeGrowthEndSeason >= SeasonalSenescence
+                || TreeGraftHeight >= Height || TreeClearTrunkHeight > Height)
+                throw new ArgumentException("Trees require bud break before growth cessation before senescence, and a graft below mature height.");
         }
 
         static void RequireColor(Vector3 value, string name)
@@ -1274,6 +1606,15 @@ public class SpeciesSettings
         }
 
         RequireFiniteNonNegative(FloweringStartAgeHours, nameof(FloweringStartAgeHours));
+        RequireFiniteNonNegative(BoltingAgeHours, nameof(BoltingAgeHours));
+        RequireFinitePositive(RootRadiusTaper, nameof(RootRadiusTaper));
+        RequireProbability(RootRadiusTaper, nameof(RootRadiusTaper));
+        RequireFinitePositive(RosetteNodeDistance, nameof(RosetteNodeDistance));
+        RequireProbability(HerbaceousBranchProbability, nameof(HerbaceousBranchProbability));
+        if (RosetteMaximumNodes < 1)
+            throw new ArgumentOutOfRangeException(nameof(RosetteMaximumNodes), "Rosette node limit must be positive.");
+        if (HerbaceousBranchMaximumOrder is < 1 or > 16)
+            throw new ArgumentOutOfRangeException(nameof(HerbaceousBranchMaximumOrder), "Shoot orders must be between 1 and 16.");
         if (!float.IsFinite(ShootsGravitropicSetPointAngle) || ShootsGravitropicSetPointAngle < 0f ||
             ShootsGravitropicSetPointAngle > MathF.PI * 0.5f)
         {
@@ -1315,6 +1656,13 @@ public class SpeciesSettings
         if (!Enum.IsDefined(ContactDeformationMode)) throw new ArgumentOutOfRangeException(nameof(ContactDeformationMode));
         RequireFiniteNonNegative(PetioleContactBendDegrees, nameof(PetioleContactBendDegrees));
         RequireFinitePositive(LeafExpansionRateScale, nameof(LeafExpansionRateScale));
+        if (!float.IsFinite(VegetativeGrowthBaseTemperatureC))
+            throw new ArgumentOutOfRangeException(nameof(VegetativeGrowthBaseTemperatureC));
+        if (!float.IsFinite(VegetativeGrowthFullTemperatureC)
+            || VegetativeGrowthFullTemperatureC <= VegetativeGrowthBaseTemperatureC)
+            throw new ArgumentOutOfRangeException(nameof(VegetativeGrowthFullTemperatureC),
+                "The full-rate temperature must be finite and greater than the base temperature.");
+        RequireFiniteNonNegative(VegetativeGrowthLightReferenceWhM2, nameof(VegetativeGrowthLightReferenceWhM2));
         RequireFiniteNonNegative(ConstructionEnergyPerDryGram, nameof(ConstructionEnergyPerDryGram));
         if (ConstructionEnergyPerDryGram > 0f)
         {

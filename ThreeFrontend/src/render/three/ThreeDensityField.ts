@@ -39,9 +39,9 @@ export const DENSITY_DIM = 128;
 /**
  * Triangles above which the field is skipped entirely.
  *
- * Scattering is linear in triangles and runs on the main thread, so a canopy large enough to
- * make it visible would stall the tab between timesteps. WebGL is already the wrong backend at
- * that size - it draws one call per primitive - so refusing loudly beats freezing quietly.
+ * Scattering is linear in triangles and runs on the main thread, so a detailed canopy can
+ * stall the tab between timesteps even when its draws are instanced. Keep the CPU field's
+ * budget explicit; the WebGPU backend voxelises on the GPU.
  */
 export const DENSITY_TRIANGLE_BUDGET = 400000;
 

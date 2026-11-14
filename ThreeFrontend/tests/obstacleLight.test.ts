@@ -33,6 +33,22 @@ describe('the document, as the backend actually writes it', () => {
         expect(isObstacleLightDocument(null)).toBe(false);
     });
 
+    it('reads historical v2 documents and additive mesh geometry metadata without changing stored readings', () => {
+        expect(doc.meta.directLeafAreaGeometry).toBeUndefined();
+        const meshDocument: IObstacleLightDocument = {
+            ...doc,
+            meta: { ...doc.meta, directLeafAreaGeometry: 'coarse-mesh-v1' },
+        };
+        const restored = JSON.parse(JSON.stringify(meshDocument)) as IObstacleLightDocument;
+        expect(isObstacleLightDocument(restored)).toBe(true);
+        expect(restored.format).toBe(OBSTACLE_LIGHT_FORMAT);
+        expect(restored.meta.directLeafAreaGeometry).toBe('coarse-mesh-v1');
+        expect(obstacleValueOn(restored, restored.obstacles[0], ObstacleMappingOptions.LeafAreaIndex, '2026-04-20'))
+            .toBe(wall.weeks![2]!.leafAreaIndex);
+        expect(restored.definitions).toEqual(doc.definitions);
+        expect(doc.meta.directLeafAreaGeometry).toBeUndefined();
+    });
+
     it('aligns every weekly array with the period table', () => {
         const weeks = doc.periods.weeks;
         expect(weeks.length).toBe(9); //60 days from 1 April

@@ -36,6 +36,18 @@ public enum TerrainOrientation : byte { Forward, Right, Backward, Left }
 ///</summary>
 public enum ContactEngineKind : byte { Certified = 0, Soft = 1, Mixed = 2 }
 
+/// <summary>A daily mean air temperature for a local calendar date, in degrees Celsius.</summary>
+/// <remarks>Date is interpreted in the simulation site's local calendar; its time and Kind are
+/// ignored. Missing dates use the interpolated Vienna Hohe Warte 1991-2020 climate normal,
+/// not observed weather. Entries must have distinct dates and finite temperatures.</remarks>
+public sealed class DailyAirTemperature
+{
+    [System.Text.Json.Serialization.JsonRequired]
+    public DateTime Date { get; set; }
+    [System.Text.Json.Serialization.JsonRequired]
+    public float MeanC { get; set; }
+}
+
 public static class TerrainOrientationExtensions
 {
     ///<summary>
@@ -61,6 +73,9 @@ public static class TerrainOrientationExtensions
 //adds. Every property is still `init`, so nothing else about how it is used changes.
 public record SimulationRequest
 {
+    /// <summary>Use an aggregate root volume instead of explicit root segments. Omitted/false
+    /// retains the existing explicit root model.</summary>
+    public bool VirtualRoots { get; init; }
     ///<summary>
     ///Number of simulation steps per hour (default: 1)
     ///</summary>
@@ -128,6 +143,14 @@ public record SimulationRequest
     /// Date to start the simulation
     /// </summary>
     public DateTime? InitialDate { get; init; }
+
+    /// <summary>
+    /// Optional daily mean air temperatures in degrees Celsius, keyed by local calendar date.
+    /// Missing dates use the interpolated GeoSphere Vienna Hohe Warte 1991-2020 climate normal;
+    /// this fallback is a climate average, not observed weather at the requested site.
+    /// Soil temperature is not prescribed by this series.
+    /// </summary>
+    public DailyAirTemperature[]? DailyAirTemperatures { get; init; }
 
     ///<summary>
     ///A list of seeds to be planted (default: a single centered plant)

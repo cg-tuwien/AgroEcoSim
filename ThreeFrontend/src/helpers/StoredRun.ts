@@ -44,6 +44,12 @@ export interface IStoredRun {
     hasCheckpoint: boolean;
     parentRunId: string | null;
     branchStep: number | null;
+    /**
+     * Why an aborted run stopped, as a clause that reads after "stopped: " - the volume reached its
+     * reserve, a frame could not be written, nobody was watching. Optional: a server older than the
+     * field sends nothing, and a finished run sends null.
+     */
+    stopReason?: string | null;
 }
 
 /** Everything a run occupies. `bytesOnDisk` alone is the frames and reads low by the terrain. */

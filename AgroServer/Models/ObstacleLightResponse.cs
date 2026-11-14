@@ -156,6 +156,10 @@ public class ObstacleLightMetaResponse
     public string FilterError { get; set; }
     ///<summary>Which light model produced the numbers.</summary>
     public string Renderer { get; set; }
+    ///<summary>Geometry used by the direct, projected and maximum leaf area indices. Missing on
+    ///historical documents whose direct indices used the light scene's geometry.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? DirectLeafAreaGeometry { get; set; }
     public float Latitude { get; set; }
     public float Longitude { get; set; }
     /// <summary>Metres above sea level; it scales the direct beam the surfaces received.</summary>
@@ -191,8 +195,8 @@ public class ObstacleLightMetaResponse
     ///a checkpoint, so a resumed run continues the count from the original start date.</summary>
     public ObstacleLightCoverageResponse Coverage { get; set; }
     ///<summary>Per species present, the one-sided outline area over the rectangle Length x 2 Radius
-    ///that the light model stands a blade in, one factor per blade slice. The tray leaf areas use
-    ///the outline; the ray-traced leaf area indices use the rectangle.</summary>
+    ///of an organ, one factor per blade slice. The tray leaf areas use this flat outline; the direct
+    ///ray-traced leaf area indices use the curved mesh surface.</summary>
     public ObstacleLightSpeciesResponse[] Species { get; set; } = [];
 
     public static ObstacleLightMetaResponse From(AgroWorld world, ObstacleLightMeter meter,
@@ -206,6 +210,7 @@ public class ObstacleLightMetaResponse
             FilterMode = filter?.Mode,
             FilterError = filter?.Error,
             Renderer = world.RendererName,
+            DirectLeafAreaGeometry = ObstacleLightMeter.DirectLeafAreaGeometry,
             Latitude = world.Latitude,
             Longitude = world.Longitude,
             Altitude = world.Altitude,

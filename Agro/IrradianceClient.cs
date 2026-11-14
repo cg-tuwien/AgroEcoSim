@@ -108,8 +108,8 @@ public class IrradianceClient
 
 	readonly Mode SelectedMode;
 	readonly CpuLightSolver? Solver;
-	/// <summary>True once the internal tracer has taken over, either because it was requested or
-	/// because the external renderer never answered.</summary>
+	/// <summary>The effective model for the current tick. Geometry fallbacks can end when
+	/// unsupported organs disappear, allowing the requested external renderer to resume.</summary>
 	bool UseInternal;
 
 	readonly List<float> Irradiances = new();
@@ -192,24 +192,38 @@ public class IrradianceClient
 	}
 
     bool ReportedDeformationFallback;
+    bool ReportedFruitFallback;
+    bool ReportedFlowerFallback;
+
+    enum ExternalGeometry { Supported, Deformable, Fruit, Flower }
+
+    static ExternalGeometry GetExternalGeometry(IList<IFormation> formations)
+    {
+        // Pending/dead plants do not contribute to the exported scene or its light model.
+        // Inspect real organs instead of preset capabilities: a fruiting tree can use the
+        // external protocol before it flowers and again after its unsupported organs shed.
+        foreach (var formation in formations)
+        {
+            if (formation is not PlantFormation2 plant || !plant.IsActive || !plant.AG.Alive) continue;
+            var ag = plant.AG;
+            var deformable = ag.HasContactDeformation;
+            for (var i = 0; i < ag.Count; ++i)
+            {
+                var organ = ag.GetOrgan(i);
+                if (organ is OrganTypes.Fruit or OrganTypes.FruitWing) return ExternalGeometry.Fruit;
+                if (deformable && organ is OrganTypes.Leaf or OrganTypes.Petiole) return ExternalGeometry.Deformable;
+                if (organ is OrganTypes.FlowerStem or OrganTypes.FlowerMeristem or OrganTypes.FlowerPedicel
+                    or OrganTypes.FlowerBud or OrganTypes.FlowerPadel or OrganTypes.FlowerBaseBud)
+                    return ExternalGeometry.Flower;
+            }
+        }
+        return ExternalGeometry.Supported;
+    }
+
 	public void Tick(SimulationWorld world, uint timestep, IList<IFormation> formations, IList<IObstacle> obstacles)
 	{
-		if (timestep == 0)
-		{
-			if (SelectedMode == Mode.Internal)
-			{
-				UseInternal = true;
-				world.RendererName = Mode.Internal.ToString();
-			}
-			else if (GlobalIllumination)
-			{
-				ProbeRenderer();
-				UseInternal = !IsOnline;
-				world.RendererName = IsOnline ? RequestedMode : $"{Mode.Internal} (no {RequestedMode})";
-			}
-			else
-				world.RendererName = RequestedMode;
-		}
+		var external = GlobalIllumination && SelectedMode != Mode.Internal;
+		if (timestep == 0 && external) ProbeRenderer();
 
 		//Every tick, for every light model. The exports read this list, and a plant that has not
 		//germinated yet lands on it; leaving it stale kept such a plant hidden from the viewport for
@@ -217,15 +231,31 @@ public class IrradianceClient
 		RefreshSkipFormations(formations);
 
         var agroWorld = world as AgroWorld;
-        var foldedExternal = GlobalIllumination && SelectedMode != Mode.Internal
-            && formations.OfType<PlantFormation2>().Any(p=>p.AG.HasContactDeformation);
-        if(foldedExternal)
+        var geometry = external ? GetExternalGeometry(formations) : ExternalGeometry.Supported;
+        UseInternal = GlobalIllumination && (SelectedMode == Mode.Internal || !IsOnline
+            || geometry != ExternalGeometry.Supported);
+        world.RendererName = !GlobalIllumination ? RequestedMode
+            : geometry == ExternalGeometry.Fruit ? $"{Mode.Internal} (fruit-geometry fallback)"
+            : geometry == ExternalGeometry.Deformable ? $"{Mode.Internal} (deformable-surface fallback)"
+            : geometry == ExternalGeometry.Flower ? $"{Mode.Internal} (floral-geometry fallback)"
+            : external ? IsOnline ? RequestedMode : $"{Mode.Internal} (no {RequestedMode})"
+            : Mode.Internal.ToString();
+        if (geometry == ExternalGeometry.Deformable && !ReportedDeformationFallback)
         {
-            UseInternal=true;world.RendererName=$"{Mode.Internal} (deformable-surface fallback)";
-            if(!ReportedDeformationFallback)
-            {Console.WriteLine($"{RequestedMode} light protocol lacks area-weighted deformable leaf sensors; using the CPU folded-surface solver.");ReportedDeformationFallback=true;}
+            Console.WriteLine($"{RequestedMode} light protocol lacks area-weighted deformable leaf sensors; using the CPU folded-surface solver.");
+            ReportedDeformationFallback = true;
         }
-		if (!foldedExternal && IsOnline && GlobalIllumination && SelectedMode != Mode.Internal)
+        else if (geometry == ExternalGeometry.Fruit && !ReportedFruitFallback)
+        {
+            Console.WriteLine($"{RequestedMode} light protocol lacks fruit meshes; using the CPU surface solver.");
+            ReportedFruitFallback = true;
+        }
+        else if (geometry == ExternalGeometry.Flower && !ReportedFlowerFallback)
+        {
+            Console.WriteLine($"{RequestedMode} light protocol lacks floral surfaces; using the CPU surface solver.");
+            ReportedFlowerFallback = true;
+        }
+		if (external && !UseInternal)
 		{
 			DoTick(agroWorld, timestep, formations, obstacles);
 			//An external renderer lights the plants but measures nothing on the facade, so the
@@ -257,7 +287,7 @@ public class IrradianceClient
 	{
 		SkipFormations.Clear();
 		for (int i = 0; i < formations.Count; ++i)
-			if (!(formations[i] is PlantFormation2 plant && plant.AG.Alive))
+			if (!(formations[i] is PlantFormation2 plant && plant.IsActive && plant.AG.Alive))
 				SkipFormations.Add(i);
 	}
 
@@ -467,6 +497,8 @@ public class IrradianceClient
                         continue;
                     }
 					var center = ag.GetBaseCenterWorld(i);
+                    var baseOffset = ag.GetBaseOffset(i);
+                    if (baseOffset != Vector3.Zero) center += baseOffset;
 					var scale = ag.GetScale(i);
 					var halfRadiusX = new Vector3(0f, 0f, scale.Z * 0.5f);
 					var orientation = ag.GetDirection(i);
@@ -485,6 +517,7 @@ public class IrradianceClient
 							}
 							break;
 						case OrganTypes.Stem: case OrganTypes.Petiole: case OrganTypes.Meristem:
+                        case OrganTypes.FlowerStem: case OrganTypes.FlowerMeristem: case OrganTypes.FlowerPedicel: case OrganTypes.FlowerBud:
 							{
 								var halfRadiusY = new Vector3(0f, scale.Y * 0.5f, 0f);
 								var p = points.Count;
@@ -585,6 +618,8 @@ public class IrradianceClient
                         continue;
                     }
 					var center = ag.GetBaseCenterWorld(i);
+                    var baseOffset = ag.GetBaseOffset(i);
+                    if (baseOffset != Vector3.Zero) center += baseOffset;
 					var scale = ag.GetScale(i);
 					var halfRadiusX = new Vector3(0f, 0f, scale.Z * 0.5f);
 					var orientation = ag.GetDirection(i);
@@ -611,6 +646,7 @@ public class IrradianceClient
 							}
 							break;
 						case OrganTypes.Stem: case OrganTypes.Petiole: case OrganTypes.Meristem:
+                        case OrganTypes.FlowerStem: case OrganTypes.FlowerMeristem: case OrganTypes.FlowerPedicel: case OrganTypes.FlowerBud:
 							{
 								var halfRadiusY = new Vector3(0f, scale.Y * 0.5f, 0f);
 								TriangleCount(8); //WRITE NUMBER OF TRIANGLES in this surface
@@ -725,6 +761,8 @@ public class IrradianceClient
 				{
 					var organ = ag.GetOrgan(i);
 					var center = ag.GetBaseCenterWorld(i);
+                    var baseOffset = ag.GetBaseOffset(i);
+                    if (baseOffset != Vector3.Zero) center += baseOffset;
 					var scale = ag.GetScale(i);
 					var orientation = ag.GetDirection(i);
 
@@ -807,6 +845,8 @@ public class IrradianceClient
 				{
 					var organ = ag.GetOrgan(i);
 					var center = ag.GetBaseCenterWorld(i);
+                    var baseOffset = ag.GetBaseOffset(i);
+                    if (baseOffset != Vector3.Zero) center += baseOffset;
 					var scale = ag.GetScale(i);
 					var orientation = ag.GetDirection(i);
 					var x = Vector3.Transform(Vector3.UnitX, orientation);
@@ -1029,14 +1069,17 @@ public class IrradianceClient
 
     byte[]? RecordedGeometryAssets;
     internal void ExportV7(IList<IFormation> formations, Stream binaryStream, ExportFlags flags)
-        => ExportRecordedScene(formations, binaryStream, flags, false);
+        => ExportRecordedScene(formations, binaryStream, flags, 7);
     internal void ExportV8(IList<IFormation> formations, Stream binaryStream, ExportFlags flags)
-        => ExportRecordedScene(formations, binaryStream, flags, true);
+        => ExportRecordedScene(formations, binaryStream, flags, 8);
+    internal void ExportV9(IList<IFormation> formations, Stream binaryStream, ExportFlags flags)
+        => ExportRecordedScene(formations, binaryStream, flags, 9);
 
-    void ExportRecordedScene(IList<IFormation> formations, Stream binaryStream, ExportFlags flags, bool v8)
+    void ExportRecordedScene(IList<IFormation> formations, Stream binaryStream, ExportFlags flags, byte version)
 	{
+		var v8 = version >= 8;
 		using var writer = new BinaryWriter(binaryStream, System.Text.Encoding.UTF8, leaveOpen: true);
-		writer.WriteU8(v8 ? 8 : 7);
+		writer.WriteU8(version);
 
 		var includeAnalytics = flags.HasFlag(ExportFlags.Analytics);
 		writer.Write((byte)flags);
@@ -1053,13 +1096,20 @@ public class IrradianceClient
 		// into per-plant buffers and concatenated in formation order: the bytes are identical to
 		// the sequential export, and the export no longer serialises the whole stand on one core.
 		ExportedPlants.Clear();
+		ExportedPlantSourceIndices.Clear();
 		var skipPointer = 0;
+		var sourcePlantIndex = -1;
 		for (int pi = 0; pi < formations.Count; ++pi)
 		{
+			// Advance through every requested plant, including dormant scheduled entries.
+			if (formations[pi] is PlantFormation2) ++sourcePlantIndex;
 			if (skipPointer < SkipFormations.Count && SkipFormations[skipPointer] == pi)
 				++skipPointer;
 			else
+			{
 				ExportedPlants.Add((PlantFormation2)formations[pi]);
+				ExportedPlantSourceIndices.Add((uint)sourcePlantIndex);
+			}
 		}
 		while (PlantExportBuffers.Count < ExportedPlants.Count) PlantExportBuffers.Add(new MemoryStream(1 << 12));
 		var roots = flags.HasFlag(ExportFlags.Roots);
@@ -1068,7 +1118,8 @@ public class IrradianceClient
 			var buffer = PlantExportBuffers[i];
 			buffer.Position = 0; buffer.SetLength(0);
 			using var plantWriter = new BinaryWriter(buffer, System.Text.Encoding.UTF8, leaveOpen: true);
-			WritePlant(plantWriter, ExportedPlants[i], v8, includeAnalytics, roots);
+			WritePlant(plantWriter, ExportedPlants[i], v8, includeAnalytics, roots,
+				version >= 9 ? ExportedPlantSourceIndices[i] : null);
 		});
 		for (int i = 0; i < ExportedPlants.Count; ++i)
 		{
@@ -1080,10 +1131,12 @@ public class IrradianceClient
 	/// <summary>Scratch for the parallel export: one buffer per exported plant, kept at its high-water mark.</summary>
 	readonly List<MemoryStream> PlantExportBuffers = [];
 	readonly List<PlantFormation2> ExportedPlants = [];
+	readonly List<uint> ExportedPlantSourceIndices = [];
 
-	/// <summary>One plant's record of a V7/V8 frame. Reads the plant and the irradiance of the
+	/// <summary>One plant's record of a V7/V8/V9 frame. Reads the plant and the irradiance of the
 	/// previous step only, so plants can be written concurrently.</summary>
-	void WritePlant(BinaryWriter writer, PlantFormation2 plant, bool v8, bool includeAnalytics, bool roots)
+	void WritePlant(BinaryWriter writer, PlantFormation2 plant, bool v8, bool includeAnalytics, bool roots,
+		uint? sourcePlantIndex)
 	{
 		var ag = plant.AG;
 		var count = ag.Count;
@@ -1096,6 +1149,7 @@ public class IrradianceClient
 
 		writer.Write(plant.Parameters.Name);
                 if (v8) writer.Write(SceneGeometryAssets.For(plant.Parameters).Id);
+		if (sourcePlantIndex.HasValue) writer.Write(sourcePlantIndex.Value);
 		writer.WriteU32(count); //WRITE NUMBER OF ABOVE-GROUND SURFACES in this plant
 
 		for (int i = 0; i < count; ++i)
@@ -1127,6 +1181,8 @@ public class IrradianceClient
 			{
 				case OrganTypes.Leaf:
                         case OrganTypes.FlowerPadel:
+                        case OrganTypes.FruitWing:
+                        case OrganTypes.Fruit:
                             {
 						var template = ag.GetLaminaTemplate(i)!;
 						var ax = x * scale.X * 0.5f;
@@ -1147,8 +1203,13 @@ public class IrradianceClient
 						}
 						//writer.Write(ag.GetDailyEfficiency(i));
 						//writer.Write(0f);
-						var phenology = organ.Equals(OrganTypes.Leaf)? plant.Parameters.LeafPhenology:plant.Parameters.FlowerSettings.FlowerPhenology;
-						phenology.WriteColor(writer, world.Season, ag.GetAdulcy(i, world.Timestep), ag.GetStress(i), ag.GetSenescence(i, world.Timestep));
+						if (organ is OrganTypes.Fruit or OrganTypes.FruitWing)
+                            LeafPhenology.WriteFixedColor(writer, ag.GetColor(i));
+                        else
+                        {
+                            var phenology = organ == OrganTypes.Leaf ? plant.Parameters.LeafPhenology : plant.Parameters.FlowerSettings.FlowerPhenology;
+                            phenology.WriteColor(writer, world.Season, ag.GetAdulcy(i, world.Timestep), ag.GetStress(i), ag.GetSenescence(i, world.Timestep));
+                        }
 					}
 					break;
 				case OrganTypes.Stem: case OrganTypes.Petiole: case OrganTypes.Meristem: case OrganTypes.FlowerStem:
@@ -1292,7 +1353,7 @@ public class IrradianceClient
 		// 	case 6: ExportAsBeautyPrimitives(formations, target, extended: true, roots: true); break;
 		// 	case 7:
         // }
-		ExportV8(formations, target, flags);
+		ExportV9(formations, target, flags);
 
     }
 
@@ -1443,7 +1504,7 @@ public class IrradianceClient
 
 	/// <summary>
 	/// The obstacle measurement's carried state, written after everything keyed against the
-	/// formations: the renderer name, which only step 0 decides and a resumed run never sees, then
+	/// formations: the effective renderer name at the saved step, then
 	/// the solver's static shading and leaf area index meter. See
 	/// <see cref="CpuLightSolver.WriteObstacleLightState"/>.
 	/// </summary>
@@ -1468,7 +1529,10 @@ public class IrradianceClient
 
 	public float GetIrradiance(IFormation formation, int agentIndex)
 	{
-		if (!IsNight && IrradianceFormationOffsets.TryGetValue(formation, out var offset))
+		// Checkpoints omit trailing -1 offsets. An unlit trailing organ (for
+		// example retained fruit after leaf fall) still reads zero after restore.
+		if (!IsNight && IrradianceFormationOffsets.TryGetValue(formation, out var offset)
+			&& (uint)agentIndex < (uint)offset.Length)
 		{
 			var position = offset[agentIndex];
 			if (position >= 0)

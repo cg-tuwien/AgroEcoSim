@@ -29,6 +29,9 @@ namespace AgroServer.Models;
 [JsonSerializable(typeof(RunResponse[]))]
 [JsonSerializable(typeof(RunDeleteResponse))]
 [JsonSerializable(typeof(StoredTerrainMeta))]
+[JsonSerializable(typeof(RunStoreStatusResponse))]
+[JsonSerializable(typeof(RunStoreEvent))]
+[JsonSerializable(typeof(RunStoreEvent[]))]
 // Hub arguments and completion results are resolved by their runtime type.
 [JsonSerializable(typeof(string))]
 [JsonSerializable(typeof(bool))]

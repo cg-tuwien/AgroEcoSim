@@ -44,6 +44,11 @@ public static class Geranium_Macrorrhizum
         LeafGrowthTime = 24 * 7,
         // Provisional CPU-light calibration; see LIGHT_GROWTH_CALIBRATION.md.
         LeafExpansionRateScale = 1f,
+        // Provisional development response; see SEASONAL_GROWTH.md. Adult sizes stay intact.
+        VegetativeTemperatureResponseEnabled = true,
+        VegetativeGrowthBaseTemperatureC = 5f,
+        VegetativeGrowthFullTemperatureC = 20f,
+        VegetativeGrowthLightReferenceWhM2 = 6000f,
         Height = 0.3f,
 
         // Geranium has a compressed crown, not a sequence of centimetre-scale

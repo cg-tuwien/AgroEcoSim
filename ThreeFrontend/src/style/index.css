@@ -60,6 +60,36 @@ body {
 	width: 16vw;
 }
 
+/* The playhead: slider on the left, a two-line clock on the right. The slider gives way first,
+   and only on a HUD too narrow for both does the clock wrap below it instead of overflowing. */
+#hud .timeline {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.2em 0.4em;
+}
+
+#hud .timeline input[type="range"] {
+	flex: 1 1 6em;
+	min-width: 6em;
+	width: auto;
+}
+
+#hud .timeline .clock {
+	display: flex;
+	flex-direction: column;
+	flex: 0 0 auto;
+	margin: 0;
+	line-height: 1.2;
+	white-space: nowrap;
+	/* Digits of equal width, or the label - and the slider beside it - shifts as the time ticks. */
+	font-variant-numeric: tabular-nums;
+}
+
+#hud .timeline .clock small {
+	opacity: 0.75;
+}
+
 main {
 	display: block;
 	overflow: hidden;

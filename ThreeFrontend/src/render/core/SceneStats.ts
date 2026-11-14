@@ -64,6 +64,7 @@ export function sceneStats(scene: PlantModel[], leafGeom?: (species: string, sli
                     let tris = leafTrisBySlice.get(key);
                     if (tris === undefined) {
                         const recorded = p.organ === Organs.FlowerPadel ? plant.geometry?.petal
+                            : p.organ === Organs.FruitWing ? plant.geometry?.fruitWing
                             : plant.geometry?.leaves[Math.min(p.laminaSlice, plant.geometry.leaves.length - 1)];
                         tris = trianglesOf(recorded ?? (leafGeom ? leafGeom(plant.species, p.laminaSlice) : Geom.Plane));
                         leafTrisBySlice.set(key, tris);
@@ -76,6 +77,7 @@ export function sceneStats(scene: PlantModel[], leafGeom?: (species: string, sli
                         ? 3 * trianglesOf(Geom.Cylinder) + 2 * trianglesOf(Geom.Sphere)
                         : trianglesOf(Geom.Cylinder); break;
                 case Primitives.Box:       triangles += trianglesOf(Geom.BoxCentered); break;
+                case Primitives.Ellipsoid: triangles += trianglesOf(plant.geometry?.fruit ?? Geom.Sphere); break;
                 case Primitives.Disk:      triangles += trianglesOf(Geom.CircleHalf); break;
                 //Spheres (buds) are decoded but never emitted by BuildScene, so they draw
                 //nothing and must not be counted.

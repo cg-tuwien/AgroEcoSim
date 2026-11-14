@@ -2,6 +2,7 @@ import { Component, h, Fragment } from "preact";
 import appstate from "../../appstate";
 
 export function ProgressBar() {
+    const preparation = appstate.preparation.value;
     const used = appstate.historySize.value;
     const budget = appstate.historyBudget.value;
     //Colour before the number matters: the figure alone tells nobody whether 1500 Mb is fine.
@@ -17,7 +18,7 @@ export function ProgressBar() {
                   + `What was computed is intact and can still be saved or exported.`
                 : `Memory held by the stored frames, out of the ~${(budget / 1048576).toFixed(0)} Mb `
                   + `this tab can spare. `
-                  + (appstate.runId.value
+                  + (appstate.runId.value && appstate.runStored.value === true
                       ? `Past that, older frames are handed to the server and fetched back on demand.`
                       : `Past that the run stops, because with no server-side store an older frame `
                         + `dropped here would be gone for good.`)}>
@@ -31,7 +32,24 @@ export function ProgressBar() {
             ? <span title="Older frames are held by the server and fetched back when you scrub to them."
                 >({appstate.evictedFrames.value} streamed)</span>
             : null}&nbsp;
-        {appstate.simLength.value > 0
+        {/* The server handed out a run id but is not keeping the run - its store is disabled or
+            could not register it. Said here, where the run is watched, and not only in the Runs
+            tab, because it changes what this tab does: every frame is held in memory. */}
+        {appstate.runId.value && appstate.runStored.value === false
+            ? <span style={{ color: '#ff5555' }}
+                    title="The server is not keeping this run: its run store is disabled or could not register it. Every frame stays in this tab instead, and the Runs tab says why.">
+                not stored&nbsp;
+              </span>
+            : null}
+        {appstate.runStopReason.value
+            ? <span style={{ color: '#ffaa33' }}
+                    title="The run stopped before its horizon. It can be resumed from its last checkpoint in the Runs tab once the cause is fixed.">
+                stopped: {appstate.runStopReason.value}&nbsp;
+              </span>
+            : null}
+        {preparation ? <span role="status" title="Growing plants before recording begins. The recorded timeline stays at its start.">
+            Preparing plants: {preparation.step} / {preparation.totalSteps} ({(100 * preparation.step / preparation.totalSteps).toFixed(2)}%)
+        </span> : appstate.simLength.value > 0
         ? <span title="Computation progress (slows down as plants grow bigger).">{appstate.simStep.value} / {appstate.simLength.value} ({(100.0 * appstate.simStep.value/appstate.simLength.value).toFixed(2)}%)</span>
         : <></>}
     </>;

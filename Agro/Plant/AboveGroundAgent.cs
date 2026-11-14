@@ -76,7 +76,7 @@ public partial struct AboveGroundAgent : IPlantAgent
 	[M(AI)]public readonly Vector3 Scale() => Organ switch {
 		// Petals are laminae, like leaves.  Their radius describes half of the
 		// visible width, not half of a solid stem diameter.
-		OrganTypes.Leaf or OrganTypes.FlowerPadel => new(Length, LeafThickness, 2f * Radius),
+		OrganTypes.Leaf or OrganTypes.FlowerPadel or OrganTypes.FruitWing => new(Length, LeafThickness, 2f * Radius),
 		_ => new(Length, 2f * Radius, 2f * Radius)
 	};
 
@@ -87,7 +87,8 @@ public partial struct AboveGroundAgent : IPlantAgent
 		// Keep the physical model aligned with the flat-petal rendering.  Treating
 		// a petal as a square solid (4 * length * radius²) makes a 14 mm-wide
 		// Geranium petal more than a centimetre thick and loads its stem by grams.
-		OrganTypes.Leaf or OrganTypes.FlowerPadel => Length * (2f * LeafThickness) * Radius,
+		OrganTypes.Leaf or OrganTypes.FlowerPadel or OrganTypes.FruitWing => Length * (2f * LeafThickness) * Radius,
+		OrganTypes.Fruit => 2f * MathF.PI / 3f * Length * Radius * Radius,
 		_ => Length * 4f * Radius* Radius
 	};
 
@@ -767,7 +768,10 @@ public partial struct AboveGroundAgent : IPlantAgent
 						//target the "Length <= LengthVar" growth gate is false from birth,
 						//so the meristem never elongates and every leaf of the crown
 						//attaches at the same point instead of stacking.
-						LengthVar = MathF.Max(species.MinimumInternodeLength, species.NodeDistance + plant.RNG.NextFloatVar(species.NodeDistanceVar));
+                        var rosette = species.BoltingAgeHours > 0f && plant.GetAge_h() < species.BoltingAgeHours;
+                        LengthVar = MathF.Max(species.MinimumInternodeLength, rosette
+                            ? species.RosetteNodeDistance
+                            : species.NodeDistance + plant.RNG.NextFloatVar(species.NodeDistanceVar));
 						RadiusVar = 0f;
 						GrowthTimeVar = 0f;
 					}
@@ -858,6 +862,7 @@ public partial struct AboveGroundAgent : IPlantAgent
         {
             //case Behavior.Geranium_Sanguineum: GeraniumSanguineum.TickGeraniumSanguineum(ref this, formation, agentID, timestep); break;
             case Behavior.Herbaceous: Herbaceous.Tick(ref this, formation, agentID, timestep); break;
+            case Behavior.Woody: TickWoody(formation, agentID, timestep); break;
             default: TickDefault(_formation, agentID, timestep); break;
 
         };

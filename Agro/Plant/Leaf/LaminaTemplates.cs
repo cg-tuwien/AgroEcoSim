@@ -11,6 +11,7 @@ public static class LaminaTemplates
     static readonly ConditionalWeakTable<LeafMorphology, CachedMesh> Meshes = new();
     static readonly ConditionalWeakTable<SpeciesSettings, LaminaTemplate[]> Leaves = new();
     static readonly ConditionalWeakTable<SpeciesSettings, LaminaTemplate[]> Petals = new();
+    static readonly ConditionalWeakTable<SpeciesSettings, LaminaTemplate> FruitWings = new();
 
     // Serve the authored vertices unchanged: recorded V7 matrices already encode their scale.
     public static MeshData Build(LeafMorphology morphology) => GetMesh(morphology).Mesh;
@@ -40,6 +41,16 @@ public static class LaminaTemplates
 
     public static LaminaTemplate? For(SpeciesSettings species, OrganTypes organ, int slice = 0)
     {
+        if (organ == OrganTypes.Fruit) return FruitGeometry.Body;
+        if (organ == OrganTypes.FruitWing)
+            return FruitWings.GetValue(species, static s =>
+            {
+                var morphology = s.FruitSettings?.WingMorphology
+                    ?? throw new InvalidOperationException("A fruit wing requires a species wing morphology.");
+                var cached = GetMesh(morphology);
+                return new(cached.Mesh, morphology.Dimensions.MaxWidthM * .5f,
+                    referenceLength: morphology.Dimensions.LengthM, widthScale: cached.WidthScale);
+            });
         if (organ is not (OrganTypes.Leaf or OrganTypes.FlowerPadel)) return null;
         var petals = organ == OrganTypes.FlowerPadel;
         // This lookup runs for every candidate pair. A factory capturing `petals` allocated

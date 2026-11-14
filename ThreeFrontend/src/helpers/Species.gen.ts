@@ -15,6 +15,56 @@ export class SpeciesBase {
     name = signal("Default");
     aka = signal("");
     behaviorIndex = signal(0);
+    treeCrownHabit = signal(0);
+    treeCrownRadius = signal(5);
+    treeAnnualExtension = signal(0.65);
+    treeRootAnnualExtension = signal(0.65);
+    treeAnnualRadiusGrowth = signal(0.004);
+    treeMatureAgeYears = signal(40);
+    treeFloweringAgeYears = signal(5);
+    treeSympodialRenewal = signal(false);
+    treeDorsiventralShoots = signal(false);
+    treeMainlineModuleMode = signal(0);
+    treeMainlineTrainingHeightM = signal(0);
+    treeMainlineReferenceInclinationDegrees = signal(35);
+    treeMainlineOpeningFraction = signal(0.25);
+    treeSecondaryMaturationStrainAmplitude = signal(0);
+    treeSecondaryProximalFraction = signal(0.25);
+    treeSecondaryProprioceptiveLengthM = signal(1);
+    treeLateralUnitArchDegrees = signal(0);
+    treeUnitLightDeviationDegrees = signal(10);
+    treeAxillaryFlushProbability = signal(1);
+    treeLeafDeclinationDegrees = signal(0);
+    treeLeafDeclinationVariationDegrees = signal(0);
+    treeApicalControlStartYears = signal(0);
+    treeApicalControlEndYears = signal(0);
+    treeMatureLeaderExtensionFraction = signal(0.2);
+    treeMatureBranchExtensionFraction = signal(1);
+    treeMatureFrameworkPitchFractionDeg = signal(28.64788975654116);
+    treeGraftHeight = signal(0);
+    treeClearTrunkHeight = signal(0);
+    treeStemCount = signal(1);
+    treeMaximumBranchOrder = signal(4);
+    treeBranchProbability = signal(0.16);
+    treeShortShootBranchProbability = signal(0);
+    treeShortShootShadeDiebackDays = signal(0);
+    treeShortShootShadeLightFraction = signal(0.05);
+    treeShortShootShadeRelativeFraction = signal(0.15);
+    treePhototropicWeight = signal(0.25);
+    treeShortShootNodes = signal(2);
+    treeShortShootLength = signal(0.025);
+    treeBudBreakSeason = signal(0.08);
+    treeGrowthEndSeason = signal(0.46);
+    treeFlowersPerCluster = signal(6);
+    treeMaleFlowersPerCluster = signal(0);
+    boltingAgeHours = signal(0);
+    rosetteNodeDistance = signal(0.002);
+    rosetteMaximumNodes = signal(8);
+    herbaceousBranchProbability = signal(0);
+    herbaceousBranchMaximumOrder = signal(2);
+    rosetteScapes = signal(false);
+    monocarpic = signal(false);
+    taproot = signal(false);
     height = signal(10);
     nodeDistance = signal(0.04);
     nodeDistanceVar = signal(0.01);
@@ -54,6 +104,10 @@ export class SpeciesBase {
     petioleRadiusVar = signal(0.0005);
     leafGrowthTime = signal(480);
     leafExpansionRateScale = signal(1);
+    vegetativeTemperatureResponseEnabled = signal(false);
+    vegetativeGrowthBaseTemperatureC = signal(5);
+    vegetativeGrowthFullTemperatureC = signal(20);
+    vegetativeGrowthLightReferenceWhM2 = signal(0);
     constructionEnergyPerDryGram = signal(0);
     leafGrowthTimeVar = signal(120);
     leafSenescenceSeasonalDuration = signal(480);
@@ -62,6 +116,7 @@ export class SpeciesBase {
     leafSenescenceStressDurationVar = signal(60);
     seasonalSenescence = signal(0.70909095);
     rootsDensity = signal(0.5);
+    rootRadiusTaper = signal(1);
     rootsGravitaxis = signal(0.2);
     densityDryWood = signal(700000);
     densityDryStem = signal(200000);
@@ -137,6 +192,56 @@ export class SpeciesBase {
             name: this.name.peek(),
             aka: this.aka.peek(),
             behavior: this.behaviorIndex.peek(),
+            treeCrownHabit: this.treeCrownHabit.peek(),
+            treeCrownRadius: this.treeCrownRadius.peek(),
+            treeAnnualExtension: this.treeAnnualExtension.peek(),
+            treeRootAnnualExtension: this.treeRootAnnualExtension.peek(),
+            treeAnnualRadiusGrowth: this.treeAnnualRadiusGrowth.peek(),
+            treeMatureAgeYears: this.treeMatureAgeYears.peek(),
+            treeFloweringAgeYears: this.treeFloweringAgeYears.peek(),
+            treeSympodialRenewal: this.treeSympodialRenewal.peek(),
+            treeDorsiventralShoots: this.treeDorsiventralShoots.peek(),
+            treeMainlineModuleMode: this.treeMainlineModuleMode.peek(),
+            treeMainlineTrainingHeightM: this.treeMainlineTrainingHeightM.peek(),
+            treeMainlineReferenceInclinationDegrees: this.treeMainlineReferenceInclinationDegrees.peek(),
+            treeMainlineOpeningFraction: this.treeMainlineOpeningFraction.peek(),
+            treeSecondaryMaturationStrainAmplitude: this.treeSecondaryMaturationStrainAmplitude.peek(),
+            treeSecondaryProximalFraction: this.treeSecondaryProximalFraction.peek(),
+            treeSecondaryProprioceptiveLengthM: this.treeSecondaryProprioceptiveLengthM.peek(),
+            treeLateralUnitArchDegrees: this.treeLateralUnitArchDegrees.peek(),
+            treeUnitLightDeviationDegrees: this.treeUnitLightDeviationDegrees.peek(),
+            treeAxillaryFlushProbability: this.treeAxillaryFlushProbability.peek(),
+            treeLeafDeclinationDegrees: this.treeLeafDeclinationDegrees.peek(),
+            treeLeafDeclinationVariationDegrees: this.treeLeafDeclinationVariationDegrees.peek(),
+            treeApicalControlStartYears: this.treeApicalControlStartYears.peek(),
+            treeApicalControlEndYears: this.treeApicalControlEndYears.peek(),
+            treeMatureLeaderExtensionFraction: this.treeMatureLeaderExtensionFraction.peek(),
+            treeMatureBranchExtensionFraction: this.treeMatureBranchExtensionFraction.peek(),
+            treeMatureFrameworkPitchFraction: this.treeMatureFrameworkPitchFractionDeg.peek() * DegToRad,
+            treeGraftHeight: this.treeGraftHeight.peek(),
+            treeClearTrunkHeight: this.treeClearTrunkHeight.peek(),
+            treeStemCount: this.treeStemCount.peek(),
+            treeMaximumBranchOrder: this.treeMaximumBranchOrder.peek(),
+            treeBranchProbability: this.treeBranchProbability.peek(),
+            treeShortShootBranchProbability: this.treeShortShootBranchProbability.peek(),
+            treeShortShootShadeDiebackDays: this.treeShortShootShadeDiebackDays.peek(),
+            treeShortShootShadeLightFraction: this.treeShortShootShadeLightFraction.peek(),
+            treeShortShootShadeRelativeFraction: this.treeShortShootShadeRelativeFraction.peek(),
+            treePhototropicWeight: this.treePhototropicWeight.peek(),
+            treeShortShootNodes: this.treeShortShootNodes.peek(),
+            treeShortShootLength: this.treeShortShootLength.peek(),
+            treeBudBreakSeason: this.treeBudBreakSeason.peek(),
+            treeGrowthEndSeason: this.treeGrowthEndSeason.peek(),
+            treeFlowersPerCluster: this.treeFlowersPerCluster.peek(),
+            treeMaleFlowersPerCluster: this.treeMaleFlowersPerCluster.peek(),
+            boltingAgeHours: this.boltingAgeHours.peek(),
+            rosetteNodeDistance: this.rosetteNodeDistance.peek(),
+            rosetteMaximumNodes: this.rosetteMaximumNodes.peek(),
+            herbaceousBranchProbability: this.herbaceousBranchProbability.peek(),
+            herbaceousBranchMaximumOrder: this.herbaceousBranchMaximumOrder.peek(),
+            rosetteScapes: this.rosetteScapes.peek(),
+            monocarpic: this.monocarpic.peek(),
+            taproot: this.taproot.peek(),
             height: this.height.peek(),
             nodeDistance: this.nodeDistance.peek(),
             nodeDistanceVar: this.nodeDistanceVar.peek(),
@@ -176,6 +281,10 @@ export class SpeciesBase {
             petioleRadiusVar: this.petioleRadiusVar.peek(),
             leafGrowthTime: this.leafGrowthTime.peek(),
             leafExpansionRateScale: this.leafExpansionRateScale.peek(),
+            vegetativeTemperatureResponseEnabled: this.vegetativeTemperatureResponseEnabled.peek(),
+            vegetativeGrowthBaseTemperatureC: this.vegetativeGrowthBaseTemperatureC.peek(),
+            vegetativeGrowthFullTemperatureC: this.vegetativeGrowthFullTemperatureC.peek(),
+            vegetativeGrowthLightReferenceWhM2: this.vegetativeGrowthLightReferenceWhM2.peek(),
             constructionEnergyPerDryGram: this.constructionEnergyPerDryGram.peek(),
             leafGrowthTimeVar: this.leafGrowthTimeVar.peek(),
             leafSenescenceSeasonalDuration: this.leafSenescenceSeasonalDuration.peek(),
@@ -184,6 +293,7 @@ export class SpeciesBase {
             leafSenescenceStressDurationVar: this.leafSenescenceStressDurationVar.peek(),
             seasonalSenescence: this.seasonalSenescence.peek(),
             rootsDensity: this.rootsDensity.peek(),
+            rootRadiusTaper: this.rootRadiusTaper.peek(),
             rootsGravitaxis: this.rootsGravitaxis.peek(),
             densityDryWood: this.densityDryWood.peek(),
             densityDryStem: this.densityDryStem.peek(),
@@ -260,6 +370,56 @@ export class SpeciesBase {
         this.name.value = s.name;
         this.aka.value = s.aka;
         this.behaviorIndex.value = s.behavior;
+        this.treeCrownHabit.value = s.treeCrownHabit ?? 0;
+        this.treeCrownRadius.value = s.treeCrownRadius ?? 5;
+        this.treeAnnualExtension.value = s.treeAnnualExtension ?? 0.65;
+        this.treeRootAnnualExtension.value = s.treeRootAnnualExtension ?? 0.65;
+        this.treeAnnualRadiusGrowth.value = s.treeAnnualRadiusGrowth ?? 0.004;
+        this.treeMatureAgeYears.value = s.treeMatureAgeYears ?? 40;
+        this.treeFloweringAgeYears.value = s.treeFloweringAgeYears ?? 5;
+        this.treeSympodialRenewal.value = s.treeSympodialRenewal ?? false;
+        this.treeDorsiventralShoots.value = s.treeDorsiventralShoots ?? false;
+        this.treeMainlineModuleMode.value = s.treeMainlineModuleMode ?? 0;
+        this.treeMainlineTrainingHeightM.value = s.treeMainlineTrainingHeightM ?? 0;
+        this.treeMainlineReferenceInclinationDegrees.value = s.treeMainlineReferenceInclinationDegrees ?? 35;
+        this.treeMainlineOpeningFraction.value = s.treeMainlineOpeningFraction ?? 0.25;
+        this.treeSecondaryMaturationStrainAmplitude.value = s.treeSecondaryMaturationStrainAmplitude ?? 0;
+        this.treeSecondaryProximalFraction.value = s.treeSecondaryProximalFraction ?? 0.25;
+        this.treeSecondaryProprioceptiveLengthM.value = s.treeSecondaryProprioceptiveLengthM ?? 1;
+        this.treeLateralUnitArchDegrees.value = s.treeLateralUnitArchDegrees ?? 0;
+        this.treeUnitLightDeviationDegrees.value = s.treeUnitLightDeviationDegrees ?? 10;
+        this.treeAxillaryFlushProbability.value = s.treeAxillaryFlushProbability ?? 1;
+        this.treeLeafDeclinationDegrees.value = s.treeLeafDeclinationDegrees ?? 0;
+        this.treeLeafDeclinationVariationDegrees.value = s.treeLeafDeclinationVariationDegrees ?? 0;
+        this.treeApicalControlStartYears.value = s.treeApicalControlStartYears ?? 0;
+        this.treeApicalControlEndYears.value = s.treeApicalControlEndYears ?? 0;
+        this.treeMatureLeaderExtensionFraction.value = s.treeMatureLeaderExtensionFraction ?? 0.2;
+        this.treeMatureBranchExtensionFraction.value = s.treeMatureBranchExtensionFraction ?? 1;
+        this.treeMatureFrameworkPitchFractionDeg.value = s.treeMatureFrameworkPitchFraction * RadToDeg;
+        this.treeGraftHeight.value = s.treeGraftHeight ?? 0;
+        this.treeClearTrunkHeight.value = s.treeClearTrunkHeight ?? 0;
+        this.treeStemCount.value = s.treeStemCount ?? 1;
+        this.treeMaximumBranchOrder.value = s.treeMaximumBranchOrder ?? 4;
+        this.treeBranchProbability.value = s.treeBranchProbability ?? 0.16;
+        this.treeShortShootBranchProbability.value = s.treeShortShootBranchProbability ?? 0;
+        this.treeShortShootShadeDiebackDays.value = s.treeShortShootShadeDiebackDays ?? 0;
+        this.treeShortShootShadeLightFraction.value = s.treeShortShootShadeLightFraction ?? 0.05;
+        this.treeShortShootShadeRelativeFraction.value = s.treeShortShootShadeRelativeFraction ?? 0.15;
+        this.treePhototropicWeight.value = s.treePhototropicWeight ?? 0.25;
+        this.treeShortShootNodes.value = s.treeShortShootNodes ?? 2;
+        this.treeShortShootLength.value = s.treeShortShootLength ?? 0.025;
+        this.treeBudBreakSeason.value = s.treeBudBreakSeason ?? 0.08;
+        this.treeGrowthEndSeason.value = s.treeGrowthEndSeason ?? 0.46;
+        this.treeFlowersPerCluster.value = s.treeFlowersPerCluster ?? 6;
+        this.treeMaleFlowersPerCluster.value = s.treeMaleFlowersPerCluster ?? 0;
+        this.boltingAgeHours.value = s.boltingAgeHours ?? 0;
+        this.rosetteNodeDistance.value = s.rosetteNodeDistance ?? 0.002;
+        this.rosetteMaximumNodes.value = s.rosetteMaximumNodes ?? 8;
+        this.herbaceousBranchProbability.value = s.herbaceousBranchProbability ?? 0;
+        this.herbaceousBranchMaximumOrder.value = s.herbaceousBranchMaximumOrder ?? 2;
+        this.rosetteScapes.value = s.rosetteScapes ?? false;
+        this.monocarpic.value = s.monocarpic ?? false;
+        this.taproot.value = s.taproot ?? false;
         this.height.value = s.height;
         this.nodeDistance.value = s.nodeDistance;
         this.nodeDistanceVar.value = s.nodeDistanceVar;
@@ -299,6 +459,10 @@ export class SpeciesBase {
         this.petioleRadiusVar.value = s.petioleRadiusVar;
         this.leafGrowthTime.value = s.leafGrowthTime;
         this.leafExpansionRateScale.value = s.leafExpansionRateScale;
+        this.vegetativeTemperatureResponseEnabled.value = s.vegetativeTemperatureResponseEnabled ?? false;
+        this.vegetativeGrowthBaseTemperatureC.value = s.vegetativeGrowthBaseTemperatureC ?? 5;
+        this.vegetativeGrowthFullTemperatureC.value = s.vegetativeGrowthFullTemperatureC ?? 20;
+        this.vegetativeGrowthLightReferenceWhM2.value = s.vegetativeGrowthLightReferenceWhM2 ?? 0;
         this.constructionEnergyPerDryGram.value = s.constructionEnergyPerDryGram;
         this.leafGrowthTimeVar.value = s.leafGrowthTimeVar;
         this.leafSenescenceSeasonalDuration.value = s.leafSenescenceSeasonalDuration;
@@ -307,6 +471,7 @@ export class SpeciesBase {
         this.leafSenescenceStressDurationVar.value = s.leafSenescenceStressDurationVar;
         this.seasonalSenescence.value = s.seasonalSenescence;
         this.rootsDensity.value = s.rootsDensity;
+        this.rootRadiusTaper.value = s.rootRadiusTaper ?? 1;
         this.rootsGravitaxis.value = s.rootsGravitaxis;
         this.densityDryWood.value = s.densityDryWood;
         this.densityDryStem.value = s.densityDryStem;
@@ -384,6 +549,56 @@ export class SpeciesBase {
             Name: this.name.peek(),
             Aka: this.aka.peek(),
             Behavior: this.behaviorIndex.peek(),
+            TreeCrownHabit: this.treeCrownHabit.peek(),
+            TreeCrownRadius: this.treeCrownRadius.peek(),
+            TreeAnnualExtension: this.treeAnnualExtension.peek(),
+            TreeRootAnnualExtension: this.treeRootAnnualExtension.peek(),
+            TreeAnnualRadiusGrowth: this.treeAnnualRadiusGrowth.peek(),
+            TreeMatureAgeYears: this.treeMatureAgeYears.peek(),
+            TreeFloweringAgeYears: this.treeFloweringAgeYears.peek(),
+            TreeSympodialRenewal: this.treeSympodialRenewal.peek(),
+            TreeDorsiventralShoots: this.treeDorsiventralShoots.peek(),
+            TreeMainlineModuleMode: this.treeMainlineModuleMode.peek(),
+            TreeMainlineTrainingHeightM: this.treeMainlineTrainingHeightM.peek(),
+            TreeMainlineReferenceInclinationDegrees: this.treeMainlineReferenceInclinationDegrees.peek(),
+            TreeMainlineOpeningFraction: this.treeMainlineOpeningFraction.peek(),
+            TreeSecondaryMaturationStrainAmplitude: this.treeSecondaryMaturationStrainAmplitude.peek(),
+            TreeSecondaryProximalFraction: this.treeSecondaryProximalFraction.peek(),
+            TreeSecondaryProprioceptiveLengthM: this.treeSecondaryProprioceptiveLengthM.peek(),
+            TreeLateralUnitArchDegrees: this.treeLateralUnitArchDegrees.peek(),
+            TreeUnitLightDeviationDegrees: this.treeUnitLightDeviationDegrees.peek(),
+            TreeAxillaryFlushProbability: this.treeAxillaryFlushProbability.peek(),
+            TreeLeafDeclinationDegrees: this.treeLeafDeclinationDegrees.peek(),
+            TreeLeafDeclinationVariationDegrees: this.treeLeafDeclinationVariationDegrees.peek(),
+            TreeApicalControlStartYears: this.treeApicalControlStartYears.peek(),
+            TreeApicalControlEndYears: this.treeApicalControlEndYears.peek(),
+            TreeMatureLeaderExtensionFraction: this.treeMatureLeaderExtensionFraction.peek(),
+            TreeMatureBranchExtensionFraction: this.treeMatureBranchExtensionFraction.peek(),
+            TreeMatureFrameworkPitchFraction: this.treeMatureFrameworkPitchFractionDeg.peek() * DegToRad,
+            TreeGraftHeight: this.treeGraftHeight.peek(),
+            TreeClearTrunkHeight: this.treeClearTrunkHeight.peek(),
+            TreeStemCount: this.treeStemCount.peek(),
+            TreeMaximumBranchOrder: this.treeMaximumBranchOrder.peek(),
+            TreeBranchProbability: this.treeBranchProbability.peek(),
+            TreeShortShootBranchProbability: this.treeShortShootBranchProbability.peek(),
+            TreeShortShootShadeDiebackDays: this.treeShortShootShadeDiebackDays.peek(),
+            TreeShortShootShadeLightFraction: this.treeShortShootShadeLightFraction.peek(),
+            TreeShortShootShadeRelativeFraction: this.treeShortShootShadeRelativeFraction.peek(),
+            TreePhototropicWeight: this.treePhototropicWeight.peek(),
+            TreeShortShootNodes: this.treeShortShootNodes.peek(),
+            TreeShortShootLength: this.treeShortShootLength.peek(),
+            TreeBudBreakSeason: this.treeBudBreakSeason.peek(),
+            TreeGrowthEndSeason: this.treeGrowthEndSeason.peek(),
+            TreeFlowersPerCluster: this.treeFlowersPerCluster.peek(),
+            TreeMaleFlowersPerCluster: this.treeMaleFlowersPerCluster.peek(),
+            BoltingAgeHours: this.boltingAgeHours.peek(),
+            RosetteNodeDistance: this.rosetteNodeDistance.peek(),
+            RosetteMaximumNodes: this.rosetteMaximumNodes.peek(),
+            HerbaceousBranchProbability: this.herbaceousBranchProbability.peek(),
+            HerbaceousBranchMaximumOrder: this.herbaceousBranchMaximumOrder.peek(),
+            RosetteScapes: this.rosetteScapes.peek(),
+            Monocarpic: this.monocarpic.peek(),
+            Taproot: this.taproot.peek(),
             Height: this.height.peek(),
             NodeDistance: this.nodeDistance.peek(),
             NodeDistanceVar: this.nodeDistanceVar.peek(),
@@ -423,6 +638,10 @@ export class SpeciesBase {
             PetioleRadiusVar: this.petioleRadiusVar.peek(),
             LeafGrowthTime: this.leafGrowthTime.peek(),
             LeafExpansionRateScale: this.leafExpansionRateScale.peek(),
+            VegetativeTemperatureResponseEnabled: this.vegetativeTemperatureResponseEnabled.peek(),
+            VegetativeGrowthBaseTemperatureC: this.vegetativeGrowthBaseTemperatureC.peek(),
+            VegetativeGrowthFullTemperatureC: this.vegetativeGrowthFullTemperatureC.peek(),
+            VegetativeGrowthLightReferenceWhM2: this.vegetativeGrowthLightReferenceWhM2.peek(),
             ConstructionEnergyPerDryGram: this.constructionEnergyPerDryGram.peek(),
             LeafGrowthTimeVar: this.leafGrowthTimeVar.peek(),
             LeafSenescenceSeasonalDuration: this.leafSenescenceSeasonalDuration.peek(),
@@ -431,6 +650,7 @@ export class SpeciesBase {
             LeafSenescenceStressDurationVar: this.leafSenescenceStressDurationVar.peek(),
             SeasonalSenescence: this.seasonalSenescence.peek(),
             RootsDensity: this.rootsDensity.peek(),
+            RootRadiusTaper: this.rootRadiusTaper.peek(),
             RootsGravitaxis: this.rootsGravitaxis.peek(),
             DensityDryWood: this.densityDryWood.peek(),
             DensityDryStem: this.densityDryStem.peek(),

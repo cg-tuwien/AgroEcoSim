@@ -3,7 +3,7 @@ import { Obstacle } from "./Obstacle";
 import { Organs, Primitive, Primitives } from "./Primitives";
 import { BoxTerrainItem, ITerrainItem, MeshTerrainItem } from "./Terrain";
 import type { ObstacleGroup } from "./Obstacle";
-import { PlantModel, RecordedGeometry } from "./Scene";
+import { PlantModel, RecordedGeometry, registerFrameCapabilities } from "./Scene";
 import { registerGeometry } from '../render/core/GeometryStore';
 import { computeVertexNormals } from '../render/core/Geometry';
 const recordedGeometry = new Map<string, RecordedGeometry>();
@@ -150,6 +150,7 @@ export default class BinaryReader {
         {
             case 7: return this.readAgroSceneV7();
             case 8: return this.readAgroSceneV7(true);
+            case 9: return this.readAgroSceneV7(true, true);
             default: console.error("Unsupported scene format version:", version);
         }
     }
@@ -308,13 +309,15 @@ export default class BinaryReader {
         return primitives;
     }
 
-    readAgroSceneV7(v8 = false)
+    readAgroSceneV7(v8 = false, sourceIdentity = false)
     {
         const result : PlantModel[] = [];
         const flags = this.readInt8();
         if (v8) this.readRecordedGeometry();
         const doRoots = (flags & 1) > 0;
         const doAnalytics = (flags & 2) >0;
+        let hasRootGeometry = false;
+        let hasVirtualRoots = false;
         const entitesCount = this.readUInt32();
         for(let i = 0; i < entitesCount; ++i)
         {
@@ -322,6 +325,7 @@ export default class BinaryReader {
             const species = this.readString();
             const geometry = v8 ? recordedGeometry.get(this.readString()) : undefined;
             if (v8 && !geometry) throw new Error('V8 scene references a missing immutable mesh asset.');
+            const sourcePlantIndex = sourceIdentity ? this.readUInt32() : undefined;
             const primitivesCount = this.readUInt32();
             let maxDailyResourceShoots = 0;
             let maxDailyProductionShoots = 0;
@@ -358,7 +362,10 @@ export default class BinaryReader {
                 }
                 switch(organ)
                 {
-                    case Organs.Leaf: case Organs.FlowerPadel: { //lamina record: 12-float affine transform, no length/radius
+                    case Organs.Leaf: case Organs.FlowerPadel: case Organs.FruitWing: case Organs.Fruit: { //mesh record: 12-float affine transform, no length/radius
+                        if (v8 && ((organ === Organs.Fruit && geometry?.fruit === undefined)
+                            || (organ === Organs.FruitWing && geometry?.fruitWing === undefined)))
+                            throw new Error('Fruit record is missing its immutable mesh asset.');
                         const slice = organ === Organs.Leaf ? chainPosition[j] : 0;
                         const transform = this.readFloat32Vector(12);
                         if (doAnalytics)
@@ -371,14 +378,20 @@ export default class BinaryReader {
                             const color = this.readHexRGB();
                             const auxins = this.readFloat32();
                             const dailyEfficiency = this.readFloat32();
-                            entity.push({ type: Primitives.Rectangle, organ: organ, affineTransform: transform, stats: new Float32Array([waterRatio, energyRatio, auxins, 0, lastIrradiance, dailyResource, dailyProduction, 0, 0]), color: color, laminaSlice: slice, deformation });
+                            const stats = new Float32Array([waterRatio, energyRatio, auxins, 0, lastIrradiance, dailyResource, dailyProduction, 0, 0]);
+                            entity.push(organ === Organs.Fruit
+                                ? { type: Primitives.Ellipsoid, organ, affineTransform: transform, stats, color }
+                                : { type: Primitives.Rectangle, organ, affineTransform: transform, stats, color, laminaSlice: slice, deformation });
                             maxDailyProductionShoots = Math.max(dailyProduction, maxDailyProductionShoots);
                             maxDailyResourceShoots = Math.max(dailyResource, maxDailyResourceShoots);
                         }
                         else
                         {
                             const color = this.readHexRGB();
-                            entity.push({ type: Primitives.Rectangle, organ: organ, affineTransform: transform, stats: new Float32Array([0, 0, 0, 0, 0, 0, 0, 0, 0]), color: color, laminaSlice: slice, deformation });
+                            const stats = new Float32Array(9);
+                            entity.push(organ === Organs.Fruit
+                                ? { type: Primitives.Ellipsoid, organ, affineTransform: transform, stats, color }
+                                : { type: Primitives.Rectangle, organ, affineTransform: transform, stats, color, laminaSlice: slice, deformation });
                         }
                     }
                     break;
@@ -436,6 +449,7 @@ export default class BinaryReader {
                 //ExportV7 writes the VirtualRoots flag first; virtual root systems carry only their
                 //bounding size instead of a list of root segments.
                 const virtualRoots = this.readUInt8() != 0;
+                hasVirtualRoots = hasVirtualRoots || virtualRoots;
                 if (virtualRoots)
                     this.readFloat32Vector(3); //bounding size of the virtual root system
                 const rootsCount = virtualRoots ? 0 : this.readUInt32();
@@ -456,6 +470,7 @@ export default class BinaryReader {
                             const auxins = 0;//this.readFloat32();
                             const cytokinins = 0;//this.readFloat32();
                             entity.push({ type: Primitives.Box, organ: Organs.Root, affineTransform: transform, length: length, radius: radius, stats: new Float32Array([waterRatio, energyRatio, auxins, cytokinins, woodRatio, dailyResource, dailyProduction, 0, 0]) });
+                            hasRootGeometry = true;
                             maxDailyProductionRoots = Math.max(dailyProduction, maxDailyProductionRoots);
                             maxDailyResourceRoots = Math.max(dailyResource, maxDailyResourceRoots);
                         }
@@ -469,6 +484,7 @@ export default class BinaryReader {
                 switch (ent.type)
                 {
                     case Primitives.Rectangle:
+                    case Primitives.Ellipsoid:
                     case Primitives.Cylinder:
                     {
                         ent.stats[7] = ent.stats[5] / maxDailyResourceShoots;
@@ -484,9 +500,16 @@ export default class BinaryReader {
                 }
             }
 
-            result.push({ primitives: entity, species: species, geometry });
+            result.push({ primitives: entity, species: species, geometry, sourcePlantIndex });
         }
 
+        registerFrameCapabilities(result, {
+            version: sourceIdentity ? 9 : v8 ? 8 : 7,
+            rootsDownloaded: doRoots,
+            analyticsAvailable: doAnalytics,
+            hasRootGeometry,
+            virtualRoots: hasVirtualRoots,
+        });
         return result;
     }
 
@@ -498,7 +521,7 @@ export default class BinaryReader {
             if (!/^[0-9a-f]{64}$/.test(id) || end > this.source.length) throw new Error('Invalid V8 asset.');
             if (recordedGeometry.has(id)) { this.pos = end; continue; }
             const profile = this.readUInt8(), version = this.readUInt8();
-            if (profile > 1 || version !== 1) throw new Error(`Unsupported deformation profile ${profile}/${version}.`);
+            if (profile > 1 || (version !== 1 && version !== 2)) throw new Error(`Unsupported geometry profile ${profile}/${version}.`);
             const slices = this.readUInt32();
             if (!slices || slices > 256) throw new Error('Invalid V8 blade slices.');
             const readMesh = (key: string) => {
@@ -515,8 +538,12 @@ export default class BinaryReader {
             const leaves: number[] = [];
             for (let slice = 0; slice < slices; ++slice) leaves.push(readMesh(`recorded:${id}:leaf:${slice}`));
             const petal = readMesh(`recorded:${id}:petal`);
+            const fruit = version >= 2 ? readMesh(`recorded:${id}:fruit`) : undefined;
+            const wings = version >= 2 ? this.readUInt8() : 0;
+            if (wings > 1) throw new Error('Invalid fruit-wing mesh flag.');
+            const fruitWing = wings ? readMesh(`recorded:${id}:fruit-wing`) : undefined;
             if (this.pos !== end) throw new Error('Invalid V8 asset length.');
-            recordedGeometry.set(id, { id, profile, leaves, petal });
+            recordedGeometry.set(id, { id, profile, leaves, petal, fruit, fruitWing });
         }
     }
 

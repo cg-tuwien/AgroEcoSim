@@ -33,11 +33,46 @@ public partial class PlantSubFormation<T>
         // Admission retries are independent of the owner's elongation retries.
         public float NextAttemptHour;
         public int AdmissionFailures;
+        public ulong[] NewModuleRootStableIds = [];
+        public bool FixedTreeAxil;
     }
 
     readonly Dictionary<ulong, RetryState> GrowthRetries = [];
     readonly Dictionary<ulong, Development> Developments = [];
     readonly Dictionary<ulong, int> OrganIndices = [];
+    // Proposal accounting is tick-local, independent of contact trial frames. Trial shortening
+    // and restoration may run repeatedly; only the final accepted length spends the annual flush.
+    // Ordinary lateral openings are stored in their proposal's unit-reference coordinates.
+    readonly record struct WoodyExtension(float StartLength, float ProposedLength, float LightStartLength, ulong Continuation, ulong Relay,
+        Quaternion Opening, AboveGroundAgent.TreeLightStep LightStep, bool HasLightStep, TreeModuleStep Module = default,
+        Quaternion ReferenceAtProposal = default);
+    readonly Dictionary<ulong, WoodyExtension> WoodyExtensions = [];
+    readonly record struct ModuleMaterialPair(AboveGroundAgent.TreeModuleMaterialFrame Before,
+        AboveGroundAgent.TreeModuleMaterialFrame Proposed, AboveGroundAgent.TreeModuleLocalMaterial LocalBefore,
+        ulong ModuleRootStableId, uint Tick);
+    Dictionary<ulong, ModuleMaterialPair>? ModuleMaterialFrames;
+    // One plant job ticks its organs serially. This proposal scratch captures the
+    // actual post-renewal/pre-extension unit state, rather than last year's apex.
+    AboveGroundAgent.TreeLightStep TickTreeLightStep;
+    float TickTreeLightStartLength;
+    Quaternion TickTreeUnitOpening;
+    Quaternion TickTreeUnitReference;
+    bool HasTickTreeLightStep;
+    TreeModuleStep TickTreeModuleStep;
+    Quaternion[] FundedUnitBirthCarries = [];
+    internal void RecordTreeLightStep(in AboveGroundAgent.TreeLightStep step, Quaternion opening, float startLength,
+        TreeModuleStep module = default, Quaternion reference = default)
+    {
+        TickTreeLightStep = step; TickTreeUnitOpening = opening;
+        TickTreeUnitReference = reference; TickTreeLightStartLength = startLength;
+        TickTreeModuleStep = module; HasTickTreeLightStep = true;
+    }
+
+    static Quaternion StoreWoodyUnitOpening(Quaternion opening, Quaternion reference)
+    {
+        if (reference.LengthSquared() < .5f || opening == Quaternion.Identity) return opening;
+        return Quaternion.Normalize(Quaternion.Conjugate(reference) * opening * reference);
+    }
     readonly List<(int Index, OrganDeathReason Reason)> DevelopmentDeaths = [];
     readonly List<ulong> RemovedGrowthIds = [], CompletedGrowthIds = [];
     readonly List<Development> DevelopmentOrder = [];
@@ -47,6 +82,7 @@ public partial class PlantSubFormation<T>
     OrganPose[] DevelopmentPoses = [];
     LaminaTemplate?[] DevelopmentTemplates = [];
     bool RecordingDevelopment;
+    int UnitBirthOwner = -1, UnitBirthStart;
     AboveGroundAgent TickPhysiology;
     internal void MarkDevelopmentPhysiology(in AboveGroundAgent agent) => TickPhysiology = agent;
     public long RejectedDevelopments { get; private set; }
@@ -73,7 +109,11 @@ public partial class PlantSubFormation<T>
         RemovedGrowthIds.Clear();
         foreach (var id in Developments.Keys)
             if (!OrganIndices.ContainsKey(id)) RemovedGrowthIds.Add(id);
-        foreach (var id in RemovedGrowthIds) Developments.Remove(id);
+        foreach (var id in RemovedGrowthIds)
+        {
+            CancelModuleDevelopment(Developments[id], ownerDied: true);
+            Developments.Remove(id);
+        }
         PruneDeformationState();
     }
 
@@ -87,11 +127,70 @@ public partial class PlantSubFormation<T>
 
     internal bool HasPendingDevelopment(int i) => i >= 0 && Developments.ContainsKey(Src()[i].StableId);
 
+    internal bool TryGetDistalTreeAxil(int index, Quaternion ownerFrame, out AboveGroundAgent petiole)
+    {
+        var selected = default(AboveGroundAgent);
+        var found = false;
+        var distal = float.NegativeInfinity;
+        var axis = Vector3.Transform(Vector3.UnitX, ownerFrame);
+        var source = Src();
+        var carry = ownerFrame == source[index].Orientation ? Quaternion.Identity
+            : Quaternion.Normalize(ownerFrame * Quaternion.Conjugate(source[index].Orientation));
+        foreach (var child in GetChildren(index))
+        {
+            var value = source[child];
+            if (value.Organ != OrganTypes.Petiole) continue;
+            var candidate = Unsafe.As<T, AboveGroundAgent>(ref value);
+            if (carry != Quaternion.Identity) candidate.TransportDevelopment(carry, carryAttachment: true);
+            Consider(candidate);
+        }
+        // Same-tick leaf births already use the final proposed owner frame.
+        for (int j = UnitBirthOwner == index ? UnitBirthStart : 0; j < Births.Count; ++j)
+        {
+            var value = Births[j];
+            if (value.Parent != index || value.Organ != OrganTypes.Petiole) continue;
+            var candidate = value;
+            Consider(Unsafe.As<T, AboveGroundAgent>(ref candidate));
+        }
+        petiole = selected;
+        return found;
+
+        void Consider(AboveGroundAgent candidate)
+        {
+            var offset = Vector3.Dot(candidate.BaseOffset, axis);
+            if (found && offset <= distal) return;
+            found = true;
+            distal = offset;
+            selected = candidate;
+        }
+    }
+
+    void TickWithUnitBirthRange(ref T agent, int index, uint timestep)
+    {
+        var previousOwner = UnitBirthOwner;
+        var previousStart = UnitBirthStart;
+        UnitBirthOwner = index;
+        UnitBirthStart = Births.Count;
+        try { agent.Tick(this, index, timestep); }
+        finally { UnitBirthOwner = previousOwner; UnitBirthStart = previousStart; }
+    }
+
     // A rejected first scape is a sampled spring commitment. Keep its exact
     // proposal while emergence could still lead to bloom, then release the
     // vegetative owner rather than pinning that crown until obstacle removal.
     bool FloralDevelopmentExpired(Development proposal)
     {
+        if (Plant.Parameters.Behavior == Behavior.Woody && proposal.Children.Length > 0
+            && proposal.Children[0].Organ is OrganTypes.FlowerStem or OrganTypes.FlowerPedicel or OrganTypes.FlowerPadel)
+        {
+            var woodyCreated = Plant.World.GetTime(proposal.Created);
+            var woodyNow = Plant.World.GetTime(Plant.World.Timestep);
+            var extra = proposal.Children[0].Organ == OrganTypes.FlowerPadel
+                ? (Plant.Parameters.FlowerSettings.BudBloomDurationHours + Plant.Parameters.FlowerSettings.FlowerMaximumAgeHours) / (365f * 24f)
+                : 0f;
+            return SeasonCycle(woodyCreated) != SeasonCycle(woodyNow)
+                || Plant.World.Season > Plant.Parameters.FloweringSeasonEnd + extra;
+        }
         if (proposal.Children.Length != 1 || proposal.Children[0].Organ != OrganTypes.FlowerMeristem
             || !proposal.Children[0].FlowerAgent.flowerBase || proposal.Children[0].FlowerAgent.debth != 0)
             return false;
@@ -141,6 +240,9 @@ public partial class PlantSubFormation<T>
     void PrepareGrowthAttempts(Span<T> agents)
     {
         if (!IsAboveGround) return;
+        WoodyExtensions.Clear();
+        ModuleMaterialFrames?.Clear();
+        if (TreeModulesEnabled) ModuleWithdrawalReceipts?.Clear();
         var hour = Plant.World.Timestep * (float)Plant.World.HoursPerTick;
         for (int i = 0; i < agents.Length; ++i)
         {
@@ -172,6 +274,7 @@ public partial class PlantSubFormation<T>
 
     void TickWithDevelopment(ref T agent, int index, uint timestep)
     {
+        HasTickTreeLightStep = false;
         if (!IsAboveGround)
         {
             agent.Tick(this, index, timestep);
@@ -180,7 +283,10 @@ public partial class PlantSubFormation<T>
         if (!CollisionSettings.Enabled && Plant.Parameters.ConstructionEnergyPerDryGram == 0f)
         {
             var length = agent.Length;
-            agent.Tick(this,index,timestep);
+            var firstBirth = Births.Count;
+            if (Plant.Parameters.TreeGrowthUnitsEnabled) TickWithUnitBirthRange(ref agent, index, timestep);
+            else agent.Tick(this,index,timestep);
+            BoundWoodyBirthWater(ref Unsafe.As<T,AboveGroundAgent>(ref agent), firstBirth);
             ApplyGrowthLight(index,ref Unsafe.As<T,AboveGroundAgent>(ref agent),length);
             return;
         }
@@ -195,11 +301,17 @@ public partial class PlantSubFormation<T>
         {
             DevelopmentDeaths.Clear();
             RecordingDevelopment = true;
-            try { agent.Tick(this, index, timestep); }
+            try
+            {
+                if (Plant.Parameters.TreeGrowthUnitsEnabled) TickWithUnitBirthRange(ref agent, index, timestep);
+                else agent.Tick(this, index, timestep);
+            }
             finally { RecordingDevelopment = false; }
         }
+        else if (Plant.Parameters.TreeGrowthUnitsEnabled) TickWithUnitBirthRange(ref agent, index, timestep);
         else agent.Tick(this, index, timestep);
         ref var after = ref Unsafe.As<T, AboveGroundAgent>(ref agent);
+        BoundWoodyBirthWater(ref after, first);
         if (!staging)
             ChargeBirths(ref after, first);
         else if (Births.Count > first)
@@ -222,6 +334,7 @@ public partial class PlantSubFormation<T>
                 proposal.Water += MathF.Max(0, child.Water_g);
             }
             Births.RemoveRange(first, Births.Count - first);
+            CaptureModuleDevelopment(proposal);
             proposal.EnergyFraction = Math.Clamp(proposal.Energy / MathF.Max(1e-20f, TickPhysiology.Energy), 0f, 1f);
             proposal.WaterFraction = Math.Clamp(proposal.Water / MathF.Max(1e-20f, TickPhysiology.Water_g), 0f, 1f);
             // Only developmental state is rolled back. Maintenance, photosynthesis and daily
@@ -234,12 +347,40 @@ public partial class PlantSubFormation<T>
         else
             foreach (var death in DevelopmentDeaths) Death(death.Index, reason: death.Reason);
 
+        if (Plant.Parameters.Behavior == Behavior.Woody
+            && before.Organ is OrganTypes.Meristem or OrganTypes.Bud && after.Length > before.Length)
+        {
+            // A certified pending development restored `before` above, so has no increment
+            // here. Its sampled counter commits only when its complete pose is admitted.
+            ulong continuation = 0, relay = 0;
+            for (int j = first; j < Births.Count; ++j)
+            {
+                var born = Births[j];
+                ref var child = ref Unsafe.As<T, AboveGroundAgent>(ref born);
+                if (child.Parent == index && child.IsTreeShootContinuation(after))
+                    continuation = child.StableId;
+                else if (child.IsTreeRelayOf(after))
+                    relay = child.StableId;
+            }
+            var opening = HasTickTreeLightStep ? TickTreeUnitOpening : Quaternion.Identity;
+            var sampledReference = HasTickTreeLightStep ? TickTreeUnitReference : default;
+            opening = StoreWoodyUnitOpening(opening, sampledReference);
+            WoodyExtensions[after.StableId] = new(before.Length, after.Length,
+                HasTickTreeLightStep ? TickTreeLightStartLength : before.Length, continuation, relay, opening,
+                HasTickTreeLightStep ? TickTreeLightStep : after.CaptureTreeLightProposal(before, Plant.Parameters), HasTickTreeLightStep,
+                HasTickTreeLightStep ? TickTreeModuleStep : default, sampledReference);
+        }
+
         if (before.GrowthBlocked)
         {
             after.Length = before.Length;
             after.GrowSuspendedRadius(Plant);
         }
         after.FundExpansion(before, Plant.Parameters);
+        if (Plant.Parameters.TreeGrowthUnitsEnabled && HasTickTreeLightStep
+            && WoodyExtensions.TryGetValue(after.StableId, out var fundedUnit)
+            && after.Length < fundedUnit.ProposedLength)
+            FundTreeUnitFrames(ref after, index, first, fundedUnit, before);
         var delta = Quaternion.Normalize(after.Orientation * Quaternion.Conjugate(before.Orientation));
         if (new Vector3(delta.X,delta.Y,delta.Z).LengthSquared() > 1e-16f)
         {
@@ -247,6 +388,59 @@ public partial class PlantSubFormation<T>
             PropagateToSubtree(growing,index,delta);
         }
         ApplyGrowthLight(index, ref after, before.Length);
+        if (HasTickTreeLightStep && (TreeModulesEnabled && TickTreeModuleStep.IsDorsiventral
+            || after.CorrectsOrdinaryLateralUnitTrial(Plant.Parameters)))
+            (ModuleMaterialFrames ??= [])[after.StableId] = new(before.CaptureTreeModuleMaterial(), after.CaptureTreeModuleMaterial(),
+                before.CaptureTreeModuleLocalMaterial(), after.TreeModuleRootStableId, timestep);
+    }
+
+    // Funding is an accepted-length decision before geometric certification.
+    // Newborns already use the proposed bearer frame, whereas committed children
+    // are carried once below TickWithDevelopment by its final net rotation.
+    void FundTreeUnitFrames(ref AboveGroundAgent axis, int index, int first, in WoodyExtension proposal,
+        in AboveGroundAgent before)
+    {
+        var oldExtension = axis.TreeTrialExtension(proposal.LightStartLength, proposal.ProposedLength,
+            proposal.ProposedLength, proposal.LightStep);
+        var newExtension = axis.TreeTrialExtension(proposal.LightStartLength, proposal.ProposedLength,
+            axis.Length, proposal.LightStep);
+        var corrected = proposal.ReferenceAtProposal.LengthSquared() > .5f;
+        var endpointTurn = corrected
+            ? axis.LateralTreeUnitTrialTurnWithLight(Plant.Parameters, oldExtension, newExtension,
+                proposal.LightStep, proposal.ReferenceAtProposal, proposal.Opening, atTip: true)
+            : axis.TreeUnitTrialTurnWithLight(Plant.Parameters, oldExtension, newExtension,
+                proposal.LightStep, atTip: true, module: proposal.Module);
+        var carry = corrected
+            ? axis.TransportLateralTreeUnitTrialWithLight(Plant.Parameters, oldExtension, newExtension,
+                proposal.LightStep, proposal.ReferenceAtProposal, proposal.Opening)
+            : axis.TransportTreeUnitTrialOpeningWithLight(Plant.Parameters, oldExtension, newExtension,
+                proposal.LightStep, proposal.Opening, proposal.Module);
+        var count = Births.Count - first;
+        if (FundedUnitBirthCarries.Length < count)
+            Array.Resize(ref FundedUnitBirthCarries, Math.Max(count, Math.Max(8, FundedUnitBirthCarries.Length * 2)));
+        for (int j = first; j < Births.Count; ++j)
+        {
+            var value = Births[j];
+            ref var child = ref Unsafe.As<T, AboveGroundAgent>(ref value);
+            var continuation = child.StableId == proposal.Continuation;
+            var relay = child.StableId == proposal.Relay;
+            var turn = child.Parent == index ? continuation ? endpointTurn : carry
+                : child.Parent >= AgentCount + first && child.Parent < AgentCount + j
+                    ? FundedUnitBirthCarries[child.Parent - AgentCount - first] : Quaternion.Identity;
+            FundedUnitBirthCarries[j - first] = turn;
+            var reference = continuation || relay ? child.CaptureTreeUnitFrame() : Quaternion.Identity;
+            if (turn != Quaternion.Identity) child.TransportDevelopment(turn, carryAttachment: true);
+            if (continuation || relay)
+            {
+                if (turn != Quaternion.Identity) child.RestoreTreeUnitFrame(reference);
+                child.InheritTreeUnitLight(axis, newUnit: relay);
+            }
+            Births[j] = value;
+        }
+        if ((proposal.Module.IsDorsiventral || axis.CorrectsOrdinaryLateralUnitTrial(Plant.Parameters))
+            && newExtension == proposal.LightStep.StartExtension
+            && axis.Length == proposal.StartLength)
+            axis.RestoreZeroTreeModuleMaterial(before);
     }
 
     /// <summary>
@@ -266,6 +460,22 @@ public partial class PlantSubFormation<T>
         parent.Energy -= cost;
     }
 
+    // Cap only this tick's newborns, before immediate admission or proposal capture.
+    // Unused shares return to their actual donor; a pending proposal is not live water.
+    void BoundWoodyBirthWater(ref AboveGroundAgent owner, int first)
+    {
+        if (Plant.Parameters.Behavior != Behavior.Woody) return;
+        double returnedWater = 0d;
+        for (int j = first; j < Births.Count; j++)
+        {
+            var child = Births[j];
+            ref var born = ref Unsafe.As<T, AboveGroundAgent>(ref child);
+            returnedWater += born.ReleaseWaterAboveCapacity();
+            Births[j] = child;
+        }
+        owner.Water_g += (float)returnedWater;
+    }
+
     internal void ProcessDevelopments(CollisionWorld collisions)
     {
         if (!IsAboveGround || Developments.Count == 0) return;
@@ -279,7 +489,10 @@ public partial class PlantSubFormation<T>
         foreach (var proposal in DevelopmentOrder)
         {
             var index = FindOrgan(proposal.Owner);
-            if (index < 0 || Deaths.Contains(index)) { Developments.Remove(proposal.Owner); continue; }
+            if (index < 0 || Deaths.Contains(index))
+            { CancelModuleDevelopment(proposal, ownerDied: true); Developments.Remove(proposal.Owner); continue; }
+            if (!ModuleDevelopmentSiteEligible(proposal))
+            { CancelModuleDevelopment(proposal, ownerDied: false); Developments.Remove(proposal.Owner); continue; }
             if (FloralDevelopmentExpired(proposal))
             {
                 Developments.Remove(proposal.Owner);
@@ -299,10 +512,25 @@ public partial class PlantSubFormation<T>
             // Proposals remember sampled orientations relative to the owner, not a stale world frame.
             var carry = Quaternion.Normalize(current.Orientation * Quaternion.Conjugate(proposal.Before.Orientation));
             var parent = AboveGroundAgent.RetainPhysiology(proposal.After, current);
+            if (Plant.Parameters.Behavior == Behavior.Woody)
+                parent.RebaseTreeDevelopmentClock(proposal.Before, Plant.World.Timestep - proposal.Created);
             parent.CensusUpdateParent(current.Parent);
             parent.TransportDevelopment(carry);
+            if (Plant.Parameters.Behavior == Behavior.Woody)
+            {
+                // Preserve the owner's already-carried attachment. A newly split fruit
+                // adds its sampled offset in the owner's current frame at admission.
+                var attachmentChange = proposal.After.BaseOffset - proposal.Before.BaseOffset;
+                parent.BaseOffset = current.BaseOffset + Vector3.Transform(attachmentChange, carry);
+            }
             parent.Radius = MathF.Max(parent.Radius, current.Radius);
-            if (Quaternion.Dot(proposal.Before.Orientation, proposal.After.Orientation) > 0.999999f)
+            // A finite unit can encode real, very small intrinsic turns. Replacing
+            // its proposed base frame while keeping the inverse local unit reference
+            // would unpair them. The historical tolerance is retained for other paths.
+            var noOwnTurn = Plant.Parameters.Behavior == Behavior.Woody && Plant.Parameters.TreeGrowthUnitsEnabled
+                ? proposal.Before.Orientation == proposal.After.Orientation
+                : Quaternion.Dot(proposal.Before.Orientation, proposal.After.Orientation) > 0.999999f;
+            if (noOwnTurn)
             {
                 parent.SetOrientation(current.Orientation);
                 parent.baseOrientation = current.baseOrientation;
@@ -387,7 +615,7 @@ public partial class PlantSubFormation<T>
                 for (int j = 0; j < children.Length; ++j)
                 {
                     var child = children[j];
-                    child.TransportDevelopment(orientationCarry);
+                    child.TransportDevelopment(orientationCarry, Plant.Parameters.Behavior == Behavior.Woody);
                     var p = proposal.LocalParents[j];
                     var existing = p < 0 ? FindOrgan(proposal.Parents[j]) : -1;
                     if (p >= j || (p < 0 && existing < 0 && proposal.Parents[j] != 0)) return false;
@@ -469,7 +697,7 @@ public partial class PlantSubFormation<T>
                     }
                 }
             }
-            if (!valid && supportAttempts<4)
+            if (!valid && !proposal.FixedTreeAxil && supportAttempts<4)
             {
                 supportFallback ??= SaveContactTrial();
                 ++supportAttempts;
@@ -481,7 +709,7 @@ public partial class PlantSubFormation<T>
                 RestoreContactTrial(supportFallback);supportFallback=null;supportAttempts=4;
                 goto RetrySupportedDevelopment;
             }
-            if (parentFits && !valid)
+            if (parentFits && !valid && !proposal.FixedTreeAxil)
             {
                 valid=false;
                 // Reuse the sampled organs and resource shares while testing finite alternative
@@ -525,7 +753,10 @@ public partial class PlantSubFormation<T>
             var water = MathF.Min(MathF.Max(0, parent.Water_g) * proposal.WaterFraction, proposal.Water);
             parent.Energy -= energy;
             parent.Water_g -= water;
+            if (Plant.Parameters.Behavior == Behavior.Woody)
+                Plant.RetainWaterReserve(parent.ReleaseWaterAboveCapacity());
             current = parent;
+            CommitModuleDevelopment(proposal);
             if (changed) PropagateToSubtree(Src(), index, delta);
             var first = AgentCount + Births.Count;
             for (int j = 0; j < children.Length; ++j)
@@ -533,7 +764,7 @@ public partial class PlantSubFormation<T>
                 var child = children[j];
                 child.Energy *= proposal.Energy > 0 ? energy / proposal.Energy : 0;
                 child.Water_g *= proposal.Water > 0 ? water / proposal.Water : 0;
-                child.TransportDevelopment(childCarry);
+                child.TransportDevelopment(childCarry, Plant.Parameters.Behavior == Behavior.Woody);
                 child.RebaseBirthTime(Plant.World.Timestep - proposal.Created);
                 child.CensusUpdateParent(proposal.LocalParents[j] >= 0 ? first + proposal.LocalParents[j] : FindOrgan(proposal.Parents[j]));
                 var born = Unsafe.As<AboveGroundAgent, T>(ref child);
@@ -554,14 +785,55 @@ public partial class PlantSubFormation<T>
 
     internal void SettleConstruction()
     {
-        if (!IsAboveGround || Plant.Parameters.ConstructionEnergyPerDryGram == 0f) return;
-        foreach (ref var agent in Src()) Unsafe.As<T, AboveGroundAgent>(ref agent).SettleConstruction();
+        if (!IsAboveGround) return;
+        foreach (var (id, proposal) in WoodyExtensions)
+        {
+            var index = FindOrgan(id);
+            if (index < 0) continue;
+            ref var axis = ref Unsafe.As<T, AboveGroundAgent>(ref Src()[index]);
+            var rejected = Math.Clamp(proposal.ProposedLength - axis.Length, 0f,
+                proposal.ProposedLength - proposal.StartLength);
+            if (rejected <= 0f) continue;
+            // The geometric trial has already evaluated/certified this anchored
+            // progress. Commit that same value, avoiding a second subtraction
+            // whose roundoff could spend growth after exact zero acceptance.
+            var unitStep = Plant.Parameters.TreeGrowthUnitsEnabled && proposal.HasLightStep;
+            var accepted = unitStep ? axis.TreeTrialExtension(proposal.LightStartLength,
+                proposal.ProposedLength, axis.Length, proposal.LightStep) : 0f;
+            if (unitStep) axis.AcceptTreeShootExtension(accepted);
+            else axis.RefundTreeShootExtension(rejected);
+            // A new continuation inherited this proposal before Census/contact admission.
+            // Existing descendants retain their independent budgets and growth decisions.
+            var child = FindOrgan(proposal.Continuation);
+            if (child >= 0)
+            {
+                ref var continuation = ref Unsafe.As<T, AboveGroundAgent>(ref Src()[child]);
+                if (unitStep) continuation.AcceptTreeShootExtension(accepted);
+                else continuation.RefundTreeShootExtension(rejected);
+            }
+        }
+        WoodyExtensions.Clear();
+        ModuleMaterialFrames?.Clear();
+        var woody = Plant.Parameters.Behavior == Behavior.Woody;
+        var construction = Plant.Parameters.ConstructionEnergyPerDryGram > 0f;
+        if (woody || construction)
+        {
+            double retainedWater = 0d;
+            foreach (ref var agent in Src())
+            {
+                ref var organ = ref Unsafe.As<T, AboveGroundAgent>(ref agent);
+                if (construction && !HasSecondaryStep(organ.StableId)) organ.SettleConstruction();
+                if (woody) retainedWater += organ.ReleaseWaterAboveCapacity();
+                if (woody && Plant.Parameters.TreeGrowthUnitsEnabled) organ.CompleteTreeLightCommitment();
+            }
+            if (woody) Plant.RetainWaterReserve(retainedWater);
+        }
     }
 
     internal static OrganPose PoseFor(in AboveGroundAgent a, Vector3 basis) => new(basis + a.BaseOffset,
-        a.Orientation, a.Length, a.Organ is OrganTypes.Leaf or OrganTypes.FlowerPadel ? a.Radius : 0,
-        a.Organ is OrganTypes.Leaf or OrganTypes.FlowerPadel ? AboveGroundAgent.LeafThickness * 0.5f : a.Radius,
-        a.Organ is OrganTypes.Bud or OrganTypes.FlowerBud or OrganTypes.FlowerBaseBud or OrganTypes.Fruit);
+        a.Orientation, a.Length, a.Organ is OrganTypes.Leaf or OrganTypes.FlowerPadel or OrganTypes.Fruit or OrganTypes.FruitWing ? a.Radius : 0,
+        a.Organ == OrganTypes.Fruit ? 0f : a.Organ is OrganTypes.Leaf or OrganTypes.FlowerPadel or OrganTypes.FruitWing ? AboveGroundAgent.LeafThickness * 0.5f : a.Radius,
+        a.Organ is OrganTypes.Bud or OrganTypes.FlowerBud or OrganTypes.FlowerBaseBud);
 
     void WriteGrowthState(BinaryWriter w)
     {
@@ -576,11 +848,14 @@ public partial class PlantSubFormation<T>
             w.Write(p.Owner); WriteValue(w, p.Before); WriteValue(w, p.After); w.Write(p.Created); w.Write(p.Energy); w.Write(p.Water);
             w.Write(p.EnergyFraction); w.Write(p.WaterFraction);
             w.Write(p.NextAttemptHour); w.Write(p.AdmissionFailures);
+            w.Write(p.FixedTreeAxil); w.Write(p.NewModuleRootStableIds.Length);
+            foreach (var root in p.NewModuleRootStableIds) w.Write(root);
             w.Write(p.Children.Length);
             for (int i = 0; i < p.Children.Length; ++i) { WriteValue(w, p.Children[i]); w.Write(p.Parents[i]); w.Write(p.LocalParents[i]); }
             w.Write(p.Retire.Length); foreach (var id in p.Retire) w.Write(id);
         }
         WriteGuidanceState(w);
+        WriteTreeModuleState(w);
     }
 
     void ReadGrowthState(BinaryReader r)
@@ -597,12 +872,18 @@ public partial class PlantSubFormation<T>
             var p = new Development { Owner = r.ReadUInt64(), Before = ReadValue<AboveGroundAgent>(r), After = ReadValue<AboveGroundAgent>(r),
                 Created = r.ReadUInt32(), Energy = r.ReadSingle(), Water = r.ReadSingle(), EnergyFraction = r.ReadSingle(), WaterFraction = r.ReadSingle(),
                 NextAttemptHour = r.ReadSingle(), AdmissionFailures = r.ReadInt32() };
+            p.FixedTreeAxil = r.ReadBoolean();
+            var moduleRoots = r.ReadInt32();
+            if (moduleRoots < 0) throw new InvalidDataException("Negative pending module-root count.");
+            p.NewModuleRootStableIds = new ulong[moduleRoots];
+            for (int j = 0; j < moduleRoots; ++j) p.NewModuleRootStableIds[j] = r.ReadUInt64();
             var n = r.ReadInt32(); p.Children = new AboveGroundAgent[n]; p.Parents = new ulong[n]; p.LocalParents = new int[n];
             for (int j = 0; j < n; ++j) { p.Children[j] = ReadValue<AboveGroundAgent>(r); p.Parents[j] = r.ReadUInt64(); p.LocalParents[j] = r.ReadInt32(); }
             p.Retire = new ulong[r.ReadInt32()]; for (int j = 0; j < p.Retire.Length; ++j) p.Retire[j] = r.ReadUInt64();
             Developments.Add(p.Owner, p);
         }
         ReadGuidanceState(r);
+        ReadTreeModuleState(r);
         RefreshOrganIndices();
     }
 

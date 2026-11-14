@@ -9,9 +9,8 @@ import { exactSeed, parseSeedJson } from "./helpers/ExactSeed";
 import { Obstacle } from "./helpers/Obstacle";
 import { BaseRequestObject } from "./helpers/BaseRequestObject";
 import { VisualMappingOptions } from "./render/core/PlantColors";
-import { activeRenderer } from "./render/IViewportRenderer";
 import { vec2, addScaled2 } from "./render/core/Vec3";
-import { downloadBinary, downloadBlob, downloadText, timestampedName } from "./helpers/download";
+import { downloadBinary, downloadBlob, timestampedName } from "./helpers/download";
 import {
     IObstacleLightDocument, isObstacleLightDocument,
     obstacleValueOn, ObstacleMappingOptions, obstacleMappingSpec, stepDate,
@@ -25,6 +24,7 @@ import { IObjImport, Parse } from "./helpers/ObjParser";
 import { BoxTerrainItem, ITerrainItem, MeshTerrainItem } from "./helpers/Terrain";
 import { CoordinateSystem } from "./helpers/CoordinateSystem";
 import { IStoredRun, camelizeTopLevel } from "./helpers/StoredRun";
+import type { IStoreStatus } from "./helpers/StoreLog";
 import { loadStereoOptions, type StereoMode } from "./render/core/Stereo";
 
 interface RetryContext {
@@ -56,6 +56,10 @@ const hubConnection = new SignalR.HubConnectionBuilder().withUrl(`${location.pro
 hubConnection.on("rejected", () => {
     console.warn("A simulation is already running on this connection. Wait for it to finish, or stop it first.");
     st.computing.value = false;
+    st.preparation.value = undefined;
+});
+hubConnection.on("preparation", (step: number, totalSteps: number) => {
+    st.preparation.value = totalSteps > 0 && step < totalSteps ? { step, totalSteps } : undefined;
 });
 hubConnection.on("progress", (step: number, length: number) => {
     batch(() => {
@@ -112,11 +116,15 @@ function maybeSyncTimeline(serverSteps: number) {
 }
 
 hubConnection.on("result", (result: ISimResponse) => {
+    st.preparation.value = undefined;
     if (result.debug?.length > 0)
         console.log(result.debug);
 
-    const step = result.stepTimes.length - 1;
-    if (st.history.length == 0 || st.history[st.history.length - 1].t < step)
+    // Preparation can stop before a recorded frame exists. On resume, StepTimes contains
+    // only this continuation's timings; it is not an absolute frame number.
+    const completedSteps = result.completedSteps ?? result.stepTimes.length;
+    const step = completedSteps - 1;
+    if (step >= 0 && result.scene?.length > 0 && (st.history.length == 0 || st.history[st.history.length - 1].t < step))
     {
         //Convert once and retain the BYTES, not the base64 the wire delivered. The string is
         //4/3 the size for no benefit, and dropping it here lets it be collected immediately
@@ -141,6 +149,10 @@ hubConnection.on("result", (result: ISimResponse) => {
     {
         //console.log(result.stepTimes);
         batch(() => {
+            if (completedSteps === 0) {
+                st.scene.value = [];
+                st.historyCount.value = st.history.length;
+            }
             st.plants.value = result.plants;
             st.computing.value = false;
             st.renderer.value = result.renderer;
@@ -170,18 +182,65 @@ hubConnection.on("result", (result: ISimResponse) => {
     //are simply frames whose payload has not been fetched yet, like any evicted one.
     const finishedRun = st.runId.peek();
     if (finishedRun) void syncTimelineToIndex(finishedRun, false);
+
+    //Why it stopped early, if it did. "Aborted" alone does not say whether somebody pressed stop
+    //or the run store's volume filled up, and only the second needs anyone to act.
+    st.runStopReason.value = result.stopReason ?? '';
+    if (result.stopReason) console.warn(`The run stopped early: ${result.stopReason}.`);
+    //A run that has just ended is exactly what the Runs tab is open to see.
+    if (st.activeTab.peek() === 'tab-runs') void st.refreshRuns();
 });
 
 //The server stores every frame it computes, so once a run id arrives the client no longer has
 //to be the only place the history exists.
 hubConnection.on("runStarted", (runId: string) => {
-    st.runId.value = runId;
-    //There is somewhere to put the frames now, so stop hoarding them here.
+    batch(() => {
+        st.runId.value = runId;
+        //Not yet known to be stored: the server hands out an id even when its store is disabled
+        //or the run could not be registered. Until it says otherwise, nothing is dropped.
+        st.runStored.value = null;
+    });
     refreshHistoryBudget();
     //Survives a reload. Without it the id is lost, resubscribe() has nothing to rejoin, and the
     //run's stored frames become unreachable from the page that started them.
     try { sessionStorage.setItem('agro.runId', runId); } catch { /* private mode, not fatal */ }
+    void confirmStored(runId);
 });
+
+/**
+ * Asks the server whether it is really keeping this run, and records the answer in `runStored`.
+ *
+ * A 404 is an answer - the store is disabled or could not register the run, and the Runs tab says
+ * why - and the tab then holds on to every frame it receives, as it would with no server behind it.
+ * Anything else is a failure to ask, retried a few times; until there is an answer the frames are
+ * kept too, which costs memory and never data.
+ *
+ * Exported for the tests, which drive it against a fake fetch.
+ */
+export async function confirmStored(runId: string, attempts = 3, retryMs = 2000): Promise<void> {
+    for (let attempt = 0; attempt < attempts; ++attempt) {
+        if (st.runId.peek() !== runId) return;
+        try {
+            const res = await fetch(`${location.protocol}//${BackendURI}/simulation/run/${runId}`);
+            if (st.runId.peek() !== runId) return;
+            if (res.ok || res.status === 404) {
+                st.runStored.value = res.ok;
+                refreshHistoryBudget();
+                if (!res.ok) console.warn(`Run ${runId} is not being stored by the server; its frames are kept in this tab. The Runs tab says why.`);
+                return;
+            }
+        } catch { /* not an answer; ask again */ }
+        if (attempt + 1 < attempts) await new Promise(r => setTimeout(r, retryMs));
+    }
+}
+
+/**
+ * Whether a frame dropped from memory can be fetched back: the server has confirmed it is storing
+ * the run this tab is showing. Everything that drops payloads asks this, not `runId` alone.
+ */
+function framesRecoverable(): boolean {
+    return !!st.runId.peek() && st.runStored.peek() === true;
+}
 
 /**
  * Where the run is and what weather it will see, sent once just after `runStarted`.
@@ -238,7 +297,7 @@ hubConnection.on("preview", (result: ISimPreview) => {
     //using the raw function here would let the two disagree - and it would ignore any budget the
     //user or a test had set.
     if (st.historySize.peek() > st.historyBudget.peek()) {
-        if (st.runId.peek()) evictOldestPayloads();
+        if (framesRecoverable()) evictOldestPayloads();
         else st.stopForMemory();
     }
 
@@ -309,7 +368,10 @@ async function resubscribe() {
     if (!st.runId.peek()) {
         try {
             const saved = sessionStorage.getItem('agro.runId');
-            if (saved) st.runId.value = saved;
+            if (saved) {
+                st.runId.value = saved;
+                void confirmStored(saved);
+            }
         } catch { /* private mode */ }
     }
     const runId = st.runId.peek();
@@ -349,7 +411,10 @@ async function resubscribe() {
  * same step of a different simulation, which decodes perfectly and is simply the wrong plants.
  */
 function forgetRun() {
-    st.runId.value = '';
+    batch(() => {
+        st.runId.value = '';
+        st.runStored.value = null;
+    });
     //Nothing behind the client any more: a dropped frame would be gone, so go back to holding on.
     refreshHistoryBudget();
     try { sessionStorage.removeItem('agro.runId'); } catch { /* private mode */ }
@@ -374,7 +439,11 @@ async function recoverRun() {
     const meta = await fetchStoredRun(saved);
     if (!meta) { forgetRun(); return; }
 
-    st.runId.value = saved;
+    batch(() => {
+        st.runId.value = saved;
+        //The server has just described it, so it is stored.
+        st.runStored.value = true;
+    });
     refreshHistoryBudget();
     //The clock multiplies a frame's step by this, so without it a recovered run is drawn on the
     //wrong timeline - and it is not otherwise recoverable from the page.
@@ -492,10 +561,15 @@ interface ISimResponse
     renderer: string,
     debug: string,
     stepTimes: Uint32Array,
+    //Absolute number of recorded steps completed, including a resumed run's earlier prefix.
+    completedSteps?: number,
     ticksPerMillisecond: number,
     //Only present when the request selected obstacles or the terrain was an imported tray
     //system. The server sends null otherwise.
     obstacleLight?: IObstacleLightDocument | null,
+    //Why the run stopped before its horizon, as a clause that reads after "stopped: ". Null when
+    //it finished; absent from servers older than the field.
+    stopReason?: string | null,
 }
 
 interface ISimPreview
@@ -531,6 +605,8 @@ interface ITrayModel
 export interface IPlantModel
 {
     species?: string;
+    startOffsetHours?: number;
+    StartOffsetHours?: number;
     key?: string;
     type?: string;
     note?: string;
@@ -690,7 +766,7 @@ export function evictOldestPayloads() {
     let dropped = evict(true);
     //Only when a store can serve them back. Without one a dropped frame is gone, and the old
     //behaviour - stop the run, keep what was computed - remains the right trade.
-    const recoverable = !!st.runId.peek();
+    const recoverable = framesRecoverable();
     if (st.historySize.peek() > budget && recoverable) dropped += evict(false);
 
     if (dropped > 0) st.evictedFrames.value += dropped;
@@ -711,12 +787,13 @@ export function evictOldestPayloads() {
  * one at a time; holding the whole run in memory as well buys nothing and is what puts the tab
  * over the edge.
  *
- * Does nothing without a run id. Then the payloads really are the only copy.
+ * Does nothing unless the server has confirmed it is storing the run. Otherwise the payloads really
+ * are the only copy.
  *
  * Returns how many were released.
  */
 export function releaseHeldFrames(keepAround = -1): number {
-    if (!st.runId.peek()) return 0;
+    if (!framesRecoverable()) return 0;
     let dropped = 0;
     for (let i = 0; i < st.history.length; ++i) {
         //A small window is kept around a frame the caller says it is about to need, so releasing
@@ -800,7 +877,7 @@ function historyBudgetBytes(hasStore: boolean): number {
 
 /** Re-reads the budget for the current storage situation. */
 function refreshHistoryBudget() {
-    st.historyBudget.value = historyBudgetBytes(!!st.runId.peek());
+    st.historyBudget.value = historyBudgetBytes(framesRecoverable());
 }
 
 function exportObstacle(o: Obstacle) {
@@ -922,6 +999,9 @@ class State {
      * quite differently from what a summer start would give. See Agro/AgroWorld.cs.
      */
     initialDate = signal(DEFAULT_INITIAL_DATE);
+    /** Optional dated daily mean air temperatures, in Celsius. Kept with the request so a
+     * stored scenario or session uses the same measured series when it is run again. */
+    dailyAirTemperatures = signal<{ Date: string; MeanC: number }[] | undefined>(undefined);
 
     /**
      * Where on Earth the world origin sits, and how the scene is turned on the compass.
@@ -976,6 +1056,8 @@ class State {
     seedsOptimalDistance = signal(0.165);
     seeds = signal<Seed[]>([]);
     seedsCount = computed(() => this.seeds.value.length);
+    seedAgeError = computed(() => this.seeds.value.some(seed => !Number.isFinite(seed.startOffsetHours.value))
+        ? "Enter a finite Age for every plant before simulating." : "");
 
     obstacles = signal<Obstacle[]>([]);
     obstaclesCount = computed(() => this.obstacles.value.length);
@@ -1093,6 +1175,8 @@ class State {
     terrainPick = signal(-1);
 
     downloadRoots = signal(false);
+    // Preserve the simulation's root model when reopening API-authored runs or sessions.
+    virtualRoots = signal(false);
     debugBoxes = signal(false);
     showLeaves = signal(true);
     showTerrain = signal(true);
@@ -1113,6 +1197,7 @@ class State {
     previewRequestAfterSceneUpdate = false;
     simStep = signal(0);
     simLength = signal(0);
+    preparation = signal<{ step: number; totalSteps: number } | undefined>(undefined);
 
     //RESPONSE
     plants = signal<IPlantResponse[]>([]);
@@ -1178,10 +1263,23 @@ class State {
     /**
      * The server-side store backing this run, when there is one.
      *
-     * Its presence is what makes dropping a frame from memory safe rather than lossy: with a run
-     * id the payload can be fetched back, without one it is gone for good.
+     * Its presence, once `runStored` confirms it, is what makes dropping a frame from memory safe
+     * rather than lossy: with a stored run the payload can be fetched back, without one it is gone
+     * for good.
      */
     runId = signal('');
+    /**
+     * Whether the server is actually storing the run behind `runId`: true once it has said so,
+     * false once it has said it has never heard of it, null until it has answered.
+     *
+     * `runId` alone used to be taken as the promise, and the server hands one out even when its
+     * store is disabled or the run could not be registered - so the tab dropped frames from memory
+     * for a server that did not have them, and fetching them back returned 404. Only `true` makes
+     * dropping a frame safe.
+     */
+    runStored = signal<boolean | null>(null);
+    /** Why the run this tab computed stopped early, from its result. Empty when it finished. */
+    runStopReason = signal('');
 
     //--- the archive ---------------------------------------------------------------------
     /** Stored runs as the server last reported them. Empty until something asks for them. */
@@ -1189,6 +1287,11 @@ class State {
     runsLoading = signal(false);
     /** The last thing that went wrong in the runs panel, for the panel to show. */
     runsError = signal('');
+    /**
+     * The store itself: whether it works, where it writes, how full that is, and its event log.
+     * Null until read, and on a server too old to say - the panel then shows the list alone.
+     */
+    storeStatus = signal<IStoreStatus | null>(null);
     /** A run id while an action on it is in flight, so its row can disable its own buttons. */
     runsBusy = signal('');
     /** The stored run currently open for viewing, as opposed to one this tab is computing. */
@@ -1265,6 +1368,7 @@ class State {
         FieldSize: { X: this.fieldSizeX.peek(), D: this.fieldSizeD.peek(), Z: this.fieldSizeZ.peek() },
         Seed: exactSeed(this.randomize.peek() ? Math.floor(Math.random() * 4294967296) : this.initNumber.peek()),
         InitialDate: this.initialDate.peek(),
+        DailyAirTemperatures: this.dailyAirTemperatures.peek(),
         Latitude: this.latitude.peek(),
         Longitude: this.longitude.peek(),
         Altitude: this.altitude.peek(),
@@ -1272,7 +1376,7 @@ class State {
         AzimuthOffset: this.azimuthOffset.peek(),
         Species: this.species.peek().map(s => s.serialize()),
 
-        Plants: this.seeds.peek().map((p: Seed) => ({ S: p.species.peek(), P: { X: p.px.peek(), Y: p.py.peek(), Z: p.pz.peek() }, F: p.fieldIndex.peek() })),
+        Plants: this.seeds.peek().map((p: Seed) => p.request()),
         Obstacles: this.obstacles.peek().map((o: Obstacle) => exportObstacle(o)),
         RequestGeometry: true,
         RenderMode: this.renderMode.value,
@@ -1284,6 +1388,7 @@ class State {
         LeafAreaIndexBandHeight: this.leafAreaIndexBandHeight.value,
         ExactPreview: this.exactPreview.value,
         DownloadRoots: this.downloadRoots.value,
+        VirtualRoots: this.virtualRoots.value,
 
         FieldItemRegex: this.fieldItemRegex.value,
         Deterministic: this.deterministic.value,
@@ -1306,10 +1411,12 @@ class State {
             hubConnection.invoke("abort");
         else
         {
+            if (this.seedAgeError.peek()) return;
             this.simHoursPerTick = snapHoursPerTick(this.hoursPerTick.peek());
             //console.log(this.scene);
             batch(() => {
                 this.computing.value = true;
+                this.preparation.value = undefined;
                 this.playing.value = PlayState.ForwardWaiting;
                 this.playPointer.value = 0;
                 this.renderer.value = "";
@@ -1318,6 +1425,8 @@ class State {
                 lastReceivedIndex = -1;
                 this.historyLimitHit.value = false;
                 this.runId.value = '';
+                this.runStored.value = null;
+                this.runStopReason.value = '';
                 //A new run's measurement has not arrived yet; leaving the old one would colour
                 //the obstacles by numbers that belong to a scene that no longer exists.
                 this.obstacleLight.value = undefined;
@@ -1353,6 +1462,7 @@ class State {
                         console.error(e);
                         batch(() => {
                             this.computing.value = false;
+                            this.preparation.value = undefined;
                             this.renderer.value = "error";
                         });
                     });
@@ -1617,6 +1727,7 @@ class State {
             randomize: this.randomize.peek(),
             renderMode: this.renderMode.peek(),
             initialDate: this.initialDate.peek(),
+            dailyAirTemperatures: this.dailyAirTemperatures.peek(),
             latitude: this.latitude.peek(),
             longitude: this.longitude.peek(),
             altitude: this.altitude.peek(),
@@ -1636,6 +1747,7 @@ class State {
             lightSky: this.lightSky.peek(),
             viewportBackend: this.viewportBackend.peek(),
             downloadRoots: this.downloadRoots.peek(),
+            virtualRoots: this.virtualRoots.peek(),
             exactPreview: this.exactPreview.peek(),
 
             species: this.species.value.map(s => s.save()),
@@ -1781,6 +1893,7 @@ class State {
                     self.randomize.value = data.randomize;
                     self.renderMode.value = data.renderMode;
                     self.initialDate.value = data.initialDate ?? DEFAULT_INITIAL_DATE;
+                    self.dailyAirTemperatures.value = data.dailyAirTemperatures ?? undefined;
                     //Sessions saved before the site was a setting were all at the default one.
                     self.latitude.value = data.latitude ?? LATITUDE;
                     self.longitude.value = data.longitude ?? LONGITUDE;
@@ -1817,6 +1930,7 @@ class State {
                     self.lightSky.value = data.lightSky ?? false;
                     self.viewportBackend.value = data.viewportBackend ?? "auto";
                     self.downloadRoots.value = data.downloadRoots;
+                    self.virtualRoots.value = data.virtualRoots ?? false;
                     self.exactPreview.value = data.exactPreview;
 
                     //Through the same adopter as a stored run, for the same reason: `load()` copies
@@ -1828,7 +1942,7 @@ class State {
 
                     self.seedsPerField.value = data.seedsPerField;
                     self.seedsOptimalDistance.value = data.seedsOptimalDistance;
-                    self.seeds.value = data.seeds.map(s => new Seed(s.species, s.px, s. py, s.pz, s.fi, false));
+                    self.seeds.value = data.seeds.map(s => Seed.load(s));
 
                     self.obstacles.value = data.obstacles.map(o => {
                         const obstacle = new Obstacle(o.type, o.px, o.py, o.pz, o.ax, o.ay, o.l, o.h, o.t, new Float32Array(o.vt), o.fc);
@@ -1860,6 +1974,8 @@ class State {
                     //and fetching one back returns the SAME step of a DIFFERENT simulation, which
                     //decodes perfectly and is simply the wrong plants.
                     self.runId.value = '';
+                    self.runStored.value = null;
+                    self.runStopReason.value = '';
                     self.historyBudget.value = historyBudgetBytes(false);
                     self.evictedFrames.value = 0;
                     self.historyLimitHit.value = false;
@@ -1887,16 +2003,6 @@ class State {
             } finally { input.remove(); }
         };
         input.click();
-    }
-
-    gltf = () => {
-        //The scene graph lives in the renderer now, so it does the export. Backends that
-        //cannot export simply do not implement the optional method.
-        const renderer = activeRenderer.current;
-        if (renderer?.exportGLTF)
-            renderer.exportGLTF(json => this.saveTextFile(json, 'gltf'));
-        else
-            console.warn('The active viewport does not support glTF export.');
     }
 
     prim = async () => {
@@ -2020,7 +2126,8 @@ class State {
                     if (sectionIndex >= 0)
                     {
                         seed = convertCoordsTo_RH_rightPX_upPY(seed, CoordinateSystem.RH_rightPX_upPZ);
-                        result.push(new Seed(species.name.peek(), seed.x, seed.y, seed.z, sectionIndex, true));
+                        result.push(new Seed(species.name.peek(), seed.x, seed.y, seed.z, sectionIndex, true,
+                            seed.startOffsetHours ?? seed.StartOffsetHours ?? 0));
                     }
                 }
             });
@@ -2070,6 +2177,12 @@ class State {
 
     refreshRuns = async () => {
         this.runsLoading.value = true;
+        //The store's own state beside the listing, and independently of it: an empty listing means
+        //nothing until the status says whether the store is empty or disabled, and a server older
+        //than /store must still list its runs.
+        const status = fetch(`${location.protocol}//${BackendURI}/simulation/store?events=500`)
+            .then(res => res.ok ? res.json() as Promise<IStoreStatus> : null)
+            .catch(() => null);
         try {
             const res = await fetch(`${location.protocol}//${BackendURI}/simulation/runs?limit=${RUNS_PAGE_LIMIT}`);
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -2082,6 +2195,7 @@ class State {
             this.runsError.value = `Could not list the stored runs: ${err}`;
             console.warn('Could not list the stored runs:', err);
         } finally {
+            this.storeStatus.value = await status;
             this.runsLoading.value = false;
         }
     }
@@ -2189,6 +2303,9 @@ class State {
 
             batch(() => {
                 this.runId.value = runId;
+                //Opened from the store, so stored by definition.
+                this.runStored.value = true;
+                this.runStopReason.value = '';
                 this.viewingRunId.value = runId;
                 //The clock multiplies a frame's step by this; without it the run is drawn on the
                 //wrong timeline and nothing else on the page could tell.
@@ -2308,6 +2425,7 @@ class State {
             //`altitude <= 0` night check, so the shadow map is pointed in a direction made of NaN.
             this.initialDate.value = response.InitialDate
                 ? String(response.InitialDate).slice(0, 10) : DEFAULT_INITIAL_DATE;
+            this.dailyAirTemperatures.value = response.DailyAirTemperatures ?? undefined;
             //Defaults matched to Agro/AgroWorld.cs, so importing a request written before the
             //site was settable reproduces the run it describes rather than the current form.
             this.latitude.value = response.Latitude ?? LATITUDE;
@@ -2321,6 +2439,7 @@ class State {
             this.contactEngine.value = response.ContactEngine ?? 0;
             this.exactPreview.value = response.ExactPreview ?? false;
             this.downloadRoots.value = response.DownloadRoots ?? false;
+            this.virtualRoots.value = response.VirtualRoots ?? false;
 
             this.leafAreaIndexObstacles.value = response.LeafAreaIndexObstacles ?? '';
             this.leafAreaIndexSensors.value = response.LeafAreaIndexSensors ?? 32768;
@@ -2343,7 +2462,8 @@ class State {
             //inheriting them - the panel would then show plants this run never had.
             this.seeds.value = Array.isArray(response.Plants)
                 ? response.Plants.map((p: any) =>
-                    new Seed(p.S ?? '', p.P?.X ?? 0, p.P?.Y ?? 0, p.P?.Z ?? 0, p.F ?? 0, false))
+                    new Seed(p.S ?? '', p.P?.X ?? 0, p.P?.Y ?? 0, p.P?.Z ?? 0, p.F ?? 0, false,
+                        p.StartOffsetHours ?? 0))
                 : [];
 
             //Only the primitives are rebuilt here. An imported model's obstacles travel as ONE
@@ -2563,10 +2683,6 @@ class State {
         });
         await this.run();
         return true;
-    }
-
-    private saveTextFile(data: string, ext: string) {
-        downloadText(data, ext);
     }
 
     private saveBinaryFile(data: Uint8Array, frame: string, ext: string) {
@@ -2989,6 +3105,38 @@ async function rawFrameBytes(e: { t: number, s: Uint8Array | undefined, plain: b
         return fetchFrame(e.t);
     }
     return e.plain ? e.s : inflateBytes(e.s);
+}
+
+/** A pinned source for a single-frame consumer. Unlike playback, never falls back to a new run. */
+export function captureFrameSource(index: number) {
+    const i = Math.max(0, Math.min(index, st.history.length - 1));
+    const entry = st.history[i];
+    if (!entry) throw new Error('There is no recorded frame to export.');
+    const runId = st.runId.peek();
+    const revision = frameRevisions.get(runId) ?? '0';
+    const hoursPerTick = st.simHoursPerTick;
+    const verify = () => {
+        if (st.history[i] !== entry || st.runId.peek() !== runId
+            || (frameRevisions.get(runId) ?? '0') !== revision)
+            throw new Error('The selected run changed while loading the frame. Please export again.');
+    };
+    return {
+        step: entry.t, runId, hoursPerTick, verify,
+        read: async (): Promise<PlantModel[]> => {
+            verify();
+            const cached = touchCache(i);
+            if (cached) return cached;
+            const bytes = await rawFrameBytes(entry);
+            verify();
+            if (bytes.length < 6 || (bytes[0] !== 7 && bytes[0] !== 8 && bytes[0] !== 9))
+                throw new Error(`Recorded frame ${entry.t} is unavailable or has an unsupported format.`);
+            const reader = new BinaryReader(bytes);
+            const decoded = reader.readAgroScene();
+            if (!decoded || !reader.isEnd()) throw new Error(`Recorded frame ${entry.t} could not be decoded completely.`);
+            cacheScene(i, decoded);
+            return decoded;
+        },
+    };
 }
 
 export async function sceneAt(index: number): Promise<PlantModel[]> {

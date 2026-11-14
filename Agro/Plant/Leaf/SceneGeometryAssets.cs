@@ -15,11 +15,21 @@ internal static class SceneGeometryAssets
         using var stream = new MemoryStream();
         using var writer = new BinaryWriter(stream, Encoding.UTF8, true);
         writer.Write((byte)s.ContactDeformationMode);
-        writer.Write(ContactDeformation.ProfileVersion);
+        // Version one remains byte-identical for existing presets. Version two adds
+        // fruit meshes after the existing leaf/petal table; deformation still uses V1.
+        var fruit = s.FruitSettings?.Enabled == true;
+        writer.Write(fruit ? (byte)2 : ContactDeformation.ProfileVersion);
         var count = Math.Max(1, s.LeafSegmentCount);
         writer.Write(count);
         for (var i = 0; i < count; ++i) Write(LaminaTemplates.For(s,OrganTypes.Leaf,i)!);
         Write(LaminaTemplates.For(s,OrganTypes.FlowerPadel)!);
+        if (fruit)
+        {
+            Write(FruitGeometry.Body);
+            var wings = s.FruitSettings!.WingsPerFruit > 0;
+            writer.Write(wings);
+            if (wings) Write(LaminaTemplates.For(s, OrganTypes.FruitWing)!);
+        }
         void Write(LaminaTemplate template)
         {
             template.AuthoredMesh().WriteMesh(writer);

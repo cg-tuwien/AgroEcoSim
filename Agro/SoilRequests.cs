@@ -27,11 +27,13 @@ internal static class SoilRequestRouter
 		for (int i = 0; i < formations.Count; ++i)
 		{
 			if (formations[i] is not PlantFormation2 plant || plant.WaterRequests.Count == 0) continue;
+			plant.NormalizeSoilWaterRequests();
 			var requests = plant.WaterRequests;
 			var sink = root.RequestSink(plant.SoilIndex);
 			if (sink != null)
 				for (int r = 0; r < requests.Count; ++r)
-					sink.Enqueue(plant, requests[r].Cell, requests[r].Part, requests[r].Amount_g);
+					if (requests[r].Amount_g > 0f)
+						sink.Enqueue(plant, requests[r].Cell, requests[r].Part, requests[r].Amount_g);
 			requests.Clear();
 		}
 	}

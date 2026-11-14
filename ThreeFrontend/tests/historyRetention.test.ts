@@ -226,6 +226,7 @@ describe('eviction copes with frames larger than budget/window', () => {
 
     test('a dozen huge frames are evicted, not silently ignored', () => {
         appstate.runId.value = 'run1';
+        appstate.runStored.value = true;
         //Twelve frames of 200 KB is 2.4 MB. The budget leaves room for the protected set (the
         //newest frame plus the playhead window) but not for all twelve - so real eviction has to
         //happen. Twelve is also FEWER than the old 64-frame window, which is exactly the shape
@@ -246,6 +247,7 @@ describe('eviction copes with frames larger than budget/window', () => {
 
     test('the newest frame and the playhead window are spared while there is room', () => {
         appstate.runId.value = 'run1';
+        appstate.runStored.value = true;
         //Satisfiable: dropping the unprotected frames is enough, so the comfort window is a
         //luxury the budget can afford and a scrub nearby costs no round trip.
         appstate.historyBudget.value = 2_000_000;
@@ -265,6 +267,7 @@ describe('eviction copes with frames larger than budget/window', () => {
         //simulated month 4 of 10, with every frame safely on disk. With a store they are all three
         //milliseconds away, so the window goes and the run continues.
         appstate.runId.value = 'run1';
+        appstate.runStored.value = true;
         appstate.historyBudget.value = 1000;   //unsatisfiable while anything but one frame is held
         fill(40, 100_000);
         appstate.playPointer.value = 20;
@@ -294,6 +297,7 @@ describe('eviction copes with frames larger than budget/window', () => {
 
     test('a history that cannot be shrunk enough stops the run', () => {
         appstate.runId.value = 'run1';
+        appstate.runStored.value = true;
         //Two frames, both protected (newest + playhead), together over budget. Nothing can be
         //dropped, so the old code returned quietly and the tab went on to die.
         appstate.historyBudget.value = 1000;
@@ -305,6 +309,7 @@ describe('eviction copes with frames larger than budget/window', () => {
 
     test('accounting stays consistent and never goes negative', () => {
         appstate.runId.value = 'run1';
+        appstate.runStored.value = true;
         appstate.historyBudget.value = 500_000;
         fill(30, 100_000);
         evictOldestPayloads();
@@ -313,5 +318,90 @@ describe('eviction copes with frames larger than budget/window', () => {
         const held = appstate.history.reduce((n: number, e: any) => n + (e.s ? e.s.byteLength + 136 : 0), 0);
         expect(appstate.historySize.value).toBe(held);
         expect(appstate.historySize.value).toBeGreaterThanOrEqual(0);
+    });
+});
+
+//A run id is not a promise that the server has the frames. The server hands one out even when its
+//store is disabled or could not register the run, and the tab used to drop frames for it all the
+//same - fetching one back then returned 404. Only a confirmed store makes dropping safe.
+describe('frames are dropped only for a run the server has confirmed it stores', () => {
+    let mod: any, appstate: any, realFetch: any, warn: any;
+
+    beforeEach(() => {
+        jest.resetModules();
+        realFetch = (globalThis as any).fetch;
+        (globalThis as any).fetch = jest.fn(async () => ({
+            ok: true, status: 200, json: async () => [], arrayBuffer: async () => new ArrayBuffer(0) }));
+        mod = require('../src/appstate');
+        appstate = mod.default;
+        warn = jest.spyOn(console, 'warn').mockImplementation(() => { /* silenced */ });
+    });
+    afterEach(() => { (globalThis as any).fetch = realFetch; warn.mockRestore(); });
+
+    const fill = (frames: number, bytesEach: number) => {
+        appstate.history = [];
+        for (let i = 0; i < frames; ++i) appstate.history.push({ t: i, s: new Uint8Array(bytesEach), plain: true });
+        appstate.historySize.value = frames * (bytesEach + 136);
+    };
+
+    test('an unconfirmed run keeps its window and stops, as with no store at all', () => {
+        appstate.runId.value = 'run1';
+        appstate.runStored.value = null;
+        appstate.historyBudget.value = 1000;
+        fill(40, 100_000);
+        appstate.playPointer.value = 20;
+        mod.evictOldestPayloads();
+        for (let i = 16; i <= 24; ++i) expect(appstate.history[i].s).toBeDefined();
+        expect(appstate.historyLimitHit.value).toBe(true);
+    });
+
+    test('a run the server does not store releases nothing for an export', () => {
+        appstate.runId.value = 'run1';
+        appstate.runStored.value = false;
+        fill(5, 1000);
+        expect(mod.releaseHeldFrames()).toBe(0);
+        expect(appstate.history.every((e: any) => e.s)).toBe(true);
+    });
+
+    test('a 404 says the run is not stored; a 200 says it is', async () => {
+        appstate.runId.value = 'gone';
+        (globalThis as any).fetch = jest.fn(async () => ({ ok: false, status: 404 }));
+        await mod.confirmStored('gone', 3, 0);
+        expect(appstate.runStored.value).toBe(false);
+
+        appstate.runId.value = 'kept';
+        (globalThis as any).fetch = jest.fn(async () => ({ ok: true, status: 200 }));
+        await mod.confirmStored('kept', 3, 0);
+        expect(appstate.runStored.value).toBe(true);
+    });
+
+    test('a failure to ask is not an answer: it retries, and stays unknown until it gets one', async () => {
+        appstate.runId.value = 'flaky';
+        appstate.runStored.value = null;
+        let calls = 0;
+        (globalThis as any).fetch = jest.fn(async () => {
+            if (++calls < 3) throw new Error('offline');
+            return { ok: true, status: 200 };
+        });
+        await mod.confirmStored('flaky', 3, 0);
+        expect(calls).toBe(3);
+        expect(appstate.runStored.value).toBe(true);
+
+        appstate.runId.value = 'down';
+        appstate.runStored.value = null;
+        (globalThis as any).fetch = jest.fn(async () => ({ ok: false, status: 502 }));
+        await mod.confirmStored('down', 2, 0);
+        expect(appstate.runStored.value).toBe(null);
+    });
+
+    test('an answer for a run the tab has since left is ignored', async () => {
+        appstate.runId.value = 'old';
+        appstate.runStored.value = null;
+        (globalThis as any).fetch = jest.fn(async () => {
+            appstate.runId.value = 'new';
+            return { ok: false, status: 404 };
+        });
+        await mod.confirmStored('old', 3, 0);
+        expect(appstate.runStored.value).toBe(null);
     });
 });

@@ -107,6 +107,8 @@ export interface IObstacleLightMeta {
     filterMode: string | null;
     filterError: string | null;
     renderer: string;
+    /** Geometry of direct/projected/maximum LAI; absent in historical documents. */
+    directLeafAreaGeometry?: string;
     latitude: number;
     longitude: number;
     altitude: number;

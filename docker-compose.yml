@@ -1,3 +1,7 @@
+#The project name, fixed. Compose otherwise takes it from the folder this file sits in, and the volume
+#below is named after the project - so unpacking each AgroEcoSim-<timestamp>.zip into a folder of its
+#own gave every deploy a new, empty run store, and the old runs seemed to vanish. (Compose v2.)
+name: agroeco
 services:
   simulation:
     image: agroecosim
@@ -15,13 +19,23 @@ services:
       #own retention budget.
       - runstore:/data/AgroEcoStorage
     environment:
+      #Where the store writes. It MUST be inside the volume mounted just above. It was /data/runstore
+      #while the volume was mounted here, so the runs went to an anonymous volume on the host's root
+      #disk instead, which filled at 56 GB. The server now logs a warning in the Runs tab whenever a
+      #volume is mounted next to the store rather than under it.
+      - AGRO_RunStoreRoot=/data/AgroEcoStorage/runstore
       #Total bytes of stored runs to keep before whole runs are evicted, oldest first. 1 TiB.
       #
       #A production figure, not a safe one: a ten month run of a green facade is hundreds of
       #gigabytes, so the previous 64 GiB evicted last month's work to make room for this week's.
-      #Set it to what the VOLUME can actually hold - eviction is the only thing standing between a
-      #long run and a full disk, and it can only act on what it is told the budget is.
+      #Set it to what the VOLUME can actually hold - about 80 % of it - since eviction is the only
+      #thing that frees space without anyone deleting runs by hand. The Runs tab warns when this is
+      #more than the volume can hold.
       - AGRO_RunStoreRetentionBytes=1099511627776
+      #Free space kept on the volume, in bytes; 2 GiB by default. A run that reaches it is stopped
+      #cleanly with a final checkpoint and can be resumed once there is room - it no longer fills
+      #the disk. 0 turns the guard off.
+      #- AGRO_RunStoreMinFreeBytes=2147483648
       #Store a frame every Nth step. 1 stores every timestep, which makes the stored run complete
       #and costs the most: each stored frame is an export the simulation thread waits for, about
       #two thirds of a simulation step at 1,600 plants. Raise it on a large stand where total wall
@@ -77,3 +91,8 @@ services:
 
 volumes:
   runstore:
+    #A fixed name, so every deploy finds the same runs whatever the project is called. To put the
+    #runs on a larger disk, bind it to a host directory writable by uid 61000 or gid 1001:
+    #  driver: local
+    #  driver_opts: { type: none, o: bind, device: /path/on/the/large/disk }
+    name: agroeco-runstore

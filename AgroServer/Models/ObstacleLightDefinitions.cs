@@ -50,15 +50,20 @@ public static class ObstacleLightDefinitions
         ["beamTransmittance"] = "Share of the direct beam that reaches the surface through the foliage, weighted by "
             + "beam load. Every plant organ blocks the beam.",
         ["diffuseTransmittance"] = "Share of the diffuse and inter-reflected load that reaches the surface.",
+        ["directLeafAreaGeometry"] = "Geometry used by leafAreaIndex, projectedLeafAreaIndex and leafAreaIndexMax. "
+            + "coarse-mesh-v1: the species' low-resolution leaf mesh, including surface relief and deformation. "
+            + "Gap-derived leaf area index, transmittances and solar loads retain the light model's geometry. "
+            + "Historical documents without this metadata used the light scene's geometry for the direct indices too.",
         ["leafAreaIndex"] = "m²/m². Total one-sided leaf area per unit surface area, counted along the surface normal "
-            + "up to canopyDepth in front of it, leaves only, through any intervening tray or wall. The classic "
-            + "definition; roughly 2 to 8 for a developed living wall. Mean over the period's daylight hours. "
-            + "Measured with the light model's rectangular leaf proxy - see species.leafOutlineAreaRatio.",
-        ["projectedLeafAreaIndex"] = "m²/m². Leaf area PROJECTED onto the surface per unit surface area. Equals "
-            + "leafAreaIndex for leaves parallel to the wall and about half of it for randomly oriented ones.",
+            + "up to canopyDepth in front of it, leaves only, through any intervening tray or wall. Mean over "
+            + "the period's daylight hours. Measured from the low-resolution mesh, including surface relief. "
+            + "Facet crossings are weighted by inverse foreshortening, capped at 20 near grazing incidence.",
+        ["projectedLeafAreaIndex"] = "m²/m². Mesh leaf area PROJECTED onto the surface per unit surface area. "
+            + "Each distinct surface crossing contributes once, including separate crossings of a folded leaf.",
         ["leafAreaIndexFromGaps"] = "m²/m². Beer-Lambert inversion of the diffuse gap fraction, -ln(P)/0.93, assuming "
             + "a spherical leaf angle distribution. What a canopy analyser held in front of the wall would report; "
-            + "falls below leafAreaIndex where leaves clump.",
+            + "falls below leafAreaIndex where leaves clump. Uses the light model's visibility geometry, including "
+            + "all plant organs, independently of directLeafAreaGeometry.",
         ["leafAreaIndexMax"] = "m²/m². Highest per-step value of the period, i.e. the developed canopy rather than "
             + "its mean. Annual and whole-run records only.",
         ["peakReduction_W_m2"] = "W/m². Largest irradiance the vegetation removed at any moment of the period. The "
@@ -103,9 +108,8 @@ public static class ObstacleLightDefinitions
         ["width_m, height_m, depth_m"] = "m. Extents of the tray mesh along the facade, vertically, and outward "
             + "from the back wall. Zero without a mesh.",
         ["species.leafOutlineAreaRatio"] = "One-sided area of the species' blade outline over the rectangle "
-            + "Length x 2 Radius the light model stands a blade in, one factor per blade slice. The tray leaf "
-            + "areas use the outline; the ray-traced leaf area indices use the rectangle, so they read higher "
-            + "by one over this factor.",
+            + "Length x 2 Radius, one factor per blade slice. The tray leaf areas use this flat outline. "
+            + "The direct ray-traced leaf area indices use the curved mesh surface and are not corrected by this factor.",
         ["precision"] = "Floating-point readings are written with four significant digits; coordinates and integer counts in full.",
     };
 }

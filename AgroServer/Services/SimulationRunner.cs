@@ -87,6 +87,13 @@ class RunState
     public uint StartStep { get; init; }
     public volatile bool Preview;
     public volatile bool Abort;
+    /// <summary>
+    /// Why the run is being stopped before its horizon, as a clause that reads after "stopped: ".
+    /// Recorded with the run and sent with the result, because "aborted" alone does not say whether
+    /// somebody pressed stop, nobody was watching, or the volume filled up - and only the last
+    /// needs anyone to do something.
+    /// </summary>
+    public volatile string? StopReason;
     public List<long> StepTimes { get; } = new(1000);
     /// <summary>The connection currently watching. Empty while nobody is attached.</summary>
     public volatile string ConnectionId = "";
@@ -166,6 +173,7 @@ public class SimulationRunner : ISimulationRunner
     {
         if (RunIdForConnection(connectionId) is string id && Runs.TryGetValue(id, out var run))
         {
+            run.StopReason ??= "it was stopped from the browser";
             run.Abort = true;
             return true;
         }
@@ -189,7 +197,17 @@ public class SimulationRunner : ISimulationRunner
         //the world holds one per named OBJ group, which is the number that means anything. Trays
         //are not in the request at all.
         var plants = 0;
-        world.ForEach(formation => { if (formation is PlantFormation2) ++plants; });
+        var resolvedSpecies = request.Species?.ToList() ?? new List<SpeciesSettings>();
+        var speciesNames = new HashSet<string>(resolvedSpecies.Select(species => species.Name), StringComparer.InvariantCultureIgnoreCase);
+        world.ForEach(formation =>
+        {
+            if (formation is not PlantFormation2 plant) return;
+            ++plants;
+            // A name-only request must keep the numerical catalogue settings
+            // selected for this run. Preserve any supplied, unused species too.
+            if (speciesNames.Add(plant.Parameters.Name)) resolvedSpecies.Add(plant.Parameters);
+        });
+        request = request with { Species = resolvedSpecies.ToArray() };
 
         var runId = Store.BeginRun(new RunSpec
         {
@@ -245,8 +263,8 @@ public class SimulationRunner : ISimulationRunner
             try { Store.WriteTerrain(runId, world.SerializeTerrain()); }
             catch (Exception e)
             {
-                Console.Error.WriteLine($"Run {runId}: could not store the terrain ({e.Message}). " +
-                                        $"The run proceeds; it will replay without its trays.");
+                Store.Log.Error("terrain-failed", runId, $"Run {runId}: could not store its terrain ({e.Message}). " +
+                                                         $"The run proceeds; it will replay without its trays.");
             }
         }
 
@@ -312,9 +330,9 @@ public class SimulationRunner : ISimulationRunner
             return null;
         }
 
-        if (world.Timestep != step)
+        if (world.RecordedStep != step)
         {
-            reason = $"The checkpoint says step {step} but the restored world is at {world.Timestep}.";
+            reason = $"The checkpoint says recorded step {step} but the restored world is at {world.RecordedStep}.";
             return null;
         }
 
@@ -328,9 +346,10 @@ public class SimulationRunner : ISimulationRunner
         //The store has the last word on liveness: it knows about a writer that is still draining,
         //which this class does not.
         if (!Store.ResumeRun(runId, step, totalSteps, extended.TotalHours ?? 0,
-                System.Text.Json.JsonSerializer.Serialize(extended, AppJsonSerializerContext.Default.SimulationRequest)))
+                System.Text.Json.JsonSerializer.Serialize(extended, AppJsonSerializerContext.Default.SimulationRequest),
+                out var refused))
         {
-            reason = "That run is still being written. Wait for it to settle and try again.";
+            reason = refused;
             return null;
         }
 
@@ -338,7 +357,7 @@ public class SimulationRunner : ISimulationRunner
         Pending[runId] = () => Loop(run, world, lazyPreviews, exportFlags, extended);
         Runs[runId] = run;
         ConnectionToRun[connectionId] = runId;
-        Console.WriteLine($"Run {runId} resumed at step {step} of a new total {totalSteps}.");
+        //The store has logged the resume already, with the step and the new total.
         return runId;
     }
 
@@ -384,8 +403,8 @@ public class SimulationRunner : ISimulationRunner
         Runs.TryRemove(runId, out _);
         foreach (var pair in ConnectionToRun.Where(p => p.Value == runId).ToList())
             ConnectionToRun.TryRemove(pair.Key, out _);
-        Store.CompleteRun(runId, aborted: true);
-        Console.WriteLine($"Run {runId} was created but never begun; discarded.");
+        //The store's outcome event carries the reason; nothing else needs saying.
+        Store.CompleteRun(runId, aborted: true, "it was created but never begun - the browser dropped while it was being set up");
     }
 
     /// <summary>
@@ -409,13 +428,16 @@ public class SimulationRunner : ISimulationRunner
         }
         catch (Exception e)
         {
-            Console.Error.WriteLine($"Run {runId}: could not store the full leaf area index measurement: {e.Message}");
+            Store.Log.Error("measurement-failed", runId, $"Run {runId}: could not store the full leaf area index measurement: {e.Message}");
         }
     }
 
     async Task Loop(RunState run, AgroWorld world, bool lazyPreviews, ExportFlags exportFlags, SimulationRequest request)
     {
         var to = Hub.Clients.Group(run.RunId);
+        //Whether the store has recorded the outcome. Delivering the result can still throw after
+        //that - the client has gone - and that is not a failure of the run.
+        var completed = false;
         try
         {
             world.Irradiance.SetAddress(Config["RendererIPMitsuba"], Config["RendererPortMitsuba"],
@@ -440,6 +462,34 @@ public class SimulationRunner : ISimulationRunner
             //day of simulated time at four hours a tick, for one checkpoint's worth of disk.
             var checkpointStride = uint.TryParse(Config["RunStoreCheckpointStride"], out var cs) && cs > 0 ? cs : 32u;
 
+            if (world.IsPreparing)
+            {
+                await to.Preparation(world.PreparedSteps, world.PreparationSteps);
+                var lastPreparationProgress = Stopwatch.GetTimestamp();
+                while (world.IsPreparing && !run.Abort)
+                {
+                    if (run.UnwatchedSince is DateTime since && DateTime.UtcNow - since > UnwatchedGrace)
+                    {
+                        run.StopReason ??= $"no browser had been watching it for {UnwatchedGrace.TotalMinutes:0} minutes";
+                        run.Abort = true;
+                        break;
+                    }
+                    world.RunPreparationStep();
+                    if (Stopwatch.GetElapsedTime(lastPreparationProgress).TotalMilliseconds >= 250 || !world.IsPreparing)
+                    {
+                        await to.Preparation(world.PreparedSteps, world.PreparationSteps);
+                        lastPreparationProgress = Stopwatch.GetTimestamp();
+                    }
+                    if (world.Timestep % checkpointStride == 0)
+                        Store.WriteCheckpoint(run.RunId, 0, world.SerializeState());
+                    if (Store.TryGetStopReason(run.RunId, out var preparingStopped))
+                    {
+                        run.StopReason ??= preparingStopped;
+                        run.Abort = true;
+                    }
+                }
+            }
+
             //A resumed run starts where its checkpoint left off, not at zero. The world has already
             //lived those steps and its Timestep says so; the loop counter has to agree, or the
             //frames would be filed under step numbers the run already used.
@@ -454,7 +504,9 @@ public class SimulationRunner : ISimulationRunner
                 //precisely the one that never reached the check.
                 if (run.UnwatchedSince is DateTime since && DateTime.UtcNow - since > UnwatchedGrace)
                 {
-                    Console.WriteLine($"Run {run.RunId} abandoned for over {UnwatchedGrace.TotalMinutes:0} min; stopping at step {i}.");
+                    //Recorded with the run, not just printed: a long run that "paused" overnight
+                    //because a laptop went to sleep looks exactly like one that broke.
+                    run.StopReason ??= $"no browser had been watching it for {UnwatchedGrace.TotalMinutes:0} minutes";
                     run.Abort = true;
                     break;
                 }
@@ -495,6 +547,17 @@ public class SimulationRunner : ISimulationRunner
                     //neither of which a checkpoint captures.
                     if (i % checkpointStride == 0)
                         Store.WriteCheckpoint(run.RunId, i, world.SerializeState());
+
+                    //The store says when it can no longer keep this run - its volume reached the
+                    //free-space reserve, or a frame could not be written. Stopping here, between
+                    //steps, keeps the stored frames contiguous, and the final checkpoint below makes
+                    //the run resumable once there is room. Computing on would only produce a run
+                    //with a hole in it that nothing can fill.
+                    if (Store.TryGetStopReason(run.RunId, out var storeStopped))
+                    {
+                        run.StopReason ??= storeStopped;
+                        run.Abort = true;
+                    }
                 }
                 else
                 {
@@ -506,18 +569,19 @@ public class SimulationRunner : ISimulationRunner
 
             Debug.WriteLine($"Simulation time: {(DateTime.UtcNow.Ticks - start) / TimeSpan.TicksPerMillisecond} ms");
 
-            var result = new SimulationResponse() { Plants = new(world.Count) };
+            var result = new SimulationResponse() { Plants = new(world.Count), CompletedSteps = world.RecordedStep };
             world.ForEach(formation =>
             {
                 if (formation is PlantFormation2 plant)
                     result.Plants.Add(new() { Volume = plant.AG.GetVolume() });
             });
 
-            if (request.RequestGeometry ?? false)
+            if ((request.RequestGeometry ?? false) && world.RecordedStep > 0)
                 result.Scene = world.ExportToStream((byte)exportFlags);
 
             result.Renderer = world.RendererName;
             result.StepTimes = run.StepTimes;
+            result.StopReason = run.Abort ? run.StopReason : null;
             //Reported whenever a measurement was asked for, even when the filter matched nothing:
             //without it the client cannot tell a mistyped filter from a run that never measured.
             //The socket copy is budgeted - a browser cannot hold tens of megabytes of JSON arriving
@@ -530,10 +594,11 @@ public class SimulationRunner : ISimulationRunner
             //Always, however the run ended. On an abort it is what makes the run resumable at all;
             //on a completed one it is what lets the horizon be extended later without recomputing
             //the months already paid for.
-            try { Store.WriteCheckpoint(run.RunId, (uint)world.Timestep, world.SerializeState()); }
-            catch (Exception e) { Console.Error.WriteLine($"Run {run.RunId}: could not write the final checkpoint: {e.Message}"); }
+            try { Store.WriteCheckpoint(run.RunId, world.RecordedStep, world.SerializeState()); }
+            catch (Exception e) { Store.Log.Error("checkpoint-failed", run.RunId, $"Run {run.RunId}: could not take the final checkpoint: {e.Message}"); }
 
-            Store.CompleteRun(run.RunId, run.Abort);
+            Store.CompleteRun(run.RunId, run.Abort, run.Abort ? run.StopReason : null);
+            completed = true;
             await to.Result(result);
         }
         catch (Exception e)
@@ -541,7 +606,11 @@ public class SimulationRunner : ISimulationRunner
             //A run that dies must still release its slot, or its connection is wedged forever -
             //which is exactly what the old code did when Result threw at a departed client.
             Console.Error.WriteLine($"Run {run.RunId} failed: {e}");
-            Store.CompleteRun(run.RunId, true);
+            if (!completed)
+            {
+                Store.Log.Error("run-failed", run.RunId, $"Run {run.RunId} failed: {e.Message}");
+                Store.CompleteRun(run.RunId, true, $"the simulation failed: {e.Message}");
+            }
         }
         finally
         {

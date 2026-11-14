@@ -229,6 +229,11 @@ varying vec3 vDensityNormal;
  * avoids needing the inverse view matrix in the fragment shader.
  */
 export const DENSITY_VERTEX_APPLY = /* glsl */`
-    vDensityWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;
-    vDensityNormal = normalize(mat3(modelMatrix) * objectNormal);
+    #ifdef USE_INSTANCING
+        vDensityWorld = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xyz;
+        vDensityNormal = normalize(mat3(modelMatrix) * mat3(instanceMatrix) * objectNormal);
+    #else
+        vDensityWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;
+        vDensityNormal = normalize(mat3(modelMatrix) * objectNormal);
+    #endif
 `;

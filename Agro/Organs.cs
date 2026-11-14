@@ -41,4 +41,5 @@ public enum OrganTypes : byte {
     FlowerPedicel, //13
     FlowerMeristem, //14
     FlowerBaseBud, //15
+    FruitWing, //16: non-photosynthetic lamina of a winged fruit
 };

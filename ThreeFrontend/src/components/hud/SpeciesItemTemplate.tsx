@@ -75,6 +75,16 @@ export function SpeciesBoolField(props: {speciesIndex: number, tooltip?: string,
         </>
 }
 
+export function SpeciesChoiceField(props: {speciesIndex: number, signal: Signal<number>, options: readonly string[], label: string, tooltip?: string}) {
+    const name = `${props.label.replaceAll(' ', '_').toLowerCase()}-${props.speciesIndex}`;
+    return <div>
+        <select id={name} name={name} title={props.tooltip} value={props.signal.value} onChange={e => props.signal.value = Number(e.currentTarget.value)}>
+            {props.options.map((option, value) => <option value={value}>{option}</option>)}
+        </select>
+        <label for={name} title={props.tooltip}>{props.label}</label>
+    </div>;
+}
+
 export function SpeciesBehaviorField(props: {speciesIndex: number, signal: Signal<number>, options: Signal<string[]>}) {
     const name = `behavior-${props.speciesIndex}`;
     return <>

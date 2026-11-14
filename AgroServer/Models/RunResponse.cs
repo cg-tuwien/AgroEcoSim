@@ -20,6 +20,8 @@ namespace AgroServer.Models;
 ///   BytesOnDisk   frame bytes only; AuxBytesOnDisk is the request, index, terrain and measurement
 ///   HasFieldModel whether the model behind this run is still stored, and so whether it can be
 ///                 re-run or drawn with its trays without the user uploading the OBJ again
+///   StopReason    why an aborted run stopped, in words; a non-live row still marked running is
+///                 reported as aborted, because nothing is computing it any more
 /// </summary>
 public sealed record RunResponse(
     string Id,
@@ -52,7 +54,47 @@ public sealed record RunResponse(
     /// recomputed from its request.</summary>
     bool HasCheckpoint,
     string? ParentRunId,
-    uint? BranchStep);
+    uint? BranchStep,
+    //Why the run stopped before its horizon, as a clause that reads after "stopped: " - the volume
+    //reached its reserve, a frame could not be written, nobody was watching. Null for a run that
+    //finished, and for runs stored before the reason was recorded.
+    string? StopReason);
+
+/// <summary>
+/// The run store as the Runs tab needs to see it: whether it works at all, where it writes, how much
+/// room is left there, what is wrong with that, and the newest events.
+///
+/// The listing alone cannot say any of this. A store that could not open answered it with an empty
+/// array, and an empty array is what an empty store returns too - so the panel printed "No stored
+/// runs" over a disabled store with 56 GB on its disk, and new runs went unstored without a word.
+///
+/// Field notes:
+///   DisabledReason  why the store could not open, with what to do about it; empty when it works
+///   MountPoint      the mount containing Root; VolumeName the Docker volume behind it, if any
+///   FreeBytes       statvfs on Root; -1 when unknown. Runs stop cleanly at MinFreeBytes
+///   StoredBytes     the runs' footprint (frames and the rest); ModelBytes the field models
+///   Warnings        configuration that will lose data, worked out now - not a log
+/// </summary>
+public sealed record RunStoreStatusResponse(
+    bool Enabled,
+    string Root,
+    string DisabledReason,
+    string MountPoint,
+    string FileSystem,
+    string VolumeName,
+    bool AnonymousVolume,
+    long TotalBytes,
+    long FreeBytes,
+    long MinFreeBytes,
+    long RetentionBytes,
+    long ModelRetentionBytes,
+    long StoredBytes,
+    long ModelBytes,
+    int Runs,
+    int LiveRuns,
+    double SweepMinutes,
+    string[] Warnings,
+    Services.RunStoreEvent[] Events);
 
 /// <summary>What a refused delete tells the user. A 409 with no body reads as a bug.</summary>
 public sealed record RunDeleteResponse(bool Deleted, string Reason);

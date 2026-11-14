@@ -65,10 +65,16 @@ public sealed partial class CollisionWorld
 		if (!CollisionSettings.Enabled)
         {
             foreach (var formation in formations)
-                if (formation is PlantFormation2 p && p.Parameters.ConstructionEnergyPerDryGram > 0f)
+                if (formation is PlantFormation2 p)
                 {
-                    p.AG.SettleConstruction();
-                    p.AG.ProcessDevelopments(this);
+                    if (p.Parameters.ConstructionEnergyPerDryGram > 0f)
+                    {
+                        p.AG.SettleConstruction();
+                        p.AG.ProcessDevelopments(this);
+                    }
+                    if (p.Parameters.TreeMainlineModulesEnabled) p.AG.FinalizeTreeModuleBookkeeping();
+                    p.AG.CompleteSecondaryMaterials();
+                    p.AG.SynchronizeSamaraUnitPhenology();
                 }
             return;
         }

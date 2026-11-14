@@ -2229,6 +2229,64 @@ development. The store now lives in `/data`, owned by that user, declared `VOLUM
 from a named volume in `docker-compose.yml`. `AGRO_RunStoreRetentionBytes` sets the budget, because
 the host is the only thing that knows whether 64 GiB is generous or fatal.
 
+### A full volume disabled the store, and the panel showed an empty list (23 October 2026)
+
+Reported on the deployed site: a large run's stored size froze at about 56 GB, the run then vanished,
+and new runs never appeared in the Runs tab, which stayed empty. Nothing deleted anything. In order:
+
+- **The store was not on the volume.** The image wrote to `/data/runstore` and declared `VOLUME /data`.
+  Commit a9a362a moved the compose mount to `/data/AgroEcoStorage`, so every run went to the anonymous
+  volume Docker created for `/data`, on the host's root disk, with a 1 TiB budget that could never
+  fire. The image now declares `VOLUME /data/AgroEcoStorage`, and both the image and compose set
+  `AGRO_RunStoreRoot=/data/AgroEcoStorage/runstore`. Compose also pins `name: agroeco` and the volume
+  name, because the project name, and therefore the volume, came from the folder the deploy zip was
+  unpacked into.
+- **The full disk was silent.** `Pack` caught ENOSPC, printed it and left a partial `.tmp` file per
+  frame. That debris held the last free blocks, and the listed size froze. Failed writes now delete
+  their temporaries, and the startup cleanup removes stale ones.
+- **The next start disabled the store,** because `SweepStaleRuns` had to rewrite the interrupted run's
+  `running` row on a full disk, and a disabled store answers `/runs` with `[]`, exactly as an empty
+  store does. LiteDB also refuses to reopen a datafile whose last write failed until it is rebuilt,
+  so the store now opens with `AutoRebuild`.
+
+**What changed, and the rules it established:**
+
+- **Only opening is fatal.** The housekeeping after it (`EnsureIndex`, the stale sweep, adoption) is
+  logged and skipped, so a store on a full disk still lists its runs and can delete one to make room.
+- **Liveness is the writer, not the row** (`RunStore.IsLive`). The row is inserted after the writer
+  starts, and the writer is removed under the lock that records the outcome. A row still saying
+  `running` with nothing writing it is reported as aborted, and the sweep records that late. Before
+  this, the run that filled the disk stayed `running` forever: undeletable in the panel and
+  unevictable.
+- **The volume has a reserve** (`AGRO_RunStoreMinFreeBytes`, 2 GiB). Reaching it **stops the run
+  cleanly**. The frame that tripped it and the final checkpoint may use the reserve down to a quarter.
+  The run is `aborted` with a `StopReason` and is resumable once there is room. Pausing was rejected
+  because the frames computed while paused are lost for good and leave a permanent hole.
+- **`RunWriter.GapFromStep` keeps a stopped run contiguous.** Nothing after a lost frame is committed,
+  and no checkpoint past it is written, because a checkpoint claims every frame before it. A trailing
+  partial index record is trimmed on resume, not refused, and the original is kept in the recovery
+  directory.
+- **Every deletion and storage error is an event** (`RunStoreLog`). Events are kept in memory first,
+  appended to `<root>/events.jsonl` second, reloaded at startup, printed to the console in the same
+  words, and served by `GET /Simulation/store` together with the volume, the budgets, the
+  `DisabledReason` and the warnings. Repeating states log when they start and clear (`Condition`), not
+  once per sweep.
+- **The warnings are computed from `/proc/self/mountinfo`** (`StoreVolume`): an anonymous Docker
+  volume, the container's own layer, a volume mounted next to the store instead of under it, a budget
+  larger than the volume can hold, and free space below the reserve. Budgets are configured after
+  construction, so the startup diagnosis runs in `StartMaintenance`.
+- **A run id is not a promise.** The server hands one out even when the run is not stored, so the
+  client confirms with `GET /run/{id}` before it drops any frame from memory (`runStored`). A 404
+  marks the run "not stored" in the HUD, and the tab keeps every frame, as it would with no server.
+- **The Runs tab never renders a disabled store as an empty list.** It shows a red banner with the
+  reason, the store log opens by itself, and each card carries its stop reason.
+
+Measured with a scratch probe that drives `RunStore` directly, and end to end through the hub with a
+`fallocate` filler placed mid-run: the run stopped at step 75 with 76 contiguous frames and a final
+checkpoint, and resumed after the filler was removed to 150 contiguous frames. Do not tell anyone to
+run `docker volume prune` while runs may sit in an anonymous volume: since Docker 23 that is exactly
+what it deletes.
+
 ### Two lifecycle holes the grace period did not cover
 
 **The abandonment check was inside the computing branch.** With lazy previews that is every

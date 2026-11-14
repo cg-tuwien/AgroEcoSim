@@ -33,6 +33,8 @@ public class SimulationController// : ControllerBase
     {
         api.MapGet("/", () => Results.Ok());
 
+        api.MapGet("/version", () => Results.Text("20261022"));
+
         //--- stored runs ----------------------------------------------------------------------
         //
         //REST rather than hub methods, deliberately. The SignalR JSON protocol base64-encodes
@@ -111,6 +113,17 @@ public class SimulationController// : ControllerBase
         //hundred bytes; fetching each run separately to find it out would be a request per row.
         api.MapGet("/runs", (int? limit) => Results.Ok(runStore.ListRuns(Math.Clamp(limit ?? 50, 1, 500))
             .Select(r => Describe(runStore, r)).ToArray()));
+
+        //The store itself, for the Runs tab: whether it works at all and why not, where it writes,
+        //how much room is left there, configuration that will lose data, and the newest events -
+        //every deletion and every storage error, including those from before the last restart.
+        //
+        //The listing cannot carry any of this. A store that could not open answered it with an
+        //empty array, which is also what an empty store answers, so the panel printed "No stored
+        //runs" over a disabled store with 56 GB on its disk. Separate from /runs, too, so a server
+        //older than this endpoint still lists runs: the panel only reads it when it is there.
+        api.MapGet("/store", (int? events) =>
+            Results.Ok(runStore.Status(Math.Clamp(events ?? 200, 1, RunStoreLog.Capacity))));
 
         //The request a run was started from, so the client can fork or continue it.
         //
@@ -222,7 +235,7 @@ public class SimulationController// : ControllerBase
             var stop = DateTime.UtcNow.Ticks;
             Debug.WriteLine($"Simulation time: {(stop - start) / TimeSpan.TicksPerMillisecond} ms");
 
-            var response = new SimulationResponse() { Plants = new(world.Count) };
+            var response = new SimulationResponse() { Plants = new(world.Count), CompletedSteps = world.RecordedStep };
             world.ForEach(formation =>
             {
                 if (formation is PlantFormation2 plant)
@@ -232,7 +245,7 @@ public class SimulationController// : ControllerBase
 
             Debug.WriteLine($"RENDER TIME: {world.Irradiance.ElapsedMilliseconds} ms");
 
-            if (request?.RequestGeometry ?? false)
+            if ((request?.RequestGeometry ?? false) && world.RecordedStep > 0)
             {
                 var exportFlags = (request.DownloadRoots ?? false ? ExportFlags.Roots : ExportFlags.None) | ExportFlags.Analytics;
                 response.Scene = world.ExportToStream((byte)exportFlags);
@@ -318,7 +331,8 @@ public class SimulationController// : ControllerBase
         //a stored model the endpoint can rebuild one from.
         store.HasFieldModel(run.FieldModelHash),
         store.HasTerrain(run.Id) || store.HasFieldModel(run.FieldModelHash),
-        store.HasObstacleLight(run.Id), store.HasCheckpoint(run.Id), run.ParentRunId, run.BranchStep);
+        store.HasObstacleLight(run.Id), store.HasCheckpoint(run.Id), run.ParentRunId, run.BranchStep,
+        run.StopReason);
 
     /// <summary>
     /// Builds a stored run's soil from the field model filed with it, and keeps the result.

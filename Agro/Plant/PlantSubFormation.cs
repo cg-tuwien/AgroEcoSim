@@ -133,6 +133,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 		List<int> result = null;
 		if (Deaths.Add(index))
 		{
+            NoticeTreeModuleDeath(index, reason);
 			if (reason == OrganDeathReason.Resources) ++ResourceDeaths; else ++NaturalDeaths;
 			var buffer = new Queue<int>();
 			buffer.Enqueue(index);
@@ -212,6 +213,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 			writer.Write(MemoryMarshal.AsBytes(born));
 		}
 		WriteGrowthState(writer);
+        WriteSecondaryState(writer);
         WriteDeformationState(writer);
 	}
 
@@ -281,6 +283,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 		}
 
 		ReadGrowthState(reader);
+        ReadSecondaryState(reader);
         ReadDeformationState(reader);
         TreeCache.UpdateBases(this);
 		if (IsAboveGround)
@@ -376,6 +379,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 			++TopologyRevision;
 			InvalidateLaminaCache();
 			RefreshOrganIndices();
+			ObserveTreeModuleCensus();
 			Births.Clear();
 		}
 		else
@@ -391,6 +395,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 
 	public void Tick(uint timestep)
 	{
+        BeginSecondaryTick();
 		CaptureGeometry();
 		SrcDst(out var src, out var dst);
 		src.CopyTo(dst);
@@ -408,6 +413,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 			CacheFloweringPhase = false;
 		}
 		ReadTMP = !ReadTMP;
+        ProposeSecondaryMaterials();
 	}
 
 
@@ -453,6 +459,8 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 		var energyRequirement = 0.0;
 		var waterRequirement = 0.0;
 		var waterPriority = 0.0;
+		var basalWaterFlow = 0.0;
+		var gatherRootFlow = typeof(T) == typeof(UnderGroundAgent) && species.Behavior == Behavior.Woody;
 		SrcDst(out var dst, out var src); //since Tick already swapped them
 		var prevLength = Gathering.Count;
 
@@ -473,6 +481,8 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 			//Debug.WriteLine($"{(IsAboveGround ? "⊤" : "⊥")}-{i} Energy {dst[i].Energy} Water {dst[i].Water} Res {dst[i].PreviousDayEnvResourcesInv} / {DailyResourceMax} Prod {dst[i].PreviousDayProductionInv} / {DailyProductionMax} Life {dst[i].LifeSupportPerTick(world)} wStore {dst[i].WaterStorageCapacity()} wStore {dst[i].EnergyStorageCapacity()}");
 			energy += Math.Max(0f, dst[i].Energy);
 			water += dst[i].Water_g;
+			if (gatherRootFlow && dst[i].Parent < 0)
+				basalWaterFlow += Unsafe.As<T, UnderGroundAgent>(ref dst[i]).WaterFlowToParentPerTick_g(world);
 
 			var previousEnergy = src[i].Energy;
 			energyDiff -= previousEnergy;
@@ -518,7 +528,8 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
                     && parent >= 0 && parent < dst.Length && !dst[parent].IsRizome;
                 if (droughtResponse)
                     greenLeafArea += dst[i].GreenLeafArea();
-                if (dst[i].IsRizome || isRhizomeSupportedCrownBase || isFlowerOrgan || isNodeBud)
+                if (dst[i].IsRizome || isRhizomeSupportedCrownBase || isFlowerOrgan || isNodeBud
+                    || species.Behavior == Behavior.Woody && dst[i].Organ != OrganTypes.Leaf)
                 {
                     // Rhizomes translocate stored carbohydrate to attached renewal buds and
                     // establishing crown bases. Allocation cannot depend on downstream leaves
@@ -541,6 +552,8 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 			waterRequirement -= gathered.PhotosynthWater;
 			energyCapacity -= gathered.CapacityEnergy;
 			waterCapacity -= gathered.CapacityWater;
+			if (gatherRootFlow && dst[i].Parent < 0)
+				basalWaterFlow -= Unsafe.As<T, UnderGroundAgent>(ref dst[i]).WaterFlowToParentPerTick_g(world);
 			Gathering[i] = default;
 		}
 		GreenLeafArea = Math.Max(0f, greenLeafArea);
@@ -555,6 +568,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 			Gathered.WaterDiff = waterDiff;
 			Gathered.EnergyCapacity = energyCapacity;
 			Gathered.WaterCapacity = waterCapacity;
+			Gathered.BasalWaterFlowPerTick = Math.Max(0d, basalWaterFlow);
 			Gathered.EnergyRequirementPerTick = energyRequirement;
 			Gathered.WaterRequirementPerTick = waterRequirement;
 			Gathered.WaterPriorityPerTick = waterPriority;
@@ -595,6 +609,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 	//Gravity runs for every plant on every step; these buffers keep it allocation free.
 	readonly List<int> WeightFrontA = [], WeightFrontB = [];
 	readonly Queue<int> GravityQueue = new();
+	Quaternion[] GravityTransport = [];
 
 	/// <summary>The floral axes whose stiffness follows the flower senescence curve.
 	/// Deliberately excludes FlowerBaseBud, so this is not the whole FlowerBud..FlowerBaseBud range.</summary>
@@ -661,6 +676,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
             WeightReoslveChildren.AddRange(new int[count - WeightReoslveChildren.Count]);
         if (WeightedCentroids.Count < count)
             WeightedCentroids.AddRange(new Vector3[count - WeightedCentroids.Count]);
+        var shiftedAttachments = IsAboveGround && Plant.Parameters.Behavior == Behavior.Woody;
 
         //initialize weights with self weight converted to Newtons
         for (int i = 0; i < count; ++i)
@@ -671,7 +687,9 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
             //the weight, this gives every node the centre of mass of everything it carries, which
             //is the only thing that can supply a correct lever arm.
             var selfDir = Vector3.Transform(Vector3.UnitX, dst[i].Orientation);
-            WeightedCentroids[i] = weight * (GetBaseCenter(i) + (GetDeformation(i) != Vector4.Zero && dst[i].Organ == OrganTypes.Petiole
+            var selfBase = GetBaseCenter(i);
+            if (shiftedAttachments) selfBase += dst[i].BaseOffset;
+            WeightedCentroids[i] = weight * (selfBase + (GetDeformation(i) != Vector4.Zero && dst[i].Organ == OrganTypes.Petiole
                 ? Vector3.Transform(ContactDeformation.RodPoint(.5f,dst[i].Length,GetDeformation(i)),dst[i].Orientation)
                 : selfDir * (dst[i].Length * 0.5f)));
             WeightReoslveChildren[i] = GetChildren(i).Count;
@@ -702,6 +720,34 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
         }
     }
 
+    // Integral of the bending moment over a straight structural rod, divided by
+    // its length. Descendant subtrees load their actual attachment, which may be
+    // inside a compressed shoot rather than at its tip. Each edge is visited once.
+    // A tip-attached subtree contributes M_base - W_desc * (axis x down) * L/2;
+    // uniform self weight contributes W_self * (axis x down) * L/6.
+    Vector3 WoodyRodMeanMoment(int index, float length, Vector3 frozenBase,
+        Vector3 frozenAxis, Quaternion carry)
+    {
+        var agents = Src();
+        var axis = Vector3.Transform(frozenAxis, carry);
+        var axisCrossDown = new Vector3(axis.Z, 0f, -axis.X);
+        var selfWeight = GetWeight(index, Plant.Parameters) * .001f * 9.81f;
+        var mean = axisCrossDown * (selfWeight * length / 6f);
+        foreach (var child in GetChildren(index))
+        {
+            var weight = Weights[child];
+            if (weight <= 0f) continue;
+            ref var childAgent = ref Unsafe.As<T, AboveGroundAgent>(ref agents[child]);
+            var attachment = GetBaseCenter(child) + childAgent.BaseOffset;
+            var a = Math.Clamp(Vector3.Dot(attachment - frozenBase, frozenAxis), 0f, length);
+            if (a <= 0f) continue;
+            var r = Vector3.Transform(WeightedCentroids[child] / weight - frozenBase, carry);
+            var moment = new Vector3(r.Z, 0f, -r.X);
+            mean += weight * (moment * (a / length) - axisCrossDown * (a * a / (2f * length)));
+        }
+        return mean;
+    }
+
 	internal void Gravity()
 	{
 		if (!IsAboveGround)
@@ -726,6 +772,15 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
         if (!persistentDeformation) ResetElasticDeformation();
         RefreshMechanicalLoads();
 
+        // Woody axes can have hundreds of internodes. Transporting every joint's rotation
+        // through its whole subtree visits each descendant once per ancestor. Gravity reads
+        // only the current joint's frames: cached bases and load centroids stay frozen until
+        // the final rebase. Carry the ancestor rotation once down this top-down traversal instead.
+        // Keep the eager arithmetic for existing species and the separate deformation pass.
+        var deferredTransport = Plant.Parameters.Behavior == Behavior.Woody;
+        if (deferredTransport && GravityTransport.Length < count)
+            Array.Resize(ref GravityTransport, Math.Max(count, Math.Max(8, GravityTransport.Length + GravityTransport.Length / 2)));
+
 		// Process nodes from roots to leaves, propagating rotations.  The response
 		// is specified per hour so changing the simulation timestep does not alter
 		// how quickly an organ approaches its elastic equilibrium.
@@ -749,8 +804,31 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 
 			var i = nodesToVisit.Dequeue();
 			ref var agent = ref dst[i];
+            // Bases and centroids describe the pose frozen at the start of this
+            // walk. Save its attachment before carrying the agent's mutable offset.
+            Vector3 frozenJointBase = default, frozenAxis = default;
+            var woodyStructure = deferredTransport && !agent.IsRizome
+                && agent.Organ is OrganTypes.Stem or OrganTypes.Meristem or OrganTypes.Bud;
+            if (deferredTransport)
+            {
+                frozenJointBase = GetBaseCenter(i) + Unsafe.As<T, AboveGroundAgent>(ref agent).BaseOffset;
+                frozenAxis = Vector3.Transform(Vector3.UnitX, agent.Orientation);
+                var carry = agent.Parent >= 0 ? GravityTransport[agent.Parent] : Quaternion.Identity;
+                GravityTransport[i] = carry;
+                if (carry != Quaternion.Identity)
+                {
+                    agent.SetOrientation(Quaternion.Normalize(carry * agent.Orientation));
+                    agent.baseOrientation = Quaternion.Normalize(carry * agent.baseOrientation);
+                    agent.restOrientation = Quaternion.Normalize(carry * agent.restOrientation);
+                    agent.targetOrientation = Quaternion.Normalize(carry * agent.targetOrientation);
+                    // Woody attachments are world-space offsets from the parent's tip.
+                    // Carry only ancestor turns: this joint's own bend leaves its base fixed.
+                    ref var above = ref Unsafe.As<T, AboveGroundAgent>(ref agent);
+                    above.BaseOffset = Vector3.Transform(above.BaseOffset, carry);
+                }
+            }
             agent.LoadLimited = false;
-			var petal = GetOrgan(i).Equals(OrganTypes.FlowerPadel);
+			var petal = GetOrgan(i) is OrganTypes.FlowerPadel or OrganTypes.FruitWing;
 			if ((GetIsRizome(i) && agent.SoilAnchored) || (petal && !relaxUnloaded))
 			{
 				foreach (var child in GetChildren(i))
@@ -840,7 +918,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 						agent.restOrientation = Quaternion.Normalize(steer * agent.restOrientation);
 						agent.targetOrientation = Quaternion.Normalize(steer * agent.targetOrientation);
 						agent.SetOrientation(Quaternion.Normalize(steer * agent.Orientation));
-						PropagateToSubtree(dst, i, steer);
+						PropagateGravityRotation(dst, i, steer, deferredTransport);
 					}
 				}
 			}
@@ -861,10 +939,11 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 				//when it should visibly arch.
 				var isPetiole = agent.Organ is OrganTypes.Petiole;
 
-				//These get the real thing: the torque of the load they carry about their own base,
-				//resolved in their own frame. Everything below is the old scalar law, kept for the
-				//structural axes - see the remark on the two formulations further down.
-				if ((isBlade || isPetiole || agent.IsRizome || IsFloralAxis(agent.Organ)) && Collisions.CollisionSettings.VectorBending)
+				//Existing lamina/petiole/floral behavior uses the load moment at the base.
+                // Woody structural rods use its length-average: curvature integrated
+                // over this segment gives the relative end-tangent rotation. The
+                // articulated geometry approaches the curved rod with subdivision.
+				if ((isBlade || isPetiole || agent.IsRizome || IsFloralAxis(agent.Organ) || woodyStructure) && Collisions.CollisionSettings.VectorBending)
 				{
 					//tau = r x F with F = (0, -W, 0), so |tau| = W * |horizontal offset to the load|
 					//and the axis falls out of the same cross product. This replaces BOTH the
@@ -875,8 +954,12 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 					//a factor of 8 and the error grew with the segment count - the arch got weaker
 					//the finer the blade was divided, which is the opposite of converging.
 					var centroid = WeightedCentroids[i] / totalWeight;
-					var r = centroid - GetBaseCenter(i);
-					var torque = new Vector3(r.Z, 0f, -r.X) * totalWeight;
+                    var r = deferredTransport
+                        ? Vector3.Transform(centroid - frozenJointBase, GravityTransport[i])
+                        : centroid - GetBaseCenter(i);
+                    var torque = woodyStructure
+                        ? WoodyRodMeanMoment(i, length, frozenJointBase, frozenAxis, GravityTransport[i])
+                        : new Vector3(r.Z, 0f, -r.X) * totalWeight;
 
 					//Resolved in the organ's own frame: X along it, and for a blade Y is its normal
 					//and Z runs across the width.
@@ -907,7 +990,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 					}
 
 					var deltaThetaBlade = kappa.Length() * length / (Deformable(i) ? 3f : 1f);
-                    if (agent.IsRizome)
+                    if (agent.IsRizome || woodyStructure)
                         agent.LoadLimited = !float.IsFinite(deltaThetaBlade) || deltaThetaBlade > Collisions.CollisionSettings.MaxElasticBendRadians;
 					if (deltaThetaBlade > 1e-7f && float.IsFinite(deltaThetaBlade))
 					{
@@ -937,7 +1020,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 						agent.SetOrientation(relaxed);
 					}
 
-					PropagateToSubtree(dst, i, appliedDelta);
+					PropagateGravityRotation(dst, i, appliedDelta, deferredTransport);
 					foreach (var child in GetChildren(i))
 						nodesToVisit.Enqueue(child);
 					continue;
@@ -949,7 +1032,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 				//
 				//This is the OLD scalar law and it has the same lever-arm defect the lamina branch
 				//above describes: the subtree's whole weight is applied at this organ's own
-				//midpoint. It is left in place for rods deliberately. For an organ whose subtree is
+				//midpoint. It is retained for legacy structural axes. For an organ whose subtree is
 				//itself the two agree on the MAGNITUDE of the moment - which is why the lamina
 				//change is about the arch of a segmented blade rather than about how hard a single
 				//leaf droops - but for a stem carrying a whole shoot they differ by a large factor,
@@ -996,20 +1079,20 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 					agent.SetOrientation(newOr);
                 }
 
-                PropagateToSubtree(dst, i, appliedDelta);
+                PropagateGravityRotation(dst, i, appliedDelta, deferredTransport);
             }
-            else if ((HasContactDeformation || relaxUnloaded) && agent.Orientation != agent.baseOrientation)
+            else if ((HasContactDeformation || relaxUnloaded || woodyStructure) && agent.Orientation != agent.baseOrientation)
             {
                 // A tiny or unloaded joint has no gravitational moment, but must
                 // still release a previous elastic contact turn. Keep its unloaded
                 // frame exactly, without repeatedly normalizing an unchanged frame.
-                var released=persistentDeformation || relaxUnloaded
+                var released=persistentDeformation || relaxUnloaded || woodyStructure
                     ? Quaternion.Normalize(Quaternion.Slerp(agent.Orientation,agent.baseOrientation,response))
                     : agent.baseOrientation;
                 appliedDelta=Quaternion.Normalize(released*Quaternion.Conjugate(agent.Orientation));
                 agent.targetOrientation=agent.baseOrientation;
                 agent.SetOrientation(released);
-                PropagateToSubtree(dst,i,appliedDelta);
+                PropagateGravityRotation(dst, i, appliedDelta, deferredTransport);
             }
 			foreach (var child in GetChildren(i))
 			{
@@ -1026,6 +1109,15 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 		}
 		finally { GravityTicks += Stopwatch.GetTimestamp() - started; }
     }
+
+    void PropagateGravityRotation(Span<T> dst, int index, Quaternion delta, bool deferred)
+    {
+        if (deferred)
+            GravityTransport[index] = Quaternion.Normalize(delta * GravityTransport[index]);
+        else
+            PropagateToSubtree(dst, index, delta);
+    }
+
     /// <summary>
     /// Carries a rotation of one organ rigidly through everything beyond it.
     /// </summary>
@@ -1037,6 +1129,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
     /// </remarks>
     void PropagateToSubtree(Span<T> dst, int index, Quaternion appliedDelta)
     {
+        var carryAttachment = IsAboveGround && Plant.Parameters.Behavior == Behavior.Woody;
         var children = CollisionChildren;
         children.Clear();
         children.Enqueue(index);
@@ -1051,6 +1144,11 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
                 c.baseOrientation = Quaternion.Normalize(appliedDelta * c.baseOrientation);
                 c.restOrientation = Quaternion.Normalize(appliedDelta * c.restOrientation);
                 c.targetOrientation = Quaternion.Normalize(appliedDelta * c.targetOrientation);
+                if (carryAttachment)
+                {
+                    ref var above = ref Unsafe.As<T, AboveGroundAgent>(ref c);
+                    above.BaseOffset = Vector3.Transform(above.BaseOffset, appliedDelta);
+                }
             }
         }
     }
@@ -1522,6 +1620,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 		if (plastic)
 			dst[index].baseOrientation = Quaternion.Normalize(kept * dst[index].baseOrientation);
 
+		var carryAttachment = IsAboveGround && Plant.Parameters.Behavior == Behavior.Woody;
 		var queue = CollisionChildren;
 		queue.Clear();
 		queue.Enqueue(index);
@@ -1550,6 +1649,11 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 				c.SetOrientation(Quaternion.Normalize(delta * c.Orientation));
 				c.baseOrientation = Quaternion.Normalize(delta * c.baseOrientation);
 				c.restOrientation = Quaternion.Normalize(delta * c.restOrientation);
+				if (carryAttachment)
+				{
+					ref var above = ref Unsafe.As<T, AboveGroundAgent>(ref c);
+					above.BaseOffset = Vector3.Transform(above.BaseOffset, delta);
+				}
 			}
 		}
 	}
@@ -2065,6 +2169,13 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
     uint PhaseCacheTimestep;
     SeasonalPhase CachedFloweringPhase;
 
+    // Uses the existing checkpointed phenology history. A late-established annual
+    // may overwinter before reproducing; January alone is never a death trigger.
+    internal bool CompletedMonocarpicLife(uint timestep) => Plant.Parameters.Monocarpic
+        && FloweringStarted[^1] == PostFloweringState
+        && (Plant.World.Season > Plant.Parameters.SeasonalSenescence
+            || SeasonCycle(Plant.World.GetTime(timestep)) != FloweringCycle);
+
     public SeasonalPhase GetFloweringPhase(SpeciesSettings species, uint timestep)
     {
         // Cache only within the organ tick: age/calendar and the source buffer
@@ -2093,6 +2204,8 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 		//in ResetPending - and with its Dormant* rates at zero that froze the whole plant
 		//for nine months. The season year is the same cycle TryActivateCrownBud uses.
 		var cycle = SeasonCycle(Plant.World.GetTime(timestep));
+		if (species.Monocarpic && FloweringStarted[^1] == PostFloweringState)
+			return SeasonalPhase.PostFlower;
 		if (cycle != FloweringCycle)
 		{
 			FloweringCycle = cycle;
@@ -2321,6 +2434,8 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
         {
             case OrganTypes.Leaf:
             case OrganTypes.FlowerPadel:
+            case OrganTypes.FruitWing:
+            case OrganTypes.Fruit:
             {
                 if (GetLaminaTemplate(index) is { } template)
                 {
@@ -2339,7 +2454,6 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
             case OrganTypes.Bud:
             case OrganTypes.FlowerBud:
             case OrganTypes.FlowerBaseBud:
-            case OrganTypes.Fruit:
             case OrganTypes.Seed:
             {
                 //A sphere whose radius is the organ length, matching CpuLightSolver.FillPlant and
@@ -2468,7 +2582,8 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 			const float rcpScale = 1e-5f;
 
 			for(int i = 0; i < src.Length; ++i)
-				if (src[i].Organ == OrganTypes.Bud)
+				if (src[i].Organ == OrganTypes.Bud &&
+                    (Plant.Parameters.Behavior != Behavior.Woody || LeavesCount[i] == 0))
 				{
 					var parent = src[i].Parent;
 					src[i].DailySet(src[parent].PreviousDayEnvResourcesInvariant, src[parent].PreviousDayProductionInvariant, Resources[parent] * rcpScale / Volumes[parent]);
@@ -2476,6 +2591,8 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 				}
 				else
 				{
+					// Woody short shoots carry their own leaves. Preserve their measured
+					// local exposure for flushing decisions; only leafless buds inherit it.
 					var efficiency = Volumes[i] > 0f ? Resources[i] * rcpScale / Volumes[i] : 0f;
 
 					if (efficiency > DailyEfficiencyMax)

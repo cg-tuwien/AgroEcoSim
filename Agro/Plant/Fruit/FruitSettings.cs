@@ -9,6 +9,7 @@ namespace Agro;
 /// </summary>
 public class FruitSettings
 {
+    public bool Enabled { get; init; }
     public FruitType FruitType { get; init; } = FruitType.Accessory;
 
     public float InitialRadius { get; init; } = 0.002f;
@@ -32,4 +33,9 @@ public class FruitSettings
     public bool PollinationRequired { get; init; } = true;
     public float PollinationWindowHours { get; init; } = 48f;
     public float FruitRetentionDays { get; init; } = 14f;
+    public int WingsPerFruit { get; init; }
+    public int FruitsPerFlower { get; init; } = 1;
+    public float WingLength { get; init; } = .035f;
+    public float WingRadius { get; init; } = .006f;
+    public LeafMorphology WingMorphology { get; init; } = LeafMorphology.Petal;
 }

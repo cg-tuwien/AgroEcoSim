@@ -53,7 +53,7 @@ internal class Program
         // 168 hours, which is not a multiple of its tick: the last step's midpoint falls on the day
         // AFTER the requested horizon, so the calendar must reach that day or the step's bucket
         // depends on the horizon and a resume onto a longer one files it in the wrong week.
-        // The last scenarios are a herbaceous plant in a rainless field: the drought response
+        // The drought scenarios use a herbaceous plant in a rainless field: the drought response
         // commits leaves to senescence, kills them, sheds them and regrows node buds within the
         // first months, and every resume point lands inside that episode. The BroadLeafV1 variant
         // stores contact deformations keyed by organs that later turn from petiole into bud.
@@ -62,6 +62,9 @@ internal class Program
             (40, 24, 4, 0, null, 0, 0, "Default", false, false), (60, 12, 8, 0, null, 0, 0, "Default", false, false), (90, 6, 2, 0, null, 0, 0, "Default", false, false),
             (40, 24, 4, 3, "wall", 0, 0, "Default", false, false), (36, 6, 4, 3, "wall", 40, 0, "Default", false, false), (4, 48, 2, 3, "wall", 4, 168, "Default", false, false),
             (540, 4, 1, 0, null, 0, 0, "Campanula poscharskyana", true, false), (540, 4, 1, 0, null, 0, 0, "Campanula poscharskyana", true, true),
+            // Mesh LAI scratch is rebuilt after restore, including opted-in deformed foliage;
+            // extending the horizon must preserve the original measured weeks as well as frames.
+            (180, 4, 1, 3, "wall", 40, 0, "Campanula poscharskyana", false, true),
         };
         foreach (var engine in new[] { ContactEngineKind.Mixed, ContactEngineKind.Certified, ContactEngineKind.Soft })
         foreach (var (steps, hoursPerTick, plants, renderMode, filter, extraSteps, totalHours, speciesName, dry, deformable) in scenarios)

@@ -8,7 +8,8 @@ internal static class MechanicalMesh
     internal static MeshData? For(PlantSubFormation<AboveGroundAgent> ag,int organ)
     {
         var pose=ag.GetContactPose(organ);
-        if(ag.HasContactDeformation && ag.GetOrgan(organ)==OrganTypes.Leaf)
+        if((ag.HasContactDeformation && ag.GetOrgan(organ)==OrganTypes.Leaf)
+            || ag.GetOrgan(organ) is OrganTypes.Fruit or OrganTypes.FruitWing or OrganTypes.FlowerPadel)
         {
             var template=ag.GetLaminaTemplate(organ)!;
             var mesh=new MeshData { Indices=template.Indices.ToList() };

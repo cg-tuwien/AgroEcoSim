@@ -28,6 +28,7 @@ public interface IEditorHub
     /// </summary>
     Task RunSite(RunSiteResponse site);
     Task Progress(uint step, uint length);
+    Task Preparation(uint step, uint totalSteps);
     Task Result(SimulationResponse response);
     Task Preview(PreviewResponse response);
     Task Terrain(byte[] response);

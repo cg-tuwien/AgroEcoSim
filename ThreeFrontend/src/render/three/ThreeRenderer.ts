@@ -1,11 +1,9 @@
 //The Three.js/WebGL viewport backend.
 //
 //This is the former ThreeSceneFn component turned into a class behind IViewportRenderer.
-//The rendering behaviour is intentionally the same as before - one Mesh per primitive, no
-//instancing, render-on-demand - because this backend's job is to remain the parity reference
-//and the compatibility fallback. What changed is where the decisions come from: geometry,
-//colour, transforms and the draw list are all computed by src/render/core and merely
-//realised here.
+//Small scenes retain one Mesh per primitive as the parity reference. Detailed trees batch
+//identical rigid geometry/materials; folded organs retain their individual deformation path.
+//Geometry, colour, transforms and the draw list come from src/render/core in both cases.
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
@@ -45,7 +43,8 @@ import { ThreeDensityField } from './ThreeDensityField';
 import { ThreeSky } from './ThreeSky';
 import { ThreeStereo } from './ThreeStereo';
 import type { StereoOptions } from '../core/Stereo';
-import { bindFold, disposeFold, cloneFoldedScene } from './ThreeContactDeformation';
+import { bindFold, disposeFold } from './ThreeContactDeformation';
+import { ThreePlantBatches, PLANT_BATCH_THRESHOLD, plantHitRef } from './ThreePlantBatches';
 import '../core/StaticGeometry';   // side effect: fills the static geometry table
 
 /** Per-mesh bookkeeping that has nowhere else to live. */
@@ -89,6 +88,7 @@ export class ThreeRenderer implements IViewportRenderer {
      */
     skyCube: SkyCube | undefined;
     private plantInstances = new InstanceList();
+    private plantBatches: ThreePlantBatches | undefined;
     private scratch: Mat4 = createMat4();
     private raycaster = new THREE.Raycaster();
     private disposed = false;
@@ -189,6 +189,7 @@ export class ThreeRenderer implements IViewportRenderer {
 
         this.skyView.dispose();
         this.stereo.dispose();
+        this.plantBatches?.dispose();
         this.disposeGroup(this.objPlants);
         this.disposeGroup(this.objSeeds);
         this.disposeGroup(this.objObstacles);
@@ -210,6 +211,7 @@ export class ThreeRenderer implements IViewportRenderer {
 
     private disposeGroup(group: THREE.Object3D) {
         group.traverse(o => {
+            disposeFold(o as THREE.Mesh);
             const m = (o as THREE.Mesh).material;
             if (Array.isArray(m)) m.forEach(x => x.dispose());
             else m?.dispose();
@@ -312,7 +314,21 @@ export class ThreeRenderer implements IViewportRenderer {
     rebuildPlants(inputs: PlantFrameInputs) {
         buildPlants(this.plantInstances, inputs);
         //syncInstanceMeshes sets each mesh's shadow flags as it goes, so no traverse here.
-        this.syncInstanceMeshes(this.objPlants, this.plantInstances);
+        const canInstance = this.renderer && (this.renderer.capabilities.isWebGL2
+            || this.renderer.extensions.has('ANGLE_instanced_arrays'));
+        if (!this.plantBatches && canInstance && this.plantInstances.count >= PLANT_BATCH_THRESHOLD) {
+            this.disposeGroup(this.objPlants);
+            this.plantBatches = new ThreePlantBatches(this.objPlants, id => this.geometryFor(id), inst => {
+                const material = newInstanceMaterial();
+                this.density?.patch(material);
+                applyInstanceMaterial(material, inst.color, inst.emissive, inst.flags, -1);
+                return material;
+            });
+        }
+        if (this.plantBatches) {
+            this.plantBatches.update(this.plantInstances);
+            this.syncInstanceMeshes(this.plantBatches.singlesGroup, this.plantBatches.singles);
+        } else this.syncInstanceMeshes(this.objPlants, this.plantInstances);
         //Rebuild the density field from the same instance list that was just drawn, so the
         //shadows a frame casts always belong to the geometry that frame shows. Doing it on the
         //rebuild rather than per frame is what keeps the CPU scatter off the camera path.
@@ -679,11 +695,15 @@ export class ThreeRenderer implements IViewportRenderer {
         const hits: THREE.Intersection[] = [];
         if (appstate.showSeeds.peek()) hits.push(...this.raycaster.intersectObjects(this.objSeeds.children, true));
         if (appstate.showObstacles.peek()) hits.push(...this.raycaster.intersectObjects(this.objObstacles.children, true));
-        hits.push(...this.raycaster.intersectObjects(this.objPlants.children.filter(x => x.visible), true));
+        const plantTargets: THREE.Object3D[] = [];
+        this.objPlants.traverseVisible(object => {
+            if ((object as THREE.Mesh).isMesh) plantTargets.push(object);
+        });
+        hits.push(...this.raycaster.intersectObjects(plantTargets, false));
         if (appstate.showTerrain.peek()) hits.push(...this.raycaster.intersectObjects(this.objTerrain.children, true));
         hits.sort((a, b) => a.distance - b.distance);
 
-        const ref = hits.length > 0 ? (hits[0].object.userData as MeshUserData)?.ref : undefined;
+        const ref = plantHitRef(hits[0]);
         applyPick(ref, clicks, ray);
     }
 
@@ -827,22 +847,6 @@ export class ThreeRenderer implements IViewportRenderer {
             resolve?.dispose();
             this.renderOnce();
         }
-    }
-
-    //--- export --------------------------------------------------------------------------------
-
-    exportGLTF(save: (json: string) => void) {
-        //Dynamically imported so the exporter is not in the main bundle; webpack 4 supports
-        //this and emits a separate chunk.
-        import('three/examples/jsm/exporters/GLTFExporter').then(({ GLTFExporter }) => {
-            const baked = cloneFoldedScene(this.scene);
-            new GLTFExporter().parse(
-                baked.scene,
-                gltf => { baked.dispose(); save(JSON.stringify(gltf)); },
-                error => { baked.dispose(); console.error('glTF export failed', error); },
-                {},
-            );
-        });
     }
 }
 

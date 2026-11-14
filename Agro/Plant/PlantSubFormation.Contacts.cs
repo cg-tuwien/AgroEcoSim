@@ -1,4 +1,5 @@
 using System.Numerics;
+using System.Runtime.CompilerServices;
 using Agro.Collisions;
 
 namespace Agro;
@@ -15,9 +16,166 @@ internal readonly record struct ContactAngularCompliance(Vector3 First, Vector3 
 public partial class PlantSubFormation<T>
 {
     internal readonly record struct GeometryState(OrganPose Pose, Quaternion BaseOrientation,
-        Quaternion RestOrientation, Quaternion TargetOrientation, float Radius, bool Exists);
+        Quaternion RestOrientation, Quaternion TargetOrientation, float Radius, bool Exists,
+        Vector3 BaseOffset = default, Quaternion UnitReferenceLocal = default,
+        AboveGroundAgent.TreeLightMaterial LightMaterial = default);
 
     internal GeometryState[] PreviousGeometry = [];
+
+    // Contact frames belong to above-ground organs; underground agents have no offsets.
+    static void SetContactOffset(ref T agent, Vector3 offset)
+        => Unsafe.As<T, AboveGroundAgent>(ref agent).BaseOffset = offset;
+
+    GeometryState CaptureContactGeometry(int index, ref T agent)
+    {
+        var state = new GeometryState(GetContactPose(index), agent.baseOrientation, agent.restOrientation,
+            agent.targetOrientation, agent.Radius, true, agent.BaseOffset,
+            Plant.Parameters.Behavior == Behavior.Woody && Plant.Parameters.TreeGrowthUnitsEnabled
+                ? Unsafe.As<T, AboveGroundAgent>(ref agent).CaptureTreeUnitReference() : default,
+            Plant.Parameters.Behavior == Behavior.Woody && Plant.Parameters.TreeGrowthUnitsEnabled
+                ? Unsafe.As<T, AboveGroundAgent>(ref agent).CaptureTreeLightMaterial() : default);
+        RememberSecondarySnapshot(agent.StableId, state);
+        return state;
+    }
+
+    void RestoreContactUnitReference(ref T agent, in GeometryState state)
+    {
+        RestoreSecondarySnapshot(agent.StableId, state);
+        if (Plant.Parameters.Behavior == Behavior.Woody && Plant.Parameters.TreeGrowthUnitsEnabled)
+        {
+            Unsafe.As<T, AboveGroundAgent>(ref agent).RestoreTreeUnitReference(state.UnitReferenceLocal);
+            Unsafe.As<T, AboveGroundAgent>(ref agent).RestoreTreeLightMaterial(state.LightMaterial);
+        }
+    }
+
+    readonly record struct GrowthTrialBookmark(int Offset, int Count);
+    readonly List<int> GrowthTrialOrgans = [];
+    GeometryState[] GrowthTrialFrames = [];
+
+    GrowthTrialBookmark CaptureGrowthTrial(int index)
+    {
+        var live = Src();
+        if (!HasSecondaryStep(live[index].StableId) && (Plant.Parameters.Behavior != Behavior.Woody || !Plant.Parameters.TreeGrowthUnitsEnabled
+            || !Unsafe.As<T, AboveGroundAgent>(ref live[index]).IsTreeUnitAxis
+            || !WoodyExtensions.ContainsKey(live[index].StableId))) return default;
+        // Append ranges rather than overwriting shared scratch: a nested trial
+        // cannot invalidate its caller's immutable local subtree bookmark.
+        var offset = GrowthTrialOrgans.Count;
+        GrowthTrialOrgans.Add(index);
+        for (int j = offset; j < GrowthTrialOrgans.Count; ++j)
+            foreach (var child in GetChildren(GrowthTrialOrgans[j])) GrowthTrialOrgans.Add(child);
+        var count = GrowthTrialOrgans.Count - offset;
+        if (GrowthTrialFrames.Length < GrowthTrialOrgans.Count)
+            Array.Resize(ref GrowthTrialFrames, Math.Max(GrowthTrialOrgans.Count, Math.Max(16, GrowthTrialFrames.Length * 2)));
+        for (int j = offset; j < offset + count; ++j)
+        {
+            var organ = GrowthTrialOrgans[j];
+            GrowthTrialFrames[j] = CaptureContactGeometry(organ, ref live[organ]);
+        }
+        return new(offset, count);
+    }
+
+    void RestoreGrowthTrial(GrowthTrialBookmark bookmark)
+    {
+        var live = Src();
+        for (int j = bookmark.Offset; j < bookmark.Offset + bookmark.Count; ++j)
+        {
+            var i = GrowthTrialOrgans[j];
+            var state = GrowthTrialFrames[j];
+            SetDeformation(i, state.Pose.Deformation);
+            live[i].SetGeometry(state.Pose.Length, state.Radius);
+            live[i].SetOrientation(state.Pose.Rotation);
+            live[i].baseOrientation = state.BaseOrientation;
+            live[i].restOrientation = state.RestOrientation;
+            live[i].targetOrientation = state.TargetOrientation;
+            SetContactOffset(ref live[i], state.BaseOffset);
+            RestoreContactUnitReference(ref live[i], state);
+        }
+    }
+
+    void ReleaseGrowthTrial(GrowthTrialBookmark bookmark)
+    {
+        if (bookmark.Count > 0)
+            GrowthTrialOrgans.RemoveRange(bookmark.Offset, bookmark.Count);
+    }
+
+    void SetGrowthTrialGeometry(int index, float length, float radius, GrowthTrialBookmark bookmark = default)
+    {
+        if (bookmark.Count > 0) RestoreGrowthTrial(bookmark);
+        var live = Src();
+        ref var agent = ref live[index];
+        if (Plant.Parameters.Behavior == Behavior.Woody && Plant.Parameters.TreeGrowthUnitsEnabled
+            && length != agent.Length
+            && Unsafe.As<T, AboveGroundAgent>(ref agent).IsTreeUnitAxis
+            && WoodyExtensions.TryGetValue(agent.StableId, out var proposal) && proposal.HasLightStep)
+        {
+            ref var woody = ref Unsafe.As<T, AboveGroundAgent>(ref agent);
+            if (proposal.Module.IsDorsiventral && woody.TreeModuleRootStableId != proposal.Module.RootStableId)
+                throw new InvalidDataException("A growth trial cannot change developmental module identity.");
+            var oldExtension = woody.TreeTrialExtension(proposal.LightStartLength, proposal.ProposedLength,
+                agent.Length, proposal.LightStep);
+            var newExtension = woody.TreeTrialExtension(proposal.LightStartLength, proposal.ProposedLength,
+                length, proposal.LightStep);
+            var zeroModule = (proposal.Module.IsDorsiventral || woody.CorrectsOrdinaryLateralUnitTrial(Plant.Parameters))
+                && newExtension == proposal.LightStep.StartExtension
+                && length == proposal.StartLength;
+            var moduleBefore = default(AboveGroundAgent.TreeModuleMaterialFrame);
+            var moduleLocalBefore = default(AboveGroundAgent.TreeModuleLocalMaterial);
+            var exactUnchangedPostOwn = false;
+            if (zeroModule)
+            {
+                if (ModuleMaterialFrames == null || !ModuleMaterialFrames.TryGetValue(woody.StableId, out var materialPair))
+                    throw new InvalidDataException("A zero unit trial lacks its paired pre-own/post-own material snapshot.");
+                if (materialPair.Tick != Plant.World.Timestep || materialPair.ModuleRootStableId != woody.TreeModuleRootStableId)
+                    throw new InvalidDataException("A module trial material pair belongs to a different tick/root identity.");
+                moduleBefore = materialPair.Before;
+                moduleLocalBefore = materialPair.LocalBefore;
+                exactUnchangedPostOwn = woody.CaptureTreeModuleMaterial().SameBits(materialPair.Proposed);
+            }
+            var continuation = FindOrgan(proposal.Continuation);
+            var relay = FindOrgan(proposal.Relay);
+            var continuationFrame = continuation >= 0
+                ? Unsafe.As<T, AboveGroundAgent>(ref live[continuation]).CaptureTreeUnitFrame() : Quaternion.Identity;
+            var relayFrame = relay >= 0
+                ? Unsafe.As<T, AboveGroundAgent>(ref live[relay]).CaptureTreeUnitFrame() : Quaternion.Identity;
+            var corrected = proposal.ReferenceAtProposal.LengthSquared() > .5f;
+            var endpointTurn = continuation < 0 ? Quaternion.Identity : corrected
+                ? Unsafe.As<T, AboveGroundAgent>(ref live[continuation]).LateralTreeUnitTrialTurnWithLight(
+                    Plant.Parameters, oldExtension, newExtension, proposal.LightStep,
+                    proposal.ReferenceAtProposal, proposal.Opening, atTip: true)
+                : Unsafe.As<T, AboveGroundAgent>(ref live[continuation]).TreeUnitTrialTurnWithLight(
+                    Plant.Parameters, oldExtension, newExtension, proposal.LightStep, atTip: true, module: proposal.Module);
+            var carry = corrected
+                ? woody.TransportLateralTreeUnitTrialWithLight(Plant.Parameters, oldExtension, newExtension,
+                    proposal.LightStep, proposal.ReferenceAtProposal, proposal.Opening)
+                : woody.TransportTreeUnitTrialOpeningWithLight(Plant.Parameters, oldExtension, newExtension,
+                    proposal.LightStep, proposal.Opening, proposal.Module);
+            if (carry != Quaternion.Identity)
+                PropagateToSubtree(live, index, carry);
+            if (continuation >= 0)
+            {
+                // The same-tick continuation starts at the accepted endpoint,
+                // rather than inheriting the bearer's mean-segment phase turn.
+                var turn = Quaternion.Normalize(endpointTurn * Quaternion.Conjugate(carry));
+                if (turn != Quaternion.Identity)
+                {
+                    Unsafe.As<T, AboveGroundAgent>(ref live[continuation]).TransportTreeUnitFrame(turn, continuationFrame);
+                    PropagateToSubtree(live, continuation, turn);
+                }
+                else if (carry != Quaternion.Identity)
+                    Unsafe.As<T, AboveGroundAgent>(ref live[continuation]).RestoreTreeUnitFrame(continuationFrame);
+                Unsafe.As<T, AboveGroundAgent>(ref live[continuation]).InheritTreeUnitLight(woody);
+            }
+            if (relay >= 0 && live[relay].Parent == index && carry != Quaternion.Identity)
+                Unsafe.As<T, AboveGroundAgent>(ref live[relay]).RestoreTreeUnitFrame(relayFrame);
+            if (relay >= 0)
+                Unsafe.As<T, AboveGroundAgent>(ref live[relay]).InheritTreeUnitLight(woody, newUnit: true);
+            if (zeroModule)
+                woody.RestoreTreeModuleMaterial(moduleBefore, moduleLocalBefore, absoluteFrames: exactUnchangedPostOwn);
+        }
+        ApplySecondaryTrial(index, radius);
+        agent.SetGeometry(length, radius);
+    }
     LaminaTemplate?[] LaminaCache = [];
     OrganTypes[] LaminaKinds = [];
     bool[] LaminaKnown = [];
@@ -27,7 +185,7 @@ public partial class PlantSubFormation<T>
     internal LaminaTemplate? GetLaminaTemplate(int index)
     {
         var organ = GetOrgan(index);
-        if (organ is not (OrganTypes.Leaf or OrganTypes.FlowerPadel)) return null;
+        if (organ is not (OrganTypes.Leaf or OrganTypes.FlowerPadel or OrganTypes.Fruit or OrganTypes.FruitWing)) return null;
         if (index >= LaminaCache.Length)
         {
             var capacity = Math.Max(AgentCount, Math.Max(16, LaminaCache.Length * 2));
@@ -79,13 +237,14 @@ public partial class PlantSubFormation<T>
     internal OrganPose GetContactPose(int index)
     {
         ref var a = ref Src()[index];
-        var blade = a.Organ is OrganTypes.Leaf or OrganTypes.FlowerPadel;
+        var blade = a.Organ is OrganTypes.Leaf or OrganTypes.FlowerPadel or OrganTypes.FruitWing;
+        var fruit = a.Organ == OrganTypes.Fruit;
         //A bud is a rounded capsule of its own radius and length, as it is drawn. The old
         //max(radius, length) made an opened Carex receptacle, 30 mm long and 2 mm wide, a 30 mm
         //ball that every leaf brushing the culm pushed against.
-        var radius = blade ? AboveGroundAgent.LeafThickness * 0.5f : a.Radius;
+        var radius = fruit ? 0f : blade ? AboveGroundAgent.LeafThickness * 0.5f : a.Radius;
         return new(GetBaseCenterWorld(index) + a.BaseOffset, a.Orientation, a.Length,
-            blade ? a.Radius : 0f, radius, a.Organ is OrganTypes.Bud or OrganTypes.FlowerBud or OrganTypes.FlowerBaseBud or OrganTypes.Fruit,
+            blade || fruit ? a.Radius : 0f, radius, a.Organ is OrganTypes.Bud or OrganTypes.FlowerBud or OrganTypes.FlowerBaseBud,
             GetDeformation(index));
     }
 
@@ -95,8 +254,7 @@ public partial class PlantSubFormation<T>
         EnsureContactCapacity(AgentCount);
         var src = Src();
         for (int i = 0; i < AgentCount; ++i)
-            PreviousGeometry[i] = new(GetContactPose(i), src[i].baseOrientation,
-                src[i].restOrientation, src[i].targetOrientation, src[i].Radius, true);
+            PreviousGeometry[i] = CaptureContactGeometry(i, ref src[i]);
     }
 
     void EnsureContactCapacity(int count)
@@ -190,14 +348,28 @@ public partial class PlantSubFormation<T>
             var constrained = LimitJointBend(transportedBase, proposed, ContactBendLimit(i));
             var delta = Quaternion.Normalize(constrained * Quaternion.Conjugate(src[i].Orientation));
             TransportedTurns[i] = delta;
+            if (Plant.Parameters.Behavior == Behavior.Woody && carry != Quaternion.Identity)
+            {
+                // The attachment belongs to the parent's frame, independent of this
+                // joint's own elastic bend (which may even cancel the parent's rotation).
+                var offset = Vector3.Transform(src[i].BaseOffset, carry);
+                moved |= offset != src[i].BaseOffset;
+                SetContactOffset(ref src[i], offset);
+                src[i].baseOrientation = Quaternion.Normalize(carry * src[i].baseOrientation);
+                src[i].restOrientation = Quaternion.Normalize(carry * src[i].restOrientation);
+                src[i].targetOrientation = Quaternion.Normalize(carry * src[i].targetOrientation);
+            }
             if (delta.X * delta.X + delta.Y * delta.Y + delta.Z * delta.Z > 1e-16f)
             {
                 src[i].SetOrientation(Quaternion.Normalize(delta * src[i].Orientation));
                 // The ancestor transform transports this joint's rest frame. Its own contact
                 // deformation is elastic and must relax after contact is released.
-                src[i].baseOrientation = Quaternion.Normalize(carry * src[i].baseOrientation);
-                src[i].restOrientation = Quaternion.Normalize(carry * src[i].restOrientation);
-                src[i].targetOrientation = Quaternion.Normalize(carry * src[i].targetOrientation);
+                if (Plant.Parameters.Behavior != Behavior.Woody)
+                {
+                    src[i].baseOrientation = Quaternion.Normalize(carry * src[i].baseOrientation);
+                    src[i].restOrientation = Quaternion.Normalize(carry * src[i].restOrientation);
+                    src[i].targetOrientation = Quaternion.Normalize(carry * src[i].targetOrientation);
+                }
                 if (carry == Quaternion.Identity) ContactMovedRoots.Add(i);
                 moved = true;
             }
@@ -317,6 +489,10 @@ public partial class PlantSubFormation<T>
                     : Quaternion.Normalize(previousCarry * previous.RestOrientation);
                 src[i].targetOrientation = previousCarry == Quaternion.Identity ? previous.TargetOrientation
                     : Quaternion.Normalize(previousCarry * previous.TargetOrientation);
+                RestoreContactUnitReference(ref src[i], previous);
+                if (Plant.Parameters.Behavior == Behavior.Woody)
+                    SetContactOffset(ref src[i], previousCarry == Quaternion.Identity ? previous.BaseOffset
+                        : Vector3.Transform(previous.BaseOffset, previousCarry));
             }
             else if (new Vector3(carry.X, carry.Y, carry.Z).LengthSquared() > 1e-16f)
             {
@@ -324,6 +500,8 @@ public partial class PlantSubFormation<T>
                 src[i].baseOrientation = Quaternion.Normalize(carry * src[i].baseOrientation);
                 src[i].restOrientation = Quaternion.Normalize(carry * src[i].restOrientation);
                 src[i].targetOrientation = Quaternion.Normalize(carry * src[i].targetOrientation);
+                if (Plant.Parameters.Behavior == Behavior.Woody)
+                    SetContactOffset(ref src[i], Vector3.Transform(src[i].BaseOffset, carry));
             }
             var attachment = AttachmentRotation(GetContactPose(i));
             TransportedTurns[i] = attachment == originalAttachment ? Quaternion.Identity
@@ -389,8 +567,7 @@ public partial class PlantSubFormation<T>
             Array.Resize(ref ContactTrialStates, Math.Max(Count, ContactTrialStates.Length * 3 / 2 + 8));
         var live=Src(); var saved=ContactTrialStates;
         for(int i=0;i<Count;++i)
-            saved[i]=new(GetContactPose(i),live[i].baseOrientation,live[i].restOrientation,
-                live[i].targetOrientation,live[i].Radius,true);
+            saved[i] = CaptureContactGeometry(i, ref live[i]);
         return saved;
     }
 
@@ -402,8 +579,7 @@ public partial class PlantSubFormation<T>
             Array.Resize(ref ContinuationStates, Math.Max(Count, ContinuationStates.Length * 3 / 2 + 8));
         var live = Src();
         for (int i = 0; i < Count; ++i)
-            ContinuationStates[i] = new(GetContactPose(i), live[i].baseOrientation,
-                live[i].restOrientation, live[i].targetOrientation, live[i].Radius, true);
+            ContinuationStates[i] = CaptureContactGeometry(i, ref live[i]);
         return ContinuationStates;
     }
 
@@ -411,7 +587,7 @@ public partial class PlantSubFormation<T>
 
     internal void SetContinuationDimensions(int index, float length, float radius)
     {
-        Src()[index].SetGeometry(length, radius);
+        SetGrowthTrialGeometry(index, length, radius);
         RebaseAndRefit(index);
     }
 
@@ -437,6 +613,8 @@ public partial class PlantSubFormation<T>
             live[i].baseOrientation=state.BaseOrientation;
             live[i].restOrientation=state.RestOrientation;
             live[i].targetOrientation=state.TargetOrientation;
+            RestoreContactUnitReference(ref live[i], state);
+            if (Plant.Parameters.Behavior == Behavior.Woody) SetContactOffset(ref live[i], state.BaseOffset);
         }
         RebaseAndRefit();
     }
@@ -451,15 +629,20 @@ public partial class PlantSubFormation<T>
         src[i].baseOrientation = previous.BaseOrientation;
         src[i].restOrientation = previous.RestOrientation;
         src[i].targetOrientation = previous.TargetOrientation;
+        RestoreContactUnitReference(ref src[i], previous);
+        if (Plant.Parameters.Behavior == Behavior.Woody) SetContactOffset(ref src[i], previous.BaseOffset);
     }
 
     internal void SealNewGeometry()
     {
+        FinalizeTreeModuleBookkeeping();
+        CompleteSecondaryMaterials();
+        SynchronizeSamaraUnitPhenology();
         EnsureContactCapacity(Count);
         var src = Src();
         for (int i = 0; i < Count; ++i)
             if (!PreviousGeometry[i].Exists)
-                PreviousGeometry[i] = new(GetContactPose(i), src[i].baseOrientation, src[i].restOrientation, src[i].targetOrientation, src[i].Radius, true);
+                PreviousGeometry[i] = CaptureContactGeometry(i, ref src[i]);
     }
 
     /// <summary>
@@ -498,44 +681,49 @@ public partial class PlantSubFormation<T>
         if (!old.Exists) return false;
         var src = Src(); var length = src[index].Length; var radius = src[index].Radius;
         if (length <= old.Pose.Length && radius <= old.Radius) return false;
-        src[index].SetGeometry(MathF.Min(length, old.Pose.Length), MathF.Min(radius, old.Radius));
-        RebaseAndRefit(index);
-        if (!admissible()) { src[index].SetGeometry(length, radius); RebaseAndRefit(index); return false; }
-        float lo = 0, hi = 1;
-        for (int step = 0; step < 8; ++step)
+        var bookmark = CaptureGrowthTrial(index);
+        try
         {
-            var mid = (lo + hi) * 0.5f;
-            src[index].SetGeometry(old.Pose.Length + (length - old.Pose.Length) * mid, old.Radius + (radius - old.Radius) * mid);
+            SetGrowthTrialGeometry(index, MathF.Min(length, old.Pose.Length), MathF.Min(radius, old.Radius), bookmark);
             RebaseAndRefit(index);
-            if (admissible()) lo = mid; else hi = mid;
-        }
-        src[index].SetGeometry(old.Pose.Length + (length - old.Pose.Length) * lo, old.Radius + (radius - old.Radius) * lo);
-        RebaseAndRefit(index);
-        // Extension and radial strengthening are independent proposals. Contact at the tip
-        // must not discard admissible thickening (nor a width limit discard safe extension).
-        var acceptedLength=src[index].Length;
-        var acceptedRadius=src[index].Radius;
-        GrowOneDimension(true,acceptedLength,length,acceptedRadius);
-        GrowOneDimension(false,src[index].Radius,radius,src[index].Length);
-        return true;
-
-        void GrowOneDimension(bool longitudinal,float from,float to,float fixedSize)
-        {
-            if(to<=from) return;
-            var live=Src();float lower=from,upper=to;
-            live[index].SetGeometry(longitudinal?to:fixedSize,longitudinal?fixedSize:to);
-            RebaseAndRefit(index);
-            if(admissible()) return;
-            for(int n=0;n<8;++n)
+            if (!admissible()) { SetGrowthTrialGeometry(index, length, radius, bookmark); RebaseAndRefit(index); return false; }
+            float lo = 0, hi = 1;
+            for (int step = 0; step < 8; ++step)
             {
-                var mid=(lower+upper)*.5f;
-                live[index].SetGeometry(longitudinal?mid:fixedSize,longitudinal?fixedSize:mid);
+                var mid = (lo + hi) * 0.5f;
+                SetGrowthTrialGeometry(index, old.Pose.Length + (length - old.Pose.Length) * mid, old.Radius + (radius - old.Radius) * mid, bookmark);
                 RebaseAndRefit(index);
-                if(admissible()) lower=mid; else upper=mid;
+                if (admissible()) lo = mid; else hi = mid;
             }
-            live[index].SetGeometry(longitudinal?lower:fixedSize,longitudinal?fixedSize:lower);
+            SetGrowthTrialGeometry(index, old.Pose.Length + (length - old.Pose.Length) * lo, old.Radius + (radius - old.Radius) * lo, bookmark);
             RebaseAndRefit(index);
+            // Extension and radial strengthening are independent proposals. Contact at the tip
+            // must not discard admissible thickening (nor a width limit discard safe extension).
+            var acceptedLength=src[index].Length;
+            var acceptedRadius=src[index].Radius;
+            GrowOneDimension(true,acceptedLength,length,acceptedRadius);
+            GrowOneDimension(false,src[index].Radius,radius,src[index].Length);
+            return true;
+
+            void GrowOneDimension(bool longitudinal,float from,float to,float fixedSize)
+            {
+                if(to<=from) return;
+                float lower=from,upper=to;
+                SetGrowthTrialGeometry(index, longitudinal?to:fixedSize,longitudinal?fixedSize:to, bookmark);
+                RebaseAndRefit(index);
+                if(admissible()) return;
+                for(int n=0;n<8;++n)
+                {
+                    var mid=(lower+upper)*.5f;
+                    SetGrowthTrialGeometry(index, longitudinal?mid:fixedSize,longitudinal?fixedSize:mid, bookmark);
+                    RebaseAndRefit(index);
+                    if(admissible()) lower=mid; else upper=mid;
+                }
+                SetGrowthTrialGeometry(index, longitudinal?lower:fixedSize,longitudinal?fixedSize:lower, bookmark);
+                RebaseAndRefit(index);
+            }
         }
+        finally { ReleaseGrowthTrial(bookmark); }
     }
 
     // A simultaneous contact correction may fail even when one restored organ can
@@ -551,60 +739,65 @@ public partial class PlantSubFormation<T>
         var previousRadius = live[index].Radius;
         if (length < previousLength || radius < previousRadius
             || length <= previousLength + 1e-7f && radius <= previousRadius + 1e-7f) return false;
-        live[index].SetGeometry(length, radius);
-        RebaseAndRefit(index);
-        if (admissible())
+        var bookmark = CaptureGrowthTrial(index);
+        try
         {
-            GrowthRetries.Remove(live[index].StableId);
-            live[index].GrowthBlocked = false;
-            live[index].ObstructionHours = 0f;
-            return true;
-        }
-        live[index].SetGeometry(previousLength, previousRadius);
-        RebaseAndRefit(index);
-        if (allowPartial && admissible())
-        {
-            // Search from the accepted dimensions, not the pre-tick snapshot: a
-            // prior certified retry may already have retained part of the growth.
-            // Extension and thickening have separate clearance limits.
-            GrowDimension(longitudinal: true, length);
-            GrowDimension(longitudinal: false, radius);
-            if ((live[index].Length > previousLength + 1e-7f
-                || live[index].Radius > previousRadius + 1e-7f) && admissible())
+            SetGrowthTrialGeometry(index, length, radius, bookmark);
+            RebaseAndRefit(index);
+            if (admissible())
             {
                 GrowthRetries.Remove(live[index].StableId);
                 live[index].GrowthBlocked = false;
                 live[index].ObstructionHours = 0f;
                 return true;
             }
-            live[index].SetGeometry(previousLength, previousRadius);
+            SetGrowthTrialGeometry(index, previousLength, previousRadius, bookmark);
             RebaseAndRefit(index);
-        }
-        return false;
-
-        void GrowDimension(bool longitudinal, float target)
-        {
-            var current = Src();
-            var lower = longitudinal ? current[index].Length : current[index].Radius;
-            if (target <= lower + 1e-7f) return;
-            var fixedSize = longitudinal ? current[index].Radius : current[index].Length;
-            void Set(float value)
+            if (allowPartial && admissible())
             {
-                Src()[index].SetGeometry(longitudinal ? value : fixedSize,
-                    longitudinal ? fixedSize : value);
+                // Search from the accepted dimensions, not the pre-tick snapshot: a
+                // prior certified retry may already have retained part of the growth.
+                // Extension and thickening have separate clearance limits.
+                GrowDimension(longitudinal: true, length);
+                GrowDimension(longitudinal: false, radius);
+                if ((live[index].Length > previousLength + 1e-7f
+                    || live[index].Radius > previousRadius + 1e-7f) && admissible())
+                {
+                    GrowthRetries.Remove(live[index].StableId);
+                    live[index].GrowthBlocked = false;
+                    live[index].ObstructionHours = 0f;
+                    return true;
+                }
+                SetGrowthTrialGeometry(index, previousLength, previousRadius, bookmark);
                 RebaseAndRefit(index);
             }
-            Set(target);
-            if (admissible()) return;
-            var upper = target;
-            for (var step = 0; step < 8; ++step)
+            return false;
+
+            void GrowDimension(bool longitudinal, float target)
             {
-                var mid = (lower + upper) * .5f;
-                Set(mid);
-                if (admissible()) lower = mid; else upper = mid;
+                var current = Src();
+                var lower = longitudinal ? current[index].Length : current[index].Radius;
+                if (target <= lower + 1e-7f) return;
+                var fixedSize = longitudinal ? current[index].Radius : current[index].Length;
+                void Set(float value)
+                {
+                    SetGrowthTrialGeometry(index, longitudinal ? value : fixedSize,
+                        longitudinal ? fixedSize : value, bookmark);
+                    RebaseAndRefit(index);
+                }
+                Set(target);
+                if (admissible()) return;
+                var upper = target;
+                for (var step = 0; step < 8; ++step)
+                {
+                    var mid = (lower + upper) * .5f;
+                    Set(mid);
+                    if (admissible()) lower = mid; else upper = mid;
+                }
+                Set(lower);
             }
-            Set(lower);
         }
+        finally { ReleaseGrowthTrial(bookmark); }
     }
 
     internal bool TryRedirectGrowth(int index, Vector3 normal, Func<bool> admissible,
@@ -643,7 +836,7 @@ public partial class PlantSubFormation<T>
         for (int j = 0; j < affected.Count; ++j)
         {
             var i = affected[j];
-            saved[j] = new(GetContactPose(i), src[i].baseOrientation, src[i].restOrientation, src[i].targetOrientation, src[i].Radius, true);
+            saved[j] = CaptureContactGeometry(i, ref src[i]);
         }
         foreach (var candidate in candidates)
         {
@@ -673,6 +866,8 @@ public partial class PlantSubFormation<T>
                 SetDeformation(i, state.Pose.Deformation);
                 live[i].SetGeometry(state.Pose.Length, state.Radius); live[i].SetOrientation(state.Pose.Rotation);
                 live[i].baseOrientation = state.BaseOrientation; live[i].restOrientation = state.RestOrientation; live[i].targetOrientation = state.TargetOrientation;
+                RestoreContactUnitReference(ref live[i], state);
+                if (Plant.Parameters.Behavior == Behavior.Woody) SetContactOffset(ref live[i], state.BaseOffset);
             }
         }
     }
@@ -695,7 +890,7 @@ public partial class PlantSubFormation<T>
         if (IsFloralAxis(a.Organ))
             e = e * (1f - a.WoodRatio()) + MathF.Max(e, Plant.Parameters.WoodElasticModulus) * a.WoodRatio(); // never softer, see Gravity
         var inertia = MathF.PI * MathF.Pow(a.Radius, 4) / 4f;
-        if (a.Organ is OrganTypes.Leaf or OrganTypes.FlowerPadel)
+        if (a.Organ is OrganTypes.Leaf or OrganTypes.FlowerPadel or OrganTypes.FruitWing)
         {
             e = Plant.Parameters.LeafElasticModulus > 0f ? Plant.Parameters.LeafElasticModulus : Plant.Parameters.GreenElasticModulus;
             var z = Vector3.Transform(Vector3.UnitZ, a.Orientation);
@@ -773,7 +968,7 @@ public partial class PlantSubFormation<T>
         var first = Vector3.Normalize(Vector3.Transform(Vector3.UnitZ, a.Orientation));
         var second = Vector3.Normalize(Vector3.Cross(first, Vector3.Transform(Vector3.UnitX, a.Orientation)));
         var alongFirst = (double)ContactCompliance(joint, first);
-        var alongSecond = a.Organ is OrganTypes.Leaf or OrganTypes.FlowerPadel
+        var alongSecond = a.Organ is OrganTypes.Leaf or OrganTypes.FlowerPadel or OrganTypes.FruitWing
             ? (double)ContactCompliance(joint, second) : alongFirst;
         // The scalar beam coefficients are unchanged. Double spectral products
         // keep reciprocal terms consistent, especially when a limit removes an

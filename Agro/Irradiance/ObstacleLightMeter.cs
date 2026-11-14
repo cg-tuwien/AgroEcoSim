@@ -41,6 +41,8 @@ namespace Agro;
 /// </remarks>
 public sealed class ObstacleLightMeter
 {
+	/// <summary>Geometry convention of direct, projected and maximum LAI in simulation documents.</summary>
+	public const string DirectLeafAreaGeometry = "coarse-mesh-v1";
 	/// <summary>Sensors are dropped from the readings when less than this fraction of their
 	/// hemisphere can see the sky past the building itself. That removes the inward faces of a wall
 	/// that encloses a modelled room, which would otherwise dilute every reading.</summary>
@@ -1085,6 +1087,14 @@ public sealed class ObstacleLightMeter
 	public void Measure(RayScene scene, in SkyInterval diffuse, SkyDome[] suns, int sunCount,
 						in SurfaceRadianceModel model, int diffuseSamples, float hoursPerTick,
 						DateTime localStepTime, float[] staticShading)
+		=> Measure(scene, null, in diffuse, suns, sunCount, in model, diffuseSamples, hoursPerTick,
+			localStepTime, staticShading);
+
+	// Standalone RayScene callers retain their supplied geometry; the simulator supplies its
+	// separate mesh scene without altering the public measurement overloads or lighting queries.
+	internal void Measure(RayScene scene, LeafRayScene? leafScene, in SkyInterval diffuse, SkyDome[] suns, int sunCount,
+						in SurfaceRadianceModel model, int diffuseSamples, float hoursPerTick,
+						DateTime localStepTime, float[] staticShading)
 	{
 		if (Sensors.Length == 0)
 			return;
@@ -1155,7 +1165,10 @@ public sealed class ObstacleLightMeter
 				SensorDiffuseOpen[i] = scale * sumOpen;
 				SensorDiffuse[i] = scale * sumVeg;
 				SensorGapDiffuse[i] = freeOfFoliage / samples;
-				SensorCrossings[i] = scene.CountFoliageCrossings(origin, n, Epsilon, depth, out var leafArea);
+				float leafArea;
+				SensorCrossings[i] = leafScene == null
+					? scene.CountFoliageCrossings(origin, n, Epsilon, depth, out leafArea)
+					: leafScene.CountFoliageCrossings(origin, n, Epsilon, depth, out leafArea);
 				SensorLeafArea[i] = leafArea;
 			}
 		});

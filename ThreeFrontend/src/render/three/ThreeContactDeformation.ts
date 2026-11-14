@@ -56,20 +56,3 @@ function bakedGeometry(mesh: THREE.Mesh): THREE.BufferGeometry {
 }
 
 export function disposeFold(mesh: THREE.Mesh) { states.get(mesh)?.baked?.dispose(); states.delete(mesh); }
-
-/** Exporters read CPU vertices and do not execute the vertex shader. */
-export function cloneFoldedScene(scene: THREE.Scene): { scene: THREE.Scene; dispose: () => void } {
-    const owned: THREE.BufferGeometry[] = [];
-    const copy = (source: THREE.Object3D): THREE.Object3D | undefined => {
-        // TransformControls owns DOM listeners and cannot be cloned without its
-        // camera/canvas constructor arguments. It is an editor overlay, not geometry.
-        if ((source as THREE.Object3D & { isTransformControls?: boolean }).isTransformControls) return;
-        const target = source.clone(false);
-        if (source instanceof THREE.Mesh && target instanceof THREE.Mesh && states.get(source)?.fold) {
-            target.geometry = bakedGeometry(source).clone(); owned.push(target.geometry);
-        }
-        for (const child of source.children) { const cloned = copy(child); if (cloned) target.add(cloned); }
-        return target;
-    };
-    return { scene: copy(scene) as THREE.Scene, dispose: () => owned.forEach(g => g.dispose()) };
-}

@@ -51,8 +51,10 @@ RUN addgroup -g 61000 docker && adduser -g 61000 -H -D -s /bin/false -u 61000 do
 #in development. Give it a directory this user owns, and declare it a volume so a container
 #restart does not take the runs with it - one two-month run at production plant count is ~17 GB,
 #which has no business in the writable layer either.
-RUN mkdir -p /data/runstore && chown -R 61000:61000 /data
-ENV AGRO_RunStoreRoot=/data/runstore
+#Inside the directory the volume is mounted on, matching Dockerfile-simaot and docker-compose.yml -
+#see Dockerfile-simaot for what happened when the store and the mount disagreed.
+RUN mkdir -p /data/AgroEcoStorage/runstore && chown -R 61000:61000 /data
+ENV AGRO_RunStoreRoot=/data/AgroEcoStorage/runstore
 
 #Listen on every interface, not just loopback.
 #
@@ -61,7 +63,7 @@ ENV AGRO_RunStoreRoot=/data/runstore
 #container can reach it, however the port is published. The default stays loopback because the API
 #has no authentication; a container is the place that opts in.
 ENV AGRO_ListenAnyIP=true
-VOLUME /data
+VOLUME /data/AgroEcoStorage
 
 USER docker
 

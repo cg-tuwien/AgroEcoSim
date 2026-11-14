@@ -1,5 +1,15 @@
 # CPU light, expansion calibration and contact trials
 
+## Update (2026-10-23)
+
+The Geranium presets now apply the provisional thermal and absolute-light
+development response described in [SEASONAL_GROWTH.md](SEASONAL_GROWTH.md).
+Weather follows the requested calendar and optional dated air temperatures are
+supported. Adult dimensions and nominal expansion durations are retained.
+The historical trials below predate this response; the construction-carbon
+experiment remains disabled by default and is not made physiological by this
+empirical developmental limit. Live checkpoints now use version 36.
+
 ## Update (2026-10-03)
 
 Soil now debits delivered water in regular fields and imported trays; see
@@ -564,3 +574,64 @@ remaining assimilation/maintenance unit contract either.
 Final and pre-root-fix ablations, requests, frames, diagnostics and source evidence
 are archived in `canopy-validation/seed-budget/`. Harnesses remain under
 `/tmp/gf-seed-budget/` outside the repository.
+
+## Direct leaf area measurement with shared low meshes
+
+Direct, projected and maximum obstacle LAI use the same low-resolution lamina
+templates as exported leaves, including their relief and actual developing width.
+A separate leaf-only BVH contains one entry per leaf organ (one per Carex slice),
+and ordinary leaves share an immutable triangle BVH per template. Rays are
+transformed into template coordinates without normalizing their directions, so
+world-space clipping and canopy depth are preserved. Facet normals use the inverse
+transpose; inverse-cosine weights retain the existing cap of 20 at grazing angles.
+Nonlinear contact folds use their actual deformed triangles.
+
+This changes the three direct LAI fields only. The original light scene and its
+sampling, gap fraction, transmittances, solar load and reflected-light feedback are
+unchanged. Attached dead blades still count, petals do not, and intervening static
+geometry does not stop a normal-direction LAI ray. The tray survey still reports
+flat outline area; its outline factors do not convert curved mesh LAI to flat area.
+
+Documents retain format `greenfdt.leaf-area-index/2` and add optional metadata
+`directLeafAreaGeometry: "coarse-mesh-v1"`. Historical documents retain their
+readings and definitions. Live checkpoint 37 rejects earlier live checkpoints,
+whose accumulated rectangle-based LAI cannot be mixed with mesh-based readings;
+the new ray hierarchies are reconstructed scratch, not checkpoint state.
+
+Regression scenarios:
+
+- A triangulated rectangle counts once on its diagonal and vertices. Exactly
+  coincident indexed seams share edge ownership; genuinely separate surface
+  crossings of curved or folded material remain separate. Carex slice boundaries
+  remain boundaries of separate organ instances.
+- Tilted and grazing blades retain inverse-foreshortening weights and the cap.
+  Compare all seven species and all eight Carex slices with a double-precision
+  triangle oracle, including seedling dimensions and nonlinear deformations.
+- Seed 42, CPU light, one Geranium through 60 days and one Carex through 100 days,
+  at both one-hour and four-hour ticks, with a wall selected for LAI: exported
+  plant frames, irradiance and non-direct light readings must match the baseline;
+  direct LAI follows the mesh. Check finite water/mass and organ orientations.
+- Sequential and parallel queries must agree. Resume before and after foliage
+  appears and onto a longer reporting horizon; compare frames and closed meter
+  state. The checkpoint self-test includes CPU-lit BroadLeafV1 foliage for this.
+
+Float poses impose a spatial precision limit: a ray within rounding distance of
+a facet boundary can select the adjacent facet's normal. Compare per-ray normals
+away from that boundary and compare integrated area against the oracle. Very small
+blades at kilometre-scale coordinates need a local origin or higher precision;
+do not conceal that limit by enlarging their geometry.
+
+Validation of this change: 53,760 oracle rays across all seven presets and every
+Carex slice had no crossing-count disagreements; aggregate area error was
+4.885e-7 relative. Paired runs compared 5,520 ticks with identical exported frames,
+irradiance, resources and lighting-derived readings. The 99 checkpoint comparisons,
+180 parallel/sequential tick comparisons and organ-removal/reindexing probes passed.
+
+On this machine, the optimized 230,000-leaf profile with 32,768 rays added 28.4 ms
+per lit step (new build plus mesh query minus the old quad query), using 39.6 MB of
+outer arrays. A separate 16-plant, 60-day, four-hour Release comparison had medians
+of 5.928 s before and 6.099 s after (+2.9%, with overlapping run ranges). That wall
+requested 32,768 sensors but placed 4,096 due to its per-band cap; this is not a
+full-facade percentage. Requests, isolated baseline/current binaries, oracle probes,
+profiles and paired outputs are retained under `/tmp/greenfdt-lai-implementation/`
+and `/tmp/greenfdt-lai-leafmesh-validation/`.

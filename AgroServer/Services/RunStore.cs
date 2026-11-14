@@ -84,7 +84,34 @@ public interface IRunStore
     /// </summary>
     void WriteTerrain(string runId, byte[] serializedTerrain);
 
-    void CompleteRun(string runId, bool aborted);
+    /// <summary>
+    /// Drains the run's writer and records how it ended. <c>reason</c> says why an aborted run
+    /// stopped, as a clause that reads after "stopped: "; when the store itself asked for the stop
+    /// (<see cref="TryGetStopReason"/>), its own reason stands in for a null one.
+    /// </summary>
+    void CompleteRun(string runId, bool aborted, string? reason = null);
+
+    /// <summary>
+    /// Why this run can no longer be stored, once that is so: its volume reached the free-space
+    /// reserve, or a frame or checkpoint could not be written.
+    ///
+    /// The run loop asks after every step and stops the run cleanly when this is true. Carrying on
+    /// would leave a run whose stored frames have a hole in them that nothing can ever fill, and
+    /// whose checkpoints stop being written - while stopping now keeps the frames contiguous and
+    /// the final checkpoint, written into the reserve, makes the run resumable once there is room.
+    /// Two dictionary and field reads: cheap enough for the simulation thread.
+    /// </summary>
+    bool TryGetStopReason(string runId, out string reason);
+
+    /// <summary>What the store did and failed to do - every deletion, every storage error - kept
+    /// across restarts and shown in the Runs tab.</summary>
+    RunStoreLog Log { get; }
+
+    /// <summary>
+    /// The store's state for the Runs tab: whether it works at all and why not, where it writes and
+    /// how much room is left there, configuration that will lose data, and the newest events.
+    /// </summary>
+    Models.RunStoreStatusResponse Status(int events);
 
     /// <summary>The deflated bytes as stored, for serving with Content-Encoding: deflate.</summary>
     bool TryReadFrameDeflated(string runId, uint step, out byte[] deflated);
@@ -120,8 +147,9 @@ public interface IRunStore
     /// later reader - the panel, an adoption pass, a second resume - sees the horizon the run is
     /// actually working towards rather than the one it was first given.
     /// </summary>
-    /// <returns>False when the run is still live, which is the one state a resume must not enter.</returns>
-    bool ResumeRun(string runId, uint checkpointStep, uint totalSteps, int totalHours, string requestJson);
+    /// <returns>False when the run is still live, which is the one state a resume must not enter,
+    /// or when its files could not be reconciled; <c>reason</c> then says which, for the user.</returns>
+    bool ResumeRun(string runId, uint checkpointStep, uint totalSteps, int totalHours, string requestJson, out string reason);
 
     /// <summary>The serialized soil as gzipped bytes, for serving with Content-Encoding: gzip.</summary>
     bool TryReadTerrain(string runId, out byte[] gzipped);
@@ -300,6 +328,17 @@ public class RunRecord
     public float FieldResolution { get; set; }
 
     /// <summary>
+    /// Why an aborted run stopped, as a clause that reads after "stopped: ".
+    ///
+    /// "aborted" alone sent people looking in the wrong place: a run stops because the user pressed
+    /// stop, because nobody had been watching it for five minutes, because the server restarted,
+    /// because the simulation threw - or because its volume reached the reserve and the store asked
+    /// for it to stop. The first three need nothing, the last two need someone to act. Null for a
+    /// run that finished, and for rows written before the reason was recorded.
+    /// </summary>
+    public string? StopReason { get; set; }
+
+    /// <summary>
     /// Which shape of metadata this row was written with.
     ///
     /// Rows written by an older build simply have no value for the fields above - LiteDB returns
@@ -331,14 +370,48 @@ sealed class RunWriter
     public long BytesOnDisk;
     public uint AccountedIndexEntries;
     public DateTime LastMetadataFlush = DateTime.UtcNow;
+    /// <summary>
+    /// Why this run can no longer be stored. Set once - the first thread to hit a problem wins,
+    /// whether the simulation thread finding the reserve reached or a compressor failing a write -
+    /// and read by the run loop after every step, which then stops the run.
+    /// </summary>
+    public string? StopReason;
+    /// <summary>Frames and checkpoints that should have been stored and were not, for the summary
+    /// at the end of the run. Incremented from every thread that refuses or fails one.</summary>
+    public int Unstored;
+    /// <summary>Whether the last progress flush to the database failed. Committer thread only; it
+    /// is what makes "progress cannot be recorded" one warning and not one every two seconds.</summary>
+    public bool MetadataFailing;
+    /// <summary>
+    /// The first step whose frame was lost, or <c>uint.MaxValue</c> while none has been.
+    ///
+    /// Nothing at or after it is committed, and no checkpoint after it is written, because the
+    /// stored run must stay contiguous: a checkpoint describes the world after every frame before
+    /// it, and resuming from one that skips a lost frame would leave a hole in the run that nothing
+    /// could ever fill. Resuming from the last checkpoint before the gap recomputes those few steps
+    /// instead, and the run carries on whole.
+    /// </summary>
+    public uint GapFromStep = uint.MaxValue;
+    /// <summary>The step of the last checkpoint committed, for the summary: where a resume starts.</summary>
+    public uint CheckpointStep;
 }
 
 public class RunStore : IRunStore, IDisposable
 {
     readonly string Root;
-    readonly LiteDatabase Db;
-    readonly ILiteCollection<RunRecord> Runs;
+    readonly LiteDatabase Db = null!;
+    readonly ILiteCollection<RunRecord> Runs = null!;
     readonly ConcurrentDictionary<string, RunWriter> Writers = new();
+
+    public RunStoreLog Log { get; }
+
+    /// <summary>
+    /// Outcomes <see cref="CompleteRun"/> could not write to the database, kept until a maintenance
+    /// pass manages to. Without them a run that finished while the disk was full would be listed -
+    /// and later recorded - as aborted, because a row still saying "running" with no writer behind
+    /// it can only be read as a run that was interrupted.
+    /// </summary>
+    readonly ConcurrentDictionary<string, (string Status, string? Reason)> UnrecordedOutcomes = new();
 
     /// <summary>
     /// Serialises every read-modify-write of a run's metadata row.
@@ -468,6 +541,19 @@ public class RunStore : IRunStore, IDisposable
     public long RetentionBytes { get; set; } = 64L * 1024 * 1024 * 1024;
 
     /// <summary>
+    /// Free space kept on the store's volume. A run that would eat into it is stopped cleanly.
+    ///
+    /// The retention budget alone cannot protect the disk: it is a number somebody typed, and the
+    /// deployed one was a terabyte on a volume that filled at 56 GB. Past that point every write
+    /// failed - frames, the metadata database, Docker's own log of the errors - and the store
+    /// disabled itself at the next start. So the store watches the volume itself. Reaching the
+    /// reserve stops the run with a final checkpoint, which may use up to three quarters of the
+    /// reserve; the rest is what keeps the database and the event log writable, so the stop can be
+    /// recorded and the run resumed once there is room. Zero turns the guard off.
+    /// </summary>
+    public long MinFreeBytes { get; set; } = 2L * 1024 * 1024 * 1024;
+
+    /// <summary>
     /// True when the store could not be opened. Every operation then becomes a no-op.
     ///
     /// The constructor used to let its exceptions escape, and it is called from a top-level
@@ -478,6 +564,15 @@ public class RunStore : IRunStore, IDisposable
     /// </summary>
     public bool Disabled { get; }
 
+    /// <summary>
+    /// Why the store is disabled, and what to do about it. Empty while it works.
+    ///
+    /// A disabled store used to be indistinguishable from an empty one: the listing answered an
+    /// empty array, the panel printed "No stored runs", and the one line that said why went to a
+    /// log on the disk that had just filled up.
+    /// </summary>
+    public string DisabledReason { get; } = "";
+
     // LiteDB 5 discovers this model through reflection. Direct calls to its constructor and
     // accessors do not keep their reflection metadata when publishing with trimming/AOT.
     [DynamicDependency(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor |
@@ -485,52 +580,177 @@ public class RunStore : IRunStore, IDisposable
     public RunStore(string root)
     {
         Root = root;
+        //First, and outside every try: the log must exist whatever else fails, because a store that
+        //cannot open is precisely what it has to report.
+        Log = new RunStoreLog(Path.Combine(root, "events.jsonl"));
+
+        //Only OPENING is fatal. Everything after it is housekeeping that writes, and on a full disk
+        //it fails - which used to disable the whole store, listing and deleting included, so a user
+        //could not even delete a run to make room.
+        var openingDatabase = false;
         try
         {
             Directory.CreateDirectory(RunsDir);
             Directory.CreateDirectory(ModelsDir);
-            //Said out loud at startup. The root is a fallback off AppContext.BaseDirectory unless
-            //something sets AGRO_RunStoreRoot, which means it moves when the server is run from a
-            //different output directory - and "where did my runs go" should be a two-second
-            //question, not an archaeology exercise.
-            Console.WriteLine($"RunStore root: {Path.GetFullPath(Root)}");
+            openingDatabase = true;
             //Shared connection: the simulation loop writes from a background thread while HTTP
             //requests read, and LiteDB's default Direct mode allows a single process handle only.
-            Db = new LiteDatabase(new ConnectionString { Filename = Path.Combine(Root, "index.litedb"), Connection = ConnectionType.Shared });
+            //
+            //AutoRebuild because LiteDB marks a datafile whose last write failed - a full disk, a
+            //killed process - as being in an invalid state, and refuses to open it again until it
+            //is rebuilt. Without this the store stayed disabled after the space was freed.
+            Db = new LiteDatabase(new ConnectionString
+            {
+                Filename = Path.Combine(Root, "index.litedb"),
+                Connection = ConnectionType.Shared,
+                AutoRebuild = true,
+            });
             Runs = Db.GetCollection<RunRecord>("runs");
-            Runs.EnsureIndex(x => x.CreatedUtc);
-            SweepStaleRuns();
-            AdoptOrphanedRuns();
+            //A read, so that a database which cannot be opened fails HERE, as a disabled store with
+            //a reason, rather than later as an exception inside some request.
+            _ = Runs.Count();
         }
         catch (Exception e)
         {
             Disabled = true;
-            Console.Error.WriteLine(
-                $"RunStore disabled: cannot use '{root}' ({e.Message}). Simulations will run and stream " +
-                $"normally, but frames will not be persisted and cannot be fetched back. " +
-                $"Set RunStoreRoot to a writable path to enable persistence.");
+            DisabledReason = $"Cannot use '{Path.GetFullPath(root)}': {Explain(e, openingDatabase)}";
+            Log.Error("store-disabled", null,
+                $"The run store is disabled. {DisabledReason} Simulations still run and stream, but " +
+                $"nothing is kept, stored runs cannot be listed, and the server must be restarted once " +
+                $"this is fixed.");
+            return;
+        }
+
+        //Partial files first: on a full volume they are what is holding the last free blocks, and
+        //removing them may be what lets the writes below succeed.
+        RemoveStaleTemporaries();
+        try { Runs.EnsureIndex(x => x.CreatedUtc); }
+        catch (Exception e) { Log.Warning("index-failed", null, $"Could not index the runs by date ({e.Message}). Listings still work, more slowly."); }
+        SweepStaleRuns(atStartup: true);
+        AdoptOrphanedRuns();
+    }
+
+    /// <summary>
+    /// A storage exception in words, with what to do about it. Used for the reason a store is
+    /// disabled, which is the first thing anybody reads when runs have gone missing.
+    ///
+    /// <c>openingDatabase</c> says the failure came out of LiteDB rather than the directories, where
+    /// anything that is not an I/O or permission error means the file itself is unreadable - and
+    /// LiteDB does not always say so with a LiteException: a datafile of garbage was measured to
+    /// throw an ArgumentOutOfRangeException about DateTime ticks.
+    /// </summary>
+    static string Explain(Exception e, bool openingDatabase)
+    {
+        var message = e.Message.TrimEnd('.', ' ');
+        //28 is ENOSPC and 122 EDQUOT: .NET puts the errno in HResult for a plain IOException.
+        if (e is IOException && (e.HResult is 28 or 122
+            || message.Contains("No space", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("quota", StringComparison.OrdinalIgnoreCase)))
+            return $"{message}. The volume is full: free space on it - the stale *.tmp files under " +
+                   $"runs/ first - or move the store to a larger volume.";
+        if (e is UnauthorizedAccessException || e.HResult is 13 or 30
+            || message.Contains("read-only", StringComparison.OrdinalIgnoreCase))
+            return $"{message}. The server cannot write there: the directory must be writable by the " +
+                   $"server's user (uid 61000 in the image, which docker-compose also gives group 1001).";
+        if (e is LiteException || (openingDatabase && e is not IOException))
+            return $"{message}. The run database is damaged. Stop the server, move index.litedb (and " +
+                   $"index-log.litedb, if present) aside and start it again: every run directory is " +
+                   $"adopted back from disk.";
+        return message;
+    }
+
+    /// <summary>
+    /// Records "aborted" for rows still saying "running" that nothing is writing.
+    ///
+    /// At startup that is every such row: nothing can still be running in a fresh process, and a
+    /// record left at "running" by a crash or a redeploy is otherwise never evictable - Evict skips
+    /// running rows while still counting their bytes - so a few interrupted long runs make the
+    /// budget permanently unreachable. Afterwards it is the rows whose outcome
+    /// <see cref="CompleteRun"/> could not write, which a maintenance pass records late.
+    ///
+    /// Never fatal. On a full disk the write fails, and the listing reports those rows as aborted
+    /// anyway (<see cref="Overlay"/>), which is what lets the user delete one to make room.
+    /// </summary>
+    void SweepStaleRuns(bool atStartup)
+    {
+        try
+        {
+            var swept = new List<RunRecord>();
+            lock (MetadataLock)
+            {
+                foreach (var run in Runs.Find(x => x.Status == "running").ToList())
+                {
+                    if (IsLive(run.Id)) continue;
+                    if (UnrecordedOutcomes.TryRemove(run.Id, out var outcome))
+                    {
+                        run.Status = outcome.Status;
+                        run.StopReason = outcome.Reason;
+                    }
+                    else
+                    {
+                        run.Status = "aborted";
+                        run.StopReason ??= atStartup
+                            ? "the server stopped while it was computing (a restart, a redeploy or a crash)"
+                            : "its outcome was never recorded";
+                    }
+                    run.UpdatedUtc = DateTime.UtcNow;
+                    Runs.Update(run);
+                    swept.Add(run);
+                }
+            }
+            foreach (var run in swept)
+                Log.Warning("stale-aborted", run.Id,
+                    $"Run {run.Id} was still marked running with nothing computing it; recorded as {run.Status}" +
+                    (run.Status == "aborted" ? $": {run.StopReason}." : "."),
+                    Footprint(run));
+            Log.Condition("stale-sweep", false, "stale-sweep-failed", () => "",
+                cleared: () => "Runs left marked 'running' are recorded as aborted again.");
+        }
+        catch (ObjectDisposedException) { /* shutting down */ }
+        catch (Exception e)
+        {
+            Log.Condition("stale-sweep", true, "stale-sweep-failed", () =>
+                $"Could not record runs left marked 'running' as aborted ({e.Message}). They are listed " +
+                $"as aborted and can be deleted anyway; each maintenance pass tries again.");
         }
     }
 
     /// <summary>
-    /// Nothing can still be running in a freshly started process.
+    /// Deletes the partial files interrupted writes leave behind. Called at startup only, when
+    /// nothing can be writing.
     ///
-    /// A record left at "running" by a crash or a redeploy is otherwise never evictable - Evict
-    /// skips running rows while still counting their bytes - so a few interrupted long runs make
-    /// the budget permanently unreachable and every later BeginRun deletes all the completed runs
-    /// for nothing.
+    /// Every frame is deflated into a <c>.tmp</c> beside its final name, and a write that fails -
+    /// above all on a full disk - used to leave it there: one per frame the run tried to store,
+    /// each as large as the space it found, with several compressors at it at once. That debris is
+    /// what held the last free blocks of the deployed volume. Nothing else ever removed it, and
+    /// Reconcile counted it as frames.
     /// </summary>
-    void SweepStaleRuns()
+    void RemoveStaleTemporaries()
     {
-        var stale = Runs.Find(x => x.Status == "running").ToList();
-        foreach (var run in stale)
+        long bytes = 0;
+        var count = 0;
+        try
         {
-            run.Status = "aborted";
-            run.UpdatedUtc = DateTime.UtcNow;
-            Runs.Update(run);
+            foreach (var dir in Directory.EnumerateDirectories(RunsDir))
+                foreach (var where in new[] { dir, Path.Combine(dir, "frames") })
+                {
+                    if (!Directory.Exists(where)) continue;
+                    foreach (var file in Directory.EnumerateFiles(where, "*.tmp"))
+                        try
+                        {
+                            var length = new FileInfo(file).Length;
+                            File.Delete(file);
+                            bytes += length;
+                            ++count;
+                        }
+                        catch { /* the next start tries again */ }
+                }
         }
-        if (stale.Count > 0)
-            Console.WriteLine($"RunStore: marked {stale.Count} run(s) left 'running' by a previous process as aborted.");
+        catch (Exception e) { Log.Error("temp-cleanup-failed", null, $"Could not look for partial files left by interrupted writes: {e.Message}"); }
+        if (count > 0)
+            Log.Info("temp-removed", null,
+                $"Removed {count} partial file{(count == 1 ? "" : "s")} ({Size(bytes)}) left by writes that were " +
+                $"interrupted - by a full disk or a crash.", bytes);
     }
 
     /// <summary>
@@ -547,7 +767,6 @@ public class RunStore : IRunStore, IDisposable
         try
         {
             var known = Runs.FindAll().Select(x => x.Id).ToHashSet(StringComparer.Ordinal);
-            var adopted = 0;
             foreach (var dir in Directory.EnumerateDirectories(RunsDir))
             {
                 var id = Path.GetFileName(dir);
@@ -564,12 +783,14 @@ public class RunStore : IRunStore, IDisposable
                     Status = "complete",
                 };
                 Reconcile(run, insert: true);
-                ++adopted;
+                //One event per run: adoption is how a store moved between volumes by hand comes
+                //back, so each run that reappears is worth seeing by name and size.
+                Log.Info("adopted", id,
+                    $"Adopted run {id} ({Size(Footprint(run))}, {run.StoredFrames} frames): its directory was on " +
+                    $"disk but not in the database.", Footprint(run));
             }
-            if (adopted > 0)
-                Console.WriteLine($"RunStore: adopted {adopted} run director{(adopted == 1 ? "y" : "ies")} that the metadata did not know about.");
         }
-        catch (Exception e) { Console.Error.WriteLine($"RunStore: could not scan for orphaned runs: {e.Message}"); }
+        catch (Exception e) { Log.Error("adopt-failed", null, $"Could not scan for run directories the database does not know: {e.Message}"); }
     }
 
     /// <summary>
@@ -596,6 +817,9 @@ public class RunStore : IRunStore, IDisposable
             if (Directory.Exists(framesDir))
                 foreach (var file in Directory.EnumerateFiles(framesDir))
                 {
+                    //Frames only. A partial .tmp left by a failed write is not a frame, and counting
+                    //it made a run that had filled its disk look larger than what it had stored.
+                    if (Path.GetExtension(file) is not (".g" or ".z")) continue;
                     var info = new FileInfo(file);
                     frameBytes += info.Length;
                     ++frames;
@@ -705,7 +929,7 @@ public class RunStore : IRunStore, IDisposable
         }
         catch (Exception e)
         {
-            Console.Error.WriteLine($"RunStore: could not reconcile {run.Id}: {e.Message}");
+            Log.Error("reconcile-failed", run.Id, $"Could not read back the description of run {run.Id}: {e.Message}");
             //Stamped anyway. A request.json that cannot be parsed will not parse on the next
             //listing either, and retrying it for every listing forever costs more than the blanks.
             try { run.MetadataVersion = CurrentMetadataVersion; if (insert) Runs.Insert(run); else Runs.Update(run); }
@@ -734,34 +958,91 @@ public class RunStore : IRunStore, IDisposable
         if (string.IsNullOrEmpty(spec.FieldModelHash) && string.IsNullOrEmpty(spec.FieldModelName)) return;
         try
         {
-            File.WriteAllBytes(TerrainMetaPath(runId), System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(
+            var bytes = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(
                 new Models.StoredTerrainMeta(spec.FieldModelHash, spec.FieldModelName, spec.FieldItemRegex,
                                              spec.FieldItemRegexMaterial, spec.FieldResolution),
-                Models.AppJsonSerializerContext.Default.StoredTerrainMeta));
+                Models.AppJsonSerializerContext.Default.StoredTerrainMeta);
+            WriteAtomically(TerrainMetaPath(runId), output => output.Write(bytes));
         }
-        catch (Exception e) { Console.Error.WriteLine($"RunStore: could not record the terrain of {runId}: {e.Message}"); }
+        catch (Exception e) { Log.Error("terrain-failed", runId, $"Run {runId}: could not record how its terrain was built: {e.Message}"); }
+    }
+
+    /// <summary>
+    /// Writes beside the target and moves into place, and returns the bytes written.
+    ///
+    /// A file overwritten in place is truncated first and filled second, so a full disk or a crash
+    /// in between leaves it empty or cut short under its real name - and for request.json that is
+    /// permanent: a run whose request does not parse can never be resumed or forked again. The
+    /// temporary is removed when the write fails, so a failure costs no space either.
+    /// </summary>
+    static long WriteAtomically(string path, Action<Stream> write)
+    {
+        var temporary = $"{path}.{Guid.NewGuid():N}.tmp";
+        try
+        {
+            long length;
+            using (var output = new FileStream(temporary, FileMode.Create, FileAccess.Write, FileShare.None))
+            {
+                write(output);
+                output.Flush();
+                length = output.Length;
+            }
+            File.Move(temporary, path, overwrite: true);
+            return length;
+        }
+        catch
+        {
+            try { File.Delete(temporary); } catch { /* the original failure is the one to report */ }
+            throw;
+        }
     }
 
     /// <summary>Rejects anything that is not a plain id, so a path cannot escape the store.</summary>
     static bool IsSafeId(string id) =>
         !string.IsNullOrEmpty(id) && id.Length <= 64 && id.All(c => char.IsAsciiLetterOrDigit(c) || c == '-');
 
+    /// <summary>
+    /// Whether something is still writing this run - the one test of liveness this store trusts.
+    ///
+    /// The row's status cannot be it. A row says "running" from the moment it is inserted until
+    /// <see cref="CompleteRun"/> manages to write the outcome, and on a full disk that write fails:
+    /// the run that filled the volume then stayed "running" forever, which made it undeletable from
+    /// the panel and unevictable by the budget - the two ways of getting the space back. A writer
+    /// exists for exactly as long as frames can arrive, so the row is inserted after the writer
+    /// starts, and the writer is removed under the same lock that records the outcome.
+    /// </summary>
+    bool IsLive(string runId) => Writers.ContainsKey(runId);
+
+    /// <summary>Everything a run occupies: frames, then the request, index, terrain and checkpoint.</summary>
+    static long Footprint(RunRecord run) => run.BytesOnDisk + run.AuxBytesOnDisk;
+
     public string BeginRun(RunSpec spec)
     {
         var id = Guid.NewGuid().ToString("N");
-        if (Disabled) return id;
+        if (Disabled)
+        {
+            //Said once per run, so that a run the user is watching compute can be matched to the
+            //reason it will not be in the list afterwards.
+            Log.Error("run-not-stored", id, $"Run {id} is computing but is not being stored: the run store is disabled. {DisabledReason}");
+            return id;
+        }
+        var inserted = false;
         try
         {
             Directory.CreateDirectory(FramesDir(id));
             //The request is what a resumed or branched run needs to rebuild its world, and the
             //upload and terrain caches that hold it today expire after five minutes.
-            File.WriteAllText(RequestPath(id), spec.RequestJson);
+            WriteAtomically(RequestPath(id), output => output.Write(Encoding.UTF8.GetBytes(spec.RequestJson)));
             //And beside it, how the terrain was actually built. The database is not the only copy
             //of this: a store whose index.litedb is lost is adopted from its directories, and a run
             //adopted without its model hash contributes nothing to the reference set that decides
             //which models to keep - so the next eviction would delete every model the store owns.
             WriteTerrainMeta(id, spec);
 
+            //The writer BEFORE the row: liveness is the writer (IsLive), so a row that says
+            //"running" must never exist without one - Evict, just below, would take it for a run
+            //that is already over.
+            StartWriter(id);
             Runs.Insert(new RunRecord
             {
                 Id = id,
@@ -789,22 +1070,52 @@ public class RunStore : IRunStore, IDisposable
                     ParentRunId = spec.ParentRunId,
                 MetadataVersion = CurrentMetadataVersion,
             });
+            inserted = true;
+            Log.Info("run-started", id,
+                $"Run {id} started: {spec.Plants} plant{(spec.Plants == 1 ? "" : "s")}, {spec.TotalSteps} steps of " +
+                $"{spec.HoursPerTick} h{(spec.ParentRunId != null ? $", derived from {spec.ParentRunId}" : "")}.");
             Evict();
-            StartWriter(id);
         }
         catch (Exception e)
         {
             //Persistence must never take the simulation down with it. A run with no store still
-            //streams to the client exactly as it did before.
-            Console.Error.WriteLine($"RunStore: could not begin run {id}: {e.Message}");
+            //streams to the client exactly as it did before - and the client finds out it is not
+            //stored by asking for it, so it keeps its frames rather than dropping them for a server
+            //that does not have them.
+            Log.Error("begin-failed", id, $"Run {id} is computing but is not being stored: it could not be registered ({e.Message}).");
+            AbandonBegin(id, inserted);
         }
         return id;
+    }
+
+    /// <summary>
+    /// Undoes a <see cref="BeginRun"/> that failed half way, so nothing it made outlives it.
+    ///
+    /// A writer left behind would keep the run "live" forever; a directory left behind is adopted at
+    /// the next start as a run with no frames; a row left behind is a run that never ran.
+    /// </summary>
+    void AbandonBegin(string id, bool inserted)
+    {
+        AbandonWriter(id);
+        if (inserted) try { Runs.Delete(id); } catch { /* the next start sweeps it to aborted */ }
+        try { if (Directory.Exists(RunDir(id))) Directory.Delete(RunDir(id), true); } catch { /* adopted later, empty */ }
     }
 
     public void WriteFrame(string runId, uint step, byte[] scene)
     {
         if (Disabled || !IsSafeId(runId)) return;
         if (!Writers.TryGetValue(runId, out var writer)) return;
+        //Once storing has had to stop, nothing more is queued. The run loop reads the reason right
+        //after this call and stops the run; a frame queued now would only be refused at the floor.
+        if (Volatile.Read(ref writer.StopReason) != null) { LoseFrame(writer, step); return; }
+        if (!HasRoomFor(scene.LongLength, out var free))
+        {
+            StopStoring(writer, LowSpaceReason(free), "low-space-stop", step, "warning");
+            //The frame that reached the reserve is still kept if it fits above the floor. It is the
+            //state the run stops in, and the final checkpoint taken right after it describes exactly
+            //that state - so a resume continues with no gap in the stored frames.
+            if (free - scene.LongLength < MinFreeBytes / 4) { LoseFrame(writer, step); return; }
+        }
         if (!ReserveFrameBytes(writer, scene.LongLength)) return;
         var queued = false;
         try
@@ -819,17 +1130,106 @@ public class RunStore : IRunStore, IDisposable
         finally { if (!queued) ReleaseFrameBytes(scene.LongLength); }
     }
 
+    public bool TryGetStopReason(string runId, out string reason)
+    {
+        reason = "";
+        if (!Writers.TryGetValue(runId, out var writer) || Volatile.Read(ref writer.StopReason) is not { } why) return false;
+        reason = why;
+        return true;
+    }
+
+    /// <summary>
+    /// Counts a frame that will not be stored and moves the gap back to it if it is the earliest:
+    /// from here on nothing later is committed and no later checkpoint written (see
+    /// <see cref="RunWriter.GapFromStep"/>).
+    /// </summary>
+    static void LoseFrame(RunWriter writer, uint step)
+    {
+        Interlocked.Increment(ref writer.Unstored);
+        lock (writer)
+            if (step < writer.GapFromStep) writer.GapFromStep = step;
+    }
+
+    /// <summary>
+    /// Records that this run can no longer be stored and why, once - whichever thread gets there
+    /// first. The run loop picks it up after the current step and stops the run.
+    /// </summary>
+    void StopStoring(RunWriter writer, string reason, string kind, uint step, string level)
+    {
+        if (Interlocked.CompareExchange(ref writer.StopReason, reason, null) != null) return;
+        var message = $"Run {writer.RunId}: storing stopped at step {step} because {reason}. The run is being " +
+                      $"stopped with a final checkpoint, and can be resumed from it once this is fixed.";
+        if (level == "error") Log.Error(kind, writer.RunId, message);
+        else Log.Warning(kind, writer.RunId, message);
+    }
+
+    /// <summary>Why the reserve was reached, as a clause, with what to do about it.</summary>
+    string LowSpaceReason(long free) =>
+        $"the run store's volume has only {Size(Math.Max(0, free))} free, below the {Size(MinFreeBytes)} reserve " +
+        $"(delete runs or free space on {Root}, then resume)";
+
+    /// <summary>Free space, read at most once a second. The simulation thread asks every frame.</summary>
+    long FreeBytesCached()
+    {
+        var now = Environment.TickCount64;
+        var at = Volatile.Read(ref FreeMeasuredAt);
+        if (at != 0 && now - at < 1000) return Volatile.Read(ref MeasuredFree);
+        var free = StoreVolume.FreeSpace(Root);
+        Volatile.Write(ref MeasuredFree, free);
+        Volatile.Write(ref FreeMeasuredAt, now);
+        return free;
+    }
+    long MeasuredFree = -1, FreeMeasuredAt;
+
+    /// <summary>
+    /// Whether a frame of this many raw bytes fits above the reserve, counting what is already
+    /// queued or being compressed. Raw sizes are an upper bound on what deflate writes.
+    /// </summary>
+    bool HasRoomFor(long bytes, out long free)
+    {
+        free = -1;
+        if (MinFreeBytes <= 0) return true;
+        free = FreeBytesCached();
+        //Unknown is not full. A volume that will not say how much space it has is not refused.
+        if (free < 0) return true;
+        return free - Volatile.Read(ref PendingFrameBytes) - bytes >= MinFreeBytes;
+    }
+
+    /// <summary>Raw bytes compressors are writing right now, which statvfs does not see yet.</summary>
+    long WritingBytes;
+
+    /// <summary>
+    /// The exact check, taken by a compressor just before it writes: a fresh statvfs against a
+    /// quarter of the reserve, counting every write in flight. The simulation thread's check is
+    /// a second old and cannot see several compressors writing at once; this one can, and it is
+    /// what keeps the last part of the reserve for the database and the event log.
+    /// </summary>
+    bool BeginWrite(long bytes, out long free)
+    {
+        free = -1;
+        var writing = Interlocked.Add(ref WritingBytes, bytes);
+        if (MinFreeBytes <= 0) return true;
+        free = StoreVolume.FreeSpace(Root);
+        if (free < 0 || free - writing >= MinFreeBytes / 4) return true;
+        Interlocked.Add(ref WritingBytes, -bytes);
+        return false;
+    }
+
+    void EndWrite(long bytes) => Interlocked.Add(ref WritingBytes, -bytes);
+
     public void WriteTerrain(string runId, byte[] serializedTerrain)
     {
         if (Disabled || !IsSafeId(runId) || serializedTerrain == null || serializedTerrain.Length == 0) return;
         try
         {
-            using var output = new FileStream(TerrainPath(runId), FileMode.Create, FileAccess.Write, FileShare.Read);
-            using (var gz = new GZipStream(output, CompressionLevel.Optimal, leaveOpen: true))
+            var stored = WriteAtomically(TerrainPath(runId), output =>
+            {
+                using var gz = new GZipStream(output, CompressionLevel.Optimal, leaveOpen: true);
                 gz.Write(serializedTerrain, 0, serializedTerrain.Length);
-            AddAuxBytes(runId, output.Length);
+            });
+            AddAuxBytes(runId, stored);
         }
-        catch (Exception e) { Console.Error.WriteLine($"RunStore: could not store the terrain of {runId}: {e.Message}"); }
+        catch (Exception e) { Log.Error("terrain-failed", runId, $"Run {runId}: could not store its terrain ({e.Message}); it will replay without its trays."); }
     }
 
     /// <summary>
@@ -870,21 +1270,41 @@ public class RunStore : IRunStore, IDisposable
     {
         try
         {
-            if (checkpoint) return PackCheckpoint(writer.RunId, step, scene) is { } packedCheckpoint ? packedCheckpoint with { Checkpoint = true } : null;
+            if (checkpoint) return PackCheckpoint(writer.RunId, step, scene, writer) is { } packedCheckpoint ? packedCheckpoint with { Checkpoint = true } : null;
+            if (!BeginWrite(scene.LongLength, out var free))
+            {
+                LoseFrame(writer, step);
+                StopStoring(writer, LowSpaceReason(free), "low-space-stop", step, "warning");
+                return null;
+            }
             var path = FramePath(writer.RunId, step);
             var temporary = path + ".tmp";
-            long storedBytes;
-            using (var output = new FileStream(temporary, FileMode.Create, FileAccess.Write, FileShare.None))
+            try
             {
-                using (var zlib = new ZLibStream(output, CompressionLevel.Fastest, leaveOpen: true))
-                    zlib.Write(scene);
-                storedBytes = output.Length;
+                long storedBytes;
+                using (var output = new FileStream(temporary, FileMode.Create, FileAccess.Write, FileShare.None))
+                {
+                    using (var zlib = new ZLibStream(output, CompressionLevel.Fastest, leaveOpen: true))
+                        zlib.Write(scene);
+                    storedBytes = output.Length;
+                }
+                return new(step, path, temporary, storedBytes);
             }
-            return new(step, path, temporary, storedBytes);
+            catch
+            {
+                //Never left behind. On a full disk each failed frame used to leave its partial
+                //temporary in place - as large as the space it found - and with several compressors
+                //failing at once that debris is what held the volume full.
+                try { File.Delete(temporary); } catch { /* reported below; swept at the next start */ }
+                throw;
+            }
+            finally { EndWrite(scene.LongLength); }
         }
         catch (Exception e)
         {
-            Console.Error.WriteLine($"RunStore: could not store frame {step} of {writer.RunId}: {e.Message}");
+            //Frames only: PackCheckpoint reports its own failures and never throws.
+            LoseFrame(writer, step);
+            StopStoring(writer, $"frame {step} could not be written ({e.Message})", "frame-failed", step, "error");
             return null;
         }
         finally { ReleaseFrameBytes(scene.LongLength); }
@@ -910,14 +1330,23 @@ public class RunStore : IRunStore, IDisposable
                 commits.Add(packing);
             }
         }
-        catch (Exception e) { Console.Error.WriteLine($"RunStore: writer for {writer.RunId} stopped: {e}"); }
+        catch (Exception e)
+        {
+            StopStoring(writer, $"its frame writer stopped ({e.Message})", "writer-failed", writer.LastStep, "error");
+            Console.Error.WriteLine($"RunStore: writer for {writer.RunId} stopped: {e}");
+        }
         finally
         {
             writer.Queue.CompleteAdding();
             while (writer.Queue.TryTake(out var abandoned)) ReleaseFrameBytes(abandoned.Scene.LongLength);
             commits.CompleteAdding();
-            try { committer.Wait(); } catch (Exception e) { Console.Error.WriteLine($"RunStore: committer for {writer.RunId} failed: {e}"); }
-            try { FlushMetadata(writer); } catch { /* best effort */ }
+            try { committer.Wait(); }
+            catch (Exception e)
+            {
+                Log.Error("writer-failed", writer.RunId, $"Run {writer.RunId}: its frame committer failed: {e.Message}");
+                Console.Error.WriteLine($"RunStore: committer for {writer.RunId} failed: {e}");
+            }
+            TryFlushMetadata(writer);
             try { writer.Index.Dispose(); } catch { /* best effort */ }
         }
     }
@@ -927,43 +1356,98 @@ public class RunStore : IRunStore, IDisposable
     {
         foreach (var packing in commits.GetConsumingEnumerable())
         {
-            PackedFrame? packed;
-            try { packed = packing.Result; }
-            catch (Exception e) { Console.Error.WriteLine($"RunStore: packing a frame of {writer.RunId} failed: {e.Message}"); continue; }
-            if (packed is not { } frame) continue; // failed and already reported
-            if (frame.Checkpoint) { CommitCheckpoint(writer.RunId, frame); continue; }
-            var step = frame.Step;
-            try
+            CommitOne(writer, packing);
+            //Metadata on a timer rather than per frame. It is only a progress figure, and LiteDB in
+            //Shared mode takes a cross-process mutex for each update - 0.7 ms a frame measured, which
+            //is small but entirely pointless a thousand times over. On the cadence whatever happened
+            //to the item, so a run whose frames are failing still reports what it did store.
+            if (DateTime.UtcNow - writer.LastMetadataFlush > MetadataInterval)
+                TryFlushMetadata(writer);
+        }
+    }
+
+    void CommitOne(RunWriter writer, Task<PackedFrame?> packing)
+    {
+        PackedFrame? packed;
+        try { packed = packing.Result; }
+        catch (Exception e)
+        {
+            //Pack catches everything it can throw; reaching this means the task itself failed, and
+            //the frame it carried is gone. Its step is unknown, so the gap starts at the frame after
+            //the last one committed - which loses nothing that was stored.
+            LoseFrame(writer, writer.LastStep);
+            StopStoring(writer, $"a frame could not be compressed ({e.Message})", "frame-failed", writer.LastStep, "error");
+            return;
+        }
+        if (packed is not { } frame) return; // refused or failed, and already reported
+
+        //Past the gap nothing is committed: frames after a lost one, and a checkpoint that would
+        //claim the lost frame was stored. Resuming from the last checkpoint before it recomputes the
+        //missing steps instead, and keeps the stored run whole.
+        var gap = Volatile.Read(ref writer.GapFromStep);
+        if (frame.Checkpoint ? frame.Step > gap : frame.Step >= gap)
+        {
+            try { File.Delete(frame.Temporary); } catch { /* swept at the next start */ }
+            if (!frame.Checkpoint) Interlocked.Increment(ref writer.Unstored);
+            return;
+        }
+
+        if (frame.Checkpoint) { CommitCheckpoint(writer.RunId, frame, writer); return; }
+        var step = frame.Step;
+        try
+        {
+            File.Move(frame.Temporary, frame.Path, overwrite: true);
+            var storedBytes = frame.StoredBytes;
+
+            Span<byte> entry = stackalloc byte[8];
+            BitConverter.TryWriteBytes(entry[..4], step);
+            BitConverter.TryWriteBytes(entry[4..], checked((uint)storedBytes));
+            writer.Index.Write(entry);
+            //Flushed per frame so a reader - the client rebuilding its timeline while the
+            //run computes - sees entries for frames that are actually on disk, and never
+            //an entry for one that is not.
+            writer.Index.Flush();
+
+            //A count, not the step reached: with a frame stride those differ, and a
+            //listing that says "540 frames" for a run that stored 135 is describing
+            //storage it does not have.
+            ++writer.StoredFrames;
+            writer.LastStep = step + 1;
+            //Written for the listing's thread, which reads the live figure (Overlay).
+            Volatile.Write(ref writer.BytesOnDisk, writer.BytesOnDisk + storedBytes);
+        }
+        catch (Exception e)
+        {
+            try { File.Delete(frame.Temporary); } catch { /* moved already, or swept at the next start */ }
+            LoseFrame(writer, step);
+            StopStoring(writer, $"frame {step} could not be committed ({e.Message})", "frame-failed", step, "error");
+        }
+    }
+
+    /// <summary>
+    /// <see cref="FlushMetadata"/> with its failure reported once while it lasts, not every two
+    /// seconds. Frames are still stored meanwhile, and the listing reads the live writer's figures,
+    /// so a database that cannot be written costs the record of progress and nothing else.
+    /// </summary>
+    void TryFlushMetadata(RunWriter writer)
+    {
+        try
+        {
+            FlushMetadata(writer);
+            if (writer.MetadataFailing)
             {
-                File.Move(frame.Temporary, frame.Path, overwrite: true);
-                var storedBytes = frame.StoredBytes;
-
-                Span<byte> entry = stackalloc byte[8];
-                BitConverter.TryWriteBytes(entry[..4], step);
-                BitConverter.TryWriteBytes(entry[4..], checked((uint)storedBytes));
-                writer.Index.Write(entry);
-                //Flushed per frame so a reader - the client rebuilding its timeline while the
-                //run computes - sees entries for frames that are actually on disk, and never
-                //an entry for one that is not.
-                writer.Index.Flush();
-
-                //A count, not the step reached: with a frame stride those differ, and a
-                //listing that says "540 frames" for a run that stored 135 is describing
-                //storage it does not have.
-                ++writer.StoredFrames;
-                writer.LastStep = step + 1;
-                writer.BytesOnDisk += storedBytes;
-
-                //Metadata on a timer rather than per frame. It is only a progress figure, and
-                //LiteDB in Shared mode takes a cross-process mutex for each update - 0.7 ms a
-                //frame measured, which is small but entirely pointless a thousand times over.
-                if (DateTime.UtcNow - writer.LastMetadataFlush > MetadataInterval)
-                    FlushMetadata(writer);
+                writer.MetadataFailing = false;
+                Log.Info("metadata-failed", writer.RunId, $"Run {writer.RunId}: its progress is being recorded in the database again.");
             }
-            catch (Exception e)
-            {
-                Console.Error.WriteLine($"RunStore: could not commit frame {step} of {writer.RunId}: {e.Message}");
-            }
+        }
+        catch (ObjectDisposedException) { /* shutting down */ }
+        catch (Exception e)
+        {
+            if (writer.MetadataFailing) return;
+            writer.MetadataFailing = true;
+            Log.Error("metadata-failed", writer.RunId,
+                $"Run {writer.RunId}: its progress could not be recorded in the database ({e.Message}). Its frames are " +
+                $"still being stored, and the listing shows the live figures.");
         }
     }
 
@@ -1001,28 +1485,37 @@ public class RunStore : IRunStore, IDisposable
         catch { /* a size that is a little stale is not worth failing a write for */ }
     }
 
-    public void CompleteRun(string runId, bool aborted)
+    public void CompleteRun(string runId, bool aborted, string? reason = null)
     {
         if (Disabled || !IsSafeId(runId)) return;
+        RunWriter? writer = null;
+        var removed = false;
         try
         {
             //Drain before recording the outcome, so a completed run's metadata describes every
             //frame it actually stored rather than whatever the last periodic flush had seen.
-            if (Writers.TryGetValue(runId, out var writer))
+            if (Writers.TryGetValue(runId, out writer))
             {
                 writer.Queue.CompleteAdding();
                 // The final checkpoint shares the bounded writer. Completion must not
                 // publish a resumable run before that snapshot has reached disk.
                 writer.Worker?.GetAwaiter().GetResult();
-                // Deregister only after the index and final checkpoint are closed. Until
-                // then the live writer also protects the run against eviction.
-                Writers.TryRemove(runId, out _);
             }
+            if (aborted) reason ??= writer?.StopReason;
 
             //Taken AFTER the writer has drained, never across the wait: the writer's own final
             //flush takes this same lock on its way out.
             lock (MetadataLock)
             {
+                //Deregistered inside the lock that records the outcome, so nothing that takes it -
+                //delete, eviction, the stale sweep - can see a row still saying "running" with no
+                //writer behind it and take it for an interrupted run. Until here the live writer
+                //also protects the run against eviction.
+                removed = writer != null && Writers.TryRemove(runId, out _);
+                //Logged by the one call that removed the writer, and before the write below that may
+                //fail: the outcome is worth knowing even when the database cannot record it.
+                if (removed) LogOutcome(writer!, aborted, reason);
+
                 var run = Runs.FindById(runId);
                 if (run == null) return;
                 //The FIRST outcome wins. This is called twice whenever delivering the result
@@ -1031,7 +1524,10 @@ public class RunStore : IRunStore, IDisposable
                 //every step it was asked for; saying otherwise sends a user to continue a run that
                 //has nothing left to compute.
                 if (run.Status == "running")
+                {
                     run.Status = aborted ? "aborted" : "complete";
+                    run.StopReason = aborted ? reason : null;
+                }
                 //Booked once, here, rather than eight bytes at a time from the writer thread: the
                 //index is the one file that grows with the run, and adding to the metadata row per
                 //frame is the cross-process mutex this store already refuses to take per frame.
@@ -1042,9 +1538,41 @@ public class RunStore : IRunStore, IDisposable
                 }
                 run.UpdatedUtc = DateTime.UtcNow;
                 Runs.Update(run);
+                UnrecordedOutcomes.TryRemove(runId, out _);
             }
         }
-        catch (Exception e) { Console.Error.WriteLine($"RunStore: could not complete {runId}: {e.Message}"); }
+        catch (Exception e)
+        {
+            //Kept, so the listing reports the run as it ended and the next maintenance pass records
+            //it - rather than both reading the stale "running" as an interruption.
+            if (removed) UnrecordedOutcomes[runId] = (aborted ? "aborted" : "complete", aborted ? reason : null);
+            Log.Error("complete-failed", runId,
+                $"Run {runId}: how it ended could not be recorded ({e.Message}). It is listed as " +
+                $"{(aborted ? "aborted" : "complete")} anyway, and recorded at the next maintenance pass.");
+        }
+    }
+
+    /// <summary>
+    /// The one event that says how a stored run ended: what it stored, what it could not, why it
+    /// stopped and where a resume would start.
+    /// </summary>
+    void LogOutcome(RunWriter writer, bool aborted, string? reason)
+    {
+        var bytes = Volatile.Read(ref writer.BytesOnDisk);
+        var stored = $"{writer.StoredFrames} frame{(writer.StoredFrames == 1 ? "" : "s")} ({Size(bytes)})";
+        var unstored = Volatile.Read(ref writer.Unstored);
+        var lost = unstored > 0 ? $" {unstored} frame{(unstored == 1 ? "" : "s")} could not be stored." : "";
+        if (!aborted && unstored == 0)
+        {
+            Log.Info("run-completed", writer.RunId, $"Run {writer.RunId} completed and stored {stored}.", bytes);
+            return;
+        }
+        var resume = writer.CheckpointStep > 0 ? $" It can be resumed from step {writer.CheckpointStep}." : "";
+        var last = writer.StoredFrames > 0 ? $", the last at step {writer.LastStep - 1}" : "";
+        var message = aborted
+            ? $"Run {writer.RunId} stopped because {reason ?? "it was stopped"}. It stored {stored}{last}.{lost}{resume}"
+            : $"Run {writer.RunId} completed and stored {stored}.{lost}{resume}";
+        Log.Warning(aborted ? "run-aborted" : "run-completed", writer.RunId, message, bytes);
     }
 
     public bool TryReadFrameDeflated(string runId, uint step, out byte[] deflated)
@@ -1102,6 +1630,11 @@ public class RunStore : IRunStore, IDisposable
         if (Disabled || !IsSafeId(runId) || state == null || state.Length == 0) return;
         if (!Writers.TryGetValue(runId, out var writer))
         { WriteCheckpointCore(runId, step, state); return; }
+        //A checkpoint describes the world after every frame before it. Past a lost frame it would
+        //claim one the store does not have, so the last checkpoint before the gap stands instead.
+        //No reserve check of its own: the final checkpoint is what makes a stopped run resumable,
+        //and it may use the reserve down to the floor PackCheckpoint enforces.
+        if (step > Volatile.Read(ref writer.GapFromStep)) return;
         // SerializeState runs between ticks and returns an owned snapshot. Only its
         // compression and file I/O move to the writer; it never reads the live world.
         if (!ReserveFrameBytes(writer, state.LongLength)) return;
@@ -1113,23 +1646,31 @@ public class RunStore : IRunStore, IDisposable
 
     void WriteCheckpointCore(string runId, uint step, byte[] state)
     {
-        var packed = PackCheckpoint(runId, step, state);
-        if (packed is { } frame) CommitCheckpoint(runId, frame);
+        var packed = PackCheckpoint(runId, step, state, null);
+        if (packed is { } frame) CommitCheckpoint(runId, frame, null);
     }
 
     /// <summary>
     /// Written beside and moved into place by <see cref="CommitCheckpoint"/>. A checkpoint
     /// truncated by a crash is worse than no checkpoint: it is the one file a resume trusts
     /// completely, and a half-written one reads back as a world with fewer organs rather than as a
-    /// failure. The temporary carries the step so that two checkpoints packing at once never
-    /// share a file.
+    /// failure. A unique suffix also distinguishes repeated preparation snapshots at recorded
+    /// step zero, which the bounded writer can pack concurrently.
     /// </summary>
-    PackedFrame? PackCheckpoint(string runId, uint step, byte[] state)
+    PackedFrame? PackCheckpoint(string runId, uint step, byte[] state, RunWriter? writer)
     {
+        var path = CheckpointPath(runId);
+        var temp = $"{path}.{step}.{Guid.NewGuid():N}.tmp";
+        if (!BeginWrite(state.LongLength, out var free))
+        {
+            //The previous checkpoint stays, and with it a place to resume from.
+            if (writer != null) StopStoring(writer, LowSpaceReason(free), "low-space-stop", step, "warning");
+            Log.Warning("checkpoint-skipped", runId,
+                $"Run {runId}: the checkpoint at step {step} was not written: {LowSpaceReason(free)}.");
+            return null;
+        }
         try
         {
-            var path = CheckpointPath(runId);
-            var temp = $"{path}.{step}.tmp";
             long size;
             using (var output = new FileStream(temp, FileMode.Create, FileAccess.Write, FileShare.None))
             {
@@ -1142,19 +1683,32 @@ public class RunStore : IRunStore, IDisposable
             }
             return new(step, path, temp, size);
         }
-        catch (Exception e) { Console.Error.WriteLine($"RunStore: could not checkpoint {runId}: {e.Message}"); return null; }
+        catch (Exception e)
+        {
+            try { File.Delete(temp); } catch { /* swept at the next start */ }
+            if (writer != null) StopStoring(writer, $"the checkpoint at step {step} could not be written ({e.Message})", "checkpoint-failed", step, "error");
+            else Log.Error("checkpoint-failed", runId, $"Run {runId}: the checkpoint at step {step} could not be written: {e.Message}");
+            return null;
+        }
+        finally { EndWrite(state.LongLength); }
     }
 
-    void CommitCheckpoint(string runId, PackedFrame packed)
+    void CommitCheckpoint(string runId, PackedFrame packed, RunWriter? writer)
     {
         try
         {
             var previous = File.Exists(packed.Path) ? new FileInfo(packed.Path).Length : 0;
             File.Move(packed.Temporary, packed.Path, overwrite: true);
+            if (writer != null) writer.CheckpointStep = packed.Step;
             //Only the difference: the file replaces itself rather than accumulating.
             if (packed.StoredBytes != previous) AddAuxBytes(runId, packed.StoredBytes - previous);
         }
-        catch (Exception e) { Console.Error.WriteLine($"RunStore: could not checkpoint {runId}: {e.Message}"); }
+        catch (Exception e)
+        {
+            try { File.Delete(packed.Temporary); } catch { /* swept at the next start */ }
+            if (writer != null) StopStoring(writer, $"the checkpoint at step {packed.Step} could not be committed ({e.Message})", "checkpoint-failed", packed.Step, "error");
+            else Log.Error("checkpoint-failed", runId, $"Run {runId}: the checkpoint at step {packed.Step} could not be committed: {e.Message}");
+        }
     }
 
     public bool TryReadCheckpoint(string runId, out uint step, out byte[] state)
@@ -1179,7 +1733,7 @@ public class RunStore : IRunStore, IDisposable
         }
         catch (Exception e)
         {
-            Console.Error.WriteLine($"RunStore: could not read the checkpoint of {runId}: {e.Message}");
+            Log.Error("checkpoint-unreadable", runId, $"Run {runId}: its checkpoint could not be read ({e.Message}), so it cannot be resumed - only forked.");
             return false;
         }
     }
@@ -1191,10 +1745,15 @@ public class RunStore : IRunStore, IDisposable
     {
         var indexPath = IndexPath(run.Id);
         var index = File.Exists(indexPath) ? File.ReadAllBytes(indexPath) : [];
-        if (index.Length % 8 != 0) throw new InvalidDataException("The frame index has a partial record.");
+        //A trailing partial record is an append the disk could not finish - the volume filling up
+        //is the usual way. Every whole entry before it is good, and readers already ignore the
+        //remainder, so it is dropped rather than refused: refusing made exactly the run that had
+        //filled its disk impossible to resume. The original index is kept in the recovery
+        //directory below, since the record count no longer matches its length.
+        var whole = index.Length / 8 * 8;
         var prefix = new SortedDictionary<uint, uint>();
         var tail = new List<string>();
-        for (int offset = 0; offset < index.Length; offset += 8)
+        for (int offset = 0; offset < whole; offset += 8)
         {
             var step = BitConverter.ToUInt32(index, offset);
             if (step >= checkpointStep) continue;
@@ -1228,49 +1787,70 @@ public class RunStore : IRunStore, IDisposable
             .Sum(path => new FileInfo(path).Length) - run.BytesOnDisk;
     }
 
-    public bool ResumeRun(string runId, uint checkpointStep, uint totalSteps, int totalHours, string requestJson)
+    public bool ResumeRun(string runId, uint checkpointStep, uint totalSteps, int totalHours, string requestJson, out string reason)
     {
-        if (Disabled || !IsSafeId(runId)) return false;
+        reason = "";
+        if (Disabled) { reason = $"The run store is disabled. {DisabledReason}"; return false; }
+        if (!IsSafeId(runId)) { reason = "Not a run id."; return false; }
         try
         {
             lock (MetadataLock)
             {
                 var run = Runs.FindById(runId);
-                if (run == null) return false;
+                if (run == null) { reason = "No such run."; return false; }
 
                 //The same test DeleteRun makes, for the same reason. A run whose writer is still
                 //draining has a thread appending frames and holding the index handle: starting a
                 //second writer on it leaves two workers writing the same frame paths and
                 //interleaving eight-byte index entries, after which the index no longer parses in
-                //step order. The status alone is not enough - a drain that timed out leaves the
-                //writer registered and the row already stamped.
-                if (Writers.ContainsKey(runId) || run.Status == "running") return false;
+                //step order. The writer, not the status: a row left "running" by a server that
+                //stopped - or by a disk too full to record the outcome - is exactly the run that
+                //most needs resuming.
+                if (IsLive(runId))
+                {
+                    reason = "That run is still being written. Wait for it to settle and try again.";
+                    return false;
+                }
 
                 ReconcileCheckpointHistory(run, checkpointStep);
                 ++run.FrameRevision;
                 run.FrameRestartStep = checkpointStep;
 
                 //Written inside the lock, so a refusal cannot have already replaced the request of
-                //a run it then declines to reopen.
+                //a run it then declines to reopen - and atomically, because a request truncated by
+                //a full disk would make the run impossible to resume or fork ever again.
                 var oldRequestBytes = new FileInfo(RequestPath(runId)).Length;
-                File.WriteAllText(RequestPath(runId), requestJson);
-                run.AuxBytesOnDisk += new FileInfo(RequestPath(runId)).Length - oldRequestBytes;
+                var newRequestBytes = WriteAtomically(RequestPath(runId), output => output.Write(Encoding.UTF8.GetBytes(requestJson)));
+                run.AuxBytesOnDisk += newRequestBytes - oldRequestBytes;
                 run.Status = "running";
+                run.StopReason = null;
                 run.TotalSteps = totalSteps;
                 run.TotalHours = totalHours;
                 run.UpdatedUtc = DateTime.UtcNow;
-                Runs.Update(run);
                 //Seeded from what the run already holds, so the resumed writer adds to the tally
-                //rather than replacing it.
+                //rather than replacing it. Started before the row says "running", as BeginRun does.
                 StartWriter(runId, run.StoredFrames, run.BytesOnDisk, run.LastStep);
-                return true;
+                try { Runs.Update(run); }
+                catch { AbandonWriter(runId); throw; }
+                UnrecordedOutcomes.TryRemove(runId, out _);
             }
+            Log.Info("resumed", runId, $"Run {runId} resumed from its checkpoint at step {checkpointStep}, now running to step {totalSteps}.");
+            return true;
         }
         catch (Exception e)
         {
-            Console.Error.WriteLine($"RunStore: could not reopen {runId}: {e.Message}");
+            reason = $"That run could not be reopened: {e.Message}";
+            Log.Error("resume-failed", runId, $"Run {runId} could not be resumed: {e.Message}");
             return false;
         }
+    }
+
+    /// <summary>Stops a writer that was started for a run that is not going ahead after all.</summary>
+    void AbandonWriter(string runId)
+    {
+        if (!Writers.TryRemove(runId, out var writer)) return;
+        writer.Queue.CompleteAdding();
+        try { writer.Worker?.Wait(TimeSpan.FromSeconds(30)); } catch { /* it had nothing to write */ }
     }
 
     public bool HasCheckpoint(string runId) =>
@@ -1292,14 +1872,17 @@ public class RunStore : IRunStore, IDisposable
         {
             //gzip rather than the frames' zlib: this one is served to a browser as a file to save,
             //and Content-Encoding: gzip is the form every client handles without ambiguity.
-            using var output = new FileStream(ObstacleLightPath(runId), FileMode.Create, FileAccess.Write, FileShare.Read);
-            using (var gz = new GZipStream(output, CompressionLevel.Optimal, leaveOpen: true))
+            var stored = WriteAtomically(ObstacleLightPath(runId), output =>
+            {
+                using var gz = new GZipStream(output, CompressionLevel.Optimal, leaveOpen: true);
                 gz.Write(utf8Json, 0, utf8Json.Length);
-            AddAuxBytes(runId, output.Length);
+            });
+            AddAuxBytes(runId, stored);
+            //Console only: it happens once per run, and the run's own outcome is the event.
             Console.WriteLine($"RunStore: stored the leaf area index document of {runId} " +
-                              $"({Size(utf8Json.Length)} of JSON, {Size(output.Length)} on disk).");
+                              $"({Size(utf8Json.Length)} of JSON, {Size(stored)} on disk).");
         }
-        catch (Exception e) { Console.Error.WriteLine($"RunStore: could not store the measurement of {runId}: {e.Message}"); }
+        catch (Exception e) { Log.Error("measurement-failed", runId, $"Run {runId}: could not store its leaf area index document: {e.Message}"); }
     }
 
     public string? StoreFieldModel(string objSource)
@@ -1335,17 +1918,29 @@ public class RunStore : IRunStore, IDisposable
             //Written beside and moved into place, so a crash mid-write cannot leave a truncated
             //file under a name that claims to be the hash of its contents.
             var temp = $"{path}.{Guid.NewGuid():N}.tmp";
-            using (var output = new FileStream(temp, FileMode.Create, FileAccess.Write, FileShare.None))
-            using (var gz = new GZipStream(output, CompressionLevel.Optimal))
-                gz.Write(bytes, 0, bytes.Length);
-            lock (MetadataLock) File.Move(temp, path, overwrite: true);
+            try
+            {
+                using (var output = new FileStream(temp, FileMode.Create, FileAccess.Write, FileShare.None))
+                using (var gz = new GZipStream(output, CompressionLevel.Optimal))
+                    gz.Write(bytes, 0, bytes.Length);
+                lock (MetadataLock) File.Move(temp, path, overwrite: true);
+            }
+            catch
+            {
+                //Up to a few hundred megabytes, and nothing would ever reference it.
+                try { File.Delete(temp); } catch { /* CollectTempModels removes it within the hour */ }
+                throw;
+            }
 
-            Console.WriteLine($"RunStore: stored field model {hash[..12]} ({Size(bytes.Length)} of OBJ, {Size(new FileInfo(path).Length)} on disk).");
+            var stored = new FileInfo(path).Length;
+            Log.Info("model-stored", null, $"Stored field model {hash[..12]} ({Size(bytes.Length)} of OBJ, {Size(stored)} on disk).", stored);
             return hash;
         }
         catch (Exception e)
         {
-            Console.Error.WriteLine($"RunStore: could not store the field model: {e.Message}");
+            Log.Error("model-store-failed", null,
+                $"Could not store an uploaded field model ({e.Message}). Runs on it will compute, but cannot be " +
+                $"continued, forked or drawn with their trays later.");
             return null;
         }
     }
@@ -1366,7 +1961,7 @@ public class RunStore : IRunStore, IDisposable
         }
         catch (Exception e)
         {
-            Console.Error.WriteLine($"RunStore: could not read field model {hash}: {e.Message}");
+            Log.Error("model-unreadable", null, $"Could not read field model {hash}: {e.Message}");
             return false;
         }
     }
@@ -1375,8 +1970,9 @@ public class RunStore : IRunStore, IDisposable
     {
         if (Disabled || !IsSafeId(runId)) return null;
         var run = Runs.FindById(runId);
-        if (run != null && run.MetadataVersion < CurrentMetadataVersion) Reconcile(run);
-        return run;
+        if (run == null) return null;
+        if (run.MetadataVersion < CurrentMetadataVersion) Reconcile(run);
+        return Overlay(run);
     }
 
     public IReadOnlyList<RunRecord> ListRuns(int limit)
@@ -1385,25 +1981,164 @@ public class RunStore : IRunStore, IDisposable
         var runs = Runs.Query().OrderByDescending(x => x.CreatedUtc).Limit(limit).ToList();
         //Once per run, not once per listing: Reconcile stamps the row it repairs.
         foreach (var run in runs)
+        {
             if (run.MetadataVersion < CurrentMetadataVersion) Reconcile(run);
+            Overlay(run);
+        }
         return runs;
+    }
+
+    /// <summary>
+    /// What a row says, corrected by what is known in memory. The returned copy only - nothing is
+    /// written back.
+    ///
+    /// A live run's figures come from its writer, so the listing keeps moving even while the
+    /// database cannot be written. A row still saying "running" that nothing is writing is reported
+    /// the way it ended, or as aborted: that row is how a full disk left the run that filled it -
+    /// undeletable in the panel, because the panel will not delete a running run, and unevictable,
+    /// because eviction will not either.
+    /// </summary>
+    RunRecord Overlay(RunRecord run)
+    {
+        if (Writers.TryGetValue(run.Id, out var writer))
+        {
+            run.StoredFrames = writer.StoredFrames;
+            run.LastStep = writer.LastStep;
+            run.BytesOnDisk = Volatile.Read(ref writer.BytesOnDisk);
+        }
+        else if (run.Status == "running")
+        {
+            if (UnrecordedOutcomes.TryGetValue(run.Id, out var outcome))
+            {
+                run.Status = outcome.Status;
+                run.StopReason = outcome.Reason;
+            }
+            else
+            {
+                run.Status = "aborted";
+                run.StopReason ??= "nothing is computing it any more; its outcome was never recorded";
+            }
+        }
+        return run;
     }
 
     public void StartMaintenance()
     {
+        //Said once at startup, and here rather than in the constructor: the budgets it compares the
+        //volume against are configured after the store is built. Also when the store is disabled -
+        //where it writes, and how full that is, is half of explaining why.
+        ReportSetup();
         if (Disabled || Maintenance != null) return;
         if (SweepInterval <= TimeSpan.Zero)
         {
-            Console.WriteLine("RunStore: periodic maintenance is off. The budget is then enforced only when a " +
-                              "run starts or is deleted, and uploaded field models are never collected.");
+            Log.Warning("maintenance-off", null,
+                "Periodic maintenance is off. The budget is then enforced only when a run starts or is deleted, " +
+                "and uploaded field models are never collected.");
             return;
         }
         //One-shot and re-armed at the end of each pass, not a fixed period: recursively deleting a
         //17 GB run can outlive the interval, and a tick queued behind a pass that is already
         //evicting would start a second one on top of it.
         Maintenance = new Timer(_ => Sweep(), null, SweepInterval, Timeout.InfiniteTimeSpan);
-        Console.WriteLine($"RunStore: maintenance every {SweepInterval.TotalMinutes:0} min (runs {Size(RetentionBytes)}, " +
-                          $"field models {Size(ModelRetentionBytes)}, unreferenced models kept {ModelGrace.TotalHours:0} h).");
+    }
+
+    /// <summary>
+    /// Says where the store writes, how much room is left there and what it will keep - and warns
+    /// about every configuration that will lose data. Logged once at startup.
+    /// </summary>
+    void ReportSetup()
+    {
+        var volume = StoreVolume.Probe(Root);
+        var stored = StoredBytes(out _);
+        var where = volume.MountPoint.Length == 0 ? "" :
+            $" on {volume.MountPoint}" +
+            (volume.FileSystem.Length > 0 ? $" ({volume.FileSystem}" : " (") +
+            (volume.AnonymousVolume ? ", an anonymous Docker volume)" :
+             volume.VolumeName.Length > 0 ? $", Docker volume {volume.VolumeName})" : ")");
+        var room = volume.FreeBytes >= 0 ? $", {Size(volume.FreeBytes)} free of {Size(volume.TotalBytes)}" : "";
+        var maintenance = SweepInterval > TimeSpan.Zero ? $"maintenance every {SweepInterval.TotalMinutes:0} min" : "no periodic maintenance";
+        Log.Info(Disabled ? "store-status" : "store-opened", null,
+            $"{(Disabled ? "The disabled run store" : "Run store")} at {volume.Root}{where}{room}. Keeping runs up to " +
+            $"{Size(RetentionBytes)} (holding {Size(stored)}), field models up to {Size(ModelRetentionBytes)}, " +
+            $"{Size(MinFreeBytes)} reserved free; {maintenance}.");
+        foreach (var warning in Warnings(volume, stored))
+            Log.Warning("config", null, warning);
+    }
+
+    /// <summary>What the runs occupy, from the database. Zero when it cannot be read.</summary>
+    long StoredBytes(out int runs)
+    {
+        runs = 0;
+        if (Disabled) return 0;
+        try
+        {
+            var all = Runs.FindAll().ToList();
+            runs = all.Count;
+            return all.Sum(Footprint);
+        }
+        catch { return 0; }
+    }
+
+    /// <summary>
+    /// Configuration that will lose data, in words, each with what to do about it. Computed from
+    /// the volume as it is now, so the Runs tab shows the current state and not a startup snapshot.
+    /// </summary>
+    List<string> Warnings(StoreVolume volume, long stored)
+    {
+        var warnings = new List<string>();
+        if (volume.AnonymousVolume)
+            warnings.Add($"The run store is on an anonymous Docker volume ({volume.MountPoint}). A redeploy that " +
+                         $"recreates the container starts with an empty store, and `docker volume prune` deletes " +
+                         $"every run in it. Mount a named volume and point AGRO_RunStoreRoot inside it.");
+        else if (volume.InContainer && volume.MountPoint == "/")
+            warnings.Add($"The run store is in the container's own filesystem, not on a volume, so it is lost when " +
+                         $"the container is recreated. Mount a volume and point AGRO_RunStoreRoot inside it.");
+        foreach (var mount in volume.NestedMounts)
+            warnings.Add($"A volume is mounted at {mount}, but the run store writes to {volume.Root}, outside it" +
+                         $"{(volume.MountPoint.Length > 0 ? $", on {volume.MountPoint}" : "")}. If that volume is meant " +
+                         $"to hold the runs, set AGRO_RunStoreRoot to a directory inside it.");
+        if (volume.FreeBytes >= 0)
+        {
+            var capacity = stored + volume.FreeBytes - MinFreeBytes;
+            //Not when there is no room at all: the reserve warning below says that, and "set the
+            //budget below 0 B" is not advice.
+            if (capacity > 0 && RetentionBytes > capacity)
+                warnings.Add($"The retention budget ({Size(RetentionBytes)}) is more than this volume can hold for " +
+                             $"runs (about {Size(Math.Max(0, capacity))}, keeping the {Size(MinFreeBytes)} reserve free). " +
+                             $"Eviction will never start; runs stop at the reserve instead, and only deleting runs " +
+                             $"makes room. Set AGRO_RunStoreRetentionBytes below {Size(Math.Max(0, capacity))}.");
+            if (MinFreeBytes > 0 && volume.FreeBytes < MinFreeBytes)
+                warnings.Add($"Only {Size(volume.FreeBytes)} is free on {(volume.MountPoint.Length > 0 ? volume.MountPoint : volume.Root)}, " +
+                             $"below the {Size(MinFreeBytes)} reserve: a run stops as soon as it starts storing. " +
+                             $"Delete runs or free space on the volume.");
+        }
+        return warnings;
+    }
+
+    public Models.RunStoreStatusResponse Status(int events)
+    {
+        var volume = StoreVolume.Probe(Root);
+        var stored = StoredBytes(out var runs);
+        return new(
+            Enabled: !Disabled,
+            Root: volume.Root,
+            DisabledReason: DisabledReason,
+            MountPoint: volume.MountPoint,
+            FileSystem: volume.FileSystem,
+            VolumeName: volume.VolumeName,
+            AnonymousVolume: volume.AnonymousVolume,
+            TotalBytes: volume.TotalBytes,
+            FreeBytes: volume.FreeBytes,
+            MinFreeBytes: MinFreeBytes,
+            RetentionBytes: RetentionBytes,
+            ModelRetentionBytes: ModelRetentionBytes,
+            StoredBytes: stored,
+            ModelBytes: Disabled ? 0 : ModelBytes(),
+            Runs: runs,
+            LiveRuns: Writers.Count,
+            SweepMinutes: SweepInterval.TotalMinutes,
+            Warnings: Warnings(volume, stored).ToArray(),
+            Events: Log.Snapshot(events));
     }
 
     /// <summary>
@@ -1419,12 +2154,20 @@ public class RunStore : IRunStore, IDisposable
         if (Interlocked.Exchange(ref Sweeping, 1) != 0) return;
         try
         {
+            //Outcomes CompleteRun could not write - typically on the full disk that stopped the run.
+            SweepStaleRuns(atStartup: false);
             CollectTempModels();
             CollectModels();
             Evict();
+            var free = StoreVolume.FreeSpace(Root);
+            Log.Condition("disk-low", MinFreeBytes > 0 && free >= 0 && free < MinFreeBytes, "disk-low",
+                () => $"Only {Size(free)} is free on the run store's volume, below the {Size(MinFreeBytes)} reserve. " +
+                      $"Runs stop as soon as they try to store a frame; delete runs or free space on the volume.",
+                cleared: () => $"Free space on the run store's volume is back above the {Size(MinFreeBytes)} reserve " +
+                               $"({Size(StoreVolume.FreeSpace(Root))} free).");
         }
         catch (ObjectDisposedException) { /* the database went away: the store is shutting down */ }
-        catch (Exception e) { Console.Error.WriteLine($"RunStore: maintenance sweep failed: {e.Message}"); }
+        catch (Exception e) { Log.Error("maintenance-failed", null, $"A maintenance pass failed: {e.Message}"); }
         finally
         {
             Interlocked.Exchange(ref Sweeping, 0);
@@ -1456,16 +2199,25 @@ public class RunStore : IRunStore, IDisposable
                 //Refused rather than silently stopped. Deleting the frames out from under a live
                 //writer leaves it appending to an index file in a directory that no longer exists,
                 //and the user who asked has a simulation on screen they did not ask to lose.
-                if (Writers.ContainsKey(runId) || run?.Status == "running")
+                //The writer and not the row's status: a row the full disk left saying "running" is
+                //the run a user most needs to delete, to make room.
+                if (IsLive(runId))
                 {
                     reason = "This run is still computing. Stop it first, then delete it.";
+                    Log.Info("delete-refused", runId, $"Refused to delete run {runId}: it is still computing.");
                     return DeleteOutcome.Refused;
                 }
 
+                //Measured before it goes, from the row or - for a directory the database never knew -
+                //from the disk, so the event says what was given back.
                 var dir = RunDir(runId);
+                var size = run != null ? Footprint(run) : DirectorySize(dir);
                 if (Directory.Exists(dir)) Directory.Delete(dir, true);
                 if (run != null) Runs.Delete(runId);
-                Console.WriteLine($"RunStore: deleted run {runId} ({Size((run?.BytesOnDisk ?? 0) + (run?.AuxBytesOnDisk ?? 0))}).");
+                UnrecordedOutcomes.TryRemove(runId, out _);
+                Log.Info("deleted", runId,
+                    $"Deleted run {runId} ({Size(size)}{(run != null ? $", started {run.CreatedUtc:yyyy-MM-dd HH:mm} UTC" : "")}) " +
+                    $"on request.", size);
             }
             CollectModels();
             return DeleteOutcome.Deleted;
@@ -1473,9 +2225,21 @@ public class RunStore : IRunStore, IDisposable
         catch (Exception e)
         {
             reason = e.Message;
-            Console.Error.WriteLine($"RunStore: could not delete {runId}: {e.Message}");
+            Log.Error("delete-failed", runId, $"Could not delete run {runId}: {e.Message}");
             return DeleteOutcome.Refused;
         }
+    }
+
+    /// <summary>Bytes under a directory, or zero when it cannot be measured.</summary>
+    static long DirectorySize(string dir)
+    {
+        try
+        {
+            return Directory.Exists(dir)
+                ? Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories).Sum(file => new FileInfo(file).Length)
+                : 0;
+        }
+        catch { return 0; }
     }
 
     /// <summary>
@@ -1501,7 +2265,6 @@ public class RunStore : IRunStore, IDisposable
             lock (MetadataLock)
             {
             var all = Runs.Query().OrderBy(x => x.CreatedUtc).ToList();
-            static long Footprint(RunRecord r) => r.BytesOnDisk + r.AuxBytesOnDisk;
             //Runs only. Field models have their own cap (ModelRetentionBytes) because evicting a
             //run does not release its model - it outlives the run and may be shared - so counting
             //them here would have this loop delete every completed run in the store chasing a
@@ -1509,16 +2272,15 @@ public class RunStore : IRunStore, IDisposable
             var total = all.Sum(Footprint);
 
             //If what cannot be evicted already exceeds the budget, deleting the rest frees nobody
-            //and costs the user their whole history. Say so and stop.
-            var pinned = all.Where(r => r.Status == "running" || all.Any(x => x.ParentRunId == r.Id)).Sum(Footprint);
-            if (pinned > RetentionBytes)
-            {
-                Console.Error.WriteLine(
-                    $"RunStore: {Size(pinned)} is held by running or branched-from runs, which is already over " +
-                    $"the {Size(RetentionBytes)} budget. Not evicting - deleting completed runs would not help.");
-                return;
-            }
-
+            //and costs the user their whole history. Say so - once, when it starts - and stop.
+            //Liveness is the writer, not the status: a row the server left saying "running" after
+            //it stopped is over, and holding the budget for it is how that run's space was lost.
+            var pinned = all.Where(r => IsLive(r.Id) || all.Any(x => x.ParentRunId == r.Id)).Sum(Footprint);
+            Log.Condition("eviction-refused", pinned > RetentionBytes, "eviction-refused",
+                () => $"{Size(pinned)} is held by running or branched-from runs, which is already over the " +
+                      $"{Size(RetentionBytes)} budget. Not evicting - deleting completed runs would not help.",
+                cleared: () => "Running and branched-from runs fit inside the retention budget again; eviction resumes.");
+            if (pinned > RetentionBytes) return;
 
             foreach (var run in all)
             {
@@ -1528,10 +2290,7 @@ public class RunStore : IRunStore, IDisposable
                 if (Stopping) break;
                 //Never evict a run something else was branched from - its request and its stored
                 //frames are the only thing making those children comparable to it.
-                //Writers too, not only the status: the row is inserted as "running" before the
-                //writer exists and cleared after it is gone, so the two disagree at the edges - and
-                //on a timer this runs at arbitrary moments rather than only at BeginRun.
-                if (run.Status == "running" || Writers.ContainsKey(run.Id) || all.Any(x => x.ParentRunId == run.Id)) continue;
+                if (IsLive(run.Id) || all.Any(x => x.ParentRunId == run.Id)) continue;
 
                 //Per run, because one undeletable directory used to abort the whole pass - which on
                 //a timer means aborting it again every interval, forever, with the store stuck over
@@ -1539,21 +2298,28 @@ public class RunStore : IRunStore, IDisposable
                 try
                 {
                     var dir = RunDir(run.Id);
+                    var before = total;
                     if (Directory.Exists(dir)) Directory.Delete(dir, true);
                     Runs.Delete(run.Id);
+                    UnrecordedOutcomes.TryRemove(run.Id, out _);
                     total -= Footprint(run);
-                    Console.WriteLine($"RunStore: evicted run {run.Id} ({Size(Footprint(run))}) to stay inside the retention budget.");
+                    //A warning, because it deletes results nobody asked to delete - the one deletion
+                    //a user will come looking for, so it says what, when it was made, and why.
+                    Log.Warning("evicted", run.Id,
+                        $"Evicted run {run.Id} ({Size(Footprint(run))}, started {run.CreatedUtc:yyyy-MM-dd HH:mm} UTC): " +
+                        $"the stored runs held {Size(before)} against a retention budget of {Size(RetentionBytes)}, " +
+                        $"and this was the oldest that could go.", Footprint(run));
                 }
                 catch (ObjectDisposedException)
                 {
                     //The database is closing under us. Stop: continuing deletes directories whose
                     //rows can no longer be removed, which is worse than stopping mid-budget.
-                    Console.Error.WriteLine($"RunStore: eviction stopped at {run.Id}; the store is shutting down.");
+                    Log.Warning("eviction-failed", run.Id, $"Eviction stopped at run {run.Id}: the store is shutting down.");
                     break;
                 }
                 catch (Exception e)
                 {
-                    Console.Error.WriteLine($"RunStore: could not evict {run.Id}: {e.Message}");
+                    Log.Error("eviction-failed", run.Id, $"Could not evict run {run.Id}: {e.Message}");
                 }
             }
             }
@@ -1562,7 +2328,7 @@ public class RunStore : IRunStore, IDisposable
             //its model. The list is passed through so the pass reads the table once.
             CollectModels(Runs.FindAll().ToList());
         }
-        catch (Exception e) { Console.Error.WriteLine($"RunStore: eviction failed: {e.Message}"); }
+        catch (Exception e) { Log.Error("eviction-failed", null, $"Eviction failed: {e.Message}"); }
     }
 
     /// <summary>
@@ -1628,9 +2394,9 @@ public class RunStore : IRunStore, IDisposable
             //that genuinely matter - adopted ones - recover their hash from terrain.json in
             //Reconcile, which is the mechanism that actually protects them.
             var unaccounted = all.Count(x => !string.IsNullOrEmpty(x.FieldModelName) && string.IsNullOrEmpty(x.FieldModelHash));
-            if (unaccounted > 0)
-                Console.WriteLine($"RunStore: {unaccounted} run(s) name a field model without recording which one. " +
-                                  $"They cannot use a stored model and do not hold one back; collecting anyway.");
+            Log.Condition("models-unaccounted", unaccounted > 0, "models-unaccounted",
+                () => $"{unaccounted} run(s) name a field model without recording which one. They cannot use a stored " +
+                      $"model and do not hold one back; collecting anyway.", level: "info");
 
             var referenced = all
                 .Select(x => x.FieldModelHash)
@@ -1656,29 +2422,32 @@ public class RunStore : IRunStore, IDisposable
             {
                 if (Stopping) return;
                 if (model.Touched > aged) { survivors.Add(model); continue; }
-                if (!TryDeleteModel(model.Path, model.Hash, model.Size, "unreferenced")) survivors.Add(model);
+                if (!TryDeleteModel(model.Path, model.Hash, model.Size,
+                        $"no stored run uses it, and it was last uploaded over {ModelGrace.TotalHours:0} h ago")) survivors.Add(model);
             }
 
             //Stage B: still over the cap, so the youngest dead models go too - oldest touched
             //first, and never one young enough to be an upload in progress.
             var total = referencedBytes + survivors.Sum(x => x.Size);
-            if (total <= ModelRetentionBytes) return;
-
-            var floor = now - ModelMinGrace;
-            foreach (var model in survivors.Where(x => x.Touched <= floor).OrderBy(x => x.Touched))
+            if (total > ModelRetentionBytes)
             {
-                if (total <= ModelRetentionBytes || Stopping) break;
-                if (TryDeleteModel(model.Path, model.Hash, model.Size, "over the model budget")) total -= model.Size;
+                var floor = now - ModelMinGrace;
+                foreach (var model in survivors.Where(x => x.Touched <= floor).OrderBy(x => x.Touched))
+                {
+                    if (total <= ModelRetentionBytes || Stopping) break;
+                    if (TryDeleteModel(model.Path, model.Hash, model.Size,
+                            "no stored run uses it, and the field models were over their budget")) total -= model.Size;
+                }
             }
 
-            if (total > ModelRetentionBytes)
-                Console.Error.WriteLine(
-                    $"RunStore: field models occupy {Size(total)}, over the {Size(ModelRetentionBytes)} budget, " +
-                    $"and {Size(referencedBytes)} of that is referenced by stored runs. Nothing further can be " +
-                    $"collected without costing those runs their terrain - delete runs to release their models.");
+            Log.Condition("model-budget", total > ModelRetentionBytes, "model-budget",
+                () => $"Field models occupy {Size(total)}, over the {Size(ModelRetentionBytes)} budget, and " +
+                      $"{Size(referencedBytes)} of that is referenced by stored runs. Nothing further can be collected " +
+                      $"without costing those runs their terrain - delete runs to release their models.",
+                cleared: () => $"Field models fit inside the {Size(ModelRetentionBytes)} budget again.");
         }
         catch (ObjectDisposedException) { /* the database went away: the store is shutting down */ }
-        catch (Exception e) { Console.Error.WriteLine($"RunStore: model collection failed: {e.Message}"); }
+        catch (Exception e) { Log.Error("model-collect-failed", null, $"Field model collection failed: {e.Message}"); }
         finally { Interlocked.Exchange(ref Collecting, 0); }
     }
 
@@ -1700,12 +2469,12 @@ public class RunStore : IRunStore, IDisposable
                 if (File.GetLastWriteTimeUtc(path) > DateTime.UtcNow - ModelMinGrace) return false;
                 File.Delete(path);
             }
-            Console.WriteLine($"RunStore: collected field model {hash[..Math.Min(12, hash.Length)]} ({Size(size)}), {why}.");
+            Log.Info("model-collected", null, $"Deleted field model {hash[..Math.Min(12, hash.Length)]} ({Size(size)}): {why}.", size);
             return true;
         }
         catch (Exception e)
         {
-            Console.Error.WriteLine($"RunStore: could not collect field model {hash[..Math.Min(12, hash.Length)]}: {e.Message}");
+            Log.Error("model-collect-failed", null, $"Could not delete field model {hash[..Math.Min(12, hash.Length)]}: {e.Message}");
             return false;
         }
     }
@@ -1738,12 +2507,12 @@ public class RunStore : IRunStore, IDisposable
                         if (File.GetLastWriteTimeUtc(file) > cutoff) continue;
                         var size = new FileInfo(file).Length;
                         File.Delete(file);
-                        Console.WriteLine($"RunStore: removed an abandoned partial field model ({Size(size)}).");
+                        Log.Info("model-temp-removed", null, $"Removed an abandoned partial field model upload ({Size(size)}).", size);
                     }
                 }
                 catch { /* the next pass will try again */ }
         }
-        catch (Exception e) { Console.Error.WriteLine($"RunStore: temp model sweep failed: {e.Message}"); }
+        catch (Exception e) { Log.Error("model-collect-failed", null, $"Could not look for abandoned partial field model uploads: {e.Message}"); }
     }
 
     /// <summary>
@@ -1756,7 +2525,7 @@ public class RunStore : IRunStore, IDisposable
     /// <summary>
     /// The export flags out of a stored frame's header, without inflating the frame.
     ///
-    /// V7 and V8 frames both open with a version byte and a flags byte. The frames are
+    /// V7, V8 and V9 frames open with a version byte and a flags byte. The frames are
     /// zlib streams, so decompressing the first block is enough however large the frame is.
     /// </summary>
     static bool TryReadExportFlags(string framePath, out byte flags)
@@ -1768,7 +2537,7 @@ public class RunStore : IRunStore, IDisposable
             using var zlib = new ZLibStream(input, CompressionMode.Decompress);
             Span<byte> header = stackalloc byte[2];
             if (zlib.ReadAtLeast(header, 2, throwOnEndOfStream: false) < 2) return false;
-            if (header[0] is not (7 or 8)) return false;
+            if (header[0] is not (7 or 8 or 9)) return false;
             flags = header[1];
             return true;
         }

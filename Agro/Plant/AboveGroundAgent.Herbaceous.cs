@@ -23,7 +23,14 @@ namespace Agro
 
                 var phase = formation.GetFloweringPhase(species, timestep);
 
-                //TODO growth should reflect temperature
+                // A waiting rosette apex elongates when the plant bolts. Existing basal
+                // nodes and leaves remain compressed; only the new axis is elongated.
+                if (species.BoltingAgeHours > 0f && plant.GetAge_h() >= species.BoltingAgeHours
+                    && agent.Organ == OrganTypes.Meristem && !agent.IsRizome
+                    && agent.LengthVar <= species.RosetteNodeDistance)
+                    agent.LengthVar = MathF.Max(species.MinimumInternodeLength,
+                        species.NodeDistance + plant.RNG.NextFloatVar(species.NodeDistanceVar));
+
                 var lifeSupportPerHour = agent.LifeSupportPerHour(species);
                 var lifeSupportPerTick = lifeSupportPerHour * world.HoursPerTick;
                 // A senescing leaf maintains only the tissue it has left - the same fraction the
@@ -61,7 +68,7 @@ namespace Agro
                         //Only the first segment of a petiole ages out. An inner segment renewing
                         //itself would replace one link of the chain and orphan everything past it.
                         if (!formation.HasPendingDevelopment(agentID) && ageHours > species.LeafMaximumAgeHours
-                            && formation.GetOrgan(agent.Parent) != OrganTypes.Meristem
+                            && (formation.GetOrgan(agent.Parent) != OrganTypes.Meristem || species.RosetteScapes)
                             && formation.GetOrgan(agent.Parent) != OrganTypes.Petiole)
                         {
                             // Keep the age ratio fractional below 7000 hours.
@@ -149,7 +156,18 @@ namespace Agro
                         var currentSize = new Vector2(agent.Length, agent.Radius);
                         //dominance factor decreases the growth of structures further away from the dominant branch (based on the tree structure)
                         var dominanceFactor = species.GetDominanceFactor(agent.DominanceLevel);
-                        var productionFactor = formation.DailyProductionMax > 1e-6f ? agent.PreviousDayProductionInvariant / formation.DailyProductionMax : 0f;
+                        var productionFactor = plant.VegetativeGrowthFactor(timestep,
+                            agent.PreviousDayEnvResourcesInvariant, agent.PreviousDayProductionInvariant,
+                            formation.DailyProductionMax);
+                        // A basal crown has to lift its first foliage out of the soil before
+                        // that foliage can supply a light signal. Its sampled emergence target
+                        // is already bounded at birth; use its existing reserve/water checks
+                        // and thermal development until that axis reaches the surface target.
+                        // This supplies no irradiance and does not release adult leaf growth.
+                        if (species.VegetativeGrowthLightReferenceWhM2 > 0f
+                            && agent.Organ == OrganTypes.Meristem && agent.Length <= agent.LengthVar
+                            && agent.Parent >= 0 && formation.GetIsRizome(agent.Parent))
+                            productionFactor = plant.VegetativeTemperatureFactor(timestep);
                         switch (agent.Organ)
                         {
                             case OrganTypes.Leaf:
@@ -234,7 +252,8 @@ namespace Agro
                                 if (phase != SeasonalPhase.ResetPending)
                                 {
                                     var energyReserve = Math.Clamp(agent.Energy / agent.EnergyStorageCapacity(species), 0f, 1f);
-                                    var growth = 2e-5f * dominanceFactor * energyReserve * Math.Min(plant.GrowthWaterFactor, energyReserve) * world.HoursPerTick * species.HerbaceousGrowthRateScale;
+                                    var growth = 2e-5f * dominanceFactor * energyReserve * Math.Min(plant.GrowthWaterFactor, energyReserve) * world.HoursPerTick * species.HerbaceousGrowthRateScale
+                                        * plant.VegetativeEnvironmentFactor(timestep, agent.PreviousDayEnvResourcesInvariant);
 
                                     //assure not to outgrow the parent
                                     var parentRadius = (agent.Parent >= 0 && !formation.GetIsRizome(agent.Parent)) ? formation.GetBaseRadius(agent.Parent) : float.MaxValue;
@@ -260,6 +279,8 @@ namespace Agro
                         if (agent.Organ == OrganTypes.Stem || agent.Organ == OrganTypes.Meristem)
                         {
                             var (flowerCommitmentProbability, crownContinuationProbability) = plant.TickProbabilities.ForPhase(phase);
+                            crownContinuationProbability = plant.VegetativeOpportunityProbability(
+                                crownContinuationProbability, timestep, agent.PreviousDayEnvResourcesInvariant);
 
                             if (flowerCommitmentProbability > 0f)
                             {
@@ -306,9 +327,11 @@ namespace Agro
                                     CommitToFlower(ref agent, formation, agentID, prevResources, prevProduction);
                                 if (committedToFlower)
                                 {
-                                    agent.Organ = OrganTypes.Stem;
-                                    agent.GrowthTimeVar = world.HoursPerTick / (species.WoodGrowthTime + plant.RNG.NextFloatVar(species.WoodGrowthTimeVar));
-                                    wasMeristem = true;
+                                    if (!species.RosetteScapes)
+                                    {
+                                        agent.Organ = OrganTypes.Stem;
+                                        agent.GrowthTimeVar = world.HoursPerTick / (species.WoodGrowthTime + plant.RNG.NextFloatVar(species.WoodGrowthTimeVar));
+                                        wasMeristem = true;
                                     // A floral axis and its vegetative successor must be admitted
                                     // independently. A crowded replacement with several leaves used
                                     // to reject the scape in the same birth transaction, even when
@@ -320,8 +343,9 @@ namespace Agro
                                     // commit again, and a Bergenia fills its ten nodes before its
                                     // second spring. The cost is one node per flowering year beyond
                                     // the cap until basal node abscission exists.
-                                    agent.FloralHandoverPending = species.ContinueCrownAfterFlowerCommitment
-                                        && !HasVegetativeApex(formation, agentID, agentID);
+                                        agent.FloralHandoverPending = species.ContinueCrownAfterFlowerCommitment
+                                            && !HasVegetativeApex(formation, agentID, agentID);
+                                    }
                                 }
                                 else if (!agent.GrowthBlocked
                                     && (plant.RNG.NextFloat() < crownContinuationProbability)
@@ -614,7 +638,8 @@ namespace Agro
                 {
                     if (HasVegetativeApex(formation, agentID, agentID))
                         agent.FloralHandoverPending = false;
-                    else if (agent.Energy > enoughEnergyState && plant.CanopyGrowthAllowed)
+                    else if (agent.Energy > enoughEnergyState && plant.CanopyGrowthAllowed
+                        && plant.VegetativeEnvironmentFactor(timestep, agent.PreviousDayEnvResourcesInvariant) > 0f)
                     {
                         var prevResources = agent.PreviousDayEnvResourcesInvariant > 0f
                             ? agent.PreviousDayEnvResourcesInvariant : formation.DailyResourceMax;
@@ -658,7 +683,8 @@ namespace Agro
                 //attempt per year: at a 0.2 seasonal probability the expected wait to
                 //raise a crown was five years, so only the first shoots ever appeared.
                 //The marker is now claimed only by an activation that actually happens.
-                var activationProbability = plant.TickProbabilities.CrownBud;
+                var activationProbability = plant.VegetativeOpportunityProbability(
+                    plant.TickProbabilities.CrownBud, timestep, agent.PreviousDayEnvResourcesInvariant);
                 if (plant.RNG.NextFloat() >= activationProbability || !plant.CanopyGrowthAllowed)
                     return false;
 
@@ -736,7 +762,8 @@ namespace Agro
             private static bool CommitToFlower(ref AboveGroundAgent agent, PlantSubFormation<AboveGroundAgent> formation, int agentID, float prevResources, float prevProduction)
             {
                 var flowerOrgans = new List<OrganTypes>() { OrganTypes.FlowerStem, OrganTypes.FlowerPadel, OrganTypes.FlowerPedicel, OrganTypes.FlowerMeristem, OrganTypes.FlowerBud };
-                var i = agent.Parent;
+                // A persistent rosette may carry several scapes on the same apex.
+                var i = formation.Plant.Parameters.RosetteScapes ? agentID : agent.Parent;
                 var maximumFlowersPerCrown = Math.Max(1, formation.Plant.Parameters.MaximumFlowersPerCrown);
                 var currentFlowersPerCrown = 0;
                 while (i >= 0 && !formation.GetIsRizome(i) && currentFlowersPerCrown < maximumFlowersPerCrown)
@@ -756,6 +783,18 @@ namespace Agro
                     // so it cannot make a leaning parent axis vertical.  Use the
                     // gravitropic base orientation for the initial floral culm.
                     var flowerOrientation = PlantFormation2.AdjustUpBase(agent.Orientation, up: true);
+                    var flowerOffset = Vector3.Zero;
+                    if (formation.Plant.Parameters.RosetteScapes)
+                    {
+                        // Independent scapes emerge around the crown, not along an
+                        // identical coincident line every time its apex recommits.
+                        var azimuth = formation.Plant.RNG.NextFloat() * MathF.Tau;
+                        flowerOffset = Vector3.Transform(new Vector3(0f,
+                            MathF.Cos(azimuth) * agent.Radius * 0.7f,
+                            MathF.Sin(azimuth) * agent.Radius * 0.7f), flowerOrientation);
+                        flowerOrientation *= Quaternion.CreateFromAxisAngle(Vector3.UnitX, azimuth)
+                            * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, 10f * MathF.PI / 180f);
+                    }
                     // FlowerMeristem selects basal versus terminal dimensions in
                     // its constructor.  Supplying this state only in the object
                     // initializer made the first Carex culm use the 4 mm terminal
@@ -773,6 +812,7 @@ namespace Agro
                         flowerEnergy, initialResources: prevResources, initialProduction: prevProduction, flowerAgent: flowerAgent)
                     {
                         Water_g = flowerWater,
+                        BaseOffset = flowerOffset,
                         LateralAngle = lateralPitch,
                         DominanceLevel = agent.DominanceLevel,
                         FlowerAgent = flowerAgent
@@ -959,11 +999,15 @@ namespace Agro
             /// continuation or commitment roll has already succeeded.
             /// </remarks>
             static bool CrownAxisHasRoom(PlantSubFormation<AboveGroundAgent> formation, int agentID,
-                SpeciesSettings species)
+                SpeciesSettings species, int reservedNodes = 0)
             {
                 var limit = species.CrownMaximumNodes;
+                if (species.BoltingAgeHours > 0f && formation.Plant.GetAge_h() < species.BoltingAgeHours)
+                    limit = limit > 0 ? Math.Min(limit, species.RosetteMaximumNodes) : species.RosetteMaximumNodes;
                 if (limit <= 0)
                     return true;
+
+                limit -= reservedNodes;
 
                 var baseNode = agentID;
                 while (true)
@@ -1023,6 +1067,25 @@ namespace Agro
                     formation.Plant.Parameters, agent.Orientation));
                 CreateVegetativeCrownNode(ref agent, formation, agentID, orientation, lateralPitch,
                     prevResources, prevProduction);
+                var species = formation.Plant.Parameters;
+                // One trial per developmental node keeps this probability independent
+                // of tick duration. Both shoots share the parent's finite reserve.
+                if (species.HerbaceousBranchProbability > 0f
+                    && agent.DominanceLevel < species.HerbaceousBranchMaximumOrder
+                    && formation.Plant.GetAge_h() >= species.BoltingAgeHours
+                    && CrownAxisHasRoom(formation, agentID, species, reservedNodes: 1)
+                    && formation.Plant.RNG.NextFloat() < species.HerbaceousBranchProbability)
+                {
+                    var branch = agent;
+                    branch.DominanceLevel++;
+                    var branchOrientation = orientation
+                        * Quaternion.CreateFromAxisAngle(Vector3.UnitX, lateralPitch)
+                        * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, species.LateralPitch);
+                    CreateVegetativeCrownNode(ref branch, formation, agentID, branchOrientation,
+                        lateralPitch, prevResources, prevProduction);
+                    agent.Energy = branch.Energy;
+                    agent.Water_g = branch.Water_g;
+                }
             }
 
             static void RenewPetiole(ref AboveGroundAgent agent, PlantSubFormation<AboveGroundAgent> formation, int agentID,
@@ -1113,7 +1176,9 @@ namespace Agro
                 if (ageHours < MinimumBudAgeHours || phase == SeasonalPhase.ResetPending || agent.GrowthBlocked
                     || agent.LoadLimited || agent.Energy < 0f || formation.HasPendingDevelopment(agentID))
                     return;
-                if (plant.RNG.NextFloat() >= plant.TickProbabilities.NodeBudRegrowth || !plant.CanopyGrowthAllowed)
+                var regrowthProbability = plant.VegetativeOpportunityProbability(
+                    plant.TickProbabilities.NodeBudRegrowth, plant.World.Timestep, agent.PreviousDayEnvResourcesInvariant);
+                if (plant.RNG.NextFloat() >= regrowthProbability || !plant.CanopyGrowthAllowed)
                     return;
                 RenewPetiole(ref agent, formation, agentID, agent.restOrientation);
             }

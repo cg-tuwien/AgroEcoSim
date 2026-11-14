@@ -82,15 +82,21 @@ export function buildPlants(out: InstanceList, inp: PlantBuildInputs) {
                     //organ is the only thing that distinguishes them.
                     const laminaGeom = p.organ === Organs.FlowerPadel
                         ? petalGeomId
+                        : p.organ === Organs.FruitWing ? entity.geometry?.fruitWing ?? Geom.Plane
                         : entity.geometry?.leaves[Math.min(p.laminaSlice, entity.geometry.leaves.length - 1)] ?? inp.leafGeom(entity.species, p.laminaSlice);
                     const folding = p.deformation?.some(x => x !== 0);
                     if (folding) inst.fold = { angles: p.deformation!, scale: foldScale(inst.model) };
-                    assign(inst, laminaGeom, c.color, c.emissive, IFlags.DoubleSided | IFlags.Foliage
+                    assign(inst, laminaGeom, c.color, c.emissive, IFlags.DoubleSided | (p.organ === Organs.FruitWing ? 0 : IFlags.Foliage)
                         | (folding ? IFlags.FlatShaded : 0) | hiddenFlag(p, inp), ref);
                     break;
                 }
+                case Primitives.Ellipsoid: {
+                    const c = p.stats ? leafColor(p, j, inp.visualMapping) : { color: neutral, emissive: black };
+                    assign(inst, entity.geometry?.fruit ?? Geom.Sphere, c.color, c.emissive, IFlags.None, ref);
+                    break;
+                }
                 case Primitives.Cylinder: {
-                    const c = p.stats ? stemColor(p, inp.visualMapping) : { color: neutral, emissive: black };
+                    const c = p.stats ? stemColor(p, inp.visualMapping, entity.species) : { color: neutral, emissive: black };
                     assign(inst, Geom.Cylinder, c.color, c.emissive, hiddenFlag(p, inp), ref);
                     if (p.deformation?.some(x => x !== 0)) {
                         for (let span = 0; span < 3; ++span) {
@@ -127,7 +133,7 @@ export function buildPlants(out: InstanceList, inp: PlantBuildInputs) {
 /** Mirrors the per-primitive visibility SetupMesh applied from the showX toggles. */
 function hiddenFlag(p: Primitive, inp: PlantBuildInputs): number {
     switch (p.type) {
-        case Primitives.Rectangle: return inp.showLeaves ? IFlags.None : IFlags.Hidden;
+        case Primitives.Rectangle: return p.organ === Organs.FruitWing || inp.showLeaves ? IFlags.None : IFlags.Hidden;
         case Primitives.Box: return inp.showRoots ? IFlags.None : IFlags.Hidden;
         default: return IFlags.None;
     }

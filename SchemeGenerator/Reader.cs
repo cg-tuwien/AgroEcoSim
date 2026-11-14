@@ -248,7 +248,7 @@ public static partial class Reader
             "byte" => true,
             "bool" => true,
             "string" => true,
-            "Behavior" or nameof(ContactDeformationMode) => true,
+            "Behavior" or nameof(ContactDeformationMode) or nameof(TreeCrownHabit) or nameof(TreeMainlineModuleMode) => true,
             nameof(SeasonalPhase) => true,
             _ => false
         };
@@ -299,7 +299,7 @@ public static partial class Reader
             "float" or "double" or "long" or "int" or "short" or "sbyte" or "ulong" or "uint" or "ushort" or "byte" => "number",
             "bool" => "boolean",
             "string" => "string",
-            "Behavior" or nameof(SeasonalPhase) or nameof(ContactDeformationMode) => "number",
+            "Behavior" or nameof(SeasonalPhase) or nameof(ContactDeformationMode) or nameof(TreeCrownHabit) or nameof(TreeMainlineModuleMode) => "number",
             _ => "any"
         };
     }
@@ -322,6 +322,10 @@ public static partial class Reader
 
         if (expr.StartsWith(nameof(ContactDeformationMode)+".") && Enum.TryParse<ContactDeformationMode>(expr[(nameof(ContactDeformationMode).Length+1)..],out var deformation))
             return ((byte)deformation).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        if (expr.StartsWith(nameof(TreeCrownHabit)+".") && Enum.TryParse<TreeCrownHabit>(expr[(nameof(TreeCrownHabit).Length+1)..],out var habit))
+            return ((byte)habit).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        if (expr.StartsWith(nameof(TreeMainlineModuleMode)+".") && Enum.TryParse<TreeMainlineModuleMode>(expr[(nameof(TreeMainlineModuleMode).Length+1)..],out var mainline))
+            return ((byte)mainline).ToString(System.Globalization.CultureInfo.InvariantCulture);
 
         if (expr.StartsWith(nameof(Behavior)))
         {
@@ -464,15 +468,30 @@ public static partial class Reader
                 sb.AppendLine($"        this.{member.TsName}.value = s.{savedName} * RadToDeg;");
             else if (member.CSharpType == nameof(ContactDeformationMode))
                 sb.AppendLine($"        this.{member.TsName}.value = s.{savedName} ?? 0;");
+            else if (member.CSharpName.StartsWith("Tree", StringComparison.Ordinal))
+                sb.AppendLine($"        this.{member.TsName}.value = s.{savedName} ?? {ToTsDefaultValue(member)};");
             else if (member.CSharpName is nameof(SpeciesSettings.LeafMembraneElasticModulus)
                 or nameof(SpeciesSettings.LeafBendingElasticModulus) or nameof(SpeciesSettings.LeafMechanicalThickness))
                 sb.AppendLine($"        this.{member.TsName}.value = s.{savedName} ?? 0;");
             else if (member.CSharpName == nameof(SpeciesSettings.LeafPoissonRatio))
                 sb.AppendLine($"        this.{member.TsName}.value = s.{savedName} ?? 0.3;");
-            // Sessions and stored runs saved before the drought response carry no value; they get
-            // the class default, as a request that omits the field does on the server.
+            // Older sessions and stored runs use the class defaults for newly introduced
+            // responses, just as a request that omits these fields does on the server.
             else if (member.CSharpName is nameof(SpeciesSettings.DroughtSenescenceOnset)
-                or nameof(SpeciesSettings.CanopyAdjustmentHalfTimeDays) or nameof(SpeciesSettings.DeadLeafAttachmentHours))
+                or nameof(SpeciesSettings.CanopyAdjustmentHalfTimeDays) or nameof(SpeciesSettings.DeadLeafAttachmentHours)
+                or nameof(SpeciesSettings.VegetativeTemperatureResponseEnabled)
+                or nameof(SpeciesSettings.VegetativeGrowthBaseTemperatureC)
+                or nameof(SpeciesSettings.VegetativeGrowthFullTemperatureC)
+                or nameof(SpeciesSettings.VegetativeGrowthLightReferenceWhM2)
+                or nameof(SpeciesSettings.BoltingAgeHours)
+                or nameof(SpeciesSettings.RosetteNodeDistance)
+                or nameof(SpeciesSettings.RosetteMaximumNodes)
+                or nameof(SpeciesSettings.HerbaceousBranchProbability)
+                or nameof(SpeciesSettings.HerbaceousBranchMaximumOrder)
+                or nameof(SpeciesSettings.RosetteScapes)
+                or nameof(SpeciesSettings.Monocarpic)
+                or nameof(SpeciesSettings.Taproot)
+                or nameof(SpeciesSettings.RootRadiusTaper))
                 sb.AppendLine($"        this.{member.TsName}.value = s.{savedName} ?? {ToTsDefaultValue(member)};");
             else
                 sb.AppendLine($"        this.{member.TsName}.value = s.{savedName};");
@@ -553,6 +572,11 @@ public static partial class Reader
             return ("0", null, "0.5");
         if (name == nameof(SpeciesSettings.DeadLeafAttachmentHours))
             return ("0", null, "1");
+        if (name is nameof(SpeciesSettings.VegetativeGrowthBaseTemperatureC)
+            or nameof(SpeciesSettings.VegetativeGrowthFullTemperatureC))
+            return ("-Number.MAX_VALUE", null, "0.5");
+        if (name == nameof(SpeciesSettings.VegetativeGrowthLightReferenceWhM2))
+            return ("0", null, "100");
 
         if (name is nameof(SpeciesSettings.RhizomeAxillaryBudsPerSegment) or nameof(SpeciesSettings.InitialBasalRhizomeBuds))
             return ("0", "32", "1");
@@ -562,6 +586,8 @@ public static partial class Reader
 
         if (member.CSharpType == "ContactDeformationMode")
             return ("0", "1", "1");
+        if (member.CSharpType == nameof(TreeCrownHabit))
+            return ("0", "2", "1");
 
         if (member.CSharpType is "int" or "byte")
             return ("0", null, "1");
@@ -650,7 +676,7 @@ public static partial class Reader
         sb.AppendLine("import { h, Fragment } from \"preact\";");
         sb.AppendLine("import appstate from \"../../appstate\";");
         sb.AppendLine("import { Signal } from \"@preact/signals\";");
-        sb.AppendLine("import { SpeciesFloatField, SpeciesIntField, SpeciesBoolField, SpeciesNameFields, SpeciesBehaviorField, SpeciesFlagsField } from \"./SpeciesItemTemplate\";");
+        sb.AppendLine("import { SpeciesFloatField, SpeciesIntField, SpeciesBoolField, SpeciesNameFields, SpeciesBehaviorField, SpeciesFlagsField, SpeciesChoiceField } from \"./SpeciesItemTemplate\";");
         sb.AppendLine("import { Species } from \"src/helpers/Species\";");
         sb.AppendLine();
         sb.AppendLine("export function GeneratedSpeciesFields(props: { species: Species; index: number }) {");
@@ -676,6 +702,8 @@ public static partial class Reader
     private static string GenerateGenericRow(TsFormField field, TsFormField? variance = null)
     {
         var tooltip = !string.IsNullOrWhiteSpace(field.Tooltip) ? $"tooltip={{{TsStringLiteral(field.Tooltip)}}}" : "";
+        if (field.CSharpType == nameof(TreeMainlineModuleMode))
+            return $"<SpeciesChoiceField speciesIndex={{index}} {tooltip} signal={{species.{field.TsName}}} label={{{TsStringLiteral(field.Label)}}} options={{[\"Existing\", \"Real axillary\", \"Automatic\"]}} />";
         var tag = field.CSharpType switch
         {
             "float" or "double" => FloatFieldTag,
@@ -683,7 +711,7 @@ public static partial class Reader
             "string" => StringFieldTag,
             "bool" => BoolFieldTag,
             nameof(SeasonalPhase) => StringFlagsTag,
-            nameof(ContactDeformationMode) => IntFieldTag,
+            nameof(ContactDeformationMode) or nameof(TreeCrownHabit) => IntFieldTag,
             _ => throw new Exception("Unknown field type.")
         };
 
