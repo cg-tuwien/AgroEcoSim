@@ -355,17 +355,43 @@ internal static partial class FoliageGeometry
         }
         return MathF.Sqrt(best);
     }
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
     static bool PlaneSeparates(Vector3 normal, Vector3 ab, Vector3 ac, Vector3 p, Vector3 q, Vector3 r, float search)
+        => new FacetAxis(normal, ab, ac).Separates(p, q, r, search);
+
+    /// <summary>
+    /// One projection test of <see cref="TriangleDistance"/> with the half that belongs to the
+    /// first facet worked out once: an axis, and the extent along it of a facet whose corners
+    /// are the origin, <c>ab</c> and <c>ac</c>. A static triangle is tested against every
+    /// candidate facet of a blade, and its own half never changes.
+    /// </summary>
+    internal readonly struct FacetAxis
     {
-        var size = normal.LengthSquared();
-        if (size < 1e-30f) return false;
-        var b = Vector3.Dot(normal, ab); var c = Vector3.Dot(normal, ac);
-        var x = Vector3.Dot(normal, p); var y = Vector3.Dot(normal, q); var z = Vector3.Dot(normal, r);
-        var lowA = MathF.Min(0,MathF.Min(b,c)); var highA = MathF.Max(0,MathF.Max(b,c));
-        var lowB = MathF.Min(x,MathF.Min(y,z)); var highB = MathF.Max(x,MathF.Max(y,z));
-        var gap = MathF.Max(lowA-highB,lowB-highA);
-        var padded = search + Skin * .01f;
-        return gap > 0 && gap * gap > padded * padded * size;
+        readonly Vector3 Normal;
+        readonly float Size, Low, High;
+
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+        public FacetAxis(Vector3 normal, Vector3 ab, Vector3 ac)
+        {
+            Normal = normal;
+            Size = normal.LengthSquared();
+            var b = Vector3.Dot(normal, ab); var c = Vector3.Dot(normal, ac);
+            Low = MathF.Min(0,MathF.Min(b,c)); High = MathF.Max(0,MathF.Max(b,c));
+        }
+
+        /// <summary>Whether the facet with corners <paramref name="p"/>, <paramref name="q"/> and
+        /// <paramref name="r"/>, given from the first facet's first corner, lies farther along
+        /// the axis than <paramref name="search"/>.</summary>
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+        public bool Separates(Vector3 p, Vector3 q, Vector3 r, float search)
+        {
+            if (Size < 1e-30f) return false;
+            var x = Vector3.Dot(Normal, p); var y = Vector3.Dot(Normal, q); var z = Vector3.Dot(Normal, r);
+            var lowB = MathF.Min(x,MathF.Min(y,z)); var highB = MathF.Max(x,MathF.Max(y,z));
+            var gap = MathF.Max(Low-highB,lowB-High);
+            var padded = search + Skin * .01f;
+            return gap > 0 && gap * gap > padded * padded * Size;
+        }
     }
     static bool EdgePlanesSeparate(Vector3 normal, Vector3 ab, Vector3 ac,
         Vector3 p, Vector3 q, Vector3 r, float search)

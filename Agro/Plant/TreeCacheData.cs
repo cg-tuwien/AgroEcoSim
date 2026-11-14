@@ -1,5 +1,6 @@
 using System.Drawing;
 using System.Numerics;
+using System.Runtime.InteropServices;
 
 namespace Agro;
 
@@ -15,6 +16,7 @@ internal class TreeCacheData
 	int[] BreadthOrder = new int[2], BreadthRank = new int[2];
 	bool BreadthKnown;
 	readonly List<int> HeavyNodes = [], LightRoots = [];
+	readonly object HeightGate = new();
 	[ThreadStatic] static Stack<int>? WalkStack;
 	/// <summary>Nodes from which a walk over a subtree is spread over the cores.</summary>
 	internal const int ParallelWalkMinimum = 16384;
@@ -180,6 +182,11 @@ internal class TreeCacheData
 
 	internal void UpdateBases<T>(PlantSubFormation<T> formation) where T : struct, IPlantAgent
 	{
+		if (Count >= ParallelWalkMinimum && Environment.ProcessorCount > 1)
+		{
+			PlaceAllOnAllCores(formation);
+			return;
+		}
 		var buffer = TraversalStack;
 		buffer.Clear();
 		foreach(var root in Roots)
@@ -288,6 +295,32 @@ internal class TreeCacheData
 
 		if (SubtreeSize(index) < ParallelWalkMinimum) PlaceBelow(formation, index, TraversalStack);
 		else PlaceBelowOnAllCores(formation, index);
+	}
+
+	/// <summary>
+	/// Every base and the height of a large plant, on several cores: a base is its parent's base
+	/// plus the parent's reach whatever the order, and the height is a maximum.
+	/// </summary>
+	void PlaceAllOnAllCores<T>(PlantSubFormation<T> formation) where T : struct, IPlantAgent
+	{
+		foreach (var root in Roots) PointNodes[root] = formation.Plant.Position;
+		var light = LightRoots;
+		foreach (var node in SplitForWalk(CollectionsMarshal.AsSpan(Roots), light)) PlaceChildren(formation, node);
+		Parallel.For(0, light.Count, k => PlaceBelow(formation, light[k], WalkStack ??= new()));
+
+		var groundHeight = formation.Plant.Position.Y;
+		var height = 0f;
+		var gate = HeightGate;
+		Parallel.ForEach(System.Collections.Concurrent.Partitioner.Create(0, Count, 4096), () => 0f, (range, _, highest) =>
+		{
+			for (var i = range.Item1; i < range.Item2; ++i)
+			{
+				var tip = PointNodes[i] + formation.GetAttachmentOffset(i);
+				highest = MathF.Max(highest, MathF.Max(PointNodes[i].Y, tip.Y) - groundHeight);
+			}
+			return highest;
+		}, highest => { lock (gate) height = MathF.Max(height, highest); });
+		Height = height;
 	}
 
 	/// <summary>Kept apart from the per-contact rebase, which must not allocate.</summary>

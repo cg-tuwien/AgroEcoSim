@@ -732,22 +732,14 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
         var shiftedAttachments = IsAboveGround && Plant.Parameters.Behavior == Behavior.Woody;
 
         //initialize weights with self weight converted to Newtons
-        for (int i = 0; i < count; ++i)
-        {
-            var weight = GetWeight(i, Plant.Parameters) * 0.001f * 9.81f;
-            Weights[i] = weight;
-            //Where that weight acts: the midpoint of the organ. Accumulated up the tree alongside
-            //the weight, this gives every node the centre of mass of everything it carries, which
-            //is the only thing that can supply a correct lever arm.
-            var selfDir = Vector3.Transform(Vector3.UnitX, dst[i].Orientation);
-            var selfBase = GetBaseCenter(i);
-            if (shiftedAttachments) selfBase += dst[i].BaseOffset;
-            WeightedCentroids[i] = weight * (selfBase + (GetDeformation(i) != Vector4.Zero && dst[i].Organ == OrganTypes.Petiole
-                ? Vector3.Transform(ContactDeformation.RodPoint(.5f,dst[i].Length,GetDeformation(i)),dst[i].Orientation)
-                : selfDir * (dst[i].Length * 0.5f)));
-            WeightReoslveChildren[i] = GetChildren(i).Count;
-        }
+        if (count >= ParallelBoundsMinimum && Environment.ProcessorCount > 1) SelfLoadsOnAllCores(count, shiftedAttachments);
+        else SelfLoads(0, count, shiftedAttachments);
         //accumulate weights from leaves up
+        if (count >= TreeCacheData.ParallelWalkMinimum && Environment.ProcessorCount > 1)
+        {
+            SumLoadsOnAllCores(count);
+            return;
+        }
         var leavesToProcess = WeightFrontA;
         var internalNodesToProcess = WeightFrontB;
         leavesToProcess.Clear();
@@ -772,6 +764,105 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
             (leavesToProcess, internalNodesToProcess) = (internalNodesToProcess, leavesToProcess);
         }
     }
+
+    /// <summary>
+    /// The sums up the tree of a large plant, on several cores, in the plain pass's own order.
+    /// </summary>
+    /// <remarks>
+    /// The plain pass works in fronts: the leaves in index order, then the organs whose last
+    /// child was in the front before, in the order those children came. A float sum depends on
+    /// the order of its terms, so what has to be kept is the order in which each organ receives
+    /// its children. A child arrives in the front of its height above the leaves, and a front is
+    /// ordered by the leaf at the end of each organ's chain of last-arriving children: its
+    /// <c>key</c>. Height and key are known once an organ's children are, so every organ can add
+    /// its children by (height, key) on its own, and subtrees can be summed side by side.
+    /// </remarks>
+    void SumLoadsOnAllCores(int count)
+    {
+        if (LoadHeights.Length < count)
+        {
+            var capacity = Math.Max(count, LoadHeights.Length + LoadHeights.Length / 2);
+            LoadHeights = new int[capacity]; LoadKeys = new int[capacity];
+        }
+        var branches = GravityBranches;
+        var heavy = TreeCache.SplitForWalk(CollectionsMarshal.AsSpan(GetRoots()), branches);
+        Parallel.For(0, branches.Count, branch => SumLoadsBelow(branches[branch]));
+        for (int k = heavy.Count - 1; k >= 0; --k) SumChildLoads(heavy[k], LoadOrderBuffer ??= []);
+    }
+    int[] LoadHeights = [], LoadKeys = [];
+    [ThreadStatic] static List<int>? LoadWalk;
+    [ThreadStatic] static List<int>? LoadOrderBuffer;
+
+    /// <summary>Sums one subtree, the organs farthest from its root first.</summary>
+    void SumLoadsBelow(int root)
+    {
+        var walk = LoadWalk ??= []; var order = LoadOrderBuffer ??= [];
+        walk.Clear();
+        walk.Add(root);
+        for (int k = 0; k < walk.Count; ++k) walk.AddRange(GetChildren(walk[k]));
+        for (int k = walk.Count - 1; k >= 0; --k) SumChildLoads(walk[k], order);
+    }
+
+    /// <summary>Adds the loads of an organ's children, all summed already, in the order the
+    /// plain pass delivers them, and notes the organ's own height and key.</summary>
+    void SumChildLoads(int index, List<int> order)
+    {
+        var children = GetChildren(index);
+        var heights = LoadHeights; var keys = LoadKeys;
+        if (children.Count == 0)
+        {
+            heights[index] = 0; keys[index] = index;
+            return;
+        }
+        order.Clear();
+        foreach (var child in children)
+        {
+            // Insertion by (height, key): an organ has a handful of children.
+            var at = order.Count;
+            while (at > 0 && (heights[order[at - 1]] > heights[child]
+                || heights[order[at - 1]] == heights[child] && keys[order[at - 1]] > keys[child])) --at;
+            order.Insert(at, child);
+        }
+        var weights = CollectionsMarshal.AsSpan(Weights); var centroids = CollectionsMarshal.AsSpan(WeightedCentroids);
+        var weight = weights[index]; var centroid = centroids[index];
+        foreach (var child in order)
+        {
+            weight += weights[child];
+            centroid += centroids[child];
+        }
+        weights[index] = weight; centroids[index] = centroid;
+        // The last to arrive is the last child of the greatest height.
+        var last = order[^1];
+        heights[index] = heights[last] + 1; keys[index] = keys[last];
+    }
+
+    /// <summary>Each organ's own weight in newtons, where it acts, and how many children it
+    /// waits for: the starting point of the sums up the tree.</summary>
+    void SelfLoads(int from, int to, bool shiftedAttachments)
+    {
+        var dst = Src();
+        var weights = CollectionsMarshal.AsSpan(Weights); var centroids = CollectionsMarshal.AsSpan(WeightedCentroids);
+        var waiting = CollectionsMarshal.AsSpan(WeightReoslveChildren);
+        for (int i = from; i < to; ++i)
+        {
+            var weight = GetWeight(i, Plant.Parameters) * 0.001f * 9.81f;
+            weights[i] = weight;
+            //Where that weight acts: the midpoint of the organ. Accumulated up the tree alongside
+            //the weight, this gives every node the centre of mass of everything it carries, which
+            //is the only thing that can supply a correct lever arm.
+            var selfDir = Vector3.Transform(Vector3.UnitX, dst[i].Orientation);
+            var selfBase = GetBaseCenter(i);
+            if (shiftedAttachments) selfBase += dst[i].BaseOffset;
+            centroids[i] = weight * (selfBase + (GetDeformation(i) != Vector4.Zero && dst[i].Organ == OrganTypes.Petiole
+                ? Vector3.Transform(ContactDeformation.RodPoint(.5f,dst[i].Length,GetDeformation(i)),dst[i].Orientation)
+                : selfDir * (dst[i].Length * 0.5f)));
+            waiting[i] = GetChildren(i).Count;
+        }
+    }
+
+    /// <summary>Kept apart from the sums of a small plant, which must not allocate.</summary>
+    void SelfLoadsOnAllCores(int count, bool shiftedAttachments) =>
+        Parallel.ForEach(System.Collections.Concurrent.Partitioner.Create(0, count, 4096), range => SelfLoads(range.Item1, range.Item2, shiftedAttachments));
 
     // Integral of the bending moment over a straight structural rod, divided by
     // its length. Descendant subtrees load their actual attachment, which may be
@@ -847,309 +938,21 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 		//over a trough edge. The hard soil pass in Agro/Collisions/CollisionWorld.cs replaces it
 		//with containment in the actual soil hull, which forbids the first without forbidding the
 		//second.
-        var nodesToVisit = GravityQueue;
-        nodesToVisit.Clear();
-        foreach (var root in GetRoots())
-            nodesToVisit.Enqueue(root);
-		while (nodesToVisit.Count > 0)
-		{
-
-
-			var i = nodesToVisit.Dequeue();
-			ref var agent = ref dst[i];
-            // Bases and centroids describe the pose frozen at the start of this
-            // walk. Save its attachment before carrying the agent's mutable offset.
-            Vector3 frozenJointBase = default, frozenAxis = default;
-            var woodyStructure = deferredTransport && !agent.IsRizome
-                && agent.Organ is OrganTypes.Stem or OrganTypes.Meristem or OrganTypes.Bud;
-            if (deferredTransport)
+        var step = new GravityStep(deferredTransport, relaxUnloaded, persistentDeformation, tickSpeed, response);
+        if (deferredTransport && !HasContactDeformation && count >= TreeCacheData.ParallelWalkMinimum && Environment.ProcessorCount > 1)
+            GravityOnAllCores(step);
+        else
+        {
+            var nodesToVisit = GravityQueue;
+            nodesToVisit.Clear();
+            foreach (var root in GetRoots())
+                nodesToVisit.Enqueue(root);
+            while (nodesToVisit.Count > 0)
             {
-                frozenJointBase = GetBaseCenter(i) + Unsafe.As<T, AboveGroundAgent>(ref agent).BaseOffset;
-                frozenAxis = Vector3.Transform(Vector3.UnitX, agent.Orientation);
-                var carry = agent.Parent >= 0 ? GravityTransport[agent.Parent] : Quaternion.Identity;
-                GravityTransport[i] = carry;
-                if (carry != Quaternion.Identity)
-                {
-                    agent.SetOrientation(Quaternion.Normalize(carry * agent.Orientation));
-                    agent.baseOrientation = Quaternion.Normalize(carry * agent.baseOrientation);
-                    agent.restOrientation = Quaternion.Normalize(carry * agent.restOrientation);
-                    agent.targetOrientation = Quaternion.Normalize(carry * agent.targetOrientation);
-                    // Woody attachments are world-space offsets from the parent's tip.
-                    // Carry only ancestor turns: this joint's own bend leaves its base fixed.
-                    ref var above = ref Unsafe.As<T, AboveGroundAgent>(ref agent);
-                    above.BaseOffset = Vector3.Transform(above.BaseOffset, carry);
-                }
-            }
-            agent.LoadLimited = false;
-			var petal = GetOrgan(i) is OrganTypes.FlowerPadel or OrganTypes.FruitWing;
-			if ((GetIsRizome(i) && agent.SoilAnchored) || (petal && !relaxUnloaded))
-			{
-				foreach (var child in GetChildren(i))
-					nodesToVisit.Enqueue(child);
-
-				continue;
-			}
-			var length = agent.Length;
-			var radius = agent.Radius;
-			var totalWeight = Weights[i];
-
-
-
-			float woodiness = agent.WoodRatio();
-			var basalAttenuation = MathF.Exp(-GetAbsDepth(i) *
-				Plant.Parameters.BasalStiffnessAttenuationPerSegment);
-			var greenElasticity = MathF.Max(Plant.Parameters.GreenElasticModulus,
-				Plant.Parameters.BasalGreenElasticModulus * basalAttenuation);
-			float elasticity = greenElasticity * (1 - woodiness) +
-				Plant.Parameters.WoodElasticModulus * woodiness;
-
-			if (agent.Organ.Equals(OrganTypes.Petiole))
-			{
-				elasticity = Plant.Parameters.PetioleElasticModulus;
-			}
-			if (agent.Organ is OrganTypes.Leaf or OrganTypes.FlowerPadel)
-			{
-				//A blade's stiffness belongs to the blade, not to how deep it sits in the plant. The
-				//basal ramp above is keyed on topological depth to stiffen the base of a shoot, and
-				//because it is applied with a max() it was overriding the species' own figure for
-				//every leaf.
-				elasticity = Plant.Parameters.LeafElasticModulus > 0f
-					? Plant.Parameters.LeafElasticModulus
-					: Plant.Parameters.GreenElasticModulus;
-			}
-			if (IsFloralAxis(agent.Organ))
-			{
-				// Supporting floral axes dry and lignify during senescence; they do
-				// not lose essentially all bending stiffness. Interpolate toward the
-				// species' mature structural-tissue modulus instead of toward zero.
-				//The axis, the pedicel and the flower itself are three different tissues. A
-				//Bergenia scape has to stay rigid and a Geranium peduncle has to bend, and one
-				//shared modulus cannot express both.
-				var scapeElasticity = Plant.Parameters.FlowerScapeElasticModulus > 0f
-					? Plant.Parameters.FlowerScapeElasticModulus
-					: Plant.Parameters.FlowerOrganElasticModulus;
-				var greenFlowerElasticity = agent.Organ switch
-				{
-					OrganTypes.FlowerPedicel => Plant.Parameters.FlowerPedicelElasticModulus,
-					OrganTypes.FlowerStem or OrganTypes.FlowerMeristem => scapeElasticity,
-					_ => Plant.Parameters.FlowerOrganElasticModulus,
-				};
-				//Lignification never SOFTENS: a scape that dries and lignifies after bloom keeps at
-				//least its green stiffness. Blending toward a wood modulus below the species' scape
-				//modulus made a Heuchera scape 1.5x and a Carex culm 8x softer exactly when the
-				//panicle had opened and loaded it, which is why they folded after bloom.
-				elasticity = greenFlowerElasticity * (1f - woodiness) +
-					MathF.Max(greenFlowerElasticity, Plant.Parameters.WoodElasticModulus) * woodiness;
-			}
-			//Negative gravitropism after birth. The elastic bend below is an offset from the rest
-			//frame, and nothing used to move that frame once a segment was born: a scape leaned by
-			//a contact or by its own load stayed leaned. Steer the rest frame toward the set point
-			//at the species' rate - slowly against the 5 %/h elastic response, so the loaded pose
-			//does not overshoot - and carry the subtree rigidly, which is what re-erects a chain
-			//segment by segment without ever feeding the tip's error to every joint at once.
-			//Only base scape segments and stems: panicle branches and pedicels point where the
-			//inflorescence put them. The target's azimuth is the organ's own, not its current
-			//lean's - see GravitropicRestoringOrientation for the circling that produced.
-			if (IsAboveGround)
-			{
-				ref var above = ref Unsafe.As<T, AboveGroundAgent>(ref agent);
-				var rate = above.Organ is OrganTypes.FlowerStem or OrganTypes.FlowerMeristem && above.FlowerAgent.flowerBase
-					? Plant.Parameters.FlowerSettings.ScapeGravitropicRatePerHour
-					: above.Organ == OrganTypes.Stem ? Plant.Parameters.ShootsGravitropicRatePerHour : 0f;
-				if (rate > 0f && woodiness < 1f && above.Energy > 0f)
-				{
-					var setPoint = above.Organ == OrganTypes.Stem
-						? Plant.Parameters.ShootsGravitropicSetPointAngle
-						: Plant.Parameters.FlowerSettings.ScapeGravitropicSetPointAngle;
-					var k = (1f - MathF.Pow(1f - rate, tickSpeed)) * (1f - woodiness);
-					var aim = AboveGroundAgent.GravitropicRestoringOrientation(agent.baseOrientation, setPoint);
-					var steered = Quaternion.Normalize(Quaternion.Slerp(agent.baseOrientation, aim, k));
-					var steer = Quaternion.Normalize(steered * Quaternion.Conjugate(agent.baseOrientation));
-					if (steer.X * steer.X + steer.Y * steer.Y + steer.Z * steer.Z > 1e-16f)
-					{
-						agent.baseOrientation = steered;
-						agent.restOrientation = Quaternion.Normalize(steer * agent.restOrientation);
-						agent.targetOrientation = Quaternion.Normalize(steer * agent.targetOrientation);
-						agent.SetOrientation(Quaternion.Normalize(steer * agent.Orientation));
-						PropagateGravityRotation(dst, i, steer, deferredTransport);
-					}
-				}
-			}
-
-			Quaternion rotation = Quaternion.Identity;
-			Quaternion appliedDelta = Quaternion.Identity;
-
-			// Surface reactions are applied by the contact solve; all loads remain in the moment sum.
-
-			if (!petal && length > 1e-4f && radius > 0f && totalWeight > 0f)
-			{
-				var baseDir = Vector3.Transform(Vector3.UnitX, agent.baseOrientation);
-				var isBlade = agent.Organ is OrganTypes.Leaf or OrganTypes.FlowerPadel;
-				//A petiole is the end-loaded cantilever the old scalar law gets most wrong: it holds a
-				//whole blade out at its tip, and putting that load at the petiole's own midpoint
-				//understates the moment by roughly the ratio of the blade's reach to half the
-				//petiole - so a long one (Heuchera's, Geranium macrorrhizum's 18 cm) came out rigid
-				//when it should visibly arch.
-				var isPetiole = agent.Organ is OrganTypes.Petiole;
-
-				//Existing lamina/petiole/floral behavior uses the load moment at the base.
-                // Woody structural rods use its length-average: curvature integrated
-                // over this segment gives the relative end-tangent rotation. The
-                // articulated geometry approaches the curved rod with subdivision.
-				if ((isBlade || isPetiole || agent.IsRizome || IsFloralAxis(agent.Organ) || woodyStructure) && Collisions.CollisionSettings.VectorBending)
-				{
-					//tau = r x F with F = (0, -W, 0), so |tau| = W * |horizontal offset to the load|
-					//and the axis falls out of the same cross product. This replaces BOTH the
-					//length*0.5 lever and the transverseLoadFactor heuristic: the old form put the
-					//WHOLE subtree's weight at the midpoint of the current segment, which is right
-					//only for the tip. For segment k of n the true arm is the distance to the centre
-					//of mass of everything beyond it, so the base of an 8-segment blade was short by
-					//a factor of 8 and the error grew with the segment count - the arch got weaker
-					//the finer the blade was divided, which is the opposite of converging.
-					var centroid = WeightedCentroids[i] / totalWeight;
-                    var r = deferredTransport
-                        ? Vector3.Transform(centroid - frozenJointBase, GravityTransport[i])
-                        : centroid - GetBaseCenter(i);
-                    var torque = woodyStructure
-                        ? WoodyRodMeanMoment(i, length, frozenJointBase, frozenAxis, GravityTransport[i])
-                        : new Vector3(r.Z, 0f, -r.X) * totalWeight;
-
-					//Resolved in the organ's own frame: X along it, and for a blade Y is its normal
-					//and Z runs across the width.
-					var ex = Vector3.Transform(Vector3.UnitX, agent.baseOrientation);
-					var ey = Vector3.Transform(Vector3.UnitY, agent.baseOrientation);
-					var ez = Vector3.Transform(Vector3.UnitZ, agent.baseOrientation);
-					Vector3 kappa;
-					if (isBlade)
-					{
-						var keel = BladeKeelAt(i);
-						//Drooping is rotation about the WIDTH axis and is easy; curving sideways is
-						//rotation about the blade normal and is (w/t)^2 harder. One isotropic figure
-						//for both let a blade fold sideways as readily as it drooped. The component
-						//about the blade's own long axis is torsion, which this model has no degree of
-						//freedom for and which gravity cannot produce in a symmetric blade anyway - it
-						//is dropped rather than silently bent, because feeding it back as bending is
-						//what crumpled the lamina.
-						kappa = ez * (Vector3.Dot(torque, ez) / (elasticity * BladeInertia(radius, keel)))
-							+ ey * (Vector3.Dot(torque, ey) / (elasticity * BladeInertiaMajor(radius, keel)));
-					}
-					else
-					{
-						//A petiole is a rod: the same second moment about every transverse axis, so
-						//only the axial component has to come out - that is torsion, and there is no
-						//degree of freedom for it here either.
-						var rodInertia = MathF.PI * MathF.Pow(radius, 4) / 4f;
-						kappa = (torque - ex * Vector3.Dot(torque, ex)) / (elasticity * rodInertia);
-					}
-
-					var deltaThetaBlade = kappa.Length() * length / (Deformable(i) ? 3f : 1f);
-                    if (agent.IsRizome || woodyStructure)
-                        agent.LoadLimited = !float.IsFinite(deltaThetaBlade) || deltaThetaBlade > Collisions.CollisionSettings.MaxElasticBendRadians;
-					if (deltaThetaBlade > 1e-7f && float.IsFinite(deltaThetaBlade))
-					{
-						var bladeAxis = kappa / kappa.Length();
-						//The equilibrium offset from the rest pose, not a per-step increment - the
-						//slerp below does the rate limiting. Capped well short of the old bound,
-						//which was "anything up to straight down": that turned a saturated segment's
-						//TARGET into vertical, so an over-driven blade did not arc, it folded.
-						var maxBlade = Collisions.CollisionSettings.MaxElasticBendRadians;
-						var angleFromDown = MathF.Acos(Math.Clamp(Vector3.Dot(baseDir, -Vector3.UnitY), -1f, 1f));
-						var safeBlade = Math.Clamp(deltaThetaBlade, 0f, MathF.Min(maxBlade, angleFromDown));
-						if (safeBlade > 1e-7f)
-						{
-							rotation = Quaternion.CreateFromAxisAngle(bladeAxis, safeBlade);
-							agent.targetOrientation = Quaternion.Normalize(rotation * agent.baseOrientation);
-							var bladeOr = Quaternion.Slerp(agent.Orientation, agent.targetOrientation, response);
-							appliedDelta = bladeOr * Quaternion.Inverse(agent.Orientation);
-							agent.SetOrientation(bladeOr);
-						}
-					}
-					else
-					{
-						// A released joint must relax even when its remaining load is axial or zero.
-						agent.targetOrientation = agent.baseOrientation;
-						var relaxed = Quaternion.Slerp(agent.Orientation, agent.baseOrientation, response);
-						appliedDelta = relaxed * Quaternion.Inverse(agent.Orientation);
-						agent.SetOrientation(relaxed);
-					}
-
-					PropagateGravityRotation(dst, i, appliedDelta, deferredTransport);
-					foreach (var child in GetChildren(i))
-						nodesToVisit.Enqueue(child);
-					continue;
-				}
-
-				// Only the component perpendicular to the organ bends a cantilever.
-				// The previous implementation applied maximum bending even to a
-				// vertical stem, where gravity is an axial load.
-				//
-				//This is the OLD scalar law and it has the same lever-arm defect the lamina branch
-				//above describes: the subtree's whole weight is applied at this organ's own
-				//midpoint. It is retained for legacy structural axes. For an organ whose subtree is
-				//itself the two agree on the MAGNITUDE of the moment - which is why the lamina
-				//change is about the arch of a segmented blade rather than about how hard a single
-				//leaf droops - but for a stem carrying a whole shoot they differ by a large factor,
-				//and correcting that would rescale the bending of every species at once against
-				//elastic moduli calibrated to this form. That is a retune, not a fix, and it wants
-				//its own pass.
-				var transverseLoadFactor = MathF.Sqrt(MathF.Max(0f, 1f - baseDir.Y * baseDir.Y));
-				var bendingMoment = totalWeight * transverseLoadFactor * length * 0.5f;
-				//Second moment of area. A stem is a rod; a blade is not, and treating one as the
-				//other is not a small error: the circular form with the blade's HALF WIDTH as the
-				//radius gives a Carex leaf 6.4e-11 m^4, where a rectangle of its real 0.1 mm
-				//thickness gives 5e-16 - a factor of 128,000, which is why a 30 cm blade never bends.
-				//
-				//The rectangle is not taken at face value either. A real sedge leaf is keeled, and a
-				//flat strip 0.1 mm thick would simply collapse; the keel is what holds it up, so the
-				//blade bends as a rectangle of an EFFECTIVE thickness that stands in for that
-				//structure. See SpeciesSettings.LeafKeelThickness.
-				var inertia = agent.Organ is OrganTypes.Leaf or OrganTypes.FlowerPadel
-					? BladeInertia(radius, BladeKeelAt(i))
-					: MathF.PI * MathF.Pow(radius, 4) / 4f;
-				var curvature = bendingMoment / (elasticity * inertia);
-				var deltaTheta = curvature * length;
-
-				float angleToDown = MathF.Acos(Math.Clamp(Vector3.Dot(baseDir, Vector3.UnitY), -1f, 1f));
-				var axis = Vector3.Cross(baseDir, Vector3.UnitY);
-                if (axis.LengthSquared() < 1e-8f)
-                    axis = Vector3.Cross(baseDir, Vector3.UnitZ);
-
-				if (axis.LengthSquared() < 1e-8f)
-					axis = Vector3.Cross(baseDir, Vector3.UnitX);
-				float maxAllowedBend = MathF.Min(Collisions.CollisionSettings.MaxElasticBendRadians, MathF.PI - angleToDown);
-				float safeDelta = Math.Clamp(deltaTheta, 0f, maxAllowedBend);
-
-				var len = axis.Length();
-				if (len > 1e-4f)
-				{
-					axis /= len;
-					rotation = Quaternion.CreateFromAxisAngle(axis, -safeDelta);
-					agent.targetOrientation = Quaternion.Normalize(rotation * agent.baseOrientation);
-					var newOr = Quaternion.Slerp(agent.Orientation, agent.targetOrientation, response);
-
-					appliedDelta = newOr * Quaternion.Inverse(agent.Orientation);
-
-					agent.SetOrientation(newOr);
-                }
-
-                PropagateGravityRotation(dst, i, appliedDelta, deferredTransport);
-            }
-            else if ((HasContactDeformation || relaxUnloaded || woodyStructure) && agent.Orientation != agent.baseOrientation)
-            {
-                // A tiny or unloaded joint has no gravitational moment, but must
-                // still release a previous elastic contact turn. Keep its unloaded
-                // frame exactly, without repeatedly normalizing an unchanged frame.
-                var released=persistentDeformation || relaxUnloaded || woodyStructure
-                    ? Quaternion.Normalize(Quaternion.Slerp(agent.Orientation,agent.baseOrientation,response))
-                    : agent.baseOrientation;
-                appliedDelta=Quaternion.Normalize(released*Quaternion.Conjugate(agent.Orientation));
-                agent.targetOrientation=agent.baseOrientation;
-                agent.SetOrientation(released);
-                PropagateGravityRotation(dst, i, appliedDelta, deferredTransport);
-            }
-			foreach (var child in GetChildren(i))
-			{
-                nodesToVisit.Enqueue(child);
+                var i = nodesToVisit.Dequeue();
+                GravityJoint(i, step);
+                foreach (var child in GetChildren(i))
+                    nodesToVisit.Enqueue(child);
             }
         }
         GravityDeformation(persistentDeformation ? response : 1f);
@@ -1167,6 +970,337 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
         // Dynamic contacts are resolved with static constraints by CollisionWorld, after Census.
 		}
 		finally { GravityTicks += Stopwatch.GetTimestamp() - started; }
+    }
+
+    /// <summary>What every joint of one gravity pass shares.</summary>
+    readonly record struct GravityStep(bool DeferredTransport, bool RelaxUnloaded, bool PersistentDeformation, float TickSpeed, float Response);
+
+    /// <summary>
+    /// Gravity over a large woody plant, on several cores.
+    /// </summary>
+    /// <remarks>
+    /// A woody joint reads its parent's carried turn, its own organ, the loads summed before the
+    /// walk and its children as the walk has not yet touched them, and writes only itself: any
+    /// order that takes a parent before its children gives the same bits. The joints that carry
+    /// most of the tree are bent one after another, the subtrees left over side by side
+    /// (<see cref="TreeCacheData.SplitForWalk"/>). Other plants turn their whole subtree at every
+    /// joint and stay on the plain walk.
+    /// </remarks>
+    void GravityOnAllCores(GravityStep step)
+    {
+        var branches = GravityBranches;
+        foreach (var i in TreeCache.SplitForWalk(CollectionsMarshal.AsSpan(GetRoots()), branches))
+            GravityJoint(i, step);
+        Parallel.For(0, branches.Count, branch => GravityBranch(branches[branch], step));
+    }
+
+    /// <summary>Gravity over one subtree, its root first.</summary>
+    void GravityBranch(int root, in GravityStep step)
+    {
+        var pending = GravityStack ??= new();
+        pending.Clear();
+        pending.Push(root);
+        while (pending.TryPop(out var i))
+        {
+            GravityJoint(i, step);
+            foreach (var child in GetChildren(i)) pending.Push(child);
+        }
+    }
+    readonly List<int> GravityBranches = [];
+    [ThreadStatic] static Stack<int>? GravityStack;
+
+    /// <summary>
+    /// Bends one joint under the load it carries and hands the turn to what it carries. The
+    /// caller visits every parent before its children.
+    /// </summary>
+    void GravityJoint(int i, in GravityStep step)
+    {
+        var dst = Src();
+        var (deferredTransport, relaxUnloaded, persistentDeformation, tickSpeed, response) = step;
+        ref var agent = ref dst[i];
+        // Bases and centroids describe the pose frozen at the start of this
+        // walk. Save its attachment before carrying the agent's mutable offset.
+        Vector3 frozenJointBase = default, frozenAxis = default;
+        var woodyStructure = deferredTransport && !agent.IsRizome
+            && agent.Organ is OrganTypes.Stem or OrganTypes.Meristem or OrganTypes.Bud;
+        if (deferredTransport)
+        {
+            frozenJointBase = GetBaseCenter(i) + Unsafe.As<T, AboveGroundAgent>(ref agent).BaseOffset;
+            frozenAxis = Vector3.Transform(Vector3.UnitX, agent.Orientation);
+            var carry = agent.Parent >= 0 ? GravityTransport[agent.Parent] : Quaternion.Identity;
+            GravityTransport[i] = carry;
+            if (carry != Quaternion.Identity)
+            {
+                agent.SetOrientation(Quaternion.Normalize(carry * agent.Orientation));
+                agent.baseOrientation = Quaternion.Normalize(carry * agent.baseOrientation);
+                agent.restOrientation = Quaternion.Normalize(carry * agent.restOrientation);
+                agent.targetOrientation = Quaternion.Normalize(carry * agent.targetOrientation);
+                // Woody attachments are world-space offsets from the parent's tip.
+                // Carry only ancestor turns: this joint's own bend leaves its base fixed.
+                ref var above = ref Unsafe.As<T, AboveGroundAgent>(ref agent);
+                above.BaseOffset = Vector3.Transform(above.BaseOffset, carry);
+            }
+        }
+        agent.LoadLimited = false;
+		var petal = GetOrgan(i) is OrganTypes.FlowerPadel or OrganTypes.FruitWing;
+		if ((GetIsRizome(i) && agent.SoilAnchored) || (petal && !relaxUnloaded))
+			return;
+		var length = agent.Length;
+		var radius = agent.Radius;
+		var totalWeight = Weights[i];
+
+
+
+		float woodiness = agent.WoodRatio();
+		var basalAttenuation = MathF.Exp(-GetAbsDepth(i) *
+			Plant.Parameters.BasalStiffnessAttenuationPerSegment);
+		var greenElasticity = MathF.Max(Plant.Parameters.GreenElasticModulus,
+			Plant.Parameters.BasalGreenElasticModulus * basalAttenuation);
+		float elasticity = greenElasticity * (1 - woodiness) +
+			Plant.Parameters.WoodElasticModulus * woodiness;
+
+		if (agent.Organ.Equals(OrganTypes.Petiole))
+		{
+			elasticity = Plant.Parameters.PetioleElasticModulus;
+		}
+		if (agent.Organ is OrganTypes.Leaf or OrganTypes.FlowerPadel)
+		{
+			//A blade's stiffness belongs to the blade, not to how deep it sits in the plant. The
+			//basal ramp above is keyed on topological depth to stiffen the base of a shoot, and
+			//because it is applied with a max() it was overriding the species' own figure for
+			//every leaf.
+			elasticity = Plant.Parameters.LeafElasticModulus > 0f
+				? Plant.Parameters.LeafElasticModulus
+				: Plant.Parameters.GreenElasticModulus;
+		}
+		if (IsFloralAxis(agent.Organ))
+		{
+			// Supporting floral axes dry and lignify during senescence; they do
+			// not lose essentially all bending stiffness. Interpolate toward the
+			// species' mature structural-tissue modulus instead of toward zero.
+			//The axis, the pedicel and the flower itself are three different tissues. A
+			//Bergenia scape has to stay rigid and a Geranium peduncle has to bend, and one
+			//shared modulus cannot express both.
+			var scapeElasticity = Plant.Parameters.FlowerScapeElasticModulus > 0f
+				? Plant.Parameters.FlowerScapeElasticModulus
+				: Plant.Parameters.FlowerOrganElasticModulus;
+			var greenFlowerElasticity = agent.Organ switch
+			{
+				OrganTypes.FlowerPedicel => Plant.Parameters.FlowerPedicelElasticModulus,
+				OrganTypes.FlowerStem or OrganTypes.FlowerMeristem => scapeElasticity,
+				_ => Plant.Parameters.FlowerOrganElasticModulus,
+			};
+			//Lignification never SOFTENS: a scape that dries and lignifies after bloom keeps at
+			//least its green stiffness. Blending toward a wood modulus below the species' scape
+			//modulus made a Heuchera scape 1.5x and a Carex culm 8x softer exactly when the
+			//panicle had opened and loaded it, which is why they folded after bloom.
+			elasticity = greenFlowerElasticity * (1f - woodiness) +
+				MathF.Max(greenFlowerElasticity, Plant.Parameters.WoodElasticModulus) * woodiness;
+		}
+		//Negative gravitropism after birth. The elastic bend below is an offset from the rest
+		//frame, and nothing used to move that frame once a segment was born: a scape leaned by
+		//a contact or by its own load stayed leaned. Steer the rest frame toward the set point
+		//at the species' rate - slowly against the 5 %/h elastic response, so the loaded pose
+		//does not overshoot - and carry the subtree rigidly, which is what re-erects a chain
+		//segment by segment without ever feeding the tip's error to every joint at once.
+		//Only base scape segments and stems: panicle branches and pedicels point where the
+		//inflorescence put them. The target's azimuth is the organ's own, not its current
+		//lean's - see GravitropicRestoringOrientation for the circling that produced.
+		if (IsAboveGround)
+		{
+			ref var above = ref Unsafe.As<T, AboveGroundAgent>(ref agent);
+			var rate = above.Organ is OrganTypes.FlowerStem or OrganTypes.FlowerMeristem && above.FlowerAgent.flowerBase
+				? Plant.Parameters.FlowerSettings.ScapeGravitropicRatePerHour
+				: above.Organ == OrganTypes.Stem ? Plant.Parameters.ShootsGravitropicRatePerHour : 0f;
+			if (rate > 0f && woodiness < 1f && above.Energy > 0f)
+			{
+				var setPoint = above.Organ == OrganTypes.Stem
+					? Plant.Parameters.ShootsGravitropicSetPointAngle
+					: Plant.Parameters.FlowerSettings.ScapeGravitropicSetPointAngle;
+				var k = (1f - MathF.Pow(1f - rate, tickSpeed)) * (1f - woodiness);
+				var aim = AboveGroundAgent.GravitropicRestoringOrientation(agent.baseOrientation, setPoint);
+				var steered = Quaternion.Normalize(Quaternion.Slerp(agent.baseOrientation, aim, k));
+				var steer = Quaternion.Normalize(steered * Quaternion.Conjugate(agent.baseOrientation));
+				if (steer.X * steer.X + steer.Y * steer.Y + steer.Z * steer.Z > 1e-16f)
+				{
+					agent.baseOrientation = steered;
+					agent.restOrientation = Quaternion.Normalize(steer * agent.restOrientation);
+					agent.targetOrientation = Quaternion.Normalize(steer * agent.targetOrientation);
+					agent.SetOrientation(Quaternion.Normalize(steer * agent.Orientation));
+					PropagateGravityRotation(dst, i, steer, deferredTransport);
+				}
+			}
+		}
+
+		Quaternion rotation = Quaternion.Identity;
+		Quaternion appliedDelta = Quaternion.Identity;
+
+		// Surface reactions are applied by the contact solve; all loads remain in the moment sum.
+
+		if (!petal && length > 1e-4f && radius > 0f && totalWeight > 0f)
+		{
+			var baseDir = Vector3.Transform(Vector3.UnitX, agent.baseOrientation);
+			var isBlade = agent.Organ is OrganTypes.Leaf or OrganTypes.FlowerPadel;
+			//A petiole is the end-loaded cantilever the old scalar law gets most wrong: it holds a
+			//whole blade out at its tip, and putting that load at the petiole's own midpoint
+			//understates the moment by roughly the ratio of the blade's reach to half the
+			//petiole - so a long one (Heuchera's, Geranium macrorrhizum's 18 cm) came out rigid
+			//when it should visibly arch.
+			var isPetiole = agent.Organ is OrganTypes.Petiole;
+
+			//Existing lamina/petiole/floral behavior uses the load moment at the base.
+            // Woody structural rods use its length-average: curvature integrated
+            // over this segment gives the relative end-tangent rotation. The
+            // articulated geometry approaches the curved rod with subdivision.
+			if ((isBlade || isPetiole || agent.IsRizome || IsFloralAxis(agent.Organ) || woodyStructure) && Collisions.CollisionSettings.VectorBending)
+			{
+				//tau = r x F with F = (0, -W, 0), so |tau| = W * |horizontal offset to the load|
+				//and the axis falls out of the same cross product. This replaces BOTH the
+				//length*0.5 lever and the transverseLoadFactor heuristic: the old form put the
+				//WHOLE subtree's weight at the midpoint of the current segment, which is right
+				//only for the tip. For segment k of n the true arm is the distance to the centre
+				//of mass of everything beyond it, so the base of an 8-segment blade was short by
+				//a factor of 8 and the error grew with the segment count - the arch got weaker
+				//the finer the blade was divided, which is the opposite of converging.
+				var centroid = WeightedCentroids[i] / totalWeight;
+                var r = deferredTransport
+                    ? Vector3.Transform(centroid - frozenJointBase, GravityTransport[i])
+                    : centroid - GetBaseCenter(i);
+                var torque = woodyStructure
+                    ? WoodyRodMeanMoment(i, length, frozenJointBase, frozenAxis, GravityTransport[i])
+                    : new Vector3(r.Z, 0f, -r.X) * totalWeight;
+
+				//Resolved in the organ's own frame: X along it, and for a blade Y is its normal
+				//and Z runs across the width.
+				var ex = Vector3.Transform(Vector3.UnitX, agent.baseOrientation);
+				var ey = Vector3.Transform(Vector3.UnitY, agent.baseOrientation);
+				var ez = Vector3.Transform(Vector3.UnitZ, agent.baseOrientation);
+				Vector3 kappa;
+				if (isBlade)
+				{
+					var keel = BladeKeelAt(i);
+					//Drooping is rotation about the WIDTH axis and is easy; curving sideways is
+					//rotation about the blade normal and is (w/t)^2 harder. One isotropic figure
+					//for both let a blade fold sideways as readily as it drooped. The component
+					//about the blade's own long axis is torsion, which this model has no degree of
+					//freedom for and which gravity cannot produce in a symmetric blade anyway - it
+					//is dropped rather than silently bent, because feeding it back as bending is
+					//what crumpled the lamina.
+					kappa = ez * (Vector3.Dot(torque, ez) / (elasticity * BladeInertia(radius, keel)))
+						+ ey * (Vector3.Dot(torque, ey) / (elasticity * BladeInertiaMajor(radius, keel)));
+				}
+				else
+				{
+					//A petiole is a rod: the same second moment about every transverse axis, so
+					//only the axial component has to come out - that is torsion, and there is no
+					//degree of freedom for it here either.
+					var rodInertia = MathF.PI * MathF.Pow(radius, 4) / 4f;
+					kappa = (torque - ex * Vector3.Dot(torque, ex)) / (elasticity * rodInertia);
+				}
+
+				var deltaThetaBlade = kappa.Length() * length / (Deformable(i) ? 3f : 1f);
+                if (agent.IsRizome || woodyStructure)
+                    agent.LoadLimited = !float.IsFinite(deltaThetaBlade) || deltaThetaBlade > Collisions.CollisionSettings.MaxElasticBendRadians;
+				if (deltaThetaBlade > 1e-7f && float.IsFinite(deltaThetaBlade))
+				{
+					var bladeAxis = kappa / kappa.Length();
+					//The equilibrium offset from the rest pose, not a per-step increment - the
+					//slerp below does the rate limiting. Capped well short of the old bound,
+					//which was "anything up to straight down": that turned a saturated segment's
+					//TARGET into vertical, so an over-driven blade did not arc, it folded.
+					var maxBlade = Collisions.CollisionSettings.MaxElasticBendRadians;
+					var angleFromDown = MathF.Acos(Math.Clamp(Vector3.Dot(baseDir, -Vector3.UnitY), -1f, 1f));
+					var safeBlade = Math.Clamp(deltaThetaBlade, 0f, MathF.Min(maxBlade, angleFromDown));
+					if (safeBlade > 1e-7f)
+					{
+						rotation = Quaternion.CreateFromAxisAngle(bladeAxis, safeBlade);
+						agent.targetOrientation = Quaternion.Normalize(rotation * agent.baseOrientation);
+						var bladeOr = Quaternion.Slerp(agent.Orientation, agent.targetOrientation, response);
+						appliedDelta = bladeOr * Quaternion.Inverse(agent.Orientation);
+						agent.SetOrientation(bladeOr);
+					}
+				}
+				else
+				{
+					// A released joint must relax even when its remaining load is axial or zero.
+					agent.targetOrientation = agent.baseOrientation;
+					var relaxed = Quaternion.Slerp(agent.Orientation, agent.baseOrientation, response);
+					appliedDelta = relaxed * Quaternion.Inverse(agent.Orientation);
+					agent.SetOrientation(relaxed);
+				}
+
+				PropagateGravityRotation(dst, i, appliedDelta, deferredTransport);
+				return;
+			}
+
+			// Only the component perpendicular to the organ bends a cantilever.
+			// The previous implementation applied maximum bending even to a
+			// vertical stem, where gravity is an axial load.
+			//
+			//This is the OLD scalar law and it has the same lever-arm defect the lamina branch
+			//above describes: the subtree's whole weight is applied at this organ's own
+			//midpoint. It is retained for legacy structural axes. For an organ whose subtree is
+			//itself the two agree on the MAGNITUDE of the moment - which is why the lamina
+			//change is about the arch of a segmented blade rather than about how hard a single
+			//leaf droops - but for a stem carrying a whole shoot they differ by a large factor,
+			//and correcting that would rescale the bending of every species at once against
+			//elastic moduli calibrated to this form. That is a retune, not a fix, and it wants
+			//its own pass.
+			var transverseLoadFactor = MathF.Sqrt(MathF.Max(0f, 1f - baseDir.Y * baseDir.Y));
+			var bendingMoment = totalWeight * transverseLoadFactor * length * 0.5f;
+			//Second moment of area. A stem is a rod; a blade is not, and treating one as the
+			//other is not a small error: the circular form with the blade's HALF WIDTH as the
+			//radius gives a Carex leaf 6.4e-11 m^4, where a rectangle of its real 0.1 mm
+			//thickness gives 5e-16 - a factor of 128,000, which is why a 30 cm blade never bends.
+			//
+			//The rectangle is not taken at face value either. A real sedge leaf is keeled, and a
+			//flat strip 0.1 mm thick would simply collapse; the keel is what holds it up, so the
+			//blade bends as a rectangle of an EFFECTIVE thickness that stands in for that
+			//structure. See SpeciesSettings.LeafKeelThickness.
+			var inertia = agent.Organ is OrganTypes.Leaf or OrganTypes.FlowerPadel
+				? BladeInertia(radius, BladeKeelAt(i))
+				: MathF.PI * MathF.Pow(radius, 4) / 4f;
+			var curvature = bendingMoment / (elasticity * inertia);
+			var deltaTheta = curvature * length;
+
+			float angleToDown = MathF.Acos(Math.Clamp(Vector3.Dot(baseDir, Vector3.UnitY), -1f, 1f));
+			var axis = Vector3.Cross(baseDir, Vector3.UnitY);
+            if (axis.LengthSquared() < 1e-8f)
+                axis = Vector3.Cross(baseDir, Vector3.UnitZ);
+
+			if (axis.LengthSquared() < 1e-8f)
+				axis = Vector3.Cross(baseDir, Vector3.UnitX);
+			float maxAllowedBend = MathF.Min(Collisions.CollisionSettings.MaxElasticBendRadians, MathF.PI - angleToDown);
+			float safeDelta = Math.Clamp(deltaTheta, 0f, maxAllowedBend);
+
+			var len = axis.Length();
+			if (len > 1e-4f)
+			{
+				axis /= len;
+				rotation = Quaternion.CreateFromAxisAngle(axis, -safeDelta);
+				agent.targetOrientation = Quaternion.Normalize(rotation * agent.baseOrientation);
+				var newOr = Quaternion.Slerp(agent.Orientation, agent.targetOrientation, response);
+
+				appliedDelta = newOr * Quaternion.Inverse(agent.Orientation);
+
+				agent.SetOrientation(newOr);
+            }
+
+            PropagateGravityRotation(dst, i, appliedDelta, deferredTransport);
+        }
+        else if ((HasContactDeformation || relaxUnloaded || woodyStructure) && agent.Orientation != agent.baseOrientation)
+        {
+            // A tiny or unloaded joint has no gravitational moment, but must
+            // still release a previous elastic contact turn. Keep its unloaded
+            // frame exactly, without repeatedly normalizing an unchanged frame.
+            var released=persistentDeformation || relaxUnloaded || woodyStructure
+                ? Quaternion.Normalize(Quaternion.Slerp(agent.Orientation,agent.baseOrientation,response))
+                : agent.baseOrientation;
+            appliedDelta=Quaternion.Normalize(released*Quaternion.Conjugate(agent.Orientation));
+            agent.targetOrientation=agent.baseOrientation;
+            agent.SetOrientation(released);
+            PropagateGravityRotation(dst, i, appliedDelta, deferredTransport);
+        }
     }
 
     void PropagateGravityRotation(Span<T> dst, int index, Quaternion delta, bool deferred)

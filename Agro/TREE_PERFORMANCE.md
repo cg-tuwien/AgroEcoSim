@@ -229,6 +229,135 @@ Two things that went wrong on the way and are worth knowing:
   stage after the candidate gathering that decided to sample, so the gathering - the larger half
   of a sampled blade pair - appeared nowhere. Time the pair, then the stages.
 
+## Gravity on all cores, and a profiler (14 November 2026, later)
+
+Gravity was the largest phase of a mature tree's tick still on one core (165 of 1,075 ms). Three
+pieces, each identical in every bit to the plain pass:
+
+1. **The walk.** A woody joint reads its parent's carried turn, its own organ, the loads summed
+   before the walk, and its children as the walk has not yet touched them (the mean moment over
+   a rod reads each child's attachment offset, which the child's own visit turns later). It writes
+   only itself. Any order that takes a parent before its children therefore gives the same bits:
+   the joints that carry most of the tree are bent one after another and the subtrees left over
+   side by side (`GravityOnAllCores`, the split of the contact sweep). The body of the loop became
+   `GravityJoint`; herbaceous plants, which turn their whole subtree at every joint, keep the
+   plain queue around it.
+2. **The loads.** Each organ's own weight and centroid is independent of every other and is
+   filled in parallel. The sums up the tree are float sums and depend on the order of their
+   terms. The plain pass works in fronts: the leaves in index order, then the organs whose last
+   child was in the front before, in the order those children came. So a child arrives at its
+   parent in the front of its *height* above the leaves, and within a front in the order of its
+   *key*: the leaf at the end of its chain of last-arriving children. Both are known once an
+   organ's children are, so each organ adds its children sorted by (height, key) - the plain
+   pass's order - and subtrees are summed side by side (`SumLoadsOnAllCores`). It serves the
+   contact pass's lazy load sum as well.
+3. **Bases and height.** A base is its parent's base plus the parent's reach, whatever the
+   order; the height is a maximum (`PlaceAllOnAllCores`). The census's rebase uses it too.
+
+| checkpoint | organs | before | now | gravity before | gravity now |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Celtis, year 14, mid-August | 270,633 | 1,069 ms | 905 ms | 164 ms | 24 ms |
+| Celtis, year 13, 1 February | 75,392 | 206 ms | 170 ms | 42 ms | 12 ms |
+| Acer, year 12, mid-August | 55,633 | 372 ms | 353 ms | 19 ms | 5 ms |
+| Amelanchier, year 12, mid-August | 21,826 | 184 ms | 174 ms | 8 ms | 4 ms |
+
+Both columns measured back to back on the idle machine, 30 ticks. Against the frozen baseline the
+mature Celtis is at 2,742 -> 905 ms per tick, on 14.7 cores.
+
+**`dotnet-trace` is installed now** (`~/.dotnet/tools/dotnet-trace`, a global tool). Only the
+`dotnet-sampled-thread-time` profile works on this runtime (`cpu-sampling` needs .NET 10 and
+`collect-linux`); it suspends every thread a hundred times a second, which triples a tick's wall
+time, so read shares from it and never milliseconds. Three small scripts in
+`~/greenfdt-fixtures/tree-accel/traces/` read the converted speedscope file: `main.py` (one
+thread, inclusive and exclusive), `serial.py` (the main thread's time outside every parallel
+loop: what a single plant still does on one core) and `under.py` (the callees of one method over
+all threads, as a share of working time). Two traps:
+
+- **A sample lands where a thread can be stopped, not where it was.** The runtime stops a thread
+  at a return, so a short method called tens of millions of times a tick collects the samples of
+  the loop around it. The trace put 46 % of the facade's computing in the body of
+  `TriangleDistance`; a counter and two stopwatches put it in its 3 % of calls that measure in
+  full. Shares by *inclusive* time of a large method held up; exclusive time of a small one did
+  not.
+- **A timing taken while anything else runs says nothing.** Twice a change that removed 60 % of
+  the dominant operation "measured" as no gain, because a background job had the other cores.
+  Count the operation first (counts do not depend on the load), then time on an idle machine.
+
+What the main thread of the 269k-organ Celtis still does on its own, by share of its time in a
+tick (`serial.py`, with the pieces above in): replaying the contacts on the joints 6.5 %, the
+organ tick 5.5 % (shoot) and 1.9 % (root), the organ tree after a birth (`FinishUpdate`) 2.8 %,
+the top levels of the light scene's hierarchy 1.9 %, the root census 1.6 %, the serial part of
+the hierarchy refit 1.3 %, the breadth-first order per topology 0.8 %.
+
+## The planted facade: what a tick costs there, and what was done about it
+
+The facade is the scene that matters most - 4,134 herbaceous plants in the trays of the imported
+FAV11 model, 1.77 million static triangles - and none of the work above reaches it: its plants
+have a few dozen organs each and are already ticked side by side. Measured from stored states of
+the salvaged run (`probe-facade/` in the fixtures; render mode 3, Mixed engine, idle machine):
+
+| state | organs | baseline | after the tree work | with the sweep changes |
+| --- | ---: | ---: | ---: | ---: |
+| step 240 (10 February) | 200,616 | 281 ms | 295 ms | 294 ms |
+| step 600 (11 April) | 578,233 | 1,879 ms | 1,888 ms | 1,406 ms |
+| step 720 (1 May) | 724,705 | 5,051 ms | 5,103 ms | 3,240 ms |
+
+Twenty ticks from each state. A stand of 400 plants of the seven species on a plain field, 600
+steps from 1 March, took 295, 279 and 295 s in the same three builds: without trays there is
+nothing for the sweep to do, and the differences are the noise of the measurement.
+
+At step 600 all 25 cores are busy for the whole tick, 47 s of computing in 1.9 s, and it goes to
+one place: **the mixed engine's admissibility test, 60 % of it in the sweep of a blade against
+obstacle triangles**. The reasons, each counted:
+
+- A leaf is "clear of obstacles" by its midrib's distance less its half width, so in a tray
+  every leaf within its own width of a wall is tested in full: 34,000 of 158,000 shoot organs.
+- **Half of the plants have an organ the pushes cannot free, every tick** - 7,500 leaves and
+  2,700 floral organs inadmissible at the first exact round, 2,600 still at the eighth, many of
+  them clear where they stand but with a wall between this tick's pose and the last (`hit=False`
+  in `AGRO_TRACE_SOLID_ENFORCE`), which no push can change. Such a plant runs all eight
+  `HardRounds`; each round turns joints near the crown, every organ above moves by a hair, its
+  memoised verdict no longer applies, and it is tested again: 4.5 tests per organ per tick.
+- One sweep meets 18 static triangles, subdivides to 23 intervals, asks the blade's own
+  hierarchy 13 times and looks at 200 of its facets. The loop over those facets was two thirds
+  of the sweep's time, and 3 % of the looks measured a facet in full (six piercing tests,
+  fifteen closest features).
+
+What was changed, all of it in `StaticCollider.Lamina.cs`:
+
+1. **A sweep interval needs to know which of three bands the blade's distance is in, not the
+   distance** (`BladeDistance`): below the collision threshold, above the clear threshold, or in
+   between. Once one facet is found in between, a facet that a projection puts beyond the
+   collision threshold need not be measured. A blade lying along a wall had every facet at about
+   the least distance, so the plain loop measured them all, at every level: 26.2 million full
+   measurements in four ticks, 10.0 million after, 973 intervals handed back to the plain
+   loop. The decisions are the plain loop's - see the
+   method's remarks for the guard that makes that so, sized to the rounding of a closest point
+   at 37 m from the origin, and for the fallback to the plain loop when a measurement lands
+   inside the guard. This is the one change in this file whose identity rests on an error bound
+   rather than on doing the same arithmetic; it is checked frame by frame on the facade.
+2. What an interval works out about the blade alone - support along a normal, arc bound, the
+   pose half way and the motion to either side - was computed again for every static triangle
+   and is computed once (`SweepInterval`).
+3. A candidate facet shares its corners with its neighbours and the same blade is tested against
+   one triangle after another; each corner is transformed once per pose (`BladeVertices`).
+4. The distance test's projection onto the static triangle's own normal is tried first, with the
+   triangle's half of it worked out once (`FoliageGeometry.FacetAxis`); it separates more than
+   half of all candidates before the distance test is called at all.
+
+What is left there, in the order of what it would buy:
+
+- **The eight rounds.** A plant whose only inadmissible organs are ones a push cannot help still
+  runs every round and re-tests itself each time. Ending the rounds when a round queued pushes
+  only for organs it had already pushed without effect, or not re-pushing an organ whose
+  inadmissibility is a crossing, would remove most of the 4.5 tests per organ - and changes
+  results, so it is a proposal, not something done here.
+- **A true blade clearance.** Measuring a blade's real distance to the obstacles once and
+  skipping the test while its travel stays inside it would make 45 % of the blade tests
+  unnecessary (counted, with no disagreement in half a million), but one measurement costs more
+  than one test, so it only pays with a cache that lasts several ticks. Not built.
+- The foliage pass (a fifth of the tick) and the light gather (5 %) are as they were.
+
 ## How "exact" is checked
 
 The tree implementation is not committed, so "the previous code" exists as a frozen copy:
@@ -240,7 +369,13 @@ bloom) and early November (leaf fall). Three checks, all against that baseline:
 - `ab.sh 24 200 -- celtis/y11-summer ...` restores a checkpoint in both builds, runs 24 and 200
   ticks and compares the state and the exported frame. Twenty-one checkpoints of the three species -
   winter, flush and bloom, summer and leaf fall, 5,543 to 225,026 organs - all identical with every
-  change of the first round in; twenty-six, from 113 organs up, with the second round in as well.
+  change of the first round in; twenty-six, from 113 organs up, with the second round in as well;
+  twenty-two with gravity and the sweep changes.
+- `probe-facade/` (`FacadeProbe hash`, with `FROM=states/stepNNNN.bin.gz`) runs the salvaged
+  4,134-plant facade request on its imported model from a stored state and hashes the exported
+  frame of every tick: identical to the baseline over 100 ticks from step 240, 60 from 480, 40
+  from 600 and 20 from 720. It is the only check with trays, and the one that matters for any
+  change to the solid pass.
 - `scenarios.sh` runs seventeen scenarios from seed in both builds and compares the soil's water and
   the exported frame after **every** tick: the soil alone at 1, 4 and 24 h ticks on serial and
   parallel fields, Carex over 100 and 450 days, Geranium, Campanula, a stand of four species beside
@@ -269,9 +404,8 @@ first set.
 
 ## What is left, by measured share
 
-At 269k organs (Celtis, year 14, August), of 1,075 ms: contacts 408 (evaluation
-192, replay 80, the rest 136), light 211, gravity 165, census
-145, organ tick 109.
+At 269k organs (Celtis, year 14, August), of 905 ms: contacts 396 (evaluation
+192, replay 80, the rest 124), light 208, census 126, organ tick 113, gravity 24.
 
 - **Pair evaluation.** Parallel, and bound by the sixteen physical cores: 6.3 s of thread time a
   tick. By kind of pair: blade on blade, touching, 42 % (18,500 pairs at 144 us); rod and blade,
@@ -285,10 +419,10 @@ At 269k organs (Celtis, year 14, August), of 1,075 ms: contacts 408 (evaluation
   has to receive its turns in pair order. A replay partitioned into connected blocks of the tree,
   each block applying the path segments that cross it in pair order, keeps that; it needs a block
   decomposition per topology and the segments emitted by the mobility walk.
-- **Gravity** (165 ms, serial): the same fork over subtrees as the contact sweep, plus the
-  load sum in a precomputed order (it is also what the solid pass's last 22 ms wait for).
-- **Census** apart from the hierarchy (113 ms): every tick with a birth rebuilds the organ
-  tree and its index from scratch. Append on births, remap on deaths.
+- **Census** apart from the hierarchy (about 95 ms): every tick with a birth rebuilds the organ
+  tree and its index from scratch. Append on births, remap on deaths; `FinishUpdate` alone, a
+  depth-first walk over a stack of tuples, is 2.8 % of the main thread and can be three array
+  passes over the breadth-first order with the same numbering.
 - **Organ tick** (109 ms): one random stream per plant drawn in organ order; not parallel.
 - **Acer's light scene** (a fifth of its tick): fill the plant's primitives in parallel at offsets
   from a prefix sum.

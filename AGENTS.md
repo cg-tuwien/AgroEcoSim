@@ -1033,6 +1033,26 @@ Honest list of what still does not match:
   checkpoint self-test and a few small-tree A/Bs on that build after touching any of them. It is
   the only check of those paths with walls, real pushes and inadmissible organs, and under the
   certified engine. A new threshold needs a line in that script.
+- **Gravity runs on all cores for a large woody plant** (`GravityOnAllCores`): a woody joint writes
+  only itself and reads its parent's carried turn and its children as they were before their own
+  visit, so anything new in `GravityJoint` must keep to that - no read of a sibling, no write to a
+  child or to the formation. The sums of weight up the tree keep the plain pass's float order by
+  sorting each organ's children by (height above the leaves, key); see `SumLoadsOnAllCores`
+  before touching the order of `RefreshMechanicalLoads`.
+- **The planted facade gains nothing from the tree work, and its tick is one thing**: at step 600
+  of the salvaged FAV11 run 60 % of 47 s of computing per tick was the sweep of a blade against
+  obstacle triangles in the mixed engine's admissibility test, because half of the plants have an
+  organ the pushes cannot free and then run all eight exact rounds, re-testing every organ each
+  round. `~/greenfdt-fixtures/tree-accel/probe-facade/` restores stored states of that run
+  (steps 240 to 720) for timing, hashing and tracing; check any contact change there, not only on
+  the single-plant scenarios. `StaticCollider.BladeDistance` is the one place whose identity to
+  the plain loop rests on an error bound (the guard) - do not shrink the guard, and re-run the
+  facade hash after touching it or `FoliageGeometry.TriangleDistance`.
+- **`dotnet-trace` is installed** (`~/.dotnet/tools/dotnet-trace collect --profile
+  dotnet-sampled-thread-time -- dotnet ...`). Read shares from it, not milliseconds, and do not
+  trust the exclusive time of a small method called millions of times: a sample lands where a
+  thread can be stopped. Count the operation, then time it on an idle machine. The scripts that
+  read the converted trace are in `~/greenfdt-fixtures/tree-accel/traces/`.
 - **A lambda in a hot method allocates on every call, not only where it runs**: C# creates the
   closure where the captured variables are declared, and a captured parameter is declared at the
   method's entry. The first parallel hierarchy build allocated 26 MB a tick that way. Put the
