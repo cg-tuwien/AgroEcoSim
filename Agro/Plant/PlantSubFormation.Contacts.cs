@@ -1425,43 +1425,59 @@ public partial class PlantSubFormation<T>
     internal bool QueueContactCorrection(int index, Vector3 contact, Vector3 normal, float depth, int stop = -1,
         float maxDisplacement = float.PositiveInfinity, double knownMobility = double.NaN)
     {
-        if(depth<0)return QueueContactCorrection(index,contact,-normal,-depth,stop,maxDisplacement,knownMobility);
+        var plan = PlanContactCorrection(index, contact, normal, depth, stop, maxDisplacement, knownMobility);
+        ApplyContactCorrection(plan, null, -1);
+        return plan.Kind != CorrectionKind.None;
+    }
+
+    internal enum CorrectionKind : byte { None, Walk, Axial }
+
+    /// <summary>The partitions of <see cref="TreeCacheData.WalkPartition"/>, for a contact
+    /// response applied on several cores.</summary>
+    internal int[] WalkPartition(out int parts) => TreeCache.WalkPartition(this, out parts);
+
+    /// <summary>Whether the joint descriptions of this sweep are in place, which a correction
+    /// planned or applied on several cores relies on.</summary>
+    internal bool ContactJointsDescribed => ContactSweepPrepared;
+
+    /// <summary>
+    /// Appends to <paramref name="routes"/>, for every partition a planned correction turns joints
+    /// in and in the order its walk reaches them, three numbers: <paramref name="planIndex"/>, the
+    /// partition, and the joint at which the walk enters it. Needs the joint descriptions of this
+    /// sweep.
+    /// </summary>
+    internal void RouteContactCorrection(in ContactCorrection plan, int planIndex, int[] owner, List<int> routes)
+    {
+        if (plan.Kind == CorrectionKind.Axial) { routes.Add(planIndex); routes.Add(owner[plan.Best]); routes.Add(plan.Best); return; }
+        if (plan.Kind != CorrectionKind.Walk) return;
+        var joints = ContactJoints; var last = -1;
+        for (var n = plan.Index; n >= 0 && n != plan.Stop && !joints[n].Anchored; n = joints[n].Parent)
+            if (owner[n] != last) { routes.Add(planIndex); routes.Add(last = owner[n]); routes.Add(n); }
+    }
+
+    /// <summary>
+    /// One contact correction as <see cref="QueueContactCorrection"/> decides it before it turns
+    /// anything: either the compliance-weighted walk from the organ towards the common ancestor,
+    /// with the multiplier every joint on it scales its response by, or - when the contact has
+    /// no lever on any joint - a single finite turn of the most mobile one.
+    /// </summary>
+    internal readonly record struct ContactCorrection(CorrectionKind Kind, int Index, int Stop, Vector3 Contact, Vector3 Normal,
+        double Lambda, float MaxDisplacement, int Best, Vector3 AxialTurn, float AxialPeak, float AxialLever);
+
+    /// <summary>
+    /// Decides a contact correction without queueing it. Reads the joints and nothing a
+    /// correction writes, so the corrections of many pairs can be planned side by side.
+    /// </summary>
+    internal ContactCorrection PlanContactCorrection(int index, Vector3 contact, Vector3 normal, float depth, int stop,
+        float maxDisplacement, double knownMobility)
+    {
+        if (depth < 0) { normal = -normal; depth = -depth; }
         var src = Src();
         var total = double.IsNaN(knownMobility) ? ContactMobility(index, contact, normal, stop) : knownMobility;
         // Existing graph segments supply the degrees of freedom. Walk to a rooted anchor;
         // a broad, unsplit blade can therefore deflect through its petiole.
         if (total > 1e-20 && double.IsFinite(total))
-        {
-            var lambda = depth / total;
-            var ready = ContactSweepPrepared; var joints = ContactJoints; var described = default(ContactJoint);
-            for (int n = index, next; n >= 0 && n != stop; n = next)
-            {
-                if (!ready) described = DescribeJoint(n);
-                ref readonly var joint = ref (ready ? ref joints[n] : ref described);
-                if (joint.Anchored) break;
-                next = joint.Parent;
-                var lever = contact - joint.Base - joint.Offset;
-                var cross = Vector3.Cross(lever, normal);
-                var gain = cross.Length();
-                QueueShapeCorrection(n, index, contact, normal, (float)lambda);
-                if (gain <= 1e-8f) continue;
-                var axis = cross / gain;
-                if (joint.Available(axis) <= 0) continue;
-                var response = joint.Compliance.Respond(cross) * (float)lambda;
-                var angle = response.Length();
-                // A turn of θ about this joint moves the witness by at most θ·|lever|.
-                var cap = CollisionSettings.MaxCorrectionRadians;
-                if (maxDisplacement < float.PositiveInfinity) cap = MathF.Min(cap, maxDisplacement / MathF.Max(lever.Length(), 1e-6f));
-                if (angle > cap) response *= cap/angle;
-                ContactTurns[n] += response;
-                if (maxDisplacement < float.PositiveInfinity)
-                {
-                    ContactTurnPeak[n] = MathF.Max(ContactTurnPeak[n], MathF.Min(angle, cap));
-                    ContactLeverMax[n] = MathF.Max(ContactLeverMax[n], lever.Length());
-                }
-            }
-            return true;
-        }
+            return new(CorrectionKind.Walk, index, stop, contact, normal, depth / total, maxDisplacement, -1, default, 0, 0);
         // Axial impact has zero first-order gain. Solve the finite rotation rather than
         // dividing by a fabricated lever. Its side is deterministic, independent of mesh winding.
         var best = -1; float bestMobility = 0; Vector3 bestAxis = default; float bestAngle = 0;
@@ -1476,17 +1492,84 @@ public partial class PlantSubFormation<T>
             var mobility = AvailableCompliance(n, axis) * length * length;
             if (mobility > bestMobility) { best = n; bestMobility = mobility; bestAxis = axis; bestAngle = angle; }
         }
-        if (best < 0) return false;
+        if (best < 0) return new(CorrectionKind.None, index, stop, contact, normal, 0, maxDisplacement, -1, default, 0, 0);
         var axialCap = CollisionSettings.MaxCorrectionRadians;
-        if (maxDisplacement < float.PositiveInfinity)
-            axialCap = MathF.Min(axialCap, maxDisplacement / MathF.Max((contact - GetBaseCenterWorld(best) - src[best].BaseOffset).Length(), 1e-6f));
-        ContactTurns[best] += bestAxis * MathF.Min(bestAngle, axialCap);
+        var bestLever = float.NaN;
         if (maxDisplacement < float.PositiveInfinity)
         {
-            ContactTurnPeak[best] = MathF.Max(ContactTurnPeak[best], MathF.Min(bestAngle, axialCap));
-            ContactLeverMax[best] = MathF.Max(ContactLeverMax[best], (contact - GetBaseCenterWorld(best) - src[best].BaseOffset).Length());
+            bestLever = (contact - GetBaseCenterWorld(best) - src[best].BaseOffset).Length();
+            axialCap = MathF.Min(axialCap, maxDisplacement / MathF.Max(bestLever, 1e-6f));
         }
-        return true;
+        return new(CorrectionKind.Axial, index, stop, contact, normal, 0, maxDisplacement, best,
+            bestAxis * MathF.Min(bestAngle, axialCap), MathF.Min(bestAngle, axialCap), bestLever);
+    }
+
+    /// <summary>
+    /// Queues a planned correction on its joints - all of them when <paramref name="owner"/> is
+    /// null, or only those whose entry in it is <paramref name="part"/>. Each joint's turn is the
+    /// same arithmetic whichever joints are applied; the order in which a joint receives the
+    /// turns of several corrections is the caller's.
+    /// </summary>
+    /// <remarks>
+    /// The partitions are those of <see cref="TreeCacheData.WalkPartition"/>, which a walk towards
+    /// the roots enters at most once each: a partition's part of it runs from the first joint in
+    /// it - <paramref name="entry"/>, when the caller knows it - to the first joint after that
+    /// outside it. Only a plant whose organs do not change shape
+    /// under contact may be applied in parts: the shape correction of a deformable joint is
+    /// queued with every joint visited.
+    /// </remarks>
+    internal void ApplyContactCorrection(in ContactCorrection plan, int[]? owner, int part, int entry = -1)
+    {
+        if (plan.Kind == CorrectionKind.Axial)
+        {
+            var best = plan.Best;
+            if (owner != null && owner[best] != part) return;
+            ContactTurns[best] += plan.AxialTurn;
+            if (plan.MaxDisplacement < float.PositiveInfinity)
+            {
+                ContactTurnPeak[best] = MathF.Max(ContactTurnPeak[best], plan.AxialPeak);
+                ContactLeverMax[best] = MathF.Max(ContactLeverMax[best], plan.AxialLever);
+            }
+            return;
+        }
+        if (plan.Kind != CorrectionKind.Walk) return;
+        var index = plan.Index; var contact = plan.Contact; var normal = plan.Normal; var lambda = plan.Lambda;
+        var maxDisplacement = plan.MaxDisplacement;
+        var ready = ContactSweepPrepared; var joints = ContactJoints; var described = default(ContactJoint);
+        var entered = false;
+        // The walk from the organ to the entry passes no anchor and not the common ancestor:
+        // that is how the entry was found.
+        for (int n = entry >= 0 ? entry : index, next; n >= 0 && n != plan.Stop; n = next)
+        {
+            if (!ready) described = DescribeJoint(n);
+            ref readonly var joint = ref (ready ? ref joints[n] : ref described);
+            if (joint.Anchored) break;
+            next = joint.Parent;
+            if (owner != null)
+            {
+                if (owner[n] != part) { if (entered) break; continue; }
+                entered = true;
+            }
+            var lever = contact - joint.Base - joint.Offset;
+            var cross = Vector3.Cross(lever, normal);
+            var gain = cross.Length();
+            QueueShapeCorrection(n, index, contact, normal, (float)lambda);
+            if (gain <= 1e-8f) continue;
+            var axis = cross / gain;
+            if (joint.Available(axis) <= 0) continue;
+            var response = joint.Compliance.Respond(cross) * (float)lambda;
+            var angle = response.Length();
+            // A turn of θ about this joint moves the witness by at most θ·|lever|.
+            var cap = CollisionSettings.MaxCorrectionRadians;
+            if (maxDisplacement < float.PositiveInfinity) cap = MathF.Min(cap, maxDisplacement / MathF.Max(lever.Length(), 1e-6f));
+            if (angle > cap) response *= cap/angle;
+            ContactTurns[n] += response;
+            if (maxDisplacement < float.PositiveInfinity)
+            {
+                ContactTurnPeak[n] = MathF.Max(ContactTurnPeak[n], MathF.Min(angle, cap));
+                ContactLeverMax[n] = MathF.Max(ContactLeverMax[n], lever.Length());
+            }
+        }
     }
 
     /// <summary>

@@ -382,6 +382,64 @@ public class Bvh
             RefitUpdatedNode(root);
     }
 
+    /// <summary>
+    /// <see cref="UpdateLeafBounds"/> for many leaves at once, from several threads: call
+    /// <see cref="PrepareConcurrentLeafUpdates"/> first, then this for distinct agents side by
+    /// side, then <see cref="RefitUpdatedLeavesOnAllCores"/>.
+    /// </summary>
+    /// <remarks>
+    /// Each leaf's node is its own. The walk that marks the ancestors for the refit stops at the
+    /// first one already marked, and a walk only ever marks a node and then carries on upwards,
+    /// so whichever walk marked a node takes the marking on from there: every ancestor of every
+    /// updated leaf ends up marked, as one walk after another would leave it.
+    /// </remarks>
+    internal void UpdateLeafBoundsConcurrently(int agentIndex, BoundingBox bounds)
+    {
+        var leaf = LeafOf(agentIndex);
+        if (leaf < 0)
+            return;
+        var span = CollectionsMarshal.AsSpan(nodes);
+        span[leaf] = span[leaf].WithBounds(bounds);
+        for (var parent = span[leaf].Parent; parent >= 0 && !pendingRefit[parent]; parent = span[parent].Parent)
+            pendingRefit[parent] = true;
+    }
+
+    internal void PrepareConcurrentLeafUpdates()
+    {
+        if (pendingRefit.Length < nodes.Count)
+            Array.Resize(ref pendingRefit, Math.Max(nodes.Count, Math.Max(8, pendingRefit.Length + pendingRefit.Length / 2)));
+    }
+
+    /// <summary>Levels of the hierarchy below its root at which a refit still forks.</summary>
+    const int RefitForkLevels = 6;
+
+    /// <summary>
+    /// <see cref="RefitUpdatedLeaves"/> on several cores: the top levels fork, the subtrees below
+    /// refit on their own. A node's box is the merge of its children's, a componentwise minimum
+    /// and maximum, so the boxes are the same whichever subtree is done first.
+    /// </summary>
+    internal void RefitUpdatedLeavesOnAllCores()
+    {
+        if (!IsEmpty)
+            RefitPending(root, 0);
+    }
+
+    void RefitPending(int index, int level)
+    {
+        if (!pendingRefit[index])
+            return;
+        var node = nodes[index];
+        if (level < RefitForkLevels) RefitChildrenSideBySide(node.Left, node.Right, level + 1);
+        else { RefitPending(node.Left, level + 1); RefitPending(node.Right, level + 1); }
+        var span = CollectionsMarshal.AsSpan(nodes);
+        span[index] = node.WithBounds(BoundingBox.Merge(span[node.Left].Bounds, span[node.Right].Bounds));
+        pendingRefit[index] = false;
+    }
+
+    /// <summary>Kept apart so that the recursion below the forks allocates nothing.</summary>
+    void RefitChildrenSideBySide(int left, int right, int level)
+        => Parallel.Invoke(() => RefitPending(left, level), () => RefitPending(right, level));
+
     void RefitUpdatedNode(int index)
     {
         if (!pendingRefit[index])

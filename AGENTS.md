@@ -1048,6 +1048,24 @@ Honest list of what still does not match:
   the single-plant scenarios. `StaticCollider.BladeDistance` is the one place whose identity to
   the plain loop rests on an error bound (the guard) - do not shrink the guard, and re-run the
   facade hash after touching it or `FoliageGeometry.TriangleDistance`.
+- **The contact replay of a large rigid plant is planned in parallel and applied by partition**
+  (`SoftContactEngine.ReplayOnAllCores`): a correction is planned without writing
+  (`PlanContactCorrection`) and applied per partition of `TreeCacheData.WalkPartition`, each
+  partition taking its corrections in pair order. That is exact only because a rigid plant's
+  correction adds to each joint a turn that depends on that joint alone; anything new that a
+  correction writes or reads while it walks (a per-joint state other than the turn sums, or a
+  shape correction) must go into the plan or keep the plant on the serial `RespondPair` path.
+  The serial path is plan-then-apply as well, so there is one implementation of the arithmetic.
+- **The tree cache keeps each node's parent and rhizome flag** beside the children lists
+  (`AddChild(parent, child, rhizome)`), and `FinishUpdate` numbers the tree from them; on a
+  census with births and no deaths the lists are kept and the newborns appended
+  (`TreeCacheData.Grow`). Both rely on nothing re-parenting an existing organ outside `Reindex`;
+  a new code path that changes an agent's `Parent` in place must force the full rebuild.
+- **The blade-clearance cache for the facade was built and taken out**: it proved 45 % of blade
+  obstacle tests clear with no disagreement, and saved nothing - the blades a bound can prove
+  clear are the ones whose sweep already stops at its first interval. Do not build it again
+  without first counting where the sweep's intervals go (`TREE_PERFORMANCE.md`, the facade
+  section). Parallel `memmove` of the agent arrays was slower than one core, too.
 - **`dotnet-trace` is installed** (`~/.dotnet/tools/dotnet-trace collect --profile
   dotnet-sampled-thread-time -- dotnet ...`). Read shares from it, not milliseconds, and do not
   trust the exclusive time of a small method called millions of times: a sample lands where a

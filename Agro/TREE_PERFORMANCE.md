@@ -352,11 +352,119 @@ What is left there, in the order of what it would buy:
   only for organs it had already pushed without effect, or not re-pushing an organ whose
   inadmissibility is a crossing, would remove most of the 4.5 tests per organ - and changes
   results, so it is a proposal, not something done here.
-- **A true blade clearance.** Measuring a blade's real distance to the obstacles once and
-  skipping the test while its travel stays inside it would make 45 % of the blade tests
-  unnecessary (counted, with no disagreement in half a million), but one measurement costs more
-  than one test, so it only pays with a cache that lasts several ticks. Not built.
+- **A true blade clearance: built, measured, and taken out again.** A lower bound on a blade's
+  distance to every obstacle triangle - the larger of the box gap and the gap along the
+  triangle's own normal, from the blade's vertices, which is a separating-axis bound and needs
+  no facet queries - measured at the half-way pose and kept per organ until its motion bound
+  eats the margin, proves both obstacle tests would pass. It did what the count promised: 44.7 %
+  of blade tests proven, a measurement 9 us, and with every proven skip checked against the full
+  tests, 0 disagreements in 226,765. It changed the tick by nothing (1,630-1,690 ms against
+  1,647, four policies). Sweep calls fell 38 % and sweep CPU did not move: **the blades a bound
+  can prove clear are exactly the ones whose sweep already ends at its first interval.** Counted
+  over four ticks at step 600: 10.35 M blade-against-triangle sweeps end at their first interval
+  (8.6 s, under a microsecond each), 612 k need 2 to 16 intervals (18.2 s), and those that run
+  out of their 256-interval budget are negligible (344, 0.4 s). The expensive ones are blades
+  within one tick's motion of a wall, where no clearance bound decides anything - the
+  subdivision exists because the distance at the half-way pose leaves no margin. The prototype
+  is kept as `rejected/blade-clearance-cache.patch` in the fixtures. What would reduce the
+  facade's solid pass is fewer tests per organ, i.e. the rounds proposal above.
 - The foliage pass (a fifth of the tick) and the light gather (5 %) are as they were.
+
+## The serial rest of a tree's tick: the contact replay and the census (15 November 2026)
+
+What a mature tree still did on one core, in order of size. Same checkpoints, idle machine:
+
+| checkpoint | organs | before | now |
+| --- | ---: | ---: | ---: |
+| Celtis, year 14, mid-August | 270,633 | 923 ms (median 964) | 789 ms (median 828) |
+| Celtis, year 13, 1 February | 75,392 | 162 ms (median 147) | 153 ms (median 139) |
+| Acer, year 12, mid-August | 55,633 | 358 ms (median 356) | 340 ms (median 328) |
+| Amelanchier, year 12, mid-August | 21,826 | 179 ms (median 153) | 183 ms (median 141) |
+
+30 ticks each, back to back; the Amelanchier mean carries one tick of 659 ms. Against the frozen
+baseline the mature Celtis is at 2,742 -> 789 ms per tick, on 17 cores. The facade is unchanged
+(1,467 -> 1,462 ms at step 600, 3,326 -> 3,325 at step 720): its plants are far below every
+threshold here, and the census changes that reach them are a small share of their tick.
+
+**The contact replay** (80-92 ms -> 18-24 ms on the Celtis). After the pairs are evaluated in
+parallel, each touching pair's response used to be replayed in pair order on one thread: remember
+the side, then walk from each organ towards the common ancestor adding a turn to every joint on
+the way. For a plant whose organs only turn, a joint's turn from one correction depends on that
+joint and on totals known before the walk; what the order fixes is only the float sum each joint
+accumulates. So (`SoftContactEngine.ReplayOnAllCores`):
+
+1. every correction is planned on all cores - the multiplier of the walk, or the one joint an
+   axial contact turns (`PlanContactCorrection`; the serial path is now plan-then-apply too, so
+   there is one implementation of the arithmetic);
+2. the joints are split into partitions a walk enters at most once each, and every correction
+   is routed to the partitions it crosses with the joint where it enters each;
+3. the partitions apply their corrections in pair order, side by side, each only to its own
+   joints - every joint receives its turns in pair order, as before.
+
+The first version had two kinds of partition, the subtrees left over by the walk split and one
+trunk. The trunk took every long-range correction and was 30 of the 48 ms the replay still cost,
+the slowest subtree 1 ms. Partitions now have **levels** (`TreeCacheData.WalkPartition`): a
+node's level is the smallest `l` with a subtree of at most `g * 8^l` nodes, and a partition is a
+connected run of one level. Subtree sizes only grow towards the roots, so levels never fall along
+a walk, which is all the argument needs.
+
+The side memory - one dictionary entry per touching pair - then became the critical path at
+21-34 ms. Each pair has its own key, overwriting an existing key's value changes nothing else in
+a `Dictionary`, and finding a key only reads it, so the known keys are overwritten on all cores
+through `CollectionsMarshal.GetValueRefOrNullRef` and the new ones added in pair order on one
+thread: the same insertions in the same order, hence even the same layout
+(`RememberSides`). It runs beside the whole replay. Two smaller things: the touching pairs are
+taken from a 32-bit mask per evaluation chunk instead of a scan of all 1.37 million records, and
+the plan buffer holds four corrections per *touching* pair - the first version sized it per pair,
+about 380 MB on this tree.
+
+**The census** (the step that renumbers the organ tree after births or deaths; on the Celtis
+the rebuild went 55.5 -> 37 ms for the shoot and 29.5 -> 18 ms for its 141,000-organ root
+system, `FinishUpdate` itself 29.5 -> 16 and 18 -> 9.5 ms, the children lists 6 -> 0.2 and
+3.6 -> 0 ms):
+
+- `TreeCacheData.FinishUpdate` was a depth-first walk over a stack of 16-byte tuples. Its numbers
+  are now produced by array passes over the breadth-first order: depth and crown from the
+  parent, subtree sizes bottom-up, then the preorder top-down with the last root at 0 and each
+  node's children in reverse list order - the order the stack visited them. The same numbers,
+  and the breadth-first order is then known for the topology's other readers.
+- On a tick with births and no deaths, existing organs keep their index and their parent (the
+  only re-parenting is `Reindex` on deaths; a module's in-place replacement keeps the parent), so
+  the children lists are kept and the newborns appended in index order (`TreeCacheData.Grow`) -
+  the lists a rebuild would make.
+- Tried and taken out: copying and clearing the agent arrays on several cores. One core's
+  `memmove` already runs near this machine's memory bandwidth; split into tasks it was slower
+  (13.4 -> 16.7-19.2 ms for the census copy and clear).
+- The first array-pass version of `FinishUpdate` was *slower* than the stack walk (29.5 -> 37 ms):
+  it read each organ's parent and rhizome flag from the 400-byte agents in breadth-first order,
+  a cache miss per node, twice. The tree cache now keeps both beside the children lists (written
+  where the lists are built), and the sibling offsets come from one pass of falling index - the
+  lists are built in index order, so the siblings the walk visits first are the ones of higher
+  index. With leaves as nodes of size one, only the breadth-first order itself still follows a
+  list per node.
+
+**Three more pieces of the same kind:**
+
+- **The refit after a contact sweep** (33 -> 14 ms). A sweep that turned the trunk moves every
+  organ, and the hierarchy's leaves were written and refitted on one thread. A node's box is the
+  merge of its children's - a componentwise minimum and maximum - so the refit forks at the top
+  six levels; and the leaves are written side by side, each marking its ancestors for the refit
+  until it meets one already marked. A walk only ever marks a node and then goes on upwards, so
+  whichever walk marked a node carries the marking from there and every ancestor ends up marked,
+  as one walk after another leaves it (`Bvh.UpdateLeafBoundsConcurrently`).
+- **The own-pair ordering** (12.6-13.5 -> 3.8-4.2 ms). After the parallel search, the found pairs
+  were counted per first organ, placed and written out in three serial passes over two million
+  pairs. The result is fixed by the set of pairs alone, so it is now assembled by ranges of first
+  organs: each search block counts its pairs per range, a prefix over (range, block) gives each
+  block its slice of every range, and each range sorts, deduplicates and writes its own organs
+  (`OrderOwnPairs`). The check that the organs' ids rise with their index runs in blocks too.
+- **The height, inside the organ tick** (about 6 ms). Every contact sweep that rebases a subtree
+  marks the plant's height stale, and the first woody leaf born in the next organ tick asks for it
+  - a pass over every organ, on the one thread the organ tick has. The organ tick reads the other
+  half of the double buffer, so the height is a maximum over state nothing writes meanwhile and is
+  now taken on all cores (`TreeCacheData.UpdateHeight`).
+- The statistics array of the pair evaluation was reallocated to exactly the chunk count, i.e.
+  on every tick with a birth (10 MB here); it grows by half now.
 
 ## How "exact" is checked
 
@@ -370,7 +478,7 @@ bloom) and early November (leaf fall). Three checks, all against that baseline:
   ticks and compares the state and the exported frame. Twenty-one checkpoints of the three species -
   winter, flush and bloom, summer and leaf fall, 5,543 to 225,026 organs - all identical with every
   change of the first round in; twenty-six, from 113 organs up, with the second round in as well;
-  twenty-two with gravity and the sweep changes.
+  twenty-two with gravity and the sweep changes; twenty-two again with the replay and census.
 - `probe-facade/` (`FacadeProbe hash`, with `FROM=states/stepNNNN.bin.gz`) runs the salvaged
   4,134-plant facade request on its imported model from a stored state and hashes the exported
   frame of every tick: identical to the baseline over 100 ticks from step 240, 60 from 480, 40
@@ -404,8 +512,11 @@ first set.
 
 ## What is left, by measured share
 
-At 269k organs (Celtis, year 14, August), of 905 ms: contacts 396 (evaluation
-192, replay 80, the rest 124), light 208, census 126, organ tick 113, gravity 24.
+At 269k organs (Celtis, year 14, August), of 789-834 ms: the pair evaluation about 195 (on all
+cores), the light gather 139 (all cores), the census 112 (shoot rebuild 36, hierarchy build 36,
+roots 18), the organ tick 82 (shoot) and 34 (roots), the light scene 58, the contact sweep's walk
+24 and refit 14, the replay 18-24, gravity 27, root message delivery 18. A profile of the main
+thread puts 31 % of it outside every parallel loop; the organ tick is the largest part of that.
 
 - **Pair evaluation.** Parallel, and bound by the sixteen physical cores: 6.3 s of thread time a
   tick. By kind of pair: blade on blade, touching, 42 % (18,500 pairs at 144 us); rod and blade,
@@ -415,15 +526,15 @@ At 269k organs (Celtis, year 14, August), of 905 ms: contacts 396 (evaluation
   simpler than that was found. Removing the oriented-box prefilter for rods is *not* exact: its
   projections carry a micrometre of rounding at ten metres, more than the margin it tests against,
   so it can call a pair apart that the distance kernel would find just inside the band.
-- **Replay.** 80 ms, serial: 190,000 contacts, two walks each to the common ancestor. Each joint
-  has to receive its turns in pair order. A replay partitioned into connected blocks of the tree,
-  each block applying the path segments that cross it in pair order, keeps that; it needs a block
-  decomposition per topology and the segments emitted by the mobility walk.
-- **Census** apart from the hierarchy (about 95 ms): every tick with a birth rebuilds the organ
-  tree and its index from scratch. Append on births, remap on deaths; `FinishUpdate` alone, a
-  depth-first walk over a stack of tuples, is 2.8 % of the main thread and can be three array
-  passes over the breadth-first order with the same numbering.
-- **Organ tick** (109 ms): one random stream per plant drawn in organ order; not parallel.
+- **Census** apart from the hierarchy (about 55 ms with the roots): the agent copy and clear of
+  the double buffer (13 ms on the shoot, memory-bound), the breadth-first order, which still
+  follows a list per node, and the root system's own rebuild. An exact way to halve the copy -
+  append the newborns in place and clear only the other half - changes which physical array is
+  current, which nothing should observe; not done, for 6 ms.
+- **Organ tick** (82 ms shoot, 34 roots): one random stream per plant drawn in organ order; not
+  parallel. The height it used to recompute in passing is now taken on all cores.
+- **The light scene's hierarchy** builds its top levels on one thread (about 2 % of the main
+  thread in the profile); **root message delivery** (18 ms) is serial per plant.
 - **Acer's light scene** (a fifth of its tick): fill the plant's primitives in parallel at offsets
   from a prefix sum.
 

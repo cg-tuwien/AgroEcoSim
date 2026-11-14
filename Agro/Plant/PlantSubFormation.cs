@@ -258,7 +258,7 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 		RhizomeOrgans.Clear();
 		for (int i = 0; i < count; ++i)
 		{
-			TreeCache.AddChild(live[i].Parent, i);
+			TreeCache.AddChild(live[i].Parent, i, live[i].IsRizome);
 			if (live[i].IsRizome) RhizomeOrgans.Add(i);
 		}
 		TreeCache.FinishUpdate(this);
@@ -384,11 +384,14 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 				(ReadTMP ? AgentsTMP : Agents).AsSpan(newCount, oldCount - newCount).Clear();
 
 			InvalidateStaticClearance();
-			TreeCache.Clear(newCount);
-			RhizomeOrgans.Clear();
-			for (int i = 0; i < newCount; ++i)
+			// With no deaths every organ kept its index and its parent: only the newborns
+			// have to be added, and in index order they land where a rebuild puts them.
+			var first = geometryReindexed ? 0 : oldCount;
+			if (geometryReindexed) { TreeCache.Clear(newCount); RhizomeOrgans.Clear(); }
+			else TreeCache.Grow(newCount);
+			for (int i = first; i < newCount; ++i)
 			{
-				TreeCache.AddChild(dst[i].Parent, i);
+				TreeCache.AddChild(dst[i].Parent, i, dst[i].IsRizome);
 				if (dst[i].IsRizome) RhizomeOrgans.Add(i);
 			}
 			TreeCache.FinishUpdate(this);
@@ -1555,19 +1558,27 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 			if (RhizomeOrgans.Count > 0)
 				foreach (var organ in organs)
 					if (GetIsRizome(organ)) RhizomeBvh.UpdateLeafBounds(organ, ComputeBounds(organ));
+			CollisionBvh.RefitUpdatedLeaves();
 		}
-		CollisionBvh.RefitUpdatedLeaves();
 		RhizomeBvh.RefitUpdatedLeaves();
 	}
 
-	/// <summary>Kept apart from the per-contact refit of a small subtree, which must not allocate.</summary>
+	/// <summary>Kept apart from the per-contact refit of a small subtree, which must not allocate.
+	/// The organs' boxes, their leaves in the hierarchy and the hierarchy's refit are all done on
+	/// several cores (<see cref="Bvh.UpdateLeafBoundsConcurrently"/>).</summary>
 	void RefitLargeSubtree(int root)
 	{
 		bool Covered(int organ) => root < 0 || organ == root || TreeCache.IsDescendant(root, organ);
 		var count = AgentCount;
 		ComputeOrganBounds(count, Covered);
-		for (int i = 0; i < count; ++i)
-			if (Covered(i)) CollisionBvh.UpdateLeafBounds(i, OrganBounds[i]);
+		var bvh = CollisionBvh;
+		bvh.PrepareConcurrentLeafUpdates();
+		Parallel.ForEach(System.Collections.Concurrent.Partitioner.Create(0, count, 4096), range =>
+		{
+			for (int i = range.Item1; i < range.Item2; ++i)
+				if (Covered(i)) bvh.UpdateLeafBoundsConcurrently(i, OrganBounds[i]);
+		});
+		bvh.RefitUpdatedLeavesOnAllCores();
 		foreach (var organ in RhizomeOrgans)
 			if (Covered(organ)) RhizomeBvh.UpdateLeafBounds(organ, ComputeBounds(organ));
 	}

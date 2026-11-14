@@ -8,6 +8,10 @@ internal class TreeCacheData
 {
 	public int Count { get; private set; }
 	List<int>[] ChildrenNodes;
+	/// <summary>Each node's parent and whether it is a rhizome, as the children lists were built:
+	/// the passes over the whole tree read these instead of the agents.</summary>
+	int[] ParentNodes = new int[2];
+	bool[] RhizomeNodes = new bool[2];
 	ushort[] DepthNodes;
 	Vector3[] PointNodes;
 	int[] Preorder = new int[2], SubtreeEnd = new int[2], CrownAncestor = new int[2];
@@ -15,12 +19,16 @@ internal class TreeCacheData
 	/// (<see cref="BreadthFirst"/>), once per topology.</summary>
 	int[] BreadthOrder = new int[2], BreadthRank = new int[2];
 	bool BreadthKnown;
-	readonly List<int> HeavyNodes = [], LightRoots = [];
+	readonly List<int> HeavyNodes = [], LightRoots = [], PartitionRoots = [];
+	/// <summary>Each node's partition for a walk on several cores (<see cref="WalkPartition"/>),
+	/// filled on demand, once per topology.</summary>
+	int[] PartitionOwner = new int[2];
+	int PartitionParts;
+	bool PartitionKnown;
 	readonly object HeightGate = new();
 	[ThreadStatic] static Stack<int>? WalkStack;
 	/// <summary>Nodes from which a walk over a subtree is spread over the cores.</summary>
 	internal const int ParallelWalkMinimum = 16384;
-	readonly Stack<(int index, ushort depth, int crown, bool exit)> TopologyStack = new();
 	readonly Stack<int> TraversalStack = new();
 	readonly HashSet<int> Targets = [], StartNodes = [];
 	readonly List<int> Roots = [];
@@ -49,6 +57,8 @@ internal class TreeCacheData
 			for(int i = l; i < capacity; ++i)
 				ChildrenNodes[i] = [];
 			Array.Resize(ref DepthNodes, capacity);
+			Array.Resize(ref ParentNodes, capacity);
+			Array.Resize(ref RhizomeNodes, capacity);
 			Array.Resize(ref PointNodes, capacity);
 			Array.Resize(ref Preorder, capacity);
 			Array.Resize(ref SubtreeEnd, capacity);
@@ -57,56 +67,120 @@ internal class TreeCacheData
 			Array.Resize(ref BreadthRank, capacity);
 		}
 		BreadthKnown = false;
+		PartitionKnown = false;
 		Count = newSize;
 		for(int i = 0; i < newSize; ++i)
 			ChildrenNodes[i].Clear();
 	}
 
-	public void AddChild(int parentIndex, int childIndex)
+	/// <summary>
+	/// Makes room for organs appended at the end, keeping the children lists of the organs
+	/// already there. Only for a census with births and no deaths: the existing organs keep
+	/// their index and parent, so adding the newborns in index order then gives exactly the
+	/// lists <see cref="Clear"/> and adding every organ would.
+	/// </summary>
+	public void Grow(int newSize)
 	{
+		Leaves.Clear();
+		if (newSize > ChildrenNodes.Length)
+		{
+			var l = ChildrenNodes.Length;
+			var capacity = Math.Max(newSize, l + l / 2);
+			Array.Resize(ref ChildrenNodes, capacity);
+			for(int i = l; i < capacity; ++i)
+				ChildrenNodes[i] = [];
+			Array.Resize(ref DepthNodes, capacity);
+			Array.Resize(ref ParentNodes, capacity);
+			Array.Resize(ref RhizomeNodes, capacity);
+			Array.Resize(ref PointNodes, capacity);
+			Array.Resize(ref Preorder, capacity);
+			Array.Resize(ref SubtreeEnd, capacity);
+			Array.Resize(ref CrownAncestor, capacity);
+			Array.Resize(ref BreadthOrder, capacity);
+			Array.Resize(ref BreadthRank, capacity);
+		}
+		BreadthKnown = false;
+		PartitionKnown = false;
+		for (int i = Count; i < newSize; ++i)
+			ChildrenNodes[i].Clear();
+		Count = newSize;
+	}
+
+	public void AddChild(int parentIndex, int childIndex, bool rhizome)
+	{
+		ParentNodes[childIndex] = parentIndex;
+		RhizomeNodes[childIndex] = rhizome;
 		if (parentIndex >= 0)
 			ChildrenNodes[parentIndex].Add(childIndex);
 		else
 			Roots.Add(childIndex);
 	}
 
+	/// <summary>
+	/// Numbers the nodes after the children lists were rebuilt: depth, crown ancestor, preorder
+	/// and subtree end, the depth range and the leaves.
+	/// </summary>
+	/// <remarks>
+	/// The numbering is that of a depth-first walk that pushes the roots and every node's
+	/// children in list order on a stack, so the last root and the last child are visited first.
+	/// It is produced here by array passes instead of the walk, reading the parents and rhizome
+	/// flags kept beside the lists rather than the agents: subtree sizes bottom-up in reverse
+	/// breadth-first order; each node's offset among its siblings - the sizes of the siblings the
+	/// walk visits before it, which are those later in the list, i.e. of higher index, since the
+	/// lists are built in index order - in one pass of falling index; then depth, crown, preorder
+	/// (parent's plus one plus the offset) and subtree end (preorder plus size) top-down in
+	/// breadth-first order. A leaf is a node of size one. Those are the walk's numbers exactly,
+	/// and the breadth-first order is then known for the topology's other readers.
+	/// </remarks>
 	public void FinishUpdate<T>(PlantSubFormation<T> formation) where T : struct, IPlantAgent
 	{
-		var buffer = TopologyStack;
-		buffer.Clear();
-		var preorder = 0;
-		foreach(var item in Roots)
-			buffer.Push((item, 0, item, false));
-
-		MaxDepth = 0;
-
-		while(buffer.Count > 0)
+		var order = BreadthFirst();
+		if (SubtreeSizes.Length < Count) { SubtreeSizes = new int[ChildrenNodes.Length]; SiblingOffsets = new int[ChildrenNodes.Length]; }
+		var sizes = SubtreeSizes; var offsets = SiblingOffsets; var parents = ParentNodes;
+		for (int i = 0; i < Count; ++i) { sizes[i] = 1; offsets[i] = 0; }
+		for (int k = order.Length - 1; k >= 0; --k)
 		{
-			var (index, depth, crown, exit) = buffer.Pop();
-			if (exit)
-			{
-				SubtreeEnd[index] = preorder;
-				continue;
-			}
-			Preorder[index] = preorder++;
-			if (formation.GetIsRizome(index))
-				crown = index;
-			CrownAncestor[index] = crown;
-			buffer.Push((index, depth, crown, true));
-			DepthNodes[index] = depth;
-			if (depth > MaxDepth)
-				MaxDepth = depth;
-			var nextDepth = (ushort)(depth + 1);
-			foreach(var child in ChildrenNodes[index])
-				buffer.Push((child, nextDepth, crown, false));
+			var node = order[k];
+			var parent = parents[node];
+			if (parent >= 0) sizes[parent] += sizes[node];
 		}
-
-		++MaxDepth;
+		// Running sums per parent in falling index order, kept in the parent's own slot of a
+		// second array; the roots share one sum.
+		var rootsBefore = 0;
+		for (int i = Count - 1; i >= 0; --i)
+		{
+			var parent = parents[i];
+			if (parent < 0) { Preorder[i] = rootsBefore; rootsBefore += sizes[i]; }
+			else { SubtreeEnd[i] = offsets[parent]; offsets[parent] += sizes[i]; }
+		}
+		ushort deepest = 0;
+		for (int k = 0; k < order.Length; ++k)
+		{
+			var node = order[k];
+			var parent = parents[node];
+			if (parent < 0)
+			{
+				DepthNodes[node] = 0;
+				CrownAncestor[node] = node;
+			}
+			else
+			{
+				var depth = (ushort)(DepthNodes[parent] + 1);
+				DepthNodes[node] = depth;
+				if (depth > deepest) deepest = depth;
+				CrownAncestor[node] = RhizomeNodes[node] ? node : CrownAncestor[parent];
+				Preorder[node] = Preorder[parent] + 1 + SubtreeEnd[node];
+			}
+			SubtreeEnd[node] = Preorder[node] + sizes[node];
+		}
+		MaxDepth = (ushort)(deepest + 1);
 
 		for(int i = 0; i < Count; ++i)
-			if (ChildrenNodes[i].Count == 0)
+			if (sizes[i] == 1)
 				Leaves.Add(i);
 	}
+	int[] SiblingOffsets = [];
+	int[] SubtreeSizes = [];
 
 	/// <summary>
 	/// The nodes in breadth-first order from the roots: the order in which a walk that keeps its
@@ -156,6 +230,92 @@ internal class TreeCacheData
 				(SubtreeSize(child) > grain ? heavy : light).Add(child);
 		return heavy;
 	}
+
+	/// <summary>Levels of <see cref="WalkPartition"/>; a walk towards the roots crosses at most
+	/// this many partitions.</summary>
+	internal const int PartitionLevels = 7;
+
+	/// <summary>
+	/// Every node's partition for work along walks towards the roots spread over the cores, and
+	/// the number of partitions in <paramref name="parts"/>.
+	/// </summary>
+	/// <remarks>
+	/// A node's level is the smallest <c>l</c> for which its subtree has at most <c>g * 8^l</c>
+	/// nodes (the last level takes the rest), where <c>g</c> is the grain of
+	/// <see cref="SplitForWalk"/>; a partition is a node of some level whose parent is of a higher
+	/// one, with everything below it of the same level. A subtree is never larger than its
+	/// parent's, so levels never fall on the way to the roots: a walk stays in one partition
+	/// until the level rises, and never comes back to it. Level 0 is the subtrees the split
+	/// leaves over; the levels above cut the trunk that carries them, so that no partition takes
+	/// every walk that reaches the trunk. Once per topology.
+	/// </remarks>
+	internal int[] WalkPartition<T>(PlantSubFormation<T> formation, out int parts) where T : struct, IPlantAgent
+	{
+		if (!PartitionKnown)
+		{
+			if (PartitionOwner.Length < Count) PartitionOwner = new int[ChildrenNodes.Length];
+			if (PartitionLevel.Length < Count) PartitionLevel = new byte[ChildrenNodes.Length];
+			LevelPartitions(formation);
+			PartitionParts = PartitionRoots.Count;
+			MarkPartitions();
+			PartitionKnown = true;
+		}
+		parts = PartitionParts;
+		return PartitionOwner;
+	}
+	byte[] PartitionLevel = new byte[2];
+
+	/// <summary>Every node's level, and the partition roots in index order, on several cores.</summary>
+	void LevelPartitions<T>(PlantSubFormation<T> formation) where T : struct, IPlantAgent
+	{
+		var grain = Math.Clamp(Count / (8 * Environment.ProcessorCount), 256, 4096);
+		var blocks = (Count + 8191) / 8192;
+		if (PartitionBlockRoots.Length < blocks)
+		{
+			var old = PartitionBlockRoots.Length;
+			Array.Resize(ref PartitionBlockRoots, blocks);
+			for (int b = old; b < blocks; ++b) PartitionBlockRoots[b] = [];
+		}
+		Parallel.For(0, blocks, b =>
+		{
+			var last = Math.Min(Count, (b + 1) * 8192);
+			for (int i = b * 8192; i < last; ++i)
+			{
+				var size = SubtreeSize(i); byte level = 0;
+				for (long bound = grain; size > bound && level < PartitionLevels - 1; bound *= 8) ++level;
+				PartitionLevel[i] = level;
+			}
+		});
+		Parallel.For(0, blocks, b =>
+		{
+			var roots = PartitionBlockRoots[b];
+			roots.Clear();
+			var last = Math.Min(Count, (b + 1) * 8192);
+			for (int i = b * 8192; i < last; ++i)
+			{
+				var parent = ParentNodes[i];
+				if (parent < 0 || PartitionLevel[parent] != PartitionLevel[i]) roots.Add(i);
+			}
+		});
+		PartitionRoots.Clear();
+		for (int b = 0; b < blocks; ++b) PartitionRoots.AddRange(PartitionBlockRoots[b]);
+	}
+	List<int>[] PartitionBlockRoots = [];
+
+	/// <summary>Kept apart so that nothing captured is allocated before it is needed.</summary>
+	void MarkPartitions() => Parallel.For(0, PartitionRoots.Count, part =>
+	{
+		var stack = WalkStack ??= new();
+		stack.Clear();
+		var root = PartitionRoots[part]; var level = PartitionLevel[root];
+		stack.Push(root);
+		while (stack.TryPop(out var node))
+		{
+			PartitionOwner[node] = part;
+			foreach (var child in ChildrenNodes[node])
+				if (PartitionLevel[child] == level) stack.Push(child);
+		}
+	});
 
 	// The strict ancestor relation excludes a node from its own descendants.
 	internal bool IsDescendant(int ancestor, int node) =>
@@ -308,6 +468,12 @@ internal class TreeCacheData
 		foreach (var node in SplitForWalk(CollectionsMarshal.AsSpan(Roots), light)) PlaceChildren(formation, node);
 		Parallel.For(0, light.Count, k => PlaceBelow(formation, light[k], WalkStack ??= new()));
 
+		HeightOnAllCores(formation);
+	}
+
+	/// <summary>The height, a maximum, on several cores.</summary>
+	void HeightOnAllCores<T>(PlantSubFormation<T> formation) where T : struct, IPlantAgent
+	{
 		var groundHeight = formation.Plant.Position.Y;
 		var height = 0f;
 		var gate = HeightGate;
@@ -357,6 +523,9 @@ internal class TreeCacheData
 
 	internal void UpdateHeight<T>(PlantSubFormation<T> formation) where T : struct, IPlantAgent
 	{
+		// A maximum: the same on several cores. A woody plant asks for it in the middle of its
+		// organ tick after every contact sweep that rebased a subtree.
+		if (Count >= ParallelWalkMinimum && Environment.ProcessorCount > 1) { HeightOnAllCores(formation); return; }
 		Height = 0f;
 		var groundHeight = formation.Plant.Position.Y;
 		for (var i = 0; i < Count; ++i)

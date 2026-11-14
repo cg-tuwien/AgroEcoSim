@@ -99,6 +99,25 @@ public sealed partial class SoftContactEngine
         public PairStats Stats, LastStats;
         public PairStats[] ChunkStats = [];
         public PairRecord[] Records = [];
+        /// <summary>The replay of a large rigid plant on several cores: up to four planned
+        /// corrections per pair, how many each pair has, where each is applied, and the
+        /// corrections of every partition in pair order.</summary>
+        /// <summary>The own-pair ordering by ranges of first organs: each block's slice of each
+        /// range, the ranges' starts and distinct pairs, and the pairs placed by range.</summary>
+        public int[] BlockRangeAt = [], RangeStart = new int[OwnPairRanges + 1], RangeUnique = new int[OwnPairRanges];
+        public (int, int)[] StagedPairs = [];
+        public int[] ChunkTouching = [], TouchingPairs = [];
+        /// <summary>Which of the 32 pairs of each evaluation chunk touch, and which touching pairs
+        /// have no side memory yet.</summary>
+        public uint[] ChunkTouchingMask = [];
+        public bool[] SideIsNew = [];
+        public PlantSubFormation<AboveGroundAgent>.ContactCorrection[] Plans = [];
+        public byte[] PlanCounts = [];
+        public bool[] PlanSlides = [];
+        /// <summary>Per block of touching pairs, the routes its corrections take: triples of
+        /// correction, partition and entry joint, in pair order.</summary>
+        public List<int>[] BlockRoutes = [];
+        public int[] PartStart = [], PartFill = [], PartPlans = [];
         public double ClippedMetres;
         public float MaxSolidPenetration;
         public long Clips, Obstacle, Soil, Queries, Skips, SupportSkips, Slides;

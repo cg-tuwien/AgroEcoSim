@@ -77,19 +77,124 @@ public sealed partial class SoftContactEngine
     /// the serial search runs exactly as before.
     /// </para>
     /// </remarks>
+    /// <summary>Whether the organs' stable ids rise strictly with their index, checked in blocks
+    /// side by side, each against the id before it.</summary>
+    static bool IdsAscend(PlantSubFormation<AboveGroundAgent> ag, int count)
+    {
+        var descending = 0;
+        Parallel.ForEach(System.Collections.Concurrent.Partitioner.Create(0, count, 8192), range =>
+        {
+            var previous = range.Item1 > 0 ? ag.GetOrganId(range.Item1 - 1) : 0UL;
+            for (int i = range.Item1; i < range.Item2 && Volatile.Read(ref descending) == 0; ++i)
+            {
+                var id = ag.GetOrganId(i);
+                if (id <= previous) { Volatile.Write(ref descending, 1); return; }
+                previous = id;
+            }
+        });
+        return descending == 0;
+    }
+
+    /// <summary>Ranges of first organs over which the found pairs are ordered side by side.</summary>
+    const int OwnPairRanges = 64;
+
+    /// <summary>
+    /// The pairs the blocks found, as the own-pair list: by first organ, each organ's partners
+    /// in ascending order and once each.
+    /// </summary>
+    /// <remarks>
+    /// The result is fixed by the set of pairs alone, so it can be put together in any order of
+    /// work: each block counts its pairs per range of first organs, a prefix over (range, block)
+    /// gives each block a slice of every range, the blocks place their pairs, and each range then
+    /// counts, places, sorts and deduplicates its organs' partners and writes them out after the
+    /// ranges before it.
+    /// </remarks>
+    static void OrderOwnPairs(SoftWork work, int count, int blocks)
+    {
+        const int ranges = OwnPairRanges;
+        var lists = work.BlockPairs;
+        if (work.BlockRangeAt.Length < blocks * ranges) work.BlockRangeAt = new int[Math.Max(blocks * ranges, work.BlockRangeAt.Length * 3 / 2)];
+        if (work.BucketStart.Length < count + 1)
+        {
+            work.BucketStart = new int[Math.Max(count + 1, work.BucketStart.Length * 2)];
+            work.BucketFill = new int[work.BucketStart.Length];
+        }
+        var at = work.BlockRangeAt;
+        CountPairsPerRange(work, count, blocks);
+        var total = 0;
+        for (int r = 0; r < ranges; ++r)
+        {
+            work.RangeStart[r] = total;
+            for (int b = 0; b < blocks; ++b) { var n = at[b * ranges + r]; at[b * ranges + r] = total; total += n; }
+        }
+        work.RangeStart[ranges] = total;
+        if (work.StagedPairs.Length < total) work.StagedPairs = new (int, int)[Math.Max(total, work.StagedPairs.Length * 3 / 2)];
+        if (work.Seconds.Length < total) work.Seconds = new int[Math.Max(total, work.Seconds.Length * 2)];
+        PlacePairsByRange(work, count, blocks);
+        SortRanges(work, count);
+        var unique = 0;
+        for (int r = 0; r < ranges; ++r) { var n = work.RangeUnique[r]; work.RangeUnique[r] = unique; unique += n; }
+        CollectionsMarshal.SetCount(work.OwnPairs, unique);
+        WriteRanges(work, count);
+    }
+
+    static int RangeOf(int organ, int count) => (int)((long)organ * OwnPairRanges / count);
+    static int RangeFirst(int range, int count) => (int)(((long)range * count + OwnPairRanges - 1) / OwnPairRanges);
+
+    static void CountPairsPerRange(SoftWork work, int count, int blocks) => Parallel.For(0, blocks, b =>
+    {
+        var at = work.BlockRangeAt.AsSpan(b * OwnPairRanges, OwnPairRanges);
+        at.Clear();
+        foreach (var (a, _) in CollectionsMarshal.AsSpan(work.BlockPairs[b])) ++at[RangeOf(a, count)];
+    });
+
+    static void PlacePairsByRange(SoftWork work, int count, int blocks) => Parallel.For(0, blocks, b =>
+    {
+        var at = work.BlockRangeAt.AsSpan(b * OwnPairRanges, OwnPairRanges); var staged = work.StagedPairs;
+        foreach (var pair in CollectionsMarshal.AsSpan(work.BlockPairs[b])) staged[at[RangeOf(pair.Item1, count)]++] = pair;
+    });
+
+    static void SortRanges(SoftWork work, int count) => Parallel.For(0, OwnPairRanges, r =>
+    {
+        var first = RangeFirst(r, count); var last = RangeFirst(r + 1, count);
+        var start = work.BucketStart; var fill = work.BucketFill; var seconds = work.Seconds; var staged = work.StagedPairs;
+        var from = work.RangeStart[r]; var to = work.RangeStart[r + 1];
+        for (int i = first; i < last; ++i) fill[i] = 0;
+        for (int k = from; k < to; ++k) ++fill[staged[k].Item1];
+        var next = from;
+        for (int i = first; i < last; ++i) { start[i] = next; next += fill[i]; fill[i] = start[i]; }
+        for (int k = from; k < to; ++k) seconds[fill[staged[k].Item1]++] = staged[k].Item2;
+        var unique = 0;
+        for (int i = first; i < last; ++i)
+        {
+            var bucket = start[i]; var length = fill[i] - bucket;
+            if (length > 1) Array.Sort(seconds, bucket, length);
+            var kept = Math.Min(length, 1);
+            for (int k = 1; k < length; ++k)
+                if (seconds[bucket + k] != seconds[bucket + kept - 1]) seconds[bucket + kept++] = seconds[bucket + k];
+            fill[i] = kept; unique += kept;
+        }
+        work.RangeUnique[r] = unique;
+    });
+
+    static void WriteRanges(SoftWork work, int count) => Parallel.For(0, OwnPairRanges, r =>
+    {
+        var first = RangeFirst(r, count); var last = RangeFirst(r + 1, count);
+        var output = CollectionsMarshal.AsSpan(work.OwnPairs); var at = work.RangeUnique[r];
+        for (int i = first; i < last; ++i)
+        {
+            var bucket = work.BucketStart[i];
+            for (int k = 0; k < work.BucketFill[i]; ++k) output[at++] = (i, work.Seconds[bucket + k]);
+        }
+    });
+
     bool CollectOwnPairsParallel(PlantSubFormation<AboveGroundAgent> ag, SoftWork work)
     {
         var bvh = ag.CollisionBvh; var nodes = bvh.NodeCount; var count = ag.Count;
         var blocks = (nodes + OwnPairBlockNodes - 1) / OwnPairBlockNodes;
         if (blocks < 4) return false;
         var started = System.Diagnostics.Stopwatch.GetTimestamp();
-        var previous = 0UL;
-        for (int i = 0; i < count; ++i)
-        {
-            var id = ag.GetOrganId(i);
-            if (id <= previous) return false;
-            previous = id;
-        }
+        if (!IdsAscend(ag, count)) return false;
         if (work.BlockPairs.Length < blocks)
         {
             var old = work.BlockPairs.Length;
@@ -109,46 +214,7 @@ public sealed partial class SoftContactEngine
             found.RemoveRange(retained, found.Count - retained);
         });
         var discovered = System.Diagnostics.Stopwatch.GetTimestamp();
-        var total = 0;
-        for (int k = 0; k < blocks; ++k) total += lists[k].Count;
-        // One bucket per first organ: count, place, then sort and deduplicate each bucket.
-        if (work.BucketStart.Length < count + 1)
-        {
-            work.BucketStart = new int[Math.Max(count + 1, work.BucketStart.Length * 2)];
-            work.BucketFill = new int[work.BucketStart.Length];
-        }
-        if (work.Seconds.Length < total) work.Seconds = new int[Math.Max(total, work.Seconds.Length * 2)];
-        var start = work.BucketStart; var fill = work.BucketFill; var seconds = work.Seconds;
-        Array.Clear(start, 0, count + 1);
-        for (int k = 0; k < blocks; ++k)
-            foreach (var (a, _) in CollectionsMarshal.AsSpan(lists[k])) ++start[a + 1];
-        for (int i = 0; i < count; ++i) { start[i + 1] += start[i]; fill[i] = start[i]; }
-        for (int k = 0; k < blocks; ++k)
-            foreach (var (a, b) in CollectionsMarshal.AsSpan(lists[k])) seconds[fill[a]++] = b;
-        // From here fill[i] is the number of distinct partners of organ i.
-        Parallel.ForEach(System.Collections.Concurrent.Partitioner.Create(0, count, 4096), range =>
-        {
-            for (int i = range.Item1; i < range.Item2; ++i)
-            {
-                var from = start[i]; var length = start[i + 1] - from;
-                if (length > 1) Array.Sort(seconds, from, length);
-                var kept = Math.Min(length, 1);
-                for (int k = 1; k < length; ++k)
-                    if (seconds[from + k] != seconds[from + kept - 1]) seconds[from + kept++] = seconds[from + k];
-                fill[i] = kept;
-            }
-        });
-        var unique = 0;
-        for (int i = 0; i < count; ++i) unique += fill[i];
-        var pairs = work.OwnPairs;
-        CollectionsMarshal.SetCount(pairs, unique);
-        var output = CollectionsMarshal.AsSpan(pairs);
-        var at = 0;
-        for (int i = 0; i < count; ++i)
-        {
-            var from = start[i];
-            for (int k = 0; k < fill[i]; ++k) output[at++] = (i, seconds[from + k]);
-        }
+        OrderOwnPairs(work, count, blocks);
         work.LastDiscoverTicks = discovered - started; work.LastFilterTicks = 0;
         work.LastSortTicks = System.Diagnostics.Stopwatch.GetTimestamp() - discovered;
         return true;
@@ -182,7 +248,7 @@ public sealed partial class SoftContactEngine
         }
         var n = pairs.Count;
         var chunks = (n + OwnPairChunk - 1) / OwnPairChunk;
-        if (work.ChunkStats.Length < chunks) Array.Resize(ref work.ChunkStats, chunks);
+        if (work.ChunkStats.Length < chunks) Array.Resize(ref work.ChunkStats, Math.Max(chunks, work.ChunkStats.Length * 3 / 2));
         if (ChunkOwnPairs && chunks >= 2)
         {
             // Few plants, many pairs: the geometry of this plant's pairs - the expensive half - is
@@ -192,6 +258,12 @@ public sealed partial class SoftContactEngine
             var records = work.Records; var stats = work.ChunkStats; var epoch = ContactEpoch;
             var evalStarted = System.Diagnostics.Stopwatch.GetTimestamp();
             if (work.ChunkTicks.Length < chunks) { work.ChunkTicks = new long[chunks]; work.WorstPairTicks = new long[chunks]; work.WorstPairIndex = new int[chunks]; }
+            if (work.ChunkTouching.Length < chunks)
+            {
+                var capacity = Math.Max(chunks, work.ChunkTouching.Length * 3 / 2);
+                work.ChunkTouching = new int[capacity]; work.ChunkTouchingMask = new uint[capacity];
+            }
+            var chunkTouching = work.ChunkTouching; var chunkMask = work.ChunkTouchingMask;
             var chunkTicks = work.ChunkTicks; var gc0 = GC.CollectionCount(0);
             // A plant whose organs only turn: its mobilities do not depend on what is queued.
             var rigid = !ag.HasContactDeformation;
@@ -216,6 +288,9 @@ public sealed partial class SoftContactEngine
                         if (TracePairCost && pt > worst) { worst = pt; worstK = k; }
                     }
                 }
+                var mask = 0u;
+                for (int k = c * OwnPairChunk; k < last; ++k) if (records[k].Touching) mask |= 1u << (k - c * OwnPairChunk);
+                chunkMask[c] = mask; chunkTouching[c] = System.Numerics.BitOperations.PopCount(mask);
                 local.BoundsTicks += FoliageGeometry.StageBoundsTicks - b0; local.ConvexTicks += FoliageGeometry.StageConvexTicks - c0; local.ExactTicks += FoliageGeometry.StageExactTicks - e0; local.SampledTicks += FoliageGeometry.StageSampledTicks - s0;
                 local.BoundsOut += FoliageGeometry.StageBoundsOut - bo0; local.ConvexOut += FoliageGeometry.StageConvexOut - co0; local.Exact += FoliageGeometry.StageExact - ex0; local.Sampled += FoliageGeometry.StageSampled - sm0;
                 stats[c] = local;
@@ -237,8 +312,12 @@ public sealed partial class SoftContactEngine
                 }
             }
             for (int c = 0; c < chunks; ++c) work.Stats.Add(stats[c]);
-            for (int k = 0; k < n; ++k)
-                if (records[k].Touching) RespondPair(plant, plant, in records[k], work);
+            if (rigid && n >= ParallelReplayMinimum && ag.Count >= TreeCacheData.ParallelWalkMinimum
+                && ag.ContactJointsDescribed && Environment.ProcessorCount > 1)
+                ReplayOnAllCores(plant, work, chunks);
+            else
+                for (int k = 0; k < n; ++k)
+                    if (records[k].Touching) RespondPair(plant, plant, in records[k], work);
             work.LastRespondTicks = System.Diagnostics.Stopwatch.GetTimestamp() - evaluated;
         }
         else
@@ -470,6 +549,224 @@ public sealed partial class SoftContactEngine
                 if (ta > 0) a.QueueContactCorrection(i, hit.A, tangent, (float)(slide * ta / tangentSum), stop, cap, ta);
                 if (tb > 0) b.QueueContactCorrection(j, hit.B, -tangent, (float)(slide * tb / tangentSum), stop, cap, tb);
                 ++owner.Slides;
+            }
+        }
+    }
+
+    /// <summary>Pairs from which the response of a large plant whose organs do not change shape
+    /// under contact is replayed on several cores (<see cref="ReplayOnAllCores"/>).</summary>
+    const int ParallelReplayMinimum = 16384;
+
+    /// <summary>
+    /// The response of every evaluated pair of one large rigid plant, on several cores, with the
+    /// same result as <see cref="RespondPair"/> called for each pair in order.
+    /// </summary>
+    /// <remarks>
+    /// A pair's response remembers its side and queues up to four corrections - one per body
+    /// along the normal, and for a deep overlap one per body along a tangent. A correction is a
+    /// walk from the organ towards the pair's common ancestor that adds a turn to each joint on
+    /// the way; for a plant whose organs only turn, what it adds to a joint depends on that joint
+    /// and on totals the walk takes before it turns anything, and nothing reads the turns until
+    /// the sweep. So every correction is planned first, side by side
+    /// (<see cref="PlantSubFormation{T}.PlanContactCorrection"/>). What then fixes the result is
+    /// the order in which each joint receives its turns, a float sum: the joints are split into
+    /// the partitions of <see cref="TreeCacheData.WalkPartition"/>, which a walk enters at most
+    /// once each; every partition takes the corrections that reach it in pair order, starting
+    /// each at the joint where it enters, adds only to its own joints, and the partitions run
+    /// side by side - a joint therefore receives its turns in pair order, as in the plain replay.
+    /// A single trunk partition took every long-range correction and was most of the replay,
+    /// which is why the partitions have levels. The side memory is written meanwhile
+    /// (<see cref="RememberSides"/>).
+    /// </remarks>
+    void ReplayOnAllCores(PlantFormation2 plant, SoftWork work, int chunks)
+    {
+        var ag = plant.AG;
+        // The touching pairs, in pair order: a count per chunk of the evaluation, a prefix sum, a fill.
+        var touching = 0;
+        for (int c = 0; c < chunks; ++c) { var count = work.ChunkTouching[c]; work.ChunkTouching[c] = touching; touching += count; }
+        if (work.TouchingPairs.Length < touching)
+        {
+            var capacity = Math.Max(touching, work.TouchingPairs.Length * 3 / 2);
+            work.TouchingPairs = new int[capacity];
+            work.PlanCounts = new byte[capacity]; work.PlanSlides = new bool[capacity];
+            work.Plans = new PlantSubFormation<AboveGroundAgent>.ContactCorrection[4 * capacity];
+            work.SideIsNew = new bool[capacity];
+        }
+        CollectTouching(work, chunks);
+        // The side memory needs only the touching pairs, and is written while everything else runs.
+        Parallel.Invoke(
+            () => RememberSides(work, touching),
+            () => ReplayCorrections(ag, work, touching));
+        for (int t = 0; t < touching; ++t)
+            if (work.PlanSlides[t]) ++work.Slides;
+    }
+
+    /// <summary>Touching pairs planned and routed per block, so that the routes of a block are in
+    /// pair order and the blocks can be read one after another.</summary>
+    const int ReplayBlock = 512;
+
+    void ReplayCorrections(PlantSubFormation<AboveGroundAgent> ag, SoftWork work, int touching)
+    {
+        var owner = ag.WalkPartition(out var parts);
+        var blocks = (touching + ReplayBlock - 1) / ReplayBlock;
+        if (work.BlockRoutes.Length < blocks)
+        {
+            var old = work.BlockRoutes.Length;
+            Array.Resize(ref work.BlockRoutes, Math.Max(blocks, old * 3 / 2));
+            for (int b = old; b < work.BlockRoutes.Length; ++b) work.BlockRoutes[b] = [];
+        }
+        PlanReplay(ag, work, touching, blocks, owner);
+
+        // Every partition's corrections, in pair order: a count, a prefix sum, a fill.
+        if (work.PartStart.Length < parts + 1) { work.PartStart = new int[parts + 1]; work.PartFill = new int[parts]; }
+        var start = work.PartStart; var fill = work.PartFill;
+        Array.Clear(start, 0, parts + 1);
+        var total = 0;
+        for (int b = 0; b < blocks; ++b)
+        {
+            var routes = work.BlockRoutes[b];
+            for (int r = 1; r < routes.Count; r += 3) ++start[routes[r] + 1];
+            total += routes.Count / 3;
+        }
+        for (int p = 0; p < parts; ++p) { start[p + 1] += start[p]; fill[p] = start[p]; }
+        if (work.PartPlans.Length < 2 * total) work.PartPlans = new int[Math.Max(2 * total, work.PartPlans.Length * 3 / 2)];
+        var list = work.PartPlans;
+        for (int b = 0; b < blocks; ++b)
+        {
+            var routes = work.BlockRoutes[b];
+            for (int r = 0; r < routes.Count; r += 3)
+            {
+                var at = 2 * fill[routes[r + 1]]++;
+                list[at] = routes[r]; list[at + 1] = routes[r + 2];
+            }
+        }
+        ApplyReplay(ag, work, owner, parts);
+    }
+
+    /// <summary>The indices of the touching pairs, in order, from each chunk's count turned into
+    /// its first position. Kept apart, as the two below, so that a closure is only allocated
+    /// when it runs.</summary>
+    void CollectTouching(SoftWork work, int chunks)
+        => Parallel.ForEach(System.Collections.Concurrent.Partitioner.Create(0, chunks, 1024), range =>
+        {
+            for (int c = range.Item1; c < range.Item2; ++c)
+            {
+                var at = work.ChunkTouching[c];
+                for (var mask = work.ChunkTouchingMask[c]; mask != 0; mask &= mask - 1)
+                    work.TouchingPairs[at++] = c * OwnPairChunk + System.Numerics.BitOperations.TrailingZeroCount(mask);
+            }
+        });
+
+    /// <summary>Plans every touching pair's corrections and the partitions each one reaches.</summary>
+    void PlanReplay(PlantSubFormation<AboveGroundAgent> ag, SoftWork work, int touching, int blocks, int[] owner)
+        => Parallel.For(0, blocks, b =>
+        {
+            var routes = work.BlockRoutes[b];
+            routes.Clear();
+            var last = Math.Min(touching, (b + 1) * ReplayBlock);
+            for (int t = b * ReplayBlock; t < last; ++t)
+            {
+                PlanPair(ag, in work.Records[work.TouchingPairs[t]], work.Plans.AsSpan(4 * t, 4), out work.PlanCounts[t], out work.PlanSlides[t]);
+                for (int s = 0; s < work.PlanCounts[t]; ++s)
+                    ag.RouteContactCorrection(work.Plans[4 * t + s], 4 * t + s, owner, routes);
+            }
+        });
+
+    void ApplyReplay(PlantSubFormation<AboveGroundAgent> ag, SoftWork work, int[] owner, int parts)
+        => Parallel.For(0, parts, part =>
+        {
+            var plans = work.Plans; var list = work.PartPlans;
+            for (int e = work.PartStart[part]; e < work.PartStart[part + 1]; ++e)
+                ag.ApplyContactCorrection(plans[list[2 * e]], owner, part, list[2 * e + 1]);
+        });
+
+    /// <summary>
+    /// The side memory of every touching pair, as <see cref="RespondPair"/> writes it in pair
+    /// order: the same entries, and the same dictionary underneath.
+    /// </summary>
+    /// <remarks>
+    /// Each pair has a key of its own, so each entry is written once. Overwriting the value of a
+    /// key that is already there changes nothing else in a dictionary, and finding it only reads,
+    /// so those are written side by side through the entry itself; the keys that are new are then
+    /// added one after another in pair order - exactly the insertions, in exactly the order, that
+    /// shaped the dictionary before. Its layout is never part of a result anyway (the checkpoint
+    /// sorts it), but this way it does not even differ.
+    /// </remarks>
+    void RememberSides(SoftWork work, int touching)
+    {
+        OverwriteKnownSides(work, touching);
+        var records = work.Records;
+        for (int t = 0; t < touching; ++t)
+            if (work.SideIsNew[t])
+            {
+                ref readonly var r = ref records[work.TouchingPairs[t]];
+                work.Contacts[r.Key] = new(r.Normal, r.Hit.FeatureA, r.Hit.FeatureB, ContactEpoch);
+            }
+    }
+
+    void OverwriteKnownSides(SoftWork work, int touching)
+        => Parallel.ForEach(System.Collections.Concurrent.Partitioner.Create(0, touching, 2048), range =>
+        {
+            var records = work.Records; var contacts = work.Contacts; var epoch = ContactEpoch;
+            for (int t = range.Item1; t < range.Item2; ++t)
+            {
+                ref readonly var r = ref records[work.TouchingPairs[t]];
+                ref var memory = ref System.Runtime.InteropServices.CollectionsMarshal.GetValueRefOrNullRef(contacts, r.Key);
+                work.SideIsNew[t] = System.Runtime.CompilerServices.Unsafe.IsNullRef(ref memory);
+                if (!work.SideIsNew[t]) memory = new(r.Normal, r.Hit.FeatureA, r.Hit.FeatureB, epoch);
+            }
+        });
+
+    /// <summary>
+    /// The corrections <see cref="RespondPair"/> queues for one pair of a rigid plant, planned in
+    /// the order it queues them, without queueing anything. Line for line the same decisions; a
+    /// rigid plant has no shared shape to correct (<see cref="PlantSubFormation{T}.SharedShapeMobility"/>
+    /// is zero for it).
+    /// </summary>
+    static void PlanPair(PlantSubFormation<AboveGroundAgent> a, in PairRecord r, Span<PlantSubFormation<AboveGroundAgent>.ContactCorrection> plans,
+        out byte count, out bool slid)
+    {
+        count = 0; slid = false;
+        if (!r.Touching) return;
+        var i = r.I; var j = r.J; var stop = r.Stop; var hit = r.Hit; var normal = r.Normal; var weight = r.Weight;
+        if (weight <= 0f) return;
+        var depth = r.Depth;
+        if (depth <= 0f) return;
+        var cap = CollisionSettings.MaxCorrectionDisplacement > 0f ? CollisionSettings.MaxCorrectionDisplacement : float.PositiveInfinity;
+        var ma = r.MobilityKnown ? r.MobilityA : a.ContactMobility(i, hit.A, normal, stop);
+        var mb = r.MobilityKnown ? r.MobilityB : a.ContactMobility(j, hit.B, -normal, stop);
+        const double shared = 0;
+        var sum = ma + mb + shared;
+        if (sum > 1e-20 && double.IsFinite(sum))
+        {
+            if (ma > 0) plans[count++] = a.PlanContactCorrection(i, hit.A, normal, (float)(depth * ma / sum), stop, cap, ma);
+            if (mb > 0) plans[count++] = a.PlanContactCorrection(j, hit.B, -normal, (float)(depth * mb / sum), stop, cap, mb);
+        }
+        else
+        {
+            plans[count++] = a.PlanContactCorrection(i, hit.A, normal, depth * .5f, stop, cap, double.NaN);
+            plans[count++] = a.PlanContactCorrection(j, hit.B, -normal, depth * .5f, stop, cap, double.NaN);
+        }
+        var residual = r.Residual;
+        var slideThreshold = CollisionSettings.DeepPenetrationThreshold * (CollisionSettings.SoftSlideRamp ? .25f : .5f);
+        if (residual > slideThreshold)
+        {
+            var sa = CollisionWorld.Shape(a, i); var sb = CollisionWorld.Shape(a, j);
+            var apart = (sa.Pose.Base + sa.Pose.Tip - sb.Pose.Base - sb.Pose.Tip) * .5f;
+            var tangent = apart - normal * Vector3.Dot(apart, normal);
+            if (tangent.LengthSquared() < 1e-12f) tangent = Vector3.Cross(normal, MathF.Abs(normal.Y) < .9f ? Vector3.UnitY : Vector3.UnitX);
+            tangent = Vector3.Normalize(tangent);
+            var ta = a.ContactMobility(i, hit.A, tangent, stop);
+            var tb = a.ContactMobility(j, hit.B, -tangent, stop);
+            var tangentSum = ta + tb;
+            if (tangentSum > 1e-20 && double.IsFinite(tangentSum))
+            {
+                var slide = residual * CollisionSettings.ContactRelaxation * weight;
+                if (CollisionSettings.SoftSlideRamp)
+                    slide *= SmoothStep(slideThreshold, CollisionSettings.DeepPenetrationThreshold * .5f, residual);
+                if (ta > 0) plans[count++] = a.PlanContactCorrection(i, hit.A, tangent, (float)(slide * ta / tangentSum), stop, cap, ta);
+                if (tb > 0) plans[count++] = a.PlanContactCorrection(j, hit.B, -tangent, (float)(slide * tb / tangentSum), stop, cap, tb);
+                slid = true;
             }
         }
     }
