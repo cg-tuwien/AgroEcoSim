@@ -310,13 +310,16 @@ public partial class PlantSubFormation<T>
         foreach (var root in GetRoots()) queue.Enqueue(root);
         var moved = false;
         ContactMovedRoots.Clear();
+        // The pose before the sweep is only read back for an organ whose shape deformed, and only
+        // a plant with contact deformation has such organs. A tree runs this sweep five times a
+        // tick over every organ, almost all of which take the no-op branch below.
+        var shapesDeform = Deformations != null || HasContactDeformation;
         while (queue.Count > 0)
         {
             var i = queue.Dequeue();
-            var cosineLimit = MathF.Cos(ContactBendLimit(i) * .5f);
             var parent = src[i].Parent;
             var carry = parent >= 0 ? TransportedTurns[parent] : Quaternion.Identity;
-            var oldPose = GetContactPose(i);
+            var oldPose = shapesDeform ? GetContactPose(i) : default;
             var deformed = ApplyDeformationIncrement(i);
             var turn = ContactTurns[i];
             if (!deformed && turn == Vector3.Zero && carry == Quaternion.Identity)
@@ -326,6 +329,7 @@ public partial class PlantSubFormation<T>
                 // pass created tiny artificial motions and invalidated clearance caches.
                 var basis = src[i].baseOrientation; var orientation = src[i].Orientation;
                 var norm = MathF.Sqrt(basis.LengthSquared() * orientation.LengthSquared());
+                var cosineLimit = MathF.Cos(ContactBendLimit(i) * .5f);
                 if (norm > 0 && MathF.Abs(Quaternion.Dot(basis, orientation)) > (cosineLimit + 1e-6f) * norm)
                 {
                     TransportedTurns[i] = Quaternion.Identity;
@@ -412,6 +416,9 @@ public partial class PlantSubFormation<T>
 
     internal void ClearSupport()
     {
+        // Whatever moved the organs or their water since the loads were last summed, this is
+        // where a new support solve starts: it must not reuse them.
+        LoadsFresh = false;
         var src = Src();
         for (int i = 0; i < src.Length; ++i) src[i].GroundSupported = false;
         EnsureContactCapacity(src.Length);
@@ -1111,7 +1118,8 @@ public partial class PlantSubFormation<T>
 
     internal void RecordSupportReaction(int index, Vector3 point, Vector3 normal)
     {
-        if (normal.Y <= 0f || Weights.Count < Count) return;
+        if (normal.Y <= 0f) return;
+        EnsureMechanicalLoads();
         double mobility = 0, closing = 0;
         var src = Src();
         for (var n = index; n >= 0 && !src[n].SoilAnchored; n = src[n].Parent)
@@ -1133,11 +1141,11 @@ public partial class PlantSubFormation<T>
 
     internal void UpdateSupportedLoads()
     {
-        if (Weights.Count < Count) return;
         var src = Src();
         for (int i = 0; i < Count; ++i)
         {
             if (!src[i].IsRizome || src[i].SoilAnchored) continue;
+            EnsureMechanicalLoads();
             var torque = Vector3.Cross(WeightedCentroids[i] - GetBaseCenter(i) * Weights[i], -Vector3.UnitY) + SupportMoments[i];
             var axis = Vector3.Transform(Vector3.UnitX, src[i].Orientation);
             torque -= axis * Vector3.Dot(torque, axis);

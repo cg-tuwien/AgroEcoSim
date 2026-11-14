@@ -44,7 +44,13 @@ public sealed partial class SoftContactEngine
                     ta = T(); work.HardObstacleTicks += ta - tb;
                 }
                 else { var tb = T(); work.HardClearTicks += tb - ta; ta = tb; }
-                if (CollisionSettings.SoilPass && World.SoilEligible(ag, i, pose))
+                // Out of the soil's reach the push would ask the scene and find nothing (see
+                // StaticCollider.AboveSoilReach). A push that carries a contact from the round
+                // before does not ask, so it is left alone.
+                var carried = round > 0 && work.SoilTouch[i].Round == round - 1;
+                if (CollisionSettings.SoilPass
+                    && (carried || !Static.AboveSoilReach(new ContactShape(pose, ag.GetLaminaTemplate(i))))
+                    && World.SoilEligible(ag, i, pose))
                 {
                     var tb = T(); work.HardSoilEligibleTicks += tb - ta;
                     Correct(ag, i, pose, trusted, StaticSurface.Soil, work, round);
@@ -124,8 +130,7 @@ public sealed partial class SoftContactEngine
     void RefreshContactLoads(PlantFormation2 plant, SoftWork work)
     {
         var ag = plant.AG;
-        ag.ClearSupport();
-        ag.RefreshMechanicalLoads();
+        ag.ClearSupport(); // the loads are summed when the first resting organ needs them
         var supportReach = CollisionSettings.ContactTolerance + 2 * FoliageGeometry.Skin;
         for (int i = 0; i < ag.Count; ++i)
         {
@@ -138,7 +143,8 @@ public sealed partial class SoftContactEngine
             else if (!ProvablyClear(ag, i, pose, supportReach, work)) World.RecordSupport(ag, i, StaticSurface.Obstacle);
             ref var soil = ref work.SoilTouch[i];
             if (soil.Round >= 0) { if (soil.Normal.Y > 0f) ag.RecordSupportReaction(i, soil.Point, soil.Normal); }
-            else if (World.SoilEligible(ag, i, pose)) World.RecordSupport(ag, i, StaticSurface.Soil);
+            else if (!Static.AboveSoilReach(new ContactShape(pose, ag.GetLaminaTemplate(i))) && World.SoilEligible(ag, i, pose))
+                World.RecordSupport(ag, i, StaticSurface.Soil);
         }
         ag.UpdateSupportedLoads();
         ag.RefreshAnchors(Static);

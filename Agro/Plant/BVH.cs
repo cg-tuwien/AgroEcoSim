@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Numerics;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 namespace Agro;
@@ -64,7 +65,26 @@ public class Bvh
     readonly List<Node> nodes = new();
     internal int Root => root;
     internal ReadOnlySpan<Node> Nodes => CollectionsMarshal.AsSpan(nodes);
-    readonly Dictionary<int, int> leafLookup = new();
+    // Agent index -> leaf node, -1 when the agent has no leaf. The agents are dense small
+    // integers (organ, plant and triangle indices) and a refit looks every one of them up each
+    // tick, so this is an array rather than a hash table.
+    int[] leafOfAgent = [];
+    int leafCount;
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    int LeafOf(int agentIndex) => (uint)agentIndex < (uint)leafOfAgent.Length ? leafOfAgent[agentIndex] : -1;
+
+    void SetLeaf(int agentIndex, int node)
+    {
+        if (agentIndex >= leafOfAgent.Length)
+        {
+            var old = leafOfAgent.Length;
+            Array.Resize(ref leafOfAgent, Math.Max(agentIndex + 1, Math.Max(8, old + old / 2)));
+            leafOfAgent.AsSpan(old).Fill(-1);
+        }
+        if (leafOfAgent[agentIndex] < 0) ++leafCount;
+        leafOfAgent[agentIndex] = node;
+    }
     (int agentIndex, BoundingBox bounds)[] buildItems = [];
     (int agentIndex, BoundingBox bounds)[] partitionItems = [];
     double buildQuality;
@@ -89,7 +109,8 @@ public class Bvh
     {
         pendingRefit.AsSpan().Clear();
         nodes.Clear();
-        leafLookup.Clear();
+        leafOfAgent.AsSpan().Fill(-1);
+        leafCount = 0;
         root = -1;
     }
 
@@ -120,9 +141,9 @@ public class Bvh
     /// has grown by more than 50 percent. Scratch and tree topology remain reconstructible.</summary>
     public bool TryRefit(ReadOnlySpan<(int agentIndex, BoundingBox bounds)> leaves)
     {
-        if (leaves.Length != leafLookup.Count) return false;
+        if (leaves.Length != leafCount) return false;
         foreach (var leaf in leaves)
-            if (!leafLookup.ContainsKey(leaf.agentIndex)) return false;
+            if (LeafOf(leaf.agentIndex) < 0) return false;
         foreach (var leaf in leaves) UpdateLeafBounds(leaf.agentIndex, leaf.bounds);
         RefitUpdatedLeaves();
         return IsEmpty || Quality() <= Math.Max(1e-12, buildQuality) * 1.5;
@@ -149,7 +170,7 @@ public class Bvh
             var index = nodes.Count;
             var (agentIndex, bounds) = leaves[0];
             nodes.Add(new Node(bounds, -1, -1, parent, agentIndex));
-            leafLookup[agentIndex] = index;
+            SetLeaf(agentIndex, index);
             return index;
         }
 
@@ -265,7 +286,8 @@ public class Bvh
     // ancestor once and merge bottom-up after all leaf bounds have been written.
     internal void UpdateLeafBounds(int agentIndex, BoundingBox bounds)
     {
-        if (!leafLookup.TryGetValue(agentIndex, out var leaf))
+        var leaf = LeafOf(agentIndex);
+        if (leaf < 0)
             return;
         // AddLeaf may also have extended a tree since its last full build.
         if (pendingRefit.Length < nodes.Count)
@@ -347,7 +369,8 @@ public class Bvh
 
     public void RefitLeaf(int agentIndex, BoundingBox bounds)
     {
-        if (!leafLookup.TryGetValue(agentIndex, out var leaf))
+        var leaf = LeafOf(agentIndex);
+        if (leaf < 0)
             return;
 
         nodes[leaf] = nodes[leaf].WithBounds(bounds);
@@ -474,7 +497,7 @@ public class Bvh
 
     public void AddLeaf(int agentIndex, BoundingBox bounds)
     {
-        if (leafLookup.ContainsKey(agentIndex))
+        if (LeafOf(agentIndex) >= 0)
         {
             RefitLeaf(agentIndex, bounds);
             return;
@@ -484,7 +507,7 @@ public class Bvh
         {
             root = 0;
             nodes.Add(new Node(bounds, -1, -1, -1, agentIndex));
-            leafLookup[agentIndex] = 0;
+            SetLeaf(agentIndex, 0);
             return;
         }
 
@@ -494,7 +517,7 @@ public class Bvh
         int leafIndex = nodes.Count;
         var leafNode = new Node(bounds, -1, -1, -1, agentIndex);
         nodes.Add(leafNode);
-        leafLookup[agentIndex] = leafIndex;
+        SetLeaf(agentIndex, leafIndex);
 
         int newParentIndex = nodes.Count;
         var siblingNode = nodes[sibling];
@@ -578,8 +601,8 @@ public class Bvh
     public void QueryOverlaps(int agentIndex, List<int> result,
         Func<int, int, bool>? filter = null, bool collisionsOnly = false)
     {
-        if (!leafLookup.TryGetValue(agentIndex, out var leafIndex) ||
-            (collisionsOnly && !nodes[leafIndex].CollisionEligible))
+        var leafIndex = LeafOf(agentIndex);
+        if (leafIndex < 0 || (collisionsOnly && !nodes[leafIndex].CollisionEligible))
             return;
 
         var targetBounds = nodes[leafIndex].Bounds;
@@ -663,7 +686,8 @@ public class Bvh
 
     public bool TryGetBounds(int agentIndex, out BoundingBox bounds)
     {
-        if (leafLookup.TryGetValue(agentIndex, out var leaf))
+        var leaf = LeafOf(agentIndex);
+        if (leaf >= 0)
         {
             bounds = nodes[leaf].Bounds;
             return true;

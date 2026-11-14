@@ -103,6 +103,8 @@ public partial class AgroWorld : SimulationWorld
 
 	/// <summary>The collision phase: hard constraints against obstacles and soil, then foliage.</summary>
 	public readonly Collisions.CollisionWorld Collisions = new();
+	/// <summary>Per-phase wall time of the steps run so far; see <see cref="PhaseTiming"/>.</summary>
+	public readonly PhaseTiming Timing;
 
 	/// <summary>The daily geometric survey of the foliage per tray: leaf area, leaf angle, leaf
 	/// size and canopy thickness, aggregated by <see cref="Periods"/>. Runs under every light model.</summary>
@@ -208,6 +210,7 @@ public partial class AgroWorld : SimulationWorld
 
 	public AgroWorld(SimulationRequest? settings = null) : base()
 	{
+		Timing = new PhaseTiming(this);
 		AirTemperatures = new(settings?.DailyAirTemperatures);
 		CollisionGeometryToleranceM = settings?.CollisionGeometryToleranceM ?? .0005f;
 		if (!float.IsFinite(CollisionGeometryToleranceM) || CollisionGeometryToleranceM < 0f || CollisionGeometryToleranceM > .0005f)

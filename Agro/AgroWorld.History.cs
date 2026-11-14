@@ -70,6 +70,7 @@ public partial class AgroWorld
     public bool RunPreparationStep()
     {
         if (!IsPreparing) { CompleteHistory(); return false; }
+        Timing.BeginRun();
         base.Run(1);
         if (!IsPreparing) CompleteHistory();
         return true;
@@ -100,6 +101,7 @@ public partial class AgroWorld
         PrepareHistory();
         if (simulationLength > (uint)TimestepsTotal() - RecordedStep)
             throw new ArgumentOutOfRangeException(nameof(simulationLength));
+        Timing.BeginRun();
         base.Run(simulationLength);
     }
 

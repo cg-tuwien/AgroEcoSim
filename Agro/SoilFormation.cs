@@ -76,6 +76,24 @@ public class SoilFormationRegularVoxels : IGrid3D, ISoilFormation, ISoilRequestS
 	readonly ushort[] GroundLevels;
 
 	/// <summary>
+	/// The columns whose water can still move, and whether a column is among them.
+	///
+	/// The hourly transport of a column reads and writes that column's cells only, so a pass that
+	/// changes no cell would change none the next hour either: the column is at a fixed point until
+	/// rain or a root's withdrawal writes to it again. A field is tens of thousands of columns and a
+	/// plant drinks from a few, so walking them all every tick was the whole cost of an empty field
+	/// (36 ms a tick on 3.2 million cells). Skipping a settled column skips a pass that provably
+	/// writes nothing, so the water is bit for bit what the full walk produces. Derived state: it is
+	/// not checkpointed, and a restore simply marks every column active again.
+	/// </summary>
+	readonly int[] ActiveColumns;
+	readonly bool[] ColumnActive;
+	int ActiveColumnCount;
+
+	/// <summary>Stopwatch ticks spent in the water transport, for performance probes.</summary>
+	public long TickTicks;
+
+	/// <summary>
     /// Precomputed coefficiens for vertical diffusion: [diffusionDepth][realDepth][cefficients]
     /// </summary>
 	float[][][] DiffusionCoefs;
@@ -181,6 +199,9 @@ public class SoilFormationRegularVoxels : IGrid3D, ISoilFormation, ISoilRequestS
 
 		GroundAddr = new int[size.X * size.Z];
 		GroundLevels = new ushort[GroundAddr.Length];
+		ActiveColumns = new int[GroundAddr.Length];
+		ColumnActive = new bool[GroundAddr.Length];
+		ActivateAllColumns();
 		var addr = 0;
 		MaxLevel = 0;
 		for (int z = 0; z < size.Z; ++z) //y must be outer so that neighboring x items stay adjacent
@@ -392,31 +413,73 @@ public class SoilFormationRegularVoxels : IGrid3D, ISoilFormation, ISoilRequestS
 	{
 		// The same hourly transport operator is used for every external tick size.
 		// Columns are independent; never exchange water across parallel workers.
+		var started = Stopwatch.GetTimestamp();
 		var hours = World.HoursPerTick;
 		var rainPerHour = World.GetWater(timestep) * CellSurface / hours;
-		void TransportColumn(int c)
+		if (rainPerHour > 0d) ActivateAllColumns(); // rain falls on every column
+		void TransportColumn(int k)
 		{
+			var c = ActiveColumns[k];
 			var depth = GroundLevels[c];
 			var ground = GroundAddr[c];
+			// The deepest cell that is not full; every cell below it is at capacity. Water only
+			// moves down into cells with room, so a source at or below this level has nowhere to
+			// send any and its pass writes nothing. A soil without drainage fills from the floor
+			// up, and a saturated column then costs a few comparisons instead of a transfer
+			// attempt per cell and hour. Nothing empties a cell during the transport itself, so
+			// the level only rises within a tick.
+			var unsaturated = (int)depth;
 			for (int hour = 0; hour < hours; ++hour)
 			{
-				if (rainPerHour > 0d) Water_g[ground] += rainPerHour;
-				for (int d = depth - 1; d > 0; --d)
+				var moved = false;
+				if (rainPerHour > 0d) { Water_g[ground] += rainPerHour; moved = true; }
+				while (unsaturated > 0 && Water_g[ground - unsaturated] >= WaterCapacityPerCell) --unsaturated;
+				for (int d = Math.Min(depth - 1, unsaturated - 1); d > 0; --d)
 				{
 					var src = ground - d;
 					var mobile = Water_g[src] - MinimumWaterToDiffuse;
-					if (mobile > 0d) GravityDiffusion(src, mobile, depth, d);
+					if (mobile > 0d) moved |= GravityDiffusion(src, mobile, depth, d);
 				}
-				if (Water_g[ground] > 0d) GravityDiffusion(ground, Water_g[ground], depth, 0);
+				if (unsaturated > 0 && Water_g[ground] > 0d) moved |= GravityDiffusion(ground, Water_g[ground], depth, 0);
+				// An hour that changed nothing leaves the next hour the same inputs.
+				if (!moved) { ColumnActive[c] = false; break; }
 			}
 		}
-		if (GroundAddr.Length >= 256) Parallel.For(0, GroundAddr.Length, TransportColumn);
-		else for (int c = 0; c < GroundAddr.Length; ++c) TransportColumn(c);
+		var active = ActiveColumnCount;
+		if (active >= 256) Parallel.For(0, active, TransportColumn);
+		else for (int k = 0; k < active; ++k) TransportColumn(k);
+
+		var kept = 0;
+		for (int k = 0; k < active; ++k)
+		{
+			var c = ActiveColumns[k];
+			if (ColumnActive[c]) ActiveColumns[kept++] = c;
+		}
+		ActiveColumnCount = kept;
 		HasUndeliveredPost = true;
+		TickTicks += Stopwatch.GetTimestamp() - started;
 	}
 
-	private void GravityDiffusion(int srcIdx, double distribute, ushort groundLevel, int currentDepth)
+	void ActivateAllColumns()
 	{
+		for (int c = 0; c < ActiveColumns.Length; ++c) { ActiveColumns[c] = c; ColumnActive[c] = true; }
+		ActiveColumnCount = ActiveColumns.Length;
+	}
+
+	/// <summary>Puts the column of a cell whose water was written from outside back into the transport.</summary>
+	[M(AI)] void ActivateColumnOf(int cell)
+	{
+		var coords = CoordsCache[cell];
+		var c = coords.Z * Size.X + coords.X;
+		if (ColumnActive[c]) return;
+		ColumnActive[c] = true;
+		ActiveColumns[ActiveColumnCount++] = c;
+	}
+
+	/// <returns>Whether any cell of the column now holds a different amount.</returns>
+	private bool GravityDiffusion(int srcIdx, double distribute, ushort groundLevel, int currentDepth)
+	{
+		var changed = false;
 		// The coefficient table stops at the deepest soil column. A coarse tick
 		// can travel farther than a shallow field is deep; cap that reach here.
 		var reach = Math.Min(MaxLevel,
@@ -445,22 +508,27 @@ public class SoilFormationRegularVoxels : IGrid3D, ISoilFormation, ISoilRequestS
 					var targetFreeCapacity = WaterCapacityPerCell - occupied;
 					if (requested < targetFreeCapacity)
 					{
-						Water_g[target] = occupied + requested;
+						var filled = occupied + requested;
+						changed |= filled != occupied;
+						Water_g[target] = filled;
 						resolved += requested;
 					}
 					else
 					{
 						Water_g[target] = WaterCapacityPerCell;
+						changed = true;
 						resolved += targetFreeCapacity;
 					}
 				}
 			}
 
+			var before = Water_g[srcIdx];
 			Water_g[srcIdx] -= resolved;
 			Debug.Assert(Water_g[srcIdx] >= -1e-5d);
 			if (Water_g[srcIdx] < 0) Water_g[srcIdx] = 0;
-
+			changed |= Water_g[srcIdx] != before;
         }
+		return changed;
 	}
 
 	[M(AI)] void IFormation.Census() { }
@@ -554,6 +622,7 @@ public class SoilFormationRegularVoxels : IGrid3D, ISoilFormation, ISoilRequestS
 						remaining -= grant;
 				}
 				Water_g[i] = remaining;
+				ActivateColumnOf(i);
 			}
 			reqs.Clear();
 		}
@@ -574,6 +643,7 @@ public class SoilFormationRegularVoxels : IGrid3D, ISoilFormation, ISoilRequestS
         {
             WaterCellsPerHour = WaterTravelDistPerTick(1) / CellSize.Y;
             ComputeDiffusionCoefs();
+            ActivateAllColumns(); // the transport operator itself just changed
         }
     }
 
@@ -655,6 +725,7 @@ public class SoilFormationRegularVoxels : IGrid3D, ISoilFormation, ISoilRequestS
 		ReadInto(reader, Water_g);
 		ReadInto(reader, Temperature);
 		ReadInto(reader, Steam);
+		ActivateAllColumns(); // which columns were settled is not stored; the first tick finds out again
 	}
 
 	internal static void ReadInto(BinaryReader reader, float[] target)

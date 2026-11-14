@@ -59,10 +59,20 @@ public partial class PlantSubFormation<T>
         RemovedGuidanceIds.Clear();
         foreach (var id in GrowthLights.Keys) if (FindOrgan(id) < 0) RemovedGuidanceIds.Add(id);
         foreach (var id in RemovedGuidanceIds) GrowthLights.Remove(id);
+        // The apexes that are due, in organ order. What an apex sees does not depend on any other
+        // apex - the rays read the scene and the organ's own pose - so the rays are cast on all
+        // cores and the records are then updated in organ order, exactly as one loop did both.
+        // On a tree every short shoot is an apex and a sixth of them come due each tick.
+        var due = GuidanceDueApexes;
+        due.Clear();
         for (int i = 0; i < Count; ++i)
+            if (IsGuidanceApex(i) && GuidanceDue(i, hour)) due.Add(i);
+        if (GuidanceSamples.Length < due.Count)
+            GuidanceSamples = new (Vector3 Tip, Vector3 Moment, float Open)[Math.Max(due.Count, GuidanceSamples.Length * 2)];
+        var samples = GuidanceSamples;
+        void Sample(int k)
         {
-            if (!IsGuidanceApex(i) || !GuidanceDue(i, hour)) continue;
-            var pose = GetContactPose(i);
+            var pose = GetContactPose(due[k]);
             var origin = pose.Tip + Vector3.Transform(Vector3.UnitX, pose.Rotation) * (pose.Radius + 0.0002f);
             var moment = Vector3.Zero; float open = 0, total = 0;
             foreach (var dir in GrowthRayDirections)
@@ -70,21 +80,30 @@ public partial class PlantSubFormation<T>
                 // CIE overcast relative luminance: fixed diffuse openings, no moving sun disc.
                 var weight = (1f + 2f * dir.Y) / 3f;
                 total += weight;
-                ++GrowthGuidanceRays;
                 if (scene.AnyHit(origin, dir, 0.0001f, 10000f, RayScene.MaskAll)) continue;
                 moment += dir * weight; open += weight;
             }
-            moment /= total; open /= total;
-            var id = GetOrganId(i);
+            samples[k] = (pose.Tip, moment / total, open / total);
+        }
+        if (due.Count >= 32 && Environment.ProcessorCount > 1) Parallel.For(0, due.Count, Sample);
+        else for (int k = 0; k < due.Count; ++k) Sample(k);
+        GrowthGuidanceRays += (long)due.Count * GrowthRayDirections.Length;
+
+        for (int k = 0; k < due.Count; ++k)
+        {
+            var (tip, moment, open) = samples[k];
+            var id = GetOrganId(due[k]);
             if (GrowthLights.TryGetValue(id, out var old))
             {
                 var response = 1f - MathF.Exp(-MathF.Max(0, hour - old.LastHour) / 48f);
                 moment = Vector3.Lerp(old.Moment, moment, response);
                 open = old.OpenWeight + (open - old.OpenWeight) * response;
             }
-            GrowthLights[id] = new() { Origin = pose.Tip, Moment = moment, OpenWeight = open, LastHour = hour };
+            GrowthLights[id] = new() { Origin = tip, Moment = moment, OpenWeight = open, LastHour = hour };
         }
     }
+    readonly List<int> GuidanceDueApexes = [];
+    (Vector3 Tip, Vector3 Moment, float Open)[] GuidanceSamples = [];
 
     internal bool TryGetGrowthLight(int index, out Vector3 direction, out float confidence)
     {

@@ -36,6 +36,11 @@ public partial class PlantFormation2 : IPlantFormation
 	public readonly IPlantSubFormation<UnderGroundAgent> UG;
 	public readonly PlantSubFormation<AboveGroundAgent> AG;
 
+	/// <summary>Stopwatch ticks this plant spent in each phase of its steps, for performance probes
+	/// (see <see cref="PhaseTiming"/>). Written by the one thread that ticks this plant and never
+	/// read by the simulation. Gravity keeps its own counter on <see cref="AG"/>.</summary>
+	public long RootTickTicks, ShootTickTicks, HormoneTicks, DeliverPostTicks, CensusTicks, RootCensusTicks, ShootCensusTicks;
+
 	//public readonly List<Quaternion> SegmentOrientations;
 
 	internal const float RootSegmentLength = 0.05f;
@@ -227,6 +232,13 @@ public partial class PlantFormation2 : IPlantFormation
 	public void Census()
 	{
 		if (!IsActive) return;
+		var started = Stopwatch.GetTimestamp();
+		try { CensusActive(); }
+		finally { CensusTicks += Stopwatch.GetTimestamp() - started; }
+	}
+
+	void CensusActive()
+	{
 		WoodySoilWaterRequestBudget_g = 0d;
 		if (Seed.Length == 0 && AG.CompletedMonocarpicLife(World.Timestep))
 		{
@@ -241,8 +253,12 @@ public partial class PlantFormation2 : IPlantFormation
 				virtualRoots.EndLife();
 			UnallocatedWater_g = 0d;
 		}
+		var censusStarted = Stopwatch.GetTimestamp();
 		UG.Census();
+		var rootsCounted = Stopwatch.GetTimestamp();
 		AG.Census();
+		RootCensusTicks += rootsCounted - censusStarted;
+		ShootCensusTicks += Stopwatch.GetTimestamp() - rootsCounted;
 
 		if (Seed.Length == 0 && (UG.Alive || AG.Alive))
 		{
@@ -558,7 +574,10 @@ public partial class PlantFormation2 : IPlantFormation
 		}
 		else
 		{
+			var tickStarted = Stopwatch.GetTimestamp();
 			UG.Tick(timestep);
+			var rootsTicked = Stopwatch.GetTimestamp();
+			RootTickTicks += rootsTicked - tickStarted;
 			// for(int i = World.HoursPerTick - 1; i >= 0; --i)
 			// {
 			// 	UG.Tick(timestep);
@@ -571,10 +590,15 @@ public partial class PlantFormation2 : IPlantFormation
 			// }
 
 			AG.Tick(timestep);
+			var shootTicked = Stopwatch.GetTimestamp();
+			ShootTickTicks += shootTicked - rootsTicked;
 			// Woody bud opportunities use age, light and reserves; they do not consume the
 			// generic auxin field. Avoid its repeated neighbourhood walks on long tree axes.
 			if (Parameters.Behavior != Behavior.Woody)
+			{
 				AG.Hormones(true);
+				HormoneTicks += Stopwatch.GetTimestamp() - shootTicked;
+			}
 
 			//Physics (work in progress)
 			AG.Gravity();
@@ -585,6 +609,7 @@ public partial class PlantFormation2 : IPlantFormation
 
 	public void DeliverPost(uint timestep)
 	{
+		var started = Stopwatch.GetTimestamp();
 		if (Seed.Length > 0)
 		{
 			var (src, dst) = SrcDst_Seed();
@@ -600,6 +625,7 @@ public partial class PlantFormation2 : IPlantFormation
 			UG.DeliverPost(timestep);
 		if (AG.HasUndeliveredPost)
 			AG.DeliverPost(timestep);
+		DeliverPostTicks += Stopwatch.GetTimestamp() - started;
 
 		// if (!DeathSeed)
 		// 	Console.WriteLine("R: {0} E: {1}", Seed[0].Radius, Seed[0].StoredEnergy);

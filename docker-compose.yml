@@ -41,6 +41,10 @@ services:
       #two thirds of a simulation step at 1,600 plants. Raise it on a large stand where total wall
       #time matters more than per-step granularity; the last step is always stored.
       #- AGRO_RunStoreFrameStride=1
+      #How long a run keeps computing with no browser attached, in minutes; 5 by default. 0 never
+      #stops it, which is what a run of several hours needs when the laptop that started it is
+      #closed. The run can still be stopped by opening it again and aborting it.
+      #- AGRO_UnwatchedGraceMinutes=5
       #How often the store enforces its budgets, in minutes. 0 turns periodic maintenance off, and
       #then the budget is enforced only when a run starts or is deleted - on a host that uploads and
       #browses more than it simulates, that is never.

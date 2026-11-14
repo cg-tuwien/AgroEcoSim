@@ -119,6 +119,11 @@ public class SimulationRunner : ISimulationRunner
         Hub = hub;
         Store = store;
         Config = config;
+        //AGRO_UnwatchedGraceMinutes. Zero means never: a run of several hours has to survive a
+        //closed laptop, and it can still be stopped by reattaching and aborting it.
+        if (double.TryParse(config["UnwatchedGraceMinutes"], System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var minutes) && minutes >= 0)
+            UnwatchedGrace = TimeSpan.FromMinutes(minutes);
     }
 
     public bool HasRun(string connectionId) => ConnectionToRun.ContainsKey(connectionId);
@@ -134,8 +139,14 @@ public class SimulationRunner : ISimulationRunner
     /// run permanently: the loop only exits on Abort or completion, and Abort is reachable only
     /// through ConnectionToRun, which the disconnect had just cleared - so nothing on the server
     /// or the wire could ever stop it, and every reload added another.
+    ///
+    /// <c>TimeSpan.Zero</c> turns the stop off (<c>AGRO_UnwatchedGraceMinutes=0</c>): the run then
+    /// computes to its end whether or not anybody watches.
     /// </summary>
     public TimeSpan UnwatchedGrace { get; set; } = TimeSpan.FromMinutes(5);
+
+    bool Abandoned(RunState run) =>
+        UnwatchedGrace > TimeSpan.Zero && run.UnwatchedSince is DateTime since && DateTime.UtcNow - since > UnwatchedGrace;
 
     public bool Attach(string runId, string connectionId)
     {
@@ -468,7 +479,7 @@ public class SimulationRunner : ISimulationRunner
                 var lastPreparationProgress = Stopwatch.GetTimestamp();
                 while (world.IsPreparing && !run.Abort)
                 {
-                    if (run.UnwatchedSince is DateTime since && DateTime.UtcNow - since > UnwatchedGrace)
+                    if (Abandoned(run))
                     {
                         run.StopReason ??= $"no browser had been watching it for {UnwatchedGrace.TotalMinutes:0} minutes";
                         run.Abort = true;
@@ -502,7 +513,7 @@ public class SimulationRunner : ISimulationRunner
                 //loop parks in the else branch waiting for a Preview call, and a client that has
                 //gone will never make one. The abandoned run the grace period exists to stop is
                 //precisely the one that never reached the check.
-                if (run.UnwatchedSince is DateTime since && DateTime.UtcNow - since > UnwatchedGrace)
+                if (Abandoned(run))
                 {
                     //Recorded with the run, not just printed: a long run that "paused" overnight
                     //because a laptop went to sleep looks exactly like one that broke.

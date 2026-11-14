@@ -161,10 +161,15 @@ public static class Initialize
     {
         //Ahead of irradiance, so the light model measures geometry that has already been
         //pushed out of the walls and troughs rather than geometry that is still inside them.
+        //The timing callbacks only take a time stamp between the phases; see PhaseTiming.
+        world.AddCallback(world.Timing.BeforeCollisions);
         world.AddCallback(world.Collisions.Tick);
+        world.AddCallback(world.Timing.AfterCollisions);
         world.AddCallback(world.Irradiance.Tick);
+        world.AddCallback(world.Timing.AfterLight);
         //After the light, on the same consistent state: a once-a-day walk of the foliage per tray.
         world.AddCallback(world.Vegetation.Tick);
+        world.AddCallback(world.Timing.EndOfStep);
 
         world.StreamExporterFunc = world.Irradiance.ExportToStream;
         world.RendererName = "unknown";

@@ -294,6 +294,9 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 	{
 		if (Births.Count > 0 || Deaths.Count > 0)
 		{
+			var rebuildStarted = Stopwatch.GetTimestamp();
+			CensusBirths += Births.Count;
+			CensusDeaths += Deaths.Count;
 			var oldCount = AgentCount;
 			var geometryReindexed = Deaths.Count > 0;
 			RemovedBirths.Clear();
@@ -381,13 +384,19 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 			RefreshOrganIndices();
 			ObserveTreeModuleCensus();
 			Births.Clear();
+			CensusRebuildTicks += Stopwatch.GetTimestamp() - rebuildStarted;
 		}
-		else
+		else if (!BasesFollowGravity)
 			TreeCache.UpdateBases(this);
+		BasesFollowGravity = false;
 
 		HeightDirty = false;
 		if (IsAboveGround)
+		{
+			var bvhStarted = Stopwatch.GetTimestamp();
 			BuildBvh();
+			BuildBvhTicks += Stopwatch.GetTimestamp() - bvhStarted;
+		}
 		// The underground collision tree has no consumer at present. Reactivate
 		// this call when root collision queries are enabled again.
 		// else BuildBvh();
@@ -591,6 +600,18 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 	public long CollisionTicks;
 	/// <summary>Stopwatch ticks spent in gravity, for phase-level performance probes.</summary>
 	public long GravityTicks;
+
+	/// <summary>
+	/// Gravity ended this tick by recomputing every attachment point, and no organ has moved
+	/// since: the census then has nothing to recompute when no organ was born or removed. Roots
+	/// have no gravity pass and a message can move an organ, so both leave this false.
+	/// </summary>
+	bool BasesFollowGravity;
+	/// <summary>Stopwatch ticks the census spent rebuilding the organ tree and its caches after
+	/// births or deaths, and building or refitting the collision hierarchy.</summary>
+	public long CensusRebuildTicks, BuildBvhTicks;
+	/// <summary>Organs born and removed over the run, as the census applied them.</summary>
+	public long CensusBirths, CensusDeaths;
 	/// <summary>Candidate pairs the broad phase produced.</summary>
 	public long CollisionCandidatePairs;
 	/// <summary>Pairs that survived the narrow phase and were actually resolved.</summary>
@@ -665,6 +686,24 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 		var thickness = MathF.Max(keelThickness, AboveGroundAgent.LeafThickness);
 		return thickness * width * width * width / 12f;
 	}
+
+    /// <summary>
+    /// The loads as the support solve needs them, summed at most once per solve.
+    ///
+    /// The contact pass used to sum every organ's weight up the tree a second time each tick,
+    /// after gravity had done it, so that a resting organ's reaction and an unanchored rhizome's
+    /// load limit could read them. On most ticks nothing rests on anything and every rhizome is
+    /// anchored, and the sums were never read. They are now made when the first reader asks:
+    /// between <see cref="ClearSupport"/> and those readers nothing moves an organ or its water,
+    /// so the sums are the ones the eager pass produced.
+    /// </summary>
+    internal void EnsureMechanicalLoads()
+    {
+        if (LoadsFresh) return;
+        RefreshMechanicalLoads();
+        LoadsFresh = true;
+    }
+    bool LoadsFresh;
 
     internal void RefreshMechanicalLoads()
     {
@@ -1102,7 +1141,13 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
         GravityDeformation(persistentDeformation ? response : 1f);
 		TreeCache.UpdateBases(this);
 		HeightDirty = false;
-		refitAllBounds();
+		BasesFollowGravity = true;
+		// The census computes every organ's bounds again and refits this hierarchy before the
+		// contact pass reads it. Under the soft and mixed engines nothing reads it in between, so
+		// refitting it here as well was a second full bounds pass per tick for nothing. Staged
+		// development (the certified engine) is different: another plant's growth trial can
+		// query this plant while the formations are still ticking, and must see these poses.
+		if (Plant.World.StagesDevelopment) refitAllBounds();
         //Foliage against foliage within one plant. Obstacles and soil are hard constraints and are
         //handled by the world collision phase regardless of this switch.
         // Dynamic contacts are resolved with static constraints by CollisionWorld, after Census.
@@ -1992,6 +2037,9 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 		// Roots.AddRange(RootsTMP);
 		if (Post.AnyMessages)
 		{
+			// A message can turn an organ (a herbaceous petiole reorienting), so the attachment
+			// points gravity left behind may no longer be the organs'.
+			BasesFollowGravity = false;
 			SrcDst(out var src, out var dst);
 			src.CopyTo(dst);
 			Post.Process(timestep, dst);

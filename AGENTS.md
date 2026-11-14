@@ -972,6 +972,45 @@ Honest list of what still does not match:
 - **`FlowerAboveFoliage` is misleading for Carex**, whose arching leaves put their tips
   low; compare culm height against `MaxHeight`, not against the leaf-tip percentile.
 
+## Long tree runs: cost, timers and how an optimisation is proved exact
+
+[`Agro/TREE_PERFORMANCE.md`](Agro/TREE_PERFORMANCE.md) has the measurements and the reasoning. In short:
+
+- **Cost is linear in the organ count, so a run's time is its organ trajectory.** Amelanchier and
+  Acer finish 20 years in 5.6 and 8.5 h; Celtis multiplies its organs by 1.5 a year (599,167 in the
+  sixteenth summer) and each year costs 1.5 to 1.8 times the one before. Check a preset's organ
+  count per year before blaming the code - and check it against a measured tree before blaming the
+  preset: a 10-13 m street hackberry carried 521 m2 of leaf (true leaf area index 11.4, Taufflieb et
+  al., ISPRS Archives 2026), twice the simulated Celtis at the same height. A per-leaf tree is
+  several hundred thousand organs by nature; what the model lacks is the ceiling, not restraint.
+- **`AGRO_PLANT_TIMING=n`** prints a `PLANT_TIMING` line every `n` steps with every phase of a step
+  (`Agro/PhaseTiming.cs`; soil, organ tick, gravity, post, census with its rebuild and hierarchy
+  build, collisions, light, survey). Use it with `AGRO_COLLISION_TIMING=1` before optimising
+  anything: on a tree the foliage pass, the solid pass and the census are the three largest shares,
+  and the per-species split differs (Amelanchier is half foliage pass, Acer a fifth light scene).
+- **The soil tick only walks columns in which water can move** and starts above the saturated zone.
+  Both skips are exact because the skipped pass provably writes nothing. A new writer of `Water_g`
+  must call `ActivateColumnOf`, or its column stays asleep.
+- **Gravity no longer refits the collision hierarchy under the soft and mixed engines**; the census
+  does it once. Anything new that reads `CollisionBvh` between a plant's gravity and its census
+  needs the refit back (the certified engine keeps it for exactly that reason).
+- **`StaticCollider.AboveSoilReach`** answers soil queries for organs high above a regular field
+  without asking. It is a statement about a horizontal soil face; do not extend it to imported
+  troughs, whose walls make the vertical gap meaningless.
+- **A raw checkpoint is not reproducible run to run.** Agents are blitted with their padding (10 of
+  400 bytes for a shoot agent, 6 of 160 for a root agent) and a newborn's padding is stack garbage:
+  six runs of one unchanged build gave five raw hashes and identical frames. Compare frames, or
+  zero the padding first, as the fixture probe does. Do not chase a 55-byte checkpoint difference.
+- **"Exact" is checked against a frozen baseline**, because the tree code is uncommitted:
+  `~/greenfdt-fixtures/tree-accel/` holds the baseline build, one grown tree per species with
+  February, May, August and November checkpoints, `ab.sh` (restore, run 24 and 200 ticks, compare
+  padding-masked state and frame) and `scenarios.sh` (seventeen scenarios, all engines, soil water
+  and frame compared after every tick). Never keep such fixtures under `/tmp`: it is a RAM disk
+  here and a reboot deleted the first set.
+- **The default field's soil has no drainage, runoff or evaporation**: it is full by the end of the
+  first year and its surface cells then accumulate rain without bound. A tree on it never meets a
+  water limit after its first summer. Keep that in mind when tuning a water response.
+
 ## Troubleshooting
 
 - If a tool or build fails with `No space left on device`, inspect space before

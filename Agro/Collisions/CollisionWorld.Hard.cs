@@ -174,8 +174,7 @@ public sealed partial class CollisionWorld
     internal void RefreshContactLoads(PlantFormation2 plant)
     {
         var ag = plant.AG;
-        ag.ClearSupport();
-        ag.RefreshMechanicalLoads();
+        ag.ClearSupport(); // the loads are summed when the first resting organ needs them
         for (int i = 0; i < ag.Count; ++i)
         {
             if (!Eligible(ag, i)) continue;
@@ -245,7 +244,8 @@ public sealed partial class CollisionWorld
             if (CollisionSettings.ObstaclePass && !ClearOfObstacles(ag, i, shape.Pose, work)
                 && (Static.ShapeContact(shape, trusted, StaticSurface.Obstacle, out _, out _, out _)
                     || !Static.ShapeSweepClear(previous, shape, StaticSurface.Obstacle))) return false;
-            return !CollisionSettings.SoilPass || !SoilEligible(ag, i, shape.Pose)
+            // High above a regular field the three soil tests below pass without being asked.
+            return !CollisionSettings.SoilPass || Static.AboveSoilReach(previous, shape) || !SoilEligible(ag, i, shape.Pose)
                 || (!Static.ShapeContact(shape, trusted, StaticSurface.Soil, out _, out _, out _)
                     && (Static.InsideSoil(previous.Pose.Base, 1f) || Static.ShapeSweepClear(previous, shape, StaticSurface.Soil)));
         }
@@ -262,7 +262,7 @@ public sealed partial class CollisionWorld
             if (!clear) return false;
         }
         else { var t1 = System.Diagnostics.Stopwatch.GetTimestamp(); Interlocked.Add(ref AdmitClearTicks, t1 - t0); t0 = t1; }
-        if (!CollisionSettings.SoilPass || !SoilEligible(ag, i, shape.Pose)) { Interlocked.Add(ref AdmitSoilEligibleTicks, System.Diagnostics.Stopwatch.GetTimestamp() - t0); return true; }
+        if (!CollisionSettings.SoilPass || Static.AboveSoilReach(previous, shape) || !SoilEligible(ag, i, shape.Pose)) { Interlocked.Add(ref AdmitSoilEligibleTicks, System.Diagnostics.Stopwatch.GetTimestamp() - t0); return true; }
         var t3 = System.Diagnostics.Stopwatch.GetTimestamp(); Interlocked.Add(ref AdmitSoilEligibleTicks, t3 - t0);
         var soilContact = Static.ShapeContact(shape, trusted, StaticSurface.Soil, out _, out _, out _);
         var t4 = System.Diagnostics.Stopwatch.GetTimestamp(); Interlocked.Add(ref AdmitSoilContactTicks, t4 - t3); Interlocked.Increment(ref AdmitSoilContacts);
@@ -395,6 +395,8 @@ public sealed partial class CollisionWorld
     {
         var pose = ag.GetContactPose(i);
         var lamina = ag.GetLaminaTemplate(i);
+        // Nothing rests on a soil it is out of reach of; see StaticCollider.AboveSoilReach.
+        if (surface == StaticSurface.Soil && Static.AboveSoilReach(new ContactShape(pose, lamina))) return;
         if (lamina != null || pose.CurvedRod)
         {
             // A supported blade also transmits a reaction through its petiole. Expand only
