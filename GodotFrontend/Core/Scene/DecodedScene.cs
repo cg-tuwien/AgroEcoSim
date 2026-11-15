@@ -10,6 +10,8 @@ public sealed class DecodedScene
 {
     public byte Version;
     public bool RootsDownloaded, Analytics, HasRootGeometry, VirtualRoots;
+    /// <summary>Frame flag 4: stem and meristem colour bytes are final colours (see <see cref="ExportFlags"/>).</summary>
+    public bool OrganColors;
 
     // ---- plants ----
     public int PlantCount;

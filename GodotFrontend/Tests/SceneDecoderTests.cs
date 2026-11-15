@@ -3,6 +3,8 @@ using GodotFrontend.Core.Color;
 using GodotFrontend.Core.Geometry;
 using GodotFrontend.Core.Scene;
 using Xunit;
+// Agro declares an ExportFlags of its own in the global namespace, which wins name lookup here.
+using FrameFlags = GodotFrontend.Core.Scene.ExportFlags;
 
 namespace GodotFrontend.Tests;
 
@@ -19,6 +21,38 @@ public static class Fixtures
         using var output = new MemoryStream();
         z.CopyTo(output);
         return output.ToArray();
+    }
+
+    public const float AxisWood = 0.375f;
+    public static readonly (OrganType Organ, byte R, byte G, byte B)[] AxisOrgans =
+    {
+        (OrganType.Stem, 0x6b, 0x5a, 0x4c), (OrganType.Meristem, 0x4f, 0x8a, 0x2e), (OrganType.Petiole, 0x33, 0x66, 0x22),
+    };
+
+    /// <summary>A V7 frame of one plant: a stem, a meristem and a petiole, each with its own wire colour.</summary>
+    public static byte[] AxisFrame(FrameFlags flags, string species = "fixture species")
+    {
+        using var ms = new MemoryStream();
+        using (var w = new BinaryWriter(ms, System.Text.Encoding.UTF8, true))
+        {
+            w.Write((byte)7);
+            w.Write((byte)flags);
+            w.Write(1u);
+            w.Write(species);
+            w.Write((uint)AxisOrgans.Length);
+            foreach (var (organ, r, g, b) in AxisOrgans)
+            {
+                w.Write(-1);
+                w.Write((byte)organ);
+                w.Write(0.5f); w.Write(0.01f); // length, radius
+                foreach (var f in new float[] { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0 }) w.Write(f);
+                if ((flags & FrameFlags.Analytics) != 0)
+                    foreach (var f in new[] { 0.25f, 0.5f, AxisWood, 16f, 32f }) w.Write(f);
+                w.Write(r); w.Write(g); w.Write(b);
+                if ((flags & FrameFlags.Analytics) != 0) { w.Write(2f); w.Write(128f); }
+            }
+        }
+        return ms.ToArray();
     }
 }
 
@@ -141,6 +175,70 @@ public class SceneDecoderTests
         var w = PlantColors.Of(s, 0, VisualMapping.Water);
         Assert.Equal(RGB.Black, w.Color);
         Assert.Equal(Ramps.Water(s.Stats![Stat.Water]), w.Emissive);
+    }
+
+    [Fact]
+    public void OrganColorFlagGivesStemsAndMeristemsTheWireColour()
+    {
+        static RGB WireOf(int i) => ColorMath.FromSrgb8(Fixtures.AxisOrgans[i].R, Fixtures.AxisOrgans[i].G, Fixtures.AxisOrgans[i].B);
+        var green = ColorMath.FromHex("#009900");
+
+        foreach (var species in new[] { "fixture species", "Celtis australis" })
+        {
+            var flagged = Decode(Fixtures.AxisFrame(FrameFlags.Analytics | FrameFlags.OrganColors, species));
+            Assert.True(flagged.OrganColors);
+            Assert.True(flagged.Analytics);
+            Assert.False(flagged.RootsDownloaded);
+            Assert.Equal(3, flagged.Count);
+            // the wire colour replaces the wood ramp and the bark map alike
+            for (var i = 0; i < 3; ++i)
+                Assert.Equal(new OrganColor(WireOf(i), RGB.Black), PlantColors.Of(flagged, i, VisualMapping.Natural));
+
+            // a frame recorded before the flag keeps the legacy ramp exactly
+            var legacy = Decode(Fixtures.AxisFrame(FrameFlags.Analytics, species));
+            Assert.False(legacy.OrganColors);
+            var end = species == "Celtis australis" ? ColorMath.FromHex("#929087") : ColorMath.FromHex("#7f4f1f");
+            var ramp = ColorMath.LerpHSL(green, end, Fixtures.AxisWood);
+            Assert.Equal(ramp, PlantColors.Natural(legacy, 0));
+            Assert.Equal(ramp, PlantColors.Natural(legacy, 1));
+            Assert.Equal(WireOf(2), PlantColors.Natural(legacy, 2)); // the petiole was always the backend's
+
+            // data mappings do not read the flag
+            for (var i = 0; i < 3; ++i)
+                Assert.Equal(PlantColors.Of(legacy, i, VisualMapping.Water), PlantColors.Of(flagged, i, VisualMapping.Water));
+        }
+
+        // the flag is independent of analytics: no stats, wire colour all the same
+        var bare = Decode(Fixtures.AxisFrame(FrameFlags.OrganColors));
+        Assert.True(bare.OrganColors);
+        Assert.Null(bare.Stats);
+        Assert.Equal(WireOf(0), PlantColors.Natural(bare, 0));
+        Assert.Equal(WireOf(1), PlantColors.Natural(bare, 1));
+    }
+
+    [Fact]
+    public void OrganColorFlagOnAStoredFrameChangesOnlyTheAxes()
+    {
+        var bytes = Fixtures.Inflate(Fixtures.Bytes("v8-single-mid.g"));
+        var legacy = Decode(bytes);
+        Assert.False(legacy.OrganColors);
+        bytes[1] |= (byte)FrameFlags.OrganColors; // the flags byte follows the version
+        var flagged = Decode(bytes);
+        Assert.True(flagged.OrganColors);
+        Assert.Equal(legacy.Count, flagged.Count);
+        var axes = 0;
+        for (var i = 0; i < flagged.Count; ++i)
+        {
+            var c = PlantColors.Natural(flagged, i);
+            if (flagged.Kind[i] == PrimitiveType.Cylinder && flagged.Organ[i] is OrganType.Stem or OrganType.Meristem)
+            {
+                axes++;
+                Assert.Equal(ColorMath.FromSrgb8(flagged.Rgb[i * 3], flagged.Rgb[i * 3 + 1], flagged.Rgb[i * 3 + 2]), c);
+            }
+            else
+                Assert.Equal(PlantColors.Natural(legacy, i), c);
+        }
+        Assert.True(axes > 0);
     }
 
     private static void AssertPlausible(DecodedScene s)

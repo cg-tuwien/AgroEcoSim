@@ -172,7 +172,7 @@ public static class Campanula_Poscharskyana
             PetalPitchDegrees = 86f,
             PetalPitchVarianceDegrees = 6f,
             PetalRollVarianceDegrees = 8f,
-            ScapeColor = new Vector3(0f, 0.6f, 0f),
+            // No ScapeColor: flowers stand along the trailing stems and take their colours.
             FlowerCentreLength = 0.002f,
             FlowerCentreRadius = 0.0025f,
             FlowerCentreColor = new Vector3(0.93f, 0.94f, 0.99f),
@@ -195,14 +195,16 @@ public static class Campanula_Poscharskyana
                         .Add(0.00f, new Vector3(0.00f, 1.00f, 0.00f))
                         .Add(1.00f, new Vector3(-0.04f, 0.80f, 0.01f)),
                     senescenceSeason: new ColorCurve()
-                        .Add(0.00f, ColorUtils.OkLabFromSrgb8(140, 120, 160))
-                        .Add(0.40f, ColorUtils.OkLabFromSrgb8(125, 105, 140))
-                        .Add(0.75f, ColorUtils.OkLabFromSrgb8(105, 88, 115))
-                        .Add(1.00f, ColorUtils.OkLabFromSrgb8(85, 70, 90))
+                        .Add(0.00f, ColorUtils.OkLabFromSrgb8(140, 125, 180))
+                        .Add(0.40f, ColorUtils.OkLabFromSrgb8(155, 145, 180))
+                        .Add(0.75f, ColorUtils.OkLabFromSrgb8(170, 160, 170))
+                        .Add(1.00f, ColorUtils.OkLabFromSrgb8(175, 165, 150))
                 )
             ),
 
             PetalSenescenceDurationHours = 120f,
+            // A bellflower corolla wilts and withers in place, paling to a papery grey-tan.
+            PetalAbscissionSenescence = 1f,
 
             BudLength = 0.006f,
             BudRadius = 0.0035f,
@@ -249,6 +251,15 @@ public static class Campanula_Poscharskyana
 
             FlowerStemSegmentGrowthDurationHours = 80f,
         },
+
+        // Semi-evergreen: older leaves on the trailing stems die back in winter.
+        AutumnLeafLossFraction = 0.3f,
+        // Trailing stems: fresh green, then a duller green often tinged red-brown on the
+        // older lengths that lie on the ground.
+        StemColors = new StemColorModel(
+            young: new(140, 175, 105), mature: new(120, 135, 85),
+            old: new(125, 100, 80), dead: new(175, 155, 115),
+            matureAgeDays: 30f, oldAgeDays: 240f),
 
         LeafPhenology = new LeafPhenology(
             expectedAge: 1.5f * 365f * 24f,
@@ -851,11 +862,10 @@ public static class Campanula_Poscharskyana
 public static class CampanulaPoscharskyanaPreset
 {
     public static ColorCurve Lifecycle => new ColorCurve()
-        .Add(0.00f, ColorUtils.OkLabFromSrgb8(150, 205, 125)) // fresh: light clean green
-        .Add(0.20f, ColorUtils.OkLabFromSrgb8(112, 174,  96)) // expanding
-        .Add(0.50f, ColorUtils.OkLabFromSrgb8( 91, 151,  82)) // mature medium green
-        .Add(0.80f, ColorUtils.OkLabFromSrgb8( 82, 141,  76)) // adult
-        .Add(1.00f, ColorUtils.OkLabFromSrgb8( 76, 134,  72)); // full adult
+        .Add(0.00f, ColorUtils.OkLabFromCieLab(52f, -20f, 34f)) // fresh: light clean green
+        .Add(0.20f, ColorUtils.OkLabFromCieLab(46f, -20f, 31f)) // expanding
+        .Add(0.50f, ColorUtils.OkLabFromCieLab(41f, -19f, 28f)) // mature medium green
+        .Add(1.00f, ColorUtils.OkLabFromCieLab(41f, -19f, 28f)); // full adult
 
     public static ColorCurve HealthySeason => new ColorCurve()
         .Add(0.00f, new Vector3( 0.000f, 1.02f, 0.000f)) // early spring: slightly fresher
@@ -871,13 +881,13 @@ public static class CampanulaPoscharskyanaPreset
     public static ColorCurve Stress => ColorModel.CoolAnthocyanicStress;
 
     public static ColorCurve SeasonalSenescence => new ColorCurve()
-        .Add(0.00f, ColorUtils.OkLabFromSrgb8(145, 143,  79)) // muted olive
-        .Add(0.35f, ColorUtils.OkLabFromSrgb8(137, 111,  63)) // olive-bronze
-        .Add(0.70f, ColorUtils.OkLabFromSrgb8(119,  84,  55)) // warm brown
-        .Add(1.00f, ColorUtils.OkLabFromSrgb8( 86,  61,  39)); // dry brown
+        .Add(0.00f, ColorUtils.OkLabFromCieLab(60f, -4f, 44f)) // muted yellow
+        .Add(0.35f, ColorUtils.OkLabFromCieLab(56f, 6f, 40f)) // olive-gold
+        .Add(0.70f, ColorUtils.OkLabFromCieLab(49f, 10f, 30f)) // tan-brown
+        .Add(1.00f, ColorUtils.OkLabFromCieLab(45f, 10f, 24f)); // brown
 
     public static ColorCurve StressSenescence => new ColorCurve()
-        .Add(0.00f, ColorUtils.OkLabFromSrgb8(108, 112,  64)) // dull green-olive
-        .Add(0.45f, ColorUtils.OkLabFromSrgb8(101,  80,  48)) // stress brown
-        .Add(1.00f, ColorUtils.OkLabFromSrgb8( 74,  53,  34)); // dark brown
+        .Add(0.00f, ColorUtils.OkLabFromCieLab(44f, -5f, 26f)) // dull green-olive
+        .Add(0.45f, ColorUtils.OkLabFromCieLab(44f, 4f, 24f)) // khaki-brown
+        .Add(1.00f, ColorUtils.OkLabFromCieLab(45f, 8f, 22f)); // dry brown
 }

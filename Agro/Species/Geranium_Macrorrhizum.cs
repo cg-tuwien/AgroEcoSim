@@ -113,7 +113,25 @@ public static class Geranium_Macrorrhizum
         // longer macrorrhizum peduncle (6 x 5 cm) needs 3e8 for the same gain.
         FlowerScapeElasticModulus = 3e8f,
 
-        LeafPhenology = new(),
+        // Semi-evergreen: the older leaves colour orange-red and die; a low mat of young
+        // leaves overwinters. Not more than 0.3: this preset regrows spring leaves from node
+        // buds only as temperature and light allow (light reference 6000), where a real plant
+        // refills from its rhizome, and at 0.5 the second-year bloom was lost (seed 42, 4 h).
+        AutumnLeafLossFraction = 0.3f,
+        // Hairy green shoots that harden olive-brown; the thick aromatic rhizome and the
+        // old stem bases are brown and half woody.
+        StemColors = new StemColorModel(
+            young: new(150, 180, 110), mature: new(135, 120, 85),
+            old: new(110, 85, 60), dead: new(165, 140, 105),
+            matureAgeDays: 30f, oldAgeDays: 200f),
+
+        LeafPhenology = new LeafPhenology(
+            expectedAge: 2f * 365f * 24f,
+            colorModel: new ColorModel(
+                GeraniumMacrorrhizumPreset.Lifecycle,
+                GeraniumMacrorrhizumPreset.Stress,
+                GeraniumMacrorrhizumPreset.SeasonalSenescence,
+                GeraniumMacrorrhizumPreset.StressSenescence)),
         // In the herbaceous algorithm these events advance a vegetative crown
         // as well as committing the first flower.  Hour-normalized rates keep
         // the rosette from producing a new two-leaf node every few hours.
@@ -162,22 +180,24 @@ public static class Geranium_Macrorrhizum
                 expectedAge: 25f * 24f,
                 colorModel: new ColorModel(
                     age: new ColorCurve()
-                        .Add(0.00f, ColorUtils.OkLabFromSrgb8(220, 110, 170))
-                        .Add(0.25f, ColorUtils.OkLabFromSrgb8(210, 100, 160))
-                        .Add(0.70f, ColorUtils.OkLabFromSrgb8(200, 95, 150))
-                        .Add(1.00f, ColorUtils.OkLabFromSrgb8(185, 88, 138)),
+                        .Add(0.00f, ColorUtils.OkLabFromCieLab(54f, 50f, -8f)) // opening
+                        .Add(0.25f, ColorUtils.OkLabFromCieLab(51f, 53f, -9f))
+                        .Add(0.50f, ColorUtils.OkLabFromCieLab(50f, 52f, -10f)) // open: magenta pink
+                        .Add(1.00f, ColorUtils.OkLabFromCieLab(48f, 50f, -10f)),
                     stress: new ColorCurve()
                         .Add(0.00f, new Vector3(0.00f, 1.00f, 0.00f))
                         .Add(1.00f, new Vector3(-0.05f, 0.78f, 0.01f)),
                     senescenceSeason: new ColorCurve()
-                        .Add(0.00f, ColorUtils.OkLabFromSrgb8(175, 110, 130))
-                        .Add(0.40f, ColorUtils.OkLabFromSrgb8(150, 95, 100))
-                        .Add(0.75f, ColorUtils.OkLabFromSrgb8(120, 75, 70))
-                        .Add(1.00f, ColorUtils.OkLabFromSrgb8(90, 60, 50))
+                        .Add(0.00f, ColorUtils.OkLabFromCieLab(52f, 48f, -12f)) // fading: bluer
+                        .Add(0.40f, ColorUtils.OkLabFromCieLab(55f, 42f, -15f))
+                        .Add(0.75f, ColorUtils.OkLabFromCieLab(58f, 36f, -16f))
+                        .Add(1.00f, ColorUtils.OkLabFromCieLab(60f, 32f, -16f)) // paler, at the drop
                 )
             ),
             CreateLeavesOnFlowerBase = true,
             PetalSenescenceDurationHours = 168f,
+            // Geraniaceae shed their petals turgid, a little paler and bluer than they opened.
+            PetalAbscissionSenescence = 0.3f,
             BudLength = 0.010f,
             // A 10 x 6 mm bud, not 10 x 10: at 5 mm radius each bud outweighed the peduncle's
             // tip load limit on its own.
@@ -207,10 +227,7 @@ public static class Geranium_Macrorrhizum
             // Slow: the accepted tangent still dominates, but a peduncle pressed down by leaves
             // lifts back toward its set point over a week.
             ScapeGravitropicRatePerHour = 0.01f,
-            // Stem green, so the scape reads as the stem tissue it is. Before this every
-            // floral organ was handed the leaf phenology on the wire and the viewport
-            // then ignored it and greyed the scape towards wood.
-            ScapeColor = new Vector3(0f, 0.6f, 0f),
+            // No ScapeColor: the peduncle is stem tissue and takes the species' stem colours.
             // Petals 14-16 mm, flat to shallowly cupped and facing outwards and up.
             PetalPitchDegrees = 82f,
             PetalPitchVarianceDegrees = 5f,

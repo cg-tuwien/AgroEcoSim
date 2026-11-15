@@ -154,14 +154,16 @@ public static class Geranium_x_Cantabrigiense
                 .Add(0.00f, new Vector3(0.00f, 1.00f, 0.00f))
                 .Add(1.00f, new Vector3(-0.04f, 0.80f, 0.01f)),
             senescenceSeason: new ColorCurve()
-                .Add(0.00f, ColorUtils.OkLabFromSrgb8(200, 155, 165))
-                .Add(0.40f, ColorUtils.OkLabFromSrgb8(175, 130, 120))
-                .Add(0.75f, ColorUtils.OkLabFromSrgb8(140, 95, 80))
-                .Add(1.00f, ColorUtils.OkLabFromSrgb8(100, 70, 55))
+                .Add(0.00f, ColorUtils.OkLabFromSrgb8(212, 168, 182))
+                .Add(0.40f, ColorUtils.OkLabFromSrgb8(215, 178, 188))
+                .Add(0.75f, ColorUtils.OkLabFromSrgb8(218, 187, 193))
+                .Add(1.00f, ColorUtils.OkLabFromSrgb8(220, 195, 198))
         )
     ),
 
             PetalSenescenceDurationHours = 168f,
+            // Geraniaceae shed their petals turgid and barely faded.
+            PetalAbscissionSenescence = 0.3f,
 
             BudLength = 0.005f,
             BudRadius = 0.0025f,
@@ -188,10 +190,7 @@ public static class Geranium_x_Cantabrigiense
             // Slow: the accepted tangent still dominates, but a peduncle pressed down by leaves
             // lifts back toward its set point over a week.
             ScapeGravitropicRatePerHour = 0.005f,
-            // Stem green, so the scape reads as the stem tissue it is. Before this every
-            // floral organ was handed the leaf phenology on the wire and the viewport
-            // then ignored it and greyed the scape towards wood.
-            ScapeColor = new Vector3(0f, 0.6f, 0f),
+            // No ScapeColor: the peduncle is stem tissue and takes the species' stem colours.
             PetalPitchDegrees = 80f,
             PetalPitchVarianceDegrees = 5f,
             PetalRollVarianceDegrees = 4f,
@@ -235,7 +234,21 @@ public static class Geranium_x_Cantabrigiense
 
 
 
-        LeafPhenology = new(),
+        // Nearly evergreen; the leaves colour red to coppery orange and the oldest die.
+        AutumnLeafLossFraction = 0.25f,
+        // Green shoots hardening olive-brown over brown creeping stems, as in G. macrorrhizum.
+        StemColors = new StemColorModel(
+            young: new(150, 180, 110), mature: new(135, 120, 85),
+            old: new(110, 85, 60), dead: new(165, 140, 105),
+            matureAgeDays: 30f, oldAgeDays: 200f),
+
+        LeafPhenology = new LeafPhenology(
+            expectedAge: 365f * 24f,
+            colorModel: new ColorModel(
+                GeraniumXCantabrigiensePreset.Lifecycle,
+                GeraniumXCantabrigiensePreset.Stress,
+                GeraniumXCantabrigiensePreset.SeasonalSenescence,
+                GeraniumXCantabrigiensePreset.StressSenescence)),
         LeafMorphology = new() {
             LowResVertices =
             [

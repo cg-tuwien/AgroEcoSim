@@ -453,6 +453,14 @@ for the whole run while it grew normally in memory. That failure looks exactly
 like "it never germinates", and it is invisible to a probe that reads
 `PlantFormation2.AG` directly instead of the exported scene. Probe the export.
 
+The two Geraniums produce the same report for a different reason: they germinate on day 1,
+but since b2ab266b their seedling climbs to the surface only above a 5 C daily mean
+(`VegetativeTemperatureResponseEnabled`), and G. macrorrhizum climbs 5 cm because its crown
+node sits 4 cm above the soil. From the app's default 1 February start G. x cantabrigiense
+surfaces around day 56 and G. macrorrhizum around day 72 - after the default 60-day run -
+hidden meanwhile inside the opaque soil box. That is deliberate (a February sowing does not
+emerge); set the plant's age in the seed list to start from an established plant.
+
 ### Drought (`Agro/DROUGHT_RESPONSE.md`)
 
 - Herbaceous plants restrict growth, then commit whole blades to senescence towards a target
@@ -484,6 +492,9 @@ like "it never germinates", and it is invisible to a probe that reads
 - `Agro/Plant/Flower/FlowerHelper.cs` — floral growth and state transitions.
 - `Agro/Species/*.cs` and `Agro/SpeciesSettings.cs` — species presets and
   configurable biological parameters.
+- `Agro/OrganColorContext.cs`, `Agro/Plant/StemColorModel.cs`,
+  `Agro/Plant/Leaf/Phenology.cs` — the colour of every above-ground organ
+  ([`Agro/ORGAN_COLORS.md`](Agro/ORGAN_COLORS.md)).
 
 ## Herbaceous habit: what a two-year probe showed, and the six mechanisms behind it
 
@@ -505,8 +516,10 @@ to roughly *live leaves / `LateralsPerNode`*. A capped apex rests; `RenewPetiole
 replacing leaves at the existing nodes, so the rosette stays alive and bounded, and the
 plant widens through rhizome/offset crowns instead of stacking.
 
-**`RenewPetiole` means leaves are replaced, never lost.** `LeafMaximumAgeHours` does not
-reduce the leaf count - it swaps the blade at the same node. So the live leaf count is
+**`RenewPetiole` means leaves are replaced, never lost** - outside the autumn leaf loss
+(`AutumnLeafLossFraction`, since 15 November 2026), which sheds a share of the older leaves
+each autumn. `LeafMaximumAgeHours` does not reduce the leaf count - it swaps the blade at the
+same node. So the live leaf count is
 bounded *only* by the node count, and `CrownMaximumNodes` is the only thing that bounds
 it at all. A two-year Geranium macrorrhizum carried 2,808 leaves before the cap.
 
@@ -699,8 +712,58 @@ out leaf-green - and the viewport then ignored it and greyed the scape towards w
 `woodRatio`, because only `Organs.Petiole` was allowed a backend colour.
 `FlowerSettings.ScapeColor` (null = the old behaviour) now travels for
 `FlowerStem`/`FlowerMeristem`/`FlowerPedicel`, `FlowerCentreColor` for `FlowerBud`, and
-`PlantColors.backendColoredCylinders` is the set the frontend honours. Stem green is
-`#009900`, so a scape that should match the stems uses `(0, 0.6, 0)`.
+`PlantColors.backendColoredCylinders` is the set the frontend honours. Since 15 November
+2026 stems have a colour model of their own and a scape that states no `ScapeColor` takes it
+- do not set `(0, 0.6, 0)` "to match the stems" any more. See "Organ colours" below.
+
+### 7. Every colour was either darkened twice or over-exposed, and stems had none
+
+[`Agro/ORGAN_COLORS.md`](Agro/ORGAN_COLORS.md) has the model and the sources. What to keep
+in mind when touching a colour:
+
+- **A preset authors an appearance; a frame carries an sRGB-encoded albedo.**
+  `ColorUtils.AppearanceToWire` divides by the viewers' light - 3.175 for a lamina, 1.845
+  for a round organ - and encodes. `LeafPhenology.WriteColor` used to write *linear* bytes
+  that both viewers read as *sRGB*: a dead-leaf brown (82, 60, 38) was shown as (38, 25, 15),
+  which is the "black old leaves" report. Fixed colours had the opposite error and were
+  three times over-exposed. Nothing may write a colour except through that helper, and the
+  two exposures are pinned against `HEMI_*` in `ThreeFrontend/tests/organColors.test.ts`.
+- **One place decides an organ's colour**: `Agro/OrganColorContext.cs`, once per plant per
+  frame. It must stay read-only. In particular `GetFloweringPhase` mutates phenology state:
+  called from an export, the simulation would depend on the frame stride. Use
+  `MonocarpicRipening()`, which is pure.
+- **Stems**: `SpeciesSettings.StemColors` (`StemColorModel`: young, mature or twig, old or
+  bark, dead; null takes the habit's default). Herb aerial stems never lignify, so they
+  mature by age; trees by wood ratio, and bark comes with radius. Tabulated per species - a
+  stem costs one lookup; the 169,499-organ Celtis exports in 87 ms against 90 before.
+- **Author colours as what organs measure, in CIELAB** (`ColorUtils.OkLabFromCieLab`). Once
+  the decode was fixed, the presets showed exactly what they authored, and that was pastel:
+  healthy leaves at L\* 51-64 where leaves measure 35-45 (Munsell plant-tissue 5GY 4/4), dead
+  leaves a grey tan at L\* 60. They had only looked right through the double decode.
+  **`Agro --color-selftest`** checks every preset against measured bands in milliseconds - run
+  it after touching any colour.
+- **Dry dead tissue is brighter than wet, but still brown.** Every senescence path ends on a
+  mid brown, L\* 42-50 (Munsell 10YR 5/4 - 7.5YR 4/4); `LateDarkening` is zero and
+  `LateDesaturation` only 0.08. If a dead organ looks black again, look for a second encoding
+  step before retuning a curve; if it looks grey, look at the end keys and the desaturation.
+- **The senescence path belongs to the leaf**: set in the agent's `Stress` at commitment
+  (drought 1, autumn 0, carbon the plant's water stress) and read at export.
+- **Petals are shed at `FlowerSettings.PetalAbscissionSenescence`**, a family trait (0.3
+  Geranium and Fragaria, 0.5 the composites, 0.8-1 the ones that wither in place), and their
+  colour is read at `senescence / theta`. This moved bloom-end dates earlier by up to
+  `(1 - theta) x PetalSenescenceDurationHours`.
+- **Frame flag 4 (`OrganColors`)** tells a viewer the stem bytes are real. Frames without it
+  keep the old `#009900`-to-wood ramp and the Celtis swatch verbatim; do not delete that
+  branch, stored runs and `fixture-session.json` depend on it.
+- **Autumn leaf loss** (`AutumnLeafLossFraction`, 0.15 Bergenia to 0.5 Fragaria) commits the
+  older summer leaves from 6 October through the canopy controller; age renewal pauses in that
+  window. Herb leaves are no longer kept for ever. Lost leaves come back from the surviving
+  canopy, not from rhizome reserves, so check the second-year bloom before raising a share: at
+  0.5 G. macrorrhizum stopped flowering in its second year.
+- **Probe the exported frame, decoded by a viewer's own decoder.** Reading
+  `PlantFormation2.AG` or evaluating a curve directly would have passed while the wire was
+  wrong. The Godot core (`SceneDecoder` + `PlantColors.Natural`) is engine-free and
+  references `Agro.csproj`, which makes it the natural probe.
 
 ### 5. Every scape was forced straight up
 
@@ -872,7 +935,7 @@ render mode 3, one plant in a 1x1 m field.
 | Heuchera, Bergenia, both Geraniums, 730 days | Scape clears the foliage | `FlowerMaxHeight - LeafP90Height > 0` at peak bloom |
 | Campanula, run 759ee89b's request, 200 days, drought response on | Gradual canopy adjustment | Largest single-tick leaf loss at most a few blades; senescing, dead-attached and node-bud counts all non-zero in May; leaves regrow after the June rain; identical per-tick counts to the old rules with `CanopyAdjustmentHalfTimeDays = 0` |
 | Campanula, run 759ee89b's request (10 x 10 m field, start 1 Feb), 160 days | Drought mass death | No tick removes more than 2 % of the leaves while the plant's energy pool is positive (it removed 606 at once on day 112) |
-| Carex, 365 days | No dormancy stall | Organ and leaf counts strictly increase from day 91 to day 273 |
+| Carex, 365 days | No dormancy stall | Organ and leaf counts strictly increase from day 91 to day 200 (until 29 November before autumn leaf loss existed; from 6 October Carex sheds a fifth of its leaf area, so counts fall there by design) |
 | Carex, 730 days | Annual re-arm | A `Flowering` phase occurs in **both** season years |
 | Campanula, 730 days | Trailing, not climbing | `MaxHeight < 0.35 m`; more than 8 crown axes; more than 5 branch points |
 | Fragaria, 730 days | Rosette, not column | `MaxHeight / LeafMaxRadial < 1.3`; more than 3 crown axes by year two |
@@ -881,6 +944,9 @@ render mode 3, one plant in a 1x1 m field.
 | Geranium macrorrhizum and Heuchera, 730 days, soft engine | Shaking | Median per-tick organ rotation under 0.3 deg after day 300; see `SOFT_CONTACTS.md` "Shaking" |
 | 100 and 400 plants, parallel against sequential tick, 650 steps | Reproducibility | Byte-identical exported frames |
 | Geranium macrorrhizum beside a 5 cm wall, in a wall corner and under a 12 cm ceiling; Carex beside a wall; 120 days, 4 h, mixed engine | Obstacles are hard | Zero organ-ticks inside the walls (`CollisionWorld.StaticPenetration`); under the ceiling at most 0.6 mm on newborn floral segments; organ counts equal to the soft engine's; see `SOFT_CONTACTS.md` "The mixed engine" |
+| Every preset, `Agro --color-selftest` | Organ colours | Healthy leaf L\* 25-54 and green (or anthocyanic); dead leaf on both paths L\* 38-58, chroma >= 18, brown hue; no senescing stage under L\* 30; open petals white or coloured; stems L\* 30-85 |
+| Campanula and Taraxacum without rain, 200 days; Persicaria and Lactuca, 260 days; exported frames decoded by the Godot core | Organ colours on the wire | No organ type other than a ripe fruit with its brightest on-screen channel under 64; every frame carries flag 4; the annuals' stems reach straw and their leaves brown in the last weeks; see `ORGAN_COLORS.md` |
+| Fragaria, 300 days from 1 March, 4 h and 1 h | Autumn leaf loss | No leaf turns before 6 October; from mid-October leaves pass through a red stage (on-screen a\* above 35); by mid-December about 40 % fewer leaves than the October peak; no regrowth before March; `--checkpoint-selftest` resumes inside the window |
 | Any species, 1 h vs 4 h ticks, 100 days | Timestep sensitivity | See the note below - treat this as a drift check, not an equality check |
 
 **The model is not timestep invariant, and it was not before these changes either.**
@@ -900,8 +966,10 @@ to catch a change that makes the divergence *worse*, and never to assert equalit
 
 ## Where the seven species stand now
 
-Measured at day 730, seed 42, 4 h ticks, render mode 3, one plant in a 1x1 m field.
-Lengths in centimetres. "Tallest flower" is the highest floral organ reached during the
+Measured at day 730, seed 42, 4 h ticks, render mode 3, one plant in a 1x1 m field, **before
+the autumn leaf loss** (15 November 2026): day 730 is late February, so the leaf counts now
+sit lower by roughly each species' share - see `ORGAN_COLORS.md` for the re-measured counts
+and bloom dates. Lengths in centimetres. "Tallest flower" is the highest floral organ reached during the
 second season's bloom; "above foliage" is that height minus the 90th percentile of leaf
 tip height.
 
@@ -958,13 +1026,14 @@ Honest list of what still does not match:
 - **Density and width are coupled**, because both come from stem length. Campanula's mat
   had to be built from many short stems rather than a few long ones to get 2.6x the leaf
   density at the same width; the same trade-off will appear for any mat-former.
-- **No leaf and no node ever dies - except to drought.** Since the drought response
-  (`Agro/DROUGHT_RESPONSE.md`) a herbaceous leaf can senesce, hang dead and fall, leaving a
-  node bud that regrows a leaf. Outside a drought `RenewPetiole` still replaces the blade at
-  the same node, so foliage is bounded only by the node count, and `CrownMaximumNodes` is a hard
-  ceiling rather than a turnover. A real rosette sheds its oldest leaves and its oldest
-  basal nodes each season, which is what lets it flower repeatedly without growing.
-  Implementing that is the single most valuable thing left here.
+- **No node ever dies, and leaves die only to drought and in autumn.** Since the drought
+  response (`Agro/DROUGHT_RESPONSE.md`) a herbaceous leaf can senesce, hang dead and fall,
+  leaving a node bud that regrows a leaf, and since 15 November 2026 the autumn leaf loss does
+  the same to a share of the older leaves each autumn (`ORGAN_COLORS.md`). Otherwise
+  `RenewPetiole` still replaces the blade at the same node, so foliage is bounded only by the
+  node count, and `CrownMaximumNodes` is a hard ceiling rather than a turnover. A real rosette
+  also sheds its oldest basal nodes each season, which is what lets it flower repeatedly
+  without growing. Node abscission is the single most valuable thing left here.
 - **Clonal proliferation is still fast**: Carex reaches 65 tillers and G. macrorrhizum
   114 crowns in the first year. Sizes stay right because the crowns are capped, but the
   density is high. The feedback loop runs through `MakeBud`: every shaded-out petiole

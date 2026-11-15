@@ -122,6 +122,8 @@ public static class Lactuca_Serriola
             PetalAndPedicelGrowthDurationHours = 36f,
             FlowerMaximumAgeHours = 24f * 30f,
             PetalSenescenceDurationHours = 24f * 3f,
+            // Ligules wilt within the day and the involucre closes over them: pale tan-yellow.
+            PetalAbscissionSenescence = 0.5f,
             FlowerCentreLength = 0.002f,
             FlowerCentreRadius = 0.0015f,
             FlowerCentreColor = new(0.91f, 0.74f, 0.15f),
@@ -135,17 +137,32 @@ public static class Lactuca_Serriola
                     .Add(1f, ColorUtils.OkLabFromSrgb8(237, 201, 63)),
                 ColorModel.DefaultStress,
                 new ColorCurve()
-                    .Add(0f, ColorUtils.OkLabFromSrgb8(217, 186, 97))
-                    .Add(1f, ColorUtils.OkLabFromSrgb8(134, 112, 70)))),
+                    .Add(0f, ColorUtils.OkLabFromSrgb8(225, 200, 110))
+                    .Add(1f, ColorUtils.OkLabFromSrgb8(205, 180, 120)))),
         },
         LeafMorphology = VolunteerLeafMorphologies.LactucaSerriola,
         // Glaucous healthy foliage; whitish disease deposits are not a species trait.
+        // The stem of prickly lettuce is pale from the start and whitish once it has
+        // bolted (Kew: "whitish, shining"); it ripens and dies straw-coloured.
+        StemColors = new StemColorModel(
+            young: new(175, 200, 150), mature: new(205, 210, 180),
+            old: new(200, 190, 150), dead: new(190, 170, 125),
+            matureAgeDays: 40f, oldAgeDays: 110f),
         LeafPhenology = new(24f * 100f, new ColorModel(
             new ColorCurve()
-                .Add(0f, ColorUtils.OkLabFromSrgb8(153, 184, 127))
-                .Add(0.5f, ColorUtils.OkLabFromSrgb8(113, 153, 111))
-                .Add(1f, ColorUtils.OkLabFromSrgb8(104, 143, 108)),
-            ColorModel.DefaultStress, ColorModel.DefaultSeasonalSenescence,
-            ColorModel.DefaultStressSenescence)),
+                .Add(0f, ColorUtils.OkLabFromCieLab(60f, -15f, 24f)) // young
+                .Add(0.50f, ColorUtils.OkLabFromCieLab(50f, -14f, 16f)) // mature: glaucous blue-green
+                .Add(1f, ColorUtils.OkLabFromCieLab(50f, -14f, 16f)),
+            ColorModel.DefaultStress,
+            // The lower leaves yellow and dry to a papery light brown on the bolting stem.
+            new ColorCurve()
+                .Add(0f, ColorUtils.OkLabFromCieLab(68f, -2f, 46f)) // yellow
+                .Add(0.40f, ColorUtils.OkLabFromCieLab(62f, 4f, 38f)) // straw-yellow
+                .Add(0.75f, ColorUtils.OkLabFromCieLab(56f, 7f, 30f)) // straw-brown
+                .Add(1f, ColorUtils.OkLabFromCieLab(52f, 8f, 26f)), // papery light brown
+            new ColorCurve()
+                .Add(0f, ColorUtils.OkLabFromCieLab(50f, -4f, 24f)) // dull olive
+                .Add(0.50f, ColorUtils.OkLabFromCieLab(51f, 4f, 24f)) // khaki
+                .Add(1f, ColorUtils.OkLabFromCieLab(52f, 7f, 24f)))), // papery light brown
     };
 }

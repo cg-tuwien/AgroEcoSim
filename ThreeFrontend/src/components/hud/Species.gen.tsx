@@ -188,5 +188,7 @@ export function GeneratedSpeciesFields(props: { species: Species; index: number 
 <SpeciesFloatField max={0.99} step={0.01} speciesIndex={index} tooltip={"Water stress (0 = well watered, 1 = no plant water) at which existing leaves start to senesce. Growth slows below it already."} signal={species.droughtSenescenceOnset} label={"Drought senescence onset"} />
 <SpeciesFloatField step={0.5} speciesIndex={index} tooltip={"Days to commit half of the excess leaf area above the drought target to senescence. 0 disables the drought response."} signal={species.canopyAdjustmentHalfTimeDays} label={"Canopy adjustment half-time (days)"} />
 <SpeciesFloatField step={1} speciesIndex={index} tooltip={"Hours a leaf that completed drought senescence stays attached before it falls; it still shades and collides meanwhile."} signal={species.deadLeafAttachmentHours} label={"Dead leaf attachment (hours)"} />
+<SpeciesFloatField step={0.1} speciesIndex={index} tooltip={"Share of the leaf area shed each autumn, from the older summer leaves: oldest and most shaded first, through the autumn colours. 0 keeps every leaf over winter."} signal={species.autumnLeafLossFraction} label={"Autumn leaf loss (share)"} />
+<SpeciesFloatField step={0.1} speciesIndex={index} tooltip={"Season fraction from 1 March at which old leaves start to colour and fall; 0.6 is early October. It ends at dormancy."} signal={species.autumnLeafLossStartSeason} label={"Autumn leaf loss start (season)"} />
     </>;
 }

@@ -25,6 +25,10 @@ reflectance, physics or checkpoint change. Typecheck and60targeted tests pass;
 the fresh actual nine-year V9 preview preserves geometry/framing and root
 review confirms the intended bark category. Proof: `lateral-reference-20261112/bark-natural/`.
 
+Since 15 November 2026 that swatch is the `Old` (bark) key of the Celtis preset's
+`StemColors`, reached with girth, and the frontend map only serves frames stored before
+frame flag 4 (`Agro/ORGAN_COLORS.md`).
+
 The private61 CPU histories subsequently completed their original55,920hour
 horizons (about6.38model years), both with exact final cold replay. Actual
 same-camera views show later-spray uplift but an overall narrow/tiered young

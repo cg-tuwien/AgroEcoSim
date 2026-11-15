@@ -165,12 +165,14 @@ public static class Carex_Morrowii_Variegata
                     senescenceSeason: new ColorCurve()
                         .Add(0.00f, ColorUtils.OkLabFromSrgb8(135, 130, 105))
                         .Add(0.40f, ColorUtils.OkLabFromSrgb8(125, 120, 95))
-                        .Add(0.75f, ColorUtils.OkLabFromSrgb8(115, 110, 85))
-                        .Add(1.00f, ColorUtils.OkLabFromSrgb8(100, 95, 70))
+                        .Add(0.75f, ColorUtils.OkLabFromSrgb8(125, 116, 90))
+                        .Add(1.00f, ColorUtils.OkLabFromSrgb8(125, 112, 85))
                 )
             ),
 
             PetalSenescenceDurationHours = 240f,
+            // The scales and spent anthers this slot stands for stay on the spike.
+            PetalAbscissionSenescence = 1f,
 
             BudLength = 0.004f,
             BudRadius = 0.002f,
@@ -276,6 +278,14 @@ public static class Carex_Morrowii_Variegata
                     thicknessM: 0.00008f, petioleM: 0f, curvature01: 0.1f),
             },
         },
+
+        // Evergreen tussock: the oldest blades brown over winter and are combed out in spring.
+        AutumnLeafLossFraction = 0.2f,
+        // Green culms and tiller bases wrapped in brown sheaths; dead sedge is straw.
+        StemColors = new StemColorModel(
+            young: new(150, 185, 110), mature: new(120, 150, 85),
+            old: new(110, 85, 60), dead: new(185, 165, 120),
+            matureAgeDays: 30f, oldAgeDays: 200f),
 
         LeafPhenology = new LeafPhenology(
             expectedAge: 1.5f * 365f * 24f,

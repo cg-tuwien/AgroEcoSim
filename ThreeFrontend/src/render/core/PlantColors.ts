@@ -87,19 +87,28 @@ const backendColoredCylinders = new Set<number>([
     Organs.FlowerBud,
 ]);
 
+/**
+ * The vegetative axes join that set only in a frame that says so (frame flag 4, OrganColors):
+ * the backend then writes their final colour, lignification and bark included. Frames
+ * recorded before the flag carry bytes there that were never meant to be shown, so those
+ * keep the wood ramp below.
+ */
+const frameColoredCylinders = new Set<number>([Organs.Stem, Organs.Meristem]);
+
 //Provisional visual bark colour, guided by Celtis' grey/pale-brown bark references.
 //This cached sRGB swatch is an authored appearance, not measured reflectance.
 const naturalBarkColors = new Map<string, RGB>([
     ['Celtis australis', fromHex('#929087')],
 ]);
 
-export function stemColor(primitive: Primitive, mapping: VisualMappingOptions, species?: string): OrganColor {
+export function stemColor(primitive: Primitive, mapping: VisualMappingOptions, species?: string, organColors = false): OrganColor {
     const bark = mapping === VisualMappingOptions.Natural && species && primitive.type === Primitives.Cylinder
         && (primitive.organ === Organs.Stem || primitive.organ === Organs.Meristem)
         ? naturalBarkColors.get(species) : undefined;
     if (mapping === VisualMappingOptions.Natural)
         return {
-            color: primitive.type === Primitives.Cylinder && backendColoredCylinders.has(primitive.organ) && primitive.color
+            color: primitive.type === Primitives.Cylinder && primitive.color
+                && (backendColoredCylinders.has(primitive.organ) || (organColors && frameColoredCylinders.has(primitive.organ)))
                 ? fromHex(primitive.color)
                 : lerpHSL(greenColor, bark ?? woodColor, primitive.stats[S_IRRADIANCE_OR_WOOD]),
             emissive: black,

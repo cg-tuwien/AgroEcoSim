@@ -95,7 +95,15 @@ public enum Mode : byte
 	Internal,
 }
 
-public enum ExportFlags : byte { None = 0, Roots = 1, Analytics = 2 };
+/// <summary>
+/// Header flags of a recorded frame. <see cref="OrganColors"/> is set by the exporter itself on
+/// every frame it writes: the three colour bytes of every above-ground record, stems and
+/// meristems included, are the organ's final colour (an sRGB-encoded albedo, see
+/// <c>ColorUtils.AppearanceToWire</c>). Frames without it predate the stem colour model, and a
+/// viewer draws their stems with its own green-to-wood ramp.
+/// </summary>
+[Flags]
+public enum ExportFlags : byte { None = 0, Roots = 1, Analytics = 2, OrganColors = 4 };
 
 public class IrradianceClient
 {
@@ -958,7 +966,7 @@ public class IrradianceClient
 									writer.Write(ag.GetDailyProductionInv(i));
 									//writer.Write(ag.GetDailyEfficiency(i));
 									//writer.Write(0f);
-									plant.Parameters.LeafPhenology.WriteColor(writer, world.Season, ag.GetAdulcy(i, world.Timestep), ag.GetStress(i), ag.GetSenescence(i, world.Timestep));
+									plant.Parameters.LeafPhenology.WriteColor(writer, world.Season, ag.GetAdulcy(i, world.Timestep), ag.GetStress(i), ag.GetSenescence(i, world.Timestep), ColorUtils.LaminaExposure);
 								}
 							}
 							break;
@@ -989,7 +997,7 @@ public class IrradianceClient
 									writer.Write(ag.GetDailyResourcesInv(i));
 									writer.Write(ag.GetDailyProductionInv(i));
 									//writer.Write(organ == OrganTypes.Stem ? ag.GetDailyEfficiency(i) : 0);
-									plant.Parameters.LeafPhenology.WriteColor(writer, world.Season, ag.GetAdulcy(i, world.Timestep), ag.GetStress(i), ag.GetSenescence(i, world.Timestep));
+									plant.Parameters.LeafPhenology.WriteColor(writer, world.Season, ag.GetAdulcy(i, world.Timestep), ag.GetStress(i), ag.GetSenescence(i, world.Timestep), ColorUtils.RoundOrganExposure);
 								}
 							}
 							break;
@@ -1082,7 +1090,7 @@ public class IrradianceClient
 		writer.WriteU8(version);
 
 		var includeAnalytics = flags.HasFlag(ExportFlags.Analytics);
-		writer.Write((byte)flags);
+		writer.Write((byte)(flags | ExportFlags.OrganColors));
         if (v8)
         {
             // Every frame is independently decodable, including random-access playback
@@ -1142,10 +1150,7 @@ public class IrradianceClient
 		var count = ag.Count;
 		var world = plant.World;
 
-		var sensorsCount = 0;
-		for (int i = 0; i < count; ++i)
-			if (ag.GetOrgan(i) == OrganTypes.Leaf)
-				++sensorsCount;
+		var colors = new OrganColorContext(plant, count);
 
 		writer.Write(plant.Parameters.Name);
                 if (v8) writer.Write(SceneGeometryAssets.For(plant.Parameters).Id);
@@ -1203,13 +1208,7 @@ public class IrradianceClient
 						}
 						//writer.Write(ag.GetDailyEfficiency(i));
 						//writer.Write(0f);
-						if (organ is OrganTypes.Fruit or OrganTypes.FruitWing)
-                            LeafPhenology.WriteFixedColor(writer, ag.GetColor(i));
-                        else
-                        {
-                            var phenology = organ == OrganTypes.Leaf ? plant.Parameters.LeafPhenology : plant.Parameters.FlowerSettings.FlowerPhenology;
-                            phenology.WriteColor(writer, world.Season, ag.GetAdulcy(i, world.Timestep), ag.GetStress(i), ag.GetSenescence(i, world.Timestep));
-                        }
+						LeafPhenology.Write(writer, colors.Lamina(organ, in ag.GetAgent(i)));
 					}
 					break;
 				case OrganTypes.Stem: case OrganTypes.Petiole: case OrganTypes.Meristem: case OrganTypes.FlowerStem:
@@ -1240,19 +1239,7 @@ public class IrradianceClient
 							writer.Write(ag.GetDailyProductionInv(i));
 						}
 						//writer.Write(organ == OrganTypes.Stem ? ag.GetDailyEfficiency(i) : 0);
-						//Every cylinder organ used to be handed the LEAF phenology, so a scape
-						//went out leaf-green and a flower's centre was the same colour as its
-						//petals. The axis is stem tissue and the centre is its own colour, both
-						//constants of the species rather than phenological curves.
-						var flowerSettings = plant.Parameters.FlowerSettings;
-						if (organ == OrganTypes.FlowerBud && flowerSettings.FlowerCentreColor.HasValue)
-							LeafPhenology.WriteFixedColor(writer, flowerSettings.FlowerCentreColor.Value);
-						else if (flowerSettings.ScapeColor.HasValue &&
-							(organ == OrganTypes.FlowerStem || organ == OrganTypes.FlowerMeristem ||
-							 organ == OrganTypes.FlowerPedicel || organ == OrganTypes.FlowerBud))
-							LeafPhenology.WriteFixedColor(writer, flowerSettings.ScapeColor.Value);
-						else
-							plant.Parameters.LeafPhenology.WriteColor(writer, world.Season, ag.GetAdulcy(i, world.Timestep), ag.GetStress(i), ag.GetSenescence(i, world.Timestep));
+						LeafPhenology.Write(writer, colors.Cylinder(organ, i, in ag.GetAgent(i)));
 					}
 					break;
 				case OrganTypes.Bud:
@@ -1279,6 +1266,7 @@ public class IrradianceClient
 				writer.Write(ag.GetDailyEfficiency(i));
 			}
 		}
+		colors.Dispose();
 
 		if (roots)
 		{

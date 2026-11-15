@@ -118,22 +118,24 @@ public static class Bergenia_Cordifolia
             expectedAge: 504f,
             colorModel: new ColorModel(
                 age: new ColorCurve()
-                    .Add(0.00f, ColorUtils.OkLabFromSrgb8(230, 100, 165))
-                    .Add(0.25f, ColorUtils.OkLabFromSrgb8(215, 85, 150))
-                    .Add(0.70f, ColorUtils.OkLabFromSrgb8(200, 80, 140))
-                    .Add(1.00f, ColorUtils.OkLabFromSrgb8(180, 72, 125)),
+                    .Add(0.00f, ColorUtils.OkLabFromCieLab(58f, 56f, -6f)) // opening
+                    .Add(0.25f, ColorUtils.OkLabFromCieLab(54f, 58f, -6f))
+                    .Add(0.50f, ColorUtils.OkLabFromCieLab(52f, 57f, -5f)) // open: bright magenta pink
+                    .Add(1.00f, ColorUtils.OkLabFromCieLab(47f, 52f, -4f)),
                 stress: new ColorCurve()
                     .Add(0.00f, new Vector3(0.00f, 1.00f, 0.00f))
                     .Add(1.00f, new Vector3(-0.04f, 0.82f, 0.01f)),
                 senescenceSeason: new ColorCurve()
-                    .Add(0.00f, ColorUtils.OkLabFromSrgb8(170, 100, 130))
-                    .Add(0.40f, ColorUtils.OkLabFromSrgb8(145, 85, 95))
-                    .Add(0.75f, ColorUtils.OkLabFromSrgb8(115, 70, 65))
-                    .Add(1.00f, ColorUtils.OkLabFromSrgb8(88, 58, 48))
+                    .Add(0.00f, ColorUtils.OkLabFromCieLab(52f, 44f, 0f)) // withering
+                    .Add(0.40f, ColorUtils.OkLabFromCieLab(50f, 30f, 10f)) // dull pink-brown
+                    .Add(0.75f, ColorUtils.OkLabFromCieLab(50f, 18f, 16f))
+                    .Add(1.00f, ColorUtils.OkLabFromCieLab(52f, 12f, 18f)) // papery brown
                 )
             ),
 
             PetalSenescenceDurationHours = 168f,
+            // The bells fade and wither on the panicle, a papery tan-pink, before they drop.
+            PetalAbscissionSenescence = 0.8f,
 
             BudLength = 0.009f,
             BudRadius = 0.004f,
@@ -216,6 +218,15 @@ public static class Bergenia_Cordifolia
 
         },
 
+
+        // Evergreen; some old lower leaves wither over winter.
+        AutumnLeafLossFraction = 0.15f,
+        // The crown axis is a thick rhizome: green only at the growing tip, then olive,
+        // then dark brown under the scars of old leaf bases.
+        StemColors = new StemColorModel(
+            young: new(125, 150, 85), mature: new(115, 105, 70),
+            old: new(95, 72, 52), dead: new(150, 120, 90),
+            matureAgeDays: 30f, oldAgeDays: 200f),
 
         LeafPhenology = new LeafPhenology(
             expectedAge: 2f * 365f * 24f,

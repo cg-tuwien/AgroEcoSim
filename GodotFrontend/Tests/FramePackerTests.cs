@@ -3,6 +3,8 @@ using GodotFrontend.Core.Geometry;
 using GodotFrontend.Core.Packing;
 using GodotFrontend.Core.Scene;
 using Xunit;
+// Agro declares an ExportFlags of its own in the global namespace, which wins name lookup here.
+using FrameFlags = GodotFrontend.Core.Scene.ExportFlags;
 
 namespace GodotFrontend.Tests;
 
@@ -62,6 +64,35 @@ public class FramePackerTests
         var again = new FramePacker(lib).Pack(s, f);
         Assert.Same(f, again);
         Assert.Equal(s.Count, again.InstanceCount);
+    }
+
+    [Fact]
+    public void PacksTheWireColourOfAxesOnlyInAFlaggedFrame()
+    {
+        var lib = new GeometryLibrary();
+        foreach (var organColors in new[] { false, true })
+        {
+            var flags = FrameFlags.Analytics | (organColors ? FrameFlags.OrganColors : FrameFlags.None);
+            var s = new SceneDecoder(lib).Decode(Fixtures.AxisFrame(flags));
+            var f = new FramePacker(lib).Pack(s);
+            Assert.Equal(3, f.InstanceCount);
+            foreach (var b in f.Buckets.Values)
+                for (var slot = 0; slot < b.Count; ++slot)
+                {
+                    var i = b.PrimitiveOf[slot];
+                    var (organ, r, g, bl) = Fixtures.AxisOrgans[i];
+                    var axis = organ is OrganType.Stem or OrganType.Meristem;
+                    var expected = axis && !organColors
+                        ? ColorMath.LerpHSL(Ramps.Green, Ramps.Wood, Fixtures.AxisWood)
+                        : ColorMath.FromSrgb8(r, g, bl);
+                    var d = b.Data.AsSpan(slot * Bucket.Stride, Bucket.Stride);
+                    Assert.Equal(expected.R, d[InstanceEncoding.OffColor]);
+                    Assert.Equal(expected.G, d[InstanceEncoding.OffColor + 1]);
+                    Assert.Equal(expected.B, d[InstanceEncoding.OffColor + 2]);
+                    // the readout inputs do not move with the flag
+                    Assert.Equal(Fixtures.AxisWood, d[InstanceEncoding.OffCustom + 1]);
+                }
+        }
     }
 
     [Fact]

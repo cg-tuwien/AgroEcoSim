@@ -5,7 +5,7 @@
 //app's dependency graph, makes them unit-testable, and lets the offline renderer build a
 //frame under settings other than the ones the live viewport is showing.
 
-import { PlantModel } from '../../helpers/Scene';
+import { PlantModel, frameCapabilities } from '../../helpers/Scene';
 import { Organs, Primitive, Primitives } from '../../helpers/Primitives';
 import { Geom } from './GeometryIds';
 import { IFlags, Instance, InstanceList } from './InstanceList';
@@ -50,6 +50,9 @@ function assign(inst: Instance, geom: number, color: RGB, emissive: RGB, flags: 
  */
 export function buildPlants(out: InstanceList, inp: PlantBuildInputs) {
     out.reset();
+    //Whether this frame's stems carry their final colour is a property of the recorded
+    //frame, not of the settings, so it is read off the frame rather than passed in.
+    const organColors = frameCapabilities(inp.scene)?.organColors === true;
 
     for (let i = 0; i < inp.scene.length; ++i) {
         const entity = inp.scene[i];
@@ -96,7 +99,7 @@ export function buildPlants(out: InstanceList, inp: PlantBuildInputs) {
                     break;
                 }
                 case Primitives.Cylinder: {
-                    const c = p.stats ? stemColor(p, inp.visualMapping, entity.species) : { color: neutral, emissive: black };
+                    const c = p.stats ? stemColor(p, inp.visualMapping, entity.species, organColors) : { color: neutral, emissive: black };
                     assign(inst, Geom.Cylinder, c.color, c.emissive, hiddenFlag(p, inp), ref);
                     if (p.deformation?.some(x => x !== 0)) {
                         for (let span = 0; span < 3; ++span) {

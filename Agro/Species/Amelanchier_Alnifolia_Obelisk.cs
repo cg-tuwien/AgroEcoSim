@@ -32,7 +32,12 @@ public static class Amelanchier_Alnifolia_Obelisk
         s.PetioleRadius = .0009f;
         s.PetioleRadiusVar = .00015f;
         s.LeafMorphology = TreeLeafMorphologies.Amelanchier;
-        s.LeafPhenology = TreeSpecies.Phenology(new(163, 125, 80), new(72, 130, 62), new(232, 151, 44));
+        // Bronze young shoots, red-brown twigs, smooth slate-grey bark on older stems.
+        s.StemColors = new StemColorModel(
+            young: new(135, 120, 75), mature: new(120, 70, 50),
+            old: new(125, 122, 118), dead: new(150, 135, 115), oldRadius: .015f);
+        // Bronze young leaves, mid green in summer, orange-red in autumn (CIELAB).
+        s.LeafPhenology = TreeSpecies.Phenology(new(54, 6, 26), new(40, -17, 24), new(56, 30, 56));
         s.FloweringSeasonStart = .09f;
         s.FloweringSeasonEnd = .17f;
         s.FlowerSettings = TreeSpecies.Flowers(.009f, .0035f, new(248, 247, 233));

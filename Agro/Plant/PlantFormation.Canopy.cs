@@ -62,6 +62,29 @@ public partial class PlantFormation2
 	float StarvationHours;
 	uint LastCanopyUpdate;
 
+	/// <summary>Season year (from 1 March) whose autumn leaf loss has begun; -1 for none yet.</summary>
+	int AutumnCycle = -1;
+	/// <summary>Timestep the current autumn began. Blades born later are the winter leaves.</summary>
+	uint AutumnStartStep;
+	/// <summary>Green area of summer blades the plant keeps through this winter, m²: what it had of
+	/// them when the autumn began, less the species' share of its whole green leaf area. Negative
+	/// until the first census of the autumn has measured it.</summary>
+	float AutumnKeep;
+	float AutumnCarry;
+
+	/// <summary>A blade must be this old when autumn begins to be one of the summer leaves it sheds:
+	/// leaves made from September on are the winter leaves (Fragaria vesca makes its winter cohort
+	/// in autumn), and a late seedling keeps its first leaves.</summary>
+	const float AutumnEligibleAgeHours = 28f * 24f;
+
+	/// <summary>
+	/// The colour path of a leaf committed for drought or carbon: 1 desiccating in a drought episode
+	/// (dull olive, then brown - it dries like hay, with chlorophyll still in it), the plant's water
+	/// stress otherwise (a leaf retired for carbon while the plant has water is resorbed: yellow,
+	/// then brown). Stored on the leaf at commitment.
+	/// </summary>
+	float CommitmentPathStress => DroughtEpisode ? 1f : DroughtStress;
+
 	/// <summary>Multiplies every herbaceous growth rate: a dry plant grows less before it sheds anything.</summary>
 	internal float DroughtGrowthFactor => DroughtResponse ? (1f - DroughtStress) * (1f - CarbonStress) : 1f;
 
@@ -155,11 +178,14 @@ public partial class PlantFormation2
 		var dtHours = LastCanopyUpdate == 0 ? 0f : (timestep - LastCanopyUpdate) * (float)hoursPerTick;
 		LastCanopyUpdate = Math.Max(1u, timestep);
 		var carbonShort = CarbonStress > 0f;
-		if (dtHours <= 0f || (!DroughtEpisode && !carbonShort))
+		var autumn = EnterAutumn(timestep);
+		if (!autumn) AutumnCarry = 0f;
+		if (dtHours <= 0f || (!DroughtEpisode && !carbonShort && !autumn))
 		{
 			SenescenceCarry = 0f;
 			return;
 		}
+		var stressPass = DroughtEpisode || carbonShort;
 
 		var species = Parameters;
 		// Exact for a fixed target whatever the tick: 1 - 2^(-dt / T½).
@@ -171,6 +197,8 @@ public partial class PlantFormation2
 		var uncommitted = 0f;
 		var netNegative = 0f;
 		var largest = 0f;
+		var autumnBorn = AutumnStartStep - (uint)Math.Min(AutumnStartStep, (uint)MathF.Round(AutumnEligibleAgeHours / hoursPerTick));
+		var uncommittedSummer = 0f;
 		for (int i = 0; i < AG.Count; ++i)
 		{
 			ref readonly var blade = ref AG.GetAgent(i);
@@ -181,6 +209,7 @@ public partial class PlantFormation2
 
 			var area = BladeArea(i);
 			uncommitted += area;
+			if (autumn && blade.BirthTime < autumnBorn) uncommittedSummer += area;
 			largest = MathF.Max(largest, area);
 			var owner = AboveGroundAgent.LeafUnitRoot(AG, i);
 			if (LeafUnitHasPendingDevelopment(i, owner)) continue;
@@ -198,24 +227,53 @@ public partial class PlantFormation2
 			BladeCandidates.Add(new(score, blade.StableId, i, owner, area));
 		}
 
-		var waterQuota = DroughtEpisode ? Math.Max(0f, uncommitted - CanopyTarget) * step : 0f;
-		// Carbon sheds only blades that lose carbon, and sets no area target: shrinking the canopy
-		// to save carbon removes the producers and deepens the shortage it answers.
-		var carbonQuota = carbonShort ? netNegative * step : 0f;
-		var quota = Math.Max(waterQuota, carbonQuota) + SenescenceCarry;
-
 		BladeCandidates.Sort(BladeOrder);
-		foreach (var candidate in BladeCandidates)
+		if (stressPass)
 		{
-			if (quota < 0.5f * candidate.Area) break;
-			CommitLeafUnit(candidate.Root, candidate.Owner, timestep);
-			quota -= candidate.Area;
-			uncommitted -= candidate.Area;
+			var waterQuota = DroughtEpisode ? Math.Max(0f, uncommitted - CanopyTarget) * step : 0f;
+			// Carbon sheds only blades that lose carbon, and sets no area target: shrinking the canopy
+			// to save carbon removes the producers and deepens the shortage it answers.
+			var carbonQuota = carbonShort ? netNegative * step : 0f;
+			var quota = Math.Max(waterQuota, carbonQuota) + SenescenceCarry;
+
+			var pathStress = CommitmentPathStress;
+			var stressHours = species.LeafSenescenceStressDuration;
+			var stressVar = species.LeafSenescenceStressDurationVar;
+			foreach (var candidate in BladeCandidates)
+			{
+				if (quota < 0.5f * candidate.Area) break;
+				CommitLeafUnit(candidate.Root, candidate.Owner, timestep, stressHours, stressVar, pathStress);
+				quota -= candidate.Area;
+				uncommitted -= candidate.Area;
+				if (autumn && AG.GetAgent(candidate.Root).BirthTime < autumnBorn) uncommittedSummer -= candidate.Area;
+			}
+			// Fractional quota carries over, so a small plant still sheds at its rate instead of
+			// always rounding down to nothing. Bounded, so blades that cannot be committed (a pending
+			// development) do not bank an avalanche.
+			SenescenceCarry = Math.Clamp(quota, -largest, largest);
 		}
-		// Fractional quota carries over, so a small plant still sheds at its rate instead of
-		// always rounding down to nothing. Bounded, so blades that cannot be committed (a pending
-		// development) do not bank an avalanche.
-		SenescenceCarry = Math.Clamp(quota, -largest, largest);
+		else
+			SenescenceCarry = 0f;
+
+		if (autumn)
+		{
+			// The share is of the whole green canopy, as a gardener counts it, but it is taken from
+			// the summer leaves only: the leaves made in late summer and autumn overwinter.
+			if (AutumnKeep < 0f) AutumnKeep = Math.Max(0f, uncommittedSummer - species.AutumnLeafLossFraction * uncommitted);
+			// Approached with the same half-time as a drought target.
+			var quota = Math.Max(0f, uncommittedSummer - AutumnKeep) * step + AutumnCarry;
+			foreach (var candidate in BladeCandidates)
+			{
+				if (quota < 0.5f * candidate.Area) break;
+				ref readonly var blade = ref AG.GetAgent(candidate.Root);
+				if (blade.InDroughtSenescence || blade.BirthTime >= autumnBorn) continue;
+				CommitLeafUnit(candidate.Root, candidate.Owner, timestep,
+					species.LeafSenescenceSeasonalDuration, species.LeafSenescenceSeasonalDurationVar, 0f);
+				quota -= candidate.Area;
+				uncommitted -= candidate.Area;
+			}
+			AutumnCarry = Math.Clamp(quota, -largest, largest);
+		}
 		UncommittedLeafArea = Math.Max(0f, uncommitted);
 
 		if (StarvationHours > StarvationToleranceHours)
@@ -259,21 +317,45 @@ public partial class PlantFormation2
 		return AG.HasPendingDevelopment(owner);
 	}
 
-	/// <summary>Every blade segment and the petiole it hangs from senesce together, for one sampled duration.</summary>
-	void CommitLeafUnit(int bladeRoot, int owner, uint timestep)
+	/// <summary>
+	/// Whether the plant is in its autumn leaf loss window: from
+	/// <see cref="SpeciesSettings.AutumnLeafLossStartSeason"/> until dormancy at
+	/// <see cref="SpeciesSettings.SeasonalSenescence"/>, once per season year.
+	/// </summary>
+	/// <summary>Whether today lies in this plant's autumn leaf loss window. A function of the
+	/// season alone; age-based leaf renewal pauses in it.</summary>
+	internal bool AutumnLeafLossWindow => DroughtResponse && Parameters.AutumnLeafLossFraction > 0f
+		&& World.Season >= Parameters.AutumnLeafLossStartSeason && World.Season < Parameters.SeasonalSenescence;
+
+	bool EnterAutumn(uint timestep)
 	{
-		var species = Parameters;
-		var hours = species.LeafSenescenceStressDuration + RNG.NextFloatVar(species.LeafSenescenceStressDurationVar);
+		if (!AutumnLeafLossWindow) return false;
+		var date = World.GetTime(timestep);
+		var cycle = date.Month >= 3 ? date.Year : date.Year - 1; //the season year, as in GetFloweringPhase
+		if (cycle != AutumnCycle)
+		{
+			AutumnCycle = cycle;
+			AutumnStartStep = timestep;
+			AutumnKeep = -1f;
+			AutumnCarry = 0f;
+		}
+		return true;
+	}
+
+	/// <summary>Every blade segment and the petiole it hangs from senesce together, for one sampled duration.</summary>
+	void CommitLeafUnit(int bladeRoot, int owner, uint timestep, float meanHours, float varianceHours, float pathStress)
+	{
+		var hours = meanHours + RNG.NextFloatVar(varianceHours);
 		var ticks = (ushort)Math.Clamp(MathF.Round(hours / World.HoursPerTick), 1f, ushort.MaxValue);
 		for (int index = bladeRoot, guard = 0; index >= 0 && guard <= SpeciesSettings.MaximumLeafSegments; ++guard)
 		{
-			AG.CommitDroughtSenescence(index, timestep, ticks);
+			AG.CommitDroughtSenescence(index, timestep, ticks, pathStress);
 			index = NextBladeSegment(index);
 		}
 		for (int index = AG.GetParent(bladeRoot), guard = 0; index >= 0 && guard <= SpeciesSettings.MaximumPetioleSegments
 			&& AG.GetOrgan(index) == OrganTypes.Petiole; ++guard)
 		{
-			AG.CommitDroughtSenescence(index, timestep, ticks);
+			AG.CommitDroughtSenescence(index, timestep, ticks, pathStress);
 			if (index == owner) break;
 			index = AG.GetParent(index);
 		}
@@ -316,6 +398,10 @@ public partial class PlantFormation2
 		writer.Write(SenescenceCarry);
 		writer.Write(StarvationHours);
 		writer.Write(LastCanopyUpdate);
+		writer.Write(AutumnCycle);
+		writer.Write(AutumnStartStep);
+		writer.Write(AutumnKeep);
+		writer.Write(AutumnCarry);
 	}
 
 	void ReadDroughtState(BinaryReader reader)
@@ -331,8 +417,12 @@ public partial class PlantFormation2
 		SenescenceCarry = reader.ReadSingle();
 		StarvationHours = reader.ReadSingle();
 		LastCanopyUpdate = reader.ReadUInt32();
+		AutumnCycle = reader.ReadInt32();
+		AutumnStartStep = reader.ReadUInt32();
+		AutumnKeep = reader.ReadSingle();
+		AutumnCarry = reader.ReadSingle();
 		if (!float.IsFinite(DroughtStress + WaterFillFiltered + CarbonStress + EpisodeQuietHours + ReferenceCanopyArea
-			+ CanopyTarget + UncommittedLeafArea + SenescenceCarry + StarvationHours))
+			+ CanopyTarget + UncommittedLeafArea + SenescenceCarry + StarvationHours + AutumnKeep + AutumnCarry))
 			throw new InvalidDataException("The checkpoint contains an invalid drought state.");
 	}
 }

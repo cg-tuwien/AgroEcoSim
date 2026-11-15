@@ -14,8 +14,12 @@ public enum PrimitiveType : byte { Disk = 0, Rectangle = 1, Cylinder = 2, Sphere
 /// <summary>V8 contact deformation record kinds.</summary>
 public enum DeformKind : byte { None = 0, LeafFold = 1, PetioleBend = 2 }
 
+/// <summary>
+/// The frame header's flags byte. OrganColors: every above-ground cylinder's colour bytes are the organ's final
+/// colour, stems and meristems included; frames recorded before it carry bytes there that were never meant to be shown.
+/// </summary>
 [Flags]
-public enum ExportFlags : byte { None = 0, Roots = 1, Analytics = 2 }
+public enum ExportFlags : byte { None = 0, Roots = 1, Analytics = 2, OrganColors = 4 }
 
 /// <summary>Slot layout of the 9-float stats record every drawn primitive carries (PlantColors.ts).</summary>
 public static class Stat

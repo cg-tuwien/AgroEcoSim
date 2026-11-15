@@ -17,6 +17,12 @@ export interface FrameCapabilities {
     analyticsAvailable: boolean;
     hasRootGeometry: boolean;
     virtualRoots: boolean;
+    /**
+     * Frame flag 4: every above-ground cylinder's colour bytes are the organ's final colour,
+     * stems and meristems included. Absent from every frame recorded before the flag, whose
+     * stem bytes were never meant to be shown.
+     */
+    organColors: boolean;
 }
 
 //Keep the array API used by playback and the renderers. The weak key also lets an empty

@@ -158,7 +158,7 @@ public static class Fragaria_Vesca_Ruegen
             FlowerCentreLength = 0.0015f,
             FlowerCentreRadius = 0.0026f,
             FlowerCentreColor = new Vector3(0.98f, 0.82f, 0.18f),
-            ScapeColor = new Vector3(0f, 0.6f, 0f),
+            // No ScapeColor: the flower stalk is stem tissue and takes the species' stem colours.
             PetalMorphology = new LeafMorphology
             {
                 Shape = new OvateLeafShape(),
@@ -183,14 +183,16 @@ public static class Fragaria_Vesca_Ruegen
                         .Add(0.00f, new Vector3(0.00f, 1.00f, 0.00f))
                         .Add(1.00f, new Vector3(-0.04f, 0.82f, 0.01f)),
                     senescenceSeason: new ColorCurve()
-                        .Add(0.00f, ColorUtils.OkLabFromSrgb8(235, 235, 230))
-                        .Add(0.40f, ColorUtils.OkLabFromSrgb8(220, 215, 205))
-                        .Add(0.75f, ColorUtils.OkLabFromSrgb8(195, 185, 170))
-                        .Add(1.00f, ColorUtils.OkLabFromSrgb8(165, 155, 135))
+                        .Add(0.00f, ColorUtils.OkLabFromSrgb8(242, 242, 238))
+                        .Add(0.40f, ColorUtils.OkLabFromSrgb8(240, 238, 230))
+                        .Add(0.75f, ColorUtils.OkLabFromSrgb8(239, 236, 226))
+                        .Add(1.00f, ColorUtils.OkLabFromSrgb8(238, 234, 222))
                 )
             ),
 
             PetalSenescenceDurationHours = 96f,
+            // Rosaceae shed their petals turgid: white, at most a little cream, when they fall.
+            PetalAbscissionSenescence = 0.3f,
 
             BudLength = 0.005f,
             BudRadius = 0.003f,
@@ -241,6 +243,15 @@ public static class Fragaria_Vesca_Ruegen
             FlowerStemSegmentGrowthDurationHours = 84f,
         },
 
+        // Summer leaves die over winter while the winter leaves made in autumn stay
+        // (F. vesca has two leaf cohorts); about half the clump, through yellow and strong red.
+        AutumnLeafLossFraction = 0.5f,
+        // Hairy green stalks over a short crown that browns under its old leaf bases.
+        StemColors = new StemColorModel(
+            young: new(150, 185, 105), mature: new(125, 140, 80),
+            old: new(105, 80, 55), dead: new(165, 140, 100),
+            matureAgeDays: 30f, oldAgeDays: 200f),
+
         LeafPhenology = new LeafPhenology(
             expectedAge: 1.0f * 365f * 24f,
             colorModel: new ColorModel(
@@ -249,6 +260,10 @@ public static class Fragaria_Vesca_Ruegen
                 FragariaRuegenPreset.SeasonalSenescence,
                 FragariaRuegenPreset.StressSenescence
             )
+            {
+                HealthySeasonCurve = FragariaRuegenPreset.HealthySeason,
+                HealthySeasonDirection = FragariaRuegenPreset.HealthySeasonDirection,
+            }
         ),
 
         // Representative mature Fragaria vesca 'Rügen' compound leaf.

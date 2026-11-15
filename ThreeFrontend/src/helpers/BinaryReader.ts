@@ -316,6 +316,7 @@ export default class BinaryReader {
         if (v8) this.readRecordedGeometry();
         const doRoots = (flags & 1) > 0;
         const doAnalytics = (flags & 2) >0;
+        const organColors = (flags & 4) !== 0;
         let hasRootGeometry = false;
         let hasVirtualRoots = false;
         const entitesCount = this.readUInt32();
@@ -509,6 +510,7 @@ export default class BinaryReader {
             analyticsAvailable: doAnalytics,
             hasRootGeometry,
             virtualRoots: hasVirtualRoots,
+            organColors,
         });
         return result;
     }

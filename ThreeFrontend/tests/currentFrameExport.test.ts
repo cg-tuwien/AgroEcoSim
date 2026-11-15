@@ -72,7 +72,7 @@ beforeEach(() => {
         { type: Primitives.Cylinder, organ: Organs.Petiole, affineTransform: matrix(), color: '#336622', length: 2, radius: .01, stats: stats() },
         { type: Primitives.Box, organ: Organs.Root, affineTransform: matrix(), length: .5, radius: .01, stats: stats() },
     ] }];
-    registerFrameCapabilities(scene, { version: 8, rootsDownloaded: true, analyticsAvailable: true, hasRootGeometry: true, virtualRoots: false });
+    registerFrameCapabilities(scene, { version: 8, rootsDownloaded: true, analyticsAvailable: true, hasRootGeometry: true, virtualRoots: false, organColors: false });
     source = { step: 17, hoursPerTick: 4, runId: 'recorded-run', read: jest.fn(async () => scene), verify: jest.fn() };
     (captureFrameSource as jest.Mock).mockReturnValue(source);
     appstate.terrainList = [new BoxTerrainItem('P001_Y026_T001_S001', new Float32Array([1, 2, 3, 4, 5, 6, 0, 0, 0, 1]), 0)];
@@ -115,7 +115,7 @@ test('keeps multiple plants distinct while sharing repeated rigid organ and soil
 
 test('scheduled plants retain request identities separately from compact scene indices in GLTF', async () => {
     scene[0].sourcePlantIndex = 3;
-    registerFrameCapabilities(scene, { version: 9, rootsDownloaded: true, analyticsAvailable: true, hasRootGeometry: true, virtualRoots: false });
+    registerFrameCapabilities(scene, { version: 9, rootsDownloaded: true, analyticsAvailable: true, hasRootGeometry: true, virtualRoots: false, organColors: false });
     const first = JSON.parse((await exportCurrentFrame({ ...chosen, metadata: true })).json);
     const identity = (doc: any) => doc.nodes.filter((n: any) => n.name === 'plant:3 fixture species');
     expect(identity(first)).toHaveLength(2); // above ground and roots
@@ -158,14 +158,14 @@ test('omits fabricated or nonfinite statistics, keeping legitimate measured zero
     const doc = JSON.parse((await exportCurrentFrame({ ...chosen, metadata: true })).json);
     const leaf = doc.nodes.find((n: any) => n.extras?.greenFdt.organ === 'Leaf').extras.greenFdt.statistics;
     expect(leaf.auxins).toBeUndefined(); expect(leaf.previousDayResources).toBe(0);
-    registerFrameCapabilities(scene, { version: 7, rootsDownloaded: true, analyticsAvailable: false, hasRootGeometry: true, virtualRoots: false });
+    registerFrameCapabilities(scene, { version: 7, rootsDownloaded: true, analyticsAvailable: false, hasRootGeometry: true, virtualRoots: false, organColors: false });
     const noAnalytics = JSON.parse((await exportCurrentFrame({ ...chosen, metadata: true })).json);
     expect(noAnalytics.nodes.some((n: any) => n.extras?.greenFdt.statistics)).toBe(false);
 });
 
 test('does not infer roots availability from mutable request settings or virtual roots', async () => {
     expect(exportRootsAvailable(scene)).toBe(true);
-    registerFrameCapabilities(scene, { version: 7, rootsDownloaded: true, analyticsAvailable: false, hasRootGeometry: false, virtualRoots: true });
+    registerFrameCapabilities(scene, { version: 7, rootsDownloaded: true, analyticsAvailable: false, hasRootGeometry: false, virtualRoots: true, organColors: false });
     expect(exportRootsAvailable(scene)).toBe(false);
     await expect(exportCurrentFrame(chosen)).rejects.toThrow('no downloaded root geometry');
 });

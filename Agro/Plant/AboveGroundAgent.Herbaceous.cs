@@ -73,7 +73,11 @@ namespace Agro
                         {
                             // Keep the age ratio fractional below 7000 hours.
                             var p = ageHours / 7000f;
-                            if (plant.RNG.NextFloatAccum(p * p, world.HoursPerTick) && plant.CanopyGrowthAllowed)
+                            // In the autumn window an old leaf is not swapped for a fresh one: it is
+                            // what the autumn leaf loss takes. Checked after the draw, so the random
+                            // sequence is the same as without autumn loss.
+                            if (plant.RNG.NextFloatAccum(p * p, world.HoursPerTick) && plant.CanopyGrowthAllowed
+                                && !plant.AutumnLeafLossWindow)
                             {
                                 // A perennial rosette replaces a senescent leaf at its existing node.  Leaving the petiole as an inert Bud
                                 // made every old node permanently bare, which turned Geranium crowns into palm-like stems over time.

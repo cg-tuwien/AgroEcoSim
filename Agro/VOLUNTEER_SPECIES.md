@@ -37,7 +37,9 @@ RGB colors, branch probabilities and root taper are explicit model assumptions,
 not measured species calibration. The default flower windows describe Central
 European seasons; a single annual cohort need not flower throughout that window.
 The color curves include ageing and stress without baking a disease coating into
-healthy leaves.
+healthy leaves. Stems, buds and petal fate follow `ORGAN_COLORS.md`: prickly lettuce
+has its whitish stem, knotweed reddens and keeps its tepals, the composites wilt and
+drop their ligules, and the two annuals yellow and dry in the weeks before they die.
 
 The imported proposal also discussed grasses, seed recruitment, dispersal,
 root-fragment regeneration and disease. Those are independent future mechanisms.

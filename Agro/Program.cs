@@ -21,6 +21,10 @@ internal class Program
             "Verify that resuming from a checkpoint is byte-identical to never stopping, and exit.")]
         public bool CheckpointSelfTest { get; set; }
 
+        [Option("color-selftest", Required = false, HelpText =
+            "Check every predefined species' leaf, dead-leaf, petal and stem colours against measured ranges, and exit.")]
+        public bool ColorSelfTest { get; set; }
+
         [Option("sheet-distance-selftest", Required = false, HelpText =
             "Compare the soft engine's sampled blade-to-blade distance against the exact query on random blade pairs, and exit.")]
         public bool SheetDistanceSelfTest { get; set; }
@@ -57,19 +61,22 @@ internal class Program
         // commits leaves to senescence, kills them, sheds them and regrows node buds within the
         // first months, and every resume point lands inside that episode. The BroadLeafV1 variant
         // stores contact deformations keyed by organs that later turn from petiole into bud.
-        var scenarios = new (int Steps, int HoursPerTick, int Plants, byte RenderMode, string? Filter, int ExtraSteps, int TotalHours, string Species, bool Dry, bool Deformable)[]
+        var scenarios = new (int Steps, int HoursPerTick, int Plants, byte RenderMode, string? Filter, int ExtraSteps, int TotalHours, string Species, bool Dry, bool Deformable, DateTime? Start)[]
         {
-            (40, 24, 4, 0, null, 0, 0, "Default", false, false), (60, 12, 8, 0, null, 0, 0, "Default", false, false), (90, 6, 2, 0, null, 0, 0, "Default", false, false),
-            (40, 24, 4, 3, "wall", 0, 0, "Default", false, false), (36, 6, 4, 3, "wall", 40, 0, "Default", false, false), (4, 48, 2, 3, "wall", 4, 168, "Default", false, false),
-            (540, 4, 1, 0, null, 0, 0, "Campanula poscharskyana", true, false), (540, 4, 1, 0, null, 0, 0, "Campanula poscharskyana", true, true),
+            (40, 24, 4, 0, null, 0, 0, "Default", false, false, null), (60, 12, 8, 0, null, 0, 0, "Default", false, false, null), (90, 6, 2, 0, null, 0, 0, "Default", false, false, null),
+            (40, 24, 4, 3, "wall", 0, 0, "Default", false, false, null), (36, 6, 4, 3, "wall", 40, 0, "Default", false, false, null), (4, 48, 2, 3, "wall", 4, 168, "Default", false, false, null),
+            (540, 4, 1, 0, null, 0, 0, "Campanula poscharskyana", true, false, null), (540, 4, 1, 0, null, 0, 0, "Campanula poscharskyana", true, true, null),
             // Mesh LAI scratch is rebuilt after restore, including opted-in deformed foliage;
             // extending the horizon must preserve the original measured weeks as well as frames.
-            (180, 4, 1, 3, "wall", 40, 0, "Campanula poscharskyana", false, true),
+            (180, 4, 1, 3, "wall", 40, 0, "Campanula poscharskyana", false, true, null),
+            // Autumn leaf loss of a perennial herb: sown 1 August, resumed on 9 November with
+            // summer leaves committed, colouring and hanging dead. Mixed engine only.
+            (600, 4, 1, 0, null, 0, 0, "Fragaria vesca 'Rügen'", false, false, new DateTime(2026, 8, 1)),
         };
         foreach (var engine in new[] { ContactEngineKind.Mixed, ContactEngineKind.Certified, ContactEngineKind.Soft })
-        foreach (var (steps, hoursPerTick, plants, renderMode, filter, extraSteps, totalHours, speciesName, dry, deformable) in scenarios)
+        foreach (var (steps, hoursPerTick, plants, renderMode, filter, extraSteps, totalHours, speciesName, dry, deformable, start) in scenarios)
         {
-            if (deformable && engine != ContactEngineKind.Mixed) continue;
+            if ((deformable || start != null) && engine != ContactEngineKind.Mixed) continue;
             SpeciesSettings[]? species = null;
             if (deformable)
             {
@@ -85,7 +92,7 @@ internal class Program
                 FieldSize = dry ? new Utils.Json.Vector3XDZ { X = 1, D = 1, Z = 1 } : new Utils.Json.Vector3XDZ { X = 3, D = 1, Z = 3 },
                 FieldResolution = dry ? 0.05f : 0.5f,
                 Seed = 42,
-                InitialDate = new DateTime(2026, 3, 15),
+                InitialDate = start ?? new DateTime(2026, 3, 15),
                 Species = species,
                 Plants = Enumerable.Range(0, plants).Select(i => new PlantRequest
                 {
@@ -138,7 +145,8 @@ internal class Program
                 var sameMeasurement = expectedMeasurement.AsSpan().SequenceEqual(actualMeasurement);
                 if (!same || !sameMeasurement) ++failures;
                 var scenario = $"mode {renderMode}{(filter != null ? $", filter \"{filter}\"" : "")}{(extraSteps > 0 ? $", horizon +{extraSteps} steps" : "")}"
-                    + (dry ? $", {speciesName}, no rain{(deformable ? ", BroadLeafV1" : "")}" : "");
+                    + (dry ? $", {speciesName}, no rain{(deformable ? ", BroadLeafV1" : "")}" : "")
+                    + (start != null ? $", {speciesName} from {start:yyyy-MM-dd}" : "");
                 Console.WriteLine($"{engine,-9} {steps} steps @{hoursPerTick}h, {plants} plants, {scenario}, resume at {stop,3}: "
                     + $"frame {(same ? "identical" : "DIFFERS")}, measurement {(sameMeasurement ? "identical" : "DIFFERS")} (checkpoint {checkpoint.Length:N0} B)");
             }
@@ -175,6 +183,82 @@ internal class Program
     /// touching verdict differs, so a change to either query is caught here before it shows up
     /// as a leaf passing through another.
     /// </summary>
+    /// <summary>
+    /// Checks the colour every predefined species writes into a frame against what the organs
+    /// measure, as the viewer shows it under the default light. No simulation: it evaluates the
+    /// same functions the export calls.
+    /// </summary>
+    /// <remarks>
+    /// The colours went wrong twice in ways no other check could see: decoded twice so old leaves
+    /// were black, then authored pastel so healthy leaves looked washed out and dead ones grey.
+    /// The bands are CIELAB: healthy leaves L* 25-54 (Munsell plant-tissue 5GY 4/4 is L* 41),
+    /// green unless anthocyanic; dead leaves on either path L* 38-58, chroma at least 18 and a
+    /// brown hue (Munsell 10YR 5/4 - 7.5YR 4/4); nothing on the way darker than L* 30; open
+    /// petals either white (L* 75 and up) or coloured (chroma 35 and up); stems L* 30-85.
+    /// See Agro/ORGAN_COLORS.md.
+    /// </remarks>
+    static int ColorSelfTest()
+    {
+        static Vector3 Shown(RGB8 wire, float exposure)
+        {
+            static float Linear(byte b) => ColorUtils.SrgbToLinear(b / 255f);
+            var appearance = new Vector3(Linear(wire.Red), Linear(wire.Green), Linear(wire.Blue)) * exposure;
+            return ColorUtils.CieLabFromOkLab(ColorUtils.LinearRgbToOklab(Vector3.Min(appearance, Vector3.One)));
+        }
+        static float Chroma(Vector3 lab) => MathF.Sqrt(lab.Y * lab.Y + lab.Z * lab.Z);
+        static float Hue(Vector3 lab) => (MathF.Atan2(lab.Z, lab.Y) * 180f / MathF.PI + 360f) % 360f;
+        static string F(Vector3 lab) => $"({lab.X,4:F0},{lab.Y,4:F0},{lab.Z,4:F0})";
+
+        const float Summer = 0.35f, Lamina = ColorUtils.LaminaExposure, Round = ColorUtils.RoundOrganExposure;
+        var failures = new List<string>();
+        Console.WriteLine($"{"species",-34} {"leaf",-16} {"dead (season)",-16} {"dead (drought)",-16} {"petal",-16} stems");
+        foreach (var species in SpeciesSettings.Predefined)
+        {
+            var name = species.Name;
+            void Require(bool ok, string what) { if (!ok) failures.Add($"{name}: {what}"); }
+            var leaves = species.LeafPhenology;
+
+            var leaf = Shown(leaves.WireColor(Summer, 1f, 0f, 0f, Lamina), Lamina);
+            Require(leaf.X >= 25f && leaf.X <= 54f, $"healthy leaf L* {leaf.X:F0} outside 25-54");
+            Require(leaf.Y < -5f || (leaf.Y > 5f && leaf.X < 40f), $"healthy leaf neither green nor anthocyanic {F(leaf)}");
+
+            var dead = new Vector3[2];
+            for (int path = 0; path < 2; ++path)
+            {
+                for (int k = 1; k <= 10; ++k)
+                {
+                    var c = Shown(leaves.WireColor(Summer, 1f, 0f, k / 10f, Lamina, path), Lamina);
+                    Require(c.X >= 30f, $"senescing leaf (path {path}, {k * 10} %) L* {c.X:F0} under 30");
+                    dead[path] = c;
+                }
+                var d = dead[path];
+                Require(d.X >= 38f && d.X <= 58f, $"dead leaf (path {path}) L* {d.X:F0} outside 38-58");
+                Require(Chroma(d) >= 18f, $"dead leaf (path {path}) chroma {Chroma(d):F0} under 18: grey");
+                Require(Hue(d) >= 40f && Hue(d) <= 90f, $"dead leaf (path {path}) hue {Hue(d):F0} not brown");
+            }
+
+            var petal = Shown(species.FlowerSettings.FlowerPhenology.WireColor(Summer, 1f, 0f, 0f, Lamina), Lamina);
+            //A sedge has no perianth: Carex's petal slot stands for its scales and anthers.
+            Require(petal.X >= 75f || Chroma(petal) >= 35f || name.StartsWith("Carex"), $"open petal {F(petal)} neither white nor coloured");
+            var shed = Shown(species.FlowerSettings.FlowerPhenology.WireColor(Summer, 1f, 0f, 1f, Lamina), Lamina);
+            Require(shed.X >= 38f, $"petal at its drop L* {shed.X:F0} under 38");
+
+            var stems = species.EffectiveStemColors;
+            var stemRange = (Min: 100f, Max: 0f);
+            foreach (var (m, o, d) in new[] { (0f, 0f, 0f), (1f, 0f, 0f), (1f, 1f, 0f), (1f, 1f, 1f) })
+            {
+                var c = Shown(stems.Wire(m, o, d), Round);
+                stemRange = (MathF.Min(stemRange.Min, c.X), MathF.Max(stemRange.Max, c.X));
+                Require(c.X >= 30f && c.X <= 85f, $"stem (maturity {m}, age {o}, dying {d}) L* {c.X:F0} outside 30-85");
+            }
+            Console.WriteLine($"{name,-34} {F(leaf),-16} {F(dead[0]),-16} {F(dead[1]),-16} {F(petal),-16} L* {stemRange.Min:F0}-{stemRange.Max:F0}");
+        }
+
+        foreach (var failure in failures) Console.WriteLine("FAIL " + failure);
+        Console.WriteLine(failures.Count == 0 ? "Colour self-test passed." : $"Colour self-test FAILED in {failures.Count} case(s).");
+        return failures.Count == 0 ? 0 : 1;
+    }
+
     static int SheetDistanceSelfTest()
     {
         var rng = new Random(42);
@@ -236,6 +320,7 @@ internal class Program
         {
         if (options.CheckpointSelfTest) { exitCode = CheckpointSelfTest(); return; }
         if (options.SheetDistanceSelfTest) { exitCode = SheetDistanceSelfTest(); return; }
+        if (options.ColorSelfTest) { exitCode = ColorSelfTest(); return; }
 
         AgroWorld world;
         if (options.ImportFile != null)

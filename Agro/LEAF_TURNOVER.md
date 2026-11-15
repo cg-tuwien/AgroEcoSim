@@ -22,6 +22,14 @@ their eligibility age. The named herbaceous species do not use `Default`'s
 calendar-driven autumn shedding; evergreen habit alone would not justify adding
 the same autumn leaf drop to every species.
 
+Since 15 November 2026 they have a species-specific one instead:
+`AutumnLeafLossFraction` sheds a share of the green leaf area each autumn from
+leaves at least four weeks old, through the seasonal colour path, and age
+renewal pauses in that window so an old leaf dies rather than being swapped.
+Shares run from 0.5 (Fragaria, matching its summer/winter cohorts) to 0.15
+(Bergenia). See `ORGAN_COLORS.md`, "Autumn leaf loss", including why a large
+share can cost the next season's bloom.
+
 ## What the report measures
 
 `leavesShed` is the **sum** of whole ordinary foliage blades physically removed

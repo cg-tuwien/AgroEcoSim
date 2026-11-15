@@ -104,6 +104,8 @@ public static class Taraxacum_Officinale
             PetalAndPedicelGrowthDurationHours = 36f,
             FlowerMaximumAgeHours = 24f * 18f,
             PetalSenescenceDurationHours = 24f * 3f,
+            // Ligules wilt as the head closes for good; they are pushed off, pale tan, by the pappus.
+            PetalAbscissionSenescence = 0.5f,
             FlowerCentreLength = 0.002f,
             FlowerCentreRadius = 0.003f,
             FlowerCentreColor = new(0.96f, 0.70f, 0.06f),
@@ -117,16 +119,29 @@ public static class Taraxacum_Officinale
                     .Add(1f, ColorUtils.OkLabFromSrgb8(244, 191, 28)),
                 ColorModel.DefaultStress,
                 new ColorCurve()
-                    .Add(0f, ColorUtils.OkLabFromSrgb8(216, 175, 65))
-                    .Add(1f, ColorUtils.OkLabFromSrgb8(143, 115, 66)))),
+                    .Add(0f, ColorUtils.OkLabFromSrgb8(225, 185, 80))
+                    .Add(1f, ColorUtils.OkLabFromSrgb8(200, 165, 100)))),
         },
         LeafMorphology = VolunteerLeafMorphologies.TaraxacumOfficinale,
+        // The outer rosette leaves die in autumn; the heart of the rosette overwinters.
+        AutumnLeafLossFraction = 0.4f,
+        // No aerial stem to speak of: a short crown on the taproot, brown under the leaf bases.
+        StemColors = new StemColorModel(
+            young: new(150, 180, 110), mature: new(130, 120, 90),
+            old: new(105, 80, 60), dead: new(160, 135, 100),
+            matureAgeDays: 30f, oldAgeDays: 200f),
         LeafPhenology = new(24f * 110f, new ColorModel(
             new ColorCurve()
-                .Add(0f, ColorUtils.OkLabFromSrgb8(143, 185, 88))
-                .Add(0.5f, ColorUtils.OkLabFromSrgb8(72, 137, 47))
-                .Add(1f, ColorUtils.OkLabFromSrgb8(59, 120, 42)),
-            ColorModel.DefaultStress, ColorModel.DefaultSeasonalSenescence,
+                .Add(0f, ColorUtils.OkLabFromCieLab(54f, -20f, 38f)) // young
+                .Add(0.50f, ColorUtils.OkLabFromCieLab(41f, -20f, 30f)) // mature
+                .Add(1f, ColorUtils.OkLabFromCieLab(41f, -20f, 30f)),
+            ColorModel.DefaultStress,
+            // Old rosette leaves yellow, often flush red-purple, then brown.
+            new ColorCurve()
+                .Add(0f, ColorUtils.OkLabFromCieLab(64f, 0f, 56f)) // yellow
+                .Add(0.35f, ColorUtils.OkLabFromCieLab(48f, 22f, 26f)) // red-purple flush
+                .Add(0.70f, ColorUtils.OkLabFromCieLab(45f, 14f, 24f)) // red-brown
+                .Add(1f, ColorUtils.OkLabFromCieLab(44f, 10f, 22f)), // brown
             ColorModel.DefaultStressSenescence)),
     };
 }

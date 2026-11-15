@@ -696,6 +696,20 @@ public class SpeciesSettings
     public LeafPhenology LeafPhenology { get; internal set; } = new();
 
     /// <summary>
+    /// Colours of the stem through its life: young shoot, hardened stem or twig, old base or
+    /// bark, and standing dead. Null takes the generic model of the species' habit.
+    /// </summary>
+    /// <remarks>
+    /// Like the leaf phenology this is a runtime asset of the named preset, not an editable
+    /// number, so it never travels in a request.
+    /// </remarks>
+    [JsonIgnore]
+    public StemColorModel? StemColors { get; internal set; }
+
+    internal StemColorModel EffectiveStemColors
+        => StemColors ?? (Behavior == Behavior.Herbaceous ? StemColorModel.Herbaceous : StemColorModel.Woody);
+
+    /// <summary>
     /// Radius-Length ratios along the leaf. If null or empty, fallback to the the default quad.
     /// </summary>
     /// <remarks>
@@ -1417,6 +1431,33 @@ public class SpeciesSettings
     [SpeciesUILabel("Dead leaf attachment (hours)")]
     [SpeciesUITooltip("Hours a leaf that completed drought senescence stays attached before it falls; it still shades and collides meanwhile.")]
     public float DeadLeafAttachmentHours { get; set; } = 336f;
+
+    /// <summary>
+    /// Share of its green leaf area a herbaceous perennial loses each autumn, from 0 to 1, taken from
+    /// its older summer leaves only. Zero, the default, keeps every leaf through the winter.
+    /// </summary>
+    /// <remarks>
+    /// Evergreen and semi-evergreen perennials do not keep a leaf for ever: from autumn into winter
+    /// the older summer leaves colour, die and fall while the younger winter leaves overwinter
+    /// (Fragaria vesca makes distinct summer and winter leaf cohorts; Geranium macrorrhizum and
+    /// G. x cantabrigiense colour red and orange; Heuchera, Bergenia and Carex lose their oldest
+    /// leaves over winter). The oldest and most shaded leaves go first, with
+    /// <see cref="CanopyAdjustmentHalfTimeDays"/>, through the seasonal senescence path over
+    /// <see cref="LeafSenescenceSeasonalDuration"/>, then hang for
+    /// <see cref="DeadLeafAttachmentHours"/> and fall to a node bud. Needs the canopy response
+    /// (<see cref="CanopyAdjustmentHalfTimeDays"/> above zero). See Agro/ORGAN_COLORS.md.
+    /// </remarks>
+    [SpeciesUILabel("Autumn leaf loss (share)")]
+    [SpeciesUITooltip("Share of the leaf area shed each autumn, from the older summer leaves: oldest and most shaded first, through the autumn colours. 0 keeps every leaf over winter.")]
+    public float AutumnLeafLossFraction { get; set; }
+
+    /// <summary>
+    /// When the autumn leaf loss begins, as a season fraction from 1 March; it runs until dormancy at
+    /// <see cref="SeasonalSenescence"/>. The default 0.6 is 6 October.
+    /// </summary>
+    [SpeciesUILabel("Autumn leaf loss start (season)")]
+    [SpeciesUITooltip("Season fraction from 1 March at which old leaves start to colour and fall; 0.6 is early October. It ends at dormancy.")]
+    public float AutumnLeafLossStartSeason { get; set; } = 0.6f;
     public static SpeciesSettings Default => Predefined[0];
     public static List<SpeciesSettings> Predefined = [];
 
@@ -1691,6 +1732,8 @@ public class SpeciesSettings
             throw new ArgumentOutOfRangeException(nameof(DroughtSenescenceOnset), DroughtSenescenceOnset, "The onset must lie in [0, 1).");
         RequireFiniteNonNegative(CanopyAdjustmentHalfTimeDays, nameof(CanopyAdjustmentHalfTimeDays));
         RequireFiniteNonNegative(DeadLeafAttachmentHours, nameof(DeadLeafAttachmentHours));
+        RequireProbability(AutumnLeafLossFraction, nameof(AutumnLeafLossFraction));
+        RequireProbability(AutumnLeafLossStartSeason, nameof(AutumnLeafLossStartSeason));
         RequireFinitePositive(LeafSenescenceStressDuration, nameof(LeafSenescenceStressDuration));
         RequireFiniteNonNegative(LeafSenescenceStressDurationVar, nameof(LeafSenescenceStressDurationVar));
         if (LeafSenescenceStressDurationVar >= LeafSenescenceStressDuration)

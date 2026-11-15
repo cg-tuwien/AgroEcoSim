@@ -40,9 +40,20 @@ internal static class TreeSpecies
         VegetativeGrowthFullTemperatureC = 18f,
         VegetativeGrowthLightReferenceWhM2 = 1800f,
         TreeShortShootShadeDiebackDays = 180f,
-        LeafPhenology = Phenology(new(130, 175, 85), new(65, 125, 52), new(219, 181, 55)),
+        // CIELAB: a light young leaf, a mature one at Munsell 5GY 4/4, a clear autumn yellow.
+        LeafPhenology = Phenology(new(55, -18, 38), new(39, -18, 26), new(72, 4, 66)),
     };
-    internal static LeafPhenology Phenology(Vector3 young, Vector3 mature, Vector3 autumn) => new(24f * 160f, new ColorModel(new ColorCurve().Add(0, ColorUtils.OkLabFromSrgb8((byte)young.X, (byte)young.Y, (byte)young.Z)).Add(.25f, ColorUtils.OkLabFromSrgb8((byte)mature.X, (byte)mature.Y, (byte)mature.Z)).Add(1, ColorUtils.OkLabFromSrgb8((byte)mature.X, (byte)mature.Y, (byte)mature.Z)), ColorModel.DefaultStress, new ColorCurve().Add(0, ColorUtils.OkLabFromSrgb8((byte)autumn.X, (byte)autumn.Y, (byte)autumn.Z)).Add(1, ColorUtils.OkLabFromSrgb8(137, 97, 50))));
+    /// <summary>A tree's leaf colours, each as CIELAB (L*, a*, b*): young, mature, and its autumn
+    /// colour, which ends on a dry brown leaf.</summary>
+    internal static LeafPhenology Phenology(Vector3 young, Vector3 mature, Vector3 autumn) => new(24f * 160f, new ColorModel(
+        new ColorCurve()
+            .Add(0, ColorUtils.OkLabFromCieLab(young.X, young.Y, young.Z))
+            .Add(.25f, ColorUtils.OkLabFromCieLab(mature.X, mature.Y, mature.Z))
+            .Add(1, ColorUtils.OkLabFromCieLab(mature.X, mature.Y, mature.Z)),
+        ColorModel.DefaultStress,
+        new ColorCurve()
+            .Add(0, ColorUtils.OkLabFromCieLab(autumn.X, autumn.Y, autumn.Z))
+            .Add(1, ColorUtils.OkLabFromCieLab(45f, 11f, 27f))));
     internal static FlowerSettings Flowers(float petalLength, float petalWidth, Vector3 color, float pedicelLength = .015f) => new()
     {
         FlowerPedicelLength = pedicelLength,

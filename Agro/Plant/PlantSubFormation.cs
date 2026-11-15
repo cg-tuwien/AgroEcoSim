@@ -450,12 +450,12 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
 	internal float GreenLeafArea { get; private set; }
 
 	/// <summary>Commits one leaf or petiole segment to drought senescence. See <see cref="PlantFormation2.UpdateCanopy"/>.</summary>
-	internal void CommitDroughtSenescence(int index, uint timestep, ushort durationTicks)
+	internal void CommitDroughtSenescence(int index, uint timestep, ushort durationTicks, float pathStress)
 	{
 		Debug.Assert(IsAboveGround);
 		ref var agent = ref Unsafe.As<T, AboveGroundAgent>(ref Src()[index]);
 		if (agent.IsDroughtFoliage)
-			agent.CommitDroughtSenescence(timestep, durationTicks);
+			agent.CommitDroughtSenescence(timestep, durationTicks, pathStress);
 	}
 
 	/// <summary>Reverts a crown base to its dormant crown bud, removing the crown above it.</summary>
@@ -2410,6 +2410,26 @@ public partial class PlantSubFormation<T> : IPlantSubFormation<T> where T: struc
         && FloweringStarted[^1] == PostFloweringState
         && (Plant.World.Season > Plant.Parameters.SeasonalSenescence
             || SeasonCycle(Plant.World.GetTime(timestep)) != FloweringCycle);
+
+    /// <summary>
+    /// How far a monocarpic plant that has finished flowering is through ripening, from 0 to 1.
+    /// Zero for every other plant.
+    /// </summary>
+    /// <remarks>
+    /// An annual does not vanish green: between the end of its flowering and its death the whole
+    /// shoot yellows and dries as the seed ripens. The simulation removes the plant in one census
+    /// (<see cref="CompletedMonocarpicLife"/>), so this is the only place that interval exists,
+    /// and it is read by the export for colour alone. Pure: unlike
+    /// <see cref="GetFloweringPhase"/> it changes no phenology state, so it may be called at any
+    /// frame stride.
+    /// </remarks>
+    internal float MonocarpicRipening()
+    {
+        var species = Plant.Parameters;
+        if (!species.Monocarpic || FloweringStarted[^1] != PostFloweringState) return 0f;
+        var span = species.SeasonalSenescence - species.FloweringSeasonEnd;
+        return span > 1e-6f ? Math.Clamp((Plant.World.Season - species.FloweringSeasonEnd) / span, 0f, 1f) : 1f;
+    }
 
     public SeasonalPhase GetFloweringPhase(SpeciesSettings species, uint timestep)
     {

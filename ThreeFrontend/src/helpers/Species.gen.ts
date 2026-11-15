@@ -183,6 +183,8 @@ export class SpeciesBase {
     droughtSenescenceOnset = signal(0.3);
     canopyAdjustmentHalfTimeDays = signal(7);
     deadLeafAttachmentHours = signal(336);
+    autumnLeafLossFraction = signal(0);
+    autumnLeafLossStartSeason = signal(0.6);
 
     public save() {
         return {
@@ -360,6 +362,8 @@ export class SpeciesBase {
             droughtSenescenceOnset: this.droughtSenescenceOnset.peek(),
             canopyAdjustmentHalfTimeDays: this.canopyAdjustmentHalfTimeDays.peek(),
             deadLeafAttachmentHours: this.deadLeafAttachmentHours.peek(),
+            autumnLeafLossFraction: this.autumnLeafLossFraction.peek(),
+            autumnLeafLossStartSeason: this.autumnLeafLossStartSeason.peek(),
         };
     }
 
@@ -538,6 +542,8 @@ export class SpeciesBase {
         this.droughtSenescenceOnset.value = s.droughtSenescenceOnset ?? 0.3;
         this.canopyAdjustmentHalfTimeDays.value = s.canopyAdjustmentHalfTimeDays ?? 7;
         this.deadLeafAttachmentHours.value = s.deadLeafAttachmentHours ?? 336;
+        this.autumnLeafLossFraction.value = s.autumnLeafLossFraction;
+        this.autumnLeafLossStartSeason.value = s.autumnLeafLossStartSeason;
         return this;
     }
 
@@ -717,6 +723,8 @@ export class SpeciesBase {
             DroughtSenescenceOnset: this.droughtSenescenceOnset.peek(),
             CanopyAdjustmentHalfTimeDays: this.canopyAdjustmentHalfTimeDays.peek(),
             DeadLeafAttachmentHours: this.deadLeafAttachmentHours.peek(),
+            AutumnLeafLossFraction: this.autumnLeafLossFraction.peek(),
+            AutumnLeafLossStartSeason: this.autumnLeafLossStartSeason.peek(),
         };
     }
 }

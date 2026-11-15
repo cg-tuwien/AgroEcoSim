@@ -24,31 +24,39 @@ public readonly struct LeafPhenology
         Color = colorModel;
     }
 
-    internal void WriteColor(BinaryWriter writer, float season, float adulcy, float stress, float senescence)
+    /// <summary>
+    /// The wire colour of an organ on this phenology: the evaluated appearance as an
+    /// sRGB-encoded albedo for a surface lit at <paramref name="exposure"/>.
+    /// </summary>
+    /// <remarks>
+    /// This used to write the linear value times 255 while both viewers decode the bytes as
+    /// sRGB, so every phenology colour was darkened twice: the authored dead-leaf brown
+    /// (82, 60, 38) was shown as (44, 28, 15), which is the black old leaves were reported as.
+    /// <paramref name="pathStress"/> only chooses between the seasonal and the stress
+    /// senescence path; <paramref name="stress"/> is the live modifier on a living organ.
+    /// </remarks>
+    /// <summary>A white corolla: the colour of a flower that states none.</summary>
+    public static LeafPhenology WhitePetals => new(24f * 18f, new ColorModel(
+        new ColorCurve()
+            .Add(0.00f, ColorUtils.OkLabFromCieLab(95f, -2f, 6f))
+            .Add(1.00f, ColorUtils.OkLabFromCieLab(95f, -1f, 4f)),
+        ColorModel.DefaultStress,
+        new ColorCurve()
+            .Add(0.00f, ColorUtils.OkLabFromCieLab(90f, 0f, 12f)) // cream
+            .Add(1.00f, ColorUtils.OkLabFromCieLab(72f, 4f, 20f)))); // withered tan
+
+    internal RGB8 WireColor(float season, float adulcy, float stress, float senescence, float exposure, float pathStress = 0f)
+        => ColorUtils.OklabToWire(Color.Evaluate(adulcy, season, stress, senescence, pathStress), exposure);
+
+    internal void WriteColor(BinaryWriter writer, float season, float adulcy, float stress, float senescence, float exposure, float pathStress = 0f)
+        => Write(writer, WireColor(season, adulcy, stress, senescence, exposure, pathStress));
+
+    /// <summary>The three colour bytes of a record.</summary>
+    internal static void Write(BinaryWriter writer, RGB8 rgb)
     {
-        var lab = Color.Evaluate(adulcy, season, stress, senescence);
-        var rgb = ColorUtils.OklabToLinearRgb8(lab);
         writer.Write(rgb.Red);
         writer.Write(rgb.Green);
         writer.Write(rgb.Blue);
-    }
-
-    /// <summary>
-    /// Writes a fixed sRGB colour in the same three-byte layout as
-    /// <see cref="WriteColor"/>.
-    /// </summary>
-    /// <remarks>
-    /// For the parts of an inflorescence whose colour is a constant of the species rather
-    /// than a phenological curve: the axis, which reads as stem tissue, and the flower's
-    /// centre. Both used to be handed the leaf phenology, so a scape came out leaf-green
-    /// on the wire and the centre was indistinguishable from the petals.
-    /// </remarks>
-    internal static void WriteFixedColor(BinaryWriter writer, Vector3 srgb)
-    {
-        static byte Channel(float v) => (byte)Math.Clamp((int)MathF.Round(v * 255f), 0, 255);
-        writer.Write(Channel(srgb.X));
-        writer.Write(Channel(srgb.Y));
-        writer.Write(Channel(srgb.Z));
     }
 
     //public static LeafPhenology Default => new();
@@ -107,14 +115,26 @@ public readonly record struct ColorModel
     public float StressPathCompression { get; init; } = 0.55f;
 
     /// <summary>
-    /// Additional late-stage drying: chroma loss.
+    /// Additional late-stage drying: chroma loss as the last carotenoids go. Scaled by 0.7 on the
+    /// seasonal path and by 1.25 on the stress path.
     /// </summary>
-    public float LateDesaturation { get; init; } = 0.30f;
+    /// <remarks>
+    /// Kept small: the brown of a dead leaf is its oxidised phenolics, which stay. At 0.2 a dead
+    /// leaf read as a grey tan, which is what the user reported as "almost grey"; the curves now
+    /// carry the end colour themselves.
+    /// </remarks>
+    public float LateDesaturation { get; init; } = 0.08f;
 
     /// <summary>
     /// Additional late-stage drying: lightness loss.
     /// </summary>
-    public float LateDarkening { get; init; } = 0.05f;
+    /// <remarks>
+    /// Zero by default. Dry dead tissue is brighter than green tissue across the visible -
+    /// chlorophyll and then the carotenoids are gone and air replaces water in the cells -
+    /// so the terminal colour of a senescence path is a tan or a light brown, and darkening
+    /// it further is what a wet, rotting or frosted leaf does, not a dry one.
+    /// </remarks>
+    public float LateDarkening { get; init; } = 0f;
 
 
     public ColorModel(ColorCurve age, ColorCurve stress, ColorCurve senescenceSeason, ColorCurve? senescenceStress = null)
@@ -128,14 +148,21 @@ public readonly record struct ColorModel
     /// <summary>Blend weights for combining curve outputs.</summary>
     public Vector2 Weights { get; init; } = new(0.6f, 0.3f);
 
-    public Vector3 Evaluate(float adulcy, float season, float stress, float senescence)
+    /// <param name="stress">Live stress of a living organ: dulls and dries the healthy colour.</param>
+    /// <param name="pathStress">Which way a senescing organ dies: 0 follows the seasonal path
+    /// (resorption: yellow, then brown), 1 the stress path (desiccation: dull olive, then tan).
+    /// It does not touch the colour of an organ that is not senescing.</param>
+    public Vector3 Evaluate(float adulcy, float season, float stress, float senescence, float pathStress = 0f)
     {
         var result = LifecycleCurve.Evaluate(adulcy * 0.5f);
 
         if (HealthySeasonCurve != null)
         {
+            //The season drifts along the species' own pigment direction (a Bergenia goes
+            //burgundy in the cold). This applied the dry direction, so every seasonal tint
+            //went yellow-brown whatever the preset asked for.
             var seasonModifier = HealthySeasonCurve?.Evaluate(season) ?? default;
-            result = ApplyStressModifier(result, seasonModifier);
+            result = ApplySeasonModifier(result, seasonModifier);
         }
 
         if (stress > 0f)
@@ -145,7 +172,7 @@ public readonly record struct ColorModel
         }
 
         if (senescence > 0f)
-            result = ApplySenescence(result, stress, senescence);
+            result = ApplySenescence(result, Math.Clamp(MathF.Max(stress, pathStress), 0f, 1f), senescence);
 
         return result;
         //return Vector3.Clamp(result, Vector3.Zero, Vector3.One);
@@ -242,8 +269,11 @@ public readonly record struct ColorModel
         float tStress = 1f - MathF.Pow(1f - senescence, compression);
 
         // Evaluate both candidate paths
+        //The stress path is a colour path of its own. StressCurve is a modifier triple
+        //(lightness shift, chroma scale, dry shift), and reading it as an OKLab colour sent
+        //every stressed senescence towards black.
         var seasonalTarget = SeasonalSenescenceCurve.Evaluate(tSeasonal);
-        var stressTarget   = StressCurve.Evaluate(tStress);
+        var stressTarget   = (StressSenescenceCurve ?? SeasonalSenescenceCurve).Evaluate(tStress);
 
         // Blend the two path targets by onset stress.
         // Low stress -> mostly seasonal path
@@ -254,14 +284,16 @@ public readonly record struct ColorModel
         // Blend from the frozen base into the target senescence path.
         // This keeps the leaf starting from its actual onset color.
         // ------------------------------------------------------------
-        var alpha = 1f - MathF.Pow(1f - senescence, Lerp(1.15f, 1.65f, stress));
+        // The leaf leaves its own colour quickly and then follows the authored path: by half way
+        // it is 85 % on the path. A slower blend (exponent 1.15) kept a dying leaf half green, so
+        // a strawberry's strong red stage only ever reached a dull red-brown.
+        var alpha = 1f - MathF.Pow(1f - senescence, Lerp(2.2f, 2.8f, stress));
         var c = Vector3.Lerp(baseLab, targetLab, alpha);
 
         // ------------------------------------------------------------
         // Late drying pass
-        // Leaves near shedding typically get drier, duller, and often darker.
-        // Even if the path already encodes color well, this adds a believable
-        // "papery / dead tissue" finish.
+        // Leaves near shedding get drier and duller: the last pigments go and the
+        // colour greys. They do not get darker - see LateDarkening.
         // ------------------------------------------------------------
         var dryStart = Lerp(0.78f, 0.45f, stress);
         var dryT = ColorUtils.SmoothStep(dryStart, 1.0f, senescence);
@@ -335,11 +367,10 @@ public readonly record struct ColorModel
     //     .Add(1.00f, new Vector3(0.875482f, -0.047827f,  0.049368f));
 
     public static ColorCurve DefaultLifecycle => new ColorCurve()
-        .Add(0.00f, ColorUtils.OkLabFromSrgb8(175, 225, 160)) // very young, lighter
-        .Add(0.18f, ColorUtils.OkLabFromSrgb8(135, 195, 125)) // expanding
-        .Add(0.45f, ColorUtils.OkLabFromSrgb8(105, 170, 100)) // near mature
-        .Add(0.75f, ColorUtils.OkLabFromSrgb8( 95, 160,  92)) // mature
-        .Add(1.00f, ColorUtils.OkLabFromSrgb8( 90, 155,  88)); // full adult, stable
+        .Add(0.00f, ColorUtils.OkLabFromCieLab(54f, -16f, 36f)) // very young: light, yellowish
+        .Add(0.20f, ColorUtils.OkLabFromCieLab(46f, -18f, 32f)) // expanding
+        .Add(0.50f, ColorUtils.OkLabFromCieLab(40f, -18f, 28f)) // mature (adulcy 1 reads this key): Munsell 5GY 4/4, as measured on mature leaves
+        .Add(1.00f, ColorUtils.OkLabFromCieLab(40f, -18f, 28f)); // not reached while Evaluate reads adulcy * 0.5
 
     public static ColorCurve DefaultHealthySeason => new ColorCurve()
         .Add(0.00f, new Vector3( 0.010f, 1.03f, 0.000f)) // early spring flush: a bit lighter/fresher
@@ -358,16 +389,23 @@ public readonly record struct ColorModel
         .Add(0.85f, new Vector3(-0.07f, 0.62f, 0.030f)) // yellowing / browning
         .Add(1.00f, new Vector3(-0.12f, 0.45f, 0.055f)); // strong necrosis / dry
 
+    // Senescence paths. Chlorophyll goes first and unmasks the carotenoids (yellow); those go
+    // next; what is left is the brown of oxidised, polymerised phenolics over pale cell wall.
+    // Every path ends on a mid brown (Munsell 10YR 5/4 - 7.5YR 4/4, CIELAB L* 42-50): never
+    // darker, since dry tissue reflects more than a wet one, and never a grey tan - the
+    // phenolics that make it brown stay. Black is frost, rot or fire. See Agro/ORGAN_COLORS.md.
     public static ColorCurve DefaultSeasonalSenescence => new ColorCurve()
-        .Add(0.00f, ColorUtils.OkLabFromSrgb8(190, 180,  70)) // yellow-gold
-        .Add(0.35f, ColorUtils.OkLabFromSrgb8(175, 125,  50)) // warm ochre
-        .Add(0.70f, ColorUtils.OkLabFromSrgb8(120,  85,  45)) // brown onset
-        .Add(1.00f, ColorUtils.OkLabFromSrgb8( 82,  60,  38)); // dry brown
+        .Add(0.00f, ColorUtils.OkLabFromCieLab(66f, 0f, 58f)) // yellow: the carotenoids unmasked
+        .Add(0.35f, ColorUtils.OkLabFromCieLab(60f, 9f, 50f)) // ochre-gold
+        .Add(0.70f, ColorUtils.OkLabFromCieLab(51f, 12f, 34f)) // light brown
+        .Add(1.00f, ColorUtils.OkLabFromCieLab(46f, 10f, 25f)); // dry brown, between Munsell 10YR 5/4 and 7.5YR 4/4
 
+    // Death by desiccation skips most of the resorption: the leaf dries with part of its
+    // chlorophyll still in it, like hay - dull olive, then khaki, then brown.
     public static ColorCurve DefaultStressSenescence => new ColorCurve()
-        .Add(0.00f, ColorUtils.OkLabFromSrgb8(120, 120,  70)) // dull olive
-        .Add(0.45f, ColorUtils.OkLabFromSrgb8(115,  90,  50)) // yellow-brown
-        .Add(1.00f, ColorUtils.OkLabFromSrgb8( 80,  58,  36)); // dark brown
+        .Add(0.00f, ColorUtils.OkLabFromCieLab(45f, -4f, 26f)) // dull olive: dried with chlorophyll still in it
+        .Add(0.45f, ColorUtils.OkLabFromCieLab(45f, 4f, 25f)) // khaki-brown
+        .Add(1.00f, ColorUtils.OkLabFromCieLab(45f, 8f, 22f)); // dry brown
 
     //Optional milder stress modifier for naturally purple / anthocyanic foliage.
     public static ColorCurve CoolAnthocyanicStress => new ColorCurve()
@@ -447,11 +485,10 @@ public readonly record struct ColorKey(float T, Vector3 Lab);
 public static class BergeniaCordifoliaPreset
 {
     public static ColorCurve Lifecycle => new ColorCurve()
-        .Add(0.00f, ColorUtils.OkLabFromSrgb8(145, 195, 125)) // fresh: lighter glossy green
-        .Add(0.20f, ColorUtils.OkLabFromSrgb8( 92, 154,  89)) // expanding
-        .Add(0.50f, ColorUtils.OkLabFromSrgb8( 67, 128,  72)) // mature: deep clean green
-        .Add(0.80f, ColorUtils.OkLabFromSrgb8( 60, 118,  66)) // adult
-        .Add(1.00f, ColorUtils.OkLabFromSrgb8( 56, 111,  62)); // full adult
+        .Add(0.00f, ColorUtils.OkLabFromCieLab(48f, -18f, 28f)) // fresh: lighter glossy green
+        .Add(0.20f, ColorUtils.OkLabFromCieLab(41f, -18f, 24f)) // expanding
+        .Add(0.50f, ColorUtils.OkLabFromCieLab(36f, -17f, 20f)) // mature: deep glossy green
+        .Add(1.00f, ColorUtils.OkLabFromCieLab(36f, -17f, 20f)); // full adult
 
     public static ColorCurve BergeniaHealthySeason => new ColorCurve()
         .Add(0.00f, new Vector3( 0.000f, 1.00f, 0.000f)) // early spring
@@ -467,15 +504,15 @@ public static class BergeniaCordifoliaPreset
     public static ColorCurve Stress => ColorModel.CoolAnthocyanicStress;
 
     public static ColorCurve SeasonalSenescence => new ColorCurve()
-        .Add(0.00f, ColorUtils.OkLabFromSrgb8(125, 104, 60)) // dull bronze-olive
-        .Add(0.35f, ColorUtils.OkLabFromSrgb8(126,  82, 54)) // reddish bronze
-        .Add(0.70f, ColorUtils.OkLabFromSrgb8(105,  67, 49)) // warm brown
-        .Add(1.00f, ColorUtils.OkLabFromSrgb8( 78,  52, 36)); // dead dark brown
+        .Add(0.00f, ColorUtils.OkLabFromCieLab(42f, 10f, 22f)) // dull bronze-olive
+        .Add(0.35f, ColorUtils.OkLabFromCieLab(40f, 24f, 20f)) // reddish bronze
+        .Add(0.70f, ColorUtils.OkLabFromCieLab(40f, 18f, 20f)) // warm brown
+        .Add(1.00f, ColorUtils.OkLabFromCieLab(43f, 12f, 20f)); // dead leathery brown, the darkest of the presets
 
     public static ColorCurve StressSenescence => new ColorCurve()
-        .Add(0.00f, ColorUtils.OkLabFromSrgb8(95, 86, 57)) // dull stressed bronze
-        .Add(0.50f, ColorUtils.OkLabFromSrgb8(91, 63, 49)) // reddish-brown
-        .Add(1.00f, ColorUtils.OkLabFromSrgb8(68, 45, 34)); // dark brown
+        .Add(0.00f, ColorUtils.OkLabFromCieLab(40f, 0f, 20f)) // dull stressed bronze
+        .Add(0.50f, ColorUtils.OkLabFromCieLab(41f, 10f, 20f)) // reddish brown
+        .Add(1.00f, ColorUtils.OkLabFromCieLab(43f, 10f, 20f)); // dry brown
 }
 
 /// <summary>
@@ -486,25 +523,24 @@ public static class BergeniaCordifoliaPreset
 public static class GeraniumMacrorrhizumPreset
 {
     public static ColorCurve Lifecycle => new ColorCurve()
-        .Add(0.00f, ColorUtils.OkLabFromSrgb8(175, 220, 150)) // young light green
-        .Add(0.20f, ColorUtils.OkLabFromSrgb8(115, 175, 110)) // expanding
-        .Add(0.50f, ColorUtils.OkLabFromSrgb8(100, 160,  95)) // mature gray-green
-        .Add(0.80f, ColorUtils.OkLabFromSrgb8( 95, 152,  90)) // adult
-        .Add(1.00f, ColorUtils.OkLabFromSrgb8( 90, 145,  85)); // full adult, stable
+        .Add(0.00f, ColorUtils.OkLabFromCieLab(54f, -14f, 30f)) // young: light
+        .Add(0.20f, ColorUtils.OkLabFromCieLab(48f, -14f, 26f)) // expanding
+        .Add(0.50f, ColorUtils.OkLabFromCieLab(44f, -13f, 22f)) // mature: matte grey-green (hairy, aromatic)
+        .Add(1.00f, ColorUtils.OkLabFromCieLab(44f, -13f, 22f)); // full adult, stable
 
 
     public static ColorCurve Stress => ColorModel.DefaultStress;
 
     public static ColorCurve SeasonalSenescence => new ColorCurve()
-        .Add(0.00f, ColorUtils.OkLabFromSrgb8(160, 145,  80)) // olive-gold
-        .Add(0.35f, ColorUtils.OkLabFromSrgb8(150, 100,  55)) // bronze-copper
-        .Add(0.70f, ColorUtils.OkLabFromSrgb8(130,  65,  60)) // red-bronze
-        .Add(1.00f, ColorUtils.OkLabFromSrgb8( 85,  60,  35)); // brown
+        .Add(0.00f, ColorUtils.OkLabFromCieLab(56f, 12f, 50f)) // gold-orange
+        .Add(0.35f, ColorUtils.OkLabFromCieLab(48f, 32f, 40f)) // orange-red (RHS: autumn colour orange red)
+        .Add(0.70f, ColorUtils.OkLabFromCieLab(42f, 30f, 28f)) // russet
+        .Add(1.00f, ColorUtils.OkLabFromCieLab(44f, 14f, 23f)); // brown
 
     public static ColorCurve StressSenescence => new ColorCurve()
-        .Add(0.00f, ColorUtils.OkLabFromSrgb8(120, 120,  70)) // dull olive
-        .Add(0.45f, ColorUtils.OkLabFromSrgb8(110,  85,  45)) // stress brown
-        .Add(1.00f, ColorUtils.OkLabFromSrgb8( 80,  55,  35)); // dark brown
+        .Add(0.00f, ColorUtils.OkLabFromCieLab(44f, -3f, 25f)) // dull olive
+        .Add(0.45f, ColorUtils.OkLabFromCieLab(44f, 5f, 24f)) // khaki-brown
+        .Add(1.00f, ColorUtils.OkLabFromCieLab(44f, 9f, 22f)); // dry brown
 }
 
 /// <summary>
@@ -515,62 +551,23 @@ public static class GeraniumMacrorrhizumPreset
 public static class GeraniumXCantabrigiensePreset
 {
     public static ColorCurve Lifecycle => new ColorCurve()
-        .Add(0.00f, ColorUtils.OkLabFromSrgb8(175, 225, 160)) // fresh light green
-        .Add(0.20f, ColorUtils.OkLabFromSrgb8(110, 180, 110)) // expanding
-        .Add(0.50f, ColorUtils.OkLabFromSrgb8( 95, 165,  95)) // mature glossy green
-        .Add(0.80f, ColorUtils.OkLabFromSrgb8( 90, 157,  90)) // adult
-        .Add(1.00f, ColorUtils.OkLabFromSrgb8( 85, 150,  85)); // full adult, stable
+        .Add(0.00f, ColorUtils.OkLabFromCieLab(52f, -20f, 34f)) // fresh
+        .Add(0.20f, ColorUtils.OkLabFromCieLab(46f, -19f, 30f)) // expanding
+        .Add(0.50f, ColorUtils.OkLabFromCieLab(42f, -18f, 27f)) // mature: glossy mid green
+        .Add(1.00f, ColorUtils.OkLabFromCieLab(42f, -18f, 27f)); // full adult, stable
 
     public static ColorCurve Stress => ColorModel.DefaultStress;
 
     public static ColorCurve SeasonalSenescence => new ColorCurve()
-        .Add(0.00f, ColorUtils.OkLabFromSrgb8(165, 150,  85)) // yellow-green
-        .Add(0.35f, ColorUtils.OkLabFromSrgb8(160, 110,  70)) // bronze
-        .Add(0.70f, ColorUtils.OkLabFromSrgb8(140,  85,  70)) // reddish bronze
-        .Add(1.00f, ColorUtils.OkLabFromSrgb8( 90,  65,  40)); // brown
+        .Add(0.00f, ColorUtils.OkLabFromCieLab(55f, 14f, 50f)) // gold
+        .Add(0.35f, ColorUtils.OkLabFromCieLab(45f, 40f, 36f)) // red to coppery orange
+        .Add(0.70f, ColorUtils.OkLabFromCieLab(41f, 30f, 26f)) // coppery red-brown
+        .Add(1.00f, ColorUtils.OkLabFromCieLab(45f, 14f, 22f)); // brown
 
     public static ColorCurve StressSenescence => new ColorCurve()
-        .Add(0.00f, ColorUtils.OkLabFromSrgb8(122, 122,  72)) // dull olive
-        .Add(0.45f, ColorUtils.OkLabFromSrgb8(112,  88,  48)) // tan-brown
-        .Add(1.00f, ColorUtils.OkLabFromSrgb8( 82,  58,  38)); // dark brown
-}
-
-/// <summary>
-/// Why these colors: foliage ranges from olive / bronze-green to deep purple, with beet-red / amethyst-purple undersides;
-/// in hotter sun it can fade toward bronze-green.
-/// https://www.gardenia.net/plant/heuchera-palace-purple-coral-bells
-/// https://www.missouribotanicalgarden.org/PlantFinder/PlantFinderDetails.aspx?taxonid=259276
-/// </summary>
-public static class HeucheraPalacePurplePreset
-{
-    public static ColorCurve Lifecycle => new ColorCurve()
-        .Add(0.00f, ColorUtils.OkLabFromSrgb8(125, 120,  95)) // olive-bronze juvenile
-        .Add(0.20f, ColorUtils.OkLabFromSrgb8(110,  90, 100)) // bronzy purple juvenile
-        .Add(0.50f, ColorUtils.OkLabFromSrgb8( 95,  70, 100)) // maturing purple
-        .Add(0.80f, ColorUtils.OkLabFromSrgb8( 82,  58,  92)) // adult purple
-        .Add(1.00f, ColorUtils.OkLabFromSrgb8( 75,  50,  85)); // full adult, stable deep purple
-
-    public static ColorCurve HeucheraHealthySeason => new ColorCurve()
-    .Add(0.00f, new Vector3( 0.000f, 1.00f, 0.000f)) // neutral
-    .Add(0.35f, new Vector3( 0.000f, 1.00f, 0.000f)) // neutral
-    .Add(0.70f, new Vector3(-0.005f, 1.02f, 0.004f)) // slightly richer in cool season
-    .Add(0.88f, new Vector3(-0.015f, 1.05f, 0.008f)) // deeper purple in late season
-    .Add(1.00f, new Vector3(-0.020f, 1.06f, 0.010f)); // winter deepening
-
-    public static readonly Vector2 HealthySeasonDirection = Vector2.Normalize(new Vector2(0.78f, -0.62f));
-
-    public static ColorCurve Stress => ColorModel.CoolAnthocyanicStress;
-
-    public static ColorCurve SeasonalSenescence => new ColorCurve()
-        .Add(0.00f, ColorUtils.OkLabFromSrgb8( 85,  55,  95)) // amethyst plum
-        .Add(0.35f, ColorUtils.OkLabFromSrgb8( 75,  45,  88)) // deep plum
-        .Add(0.70f, ColorUtils.OkLabFromSrgb8( 85,  62,  72)) // muted plum-brown
-        .Add(1.00f, ColorUtils.OkLabFromSrgb8( 95,  72,  42)); // brown
-
-    public static ColorCurve StressSenescence => new ColorCurve()
-        .Add(0.00f, ColorUtils.OkLabFromSrgb8( 90,  70,  85)) // dull plum
-        .Add(0.50f, ColorUtils.OkLabFromSrgb8( 95,  75,  65)) // bronze-plum
-        .Add(1.00f, ColorUtils.OkLabFromSrgb8( 95,  72,  45)); // brown
+        .Add(0.00f, ColorUtils.OkLabFromCieLab(44f, -3f, 25f)) // dull olive
+        .Add(0.45f, ColorUtils.OkLabFromCieLab(44f, 5f, 24f)) // khaki-brown
+        .Add(1.00f, ColorUtils.OkLabFromCieLab(44f, 9f, 22f)); // dry brown
 }
 
 /// <summary>
@@ -584,24 +581,23 @@ public static class HeucheraPalacePurplePreset
 public static class CarexMorrowiiVariegataCenterPreset
 {
     public static ColorCurve Lifecycle => new ColorCurve()
-        .Add(0.00f, ColorUtils.OkLabFromSrgb8(150, 200, 140)) // fresh center green
-        .Add(0.20f, ColorUtils.OkLabFromSrgb8(100, 155, 100)) // expanding
-        .Add(0.50f, ColorUtils.OkLabFromSrgb8( 90, 145,  90)) // mature center green
-        .Add(0.80f, ColorUtils.OkLabFromSrgb8( 88, 140,  88)) // adult
-        .Add(1.00f, ColorUtils.OkLabFromSrgb8( 85, 135,  85)); // full adult, stable
+        .Add(0.00f, ColorUtils.OkLabFromCieLab(52f, -17f, 32f)) // fresh
+        .Add(0.20f, ColorUtils.OkLabFromCieLab(46f, -17f, 28f)) // expanding
+        .Add(0.50f, ColorUtils.OkLabFromCieLab(42f, -17f, 25f)) // mature: deep green blade
+        .Add(1.00f, ColorUtils.OkLabFromCieLab(42f, -17f, 25f)); // full adult, stable
 
     public static ColorCurve Stress => ColorModel.DefaultStress;
 
     public static ColorCurve SeasonalSenescence => new ColorCurve()
-        .Add(0.00f, ColorUtils.OkLabFromSrgb8(175, 175,  95)) // yellow-green
-        .Add(0.40f, ColorUtils.OkLabFromSrgb8(170, 150,  85)) // straw-green
-        .Add(0.75f, ColorUtils.OkLabFromSrgb8(145, 120,  70)) // straw
-        .Add(1.00f, ColorUtils.OkLabFromSrgb8(110,  88,  50)); // tan-brown
+        .Add(0.00f, ColorUtils.OkLabFromCieLab(60f, -6f, 40f)) // yellow-green
+        .Add(0.40f, ColorUtils.OkLabFromCieLab(60f, 2f, 34f)) // straw-green
+        .Add(0.75f, ColorUtils.OkLabFromCieLab(57f, 5f, 28f)) // straw
+        .Add(1.00f, ColorUtils.OkLabFromCieLab(55f, 6f, 26f)); // dead sedge blade: straw-tan, the lightest end on purpose
 
     public static ColorCurve StressSenescence => new ColorCurve()
-        .Add(0.00f, ColorUtils.OkLabFromSrgb8(125, 125,  75)) // dull olive
-        .Add(0.50f, ColorUtils.OkLabFromSrgb8(115,  98,  58)) // tan
-        .Add(1.00f, ColorUtils.OkLabFromSrgb8( 90,  72,  42)); // brown
+        .Add(0.00f, ColorUtils.OkLabFromCieLab(48f, -6f, 28f)) // dull olive
+        .Add(0.50f, ColorUtils.OkLabFromCieLab(53f, 3f, 26f)) // khaki
+        .Add(1.00f, ColorUtils.OkLabFromCieLab(55f, 5f, 25f)); // straw-tan
 }
 
 /// <summary>
@@ -627,43 +623,13 @@ public static class CarexMorrowiiVariegataMarginPreset
     public static ColorCurve SeasonalSenescence => new ColorCurve()
         .Add(0.00f, ColorUtils.OkLabFromSrgb8(230, 225, 180)) // cream
         .Add(0.40f, ColorUtils.OkLabFromSrgb8(220, 205, 150)) // pale straw
-        .Add(0.75f, ColorUtils.OkLabFromSrgb8(185, 160, 105)) // straw
-        .Add(1.00f, ColorUtils.OkLabFromSrgb8(130, 100,  60)); // tan-brown
+        .Add(0.75f, ColorUtils.OkLabFromSrgb8(200, 178, 125)) // straw
+        .Add(1.00f, ColorUtils.OkLabFromSrgb8(185, 162, 118)); // straw-tan
 
     public static ColorCurve StressSenescence => new ColorCurve()
         .Add(0.00f, ColorUtils.OkLabFromSrgb8(220, 215, 180)) // dull cream
-        .Add(0.50f, ColorUtils.OkLabFromSrgb8(190, 165, 110)) // straw-buff
-        .Add(1.00f, ColorUtils.OkLabFromSrgb8(135, 105,  65)); // brown
-}
-
-/// <summary>
-/// Why these colors: foliage is described as medium / mid-green and semi-evergreen to evergreen in mild winters,
-/// with no strong documented red/orange autumn pathway, so a restrained green→olive→brown senescence is the best fit.
-/// https://www.missouribotanicalgarden.org/PlantFinder/PlantFinderDetails.aspx?taxonid=278835&qt=Display
-/// https://www.gardenia.net/plant/campanula-poscharskyana-serbian-bellflower
-/// </summary>
-public static class CampanulaPoscharskyanaPreset
-{
-    public static ColorCurve Lifecycle => new ColorCurve()
-        .Add(0.00f, ColorUtils.OkLabFromSrgb8(170, 220, 160)) // fresh green
-        .Add(0.20f, ColorUtils.OkLabFromSrgb8(110, 170, 110)) // expanding
-        .Add(0.50f, ColorUtils.OkLabFromSrgb8( 95, 155,  95)) // mature green
-        .Add(0.80f, ColorUtils.OkLabFromSrgb8( 90, 150,  95)) // adult
-        .Add(1.00f, ColorUtils.OkLabFromSrgb8( 85, 145,  90)); // full adult, stable
-
-
-    public static ColorCurve Stress => ColorModel.DefaultStress;
-
-    public static ColorCurve SeasonalSenescence => new ColorCurve()
-        .Add(0.00f, ColorUtils.OkLabFromSrgb8(175, 180, 100)) // yellow-green
-        .Add(0.40f, ColorUtils.OkLabFromSrgb8(160, 145,  85)) // olive-tan
-        .Add(0.75f, ColorUtils.OkLabFromSrgb8(130, 105,  60)) // tan-brown
-        .Add(1.00f, ColorUtils.OkLabFromSrgb8( 92,  70,  42)); // brown
-
-    public static ColorCurve StressSenescence => new ColorCurve()
-        .Add(0.00f, ColorUtils.OkLabFromSrgb8(120, 122,  72)) // dull olive
-        .Add(0.50f, ColorUtils.OkLabFromSrgb8(108,  86,  48)) // brown onset
-        .Add(1.00f, ColorUtils.OkLabFromSrgb8( 82,  60,  38)); // dark brown
+        .Add(0.50f, ColorUtils.OkLabFromSrgb8(200, 180, 130)) // straw-buff
+        .Add(1.00f, ColorUtils.OkLabFromSrgb8(185, 162, 120)); // straw-tan
 }
 
 /// <summary>
@@ -685,22 +651,36 @@ public static class CampanulaPoscharskyanaPreset
 public static class FragariaRuegenPreset
 {
     public static ColorCurve Lifecycle => new ColorCurve()
-        .Add(0.00f, ColorUtils.OkLabFromSrgb8(147, 205, 122)) // fresh: light, clean green
-        .Add(0.20f, ColorUtils.OkLabFromSrgb8(104, 172,  82)) // expanding: vivid green
-        .Add(0.50f, ColorUtils.OkLabFromSrgb8( 76, 145,  66)) // mature: medium/deep green
-        .Add(0.80f, ColorUtils.OkLabFromSrgb8( 69, 136,  61)) // adult
-        .Add(1.00f, ColorUtils.OkLabFromSrgb8( 65, 130,  58)); // full adult: stable dark green
+        .Add(0.00f, ColorUtils.OkLabFromCieLab(48f, -20f, 34f)) // fresh: light, clean green
+        .Add(0.20f, ColorUtils.OkLabFromCieLab(40f, -20f, 30f)) // expanding
+        .Add(0.50f, ColorUtils.OkLabFromCieLab(35f, -18f, 25f)) // mature: 'Ruegen' is described as dark green
+        .Add(1.00f, ColorUtils.OkLabFromCieLab(35f, -18f, 25f)); // full adult: stable dark green
 
     public static ColorCurve Stress => ColorModel.DefaultStress;
 
     public static ColorCurve SeasonalSenescence => new ColorCurve()
-        .Add(0.00f, ColorUtils.OkLabFromSrgb8(172, 176,  90)) // muted yellow-green
-        .Add(0.40f, ColorUtils.OkLabFromSrgb8(162, 140,  74)) // warm straw / bronze
-        .Add(0.75f, ColorUtils.OkLabFromSrgb8(133, 103,  58)) // straw-brown
-        .Add(1.00f, ColorUtils.OkLabFromSrgb8( 92,  69,  41)); // dry brown
+        .Add(0.00f, ColorUtils.OkLabFromCieLab(60f, 2f, 54f)) // yellow
+        .Add(0.30f, ColorUtils.OkLabFromCieLab(47f, 40f, 42f)) // orange-red
+        .Add(0.55f, ColorUtils.OkLabFromCieLab(40f, 52f, 32f)) // strong red: summer leaves load anthocyanin before they die
+        .Add(0.80f, ColorUtils.OkLabFromCieLab(35f, 30f, 20f)) // red-brown
+        .Add(1.00f, ColorUtils.OkLabFromCieLab(40f, 14f, 20f)); // brown
 
     public static ColorCurve StressSenescence => new ColorCurve()
-        .Add(0.00f, ColorUtils.OkLabFromSrgb8(116, 119,  68)) // dull olive
-        .Add(0.50f, ColorUtils.OkLabFromSrgb8(105,  84,  47)) // tan-brown
-        .Add(1.00f, ColorUtils.OkLabFromSrgb8( 79,  56,  35)); // dark brown
+        .Add(0.00f, ColorUtils.OkLabFromCieLab(42f, -4f, 24f)) // dull olive
+        .Add(0.50f, ColorUtils.OkLabFromCieLab(42f, 6f, 22f)) // khaki-brown
+        .Add(1.00f, ColorUtils.OkLabFromCieLab(42f, 10f, 20f)); // dry brown
+
+    /// <summary>
+    /// The leaves that overwinter take a bronze-red cast in the cold (anthocyanin rises in the
+    /// winter leaves too, less than in the summer leaves that die), fading again in spring.
+    /// </summary>
+    public static ColorCurve HealthySeason => new ColorCurve()
+        .Add(0.00f, new Vector3( 0.000f, 0.97f, 0.020f)) // 1 March: fading
+        .Add(0.12f, new Vector3( 0.000f, 1.00f, 0.000f)) // mid April: none
+        .Add(0.60f, new Vector3( 0.000f, 1.00f, 0.000f)) // early October
+        .Add(0.75f, new Vector3(-0.005f, 0.96f, 0.020f)) // late November
+        .Add(0.90f, new Vector3(-0.010f, 0.94f, 0.032f)) // January
+        .Add(1.00f, new Vector3(-0.010f, 0.95f, 0.030f)); // end of February
+
+    public static readonly Vector2 HealthySeasonDirection = Vector2.Normalize(new Vector2(0.85f, 0.25f));
 }

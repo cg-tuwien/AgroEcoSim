@@ -53,6 +53,7 @@ public sealed class SceneDecoder
         var doAnalytics = (flagsByte & ExportFlags.Analytics) != 0;
         scene.RootsDownloaded = doRoots;
         scene.Analytics = doAnalytics;
+        scene.OrganColors = (flagsByte & ExportFlags.OrganColors) != 0;
 
         var plantCount = checked((int)r.U32());
         scene.PlantCount = plantCount;

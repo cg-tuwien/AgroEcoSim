@@ -90,8 +90,14 @@ shrinking the canopy to save carbon removes the producers and deepens the shorta
 - **Senescing** (`LeafSenescenceStressDuration` 140 h ± 60, the previously unused setting):
   maintenance, assimilation forecast, energy and water storage all scale with the living fraction
   `1 - senescence`, so the census neither funds nor fills dying tissue. No growth, no renewal, no
-  energy death. The exported colour follows the existing senescence curve, green to yellow to brown;
-  the wire format is unchanged.
+  energy death. The exported colour follows the senescence curve and ends on a mid brown, never
+  darker than the living leaf: the stress path (dull olive, khaki, brown) for a leaf committed in
+  a drought episode, the seasonal one (yellow, then brown) for a leaf retired for carbon while the
+  plant has water. The path is stored on the leaf when it is committed (the agent's `Stress`), so
+  it does not change when the episode ends (see `ORGAN_COLORS.md`).
+- The same commitment, dead-attached period and shedding also carry the **autumn leaf loss**
+  of perennial herbs (`AutumnLeafLossFraction`), in a pass of its own after the drought and
+  carbon pass; see `ORGAN_COLORS.md`.
 - **Dead attached** for `DeadLeafAttachmentHours` (default 336 h): zero maintenance and assimilation,
   still occludes light, still collides, not counted as a leaf in `NewDay`.
 - **Detached** in two phases by the leaf's owner (first petiole segment): its children are removed,

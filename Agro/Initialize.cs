@@ -79,6 +79,7 @@ public static class Initialize
             if (custom != null) custom.InheritMissingScapeEmergence(predefined);
             result.LeafMorphology = predefined.LeafMorphology;
             result.LeafPhenology = predefined.LeafPhenology;
+            result.StemColors = predefined.StemColors;
             result.FlowerSettings = predefined.FlowerSettings;
             result.FruitSettings = predefined.FruitSettings;
         }

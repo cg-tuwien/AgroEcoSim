@@ -351,7 +351,18 @@ public partial struct AboveGroundAgent : IPlantAgent
 	[M(AI)]public readonly bool ElongationOverdue(uint timestep)
 		=> GrowthTimeVar > 0f && (timestep - BirthTime) * GrowthTimeVar >= 2f;
 
-	public float Stress { get; private set; } = 0f;
+	/// <summary>
+	/// How stressed this organ was when it began to senesce, from 0 to 1: 0 for a leaf resorbed in
+	/// autumn or retired while the plant had water (it yellows, then browns), 1 for one killed by
+	/// drought (it dries like hay: dull olive, then brown). Set once, by the commitment, and read
+	/// only for colour; zero on a living organ.
+	/// </summary>
+	/// <remarks>
+	/// The field was declared long ago as a live stress and never written, so it already sits in the
+	/// checkpointed layout. A path chosen per leaf, rather than read off the plant at export, keeps a
+	/// leaf on the path it started on when a drought episode ends.
+	/// </remarks>
+	public float Stress { get; internal set; } = 0f;
 
 	/// <summary>
 	/// Timesteps needed for the organ to die. If the process has not been started yet, the value is zero
@@ -397,11 +408,12 @@ public partial struct AboveGroundAgent : IPlantAgent
 	/// "not started" - and the duration is at least one tick: truncating a duration shorter than
 	/// a tick to zero would leave the organ senescing forever at a 48-hour step.
 	/// </summary>
-	internal void CommitDroughtSenescence(uint timestep, ushort durationTicks)
+	internal void CommitDroughtSenescence(uint timestep, ushort durationTicks, float pathStress = 0f)
 	{
 		if (SenescenceStart != 0) return;
 		SenescenceStart = Math.Max(1u, timestep);
 		SenescenceDuration = Math.Max((ushort)1, durationTicks);
+		Stress = Math.Clamp(pathStress, 0f, 1f);
 	}
 
 	/// <summary>
@@ -418,6 +430,7 @@ public partial struct AboveGroundAgent : IPlantAgent
 		BirthTime = timestep;
 		SenescenceStart = 0;
 		SenescenceDuration = 0;
+		Stress = 0f;
 	}
 
 	/// <summary>

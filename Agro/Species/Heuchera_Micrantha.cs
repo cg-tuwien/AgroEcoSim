@@ -188,14 +188,16 @@ public static class Heuchera_Micrantha_Palace_Purple
                         .Add(0.00f, new Vector3(0.00f, 1.00f, 0.00f))
                         .Add(1.00f, new Vector3(-0.04f, 0.82f, 0.01f)),
                     senescenceSeason: new ColorCurve()
-                        .Add(0.00f, ColorUtils.OkLabFromSrgb8(220, 210, 200))
-                        .Add(0.40f, ColorUtils.OkLabFromSrgb8(195, 180, 165))
-                        .Add(0.75f, ColorUtils.OkLabFromSrgb8(165, 150, 130))
-                        .Add(1.00f, ColorUtils.OkLabFromSrgb8(130, 115, 95))
+                        .Add(0.00f, ColorUtils.OkLabFromSrgb8(225, 215, 200))
+                        .Add(0.40f, ColorUtils.OkLabFromSrgb8(210, 195, 170))
+                        .Add(0.75f, ColorUtils.OkLabFromSrgb8(195, 178, 150))
+                        .Add(1.00f, ColorUtils.OkLabFromSrgb8(185, 165, 135))
                 )
             ),
 
             PetalSenescenceDurationHours = 144f,
+            // The tiny petals wither on the persistent calyx, cream to pale tan.
+            PetalAbscissionSenescence = 0.8f,
 
             BudLength = 0.004f,
             // FNA: hypanthium 1.5-3.4 mm across, so a 1.5 mm radius; at 2.5 mm the buds
@@ -305,6 +307,15 @@ public static class Heuchera_Micrantha_Palace_Purple
                     thicknessM: 0.00006f, petioleM: 0f, curvature01: 0.35f),
             },
         },
+
+        // Evergreen, but the oldest leaves die over winter and are cleared in spring.
+        AutumnLeafLossFraction = 0.3f,
+        // 'Palace Purple' carries its anthocyanin into every shoot: dull red young growth,
+        // dark red hardened stems, and a brown woody caudex.
+        StemColors = new StemColorModel(
+            young: new(140, 95, 90), mature: new(110, 60, 65),
+            old: new(95, 70, 55), dead: new(150, 125, 95),
+            matureAgeDays: 30f, oldAgeDays: 200f),
 
         LeafPhenology = new LeafPhenology(
             expectedAge: 1.5f * 365f * 24f,
@@ -936,15 +947,15 @@ public static class HeucheraMicranthaPalacePurplePreset
     public static ColorCurve Stress => ColorModel.CoolAnthocyanicStress;
 
     public static ColorCurve SeasonalSenescence => new ColorCurve()
-        .Add(0.00f, ColorUtils.OkLabFromSrgb8(112, 56, 72)) // muted wine-purple
-        .Add(0.30f, ColorUtils.OkLabFromSrgb8(120, 67, 65)) // reddish bronze
-        .Add(0.60f, ColorUtils.OkLabFromSrgb8(111, 67, 54)) // warm red-brown
-        .Add(0.82f, ColorUtils.OkLabFromSrgb8(96, 60, 46)) // brown with residual red
-        .Add(1.00f, ColorUtils.OkLabFromSrgb8(76, 49, 37)); // dry dark brown
+        .Add(0.00f, ColorUtils.OkLabFromCieLab(32f, 22f, 4f)) // muted wine-purple
+        .Add(0.30f, ColorUtils.OkLabFromCieLab(36f, 26f, 16f)) // reddish bronze
+        .Add(0.60f, ColorUtils.OkLabFromCieLab(40f, 20f, 22f)) // warm red-brown
+        .Add(0.82f, ColorUtils.OkLabFromCieLab(42f, 15f, 22f)) // brown with residual red
+        .Add(1.00f, ColorUtils.OkLabFromCieLab(44f, 12f, 22f)); // brown
 
     public static ColorCurve StressSenescence => new ColorCurve()
-        .Add(0.00f, ColorUtils.OkLabFromSrgb8(96, 51, 68)) // dull stressed burgundy
-        .Add(0.35f, ColorUtils.OkLabFromSrgb8(93, 55, 57)) // muted wine-brown
-        .Add(0.70f, ColorUtils.OkLabFromSrgb8(82, 51, 44)) // dark reddish-brown
-        .Add(1.00f, ColorUtils.OkLabFromSrgb8(65, 43, 34)); // dead dark brown
+        .Add(0.00f, ColorUtils.OkLabFromCieLab(31f, 18f, 4f)) // dull burgundy
+        .Add(0.35f, ColorUtils.OkLabFromCieLab(35f, 18f, 10f)) // wine-brown
+        .Add(0.70f, ColorUtils.OkLabFromCieLab(40f, 14f, 18f)) // reddish brown
+        .Add(1.00f, ColorUtils.OkLabFromCieLab(44f, 10f, 22f)); // dry brown
 }

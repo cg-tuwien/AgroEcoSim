@@ -195,8 +195,10 @@ namespace Agro
                             // Convert hours → ticks correctly
                             agent.SenescenceDuration = SenescenceTicks(_settings.PetalSenescenceDurationHours, formation.Plant.World.HoursPerTick);
                         }
-                        // Die only once the senescence curve has completed
-                        if (agent.Senescence(formation.Plant.World.Timestep) >= 1f)
+                        // A petal is shed where its family sheds it, not where its colour
+                        // curve runs out: a cranesbill drops its petals almost fresh, a
+                        // bellflower's corolla withers in place.
+                        if (agent.Senescence(formation.Plant.World.Timestep) >= _settings.PetalAbscissionSenescence)
                             agent.Energy = 0f;
                     }
                     else

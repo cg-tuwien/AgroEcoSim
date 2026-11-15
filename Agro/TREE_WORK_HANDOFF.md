@@ -53,6 +53,10 @@ and24,782unaffected colour comparisons. Proof ZIP40bf7759… is10,108,013bytes,
 All prior frozen render bundles remain intact. Use the separately pinned new
 renderer for later previews; do not silently replace prior visual evidence.
 
+Since 15 November 2026 that swatch is the `Old` (bark) key of the Celtis preset's
+`StemColors`, reached with girth, and the frontend map only serves frames stored before
+frame flag 4 (`Agro/ORGAN_COLORS.md`).
+
 The private61 CPU4h C0/C1 stage completed their actual31,200hour states to the
 already planned55,920hour endpoint, with no physical-request/weather-horizon/
 core change. Both final raw cold9 state/V9 pairs pass. C0 has6328AG/1724leaves,

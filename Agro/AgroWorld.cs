@@ -894,8 +894,10 @@ public partial class AgroWorld : SimulationWorld
 	// V59 retains a completed monopodial internode as wood and gives it a
 	// separate terminal bud. V58 live histories used different shoot topology.
 	// V62 corrects ordinary lateral-unit trials and skips private V60/V61 histories.
+	// V63 adds autumn leaf loss of herbaceous perennials (four values in each plant's drought
+	// state) and records each leaf's senescence colour path in the agent's former Stress field.
 	// V9 playback and the 400-byte AG / 160-byte UG layouts are unchanged.
-	public const byte CheckpointVersion = 62;
+	public const byte CheckpointVersion = 63;
 
 	/// <summary>
 	/// Everything the next step depends on that the request does not determine.

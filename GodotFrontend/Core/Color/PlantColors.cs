@@ -33,6 +33,12 @@ public static class PlantColors
     public static bool IsBackendColoredCylinder(OrganType o) =>
         o is OrganType.Petiole or OrganType.FlowerStem or OrganType.FlowerMeristem or OrganType.FlowerPedicel or OrganType.FlowerBud;
 
+    /// <summary>
+    /// The vegetative axes, which join that set only in a frame flagged <see cref="DecodedScene.OrganColors"/>: the
+    /// backend then writes their final colour, lignification and bark included. Older frames keep the wood ramp.
+    /// </summary>
+    public static bool IsFrameColoredCylinder(OrganType o) => o is OrganType.Stem or OrganType.Meristem;
+
     private static readonly RGB CeltisBark = ColorMath.FromHex("#929087");
 
     public static RGB? NaturalBark(string species) => species == "Celtis australis" ? CeltisBark : null;
@@ -69,7 +75,7 @@ public static class PlantColors
                     : Palette.GreenColors[s.IndexInPlant(i) % Palette.GreenColors.Length];
             case PrimitiveType.Cylinder:
             {
-                if (IsBackendColoredCylinder(o) && s.HasColor(i))
+                if ((IsBackendColoredCylinder(o) || (s.OrganColors && IsFrameColoredCylinder(o))) && s.HasColor(i))
                     return Wire(s, i);
                 var wood = s.Stats is null ? 0 : s.Stats[i * Stat.Count + Stat.IrradianceOrWood];
                 var bark = (o == OrganType.Stem || o == OrganType.Meristem) ? NaturalBark(s.Species[s.PlantSpecies[s.Plant[i]]]) : null;

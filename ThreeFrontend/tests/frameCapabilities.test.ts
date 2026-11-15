@@ -83,7 +83,7 @@ describe.each([7, 8, 9])('V%i frame capabilities', version => {
         const scene = decode(version, flags);
         expect(frameCapabilities(scene)).toEqual({
             version, rootsDownloaded: false, analyticsAvailable: !!(flags & 2),
-            hasRootGeometry: false, virtualRoots: false,
+            hasRootGeometry: false, virtualRoots: false, organColors: false,
         });
         expect(Array.from(scene[0].primitives[0].stats!.subarray(0, 7)))
             .toEqual(flags & 2 ? [0.25, 0.5, 2, 0, 16, 32, 64] : [0, 0, 0, 0, 0, 0, 0]);
@@ -93,7 +93,7 @@ describe.each([7, 8, 9])('V%i frame capabilities', version => {
         const scene = decode(version, flags, 'segments');
         expect(frameCapabilities(scene)).toEqual({
             version, rootsDownloaded: true, analyticsAvailable: !!(flags & 2),
-            hasRootGeometry: true, virtualRoots: false,
+            hasRootGeometry: true, virtualRoots: false, organColors: false,
         });
         expect(scene[0].primitives.map(primitive => primitive.organ)).toEqual([Organs.Leaf, Organs.Root]);
         expect(Array.from(scene[0].primitives[1].stats!.subarray(0, 7)))
@@ -104,15 +104,24 @@ describe.each([7, 8, 9])('V%i frame capabilities', version => {
         const scene = decode(version, flags, 'virtual');
         expect(frameCapabilities(scene)).toEqual({
             version, rootsDownloaded: true, analyticsAvailable: !!(flags & 2),
-            hasRootGeometry: false, virtualRoots: true,
+            hasRootGeometry: false, virtualRoots: true, organColors: false,
         });
         expect(scene[0].primitives).toHaveLength(1);
+    });
+
+    test.each([4, 5, 6, 7])('records the organ colour flag independently with flags %i', flags => {
+        const scene = decode(version, flags, 'segments');
+        expect(frameCapabilities(scene)).toEqual({
+            version, rootsDownloaded: !!(flags & 1), analyticsAvailable: !!(flags & 2),
+            hasRootGeometry: !!(flags & 1), virtualRoots: false, organColors: true,
+        });
+        expect(scene[0].primitives[0].color).toBe('#22aa33');
     });
 
     test('distinguishes an empty real root section from omitted roots', () => {
         expect(frameCapabilities(decode(version, 1, 'empty'))).toEqual({
             version, rootsDownloaded: true, analyticsAvailable: false,
-            hasRootGeometry: false, virtualRoots: false,
+            hasRootGeometry: false, virtualRoots: false, organColors: false,
         });
     });
 
@@ -121,7 +130,7 @@ describe.each([7, 8, 9])('V%i frame capabilities', version => {
         expect(scene).toEqual([]);
         expect(frameCapabilities(scene)).toEqual({
             version, rootsDownloaded: !!(flags & 1), analyticsAvailable: !!(flags & 2),
-            hasRootGeometry: false, virtualRoots: false,
+            hasRootGeometry: false, virtualRoots: false, organColors: false,
         });
     });
 });

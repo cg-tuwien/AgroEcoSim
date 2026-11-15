@@ -470,7 +470,39 @@ namespace Agro
         /// <value>Zero to one per hour; 0.01-0.014 is a time constant of three to four days.</value>
         public float ScapeGravitropicRatePerHour { get; init; }
 
-        public LeafPhenology FlowerPhenology { get; init; } = new();
+        /// <summary>
+        /// Colour of a flower bud that has not opened, in sRGB from 0 to 1.
+        /// </summary>
+        /// <remarks>
+        /// Null takes the scape's colour, or the young stem's where the scape states none: a
+        /// closed bud is a calyx, and it used to be handed <see cref="FlowerCentreColor"/>, so
+        /// a strawberry bud was a yellow bead before it had a flower to be the centre of. Set it
+        /// where the bud shows the perianth itself, as a knotweed's pink tepals do.
+        /// </remarks>
+        public Vector3? BudColor { get; init; }
+
+        /// <summary>
+        /// Colour of the petals over their life. Defaults to a white corolla that fades to cream
+        /// and withers tan; it used to default to the LEAF curve, so a species without flowers of
+        /// its own bloomed green.
+        /// </summary>
+        public LeafPhenology FlowerPhenology { get; init; } = LeafPhenology.WhitePetals;
+
+        /// <summary>
+        /// How far through its senescence a petal is shed, from 0 to 1.
+        /// </summary>
+        /// <remarks>
+        /// Petal fate is a family trait (van Doorn 2001; Woltering and van Doorn 1988).
+        /// Geraniaceae and Rosaceae drop their petals turgid, barely faded: about 0.3.
+        /// Asteraceae ligules wilt and the head closes over them: about 0.5. Campanulaceae
+        /// corollas wither in place and Polygonaceae tepals persist around the fruit: 0.8 to 1.
+        /// The petal's colour is read at senescence divided by this value, so the authored
+        /// senescence curve ends exactly where the petal falls. One, the value every flower had
+        /// before this setting existed, kept each petal until its curve had run to its last,
+        /// darkest key.
+        /// </remarks>
+        /// <value>Greater than zero, at most one.</value>
+        public float PetalAbscissionSenescence { get; init; } = 0.35f;
 
         /// <summary>
         /// Duration of visible petal senescence after the supporting flower has
@@ -595,6 +627,7 @@ namespace Agro
             RequireNonNegative(FlowerCentreRadius, nameof(FlowerCentreRadius));
             RequireSrgb(FlowerCentreColor, nameof(FlowerCentreColor));
             RequireSrgb(ScapeColor, nameof(ScapeColor));
+            RequireSrgb(BudColor, nameof(BudColor));
             RequireAngleDegrees(ScapeGravitropicSetPointAngle * 180f / MathF.PI, 90f, nameof(ScapeGravitropicSetPointAngle));
             RequireProbability(ScapeGravitropism, nameof(ScapeGravitropism));
             RequireProbability(ScapeGravitropicRatePerHour, nameof(ScapeGravitropicRatePerHour));
@@ -609,6 +642,8 @@ namespace Agro
             RequirePositive(FlowerBaseLeafPetioleLength, nameof(FlowerBaseLeafPetioleLength));
             RequirePositive(FlowerBaseLeafPetioleRadius, nameof(FlowerBaseLeafPetioleRadius));
             RequirePositive(PetalSenescenceDurationHours, nameof(PetalSenescenceDurationHours));
+            RequirePositive(PetalAbscissionSenescence, nameof(PetalAbscissionSenescence));
+            RequireProbability(PetalAbscissionSenescence, nameof(PetalAbscissionSenescence));
         }
     }
 

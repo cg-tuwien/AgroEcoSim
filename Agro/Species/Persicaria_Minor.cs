@@ -117,10 +117,14 @@ public static class Persicaria_Minor
             PetalAndPedicelGrowthDurationHours = 24f,
             FlowerMaximumAgeHours = 24f * 24f,
             PetalSenescenceDurationHours = 24f * 4f,
+            // Polygonaceae tepals do not fall: they persist around the achene, fading to a pinkish tan.
+            PetalAbscissionSenescence = 1f,
             FlowerCentreLength = 0.0005f,
             FlowerCentreRadius = 0.00035f,
             FlowerCentreColor = new(0.94f, 0.69f, 0.72f),
             ScapeColor = new(0.42f, 0.48f, 0.25f),
+            // The bud IS the closed perianth, so it shows the tepals' pink and not a calyx green.
+            BudColor = new(0.78f, 0.40f, 0.48f),
             ScapeGravitropicSetPointAngle = 15f * DegToRad,
             ScapeGravitropicRatePerHour = 0.01f,
             PetalMorphology = new()
@@ -134,21 +138,33 @@ public static class Persicaria_Minor
             },
             FlowerPhenology = new(24f * 24f, new ColorModel(
                 new ColorCurve()
-                    .Add(0f, ColorUtils.OkLabFromSrgb8(225, 130, 155))
-                    .Add(0.5f, ColorUtils.OkLabFromSrgb8(236, 155, 177))
-                    .Add(1f, ColorUtils.OkLabFromSrgb8(232, 175, 184)),
+                    .Add(0f, ColorUtils.OkLabFromCieLab(55f, 42f, 8f)) // opening: deep pink
+                    .Add(0.50f, ColorUtils.OkLabFromCieLab(58f, 38f, 6f)) // open tepals: pink
+                    .Add(1f, ColorUtils.OkLabFromCieLab(60f, 36f, 5f)),
                 ColorModel.DefaultStress,
                 new ColorCurve()
-                    .Add(0f, ColorUtils.OkLabFromSrgb8(207, 152, 157))
-                    .Add(1f, ColorUtils.OkLabFromSrgb8(118, 87, 71)))),
+                    .Add(0f, ColorUtils.OkLabFromCieLab(58f, 30f, 10f)) // tepals persisting round the fruit
+                    .Add(1f, ColorUtils.OkLabFromCieLab(55f, 16f, 18f)))), // pinkish tan
         },
         LeafMorphology = VolunteerLeafMorphologies.PersicariaMinor,
+        // Green shoots that redden as they harden, darkest at the swollen nodes; the dead
+        // annual stem is a reddish straw.
+        StemColors = new StemColorModel(
+            young: new(150, 180, 100), mature: new(160, 110, 95),
+            old: new(135, 90, 75), dead: new(150, 115, 85),
+            matureAgeDays: 25f, oldAgeDays: 140f),
         LeafPhenology = new(24f * 90f, new ColorModel(
             new ColorCurve()
-                .Add(0f, ColorUtils.OkLabFromSrgb8(140, 182, 93))
-                .Add(0.5f, ColorUtils.OkLabFromSrgb8(76, 136, 57))
-                .Add(1f, ColorUtils.OkLabFromSrgb8(69, 124, 52)),
-            ColorModel.DefaultStress, ColorModel.DefaultSeasonalSenescence,
+                .Add(0f, ColorUtils.OkLabFromCieLab(52f, -18f, 34f)) // young
+                .Add(0.50f, ColorUtils.OkLabFromCieLab(40f, -18f, 28f)) // mature
+                .Add(1f, ColorUtils.OkLabFromCieLab(40f, -18f, 28f)),
+            ColorModel.DefaultStress,
+            // Knotweed leaves yellow and then flush red before they brown.
+            new ColorCurve()
+                .Add(0f, ColorUtils.OkLabFromCieLab(66f, 2f, 56f)) // yellow
+                .Add(0.40f, ColorUtils.OkLabFromCieLab(48f, 32f, 36f)) // red flush
+                .Add(0.75f, ColorUtils.OkLabFromCieLab(44f, 20f, 26f)) // red-brown
+                .Add(1f, ColorUtils.OkLabFromCieLab(45f, 12f, 22f)), // brown
             ColorModel.DefaultStressSenescence)),
     };
 }
