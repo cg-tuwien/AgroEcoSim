@@ -1066,6 +1066,21 @@ Honest list of what still does not match:
   clear are the ones whose sweep already stops at its first interval. Do not build it again
   without first counting where the sweep's intervals go (`TREE_PERFORMANCE.md`, the facade
   section). Parallel `memmove` of the agent arrays was slower than one core, too.
+- **Verify against a snapshot while another session works in this checkout.** Concurrent work
+  raised the live checkpoint version to 63 and changes results, so the frozen baseline and its
+  checkpoints are retired: copy the sources (`~/greenfdt-fixtures/snap/<name>`, sources only, built
+  and restored there), build reference and candidate from copies, compare with `ab63.sh` on
+  `runs63/` and the facade states in `probe-facade/states-1115/`, and make the stress build with
+  `stress-snap.sh` - `stress.sh` rewrites the shared sources while it builds.
+- **The facade's exact push rounds are a speed-for-growth trade, measured, not decided**:
+  `AGRO_CollisionHardRounds` (default 8) and `AGRO_ExactRoundsStallRatio` (default 0 = off; 0.9
+  stops a plant's rounds once they stop shrinking). 3 rounds took 27 % off 240 steps of bloom and
+  7 % of the floral organs; the stall stop 22 % and 4 %. See `TREE_PERFORMANCE.md`, facade section.
+- **Open defect: a rod lying on a tray rim can read as centimetres inside the wall**
+  (`StaticCollider.Contact` takes the plane depth whenever the rod's nearest point is behind the
+  face as oriented by the trusted point, also at a triangle's edge where that side is
+  ill-defined). Five facade Heuchera petioles sit "52 mm inside" while resting 0.1 mm clear of the
+  rim, and are set aside as unresolvable.
 - **`dotnet-trace` is installed** (`~/.dotnet/tools/dotnet-trace collect --profile
   dotnet-sampled-thread-time -- dotnet ...`). Read shares from it, not milliseconds, and do not
   trust the exclusive time of a small method called millions of times: a sample lands where a

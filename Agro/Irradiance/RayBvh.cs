@@ -174,7 +174,12 @@ public struct BvhBuilder
 		return new BvhNode { Min = min, Max = max, Left = first, Count = count };
 	}
 
-	void Subdivide(int nodeIndex, int depth)
+	void Subdivide(int nodeIndex, int depth) => Subdivide(nodeIndex, depth, default, default, false);
+
+	/// <param name="centroidsKnown">The node's centroid bounds are given in
+	/// <paramref name="knownCentroidMin"/> and <paramref name="knownCentroidMax"/>, because the
+	/// partition that made the node gathered them (<see cref="Partition"/>).</param>
+	void Subdivide(int nodeIndex, int depth, Vector3 knownCentroidMin, Vector3 knownCentroidMax, bool centroidsKnown)
 	{
 		var node = Nodes[nodeIndex];
 		if (node.Count <= MaxLeaf || depth >= MaxDepth || AllocNext + 2 > AllocEnd)
@@ -189,13 +194,18 @@ public struct BvhBuilder
 		var count = node.Count;
 
 		//Centroid bounds decide where the bins go; object bounds decide their cost.
-		var centroidMin = new Vector3(float.MaxValue);
-		var centroidMax = new Vector3(float.MinValue);
-		for (int i = first; i < first + count; ++i)
+		var centroidMin = knownCentroidMin;
+		var centroidMax = knownCentroidMax;
+		if (!centroidsKnown)
 		{
-			var c = (Items[i].Min + Items[i].Max) * 0.5f;
-			centroidMin = Vector3.Min(centroidMin, c);
-			centroidMax = Vector3.Max(centroidMax, c);
+			centroidMin = new Vector3(float.MaxValue);
+			centroidMax = new Vector3(float.MinValue);
+			for (int i = first; i < first + count; ++i)
+			{
+				var c = (Items[i].Min + Items[i].Max) * 0.5f;
+				centroidMin = Vector3.Min(centroidMin, c);
+				centroidMax = Vector3.Max(centroidMax, c);
+			}
 		}
 
 		var bestCost = float.MaxValue;
@@ -274,37 +284,74 @@ public struct BvhBuilder
 		if (bestAxis < 0 || bestCost >= leafCost)
 			return;
 
-		var mid = Partition(first, count, bestAxis, bestSplit);
+		var mid = Partition(first, count, bestAxis, bestSplit, out var sides);
 		if (mid == first || mid == first + count)
 			return;
 
 		var left = AllocNext;
 		AllocNext += 2;
-		Nodes[left] = MakeLeaf(first, mid - first);
-		Nodes[left + 1] = MakeLeaf(mid, first + count - mid);
+		Nodes[left] = new BvhNode { Min = sides.LeftMin, Max = sides.LeftMax, Left = first, Count = mid - first };
+		Nodes[left + 1] = new BvhNode { Min = sides.RightMin, Max = sides.RightMax, Left = mid, Count = first + count - mid };
 		node.Left = left;
 		node.Count = 0;
 		Nodes[nodeIndex] = node;
 
-		Subdivide(left, depth + 1);
-		Subdivide(left + 1, depth + 1);
+		Subdivide(left, depth + 1, sides.LeftCentroidMin, sides.LeftCentroidMax, true);
+		Subdivide(left + 1, depth + 1, sides.RightCentroidMin, sides.RightCentroidMax, true);
 	}
 
-	int Partition(int first, int count, int axis, float split)
+	/// <summary>What <see cref="Partition"/> gathers about each side while it sorts the items:
+	/// the bounds that make the side's node, and the centroid bounds its own split starts from.</summary>
+	struct PartitionSides
 	{
+		public Vector3 LeftMin, LeftMax, RightMin, RightMax;
+		public Vector3 LeftCentroidMin, LeftCentroidMax, RightCentroidMin, RightCentroidMax;
+	}
+
+	/// <summary>
+	/// Sorts the items to the two sides of a split and gathers each side's bounds and centroid
+	/// bounds on the way.
+	/// </summary>
+	/// <remarks>
+	/// An item's side is settled the moment it is examined: an item that goes left stays where it
+	/// is, one that goes right is swapped to the far end and never looked at again. So each item
+	/// is added to its side's bounds exactly once, and those bounds - a minimum and a maximum over
+	/// the same items - are the ones a separate pass over each side afterwards found. That pass,
+	/// and the pass each side's own split began with to find its centroid bounds, were two of the
+	/// four passes over the items each level of the hierarchy made.
+	/// </remarks>
+	int Partition(int first, int count, int axis, float split, out PartitionSides sides)
+	{
+		var empty = new Vector3(float.MaxValue); var none = new Vector3(float.MinValue);
+		Vector3 leftMin = empty, leftMax = none, rightMin = empty, rightMax = none;
+		Vector3 leftCentroidMin = empty, leftCentroidMax = none, rightCentroidMin = empty, rightCentroidMax = none;
 		var i = first;
 		var j = first + count - 1;
 		while (i <= j)
 		{
-			var c = (Component(Items[i].Min, axis) + Component(Items[i].Max, axis)) * 0.5f;
+			var item = Items[i];
+			var c = (Component(item.Min, axis) + Component(item.Max, axis)) * 0.5f;
+			var centroid = (item.Min + item.Max) * 0.5f;
 			if (c < split)
+			{
+				leftMin = Vector3.Min(leftMin, item.Min); leftMax = Vector3.Max(leftMax, item.Max);
+				leftCentroidMin = Vector3.Min(leftCentroidMin, centroid); leftCentroidMax = Vector3.Max(leftCentroidMax, centroid);
 				++i;
+			}
 			else
 			{
+				rightMin = Vector3.Min(rightMin, item.Min); rightMax = Vector3.Max(rightMax, item.Max);
+				rightCentroidMin = Vector3.Min(rightCentroidMin, centroid); rightCentroidMax = Vector3.Max(rightCentroidMax, centroid);
 				(Items[i], Items[j]) = (Items[j], Items[i]);
 				--j;
 			}
 		}
+		sides = new PartitionSides
+		{
+			LeftMin = leftMin, LeftMax = leftMax, RightMin = rightMin, RightMax = rightMax,
+			LeftCentroidMin = leftCentroidMin, LeftCentroidMax = leftCentroidMax,
+			RightCentroidMin = rightCentroidMin, RightCentroidMax = rightCentroidMax,
+		};
 		return i;
 	}
 

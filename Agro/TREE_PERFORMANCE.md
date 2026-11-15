@@ -347,11 +347,49 @@ What was changed, all of it in `StaticCollider.Lamina.cs`:
 
 What is left there, in the order of what it would buy:
 
-- **The eight rounds.** A plant whose only inadmissible organs are ones a push cannot help still
-  runs every round and re-tests itself each time. Ending the rounds when a round queued pushes
-  only for organs it had already pushed without effect, or not re-pushing an organ whose
-  inadmissibility is a crossing, would remove most of the 4.5 tests per organ - and changes
-  results, so it is a proposal, not something done here.
+- **The eight rounds: measured, a decision for whoever runs the facade** (15 November 2026).
+  `AGRO_CollisionHardRounds` sets how many exact push rounds the mixed engine runs (8 by
+  default), and `AGRO_ExactRoundsStallRatio` (0 = off, the default) ends a plant's rounds after
+  the third once a round's total pushed depth is more than that share of the round before.
+  Neither is exact; both leave the admissibility pass after them unchanged, so nothing ends a
+  tick inside a solid that would not have anyway. Same build, same stored state, 240 steps from
+  step 480 (late March to early May, the bloom), the facade's 4,134 plants:
+
+  | setting | 240 steps | last 40 steps | organs | floral | leaves | leaf area | unresolved |
+  | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+  | 8 rounds (default) | 341 s | 2,656 ms | 702,170 | 71,072 | 62,162 | 198.8 m2 | 444 |
+  | stall stop at 0.9 | 265 s | 1,899 ms | 699,487 | 68,450 | 62,154 | 197.9 m2 | 263 |
+  | 3 rounds | 250 s | 1,726 ms | 697,027 | 65,917 | 62,162 | 196.7 m2 | 296 |
+  | 2 rounds | 276 s | 1,706 ms | 696,515 | 65,509 | 62,126 | 193.1 m2 | 308 |
+  | 1 round | 246 s | 2,208 ms | 691,762 | 60,708 | 62,134 | 187.7 m2 | 255 |
+
+  The 2- and 1-round rows come from an earlier run with an interval disturbed by another
+  process; the first three rows were run back to back. Why it works: over 20 ticks every plant
+  enters the rounds; 62 % still push after the first, 45 % after the second, and from the fifth
+  round on about 850 plants a tick go on pushing the same organs without resolving them, each
+  round re-testing the whole plant because a push turns joints down to the crown. Fewer rounds
+  shift work to the admissibility pass - more redirects, shortenings and rollbacks
+  (`enforcedPlantTicks` 357,141 -> 400,439 at the stall stop, 456,221 at 3 rounds) - which is
+  where the floral organs go: the bloom's scapes and pedicels are what grows into the trays
+  in May.
+- **A false contact: petioles lying on a tray rim read as 5 cm inside the wall.** Five
+  Heuchera petioles (organ 9 or 24, 108-125 mm long) sit "52-54 mm inside" a tray wall from the
+  day they stop growing, are set aside by the escalation as unresolvable and stay there; the
+  same organs with the same depths at the committed code, so it predates everything here.
+  Followed tick by tick (plant 477): the petiole's pose is bitwise unchanged from step 499 to
+  500 while its depth goes from 0 to 53.68 mm, and its axis is 2.26 mm from the nearest wall
+  triangle against a 2.16 mm radius - it rests on the rim, clear of it. The rod test
+  (`StaticCollider.Contact`) orients the nearest triangle's normal towards the organ's trusted
+  point - the midpoint of its previous pose - and uses the plane depth whenever the rod's
+  nearest point lies behind that face. At a rim the nearest point is on the triangle's edge,
+  the direction from it to the rod runs nearly along the face, and the side comes down to where
+  the organ's own midpoint sits: once growth stopped and the previous pose became the current
+  one, it moved 0.9 mm past the face's plane and the whole overhang counted as depth. The
+  code's own comment says the plane depth is meant for an intersection only. Over 20 ticks the
+  facade has 13,363 rod contacts with obstacles, 1,286 of them on the plane-depth branch with
+  the rod not touching the triangle (some may be rods genuinely inside a thick solid) - a
+  correctness defect, not a cost driver. Blades take the plane depth only when they intersect
+  and are not affected. Not fixed here: it changes contact verdicts.
 - **A true blade clearance: built, measured, and taken out again.** A lower bound on a blade's
   distance to every obstacle triangle - the larger of the box gap and the gap along the
   triangle's own normal, from the blade's vertices, which is a separating-axis bound and needs
@@ -367,7 +405,7 @@ What is left there, in the order of what it would buy:
   within one tick's motion of a wall, where no clearance bound decides anything - the
   subdivision exists because the distance at the half-way pose leaves no margin. The prototype
   is kept as `rejected/blade-clearance-cache.patch` in the fixtures. What would reduce the
-  facade's solid pass is fewer tests per organ, i.e. the rounds proposal above.
+  facade's solid pass is fewer tests per organ, i.e. the rounds above.
 - The foliage pass (a fifth of the tick) and the light gather (5 %) are as they were.
 
 ## The serial rest of a tree's tick: the contact replay and the census (15 November 2026)
@@ -465,6 +503,49 @@ system, `FinishUpdate` itself 29.5 -> 16 and 18 -> 9.5 ms, the children lists 6 
   now taken on all cores (`TreeCacheData.UpdateHeight`).
 - The statistics array of the pair evaluation was reallocated to exactly the chunk count, i.e.
   on every tick with a birth (10 MB here); it grows by half now.
+
+## The light scene of a fruiting tree (15 November 2026)
+
+Acer 'Globosum' in summer spends a third of its tick building the light scene: at year 11 it puts
+753,000 primitives into it, most of them the triangles of its samaras, and the build took 89-93
+of a 231-233 ms tick - the hierarchy 64 ms (39 of them in the top levels, built on one thread
+until a node holds 16,384 items), the fill 19 ms (one thread, because the existing parallel loop
+is over plants). Two exact changes, measured back to back with the builds alternating:
+
+| checkpoint | organs | scene build before | after | median tick before | after |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Acer, year 11, mid-August | 42,525 | 92.8 ms | 78.5-80.7 ms | 231-233 ms | 214-220 ms |
+| Celtis, year 11, mid-August | 65,250 | 18.1-18.8 ms | 17.2-18.0 ms | within noise | |
+| Amelanchier, year 12, mid-August | 21,651 | 8.3-8.8 ms | 8.6-8.8 ms | within noise | |
+
+- **The partition gathers what the next level needs.** Each level of a binned SAH build made four
+  passes over its items: centroid bounds, bins, the partition, and the two children's bounds. An
+  item's side is settled the moment the partition examines it - it stays, or it is swapped to the
+  far end and never looked at again - so the partition adds it to its side's bounds and centroid
+  bounds there, and the children start from those (`BvhBuilder.Partition`). Minimums and maximums
+  over the same items: the same hierarchy, two passes fewer per level.
+- **The fill of a large plant runs on all cores** (`CpuLightSolver.FillPlantOnAllCores`, above
+  16,384 organs, plants whose blades do not fold): each organ's primitive and sensor count, a
+  running sum for positions, then every organ written at its position by the same per-organ code
+  the plain loop now calls (`FillOrgan`). Its count buffers are rented per call: the fill is
+  itself called from a parallel loop over plants, and the first version kept them in fields of
+  the solver - the stress build, where every plant takes this path, crashed on it, and a stand of
+  several large trees would have raced the same way.
+- **Tried and taken out: the top levels' passes on several cores.** The minimum, maximum and count
+  passes split into chunks give the same hierarchy, and made the top levels slower, 38-39 ms ->
+  48 ms: the 21 MB item array then spreads over both of this processor's core complexes, and the
+  partition, which has to stay on one thread (it swaps from both ends in an order that depends on
+  what it finds), pulls it back. The facade did not change either way.
+
+Verification of this round is against a **snapshot of the current sources**, not the frozen
+baseline: the live checkpoint version went from 62 to 63 with concurrent work on the organ
+colours and the autumn leaf loss, which also changes results, so neither the old checkpoints nor
+the old baseline can be compared to any more. `~/greenfdt-fixtures/snap/1115a` is the snapshot
+(sources only, built and restored there, so it neither depends on nor disturbs the shared
+checkout), `runs63/` holds new fixtures grown with it (Celtis and Acer to year 11, Amelanchier to
+year 12), `probe-facade/states-1115/` the facade at steps 240 and 480, `ab63.sh` compares two
+probe builds on `runs63/`, and `stress-snap.sh` makes the stress build from a snapshot copy
+instead of rewriting the shared checkout.
 
 ## How "exact" is checked
 

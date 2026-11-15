@@ -198,6 +198,13 @@ public sealed class RayScene
 	/// <see cref="BuildPlants"/>.</summary>
 	public Span<RayPrimitive> PlantPrimitives(int plant) => PrimsBuild.AsSpan(PlantPrimFirst[plant] - StaticPrimCount, PlantPrimCount[plant]);
 
+	/// <summary>The same slice as an array and a start, for a fill that writes it from several threads.</summary>
+	internal RayPrimitive[] PlantPrimitiveArray(int plant, out int start)
+	{
+		start = PlantPrimFirst[plant] - StaticPrimCount;
+		return PrimsBuild;
+	}
+
 	/// <summary>Builds the vegetation hierarchy and the two-blob top level.</summary>
 	public void BuildPlants()
 	{

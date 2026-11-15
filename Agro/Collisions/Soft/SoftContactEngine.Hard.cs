@@ -160,25 +160,33 @@ public sealed partial class SoftContactEngine
     bool ExactPushRounds(PlantFormation2 plant, SoftWork work, bool allAdmissible = false)
     {
         var ag = plant.AG; var moved = false;
+        var previousDepth = double.PositiveInfinity;
         for (int round = 0; round < CollisionSettings.HardRounds; ++round)
         {
             ag.BeginContactSweep(resetDiagnostics: false);
-            var queued = 0;
+            var queued = 0; var pushedDepth = 0.0;
             for (int i = 0; !allAdmissible && i < ag.Count; ++i)
             {
                 if (!CollisionWorld.Eligible(ag, i) || World.StaticAdmissible(plant, i, work.Admission)) continue;
                 var shape = CollisionWorld.Shape(ag, i);
                 var trusted = CollisionWorld.TrustedPoint(plant, i);
                 if (CollisionSettings.ObstaclePass && Static.ShapeContact(shape, trusted, StaticSurface.Obstacle, out var point, out var normal, out var depth)
-                    && ag.QueueContactCorrection(i, point, normal, depth + CollisionSettings.ContactTolerance)) { ++queued; ++work.Obstacle; }
+                    && ag.QueueContactCorrection(i, point, normal, depth + CollisionSettings.ContactTolerance)) { ++queued; ++work.Obstacle; pushedDepth += depth; }
                 if (CollisionSettings.SoilPass && World.SoilEligible(ag, i, shape.Pose)
                     && Static.ShapeContact(shape, trusted, StaticSurface.Soil, out point, out normal, out depth)
-                    && ag.QueueContactCorrection(i, point, normal, depth + CollisionSettings.ContactTolerance)) { ++queued; ++work.Soil; }
+                    && ag.QueueContactCorrection(i, point, normal, depth + CollisionSettings.ContactTolerance)) { ++queued; ++work.Soil; pushedDepth += depth; }
                 if (TraceSolids) Console.WriteLine($"SOLID_EXACT t={plant.World.Timestep} round={round} organ={i} {ag.GetOrgan(i)} queued={queued}");
             }
             ++work.ExactRounds;
             if (queued == 0 || !ag.EndContactSweep(CollisionSettings.MaxCorrectionRadians)) break;
             moved = true;
+            // Optional (off by default): a plant whose pushes no longer shrink - the same organs
+            // pushed by about the same total depth as the round before - stops pushing; the
+            // admissibility pass that follows deals with what is left, as it does after the last
+            // round anyway.
+            if (CollisionSettings.ExactRoundsStallRatio > 0f && round >= CollisionSettings.ExactRoundsBeforeStall
+                && pushedDepth > CollisionSettings.ExactRoundsStallRatio * previousDepth) break;
+            previousDepth = pushedDepth;
         }
         return moved;
     }

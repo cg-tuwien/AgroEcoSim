@@ -16,6 +16,11 @@ public static class CollisionSettings
     public static bool InterPlantPass { get; set; } = Environment.GetEnvironmentVariable("AGRO_NoInterPlantPass") == null;
 
     /// <summary>Alternating solid and foliage relaxation sweeps before validated rollback.</summary>
+    /// <summary>Mixed engine: ends a plant's exact push rounds once a round's total pushed depth is
+    /// more than this share of the round before (0 = off, all <see cref="HardRounds"/> rounds run).</summary>
+    public static float ExactRoundsStallRatio { get; set; } = FloatFromEnv("AGRO_ExactRoundsStallRatio", 0f, 0f, 1f);
+    /// <summary>Exact push rounds always run before the stall test can end them.</summary>
+    public static int ExactRoundsBeforeStall { get; set; } = IntFromEnv("AGRO_ExactRoundsBeforeStall", 2, 0, 16);
     public static int HardRounds { get; set; } = IntFromEnv("AGRO_CollisionHardRounds", 8, 1, 16);
     /// <summary>Per-sweep correction cap, independent of the cumulative joint limit.</summary>
     public static float MaxCorrectionDegrees { get; set; } = FloatFromEnv("AGRO_MaxCorrectionDeg", 5f, .1f, 45f);

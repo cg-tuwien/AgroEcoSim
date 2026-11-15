@@ -361,8 +361,11 @@ public sealed partial class CpuLightSolver
 			organs.AsSpan(ag.Count).Fill(-1);
             FoldedLeafSensor[]? folded=null;
             FoldedSensors?.TryGetValue(i,out folded);
-			FillPlant(ag, FirstPlantGroup + i, Scene.PlantPrimitives(i), organs.AsSpan(0, ag.Count), SensorFirst[i],folded,
-                ((PlantFormation2)formations[i]).Parameters.Behavior == Behavior.Woody ? FirstPlantGroup + slots : -1);
+            var woodyFirst = ((PlantFormation2)formations[i]).Parameters.Behavior == Behavior.Woody ? FirstPlantGroup + slots : -1;
+            if (ag.Count >= ParallelFillMinimum && !ag.HasContactDeformation && Environment.ProcessorCount > 1)
+                FillPlantOnAllCores(ag, FirstPlantGroup + i, i, organs, SensorFirst[i], woodyFirst);
+            else
+			    FillPlant(ag, FirstPlantGroup + i, Scene.PlantPrimitives(i), organs.AsSpan(0, ag.Count), SensorFirst[i],folded, woodyFirst);
 			OffsetArrays[i] = organs;
 		});
 
@@ -555,12 +558,83 @@ public sealed partial class CpuLightSolver
 		var count = ag.Count;
 		int prim = 0, sensor = 0;
 		for (int i = 0; i < count; ++i)
+			FillOrgan(ag, i, group, destination, ref prim, organOffsets, sensorFirst, ref sensor, folded, woodyFirstGroup);
+	}
+
+	/// <summary>Organs from which a plant's primitives are written on several cores.</summary>
+	const int ParallelFillMinimum = 16384;
+
+	/// <summary>
+	/// <see cref="FillPlant"/> for a large plant whose blades do not fold, on several cores.
+	/// </summary>
+	/// <remarks>
+	/// An organ's primitives, its sensor and its offset entry are a function of the organ alone;
+	/// where they go is the sum of what the organs before it put down. So each organ's count is
+	/// taken first, side by side, the positions follow from one running sum, and the organs are
+	/// then written side by side at those positions - the same primitives in the same places as
+	/// the walk over the organs one after another.
+	/// </remarks>
+	void FillPlantOnAllCores(PlantSubFormation<AboveGroundAgent> ag, int group, int slot, int[] organOffsets, int sensorFirst, int woodyFirstGroup)
+	{
+		var count = ag.Count;
+		ag.WarmLaminaCache(); // filled lazily, which only one thread at a time may do
+		// Per call: several large plants are filled at once by the loop over plants around this.
+		var primFirst = System.Buffers.ArrayPool<int>.Shared.Rent(count);
+		var sensorAt = System.Buffers.ArrayPool<int>.Shared.Rent(count);
+		CountOrgans(ag, count, primFirst, sensorAt);
+		int prims = 0, sensors = 0;
+		for (int i = 0; i < count; ++i)
 		{
+			var p = primFirst[i]; var s = sensorAt[i];
+			primFirst[i] = prims; sensorAt[i] = sensors;
+			prims += p; sensors += s;
+		}
+		var destination = Scene.PlantPrimitiveArray(slot, out var start);
+		WriteOrgans(ag, count, group, destination, start, primFirst, sensorAt, organOffsets, sensorFirst, woodyFirstGroup);
+		System.Buffers.ArrayPool<int>.Shared.Return(primFirst);
+		System.Buffers.ArrayPool<int>.Shared.Return(sensorAt);
+	}
+
+	/// <summary>What each organ puts into the scene: its primitives and its sensors.</summary>
+	void CountOrgans(PlantSubFormation<AboveGroundAgent> ag, int count, int[] prims, int[] sensors)
+		=> Parallel.ForEach(System.Collections.Concurrent.Partitioner.Create(0, count, 4096), range =>
+		{
+			for (int k = range.Item1; k < range.Item2; ++k)
+			{
+				int p = 0, s = 0;
+				switch (Classify(ag.GetOrgan(k)))
+				{
+					case PrimitiveClass.Lamina: p = 1; s = 1; break;
+					case PrimitiveClass.Cylinder: p = ag.GetContactPose(k).CurvedRod ? 5 : 1; break;
+					case PrimitiveClass.Sphere: p = 1; break;
+					case PrimitiveClass.FruitMesh: p = ag.GetLaminaTemplate(k)!.Indices.Length / 3; break;
+				}
+				prims[k] = p; sensors[k] = s;
+			}
+		});
+
+	void WriteOrgans(PlantSubFormation<AboveGroundAgent> ag, int count, int group, RayPrimitive[] destination, int start,
+		int[] primFirst, int[] sensorAt, int[] organOffsets, int sensorFirst, int woodyFirstGroup)
+		=> Parallel.ForEach(System.Collections.Concurrent.Partitioner.Create(0, count, 4096), range =>
+		{
+			var span = destination.AsSpan(start);
+			for (int i = range.Item1; i < range.Item2; ++i)
+			{
+				int prim = primFirst[i], sensor = sensorAt[i];
+				FillOrgan(ag, i, group, span, ref prim, organOffsets, sensorFirst, ref sensor, null, woodyFirstGroup);
+			}
+		});
+
+	/// <summary>One organ's primitives from <paramref name="prim"/> on, its sensor at
+	/// <paramref name="sensor"/> and its offset entry; both counters are advanced past what it used.</summary>
+	void FillOrgan(PlantSubFormation<AboveGroundAgent> ag, int i, int group, Span<RayPrimitive> destination, ref int prim,
+		Span<int> organOffsets, int sensorFirst, ref int sensor, FoldedLeafSensor[]? folded, int woodyFirstGroup)
+	{
 			organOffsets[i] = -1;
 			var organ = ag.GetOrgan(i);
 			var kind = Classify(organ);
 			if (kind == PrimitiveClass.None)
-				continue;
+				return;
 
 			//The same geometry the primitive export hands to Mitsuba: an organ grows from its base
 			//centre along the local X axis of its orientation.
@@ -654,7 +728,6 @@ public sealed partial class CpuLightSolver
 					};
 					break;
 			}
-		}
 	}
 
 	SkyInterval BuildDomes(AgroWorld world, uint timestep)
