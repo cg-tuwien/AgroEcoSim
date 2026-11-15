@@ -155,18 +155,18 @@ public static class Carex_Morrowii_Variegata
                 expectedAge: 30f * 24f,
                 colorModel: new ColorModel(
                     age: new ColorCurve()
-                        .Add(0.00f, ColorUtils.OkLabFromSrgb8(140, 135, 110))  // young greenish-brown
-                        .Add(0.25f, ColorUtils.OkLabFromSrgb8(130, 125, 100))  // developing
-                        .Add(0.70f, ColorUtils.OkLabFromSrgb8(120, 115, 90))   // mature brown
-                        .Add(1.00f, ColorUtils.OkLabFromSrgb8(110, 105, 80)),  // senescing
+                        .Add(0.00f, ColorUtils.OkLabFromSrgb8(142, 135, 100))  // young greenish-brown
+                        .Add(0.25f, ColorUtils.OkLabFromSrgb8(131, 125, 90))  // developing
+                        .Add(0.70f, ColorUtils.OkLabFromSrgb8(121, 115, 80))   // mature brown
+                        .Add(1.00f, ColorUtils.OkLabFromSrgb8(111, 105, 70)),  // senescing
                     stress: new ColorCurve()
                         .Add(0.00f, new Vector3(0.00f, 1.00f, 0.00f))
                         .Add(1.00f, new Vector3(-0.04f, 0.82f, 0.01f)),
                     senescenceSeason: new ColorCurve()
-                        .Add(0.00f, ColorUtils.OkLabFromSrgb8(135, 130, 105))
-                        .Add(0.40f, ColorUtils.OkLabFromSrgb8(125, 120, 95))
-                        .Add(0.75f, ColorUtils.OkLabFromSrgb8(125, 116, 90))
-                        .Add(1.00f, ColorUtils.OkLabFromSrgb8(125, 112, 85))
+                        .Add(0.00f, ColorUtils.OkLabFromSrgb8(137, 130, 95))
+                        .Add(0.40f, ColorUtils.OkLabFromSrgb8(126, 120, 85))
+                        .Add(0.75f, ColorUtils.OkLabFromSrgb8(127, 116, 79))
+                        .Add(1.00f, ColorUtils.OkLabFromSrgb8(128, 112, 73))
                 )
             ),
 
@@ -255,7 +255,7 @@ public static class Carex_Morrowii_Variegata
             FlowerCentreRadius = 0.0020f,
             FlowerCentreColor = new Vector3(0.36f, 0.19f, 0.11f),
             // The culm is pale green flushed red-brown below the spikes.
-            ScapeColor = new Vector3(0.38f, 0.46f, 0.22f),
+            ScapeColor = new Vector3(0.35f, 0.46f, 0.11f),
 
             // Glumes and exserted anthers rather than petals: many, 4 mm long and only
             // 0.6 mm wide, standing off the axis at about 55 degrees, cream-white.
@@ -283,8 +283,8 @@ public static class Carex_Morrowii_Variegata
         AutumnLeafLossFraction = 0.2f,
         // Green culms and tiller bases wrapped in brown sheaths; dead sedge is straw.
         StemColors = new StemColorModel(
-            young: new(150, 185, 110), mature: new(120, 150, 85),
-            old: new(110, 85, 60), dead: new(185, 165, 120),
+            young: new(120, 176, 61), mature: new(106, 154, 53),
+            old: new(117, 84, 48), dead: new(190, 165, 101),
             matureAgeDays: 30f, oldAgeDays: 200f),
 
         LeafPhenology = new LeafPhenology(

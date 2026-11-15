@@ -146,18 +146,18 @@ public static class Geranium_x_Cantabrigiense
         expectedAge: 21f * 24f,
         colorModel: new ColorModel(
             age: new ColorCurve()
-                .Add(0.00f, ColorUtils.OkLabFromSrgb8(240, 195, 210))
-                .Add(0.25f, ColorUtils.OkLabFromSrgb8(235, 180, 195))
-                .Add(0.70f, ColorUtils.OkLabFromSrgb8(225, 170, 185))
-                .Add(1.00f, ColorUtils.OkLabFromSrgb8(210, 160, 175)),
+                .Add(0.00f, ColorUtils.OkLabFromSrgb8(252, 190, 211))
+                .Add(0.25f, ColorUtils.OkLabFromSrgb8(250, 173, 195))
+                .Add(0.70f, ColorUtils.OkLabFromSrgb8(240, 163, 185))
+                .Add(1.00f, ColorUtils.OkLabFromSrgb8(223, 154, 176)),
             stress: new ColorCurve()
                 .Add(0.00f, new Vector3(0.00f, 1.00f, 0.00f))
                 .Add(1.00f, new Vector3(-0.04f, 0.80f, 0.01f)),
             senescenceSeason: new ColorCurve()
-                .Add(0.00f, ColorUtils.OkLabFromSrgb8(212, 168, 182))
-                .Add(0.40f, ColorUtils.OkLabFromSrgb8(215, 178, 188))
-                .Add(0.75f, ColorUtils.OkLabFromSrgb8(218, 187, 193))
-                .Add(1.00f, ColorUtils.OkLabFromSrgb8(220, 195, 198))
+                .Add(0.00f, ColorUtils.OkLabFromSrgb8(224, 163, 183))
+                .Add(0.40f, ColorUtils.OkLabFromSrgb8(225, 174, 188))
+                .Add(0.75f, ColorUtils.OkLabFromSrgb8(227, 184, 192))
+                .Add(1.00f, ColorUtils.OkLabFromSrgb8(227, 193, 197))
         )
     ),
 
@@ -238,8 +238,8 @@ public static class Geranium_x_Cantabrigiense
         AutumnLeafLossFraction = 0.25f,
         // Green shoots hardening olive-brown over brown creeping stems, as in G. macrorrhizum.
         StemColors = new StemColorModel(
-            young: new(150, 180, 110), mature: new(135, 120, 85),
-            old: new(110, 85, 60), dead: new(165, 140, 105),
+            young: new(122, 171, 63), mature: new(139, 120, 70),
+            old: new(117, 84, 48), dead: new(172, 139, 89),
             matureAgeDays: 30f, oldAgeDays: 200f),
 
         LeafPhenology = new LeafPhenology(

@@ -76,7 +76,7 @@ public static class Initialize
         // named preset. Do not replace result afterwards or every numeric override is lost.
         if (result != null && predefined != null)
         {
-            if (custom != null) custom.InheritMissingScapeEmergence(predefined);
+            if (custom != null) custom.InheritMissing(predefined);
             result.LeafMorphology = predefined.LeafMorphology;
             result.LeafPhenology = predefined.LeafPhenology;
             result.StemColors = predefined.StemColors;

@@ -118,18 +118,18 @@ public static class Bergenia_Cordifolia
             expectedAge: 504f,
             colorModel: new ColorModel(
                 age: new ColorCurve()
-                    .Add(0.00f, ColorUtils.OkLabFromCieLab(58f, 56f, -6f)) // opening
-                    .Add(0.25f, ColorUtils.OkLabFromCieLab(54f, 58f, -6f))
-                    .Add(0.50f, ColorUtils.OkLabFromCieLab(52f, 57f, -5f)) // open: bright magenta pink
-                    .Add(1.00f, ColorUtils.OkLabFromCieLab(47f, 52f, -4f)),
+                    .Add(0.00f, ColorUtils.OkLabFromCieLab(58f, 65f, -7f)) // opening
+                    .Add(0.25f, ColorUtils.OkLabFromCieLab(54f, 66f, -7f))
+                    .Add(0.50f, ColorUtils.OkLabFromCieLab(52f, 66f, -6f)) // open: bright magenta pink
+                    .Add(1.00f, ColorUtils.OkLabFromCieLab(47f, 62f, -5f)),
                 stress: new ColorCurve()
                     .Add(0.00f, new Vector3(0.00f, 1.00f, 0.00f))
                     .Add(1.00f, new Vector3(-0.04f, 0.82f, 0.01f)),
                 senescenceSeason: new ColorCurve()
-                    .Add(0.00f, ColorUtils.OkLabFromCieLab(52f, 44f, 0f)) // withering
-                    .Add(0.40f, ColorUtils.OkLabFromCieLab(50f, 30f, 10f)) // dull pink-brown
-                    .Add(0.75f, ColorUtils.OkLabFromCieLab(50f, 18f, 16f))
-                    .Add(1.00f, ColorUtils.OkLabFromCieLab(52f, 12f, 18f)) // papery brown
+                    .Add(0.00f, ColorUtils.OkLabFromCieLab(52f, 55f, 0f)) // withering
+                    .Add(0.40f, ColorUtils.OkLabFromCieLab(50f, 41f, 14f)) // dull pink-brown
+                    .Add(0.75f, ColorUtils.OkLabFromCieLab(50f, 25f, 22f))
+                    .Add(1.00f, ColorUtils.OkLabFromCieLab(52f, 17f, 25f)) // papery brown
                 )
             ),
 
@@ -143,7 +143,7 @@ public static class Bergenia_Cordifolia
             FlowerMaximumAgeHours = 504u,
 
             // The scape is a thick fleshy RED stem, and the panicle is dense pink bells.
-            ScapeColor = new Vector3(0.62f, 0.24f, 0.26f),
+            ScapeColor = new Vector3(0.68f, 0.18f, 0.23f),
             // Return a deflected basal scape toward vertical over several short
             // segments rather than making a sharp elbow after its first segment.
             ScapeGravitropism = 0.5f,
@@ -224,8 +224,8 @@ public static class Bergenia_Cordifolia
         // The crown axis is a thick rhizome: green only at the growing tip, then olive,
         // then dark brown under the scars of old leaf bases.
         StemColors = new StemColorModel(
-            young: new(125, 150, 85), mature: new(115, 105, 70),
-            old: new(95, 72, 52), dead: new(150, 120, 90),
+            young: new(113, 154, 53), mature: new(118, 105, 55),
+            old: new(100, 71, 41), dead: new(158, 117, 75),
             matureAgeDays: 30f, oldAgeDays: 200f),
 
         LeafPhenology = new LeafPhenology(

@@ -189,9 +189,9 @@ public static class Heuchera_Micrantha_Palace_Purple
                         .Add(1.00f, new Vector3(-0.04f, 0.82f, 0.01f)),
                     senescenceSeason: new ColorCurve()
                         .Add(0.00f, ColorUtils.OkLabFromSrgb8(225, 215, 200))
-                        .Add(0.40f, ColorUtils.OkLabFromSrgb8(210, 195, 170))
-                        .Add(0.75f, ColorUtils.OkLabFromSrgb8(195, 178, 150))
-                        .Add(1.00f, ColorUtils.OkLabFromSrgb8(185, 165, 135))
+                        .Add(0.40f, ColorUtils.OkLabFromSrgb8(215, 194, 159))
+                        .Add(0.75f, ColorUtils.OkLabFromSrgb8(200, 177, 138))
+                        .Add(1.00f, ColorUtils.OkLabFromSrgb8(191, 164, 122))
                 )
             ),
 
@@ -277,7 +277,7 @@ public static class Heuchera_Micrantha_Palace_Purple
             FlowerStemSegmentGrowthDurationHours = 26f,
 
             // The axis is "slender, wiry, dark red" (MOBOT), beetroot maroon.
-            ScapeColor = new Vector3(0.42f, 0.13f, 0.19f),
+            ScapeColor = new Vector3(0.46f, 0.07f, 0.18f),
             // What the eye reads as the flower is the campanulate hypanthium: a bell
             // 2.5-4.5 mm long with a 1.5-3.4 mm mouth, greenish white flushed pink.
             FlowerCentreLength = 0.0035f,
@@ -313,8 +313,8 @@ public static class Heuchera_Micrantha_Palace_Purple
         // 'Palace Purple' carries its anthocyanin into every shoot: dull red young growth,
         // dark red hardened stems, and a brown woody caudex.
         StemColors = new StemColorModel(
-            young: new(140, 95, 90), mature: new(110, 60, 65),
-            old: new(95, 70, 55), dead: new(150, 125, 95),
+            young: new(152, 90, 83), mature: new(122, 52, 61),
+            old: new(102, 67, 47), dead: new(157, 124, 81),
             matureAgeDays: 30f, oldAgeDays: 200f),
 
         LeafPhenology = new LeafPhenology(
@@ -923,11 +923,11 @@ public static class Heuchera_Micrantha_Palace_Purple
 public static class HeucheraMicranthaPalacePurplePreset
 {
     public static ColorCurve Lifecycle => new ColorCurve()
-        .Add(0.00f, ColorUtils.OkLabFromSrgb8(154, 86, 112)) // fresh leaf: lighter raspberry-plum
-        .Add(0.20f, ColorUtils.OkLabFromSrgb8(132, 65, 94)) // expanding: rich red-purple
-        .Add(0.50f, ColorUtils.OkLabFromSrgb8(108, 51, 76)) // mature: burgundy-purple
-        .Add(0.80f, ColorUtils.OkLabFromSrgb8(91, 43, 65)) // adult: deep wine-purple
-        .Add(1.00f, ColorUtils.OkLabFromSrgb8(78, 37, 56)); // full adult: dark muted burgundy
+        .Add(0.00f, ColorUtils.OkLabFromSrgb8(169, 75, 114)) // fresh leaf: lighter raspberry-plum
+        .Add(0.20f, ColorUtils.OkLabFromSrgb8(146, 52, 97)) // expanding: rich red-purple
+        .Add(0.50f, ColorUtils.OkLabFromSrgb8(121, 39, 78)) // mature: burgundy-purple
+        .Add(0.80f, ColorUtils.OkLabFromSrgb8(102, 33, 68)) // adult: deep wine-purple
+        .Add(1.00f, ColorUtils.OkLabFromSrgb8(88, 28, 58)); // full adult: dark muted burgundy
 
     public static ColorCurve HealthySeason => new ColorCurve()
         .Add(0.00f, new Vector3(0.004f, 1.06f, 0.012f)) // early spring: fresh, slightly stronger purple
@@ -947,15 +947,15 @@ public static class HeucheraMicranthaPalacePurplePreset
     public static ColorCurve Stress => ColorModel.CoolAnthocyanicStress;
 
     public static ColorCurve SeasonalSenescence => new ColorCurve()
-        .Add(0.00f, ColorUtils.OkLabFromCieLab(32f, 22f, 4f)) // muted wine-purple
-        .Add(0.30f, ColorUtils.OkLabFromCieLab(36f, 26f, 16f)) // reddish bronze
-        .Add(0.60f, ColorUtils.OkLabFromCieLab(40f, 20f, 22f)) // warm red-brown
-        .Add(0.82f, ColorUtils.OkLabFromCieLab(42f, 15f, 22f)) // brown with residual red
-        .Add(1.00f, ColorUtils.OkLabFromCieLab(44f, 12f, 22f)); // brown
+        .Add(0.00f, ColorUtils.OkLabFromCieLab(32f, 31f, 6f)) // muted wine-purple
+        .Add(0.30f, ColorUtils.OkLabFromCieLab(36f, 36f, 22f)) // reddish bronze
+        .Add(0.60f, ColorUtils.OkLabFromCieLab(40f, 28f, 30f)) // warm red-brown
+        .Add(0.82f, ColorUtils.OkLabFromCieLab(42f, 21f, 31f)) // brown with residual red
+        .Add(1.00f, ColorUtils.OkLabFromCieLab(44f, 17f, 31f)); // brown
 
     public static ColorCurve StressSenescence => new ColorCurve()
-        .Add(0.00f, ColorUtils.OkLabFromCieLab(31f, 18f, 4f)) // dull burgundy
-        .Add(0.35f, ColorUtils.OkLabFromCieLab(35f, 18f, 10f)) // wine-brown
-        .Add(0.70f, ColorUtils.OkLabFromCieLab(40f, 14f, 18f)) // reddish brown
-        .Add(1.00f, ColorUtils.OkLabFromCieLab(44f, 10f, 22f)); // dry brown
+        .Add(0.00f, ColorUtils.OkLabFromCieLab(31f, 25f, 6f)) // dull burgundy
+        .Add(0.35f, ColorUtils.OkLabFromCieLab(35f, 25f, 14f)) // wine-brown
+        .Add(0.70f, ColorUtils.OkLabFromCieLab(40f, 20f, 25f)) // reddish brown
+        .Add(1.00f, ColorUtils.OkLabFromCieLab(44f, 14f, 31f)); // dry brown
 }

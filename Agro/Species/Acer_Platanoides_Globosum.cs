@@ -36,8 +36,8 @@ public static class Acer_Platanoides_Globosum
         // Shoots green at first, soon a shining light to reddish brown; the trunk is
         // grey-brown and darkens as it furrows.
         s.StemColors = new StemColorModel(
-            young: new(120, 150, 70), mature: new(120, 95, 60),
-            old: new(95, 90, 82), dead: new(150, 135, 115), oldRadius: .04f);
+            young: new(106, 154, 28), mature: new(125, 94, 44),
+            old: new(95, 90, 82), dead: new(154, 134, 106), oldRadius: .04f);
         s.FloweringSeasonStart = .075f;
         s.FloweringSeasonEnd = .12f;
         s.FlowerSettings = TreeSpecies.Flowers(.003f, .0015f, new(195, 207, 65));

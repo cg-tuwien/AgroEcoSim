@@ -126,11 +126,11 @@ public sealed class StemColorModel
 	/// <summary>A herbaceous stem of no particular species: fresh green, a duller hardened
 	/// green after a month, a brown base after most of a season, straw when dead.</summary>
 	public static readonly StemColorModel Herbaceous = new(
-		new(150, 185, 105), new(112, 150, 78), new(120, 105, 70), new(178, 155, 112),
+		new(121, 176, 51), new(86, 140, 44), new(124, 105, 55), new(183, 154, 93),
 		matureAgeDays: 30f, oldAgeDays: 200f);
 
 	/// <summary>A woody axis of no particular species: green shoot, brown twig, grey-brown bark.</summary>
 	public static readonly StemColorModel Woody = new(
-		new(125, 150, 80), new(120, 95, 65), new(110, 105, 98), new(150, 135, 115),
+		new(112, 154, 42), new(126, 94, 50), new(110, 105, 98), new(154, 134, 106),
 		oldRadius: 0.03f);
 }

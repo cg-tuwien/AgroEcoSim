@@ -47,8 +47,12 @@ public static class ColorUtils
     /// </summary>
     /// <remarks>
     /// Leaf, petal and dead-tissue colours are measured in CIELAB, so presets author them that
-    /// way and the value can be checked against the measurement it came from. Out-of-gamut
-    /// values are kept as they are; the wire encoding clamps.
+    /// way: the lightness and hue of the measurement, and about one and a half times its chroma.
+    /// A colorimeter reads one matte leaf surface under diffuse light; a plant on a screen has to
+    /// stand for a canopy in daylight, whose colour is deeper (light passes through leaves and
+    /// between them) and is remembered deeper still. Presets written at the measured chroma
+    /// looked washed out. Out-of-gamut values are kept as they are; the wire encoding clamps.
+    /// See "Round 3" in Agro/ORGAN_COLORS.md.
     /// </remarks>
     public static Vector3 OkLabFromCieLab(float L, float a, float b)
     {

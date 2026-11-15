@@ -46,8 +46,8 @@ public static class Celtis_Australis
         // Downy greenish-grey shoots, grey-brown twigs, and the smooth pale grey, beech-like
         // bark the species is known for (the viewers' former #929087), reached early.
         s.StemColors = new StemColorModel(
-            young: new(125, 140, 95), mature: new(115, 105, 88),
-            old: new(146, 144, 135), dead: new(150, 135, 115), oldRadius: .02f);
+            young: new(119, 143, 74), mature: new(118, 105, 81),
+            old: new(146, 144, 135), dead: new(154, 134, 106), oldRadius: .02f);
         s.FloweringSeasonStart = .10f;
         s.FloweringSeasonEnd = .20f;
         s.FlowerSettings = TreeSpecies.Flowers(.001f, .0008f, new(150, 166, 85), pedicelLength: .025f);

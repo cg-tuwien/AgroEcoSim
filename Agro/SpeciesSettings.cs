@@ -855,12 +855,17 @@ public class SpeciesSettings
     private float basalScapeEmergenceMaxTiltDegrees;
     private bool basalScapeEmergenceWasSet;
 
-    // Requests archived before this setting existed omit it. Inherit the named
-    // preset's new default in that case, while preserving an explicit zero.
-    internal void InheritMissingScapeEmergence(SpeciesSettings preset)
+    // Requests archived before a setting existed omit it, and so does a browser tab still
+    // running a bundle from before it. Inherit the named preset's value in that case, while
+    // preserving an explicit zero. The autumn leaf loss needs it for the second reason: a tab
+    // left open over the server rebuild sent no share, zero is "off", and the plant kept every
+    // leaf through the winter while the preset said it sheds half.
+    internal void InheritMissing(SpeciesSettings preset)
     {
         if (!basalScapeEmergenceWasSet)
             basalScapeEmergenceMaxTiltDegrees = preset.BasalScapeEmergenceMaxTiltDegrees;
+        if (!autumnLeafLossFractionWasSet)
+            autumnLeafLossFraction = preset.AutumnLeafLossFraction;
     }
 
     /// <summary>
@@ -1449,7 +1454,14 @@ public class SpeciesSettings
     /// </remarks>
     [SpeciesUILabel("Autumn leaf loss (share)")]
     [SpeciesUITooltip("Share of the leaf area shed each autumn, from the older summer leaves: oldest and most shaded first, through the autumn colours. 0 keeps every leaf over winter.")]
-    public float AutumnLeafLossFraction { get; set; }
+    public float AutumnLeafLossFraction
+    {
+        get => autumnLeafLossFraction;
+        set { autumnLeafLossFraction = value; autumnLeafLossFractionWasSet = true; }
+    }
+
+    private float autumnLeafLossFraction;
+    private bool autumnLeafLossFractionWasSet;
 
     /// <summary>
     /// When the autumn leaf loss begins, as a season fraction from 1 March; it runs until dormancy at

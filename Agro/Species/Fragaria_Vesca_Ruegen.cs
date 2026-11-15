@@ -248,8 +248,8 @@ public static class Fragaria_Vesca_Ruegen
         AutumnLeafLossFraction = 0.5f,
         // Hairy green stalks over a short crown that browns under its old leaf bases.
         StemColors = new StemColorModel(
-            young: new(150, 185, 105), mature: new(125, 140, 80),
-            old: new(105, 80, 55), dead: new(165, 140, 100),
+            young: new(119, 176, 51), mature: new(117, 143, 49),
+            old: new(111, 79, 43), dead: new(172, 139, 82),
             matureAgeDays: 30f, oldAgeDays: 200f),
 
         LeafPhenology = new LeafPhenology(

@@ -736,14 +736,27 @@ in mind when touching a colour:
   bark, dead; null takes the habit's default). Herb aerial stems never lignify, so they
   mature by age; trees by wood ratio, and bark comes with radius. Tabulated per species - a
   stem costs one lookup; the 169,499-organ Celtis exports in 87 ms against 90 before.
-- **Author colours as what organs measure, in CIELAB** (`ColorUtils.OkLabFromCieLab`). Once
-  the decode was fixed, the presets showed exactly what they authored, and that was pastel:
-  healthy leaves at L\* 51-64 where leaves measure 35-45 (Munsell plant-tissue 5GY 4/4), dead
-  leaves a grey tan at L\* 60. They had only looked right through the double decode.
-  **`Agro --color-selftest`** checks every preset against measured bands in milliseconds - run
-  it after touching any colour.
+- **Author colours in CIELAB at the measured lightness and hue, and about 1.5 times the measured
+  chroma** (`ColorUtils.OkLabFromCieLab`). Once the decode was fixed, the presets showed exactly
+  what they authored, and that was pastel: healthy leaves at L\* 51-64 where leaves measure 35-45
+  (Munsell plant-tissue 5GY 4/4), dead leaves a grey tan at L\* 60. They had only looked right
+  through the double decode. The next round authored the colorimeter values verbatim (leaf chroma
+  26-36, dead leaf 23-27), and that looked washed out, "as if in a linear colour space": a
+  colorimeter reads one matte leaf surface, a plant on a screen stands for a canopy in daylight,
+  and the look everyone was used to had been the double decode's, at chroma 65. Healthy leaves
+  now sit at chroma 38-48 (Lactuca, glaucous, 32), dead leaves at 30-36. Do not go back to the
+  measured chroma, and do not put a green on the gamut edge (blue channel near zero).
+  **`Agro --color-selftest`** checks every preset against the bands in milliseconds - run it
+  after touching any colour.
+- **A setting the request omits takes the preset's value** (`SpeciesSettings.InheritMissing`,
+  for the scape emergence angle and the autumn leaf loss share). The species editor sends every
+  numeric setting, and one it does not know - a browser tab left open across a server rebuild,
+  a session or a fork from before the setting existed - arrives as the C# default. For the
+  autumn share that default is 0, "off": a run stored on 15 November 2026 kept every leaf
+  through the winter while the preset shed a quarter. A new setting whose zero switches a
+  behaviour off needs the same was-set flag.
 - **Dry dead tissue is brighter than wet, but still brown.** Every senescence path ends on a
-  mid brown, L\* 42-50 (Munsell 10YR 5/4 - 7.5YR 4/4); `LateDarkening` is zero and
+  mid brown, L\* 42-50, chroma 30-36 (the hue of Munsell 10YR 5/4 - 7.5YR 4/4); `LateDarkening` is zero and
   `LateDesaturation` only 0.08. If a dead organ looks black again, look for a second encoding
   step before retuning a curve; if it looks grey, look at the end keys and the desaturation.
 - **The senescence path belongs to the leaf**: set in the agent's `Stress` at commitment
@@ -944,7 +957,7 @@ render mode 3, one plant in a 1x1 m field.
 | Geranium macrorrhizum and Heuchera, 730 days, soft engine | Shaking | Median per-tick organ rotation under 0.3 deg after day 300; see `SOFT_CONTACTS.md` "Shaking" |
 | 100 and 400 plants, parallel against sequential tick, 650 steps | Reproducibility | Byte-identical exported frames |
 | Geranium macrorrhizum beside a 5 cm wall, in a wall corner and under a 12 cm ceiling; Carex beside a wall; 120 days, 4 h, mixed engine | Obstacles are hard | Zero organ-ticks inside the walls (`CollisionWorld.StaticPenetration`); under the ceiling at most 0.6 mm on newborn floral segments; organ counts equal to the soft engine's; see `SOFT_CONTACTS.md` "The mixed engine" |
-| Every preset, `Agro --color-selftest` | Organ colours | Healthy leaf L\* 25-54 and green (or anthocyanic); dead leaf on both paths L\* 38-58, chroma >= 18, brown hue; no senescing stage under L\* 30; open petals white or coloured; stems L\* 30-85 |
+| Every preset, `Agro --color-selftest` | Organ colours | Healthy leaf L\* 25-54 and green (or anthocyanic); healthy leaf chroma >= 30; dead leaf on both paths L\* 38-58, chroma >= 28, brown hue; no senescing stage under L\* 30; open petals white or coloured; stems L\* 30-85 |
 | Campanula and Taraxacum without rain, 200 days; Persicaria and Lactuca, 260 days; exported frames decoded by the Godot core | Organ colours on the wire | No organ type other than a ripe fruit with its brightest on-screen channel under 64; every frame carries flag 4; the annuals' stems reach straw and their leaves brown in the last weeks; see `ORGAN_COLORS.md` |
 | Fragaria, 300 days from 1 March, 4 h and 1 h | Autumn leaf loss | No leaf turns before 6 October; from mid-October leaves pass through a red stage (on-screen a\* above 35); by mid-December about 40 % fewer leaves than the October peak; no regrowth before March; `--checkpoint-selftest` resumes inside the window |
 | Any species, 1 h vs 4 h ticks, 100 days | Timestep sensitivity | See the note below - treat this as a drift check, not an equality check |

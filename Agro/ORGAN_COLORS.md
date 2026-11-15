@@ -4,7 +4,10 @@ How the colour of every above-ground organ is decided, how it travels, and why. 
 15 November 2026, after two reports: every stem of every species was the same bright green,
 and old leaves and petals went black. Revised the same day after the first version was tried
 in the app: healthy leaves too bright, dead leaves pale grey, petals washed out, and no
-strawberry leaf ever died in autumn (see "Round 2").
+strawberry leaf ever died in autumn (see "Round 2"). Revised once more that evening: the
+round-2 colours were dull in both viewers, "as if in a linear colour space" (see "Round 3").
+**The tables of round 2 keep their lightness and hue; the chroma in them is superseded by
+round 3.**
 
 One place decides: [`OrganColorContext`](OrganColorContext.cs), built once per plant per
 exported frame. It reads the plant and changes nothing, so the export stays parallel and a
@@ -73,8 +76,8 @@ those bands without running a simulation:
 
 | | band |
 | --- | --- |
-| healthy mature leaf | L\* 25 - 54; green (a\* < -5) or anthocyanic (a\* > 5, L\* < 40) |
-| dead leaf, either path | L\* 38 - 58, chroma >= 18, hue 40 - 90 (brown) |
+| healthy mature leaf | L\* 25 - 54; green (a\* < -5) or anthocyanic (a\* > 5, L\* < 40); chroma >= 30 since round 3 |
+| dead leaf, either path | L\* 38 - 58, chroma >= 18 (28 since round 3), hue 40 - 90 (brown) |
 | a senescing leaf at any stage | L\* >= 30 |
 | open petal | white (L\* >= 75) or coloured (chroma >= 35); Carex exempt, it has no perianth |
 | petal at its drop | L\* >= 38 |
@@ -98,6 +101,73 @@ used to bloom in the LEAF curve, green.
 
 Under any sun lighting tier a sunlit face is about 1.45 times brighter (linear) than these
 values. That is physically right and stays.
+
+## Round 3: the measured chroma is dull on a screen
+
+Round 2 authored what a colorimeter reads on a leaf, and in both viewers the plants looked
+washed out - "soft tones, missing saturation, as if in a linear colour space". Nothing was
+wrong in either viewer: the stored run the report was made on (G. x cantabrigiense, 755 days)
+was opened in the web app and its top-lit leaves measured the authored (84, 106, 53) to the
+unit. The authored colour itself was the dull one: an olive at chroma 32, next to a terrain
+drawn at chroma 60.
+
+Three things make the colorimeter value the wrong one to author:
+
+- **It is one leaf surface, not a plant.** In a canopy the light that reaches the eye has
+  passed through leaves and bounced between them, and each pass multiplies the spectral
+  contrast: canopy-scale absorption features are more than twice the single-leaf ones (Baret
+  et al. 1994). The default viewer light traces none of that, so the authored colour has to
+  carry it.
+- **Foliage is remembered and preferred more saturated than it measures** (Bartleson 1961,
+  eight of ten familiar objects, grass and foliage among them), and a screen is two orders of
+  magnitude dimmer than daylight, which lowers colourfulness further (the Hunt effect).
+- **The look everyone was used to was the double decode's.** A strawberry leaf authored
+  (76, 145, 66) went out as linear bytes, was decoded as sRGB and lit at 3.175: (37, 125, 31)
+  on screen, CIELAB (46, -47, 44), chroma 64. Round 1 showed the authored pastel instead
+  (L\* 54, chroma 53: "too bright"); round 2 the colorimeter value (L\* 35, chroma 31:
+  "pale"). The lightness of round 2 was right and stays.
+
+So the rule is: **the measured lightness and hue, about 1.5 times the measured chroma.**
+
+| colour class | chroma gain | example, before -> after (sRGB top-lit) |
+| --- | --- | --- |
+| foliage greens (hue 105-160) | 1.5 | default leaf (80, 101, 47) -> (67, 104, 28) |
+| yellows, oranges, reds, browns, olives | 1.4 at chroma 28 and below, falling to 1.15 at 50 and to 1 at 80 | dead leaf (138, 102, 67) -> (146, 99, 50); Fragaria red (175, 45, 45) -> (182, 35, 41) |
+| pinks, magentas, wine | 1.4 falling to 1.2 | G. macrorrhizum petal (192, 78, 137) -> (203, 65, 141); Persicaria (203, 112, 130) -> (221, 100, 128) |
+| blues, violets | 1.25 falling to 1.1 | Campanula (110, 95, 180) -> (108, 92, 194) |
+| whites, creams, greys, bark (chroma under 9, or L\* 85 and up) | 1 | unchanged |
+
+Every colour stays inside sRGB, and a green whose blue channel fell under 28 was turned a few
+degrees bluer instead of sitting on the gamut edge. Stems, scapes and buds took the same
+gains; the lightest young-stem greens (L\* above 66) also came down five units, because a
+light saturated stem is the "bright green" of the first report.
+
+| species | mature leaf L\*, a\*, b\* (chroma) |
+| --- | --- |
+| default, Persicaria | 40, -27, 37 (46) |
+| trees | 39 - 40, -27, 34 - 35 (44) |
+| Fragaria 'Rügen' | 35, -27, 31 (41) |
+| Geranium macrorrhizum | 44, -25, 36 (44), matte: a little lighter than the glossy species |
+| G. x cantabrigiense | 42, -27, 39 (47) |
+| Bergenia | 36, -25, 30 (39) |
+| Campanula, Taraxacum, Carex | 41 - 42, -25 to -30, 38 (46 - 48) |
+| Lactuca | 50, -21, 24 (32), glaucous |
+| Heuchera 'Palace Purple' | 30, +41, -6 (41) |
+
+Dead leaves end at L\* 40-55, chroma 30-36 (default (46, 14, 35) authored, (46, 13, 33) after
+the late desaturation). The self-test gained two floors so this cannot drift back: healthy
+leaf chroma at least 30, dead leaf chroma at least 28.
+
+This is a statement about appearance on a display, not a measurement, and the gain is the one
+number to revisit if the plants ever look garish: scale the chroma, keep the lightness and
+the hue.
+
+**A request that omits the autumn share now takes the preset's.** The same stored run carried
+`AutumnLeafLossFraction: 0` for a species whose preset says 0.25: the species editor sends
+every numeric setting, a tab loaded before the server was rebuilt did not know the new one,
+and the C# default 0 means "off". `SpeciesSettings.InheritMissing` (the was-set flag the
+scape emergence angle already had) gives an omitted share the preset's value and keeps an
+explicit zero. Reload the tab after rebuilding the server all the same.
 
 ## Leaves, petioles, petals: the phenology curve
 
@@ -310,6 +380,11 @@ standing litter greying in the Namib: [PLOS ONE 2015](https://journals.plos.org/
 Stems and bark: [The making of plant armor: the periderm](https://scispace.com/pdf/the-making-of-plant-armor-the-periderm-2du8g35h.pdf);
 [bark of quaking aspen](https://digitalcommons.morris.umn.edu/cgi/viewcontent.cgi?article=2128&context=jmas);
 [non-foliar photosynthesis review](https://link.springer.com/article/10.1007/s40003-026-01038-7).
+
+Display appearance (round 3): Bartleson 1961, "Color in memory in relation to photographic
+reproduction", Photogr. Sci. Eng. 5(6), as cited in the [CIE 2020 symposium papers](https://files.cie.co.at/x047_2020/x047_CIE_2020_Open_Access_Papers.pdf);
+Fairchild, [Color Appearance Models](https://scis.uohyd.ac.in/~chakcs/cipclass/lecs/ColourAppearance.pdf) (memory colours, the Hunt effect);
+Baret et al. 1994, [canopy reflectance sensitivity to leaf optical properties](https://www.sciencedirect.com/science/article/abs/pii/0034425794901465).
 
 Measured colour: Munsell plant-tissue readings of mature leaves (5GY 4/4, 5GY 4/6) in
 [US plant patent PP22505](https://image-ppubs.uspto.gov/dirsearch-public/print/downloadPdf/PP22505);

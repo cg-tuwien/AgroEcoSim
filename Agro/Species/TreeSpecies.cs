@@ -40,8 +40,8 @@ internal static class TreeSpecies
         VegetativeGrowthFullTemperatureC = 18f,
         VegetativeGrowthLightReferenceWhM2 = 1800f,
         TreeShortShootShadeDiebackDays = 180f,
-        // CIELAB: a light young leaf, a mature one at Munsell 5GY 4/4, a clear autumn yellow.
-        LeafPhenology = Phenology(new(55, -18, 38), new(39, -18, 26), new(72, 4, 66)),
+        // CIELAB: a light young leaf, a mature one at the lightness of Munsell 5GY 4/4, a clear autumn yellow.
+        LeafPhenology = Phenology(new(55, -27, 50), new(39, -27, 35), new(72, 4, 74)),
     };
     /// <summary>A tree's leaf colours, each as CIELAB (L*, a*, b*): young, mature, and its autumn
     /// colour, which ends on a dry brown leaf.</summary>
@@ -53,7 +53,7 @@ internal static class TreeSpecies
         ColorModel.DefaultStress,
         new ColorCurve()
             .Add(0, ColorUtils.OkLabFromCieLab(autumn.X, autumn.Y, autumn.Z))
-            .Add(1, ColorUtils.OkLabFromCieLab(45f, 11f, 27f))));
+            .Add(1, ColorUtils.OkLabFromCieLab(45f, 15f, 37f))));
     internal static FlowerSettings Flowers(float petalLength, float petalWidth, Vector3 color, float pedicelLength = .015f) => new()
     {
         FlowerPedicelLength = pedicelLength,

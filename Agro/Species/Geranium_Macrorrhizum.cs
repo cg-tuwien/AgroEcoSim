@@ -121,8 +121,8 @@ public static class Geranium_Macrorrhizum
         // Hairy green shoots that harden olive-brown; the thick aromatic rhizome and the
         // old stem bases are brown and half woody.
         StemColors = new StemColorModel(
-            young: new(150, 180, 110), mature: new(135, 120, 85),
-            old: new(110, 85, 60), dead: new(165, 140, 105),
+            young: new(122, 171, 63), mature: new(139, 120, 70),
+            old: new(117, 84, 48), dead: new(172, 139, 89),
             matureAgeDays: 30f, oldAgeDays: 200f),
 
         LeafPhenology = new LeafPhenology(
@@ -180,18 +180,18 @@ public static class Geranium_Macrorrhizum
                 expectedAge: 25f * 24f,
                 colorModel: new ColorModel(
                     age: new ColorCurve()
-                        .Add(0.00f, ColorUtils.OkLabFromCieLab(54f, 50f, -8f)) // opening
-                        .Add(0.25f, ColorUtils.OkLabFromCieLab(51f, 53f, -9f))
-                        .Add(0.50f, ColorUtils.OkLabFromCieLab(50f, 52f, -10f)) // open: magenta pink
-                        .Add(1.00f, ColorUtils.OkLabFromCieLab(48f, 50f, -10f)),
+                        .Add(0.00f, ColorUtils.OkLabFromCieLab(54f, 60f, -10f)) // opening
+                        .Add(0.25f, ColorUtils.OkLabFromCieLab(51f, 62f, -11f))
+                        .Add(0.50f, ColorUtils.OkLabFromCieLab(50f, 61f, -12f)) // open: magenta pink
+                        .Add(1.00f, ColorUtils.OkLabFromCieLab(48f, 60f, -12f)),
                     stress: new ColorCurve()
                         .Add(0.00f, new Vector3(0.00f, 1.00f, 0.00f))
                         .Add(1.00f, new Vector3(-0.05f, 0.78f, 0.01f)),
                     senescenceSeason: new ColorCurve()
-                        .Add(0.00f, ColorUtils.OkLabFromCieLab(52f, 48f, -12f)) // fading: bluer
-                        .Add(0.40f, ColorUtils.OkLabFromCieLab(55f, 42f, -15f))
-                        .Add(0.75f, ColorUtils.OkLabFromCieLab(58f, 36f, -16f))
-                        .Add(1.00f, ColorUtils.OkLabFromCieLab(60f, 32f, -16f)) // paler, at the drop
+                        .Add(0.00f, ColorUtils.OkLabFromCieLab(52f, 58f, -14f)) // fading: bluer
+                        .Add(0.40f, ColorUtils.OkLabFromCieLab(55f, 52f, -19f))
+                        .Add(0.75f, ColorUtils.OkLabFromCieLab(58f, 47f, -21f))
+                        .Add(1.00f, ColorUtils.OkLabFromCieLab(60f, 43f, -21f)) // paler, at the drop
                 )
             ),
             CreateLeavesOnFlowerBase = true,

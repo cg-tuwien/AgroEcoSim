@@ -189,12 +189,13 @@ internal class Program
     /// same functions the export calls.
     /// </summary>
     /// <remarks>
-    /// The colours went wrong twice in ways no other check could see: decoded twice so old leaves
-    /// were black, then authored pastel so healthy leaves looked washed out and dead ones grey.
-    /// The bands are CIELAB: healthy leaves L* 25-54 (Munsell plant-tissue 5GY 4/4 is L* 41),
-    /// green unless anthocyanic; dead leaves on either path L* 38-58, chroma at least 18 and a
-    /// brown hue (Munsell 10YR 5/4 - 7.5YR 4/4); nothing on the way darker than L* 30; open
-    /// petals either white (L* 75 and up) or coloured (chroma 35 and up); stems L* 30-85.
+    /// The colours went wrong three times in ways no other check could see: decoded twice so old
+    /// leaves were black, then authored light and pastel, then authored at the chroma a
+    /// colorimeter reads on one leaf, which is dull on a screen. The bands are CIELAB: healthy
+    /// leaves L* 25-54 (Munsell plant-tissue 5GY 4/4 is L* 41), green unless anthocyanic, chroma
+    /// at least 30; dead leaves on either path L* 38-58, chroma at least 28 and a brown hue
+    /// (Munsell 10YR 5/4 - 7.5YR 4/4); nothing on the way darker than L* 30; open petals either
+    /// white (L* 75 and up) or coloured (chroma 35 and up); stems L* 30-85.
     /// See Agro/ORGAN_COLORS.md.
     /// </remarks>
     static int ColorSelfTest()
@@ -221,6 +222,7 @@ internal class Program
             var leaf = Shown(leaves.WireColor(Summer, 1f, 0f, 0f, Lamina), Lamina);
             Require(leaf.X >= 25f && leaf.X <= 54f, $"healthy leaf L* {leaf.X:F0} outside 25-54");
             Require(leaf.Y < -5f || (leaf.Y > 5f && leaf.X < 40f), $"healthy leaf neither green nor anthocyanic {F(leaf)}");
+            Require(Chroma(leaf) >= 30f, $"healthy leaf chroma {Chroma(leaf):F0} under 30: washed out");
 
             var dead = new Vector3[2];
             for (int path = 0; path < 2; ++path)
@@ -233,7 +235,7 @@ internal class Program
                 }
                 var d = dead[path];
                 Require(d.X >= 38f && d.X <= 58f, $"dead leaf (path {path}) L* {d.X:F0} outside 38-58");
-                Require(Chroma(d) >= 18f, $"dead leaf (path {path}) chroma {Chroma(d):F0} under 18: grey");
+                Require(Chroma(d) >= 28f, $"dead leaf (path {path}) chroma {Chroma(d):F0} under 28: grey");
                 Require(Hue(d) >= 40f && Hue(d) <= 90f, $"dead leaf (path {path}) hue {Hue(d):F0} not brown");
             }
 
