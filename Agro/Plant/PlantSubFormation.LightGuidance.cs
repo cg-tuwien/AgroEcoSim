@@ -1,4 +1,5 @@
 using System.Numerics;
+using System.Runtime.CompilerServices;
 using Agro.Collisions;
 
 namespace Agro;
@@ -153,6 +154,49 @@ public partial class PlantSubFormation<T>
         agent.TransportDevelopment(transport);
         SrcDst(out _, out var growing);
         PropagateToSubtree(growing, index, transport);
+        var hold = Plant.Parameters.LeafBladeInclinationHold;
+        if (hold > 0f && agent.Organ == OrganTypes.Petiole)
+            HoldBladeInclination(growing, index, transport, hold);
+    }
+
+    /// <summary>
+    /// A petiole that turns towards the light carries its blade's attachment with it, not the
+    /// blade's inclination: the lamina takes back <paramref name="hold"/> of the change in its
+    /// elevation, about the horizontal axis across its own heading.
+    /// </summary>
+    /// <remarks>
+    /// The blade is built at an inclination the species authors (LateralPitch and LeafPitch), and a
+    /// lamina sets its own angle to the light at the top of the petiole, whatever way the petiole
+    /// grew to get there. Carried rigidly, every degree the petiole rose was a degree the blade
+    /// rose: under an open sky the guidance steers a petiole towards the zenith, a Heuchera
+    /// petiole of four segments went from 39 degrees at its base to 76 at its tip and stood its
+    /// blades on edge at up to 77 degrees, where the preset builds them 7 below the horizontal.
+    /// Walks the petiole chain beyond <paramref name="petiole"/>, a handful of organs.
+    /// </remarks>
+    void HoldBladeInclination(Span<T> growing, int petiole, Quaternion transport, float hold)
+    {
+        var undo = Quaternion.Conjugate(transport);
+        for (var node = petiole; node >= 0;)
+        {
+            var next = -1;
+            foreach (var child in GetChildren(node))
+            {
+                var organ = GetOrgan(child);
+                if (organ == OrganTypes.Petiole) next = child;
+                if (organ != OrganTypes.Leaf) continue;
+                ref var blade = ref Unsafe.As<T, AboveGroundAgent>(ref growing[child]);
+                var carried = Vector3.Transform(Vector3.UnitX, blade.Orientation);
+                var built = Vector3.Transform(carried, undo);
+                var rise = MathF.Asin(Math.Clamp(carried.Y, -1f, 1f)) - MathF.Asin(Math.Clamp(built.Y, -1f, 1f));
+                // A blade standing vertical has no heading to turn it about.
+                var across = Vector3.Cross(carried, Vector3.UnitY);
+                if (MathF.Abs(rise) < 1e-6f || across.LengthSquared() < 1e-8f) continue;
+                var level = Quaternion.CreateFromAxisAngle(Vector3.Normalize(across), -rise * hold);
+                blade.TransportDevelopment(level);
+                PropagateToSubtree(growing, child, level);
+            }
+            node = next;
+        }
     }
 
     void WriteGuidanceState(BinaryWriter w)

@@ -600,6 +600,8 @@ public class SpeciesSettings
     /// <summary>Previous-day incident light in Wh/m2 at which vegetative development reaches
     /// its nominal rate. Zero retains legacy relative-production expansion. Positive values
     /// use the propagated absolute leaf exposure, including at petioles and crown supports.
+    /// An organ with no lit leaf of its own (a dormant crown bud, a node whose leaf fell) takes
+    /// the plant's best-lit leaf, and a plant with no lit leaf develops on its reserves.
     /// This empirical developmental response does not create or debit assimilates.</summary>
     [SpeciesUILabel("Vegetative growth reference light (Wh/m2/day)")]
     public float VegetativeGrowthLightReferenceWhM2 { get; set; } = 0f;
@@ -866,6 +868,8 @@ public class SpeciesSettings
             basalScapeEmergenceMaxTiltDegrees = preset.BasalScapeEmergenceMaxTiltDegrees;
         if (!autumnLeafLossFractionWasSet)
             autumnLeafLossFraction = preset.AutumnLeafLossFraction;
+        if (!leafBladeInclinationHoldWasSet)
+            leafBladeInclinationHold = preset.LeafBladeInclinationHold;
     }
 
     /// <summary>
@@ -1149,6 +1153,30 @@ public class SpeciesSettings
     /// </value>
     [SpeciesUILabel("Petiole reorientation step")]
     public float PetioleReorientationStepAngle { get; set; }
+
+    /// <summary>
+    /// Share, from 0 to 1, of the inclination a leaf blade was built with that it keeps while its
+    /// petiole is steered towards the light. Zero, the default, carries the blade rigidly with
+    /// the petiole, as before the setting existed.
+    /// </summary>
+    /// <remarks>
+    /// A lamina sets its angle to the light at the top of its petiole; the petiole only brings it
+    /// there. With the growth light guidance a petiole under an open sky turns towards the
+    /// zenith, and a blade carried rigidly with it ends up standing on edge. One keeps the blade
+    /// at the inclination <see cref="LateralPitch"/> and <see cref="LeafPitch"/> author. Applies
+    /// to herbaceous and woody petioles; needs the growth light guidance (any render mode but 0).
+    /// A request that omits it takes the preset's value (<see cref="InheritMissing"/>).
+    /// </remarks>
+    [SpeciesUILabel("Blade keeps its inclination (share)")]
+    [SpeciesUITooltip("Share of its built inclination a leaf blade keeps while its petiole turns towards the light. 0 carries the blade rigidly with the petiole; 1 keeps the blade at the angle the leaf and lateral pitch give it.")]
+    public float LeafBladeInclinationHold
+    {
+        get => leafBladeInclinationHold;
+        set { leafBladeInclinationHold = value; leafBladeInclinationHoldWasSet = true; }
+    }
+
+    private float leafBladeInclinationHold;
+    private bool leafBladeInclinationHoldWasSet;
 
     /// <summary>
     /// Length of one petiole segment, in metres. Zero leaves a petiole as a single organ.
@@ -1745,6 +1773,7 @@ public class SpeciesSettings
         RequireFiniteNonNegative(CanopyAdjustmentHalfTimeDays, nameof(CanopyAdjustmentHalfTimeDays));
         RequireFiniteNonNegative(DeadLeafAttachmentHours, nameof(DeadLeafAttachmentHours));
         RequireProbability(AutumnLeafLossFraction, nameof(AutumnLeafLossFraction));
+        RequireProbability(LeafBladeInclinationHold, nameof(LeafBladeInclinationHold));
         RequireProbability(AutumnLeafLossStartSeason, nameof(AutumnLeafLossStartSeason));
         RequireFinitePositive(LeafSenescenceStressDuration, nameof(LeafSenescenceStressDuration));
         RequireFiniteNonNegative(LeafSenescenceStressDurationVar, nameof(LeafSenescenceStressDurationVar));

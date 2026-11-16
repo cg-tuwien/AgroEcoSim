@@ -98,6 +98,9 @@ shrinking the canopy to save carbon removes the producers and deepens the shorta
 - The same commitment, dead-attached period and shedding also carry the **autumn leaf loss**
   of perennial herbs (`AutumnLeafLossFraction`), in a pass of its own after the drought and
   carbon pass; see `ORGAN_COLORS.md`.
+- So does **age**: since 16 November 2026 a leaf past `LeafMaximumAgeHours` is committed daily on the
+  seasonal path (`RetireAgedLeaves`, outside the autumn window) instead of being swapped for a fresh
+  blade by `RenewPetiole` in the tick, which made old leaves vanish green. See `LEAF_TURNOVER.md`.
 - **Dead attached** for `DeadLeafAttachmentHours` (default 336 h): zero maintenance and assimilation,
   still occludes light, still collides, not counted as a leaf in `NewDay`.
 - **Detached** in two phases by the leaf's owner (first petiole segment): its children are removed,

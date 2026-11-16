@@ -177,6 +177,7 @@ public partial class PlantFormation2
 		var hoursPerTick = World.HoursPerTick;
 		var dtHours = LastCanopyUpdate == 0 ? 0f : (timestep - LastCanopyUpdate) * (float)hoursPerTick;
 		LastCanopyUpdate = Math.Max(1u, timestep);
+		if (dtHours > 0f && !AutumnLeafLossWindow) RetireAgedLeaves(timestep);
 		var carbonShort = CarbonStress > 0f;
 		var autumn = EnterAutumn(timestep);
 		if (!autumn) AutumnCarry = 0f;
@@ -340,6 +341,41 @@ public partial class PlantFormation2
 			AutumnCarry = 0f;
 		}
 		return true;
+	}
+
+	/// <summary>
+	/// Daily: a leaf older than <see cref="SpeciesSettings.LeafMaximumAgeHours"/> senesces on the
+	/// seasonal path (path stress 0: yellow, or the species' own autumn colours, then brown), hangs
+	/// for <see cref="SpeciesSettings.DeadLeafAttachmentHours"/> and falls to a node bud that regrows
+	/// a leaf when growth allows. Not in the autumn window: the autumn leaf loss takes the old
+	/// leaves there.
+	/// </summary>
+	/// <remarks>
+	/// The same leaves the in-tick renewal (<c>RenewPetiole</c>) used to swap: petiolate leaves whose
+	/// petiole does not sit on a growing apex, unless the species keeps its scapes in a rosette. The
+	/// swap removed the old blade and birthed a fresh one in the same tick, so a two-year Bergenia or
+	/// Heuchera lost its oldest leaves without one of them ever colouring - green one frame, gone
+	/// the next. That renewal now runs only for plants without the canopy response. Its hourly
+	/// probability, (age / 7000 h)^2, made it certain within hours of the maximum age for every
+	/// preset, so retiring at the maximum age keeps the timing.
+	/// </remarks>
+	void RetireAgedLeaves(uint timestep)
+	{
+		var species = Parameters;
+		var hoursPerTick = (float)World.HoursPerTick;
+		for (int i = 0; i < AG.Count; ++i)
+		{
+			ref readonly var blade = ref AG.GetAgent(i);
+			if (blade.Organ != OrganTypes.Leaf || blade.FlowerAgent.flowerBase || blade.InDroughtSenescence) continue;
+			var parent = blade.Parent;
+			if (parent < 0 || AG.GetOrgan(parent) != OrganTypes.Petiole) continue; //blade roots on a petiole only
+			var owner = AboveGroundAgent.LeafUnitRoot(AG, i);
+			var support = AG.GetParent(owner);
+			if (support < 0 || (AG.GetOrgan(support) == OrganTypes.Meristem && !species.RosetteScapes)) continue;
+			if ((timestep - AG.GetAgent(owner).BirthTime) * hoursPerTick <= species.LeafMaximumAgeHours) continue;
+			if (LeafUnitHasPendingDevelopment(i, owner)) continue;
+			CommitLeafUnit(i, owner, timestep, species.LeafSenescenceSeasonalDuration, species.LeafSenescenceSeasonalDurationVar, 0f);
+		}
 	}
 
 	/// <summary>Every blade segment and the petiole it hangs from senesce together, for one sampled duration.</summary>

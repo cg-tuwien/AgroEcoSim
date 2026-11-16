@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Numerics;
+using System.Runtime.CompilerServices;
 
 namespace Agro;
 
@@ -42,8 +43,21 @@ internal struct OrganColorContext
 
 	/// <summary>Whether organ <c>i</c> carries a petal: an open flower. Rented, null without petals.</summary>
 	bool[]? OpenFlower;
-	bool HasGrownBlade, HasGrownPetiole;
-	RGB8 GrownBlade, GrownPetiole;
+	bool HasGrownPetiole;
+	RGB8 GrownPetiole;
+	/// <summary>The plant's best-lit leaf yesterday: what a blade's light is measured against for its
+	/// seasonal tint. Zero when the species has no seasonal tint, which gives every blade weight 1.</summary>
+	readonly float ResourceMax;
+	/// <summary>Whether the species has a seasonal tint at all. Without one a young leaf keeps the
+	/// shared cached colour as soon as it is grown: a tree's spring flush is a hundred thousand of them.</summary>
+	readonly bool Tinted;
+	/// <summary>Full-grown healthy blade colours this frame, per step of seasonal weight (only the
+	/// last step without a seasonal tint). A bit per entry says it is filled. Inline: a context is
+	/// made per plant per frame and must not allocate.</summary>
+	GrownBladeColors GrownBlades;
+	uint GrownBladesFilled;
+	const int SeasonWeightSteps = 8;
+	[InlineArray(SeasonWeightSteps + 1)] struct GrownBladeColors { RGB8 first; }
 
 	public OrganColorContext(PlantFormation2 plant, int count)
 	{
@@ -80,8 +94,12 @@ internal struct OrganColorContext
 				if (parent >= 0 && parent < count) OpenFlower[parent] = true;
 			}
 
-		HasGrownBlade = HasGrownPetiole = false;
-		GrownBlade = GrownPetiole = default;
+		HasGrownPetiole = false;
+		GrownPetiole = default;
+		Tinted = Species.LeafPhenology.Color.HealthySeasonCurve != null;
+		ResourceMax = Tinted ? plant.AG.DailyResourceMax : 0f;
+		GrownBlades = default;
+		GrownBladesFilled = 0;
 	}
 
 	static RGB8 Fixed(Vector3? srgb) => srgb.HasValue
@@ -108,16 +126,21 @@ internal struct OrganColorContext
 				//Read at senescence / shed point: the authored curve ends where the petal falls.
 				return Flowers.FlowerPhenology.WireColor(Season, agent.Adulcy(Timestep), 0f,
 					MathF.Min(1f, agent.Senescence(Timestep) / PetalShed), ColorUtils.LaminaExposure, agent.Stress);
-			default: return Foliage(in agent, ColorUtils.LaminaExposure, ref HasGrownBlade, ref GrownBlade);
+			default: return Blade(in agent);
 		}
 	}
 
-	static RGB8 FixedFruit(Vector3 srgb, float exposure)
-		=> ColorUtils.AppearanceToWire(ColorUtils.SrgbToLinear(Vector3.Clamp(srgb, Vector3.Zero, Vector3.One)), exposure);
-
-	/// <summary>A blade or its petiole on the leaf phenology.</summary>
-	RGB8 Foliage(in AboveGroundAgent agent, float exposure, ref bool hasGrown, ref RGB8 grown)
+	/// <summary>
+	/// A leaf blade. Its seasonal tint (a Bergenia's winter red) goes with its light, in
+	/// <see cref="SeasonWeightSteps"/> steps so the healthy full-grown blades of a frame still
+	/// share a handful of colours.
+	/// </summary>
+	RGB8 Blade(in AboveGroundAgent agent)
 	{
+		var step = SeasonWeightSteps;
+		if (ResourceMax > 0f)
+			step = (int)MathF.Round(ColorModel.SeasonWeight(agent.PreviousDayEnvResourcesInvariant / ResourceMax) * SeasonWeightSteps);
+		var weight = step / (float)SeasonWeightSteps;
 		var senescence = agent.Senescence(Timestep);
 		//The leaf's own path, chosen when it was committed: a drought-killed leaf dries, one
 		//resorbed in autumn or retired for carbon with water yellows first. Tree autumn colour
@@ -125,8 +148,58 @@ internal struct OrganColorContext
 		var path = senescence > 0f ? agent.Stress : 0f;
 		if (Ripening > senescence) senescence = Ripening;
 		var adulcy = agent.Adulcy(Timestep);
-		if (senescence > 0f || adulcy < 1f)
-			return Species.LeafPhenology.WireColor(Season, adulcy, 0f, senescence, exposure, path);
+		var pigment = PigmentBuilt(in agent);
+		if (senescence > 0f || adulcy < 1f || pigment < 1f)
+			return Species.LeafPhenology.WireColor(Season, adulcy, 0f, senescence, ColorUtils.LaminaExposure, path,
+				weight * pigment);
+
+		//Most of a canopy is full-grown and healthy, and all of that is a few colours this frame.
+		if ((GrownBladesFilled & (1u << step)) == 0)
+		{
+			GrownBlades[step] = Species.LeafPhenology.WireColor(Season, 1f, 0f, 0f, ColorUtils.LaminaExposure, 0f, weight);
+			GrownBladesFilled |= 1u << step;
+		}
+		return GrownBlades[step];
+	}
+
+	/// <summary>
+	/// How much of its seasonal pigment a leaf or petiole has made, from 0 to 1. A leaf made since
+	/// 1 March (the season's origin) has lived through none of the last winter and has none until the
+	/// autumn: it unfolds green while the old leaves around it are still red, and a seedling sown on
+	/// 1 March does not come up in its species' winter colours. Otherwise the pigment builds up over
+	/// <see cref="PigmentBuildUpHours"/> of the organ's life, so a leaf made in October colours
+	/// later than the old ones: the tint needs weeks of cold and light (Hughes 2011).
+	/// </summary>
+	/// <remarks>
+	/// A ramp alone let a Geranium seedling born on 1 March turn olive-gold by the 21st while the
+	/// curve was still near its winter value; ramping with the expansion (<c>Adulcy</c>) instead let
+	/// it reach full tint within days.
+	/// </remarks>
+	readonly float PigmentBuilt(in AboveGroundAgent agent)
+	{
+		if (!Tinted) return 1f;
+		var ageHours = (Timestep - agent.BirthTime) * HoursPerTick;
+		//The season counts whole days since 1 March, so a leaf born on 1 March itself is a day short.
+		if (Season < 0.6f && ageHours < (Season * 365f + 1f) * 24f) return 0f;
+		var t = ageHours / PigmentBuildUpHours;
+		return t >= 1f ? 1f : t <= 0f ? 0f : t * t * (3f - 2f * t);
+	}
+	const float PigmentBuildUpHours = 28f * 24f;
+
+	static RGB8 FixedFruit(Vector3 srgb, float exposure)
+		=> ColorUtils.AppearanceToWire(ColorUtils.SrgbToLinear(Vector3.Clamp(srgb, Vector3.Zero, Vector3.One)), exposure);
+
+	/// <summary>A petiole on the leaf phenology. It takes the full seasonal tint: a leaf stalk is
+	/// exposed tissue, and a Bergenia's or a strawberry's is red in winter whatever its blade does.</summary>
+	RGB8 Foliage(in AboveGroundAgent agent, float exposure, ref bool hasGrown, ref RGB8 grown)
+	{
+		var senescence = agent.Senescence(Timestep);
+		var path = senescence > 0f ? agent.Stress : 0f;
+		if (Ripening > senescence) senescence = Ripening;
+		var adulcy = agent.Adulcy(Timestep);
+		var pigment = PigmentBuilt(in agent);
+		if (senescence > 0f || adulcy < 1f || pigment < 1f)
+			return Species.LeafPhenology.WireColor(Season, adulcy, 0f, senescence, exposure, path, pigment);
 
 		//Most of a canopy is full-grown and healthy, and all of that is one colour this frame.
 		if (!hasGrown)

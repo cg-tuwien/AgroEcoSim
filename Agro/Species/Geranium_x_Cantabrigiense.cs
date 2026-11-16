@@ -37,7 +37,10 @@ public static class Geranium_x_Cantabrigiense
         VegetativeTemperatureResponseEnabled = true,
         VegetativeGrowthBaseTemperatureC = 5f,
         VegetativeGrowthFullTemperatureC = 20f,
-        VegetativeGrowthLightReferenceWhM2 = 6000f,
+        // As for G. macrorrhizum, its parent: about 10 mol/m2 of photosynthetic light a day,
+        // 1.4 kWh/m2 of global radiation, and no longer the 6000 Wh/m2 of a cloudless midsummer
+        // day. See SEASONAL_GROWTH.md.
+        VegetativeGrowthLightReferenceWhM2 = 1400f,
         LeafGrowthTimeVar = 24f * 3f,
         LeafMaximumAgeHours = 24 * 365,
 
@@ -248,7 +251,11 @@ public static class Geranium_x_Cantabrigiense
                 GeraniumXCantabrigiensePreset.Lifecycle,
                 GeraniumXCantabrigiensePreset.Stress,
                 GeraniumXCantabrigiensePreset.SeasonalSenescence,
-                GeraniumXCantabrigiensePreset.StressSenescence)),
+                GeraniumXCantabrigiensePreset.StressSenescence)
+            {
+                HealthySeasonCurve = GeraniumXCantabrigiensePreset.HealthySeason,
+                HealthySeasonDirection = GeraniumXCantabrigiensePreset.HealthySeasonDirection,
+            }),
         LeafMorphology = new() {
             LowResVertices =
             [

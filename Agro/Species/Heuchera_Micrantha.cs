@@ -34,8 +34,11 @@ public static class Heuchera_Micrantha_Palace_Purple
         // complementary: LeafPitch ~ 90 - LateralPitch. Both Geraniums satisfied that
         // and looked right; the species that did not held their blades edge-on or
         // pointing at the ground.
+        // Complementary to the 62 degrees of LateralPitch, so the blade is built level. With the
+        // blade keeping that inclination (LeafBladeInclinationHold) and its own weight on the
+        // petiole it ends about 5 degrees below the horizontal; at 35 it hung at 13.
         LeafPitchVar = 6f * (MathF.PI / 180f),
-        LeafPitch = 35 * (MathF.PI / 180f),
+        LeafPitch = 28 * (MathF.PI / 180f),
 
         LeafGrowthTime = 24f * 10f * 2f,
         // Provisional CPU-light calibration; see LIGHT_GROWTH_CALIBRATION.md.
@@ -53,16 +56,21 @@ public static class Heuchera_Micrantha_Palace_Purple
         //dead straight no matter how correct its bending law became. Four segments let it arch, the
         //way a Heuchera's does under its own blade.
         PetioleSegmentLength = 0.045f,
-        //Half the 2e8 default, which holds a 3 mm petiole dead rigid however it is divided. Swept at
-        //day 730: 2e8 gives 0.8 degrees of arch, 1e8 gives 2.4 (14.6 on the most loaded petioles) at
-        //17.7 cm tall, 5e7 gives 4.5 at 15.5 cm. The arch is paid for in height, so this is the
-        //middle of that trade rather than the most visible setting.
-        PetioleElasticModulus = 1e8f,
-        // Firm petioles, 4-5 mm across, stiff enough to hold the blade out at length.
-        // Firm petioles: an 18 cm petiole carrying a 12 cm blade needs the section, or
-        // the whole rosette sags below the soil line.
-        PetioleRadius = 0.0030f,
-        PetioleRadiusVar = 0.0003f,
+        //Set together with the radius below: flexural stiffness goes with the fourth power of the
+        //radius, so a petiole two thirds as thick is five times as limp at the same modulus. At 1e8,
+        //which suited the 3 mm petiole, the 2 mm one laid the outer leaves on the soil (10th
+        //percentile leaf height 0.7 cm, median blade 21 degrees below the horizontal at day 300);
+        //2.5e8 holds the mound as before (2.7 cm and 12 degrees) and is still inside the range
+        //measured on petioles (Niklas 1991, tens to hundreds of MPa).
+        PetioleElasticModulus = 2.5e8f,
+        // Slender, wiry petioles about 4 mm across. They were 6 mm, half as thick again as the
+        // plant's, and read as stalks.
+        PetioleRadius = 0.0020f,
+        PetioleRadiusVar = 0.0002f,
+        // The blade sits across the top of its petiole, facing the sky, whatever the petiole's
+        // angle. Carried rigidly by a petiole the light guidance had turned upright, the inner
+        // blades stood on edge at 40 to 77 degrees (SpeciesSettings.LeafBladeInclinationHold).
+        LeafBladeInclinationHold = 1f,
 
         // Every leaf node that is shaded out leaves a bud behind, so a high activation
         // rate compounds with the clump's own growth: 37 crowns and 640 leaves after one
@@ -929,18 +937,30 @@ public static class HeucheraMicranthaPalacePurplePreset
         .Add(0.80f, ColorUtils.OkLabFromSrgb8(102, 33, 68)) // adult: deep wine-purple
         .Add(1.00f, ColorUtils.OkLabFromSrgb8(88, 28, 58)); // full adult: dark muted burgundy
 
+    /// <summary>
+    /// Fresh strong purple in spring, a little faded and bronzed in summer sun, and from November
+    /// the mahogany red the nurseries give as its autumn and winter colour, strongest on the
+    /// exposed leaves (<see cref="ColorModel.SeasonWeight"/>). At full light January is CIELAB
+    /// (27, 39, 13) against the summer (30, 39, -5). Season fractions from 1 March.
+    /// </summary>
+    /// <remarks>
+    /// The curve shipped before deepened the purple towards magenta all winter, which is the one
+    /// direction the leaf does not go; the winter keys now push towards red-brown, and the spring
+    /// and summer keys carry no push, only chroma.
+    /// </remarks>
     public static ColorCurve HealthySeason => new ColorCurve()
-        .Add(0.00f, new Vector3(0.004f, 1.06f, 0.012f)) // early spring: fresh, slightly stronger purple
-        .Add(0.25f, new Vector3(0.000f, 1.03f, 0.008f)) // late spring: rich purple
-        .Add(0.50f, new Vector3(0.004f, 0.96f, 0.000f)) // summer: slight fading / bronzing
-        .Add(0.65f, new Vector3(0.002f, 0.94f, 0.000f)) // hottest period: mildly muted, not green
-        .Add(0.78f, new Vector3(-0.006f, 1.03f, 0.010f)) // early autumn: purple returns
-        .Add(0.90f, new Vector3(-0.012f, 1.07f, 0.016f)) // late autumn: darker wine-purple
-        .Add(1.00f, new Vector3(-0.020f, 1.08f, 0.018f)); // winter: deep muted purple
+        .Add(0.00f, new Vector3(-0.025f, 0.82f, 0.055f)) // 1 March: still mahogany
+        .Add(0.10f, new Vector3( 0.004f, 1.06f, 0.000f)) // early April: fresh, strong purple
+        .Add(0.25f, new Vector3( 0.000f, 1.03f, 0.000f)) // June: rich purple
+        .Add(0.50f, new Vector3( 0.004f, 0.96f, 0.010f)) // August: faded a little, bronzed in sun
+        .Add(0.62f, new Vector3( 0.000f, 1.00f, 0.004f)) // mid October
+        .Add(0.72f, new Vector3(-0.012f, 0.92f, 0.030f)) // mid November: turning mahogany
+        .Add(0.84f, new Vector3(-0.025f, 0.82f, 0.055f)) // January: mahogany red
+        .Add(1.00f, new Vector3(-0.025f, 0.82f, 0.055f)); // end of February
 
-    // Positive a + negative b in OKLab points toward a red-purple / magenta-purple hue.
+    // Towards red-brown in OKLab: the anthocyanin purple warms to mahogany in the cold.
     public static readonly Vector2 HealthySeasonDirection =
-        Vector2.Normalize(new Vector2(0.65f, -0.76f));
+        Vector2.Normalize(new Vector2(0.35f, 0.94f));
 
     // Anthocyanic stress is already appropriate for a naturally purple cultivar:
     // stress should deepen / cool the existing coloration rather than introduce green.

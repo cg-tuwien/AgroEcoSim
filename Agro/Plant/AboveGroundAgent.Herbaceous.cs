@@ -67,17 +67,17 @@ namespace Agro
                     {
                         //Only the first segment of a petiole ages out. An inner segment renewing
                         //itself would replace one link of the chain and orphan everything past it.
-                        if (!formation.HasPendingDevelopment(agentID) && ageHours > species.LeafMaximumAgeHours
+                        //Under the canopy response an old leaf is not swapped here: the controller
+                        //retires it through senescence (PlantFormation2.RetireAgedLeaves), so it
+                        //colours, dies and falls like any other, and its node regrows a leaf.
+                        if (!plant.DroughtResponse
+                            && !formation.HasPendingDevelopment(agentID) && ageHours > species.LeafMaximumAgeHours
                             && (formation.GetOrgan(agent.Parent) != OrganTypes.Meristem || species.RosetteScapes)
                             && formation.GetOrgan(agent.Parent) != OrganTypes.Petiole)
                         {
                             // Keep the age ratio fractional below 7000 hours.
                             var p = ageHours / 7000f;
-                            // In the autumn window an old leaf is not swapped for a fresh one: it is
-                            // what the autumn leaf loss takes. Checked after the draw, so the random
-                            // sequence is the same as without autumn loss.
-                            if (plant.RNG.NextFloatAccum(p * p, world.HoursPerTick) && plant.CanopyGrowthAllowed
-                                && !plant.AutumnLeafLossWindow)
+                            if (plant.RNG.NextFloatAccum(p * p, world.HoursPerTick))
                             {
                                 // A perennial rosette replaces a senescent leaf at its existing node.  Leaving the petiole as an inert Bud
                                 // made every old node permanently bare, which turned Geranium crowns into palm-like stems over time.
@@ -168,7 +168,10 @@ namespace Agro
                         // is already bounded at birth; use its existing reserve/water checks
                         // and thermal development until that axis reaches the surface target.
                         // This supplies no irradiance and does not release adult leaf growth.
-                        if (species.VegetativeGrowthLightReferenceWhM2 > 0f
+                        // Under the thermal response alone the same holds: on the legacy
+                        // relative-production scale an axis below ground has no production
+                        // to be relative to, and a March propagule never surfaced.
+                        if ((species.VegetativeGrowthLightReferenceWhM2 > 0f || species.VegetativeTemperatureResponseEnabled)
                             && agent.Organ == OrganTypes.Meristem && agent.Length <= agent.LengthVar
                             && agent.Parent >= 0 && formation.GetIsRizome(agent.Parent))
                             productionFactor = plant.VegetativeTemperatureFactor(timestep);

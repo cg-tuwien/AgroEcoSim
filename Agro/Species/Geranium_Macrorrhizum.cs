@@ -48,7 +48,14 @@ public static class Geranium_Macrorrhizum
         VegetativeTemperatureResponseEnabled = true,
         VegetativeGrowthBaseTemperatureC = 5f,
         VegetativeGrowthFullTemperatureC = 20f,
-        VegetativeGrowthLightReferenceWhM2 = 6000f,
+        // The daily light at which development runs at its nominal rate. It was 6000 Wh/m2, a
+        // cloudless midsummer day on an open horizontal leaf, for a plant the RHS lists for full
+        // shade and calls "one of the few plants that can tolerate dry shade": a leaf in half
+        // shade developed at a third of its rate and a crown bud with no leaf of its own not at
+        // all. About 10 mol/m2 of photosynthetic light a day is ample for a shade-tolerant
+        // perennial (Purdue HO-238-W puts low-light crops at 3-6 and medium ones at 6-12), which
+        // is 1.4 kWh/m2 of global radiation at 2.0 mol per MJ. See SEASONAL_GROWTH.md.
+        VegetativeGrowthLightReferenceWhM2 = 1400f,
         Height = 0.3f,
 
         // Geranium has a compressed crown, not a sequence of centimetre-scale
@@ -131,7 +138,11 @@ public static class Geranium_Macrorrhizum
                 GeraniumMacrorrhizumPreset.Lifecycle,
                 GeraniumMacrorrhizumPreset.Stress,
                 GeraniumMacrorrhizumPreset.SeasonalSenescence,
-                GeraniumMacrorrhizumPreset.StressSenescence)),
+                GeraniumMacrorrhizumPreset.StressSenescence)
+            {
+                HealthySeasonCurve = GeraniumMacrorrhizumPreset.HealthySeason,
+                HealthySeasonDirection = GeraniumMacrorrhizumPreset.HealthySeasonDirection,
+            }),
         // In the herbaceous algorithm these events advance a vegetative crown
         // as well as committing the first flower.  Hour-normalized rates keep
         // the rosette from producing a new two-leaf node every few hours.

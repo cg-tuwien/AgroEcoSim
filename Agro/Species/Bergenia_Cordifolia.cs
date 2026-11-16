@@ -98,7 +98,14 @@ public static class Bergenia_Cordifolia
         // leathery blades stand at roughly 40-50 degrees of world pitch. The petiole
         // already rises 55 degrees above the horizontal, so 10 degrees of leaf pitch
         // leaves the blade near 45. At 55 it was pressed flat to the ground.
-        LeafPitch = 10f * DegToRad,
+        // ... and near 45 was only where the blade started: its petiole then turned towards the
+        // light and carried it along, so the inner blades of a rosette stood at 60 to 80 degrees,
+        // gathered like a tulip. The blade now keeps the inclination it is built with, and that
+        // is 35 degrees: measured at days 150 and 255 the blades stand from level to 45-50
+        // degrees with the median near 23, outer leaves spread and inner ones raised, which is
+        // the open rosette the plant has. 25 or 30 here lays it flatter (median 12 and 8).
+        LeafPitch = 20f * DegToRad,
+        LeafBladeInclinationHold = 1f,
         LeafPitchVar = 6f * DegToRad,
         PetioleElasticModulus = 1e8f,
         FlowerOrganElasticModulus = 5e7f,

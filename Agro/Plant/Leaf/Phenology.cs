@@ -45,8 +45,9 @@ public readonly struct LeafPhenology
             .Add(0.00f, ColorUtils.OkLabFromCieLab(90f, 0f, 12f)) // cream
             .Add(1.00f, ColorUtils.OkLabFromCieLab(72f, 6f, 28f)))); // withered tan
 
-    internal RGB8 WireColor(float season, float adulcy, float stress, float senescence, float exposure, float pathStress = 0f)
-        => ColorUtils.OklabToWire(Color.Evaluate(adulcy, season, stress, senescence, pathStress), exposure);
+    internal RGB8 WireColor(float season, float adulcy, float stress, float senescence, float exposure, float pathStress = 0f,
+        float seasonWeight = 1f)
+        => ColorUtils.OklabToWire(Color.Evaluate(adulcy, season, stress, senescence, pathStress, seasonWeight), exposure);
 
     internal void WriteColor(BinaryWriter writer, float season, float adulcy, float stress, float senescence, float exposure, float pathStress = 0f)
         => Write(writer, WireColor(season, adulcy, stress, senescence, exposure, pathStress));
@@ -89,6 +90,22 @@ public readonly record struct ColorModel
 
     // Direction of healthy seasonal pigment drift in OKLab a/b space
     public Vector2 HealthySeasonDirection { get; init; } = Vector2.Zero;
+
+    /// <summary>
+    /// How far a leaf takes on its healthy seasonal tint, from 0 to 1, given its light relative to
+    /// the plant's best-lit leaf (yesterday's gathered resources over the plant's maximum).
+    /// </summary>
+    /// <remarks>
+    /// Winter reddening of evergreen leaves is anthocyanin made under cold AND strong light - the
+    /// favoured explanation is photoprotection (Hughes 2011) - so it is strongest on the sun-exposed
+    /// leaves and the shaded inner ones stay green: a Bergenia in January is deep red on top, bronze
+    /// and dark gold below, green underneath. A shaded leaf keeps a quarter of the tint.
+    /// </remarks>
+    public static float SeasonWeight(float relativeLight)
+    {
+        var t = Math.Clamp((relativeLight - 0.15f) / 0.55f, 0f, 1f);
+        return 0.25f + 0.75f * t * t * (3f - 2f * t);
+    }
 
 
     // Stress color: chlorosis/drought/browning; you can swap this model later (deltaL, chromaScale, shiftAmount)
@@ -152,7 +169,9 @@ public readonly record struct ColorModel
     /// <param name="pathStress">Which way a senescing organ dies: 0 follows the seasonal path
     /// (resorption: yellow, then brown), 1 the stress path (desiccation: dull olive, then tan).
     /// It does not touch the colour of an organ that is not senescing.</param>
-    public Vector3 Evaluate(float adulcy, float season, float stress, float senescence, float pathStress = 0f)
+    /// <param name="seasonWeight">How far this leaf takes on the healthy seasonal tint, from 0 to 1
+    /// (<see cref="SeasonWeight"/>); 1 is the curve as authored.</param>
+    public Vector3 Evaluate(float adulcy, float season, float stress, float senescence, float pathStress = 0f, float seasonWeight = 1f)
     {
         var result = LifecycleCurve.Evaluate(adulcy * 0.5f);
 
@@ -162,7 +181,7 @@ public readonly record struct ColorModel
             //burgundy in the cold). This applied the dry direction, so every seasonal tint
             //went yellow-brown whatever the preset asked for.
             var seasonModifier = HealthySeasonCurve?.Evaluate(season) ?? default;
-            result = ApplySeasonModifier(result, seasonModifier);
+            result = ApplySeasonModifier(result, WeightSeasonModifier(seasonModifier, seasonWeight));
         }
 
         if (stress > 0f)
@@ -317,6 +336,23 @@ public readonly record struct ColorModel
     public Vector3 ApplyStressModifier(Vector3 baseLab, Vector3 modifier) => ApplyDirectionalModifier(baseLab, modifier, DryDirection);
 
     public Vector3 ApplySeasonModifier(Vector3 baseLab, Vector3 modifier) => ApplyDirectionalModifier(baseLab, modifier, HealthySeasonDirection);
+
+    /// <summary>
+    /// A season modifier taken part of the way: the lightness shift and the push along the pigment
+    /// direction scale with the weight, the loss of the base colour's own chroma with its square.
+    /// </summary>
+    /// <remarks>
+    /// The square is what makes a partly tinted leaf a colour rather than a grey. Scaling all three
+    /// linearly moves a leaf in a straight line from green to burgundy, through a dull olive at
+    /// chroma 15; keeping the base chroma longer bends the path through gold and copper, which is
+    /// what a half-reddened Bergenia leaf looks like. At weight 1 the modifier is unchanged.
+    /// </remarks>
+    public static Vector3 WeightSeasonModifier(Vector3 modifier, float weight)
+    {
+        if (weight >= 1f) return modifier;
+        weight = MathF.Max(weight, 0f);
+        return new(modifier.X * weight, 1f + (modifier.Y - 1f) * weight * weight, modifier.Z * weight);
+    }
 
     /// <summary>
     /// Applies a compact directional modifier in OKLab.
@@ -491,16 +527,36 @@ public static class BergeniaCordifoliaPreset
         .Add(0.50f, ColorUtils.OkLabFromCieLab(36f, -25f, 30f)) // mature: deep glossy green
         .Add(1.00f, ColorUtils.OkLabFromCieLab(36f, -25f, 30f)); // full adult
 
+    /// <summary>
+    /// The winter colour of the leaves that stay: green until the frosts, then dark gold and
+    /// bronze, copper-red and by January deep red on the sun-exposed leaves, back to green as
+    /// the new leaves come in April. Season fractions from 1 March: 0.69 is 7 November, 0.86
+    /// 8 January, 0.16 28 April. Per leaf the tint is scaled by its light
+    /// (<see cref="ColorModel.SeasonWeight"/>), so the shaded leaves stop at gold or stay green.
+    /// </summary>
+    /// <remarks>
+    /// The curve shipped before only pushed the green 0.024 along a magenta axis, which left a
+    /// January leaf at CIELAB (34, -23, 28): green. A green that turns red has to lose its
+    /// own chroma on the way (the chroma scale) while the shift supplies the red, and a winter
+    /// leaf is darker (anthocyanin over chlorophyll). At full light: November (34, 4, 20) dark
+    /// gold, December (31, 23, 16) copper-red, January (29, 33, 13) deep red; with half the tint
+    /// January is (33, 0, 29), dark gold, and three quarters (31, 16, 22), copper. A first
+    /// version ended on a magenta-leaning burgundy (28, 34, 6) that read as wine in the viewer;
+    /// a grower's January plant is dark red and dark gold.
+    /// </remarks>
     public static ColorCurve BergeniaHealthySeason => new ColorCurve()
-        .Add(0.00f, new Vector3( 0.000f, 1.00f, 0.000f)) // early spring
-        .Add(0.25f, new Vector3( 0.000f, 1.00f, 0.000f)) // spring / summer
-        .Add(0.60f, new Vector3( 0.000f, 1.00f, 0.000f)) // still green
-        .Add(0.75f, new Vector3(-0.008f, 1.04f, 0.008f)) // early autumn: red-bronze begins
-        .Add(0.88f, new Vector3(-0.020f, 1.10f, 0.018f)) // late autumn: bronze / plum
-        .Add(1.00f, new Vector3(-0.030f, 1.14f, 0.024f)); // winter: burgundy-plum
+        .Add(0.00f, new Vector3(-0.032f, 0.18f, 0.105f)) // 1 March: still winter red
+        .Add(0.08f, new Vector3(-0.012f, 0.55f, 0.050f)) // end of March: fading to bronze
+        .Add(0.16f, new Vector3( 0.000f, 1.00f, 0.000f)) // end of April: green
+        .Add(0.62f, new Vector3( 0.000f, 1.00f, 0.000f)) // mid October: still green
+        .Add(0.69f, new Vector3(-0.010f, 0.55f, 0.050f)) // early November: dark gold, bronze
+        .Add(0.77f, new Vector3(-0.025f, 0.30f, 0.090f)) // early December: copper-red
+        .Add(0.86f, new Vector3(-0.035f, 0.15f, 0.110f)) // January: deep red
+        .Add(1.00f, new Vector3(-0.032f, 0.18f, 0.105f)); // end of February
 
+    /// <summary>Towards red in OKLab: anthocyanin over what is left of the green.</summary>
     public static readonly Vector2 HealthySeasonDirection =
-        Vector2.Normalize(new Vector2(0.72f, -0.69f));
+        Vector2.Normalize(new Vector2(1.00f, 0.20f));
 
     public static ColorCurve Stress => ColorModel.CoolAnthocyanicStress;
 
@@ -542,6 +598,28 @@ public static class GeraniumMacrorrhizumPreset
         .Add(0.00f, ColorUtils.OkLabFromCieLab(44f, -4f, 35f)) // dull olive
         .Add(0.45f, ColorUtils.OkLabFromCieLab(44f, 7f, 34f)) // khaki-brown
         .Add(1.00f, ColorUtils.OkLabFromCieLab(44f, 13f, 31f)); // dry brown
+
+    /// <summary>
+    /// The leaves that overwinter are "attractively tinted with red" (Cornell), red, bronze and
+    /// amber (Gardenia.net): from November the sunlit ones go amber, then bronze-red, the shaded
+    /// ones keep their grey-green, and the new leaves of April are green again. Weaker than
+    /// Bergenia's and warmer. At full light: November (42, 0, 26) olive-amber, December (39, 15, 22)
+    /// bronze, January (37, 24, 20) bronze-red; with three quarters of the tint January is
+    /// (39, 10, 29), amber. A first version stopped at (39, 21, 20) and, over the soil, the plant
+    /// read as dry brown rather than red-tinted. Season fractions from 1 March.
+    /// </summary>
+    public static ColorCurve HealthySeason => new ColorCurve()
+        .Add(0.00f, new Vector3(-0.036f, 0.33f, 0.090f)) // 1 March: still red-tinted
+        .Add(0.08f, new Vector3(-0.012f, 0.65f, 0.040f)) // end of March: fading
+        .Add(0.16f, new Vector3( 0.000f, 1.00f, 0.000f)) // end of April: green
+        .Add(0.62f, new Vector3( 0.000f, 1.00f, 0.000f)) // mid October: green
+        .Add(0.68f, new Vector3(-0.012f, 0.62f, 0.045f)) // early November: amber
+        .Add(0.76f, new Vector3(-0.028f, 0.42f, 0.075f)) // early December: bronze
+        .Add(0.86f, new Vector3(-0.040f, 0.30f, 0.095f)) // January: bronze-red
+        .Add(1.00f, new Vector3(-0.036f, 0.33f, 0.090f)); // end of February
+
+    /// <summary>Towards bronze-red in OKLab: red with some of the yellow kept.</summary>
+    public static readonly Vector2 HealthySeasonDirection = Vector2.Normalize(new Vector2(1.00f, 0.25f));
 }
 
 /// <summary>
@@ -569,6 +647,27 @@ public static class GeraniumXCantabrigiensePreset
         .Add(0.00f, ColorUtils.OkLabFromCieLab(44f, -4f, 35f)) // dull olive
         .Add(0.45f, ColorUtils.OkLabFromCieLab(44f, 7f, 34f)) // khaki-brown
         .Add(1.00f, ColorUtils.OkLabFromCieLab(44f, 13f, 31f)); // dry brown
+
+    /// <summary>
+    /// 'Biokovo' keeps most of its leaves and they take "reddish tones in autumn and winter",
+    /// "bronze and red", "dark green foliage changes to dark red" (nurseries; G. macrorrhizum, one
+    /// parent of the cross, has the same habit). On the sunlit leaves: November (39, 1, 26) amber,
+    /// December (37, 19, 19) bronze, January (34, 29, 15) dark red; at three quarters January is
+    /// (36, 13, 27), copper; shaded leaves stay green; the April leaves are green. Darker and redder
+    /// than G. macrorrhizum's bronze-red, lighter than Bergenia's. Season fractions from 1 March.
+    /// </summary>
+    public static ColorCurve HealthySeason => new ColorCurve()
+        .Add(0.00f, new Vector3(-0.040f, 0.23f, 0.100f)) // 1 March: still red
+        .Add(0.08f, new Vector3(-0.012f, 0.62f, 0.045f)) // end of March: fading
+        .Add(0.16f, new Vector3( 0.000f, 1.00f, 0.000f)) // end of April: green
+        .Add(0.62f, new Vector3( 0.000f, 1.00f, 0.000f)) // mid October: green
+        .Add(0.68f, new Vector3(-0.012f, 0.60f, 0.050f)) // early November: amber
+        .Add(0.76f, new Vector3(-0.030f, 0.35f, 0.085f)) // early December: bronze
+        .Add(0.86f, new Vector3(-0.045f, 0.20f, 0.105f)) // January: dark red
+        .Add(1.00f, new Vector3(-0.040f, 0.23f, 0.100f)); // end of February
+
+    /// <summary>Towards red in OKLab, a little warmer than Bergenia's.</summary>
+    public static readonly Vector2 HealthySeasonDirection = Vector2.Normalize(new Vector2(1.00f, 0.20f));
 }
 
 /// <summary>

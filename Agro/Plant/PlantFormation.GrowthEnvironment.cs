@@ -24,9 +24,20 @@ public partial class PlantFormation2
     {
         var thermal = VegetativeTemperatureFactor(timestep);
         var reference = Parameters.VegetativeGrowthLightReferenceWhM2;
-        return reference > 0f
-            ? thermal * Math.Clamp(previousDayExposure / reference, 0f, 1f)
-            : thermal;
+        if (reference <= 0f) return thermal;
+        // An organ that carries no lit leaf of its own has nothing to sense light with: a dormant
+        // crown bud on a leafless stretch of rhizome, a node bud whose leaf fell, a crown that
+        // lost its foliage over winter. Its exposure is zero, and a zero here is not "dark" but
+        // "unknown". Read as dark it made every such hazard zero: no crown rose from the rhizome
+        // and no shed leaf was replaced, and a two-year Geranium macrorrhizum held 6 leaves on one
+        // crown beside 125 dormant buds. Such an organ takes the plant's best-lit leaf, as a
+        // woody shoot does, and a plant with no lit leaf at all develops on its reserves - the
+        // thermal response alone - like a propagule that has not surfaced.
+        // NewDay leaves the plant's maximum at one when no leaf has completed a day.
+        var best = AG.DailyResourceMax;
+        if (best <= 1f) return thermal;
+        if (previousDayExposure <= 0f) previousDayExposure = best;
+        return thermal * Math.Clamp(previousDayExposure / reference, 0f, 1f);
     }
 
     internal float VegetativeGrowthFactor(uint timestep, float previousDayExposure,

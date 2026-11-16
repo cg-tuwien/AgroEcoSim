@@ -163,6 +163,7 @@ export class SpeciesBase {
     shootMaximumRadius = signal(0.0005);
     petioleReorientationMaximumAngleDeg = signal(54.000005954352844);
     petioleReorientationStepAngleDeg = signal(0);
+    leafBladeInclinationHold = signal(0);
     petioleSegmentLength = signal(0);
     maximumPetioleSegments = signal(8);
     rhizomeGrowthRateScale = signal(0.05);
@@ -342,6 +343,7 @@ export class SpeciesBase {
             shootMaximumRadius: this.shootMaximumRadius.peek(),
             petioleReorientationMaximumAngle: this.petioleReorientationMaximumAngleDeg.peek() * DegToRad,
             petioleReorientationStepAngle: this.petioleReorientationStepAngleDeg.peek() * DegToRad,
+            leafBladeInclinationHold: this.leafBladeInclinationHold.peek(),
             petioleSegmentLength: this.petioleSegmentLength.peek(),
             maximumPetioleSegments: this.maximumPetioleSegments.peek(),
             rhizomeGrowthRateScale: this.rhizomeGrowthRateScale.peek(),
@@ -522,6 +524,7 @@ export class SpeciesBase {
         this.shootMaximumRadius.value = s.shootMaximumRadius;
         this.petioleReorientationMaximumAngleDeg.value = s.petioleReorientationMaximumAngle * RadToDeg;
         this.petioleReorientationStepAngleDeg.value = s.petioleReorientationStepAngle * RadToDeg;
+        this.leafBladeInclinationHold.value = s.leafBladeInclinationHold;
         this.petioleSegmentLength.value = s.petioleSegmentLength;
         this.maximumPetioleSegments.value = s.maximumPetioleSegments;
         this.rhizomeGrowthRateScale.value = s.rhizomeGrowthRateScale;
@@ -703,6 +706,7 @@ export class SpeciesBase {
             ShootMaximumRadius: this.shootMaximumRadius.peek(),
             PetioleReorientationMaximumAngle: this.petioleReorientationMaximumAngleDeg.peek() * DegToRad,
             PetioleReorientationStepAngle: this.petioleReorientationStepAngleDeg.peek() * DegToRad,
+            LeafBladeInclinationHold: this.leafBladeInclinationHold.peek(),
             PetioleSegmentLength: this.petioleSegmentLength.peek(),
             MaximumPetioleSegments: this.maximumPetioleSegments.peek(),
             RhizomeGrowthRateScale: this.rhizomeGrowthRateScale.peek(),

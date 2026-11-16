@@ -14,7 +14,7 @@ The provisional defaults are:
 | `VegetativeTemperatureResponseEnabled` | `true` | `false` |
 | `VegetativeGrowthBaseTemperatureC` | 5 C | 5 C, inactive |
 | `VegetativeGrowthFullTemperatureC` | 20 C | 20 C, inactive |
-| `VegetativeGrowthLightReferenceWhM2` | 6000 Wh/m2/day | 0, legacy relative production |
+| `VegetativeGrowthLightReferenceWhM2` | 1400 Wh/m2/day (6000 until 16 November 2026) | 0, legacy relative production |
 
 The thermal factor is `clamp((dailyMeanC - baseC) / (fullC - baseC), 0, 1)`.
 The absolute-light factor is `clamp(previousDayWhM2 / referenceWhM2, 0, 1)`.
@@ -52,8 +52,10 @@ long. Those adult ranges do not establish juvenile timing. Research on
 [low-temperature growth limitation](https://www.frontiersin.org/journals/plant-science/articles/10.3389/fpls.2014.00794/full)
 supports separating tissue development from assimilation at low temperature;
 it does not establish these coefficients for the site's Geranium cultivars.
-The 6000 Wh/m2/day reference is an explicit empirical model parameter, not a
+The light reference is an explicit empirical model parameter, not a
 photosynthetic saturation measurement or the ambient solver's daily integral.
+It was 6000 Wh/m2/day and is 1400 since 16 November 2026; see "The light
+response starved the plant" below.
 
 ## Temperature and calendar inputs
 
@@ -157,3 +159,57 @@ runs have 21 / 15. This observation is recorded without changing Carex mechanics
 Daily CSVs, before/after plots, response fixtures, resume checks and weather
 assertions are archived under `canopy-validation/geranium-seasonal-growth/validation/`.
 No field-size tolerance or cultivar-specific adult calibration is claimed.
+
+## The light response starved the plant (16 November 2026)
+
+Reported from the stored runs: a Geranium macrorrhizum that carried 52 leaves in its
+first summer and 1,224 in its second on the server deployed before this response
+existed carried 8 and 12 under it, on one crown, with no crown ever rising from the
+rhizome; G. x cantabrigiense 12 and 14. Two defects, measured separately on one
+plant, seed 42, 4 h ticks, CPU light, 1 March, 755 days:
+
+| G. macrorrhizum | leaves, summer 1 | leaves, summer 2 | crowns | rhizome reach |
+| --- | ---: | ---: | ---: | ---: |
+| both responses off (the earlier model) | 78 | 1,234 | 107 | 57 cm |
+| as shipped, reference 6000 | 10 | 6 | 1 | 52 cm |
+| zero exposure no longer read as dark, 6000 | 76 | 806 | 88 | 58 cm |
+| the same, reference 1400 (the preset now) | 62 | 1,000 | 101 | 58 cm |
+| thermal response only, reference 0 | 68 | 1,016 | 99 | 58 cm |
+
+- **A zero exposure meant "no leaf to measure with", and was read as darkness.**
+  Exposure reaches a support as the mean of the leaves beyond it and a bud takes its
+  parent's. A dormant crown bud on a stretch of rhizome that carries no crown, a node
+  bud whose leaf fell, a crown bare after the autumn leaf loss: all zero, so their
+  activation, regrowth and continuation hazards were exactly zero. The rhizome kept
+  extending (its growth is not light-gated) and its buds accumulated: 125 dormant buds
+  beside 6 leaves in the second June. `VegetativeEnvironmentFactor` now gives such an
+  organ the plant's best-lit leaf (`DailyResourceMax`), as the woody path always did,
+  and a plant with no lit leaf at all (the maximum still at its sentinel of one) the
+  thermal response alone: it develops on its reserves, like the propagule that has not
+  surfaced. The emergence exception for a basal crown's first axis applies under the
+  thermal response as well, whatever the light reference; with the reference at zero a
+  March propagule otherwise sat below ground until May.
+- **6000 Wh/m2/day is a cloudless midsummer day on an open horizontal leaf.** Vienna's
+  monthly mean global radiation runs from under 1 kWh/m2/day in December to about 6 in
+  June and July, so only the best-lit leaf of a plant in the open reached the nominal
+  rate, for six weeks a year. The species grows in full shade (RHS: "one of the few
+  plants that can tolerate dry shade"). A daily light integral of about 10 mol/m2 is
+  ample for a shade-tolerant perennial - Purdue HO-238-W puts low-light crops at 3-6
+  and medium-light ones at 6-12 mol/m2/day - and 10 mol of photosynthetic light is
+  1.4 kWh/m2 of global radiation at 2.0 mol per MJ. That figure is a reading of crop
+  tables, not a measurement on these cultivars.
+
+With both, the second-year stand is within a fifth of the earlier model's and blooms
+from 10 May to late July (G. x cantabrigiense: 62 to 92 leaves in the first year, 640 to
+680 in the second on 72 crowns, petals 25 May to 8 August). Run as the deployed server's
+stored request was - 1 February, 8 h ticks - G. macrorrhizum reaches 990 to 1,150 leaves
+on 114 crowns, against 1,200 to 1,224 on that server. The thermal response is unchanged, and it is what now separates
+the two models: spring growth starts three to four weeks later than without it (64
+leaves on 26 March against 296; 572 on 25 May against 974) and winter growth is nil.
+A request that still carries 6000 - a stored run opened and run again, a browser tab
+from before - gets the first repair and not the second.
+
+Regression: both Geraniums, 755 days from 1 March at 4 h, one plant: more than 40
+leaves by the end of July of the first year, more than 500 (macrorrhizum) and 350
+(cantabrigiense) in the second summer, more than 50 crowns, petals in May to July of
+the second year; and the dormant rhizome buds must not outnumber the leaves.

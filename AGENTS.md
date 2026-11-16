@@ -461,6 +461,56 @@ surfaces around day 56 and G. macrorrhizum around day 72 - after the default 60-
 hidden meanwhile inside the opaque soil box. That is deliberate (a February sowing does not
 emerge); set the plant's age in the seed list to start from an established plant.
 
+### Development light and temperature response (`Agro/SEASONAL_GROWTH.md`)
+
+Only the two Geraniums (and the trees, on their own code path) scale vegetative development by
+air temperature and by the absolute light of the previous day
+(`PlantFormation2.VegetativeEnvironmentFactor`). Two traps, both found from stored runs on
+16 November 2026, when a two-year Geranium macrorrhizum carried 6 leaves on one crown where the
+server deployed before the response carried 1,224 on a hundred:
+
+- **A zero exposure is "no leaf to measure with", not darkness.** Exposure reaches a support as
+  the mean of the leaves beyond it, and a bud takes its parent's. A dormant crown bud on a bare
+  stretch of rhizome, a node bud whose leaf fell and a crown bare after the autumn leaf loss all
+  read zero, so every hazard that would have given them a leaf was exactly zero while the rhizome
+  itself went on extending: 125 dormant buds beside 6 leaves. Such an organ takes the plant's
+  best-lit leaf (`AG.DailyResourceMax`), and a plant with no lit leaf (the maximum at its sentinel
+  of one) develops on the thermal response alone. Anything new that gates on
+  `PreviousDayEnvResourcesInvariant` needs the same two fallbacks.
+- **The reference is a daily light integral for the species, not a bright day.** It was 6000
+  Wh/m2/day, a cloudless midsummer day on an open horizontal leaf, for a plant that grows in full
+  shade; it is 1400 (about 10 mol/m2/day of photosynthetic light). Compare a species' reference
+  with Vienna's monthly mean global radiation, under 1 kWh/m2/day in December to about 6 in June,
+  and with what a shaded leaf gets, a fifth of that.
+
+**A probe that reads only leaf counts would have caught it in ten seconds**: 200 days of one
+Geranium is a 10 s run (`~/greenfdt-fixtures/habit/probe`, which also writes a run directory the
+server adopts, for screenshots). The stored runs of the deployed server
+(`GET /Simulation/runs`, `/run/{id}/request`, `/run/{id}/frame/{step}/packed`) are the reference
+for "it used to grow": read them before theorising.
+
+### Leaf blades and the petiole light guidance
+
+`ApplyGrowthLight` turns every growing petiole towards the open sky, up to 3 degrees a day, and
+carries its subtree rigidly - the blade included. Under an open sky the open-sky direction is the
+zenith, so petioles stand up along their length (a four-segment Heuchera petiole: 39 degrees at
+the base, 76 at the tip) and the blades stood on edge at 40 to 77 degrees where the preset builds
+them 7 below the horizontal; Bergenia's inner blades at 60 to 80, gathered like a tulip.
+`SpeciesSettings.LeafBladeInclinationHold` (0 = carried rigidly, the historic behaviour and every
+other species'; 1 for Heuchera and Bergenia) lets the blade keep the inclination `LateralPitch`
+and `LeafPitch` build it with: the lamina takes back the change in its own elevation each time
+its petiole turns (`HoldBladeInclination`). So for those two species the two pitches now mean
+what section 7 below says they mean; before, they described only the first day of a leaf.
+Heuchera's petiole is 2 mm in radius, not 3: stiffness goes with the fourth power, so
+`PetioleElasticModulus` went from 1e8 to 2.5e8 with it, or the outer leaves lie on the soil.
+Measured over 755 days from 1 March (seed 42, 4 h, CPU light): Heuchera blades at a median of
+-9 to +4 degrees all through, 117 to 146 leaves on 9 crowns in the second summer, foliage to
+24 cm, flowers at 58 cm, petals 24 June to 7 September as before; Bergenia blades at a median of
+12 to 25 degrees with none over 50 in the first year, 87 to 112 leaves on 6 to 9 crowns, petals
+10 April to 10 May of the second year. Flatter blades shade more: Bergenia carries about a
+third fewer leaves than with its blades upright. Carex, Fragaria and Campanula, which do not set
+the hold, measure identically before and after.
+
 ### Drought (`Agro/DROUGHT_RESPONSE.md`)
 
 - Herbaceous plants restrict growth, then commit whole blades to senescence towards a target
@@ -516,12 +566,15 @@ to roughly *live leaves / `LateralsPerNode`*. A capped apex rests; `RenewPetiole
 replacing leaves at the existing nodes, so the rosette stays alive and bounded, and the
 plant widens through rhizome/offset crowns instead of stacking.
 
-**`RenewPetiole` means leaves are replaced, never lost** - outside the autumn leaf loss
-(`AutumnLeafLossFraction`, since 15 November 2026), which sheds a share of the older leaves
-each autumn. `LeafMaximumAgeHours` does not reduce the leaf count - it swaps the blade at the
-same node. So the live leaf count is
-bounded *only* by the node count, and `CrownMaximumNodes` is the only thing that bounds
-it at all. A two-year Geranium macrorrhizum carried 2,808 leaves before the cap.
+**A node keeps a leaf; only the leaf turns over.** Under the canopy response (every herbaceous
+preset) a leaf past `LeafMaximumAgeHours` senesces through its seasonal colours, hangs dead and
+falls to a node bud that regrows a leaf at the same node (`PlantFormation2.RetireAgedLeaves`,
+since 16 November 2026; before, `RenewPetiole` swapped it for a fresh blade in one tick and an
+old leaf vanished green). The autumn leaf loss (`AutumnLeafLossFraction`) does the same to a
+share of the older leaves each autumn. Without the canopy response the instant swap remains. So
+the live leaf count is bounded *only* by the node count, and `CrownMaximumNodes` is the only
+thing that bounds it at all. A two-year Geranium macrorrhizum carried 2,808 leaves before the
+cap.
 
 **Cap both continuation paths.** `ContinueCrown` is reached from two places: the
 vegetative continuation roll, and - when `ContinueCrownAfterFlowerCommitment` is set -
@@ -760,7 +813,19 @@ in mind when touching a colour:
   `LateDesaturation` only 0.08. If a dead organ looks black again, look for a second encoding
   step before retuning a curve; if it looks grey, look at the end keys and the desaturation.
 - **The senescence path belongs to the leaf**: set in the agent's `Stress` at commitment
-  (drought 1, autumn 0, carbon the plant's water stress) and read at export.
+  (drought 1, autumn and age 0, carbon the plant's water stress) and read at export.
+- **A winter tint is per leaf, by light.** `ColorModel.HealthySeasonCurve` (Bergenia deep red and gold,
+  Heuchera mahogany, G. x cantabrigiense dark red, G. macrorrhizum bronze-red, Fragaria bronze) is
+  scaled per blade by `ColorModel.SeasonWeight` of its light relative to the plant's best-lit leaf
+  (`PreviousDayEnvResourcesInvariant / DailyResourceMax`; winter reddening is cold plus strong
+  light) and by the pigment it has had time to make (`OrganColorContext.PigmentBuilt`: none for a
+  leaf made since 1 March, then a four-week ramp), so the shaded and the new leaves stay green.
+  Not the expansion (`Adulcy`): a Geranium seedling sown on 1 March expanded in days and came up
+  in winter red. The chroma loss scales with the weight
+  squared, which bends a half-tinted leaf through gold instead of a grey olive. A tint that only
+  pushes along a pigment axis does not turn a green leaf red: Bergenia's old curve left a January
+  leaf at (34, -23, 28). The export caches the grown healthy blade colour per weight step (nine,
+  inline), so this costs no allocation.
 - **Petals are shed at `FlowerSettings.PetalAbscissionSenescence`**, a family trait (0.3
   Geranium and Fragaria, 0.5 the composites, 0.8-1 the ones that wither in place), and their
   colour is read at `senescence / theta`. This moved bloom-end dates earlier by up to
@@ -957,9 +1022,12 @@ render mode 3, one plant in a 1x1 m field.
 | Geranium macrorrhizum and Heuchera, 730 days, soft engine | Shaking | Median per-tick organ rotation under 0.3 deg after day 300; see `SOFT_CONTACTS.md` "Shaking" |
 | 100 and 400 plants, parallel against sequential tick, 650 steps | Reproducibility | Byte-identical exported frames |
 | Geranium macrorrhizum beside a 5 cm wall, in a wall corner and under a 12 cm ceiling; Carex beside a wall; 120 days, 4 h, mixed engine | Obstacles are hard | Zero organ-ticks inside the walls (`CollisionWorld.StaticPenetration`); under the ceiling at most 0.6 mm on newborn floral segments; organ counts equal to the soft engine's; see `SOFT_CONTACTS.md` "The mixed engine" |
-| Every preset, `Agro --color-selftest` | Organ colours | Healthy leaf L\* 25-54 and green (or anthocyanic); healthy leaf chroma >= 30; dead leaf on both paths L\* 38-58, chroma >= 28, brown hue; no senescing stage under L\* 30; open petals white or coloured; stems L\* 30-85 |
+| Every preset, `Agro --color-selftest` | Organ colours | Healthy leaf L\* 25-54 and green (or anthocyanic); healthy leaf chroma >= 30; January leaf sunlit and shaded L\* 22-54, chroma >= 20, a sunlit Bergenia leaf red (a\* >= 20) and a shaded one not; dead leaf on both paths L\* 38-58, chroma >= 28, brown hue; no senescing stage under L\* 30; open petals white or coloured; stems L\* 30-85 |
 | Campanula and Taraxacum without rain, 200 days; Persicaria and Lactuca, 260 days; exported frames decoded by the Godot core | Organ colours on the wire | No organ type other than a ripe fruit with its brightest on-screen channel under 64; every frame carries flag 4; the annuals' stems reach straw and their leaves brown in the last weeks; see `ORGAN_COLORS.md` |
 | Fragaria, 300 days from 1 March, 4 h and 1 h | Autumn leaf loss | No leaf turns before 6 October; from mid-October leaves pass through a red stage (on-screen a\* above 35); by mid-December about 40 % fewer leaves than the October peak; no regrowth before March; `--checkpoint-selftest` resumes inside the window |
+| Bergenia, Heuchera and both Geraniums, 730 days from 1 March, decoded frames | Winter colour, ageing leaves | In January the sunlit Bergenia leaves are deep red (on-screen a\* 25 and up) and the shaded ones gold or green, all green again by May; Heuchera mahogany (b\* above 5); both Geraniums red-flushed (a\* above 15) and green from mid April; a seedling sown on 1 March green; a leaf past `LeafMaximumAgeHours` is committed to senescence, never swapped in the tick (late February: Fragaria 137 and Campanula 749 browning leaves, before none); the leaf count does not rise between December and February |
+| Both Geraniums, 755 days from 1 March | Growth and clonal spread under the light and temperature response | More than 40 leaves by the end of July of the first year; in the second summer more than 500 leaves (G. x cantabrigiense 350) on more than 50 crowns; petals in May to July of the second year; dormant rhizome buds never outnumber the leaves (they did, 125 to 6) |
+| Heuchera and Bergenia, 240 days from 1 March | Blade inclination | Blades longer than 2 cm: Heuchera median elevation between -12 and +5 degrees and 90th percentile under 25; Bergenia median 10 to 30 and 90th percentile under 50 (they were 50 and 77, 42 and 62); Heuchera mean petiole radius under 2.1 mm and 10th-percentile leaf height above 1.5 cm |
 | Any species, 1 h vs 4 h ticks, 100 days | Timestep sensitivity | See the note below - treat this as a drift check, not an equality check |
 
 **The model is not timestep invariant, and it was not before these changes either.**
@@ -1041,10 +1109,10 @@ Honest list of what still does not match:
   density at the same width; the same trade-off will appear for any mat-former.
 - **No node ever dies, and leaves die only to drought and in autumn.** Since the drought
   response (`Agro/DROUGHT_RESPONSE.md`) a herbaceous leaf can senesce, hang dead and fall,
-  leaving a node bud that regrows a leaf, and since 15 November 2026 the autumn leaf loss does
-  the same to a share of the older leaves each autumn (`ORGAN_COLORS.md`). Otherwise
-  `RenewPetiole` still replaces the blade at the same node, so foliage is bounded only by the
-  node count, and `CrownMaximumNodes` is a hard ceiling rather than a turnover. A real rosette
+  leaving a node bud that regrows a leaf; since 15 November 2026 the autumn leaf loss does the
+  same to a share of the older leaves each autumn, and since 16 November a leaf past
+  `LeafMaximumAgeHours` (`ORGAN_COLORS.md`). The node itself stays, so foliage is bounded only
+  by the node count, and `CrownMaximumNodes` is a hard ceiling rather than a turnover. A real rosette
   also sheds its oldest basal nodes each season, which is what lets it flower repeatedly
   without growing. Node abscission is the single most valuable thing left here.
 - **Clonal proliferation is still fast**: Carex reaches 65 tillers and G. macrorrhizum

@@ -1,12 +1,26 @@
 # Leaf turnover and lifespan evidence
 
-Reviewed 5 November 2026. `LeafMaximumAgeHours` is an age of eligibility for
-herbaceous leaf replacement, not a guaranteed maximum lifespan. Ordinary renewal
-removes the old petiole and blade and creates a replacement directly. Drought or
-carbon stress instead commits blades to senescence, retains dead foliage for the
-configured attachment period, and then sheds it.
+Reviewed 5 November 2026; revised 16 November 2026. `LeafMaximumAgeHours` is the
+age at which a herbaceous leaf is retired. Under the canopy response (every
+herbaceous preset, `CanopyAdjustmentHalfTimeDays` above zero) the retirement is a
+senescence like any other: the canopy controller commits the leaf to its seasonal
+colour path (`PlantFormation2.RetireAgedLeaves`, daily, outside the autumn window),
+it dies over `LeafSenescenceSeasonalDuration`, hangs for `DeadLeafAttachmentHours`
+and falls to a node bud, which regrows a leaf when growth allows. Without the
+canopy response, ordinary renewal still removes the old petiole and blade and
+creates a replacement directly, as below. Drought or carbon stress commits blades
+to senescence the same way.
 
-## Age renewal
+**Why it changed.** The direct replacement made an old leaf vanish while green and
+a seedling-sized one appear in its place in the same tick, in winter as well. On a
+two-year Bergenia and Heuchera that is every leaf the plant lost outside a drought
+and the autumn window, and it was reported as "leaves disappeared but never went
+through colouring". The renewal's hourly probability, `(age / 7000 h)^2` past the
+eligibility age, made it near-certain within hours of the maximum age for every
+preset, so retiring at the maximum age keeps the timing; what changed is that the
+node is bare for the senescence and the attachment period plus the regrowth wait.
+
+## Age renewal (plants without the canopy response)
 
 The herbaceous renewal probability uses floating-point `ageHours / 7000f` after
 the species' eligibility age. Integer division previously held this probability

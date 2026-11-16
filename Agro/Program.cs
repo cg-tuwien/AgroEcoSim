@@ -72,6 +72,11 @@ internal class Program
             // Autumn leaf loss of a perennial herb: sown 1 August, resumed on 9 November with
             // summer leaves committed, colouring and hanging dead. Mixed engine only.
             (600, 4, 1, 0, null, 0, 0, "Fragaria vesca 'Rügen'", false, false, new DateTime(2026, 8, 1)),
+            // The growth light guidance with a blade that keeps its inclination (Heuchera), and
+            // the development response to light and temperature (Geranium), whose fallback for
+            // an organ without a lit leaf reads the plant's daily maximum. Mixed engine only.
+            (240, 4, 1, 3, null, 0, 0, "Heuchera micrantha", false, false, new DateTime(2026, 4, 1)),
+            (300, 4, 1, 3, null, 0, 0, "Geranium Macrorrhizum", false, false, new DateTime(2026, 4, 1)),
         };
         foreach (var engine in new[] { ContactEngineKind.Mixed, ContactEngineKind.Certified, ContactEngineKind.Soft })
         foreach (var (steps, hoursPerTick, plants, renderMode, filter, extraSteps, totalHours, speciesName, dry, deformable, start) in scenarios)
@@ -193,7 +198,9 @@ internal class Program
     /// leaves were black, then authored light and pastel, then authored at the chroma a
     /// colorimeter reads on one leaf, which is dull on a screen. The bands are CIELAB: healthy
     /// leaves L* 25-54 (Munsell plant-tissue 5GY 4/4 is L* 41), green unless anthocyanic, chroma
-    /// at least 30; dead leaves on either path L* 38-58, chroma at least 28 and a brown hue
+    /// at least 30; a January leaf, sunlit or shaded, L* 22-54 and chroma at least 20, and a sunlit
+    /// Bergenia leaf red (a* 20 and up) and a sunlit Geranium leaf red-flushed (15 and up) where a
+    /// shaded one is not; dead leaves on either path L* 38-58, chroma at least 28 and a brown hue
     /// (Munsell 10YR 5/4 - 7.5YR 4/4); nothing on the way darker than L* 30; open petals either
     /// white (L* 75 and up) or coloured (chroma 35 and up); stems L* 30-85.
     /// See Agro/ORGAN_COLORS.md.
@@ -210,9 +217,9 @@ internal class Program
         static float Hue(Vector3 lab) => (MathF.Atan2(lab.Z, lab.Y) * 180f / MathF.PI + 360f) % 360f;
         static string F(Vector3 lab) => $"({lab.X,4:F0},{lab.Y,4:F0},{lab.Z,4:F0})";
 
-        const float Summer = 0.35f, Lamina = ColorUtils.LaminaExposure, Round = ColorUtils.RoundOrganExposure;
+        const float Summer = 0.35f, January = 0.86f, Lamina = ColorUtils.LaminaExposure, Round = ColorUtils.RoundOrganExposure;
         var failures = new List<string>();
-        Console.WriteLine($"{"species",-34} {"leaf",-16} {"dead (season)",-16} {"dead (drought)",-16} {"petal",-16} stems");
+        Console.WriteLine($"{"species",-34} {"leaf",-16} {"winter, sun",-16} {"dead (season)",-16} {"dead (drought)",-16} {"petal",-16} stems");
         foreach (var species in SpeciesSettings.Predefined)
         {
             var name = species.Name;
@@ -223,6 +230,23 @@ internal class Program
             Require(leaf.X >= 25f && leaf.X <= 54f, $"healthy leaf L* {leaf.X:F0} outside 25-54");
             Require(leaf.Y < -5f || (leaf.Y > 5f && leaf.X < 40f), $"healthy leaf neither green nor anthocyanic {F(leaf)}");
             Require(Chroma(leaf) >= 30f, $"healthy leaf chroma {Chroma(leaf):F0} under 30: washed out");
+
+            //The winter tint, on a sunlit leaf and on a shaded one: still a leaf colour, never a grey
+            //or a black; for Bergenia the winter red the species is grown for, and the Geraniums'
+            //red flush, on the sunlit leaves only.
+            var winter = Shown(leaves.WireColor(January, 1f, 0f, 0f, Lamina, 0f, 1f), Lamina);
+            var winterShade = Shown(leaves.WireColor(January, 1f, 0f, 0f, Lamina, 0f, ColorModel.SeasonWeight(0f)), Lamina);
+            foreach (var (c, where) in new[] { (winter, "sunlit"), (winterShade, "shaded") })
+            {
+                Require(c.X >= 22f && c.X <= 54f, $"{where} winter leaf L* {c.X:F0} outside 22-54");
+                Require(Chroma(c) >= 20f, $"{where} winter leaf chroma {Chroma(c):F0} under 20: grey");
+            }
+            if (name.StartsWith("Bergenia") || name.StartsWith("Geranium"))
+            {
+                var red = name.StartsWith("Bergenia") ? 20f : 15f;
+                Require(winter.Y >= red, $"sunlit January leaf {F(winter)} not red (a* under {red:F0})");
+                Require(winterShade.Y < winter.Y - 15f, $"shaded January leaf {F(winterShade)} as red as a sunlit one");
+            }
 
             var dead = new Vector3[2];
             for (int path = 0; path < 2; ++path)
@@ -253,7 +277,7 @@ internal class Program
                 stemRange = (MathF.Min(stemRange.Min, c.X), MathF.Max(stemRange.Max, c.X));
                 Require(c.X >= 30f && c.X <= 85f, $"stem (maturity {m}, age {o}, dying {d}) L* {c.X:F0} outside 30-85");
             }
-            Console.WriteLine($"{name,-34} {F(leaf),-16} {F(dead[0]),-16} {F(dead[1]),-16} {F(petal),-16} L* {stemRange.Min:F0}-{stemRange.Max:F0}");
+            Console.WriteLine($"{name,-34} {F(leaf),-16} {F(winter),-16} {F(dead[0]),-16} {F(dead[1]),-16} {F(petal),-16} L* {stemRange.Min:F0}-{stemRange.Max:F0}");
         }
 
         foreach (var failure in failures) Console.WriteLine("FAIL " + failure);
