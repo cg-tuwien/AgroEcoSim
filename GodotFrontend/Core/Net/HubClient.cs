@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.SignalR.Client;
+using Microsoft.AspNetCore.SignalR;
 using GodotFrontend.Core.Net.Dto;
 
 namespace GodotFrontend.Core.Net;
@@ -25,6 +26,7 @@ public sealed class HubClient : IAsyncDisposable
 
     private readonly HubConnection connection;
     private readonly SemaphoreSlim startGate = new(1, 1);
+    public WriteAccess Access { get; internal set; }
 
     public event Action? Rejected;
     public event Action<uint, uint>? Preparation;
@@ -38,8 +40,9 @@ public sealed class HubClient : IAsyncDisposable
     public event Action<string?>? Reconnected;
     public event Action<Exception?>? Closed;
 
-    public HubClient(ServerEndpoint endpoint)
+    public HubClient(ServerEndpoint endpoint, WriteAccess? access = null)
     {
+        Access = access ?? new WriteAccess();
         connection = new HubConnectionBuilder()
             .WithUrl(endpoint.Hub)
             .WithAutomaticReconnect(new WebRetryPolicy())
@@ -74,12 +77,24 @@ public sealed class HubClient : IAsyncDisposable
         finally { startGate.Release(); }
     }
 
-    public Task StartRunAsync(string uploadId, CancellationToken ct = default) => connection.InvokeAsync("Start", uploadId, ct);
-    public Task<bool> PreviewAsync(CancellationToken ct = default) => connection.InvokeAsync<bool>("Preview", ct);
-    public Task<bool> SubscribeAsync(string runId, CancellationToken ct = default) => connection.InvokeAsync<bool>("Subscribe", runId, ct);
-    public Task AbortAsync(CancellationToken ct = default) => connection.InvokeAsync("Abort", ct);
+    private async Task<T> InvokeWriteAsync<T>(string method, CancellationToken ct, params object?[] args)
+    {
+        var credential = Access.RequirePassword();
+        var arguments = new object?[args.Length + 1];
+        args.CopyTo(arguments, 0);
+        arguments[^1] = credential;
+        try { return await connection.InvokeCoreAsync<T>(method, arguments, ct).ConfigureAwait(false); }
+        catch (HubException ex) { Access.HandleRejection(ex.Message); throw; }
+    }
+
+    public Task StartRunAsync(string uploadId, CancellationToken ct = default) => InvokeWriteAsync<object?>("Start", ct, uploadId);
+    public Task<bool> PreviewAsync(CancellationToken ct = default) => InvokeWriteAsync<bool>("Preview", ct);
+    public Task<bool> SubscribeAsync(string runId, CancellationToken ct = default) => InvokeWriteAsync<bool>("Subscribe", ct, runId);
+    public Task AbortAsync(CancellationToken ct = default) => InvokeWriteAsync<object?>("Abort", ct);
     public Task TerrainAsync(string terrainId, ushort hoursPerTick, string pattern, bool patternForMaterial, float resolution, CancellationToken ct = default)
-        => connection.InvokeAsync("Terrain", terrainId, hoursPerTick, pattern, patternForMaterial, resolution, ct);
+        => InvokeWriteAsync<object?>("Terrain", ct, terrainId, hoursPerTick, pattern, patternForMaterial, resolution);
+
+    public Task DisconnectAsync(CancellationToken ct = default) => connection.StopAsync(ct);
 
     public async ValueTask DisposeAsync()
     {

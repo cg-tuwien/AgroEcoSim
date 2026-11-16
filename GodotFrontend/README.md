@@ -18,6 +18,10 @@ the web frontend does: start runs, watch them grow, scrub through stored runs, l
 - **Simulation**: time step, horizon, start date, seed, render mode, contact engine, field size, seeds.
 - **Analysis**: data mappings (water, energy, irradiance, ...), visibility toggles, lighting (daylight, sun and
   shadows, occlusion, indirect light, leaf translucency, sky), and the readout of the organ under the cursor.
-- **Runs**: the server's stored runs - view or delete them.
+- **Runs**: view stored runs and their protection from automatic cleanup. Unlock writes with the shared password to protect/unprotect a run or permanently delete it; protection can change while a run computes.
+
+The app starts read-only. The password entered through **Unlock writes** stays in memory for this session and is never saved in settings or session archives. Locking detaches live control; stored playback and downloads remain available. New runs start protected, while older runs remain unprotected until marked. A protected run can still be deliberately deleted after confirmation.
+
+The console integration harness requires `AGRO_WRITE_PASSWORD` in its environment and must target an isolated test server. Use HTTPS/WSS when connecting to a production server.
 
 Developer notes, commands and measurements are in [AGENTS.md](AGENTS.md).

@@ -1,8 +1,8 @@
 using AgroServer.Models;
 using Agro;
-using System.Diagnostics;
 using AgroServer.Services;
 using System.Diagnostics.CodeAnalysis;
+using System.IO.Compression;
 using FacadeJsonImport;
 
 namespace AgroServer.Controllers;
@@ -29,11 +29,14 @@ public class SimulationController// : ControllerBase
     }
 
     [RequiresUnreferencedCode("SimulationController")]
-    public static void Map(RouteGroupBuilder api, IConfiguration configuration, ISimulationUploadService uploadService, ITerrainBuffer terrainBuffer, ISeedsBuffer seedsBuffer, IRunStore runStore)
+    public static void Map(RouteGroupBuilder api, IConfiguration configuration, ISimulationUploadService uploadService, ITerrainBuffer terrainBuffer, ISeedsBuffer seedsBuffer, IRunStore runStore, ISimulationRunner runner)
     {
         api.MapGet("/", () => Results.Ok());
 
         api.MapGet("/version", () => Results.Text("20261022"));
+
+        // The write middleware validates the header before this endpoint can be entered.
+        api.MapPost("/write-access", () => Results.NoContent());
 
         //--- stored runs ----------------------------------------------------------------------
         //
@@ -188,11 +191,8 @@ public class SimulationController// : ControllerBase
         //just replayed. Without it a past run opens as plants floating in nothing: trays and
         //facade never travel in a frame.
         //
-        //Rebuilt from the stored model when the cached copy is absent, which is every run stored
-        //before terrains were kept. The model outlives the cache - it is content-addressed and
-        //shared - so a run from before this existed is still drawable as long as its OBJ was
-        //uploaded once since. The rebuild is seconds and a few hundred megabytes, so the result is
-        //written back: the cost is paid by the first person to open that run and by nobody after.
+        //Rebuilt from the stored model when the terrain is absent. Public reads do not write a
+        //persistent cache; new runs save their required terrain before creation succeeds.
         api.MapGet("/run/{runId}/terrain", (HttpContext http, string runId) =>
         {
             if (!runStore.TryReadTerrain(runId, out var gzipped)
@@ -222,54 +222,38 @@ public class SimulationController// : ControllerBase
             };
         });
 
-        api.MapPost("/", (SimulationRequest request) =>
+        api.MapPut("/run/{runId}/protection", (string runId, RunProtectionRequest request) =>
         {
-            var world = !string.IsNullOrWhiteSpace(request.FieldModelKey) && terrainBuffer.TryGetV2(request.FieldModelKey, out var terrain)
-                ? Initialize.World(request, terrain)
-                : Initialize.World(request);
+            if (request.Protected is not bool protect)
+                return Results.BadRequest("An explicit protected boolean is required.");
+            try { return Results.Ok(Describe(runStore, runStore.SetProtection(runId, protect))); }
+            catch (KeyNotFoundException) { return Results.NotFound(); }
+        });
 
-            world.Irradiance.SetAddress(configuration["RendererIPMitsuba"], configuration["RendererPortMitsuba"], configuration["RendererIPTamashii"], configuration["RendererPortTamashii"], request?.RenderMode ?? 0);
-
-            var start = DateTime.UtcNow.Ticks;
-            world.Run((uint)world.TimestepsTotal());
-            var stop = DateTime.UtcNow.Ticks;
-            Debug.WriteLine($"Simulation time: {(stop - start) / TimeSpan.TicksPerMillisecond} ms");
-
-            var response = new SimulationResponse() { Plants = new(world.Count), CompletedSteps = world.RecordedStep };
-            world.ForEach(formation =>
-            {
-                if (formation is PlantFormation2 plant)
-                    //plantData.Add(@$"{{""P"":{JsonSerializer.Serialize(new Vector3Data(plant.Position))},""V"":{plant.AG.GetVolume()}}}");
-                    response.Plants.Add(new() { Volume = plant.AG.GetVolume() });
-            });
-
-            Debug.WriteLine($"RENDER TIME: {world.Irradiance.ElapsedMilliseconds} ms");
-
-            if ((request?.RequestGeometry ?? false) && world.RecordedStep > 0)
-            {
-                var exportFlags = (request.DownloadRoots ?? false ? ExportFlags.Roots : ExportFlags.None) | ExportFlags.Analytics;
-                response.Scene = world.ExportToStream((byte)exportFlags);
-            }
-
-            response.Renderer = world.RendererName;
-            //Reported whenever a measurement was asked for, even when the filter matched nothing:
-            //without it the client cannot tell a mistyped filter from a run that never measured.
-            //This path stores nothing, so there is no run id and nowhere to fetch a dropped series.
-            response.ObstacleLight = ObstacleLightDocument.ToElement(
-                ObstacleLightDocument.From(world, null, ObstacleLightDocument.WireWeeklyRecordBudget));
-
-            return response;
+        api.MapPost("/", async (SimulationRequest request) =>
+        {
+            if (ValidateRequest(request) is string error) return Results.BadRequest(error);
+            if (!string.IsNullOrEmpty(request.ResumeRunId))
+                return Results.BadRequest("Resume this run through the stored-run Start workflow.");
+            if (!string.IsNullOrEmpty(request.FieldModelRunId) && string.IsNullOrWhiteSpace(request.FieldModelKey))
+                return Results.BadRequest("This synchronous endpoint requires an uploaded field model key; use Start to reuse a stored run's model.");
+            runStore.EnsureWritable();
+            ImportedObjDataV2? terrain = null;
+            string? modelHash = null;
+            if (!string.IsNullOrWhiteSpace(request.FieldModelKey)
+                && !terrainBuffer.TryGetV2(request.FieldModelKey, out terrain, out modelHash))
+                return Results.BadRequest("The field model key is missing or expired; upload the model again.");
+            if (!string.IsNullOrWhiteSpace(request.FieldModelKey) && terrain?.Faces?.Count is not > 0)
+                return Results.BadRequest("The uploaded field model contains no geometry.");
+            var response = await runner.RunToCompletionAsync(request, terrain, modelHash);
+            return Results.Json(response, statusCode: response.StorageFailed ? StatusCodes.Status507InsufficientStorage
+                : response.ExecutionFailed ? StatusCodes.Status500InternalServerError : StatusCodes.Status200OK);
         });
 
         api.MapPost("/upload", (SimulationRequest request) =>
         {
-            if (request.HoursPerTick is < 1 or > ushort.MaxValue)
-                return Results.BadRequest("HoursPerTick must be between 1 and 65535.");
-            //A pattern that does not parse is still run - the meter falls back to a substring
-            //match - but the person typing it should hear about it now, not read it in the meta.
-            if (!string.IsNullOrWhiteSpace(request.LeafAreaIndexObstacles)
-                && ObstacleNameFilter.Validate(request.LeafAreaIndexObstacles.Trim()) is string error)
-                return Results.BadRequest($"LeafAreaIndexObstacles is not a valid regular expression: {error}");
+            if (ValidateRequest(request) is string error) return Results.BadRequest(error);
+            runStore.EnsureWritable();
             return Results.Text(uploadService.Add(request));
         });
 
@@ -277,11 +261,13 @@ public class SimulationController// : ControllerBase
         //api.MapPost("/terrain", (string data) => terrainBuffer.Add(data));
         api.MapPost("/terrain", async (HttpContext context) =>
         {
+            runStore.EnsureWritable();
             var maxBodySizeFeature = context.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpMaxRequestBodySizeFeature>();
             if (!maxBodySizeFeature.IsReadOnly) maxBodySizeFeature.MaxRequestBodySize = 256L * 1024L * 1024L;
 
             using var reader = new StreamReader(context.Request.Body);
             var data = await reader.ReadToEndAsync();
+            if (string.IsNullOrWhiteSpace(data)) return Results.BadRequest("The field model is empty.");
             //Filed here, at the upload, because this is the last moment the OBJ source exists. The
             //parse is not reversible and the buffer entry is single-use and five minutes old at
             //most, so a run that wants to be continued or forked later has to capture its model
@@ -332,10 +318,10 @@ public class SimulationController// : ControllerBase
         store.HasFieldModel(run.FieldModelHash),
         store.HasTerrain(run.Id) || store.HasFieldModel(run.FieldModelHash),
         store.HasObstacleLight(run.Id), store.HasCheckpoint(run.Id), run.ParentRunId, run.BranchStep,
-        run.StopReason);
+        run.StopReason, run.Protected);
 
     /// <summary>
-    /// Builds a stored run's soil from the field model filed with it, and keeps the result.
+    /// Builds a stored run's soil without changing persistent data during a public GET.
     ///
     /// The one path by which a run stored before terrains were cached becomes viewable again. It
     /// needs the same coordinate system and the same build parameters the run used - the store
@@ -354,15 +340,27 @@ public class SimulationController// : ControllerBase
 
             var soil = new SoilFormationsList(null, objData, 1f, run.FieldItemRegex,
                                               run.FieldItemRegexMaterial, run.FieldResolution, false);
-            store.WriteTerrain(runId, soil.Serialize());
-            Console.WriteLine($"Rebuilt and cached the terrain of run {runId} from stored field model {run.FieldModelHash[..12]}.");
-            return store.TryReadTerrain(runId, out gzipped);
+            using var output = new MemoryStream();
+            using (var gzip = new GZipStream(output, CompressionLevel.Optimal, leaveOpen: true))
+                gzip.Write(soil.Serialize());
+            gzipped = output.ToArray();
+            return true;
         }
         catch (Exception e)
         {
             Console.Error.WriteLine($"Could not rebuild the terrain of run {runId}: {e.Message}");
             return false;
         }
+    }
+
+    internal static string? ValidateRequest(SimulationRequest request)
+    {
+        if (request.HoursPerTick is < 1 or > ushort.MaxValue)
+            return "HoursPerTick must be between 1 and 65535.";
+        if (!string.IsNullOrWhiteSpace(request.LeafAreaIndexObstacles)
+            && ObstacleNameFilter.Validate(request.LeafAreaIndexObstacles.Trim()) is string error)
+            return $"LeafAreaIndexObstacles is not a valid regular expression: {error}";
+        return null;
     }
 
     static IResult LaminaSlices(string species)

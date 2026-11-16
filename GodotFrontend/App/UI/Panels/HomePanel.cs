@@ -40,8 +40,9 @@ public partial class HomePanel : SidePanelTab
     public override void Refresh()
     {
         var s = c.Session;
-        simulate.Text = s.Computing ? "Stop" : "Simulate";
-        simulate.Disabled = !s.Computing && c.Request.Seeds.Count == 0;
+        simulate.Text = c.Starting ? "Starting…" : s.Computing ? "Stop" : "Simulate";
+        simulate.Disabled = !c.Access.IsUnlocked || c.Starting || (!s.Computing && c.Request.Seeds.Count == 0);
+        simulate.TooltipText = c.Access.IsUnlocked ? "" : "Unlock writes to start or stop a simulation.";
         transport.Refresh();
         save.Disabled = c.History.Count == 0 || s.Computing;
         prim.Disabled = c.History.Count == 0;

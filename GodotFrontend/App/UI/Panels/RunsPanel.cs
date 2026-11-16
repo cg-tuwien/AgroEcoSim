@@ -16,6 +16,7 @@ public partial class RunsPanel : SidePanelTab
     private List<RunDto> runs = new();
     private StoreStatusDto? store;
     private bool loading;
+    private bool writing;
     private string shownKey = "";
 
     public RunsPanel(AppRoot app) : base("Runs")
@@ -54,12 +55,12 @@ public partial class RunsPanel : SidePanelTab
 
     public override void Refresh()
     {
-        var key = string.Join(",", runs.Select(r => r.Id + r.Status + r.StoredFrames)) + c.Session.ViewingRunId;
+        var key = string.Join(",", runs.Select(r => r.Id + r.Status + r.StoredFrames + r.Protected)) + c.Session.ViewingRunId + c.Access.IsUnlocked + writing;
         if (key == shownKey) return;
         shownKey = key;
         if (store is { Enabled: false })
         {
-            banner.Text = $"The run store is disabled: {store.DisabledReason}";
+            banner.Text = $"The run store is disabled: {store.DisabledReason}\nNew simulations cannot start until storage is available.";
             banner.Modulate = AppTheme.Error;
         }
         else if (store is { Warnings.Length: > 0 })
@@ -81,7 +82,8 @@ public partial class RunsPanel : SidePanelTab
             var span = Core.Time.SimClock.EncodeTime((long)r.LastStep * r.HoursPerTick);
             var title = new Label
             {
-                Text = $"{r.CreatedUtc.ToLocalTime():yyyy-MM-dd HH:mm}  [{r.Status}]{(r.Deterministic ? " det" : "")}{(r.Id == c.Session.ViewingRunId ? "  (shown)" : "")}",
+                Text = $"{r.CreatedUtc.ToLocalTime():yyyy-MM-dd HH:mm}  [{r.Status}]{(r.Deterministic ? " det" : "")}{(r.Id == c.Session.ViewingRunId ? "  (shown)" : "")}\n" +
+                       (r.Protected == true ? "Protected from automatic deletion" : r.Protected == false ? "Unprotected: eligible for automatic cleanup" : "Protection unavailable on this server"),
                 AutowrapMode = TextServer.AutowrapMode.WordSmart,
             };
             if (r.Id == c.Session.ViewingRunId) title.AddThemeColorOverride("font_color", AppTheme.Accent);
@@ -98,7 +100,19 @@ public partial class RunsPanel : SidePanelTab
             var id = r.Id;
             view.Pressed += () => _ = c.OpenStoredAsync(id);
             row.AddChild(view);
-            var del = new TwoClickButton("Delete", $"Delete {r.TotalBytes / 1048576.0:0.0} MB?", () => _ = Delete(id)) { Disabled = r.IsRunning };
+            var protect = new Button
+            {
+                Text = r.Protected == true ? "Unprotect" : "Protect",
+                Disabled = !c.Access.IsUnlocked || writing || r.Protected == null,
+                TooltipText = !c.Access.IsUnlocked ? "Unlock writes to change protection." : "Protection prevents automatic cleanup. Unprotecting makes this run eligible for cleanup.",
+            };
+            protect.Pressed += () => _ = SetProtection(id, r.Protected != true);
+            row.AddChild(protect);
+            var del = new TwoClickButton("Delete", r.Protected == true ? "Delete protected run permanently?" : $"Delete {r.TotalBytes / 1048576.0:0.0} MB permanently?", () => _ = Delete(id))
+            {
+                Disabled = r.IsRunning || !c.Access.IsUnlocked || writing,
+                TooltipText = !c.Access.IsUnlocked ? "Unlock writes to delete a run." : "Permanently delete this run, including when it is protected.",
+            };
             row.AddChild(del);
             card.AddChild(row);
             card.AddChild(new HSeparator());
@@ -108,6 +122,9 @@ public partial class RunsPanel : SidePanelTab
 
     private async Task Delete(string id)
     {
+        if (!c.Access.IsUnlocked || writing) return;
+        writing = true;
+        app.Invalidate();
         try
         {
             var res = await c.Rest.DeleteRunAsync(id);
@@ -115,6 +132,23 @@ public partial class RunsPanel : SidePanelTab
             else if (c.Session.ViewingRunId == id) c.ForgetRun();
         }
         catch (Exception ex) { app.Status($"delete failed: {ex.Message}"); }
+        finally { writing = false; }
         await Reload();
+    }
+
+    private async Task SetProtection(string id, bool protect)
+    {
+        if (!c.Access.IsUnlocked || writing) return;
+        writing = true;
+        app.Invalidate();
+        try
+        {
+            var updated = await c.Rest.SetProtectionAsync(id, protect);
+            var index = runs.FindIndex(r => r.Id == id);
+            if (index >= 0) runs[index] = updated;
+            app.Status(updated.Protected == true ? "Run protected from automatic deletion." : "Run unprotected; automatic cleanup may delete it.");
+        }
+        catch (Exception ex) { app.Status($"could not change protection: {ex.Message}"); }
+        finally { writing = false; shownKey = ""; app.Invalidate(); }
     }
 }

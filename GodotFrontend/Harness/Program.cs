@@ -73,6 +73,15 @@ T Run<T>(Task<T> task) { Wait(() => task.IsCompleted, 600); return task.GetAwait
 Console.Error.WriteLine("requesting version");
 Console.WriteLine($"server version: {Run(rest.GetVersionAsync())}");
 Console.Error.WriteLine("version received");
+var writePassword = Environment.GetEnvironmentVariable("AGRO_WRITE_PASSWORD");
+if (string.IsNullOrEmpty(writePassword))
+{
+    Console.Error.WriteLine("Set AGRO_WRITE_PASSWORD to run the write-capable harness against an isolated test server.");
+    SynchronizationContext.SetSynchronizationContext(null);
+    return 2;
+}
+Run(rest.UnlockWritesAsync(writePassword).ContinueWith(t => { t.GetAwaiter().GetResult(); return true; }, TaskScheduler.Default));
+writePassword = null;
 controller.LoadSpeciesAtStartup();
 Check(Wait(() => controller.SpeciesReady.IsCompleted, 30), "species loaded");
 Check(controller.Request.Species.Count > 0, $"{controller.Request.Species.Count} species");

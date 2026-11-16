@@ -3,6 +3,7 @@ using AgroServer.Controllers;
 using AgroServer.Hubs;
 using AgroServer.Models;
 using AgroServer.Services;
+using Microsoft.AspNetCore.SignalR;
 
 Console.WriteLine("HELLO THERE!");
 
@@ -42,8 +43,7 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 
 //Where the server listens.
 //
-//Localhost by DEFAULT, deliberately: this API has no authentication of any kind, so a development
-//machine must not put it on every interface because a container needed it there. A container sets
+//Localhost by default: development machines need not expose even public run data. A container sets
 //AGRO_ListenAnyIP=true and gets 0.0.0.0, which is the only address that can be published.
 //
 //That distinction was not available before, and the consequence was quiet: an explicit Listen call
@@ -109,9 +109,14 @@ builder.Services.AddSingleton<IRunStore>(runStoreService);
 //Resolved through DI rather than constructed here: it needs IHubContext, which only exists
 //after the app is built.
 builder.Services.AddSingleton<ISimulationRunner, SimulationRunner>();
+var writeAccess = new WriteAccess(builder.Configuration);
+builder.Services.AddSingleton(writeAccess);
+builder.Services.AddSingleton<WriteAccessHubFilter>();
+Console.WriteLine(writeAccess.Configured ? "Server writes require the shared password." : "Server writes are disabled: set AGRO_WritePassword to enable them.");
 
 builder.Services.AddSignalR(options => {
     options.MaximumParallelInvocationsPerClient = 3;
+    options.AddFilter<WriteAccessHubFilter>();
 }).AddJsonProtocol(options =>
 {
     // SignalR has its own JSON options; ConfigureHttpJsonOptions only covers HTTP endpoints.
@@ -134,6 +139,31 @@ app.Lifetime.ApplicationStopped.Register(() => runStoreService.Dispose());
 //configured above, after the store exists.
 runStoreService.StartMaintenance();
 app.UseCors(Origins);
+// Guard before body binding, uploads or any endpoint side effects. SignalR's transport stays
+// public; its invocations are guarded by WriteAccessHubFilter instead (including long polling).
+app.Use(async (context, next) =>
+{
+    if (!context.Request.Path.StartsWithSegments("/Simulation", StringComparison.OrdinalIgnoreCase))
+    {
+        await next(context);
+        return;
+    }
+    if (!HttpMethods.IsGet(context.Request.Method) && !HttpMethods.IsHead(context.Request.Method)
+        && !HttpMethods.IsOptions(context.Request.Method)
+        && !writeAccess.Allows(context.Request.Headers[WriteAccess.Header].ToString()))
+    {
+        context.Response.StatusCode = writeAccess.Configured ? StatusCodes.Status401Unauthorized : StatusCodes.Status503ServiceUnavailable;
+        await context.Response.WriteAsync(writeAccess.Error);
+        return;
+    }
+    try { await next(context); }
+    catch (StorageException error) when (!context.Response.HasStarted)
+    {
+        context.Response.StatusCode = error.InsufficientSpace ? StatusCodes.Status507InsufficientStorage : StatusCodes.Status503ServiceUnavailable;
+        await context.Response.WriteAsync(error.Message);
+    }
+});
 app.MapHub<SimulationHub>("/SimSocket").RequireCors(Origins);
-SimulationController.Map(app.MapGroup("/Simulation"), app.Configuration, simulationUploeadService, terainBufferService, seedsBufferService, runStoreService);
+SimulationController.Map(app.MapGroup("/Simulation"), app.Configuration, simulationUploeadService, terainBufferService, seedsBufferService, runStoreService,
+    app.Services.GetRequiredService<ISimulationRunner>());
 app.Run();

@@ -15,7 +15,10 @@
             "cwd": "${workspaceFolder}/Agro",
             // For more information about the 'console' field, see https://aka.ms/VSCode-CS-LaunchJson-Console
             "console": "internalConsole",
-            "stopAtEntry": false
+            "stopAtEntry": false,
+            "env": {
+                "AGRO_WRITE_PASSWORD": "password"
+            }
         },
         {
             // Use IntelliSense to find out which attributes exist for C# debugging
@@ -31,7 +34,10 @@
             "cwd": "${workspaceFolder}/Agro",
             // For more information about the 'console' field, see https://aka.ms/VSCode-CS-LaunchJson-Console
             "console": "internalConsole",
-            "stopAtEntry": false
+            "stopAtEntry": false,
+            "env": {
+                "AGRO_WRITE_PASSWORD": "password"
+            }
         },
         {
             // Use IntelliSense to find out which attributes exist for C# debugging
@@ -46,7 +52,10 @@
             "cwd": "${workspaceFolder}/AgroServer",
             // For more information about the 'console' field, see https://aka.ms/VSCode-CS-LaunchJson-Console
             "console": "internalConsole",
-            "stopAtEntry": false
+            "stopAtEntry": false,
+            "env": {
+                "AGRO_WRITE_PASSWORD": "password"
+            }
         },
         {
             // Use IntelliSense to find out which attributes exist for C# debugging
@@ -61,7 +70,10 @@
             "cwd": "${workspaceFolder}/AgroServer",
             // For more information about the 'console' field, see https://aka.ms/VSCode-CS-LaunchJson-Console
             "console": "internalConsole",
-            "stopAtEntry": false
+            "stopAtEntry": false,
+            "env": {
+                "AGRO_WRITE_PASSWORD": "password"
+            }
         },
         {
             "name": "Render Server",

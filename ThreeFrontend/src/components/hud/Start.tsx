@@ -4,6 +4,7 @@ import { batch } from "@preact/signals-core";
 import { formatClock, formatElapsed } from "../../helpers/TimeUnits";
 import { DEFAULT_TIME_ZONE, snapHoursPerTick, timeOfTimestep } from "../../helpers/Sun";
 import { sceneStats, leafGeomIdFor } from "../../render/core/SceneStats";
+import { writeAccess } from '../../helpers/WriteAccess';
 //import "wired-elements"
 //import Button from 'preact-material-components/Button';
 //import 'preact-material-components/Button/style.css';
@@ -60,7 +61,7 @@ export function Start(props: { inclStats: boolean }) {
     return <p>
         <span>
             <button title={!appstate.computing.value && appstate.seedAgeError.value ? appstate.seedAgeError.value : "Simulate"}
-                disabled={!appstate.computing.value && !!appstate.seedAgeError.value}
+                disabled={!writeAccess.unlocked.value || appstate.startingRun.value || (!appstate.computing.value && !!appstate.seedAgeError.value)}
                 onClick={async () => await appstate.run()}>{appstate.computing.value ? "⏹︎" : "🚀"}</button>&nbsp;
             <button title="Seek to start" onClick={async () => await appstate.play(PlayState.SeekBackward)} disabled={appstate.historyCount.value == 0 || appstate.playPointer.value <= 0}>⏮︎</button>
             <button title="Previous frame" onClick={async () => await appstate.play(PlayState.NextBackward)} disabled={appstate.playing.value != PlayState.None || appstate.historyCount.value == 0 || appstate.playPointer.value <= 0} class="stepBtn">◃</button>

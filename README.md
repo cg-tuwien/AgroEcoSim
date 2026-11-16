@@ -11,6 +11,9 @@ This headless mode (subfolder `Agro`) is mainly indended for development and tes
 ### HTTP Server
 The second headless mode (subfolder `AgroServer`) is designed for running multiple simulations in a row. It reduces the overhead of starting new processes over again. The HTTP server runs inside of the Docker along with the light simulation server.
 
+Server writes require a shared password, and new stored runs start protected from automatic deletion.
+See [run storage and write-access setup](AgroServer/RUN_STORAGE.md) for configuration, retention policies and API details.
+
 ### Web GUI Server
 A webserver (subfolder `ThreeFrontend`) based on [Node.js](https://nodejs.org) is the primary GUI. It uses [Three.js](https://threejs.org) on top of [preact](https://preactjs.com).
 

@@ -19,18 +19,21 @@ services:
       #own retention budget.
       - runstore:/data/AgroEcoStorage
     environment:
+      # Set AGRO_WRITE_PASSWORD in the deployment environment before starting Compose.
+      # Empty means read-only access. The password is never included in a frontend image.
+      - AGRO_WritePassword=${AGRO_WRITE_PASSWORD:-}
       #Where the store writes. It MUST be inside the volume mounted just above. It was /data/runstore
       #while the volume was mounted here, so the runs went to an anonymous volume on the host's root
       #disk instead, which filled at 56 GB. The server now logs a warning in the Runs tab whenever a
       #volume is mounted next to the store rather than under it.
       - AGRO_RunStoreRoot=/data/AgroEcoStorage/runstore
-      #Total bytes of stored runs to keep before whole runs are evicted, oldest first. 1 TiB.
+      #Total run footprint above which unprotected runs are evicted, oldest first. 1 TiB.
       #
       #A production figure, not a safe one: a ten month run of a green facade is hundreds of
       #gigabytes, so the previous 64 GiB evicted last month's work to make room for this week's.
-      #Set it to what the VOLUME can actually hold - about 80 % of it - since eviction is the only
-      #thing that frees space without anyone deleting runs by hand. The Runs tab warns when this is
-      #more than the volume can hold.
+      #New runs start protected; existing runs remain unprotected until marked in the Runs menu.
+      #Protected, live and branched-from runs cannot be evicted. Set this below the volume's
+      #capacity; the free-space reserve stops new work when retained data fills it.
       - AGRO_RunStoreRetentionBytes=1099511627776
       #Free space kept on the volume, in bytes; 2 GiB by default. A run that reaches it is stopped
       #cleanly with a final checkpoint and can be resumed once there is room - it no longer fills

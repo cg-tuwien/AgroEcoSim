@@ -2,6 +2,12 @@ namespace AgroServer.Models;
 
 public class SimulationResponse
 {
+    /// <summary>The durable handle, also returned by synchronous simulations.</summary>
+    public string? RunId { get; set; }
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool StorageFailed { get; set; }
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool ExecutionFailed { get; set; }
     ///<summary>
     ///Resulting plants (same ordering as in the request)
     ///</summary>

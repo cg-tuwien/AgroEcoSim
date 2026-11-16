@@ -22,6 +22,8 @@ public sealed class RunController
     public readonly IMainThread Main;
     public readonly RestClient Rest;
     public readonly HubClient Hub;
+    public WriteAccess Access => Rest.Access;
+    public bool Starting { get; private set; }
     public readonly History.History History = new();
     public readonly PlaybackMachine Playback = new();
     public readonly RunSession Session = new();
@@ -52,6 +54,8 @@ public sealed class RunController
     private DateTime lastTimelineSync = DateTime.MinValue;
     private readonly Dictionary<string, string> frameRevisions = new();
     private int pendingShows;
+    private (int HoursPerTick, string InitialDate)? pendingNewRun;
+    private int startGeneration;
 
     /// <summary>Raised on the main thread whenever something the UI shows changed.</summary>
     public event Action? Changed;
@@ -68,6 +72,7 @@ public sealed class RunController
         Main = main;
         Rest = rest;
         Hub = hub;
+        hub.Access = rest.Access;
         this.sink = sink;
         DiskCache = diskCache;
         Pump = new PreviewPump(hub, main);
@@ -77,22 +82,29 @@ public sealed class RunController
         Session.HistoryBudget = MemoryBudget.Compute(false);
 
         hub.Rejected += () => main.Post(OnRejected);
-        hub.Preparation += (s, t) => main.Post(() => { Session.Preparation = t > 0 && s < t ? (s, t) : null; Changed?.Invoke(); });
-        hub.Progress += (s, l) => main.Post(() => OnProgress(s, l));
-        hub.Result += r => main.Post(() => OnResult(r));
-        hub.RunStarted += id => main.Post(() => OnRunStarted(id));
-        hub.RunSite += s => main.Post(() => OnRunSite(s));
-        hub.Preview += p => main.Post(() => OnPreview(p));
-        hub.Terrain += b => main.Post(() => OnTerrain(b));
+        hub.Preparation += (s, t) => DispatchLive(() => { Session.Preparation = t > 0 && s < t ? (s, t) : null; Changed?.Invoke(); });
+        hub.Progress += (s, l) => DispatchLive(() => OnProgress(s, l));
+        hub.Result += r => DispatchLive(() => OnResult(r));
+        hub.RunStarted += id => DispatchLive(() => OnRunStarted(id));
+        hub.RunSite += s => DispatchLive(() => OnRunSite(s));
+        hub.Preview += p => DispatchLive(() => OnPreview(p));
+        hub.Terrain += b => DispatchLive(() => OnTerrain(b));
         hub.Reconnected += id => main.Post(() => _ = OnReconnectedAsync());
         hub.Reconnecting += e => main.Post(() => Log?.Invoke($"hub reconnecting: {e?.Message}"));
         hub.Closed += e => main.Post(() => Log?.Invoke($"hub closed: {e?.Message ?? "by request"}"));
+        Access.Changed += () => main.Post(OnAccessChanged);
 
         sink.FramePresented += OnFramePresented;
         Playback.Show += ShowIndex;
     }
 
     // ------------------------------------------------------------------ startup
+
+    private void DispatchLive(Action action)
+    {
+        var revision = Access.Revision;
+        Main.Post(() => { if (Access.IsUnlocked && revision == Access.Revision) action(); });
+    }
 
     public void LoadSpeciesAtStartup()
     {
@@ -134,7 +146,30 @@ public sealed class RunController
 
     // ------------------------------------------------------------------ run
 
-    public bool CanStart => !Session.Computing && Request.Seeds.Count > 0;
+    public bool CanStart => Access.IsUnlocked && !Starting && !Session.Computing && Request.Seeds.Count > 0;
+
+    private void OnAccessChanged()
+    {
+        if (!Access.IsUnlocked)
+        {
+            ++startGeneration;
+            Starting = false;
+            pendingNewRun = null;
+            Pump.Disarm();
+            previewAfterShow = false;
+            Session.Computing = false;
+            Playback.Computing = false;
+            Playback.Stop();
+            _ = DisconnectForReadOnlyAsync();
+        }
+        Changed?.Invoke();
+    }
+
+    private async Task DisconnectForReadOnlyAsync()
+    {
+        try { await Hub.DisconnectAsync().ConfigureAwait(false); }
+        catch (Exception ex) { Main.Post(() => Log?.Invoke($"could not detach live control: {ex.Message}")); }
+    }
 
     /// <summary>The Simulate button: aborts when computing, starts otherwise.</summary>
     public void SimulateOrStop()
@@ -145,6 +180,7 @@ public sealed class RunController
 
     public void Abort()
     {
+        if (!Access.IsUnlocked) { Log?.Invoke("Unlock writes to stop a simulation."); return; }
         _ = Task.Run(async () =>
         {
             try { await Hub.AbortAsync().ConfigureAwait(false); }
@@ -154,47 +190,33 @@ public sealed class RunController
 
     public async Task StartAsync()
     {
-        if (Session.Computing) return;
-        ++sceneGeneration;
-        Session.SimHoursPerTick = Time.SimClock.Snap(Request.HoursPerTick);
-        Session.InitialDate = Request.InitialDate;
-        ResetForNewRun();
-        Session.Computing = true;
-        Playback.Computing = true;
-        Playback.Request(PlayState.ForwardWaiting, 0);
+        if (Session.Computing || Starting) return;
+        if (!Access.IsUnlocked) { Log?.Invoke("Unlock writes to start a simulation."); return; }
+        var generation = ++startGeneration;
+        var accessRevision = Access.Revision;
+        Starting = true;
         Changed?.Invoke();
         try
         {
-            await Hub.ConnectAsync().ConfigureAwait(true);
             var request = Request.ToRequest(rng);
+            var initial = (Time.SimClock.Snap(Request.HoursPerTick), Request.InitialDate);
+            await Hub.ConnectAsync().ConfigureAwait(true);
+            if (generation != startGeneration || accessRevision != Access.Revision) return;
             var prepared = await Rest.UploadAsync(request).ConfigureAwait(true);
+            if (generation != startGeneration || accessRevision != Access.Revision) return;
             if (string.IsNullOrEmpty(prepared)) throw new InvalidOperationException("the server returned no prepared id");
-            _ = Hub.StartRunAsync(prepared).ContinueWith(t =>
-            {
-                if (t.IsFaulted)
-                    Main.Post(() =>
-                    {
-                        Session.Computing = false;
-                        Playback.Computing = false;
-                        Session.Preparation = null;
-                        Session.Renderer = "error";
-                        Session.LastError = t.Exception?.GetBaseException().Message ?? "start failed";
-                        Log?.Invoke($"start failed: {Session.LastError}");
-                        Playback.Stop();
-                        Changed?.Invoke();
-                    });
-            }, TaskScheduler.Default);
-            Pump.Arm();
+            // Keep the current scene intact until the backend confirms durable registration.
+            pendingNewRun = initial;
+            await Hub.StartRunAsync(prepared).ConfigureAwait(true);
         }
         catch (Exception ex)
         {
-            Session.Computing = false;
-            Playback.Computing = false;
+            if (generation != startGeneration) return;
+            pendingNewRun = null;
             Session.LastError = ex.Message;
             Log?.Invoke($"could not start: {ex.Message}");
-            Playback.Stop();
-            Changed?.Invoke();
         }
+        finally { if (generation == startGeneration) Starting = pendingNewRun != null; Changed?.Invoke(); }
     }
 
     private void ResetForNewRun()
@@ -227,6 +249,8 @@ public sealed class RunController
 
     private void OnRejected()
     {
+        pendingNewRun = null;
+        Starting = false;
         Session.Computing = false;
         Playback.Computing = false;
         Session.Preparation = null;
@@ -245,6 +269,19 @@ public sealed class RunController
 
     private void OnRunStarted(string runId)
     {
+        if (pendingNewRun is { } pending)
+        {
+            pendingNewRun = null;
+            Starting = false;
+            ++sceneGeneration;
+            ResetForNewRun();
+            Session.SimHoursPerTick = pending.HoursPerTick;
+            Session.InitialDate = pending.InitialDate;
+            Session.Computing = true;
+            Playback.Computing = true;
+            Playback.Request(PlayState.ForwardWaiting, 0);
+            Pump.Arm();
+        }
         Session.RunId = runId;
         Session.RunStored = null;
         Session.HistoryBudget = MemoryBudget.Compute(false);
@@ -355,6 +392,7 @@ public sealed class RunController
 
     private async Task OnReconnectedAsync()
     {
+        if (!Access.IsUnlocked) return;
         Log?.Invoke("hub reconnected");
         var runId = Session.RunId;
         if (runId.Length == 0) { Pump.TryFlush(); return; }
@@ -536,7 +574,7 @@ public sealed class RunController
         var count = await SyncTimelineAsync(runId, true).ConfigureAwait(true);
         if (generation != sceneGeneration) return false;
         if (count == 0 && !allowEmpty) { Log?.Invoke($"run {runId} has no readable frames"); }
-        if (meta.IsRunning)
+        if (meta.IsRunning && Access.IsUnlocked)
         {
             await ReattachAsync(runId, meta).ConfigureAwait(true);
         }
@@ -599,6 +637,7 @@ public sealed class RunController
 
     private async Task ReattachAsync(string runId, RunDto meta)
     {
+        if (!Access.IsUnlocked) return;
         try
         {
             await Hub.ConnectAsync().ConfigureAwait(true);

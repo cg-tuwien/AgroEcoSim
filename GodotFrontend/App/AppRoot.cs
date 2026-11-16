@@ -2,6 +2,7 @@ using Godot;
 using GodotFrontend.App.Render;
 using GodotFrontend.App.UI;
 using GodotFrontend.App.UI.Panels;
+using GodotFrontend.App.UI.Widgets;
 using GodotFrontend.Core.Cli;
 using GodotFrontend.Core.Color;
 using GodotFrontend.Core.Geometry;
@@ -53,6 +54,7 @@ public partial class AppRoot : Control
     private readonly PickStore pickStore = new();
     private readonly List<SidePanelTab> tabs = new();
     private Label statusLabel = null!;
+    private WriteAccessPanel accessPanel = null!;
     private TabContainer tabContainer = null!;
     private ScreenshotRunner? screenshot;
     private int screenshotIndex = -2;
@@ -221,6 +223,8 @@ public partial class AppRoot : Control
     {
         var column = new VBoxContainer();
         SidePanel.AddChild(column);
+        accessPanel = new WriteAccessPanel(this);
+        column.AddChild(accessPanel);
         tabContainer = new TabContainer { SizeFlagsVertical = SizeFlags.ExpandFill };
         column.AddChild(tabContainer);
         tabs.Add(new HomePanel(this));
@@ -296,6 +300,7 @@ public partial class AppRoot : Control
         dirty = false;
         UpdateLighting();
         UpdateSeeds();
+        accessPanel.Refresh();
         var current = tabContainer.CurrentTab;
         if (current >= 0 && current < tabs.Count) tabs[current].Refresh();
     }
@@ -725,6 +730,16 @@ public partial class AppRoot : Control
     /// <summary>--simulate HOURS: one run from the default request; with --screenshot the last frame is captured.</summary>
     private async Task SimulateFromCli(int hours)
     {
+        if (!Controller.Access.IsUnlocked)
+        {
+            var password = System.Environment.GetEnvironmentVariable("AGRO_WRITE_PASSWORD");
+            try
+            {
+                if (string.IsNullOrEmpty(password)) throw new InvalidOperationException("--simulate requires AGRO_WRITE_PASSWORD.");
+                await Controller.Rest.UnlockWritesAsync(password);
+            }
+            catch (Exception ex) { Status($"could not unlock writes: {ex.Message}"); GetTree().Quit(2); return; }
+        }
         await Controller.SpeciesReady;
         Controller.Request.TotalHours = hours;
         if (Args.Mapping == null && Args.Lighting == null) ApplyCliView();

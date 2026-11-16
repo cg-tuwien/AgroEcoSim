@@ -37,6 +37,7 @@ import { FieldItemRegex } from './hud/FieldItemRegex';
 import { TerrainsList } from './viewport/TerrainsList';
 import { SeedsDistributionUpload } from './hud/SeedsDistributionUpload';
 import { RunsList } from './hud/RunsList';
+import { WriteAccess } from './hud/WriteAccess';
 //import {Tab, initTE } from "tw-elements"; initTE({ Tab }); //tried but failed
 
 const App = () => {
@@ -46,6 +47,7 @@ const App = () => {
 			<RendererHost />
 		</main>
 		<nav id="hud">
+				<WriteAccess actionError={appstate.runsError.value} />
 			<ul role="tablist">
 				<li role="presentation"><a role="tab" onClick={e => appstate.activeTab.value = "tab-home"} aria-selected={appstate.activeTab.value.endsWith("tab-home")}>Home</a></li>
 				<li role="presentation"><a role="tab" onClick={e => appstate.activeTab.value = "tab-sim"} aria-selected={appstate.activeTab.value.endsWith("tab-sim")}>Simulation</a></li>

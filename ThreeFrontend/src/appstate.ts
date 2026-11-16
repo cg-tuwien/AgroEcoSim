@@ -26,6 +26,7 @@ import { CoordinateSystem } from "./helpers/CoordinateSystem";
 import { IStoredRun, camelizeTopLevel } from "./helpers/StoredRun";
 import type { IStoreStatus } from "./helpers/StoreLog";
 import { loadStereoOptions, type StereoMode } from "./render/core/Stereo";
+import { writeAccess } from './helpers/WriteAccess';
 
 interface RetryContext {
     readonly previousRetryCount: number; //The number of consecutive failed tries so far.
@@ -50,6 +51,8 @@ const InfiniteHubRetry = {
 }
 
 const hubConnection = new SignalR.HubConnectionBuilder().withUrl(`${location.protocol}//${BackendURI}/SimSocket`).withAutomaticReconnect(InfiniteHubRetry).build();
+//Reset the previous scene only after the server accepts a new durable run.
+let pendingRunStart: (() => void) | undefined;
 //"rejected", not "reject". The server method is Rejected() and the SignalR JS client lower-cases
 //handler names, so the old registration never matched and a refused run told the user nothing at
 //all - the Simulate button simply did nothing.
@@ -194,8 +197,12 @@ hubConnection.on("result", (result: ISimResponse) => {
 //The server stores every frame it computes, so once a run id arrives the client no longer has
 //to be the only place the history exists.
 hubConnection.on("runStarted", (runId: string) => {
+    const accepted = pendingRunStart;
+    pendingRunStart = undefined;
+    accepted?.();
     batch(() => {
         st.runId.value = runId;
+        st.viewingRunId.value = runId;
         //Not yet known to be stored: the server hands out an id even when its store is disabled
         //or the run could not be registered. Until it says otherwise, nothing is dropped.
         st.runStored.value = null;
@@ -342,20 +349,25 @@ hubConnection.on("terrain", (response: Uint8Array) => {
  */
 const hubConnected = signal(false);
 
-const start = async() => {
+const start = async(rejoin = true) => {
+    if (!writeAccess.unlocked.peek()) return;
     try {
         await hubConnection.start();
     } finally {
+        if (!writeAccess.unlocked.peek()) {
+            await hubConnection.stop();
+            return;
+        }
         hubConnected.value = hubConnection.state === SignalR.HubConnectionState.Connected;
         //Also here, not only in onreconnected. `onclose` falls back to start(), which opens a
         //brand-new connection with a new id - so without this a hard drop would leave the run
         //ticking server-side with this tab silently detached from its group.
-        if (hubConnected.value) void resubscribe();
+        if (hubConnected.value && rejoin) await resubscribe();
     }
 };
-hubConnection.onclose(() => { hubConnected.value = false; start(); });
+hubConnection.onclose(() => { hubConnected.value = false; if (writeAccess.unlocked.peek()) void start().catch(console.warn); });
 hubConnection.onreconnecting(() => { hubConnected.value = false; });
-hubConnection.onreconnected(() => { hubConnected.value = true; resubscribe(); });
+hubConnection.onreconnected(() => { hubConnected.value = true; if (writeAccess.unlocked.peek()) void resubscribe(); });
 
 /**
  * Rejoins the run after the socket came back.
@@ -365,6 +377,7 @@ hubConnection.onreconnected(() => { hubConnected.value = true; resubscribe(); })
  * that group the run would carry on server-side while this tab heard nothing more from it.
  */
 async function resubscribe() {
+    if (!writeAccess.unlocked.peek()) return;
     if (!st.runId.peek()) {
         try {
             const saved = sessionStorage.getItem('agro.runId');
@@ -383,7 +396,7 @@ async function resubscribe() {
     const restored = st.history.length === 0 ? await syncTimelineToIndex(runId, true) : 0;
 
     try {
-        const ok = await hubConnection.invoke('subscribe', runId);
+        const ok = await writeAccess.invoke<boolean>(hubConnection, 'subscribe', runId);
         if (!ok) {
             //Finished, evicted, or from a previous server process. Its frames may still be
             //readable - which is exactly what `restored` just established - but nothing further
@@ -463,7 +476,7 @@ async function recoverRun() {
     //A finished run needs no socket at all: its timeline is final and its frames come over REST.
     //That is the common case - reloading to look at a run that has ended - and it should not
     //open a websocket to do nothing.
-    if (meta.status !== 'running') return;
+    if (meta.status !== 'running' || !writeAccess.unlocked.peek()) return;
 
     //Still computing, so put the tab back into the state it was in before the reload.
     //
@@ -1333,6 +1346,8 @@ class State {
     contactEngine = signal(2);
     /** Frames whose payload has been dropped and would have to be re-fetched. */
     evictedFrames = signal(0);
+    /** Server acceptance is pending; the current scene remains viewable meanwhile. */
+    startingRun = signal(false);
 
     /**
      * Stops the run because there is no room left to keep its results.
@@ -1348,7 +1363,8 @@ class State {
             `Simulation stopped: the stored history reached ` +
             `${(this.historySize.peek() / 1048576).toFixed(0)} MB, the limit this browser tab can hold. ` +
             `The frames computed so far are intact and can be saved or exported.`);
-        if (this.computing.peek()) hubConnection.invoke("abort");
+        if (this.computing.peek() && writeAccess.unlocked.peek())
+            void writeAccess.invoke(hubConnection, 'abort').catch(console.warn);
     }
 
     fieldModelPath = signal("");
@@ -1407,77 +1423,67 @@ class State {
     }};
 
     run = async() => {
-        if (this.computing.peek())
-            hubConnection.invoke("abort");
-        else
-        {
-            if (this.seedAgeError.peek()) return;
-            this.simHoursPerTick = snapHoursPerTick(this.hoursPerTick.peek());
-            //console.log(this.scene);
-            batch(() => {
-                this.computing.value = true;
-                this.preparation.value = undefined;
-                this.playing.value = PlayState.ForwardWaiting;
-                this.playPointer.value = 0;
-                this.renderer.value = "";
-                this.historySize.value = 0;
-                this.historyCount.value = 0;
-                lastReceivedIndex = -1;
-                this.historyLimitHit.value = false;
-                this.runId.value = '';
-                this.runStored.value = null;
-                this.runStopReason.value = '';
-                //A new run's measurement has not arrived yet; leaving the old one would colour
-                //the obstacles by numbers that belong to a scene that no longer exists.
-                this.obstacleLight.value = undefined;
-                this.evictedFrames.value = 0;
-            });
-            refreshHistoryBudget();
-            //The stored id has to go at the same moment the signal does. A reload in the window
-            //between asking for a run and `runStarted` arriving would otherwise resubscribe to
-            //the PREVIOUS run and stream its frames into this one's empty history.
-            try { sessionStorage.removeItem('agro.runId'); } catch { /* private mode */ }
-            this.history.length = 0;
-            this.archiveMeasurement = undefined;
-            clearSceneCache();
-            resetCompression();
-            if (hubConnection.state !== SignalR.HubConnectionState.Connected)
-                await start();
-
-            if (hubConnection.state == SignalR.HubConnectionState.Connected)
-            {
-                console.log(this.requestBody());
-                const prepared = await fetch(`${location.protocol}//${BackendURI}/simulation/upload`, {
-                    body: JSON.stringify(this.requestBody()),
-                    method: 'post',
-                    headers: {
-                        Accept: 'application/json',
-                        'Content-Type': 'application/json'
-                    }
-                });
-
-                const preparedID = await prepared.text();
-                if (preparedID?.length > 0)
-                    hubConnection.invoke("start", preparedID).catch(e => {
-                        console.error(e);
-                        batch(() => {
-                            this.computing.value = false;
-                            this.preparation.value = undefined;
-                            this.renderer.value = "error";
-                        });
-                    });
-                // hubConnection.invoke("run", this.requestBody()).catch(e => {
-                //     console.error(e);
-                //     batch(() => {
-                //         this.computing.value = false;
-                //         this.renderer.value = "error";
-                //     });
-                // });
-                this.previewRequest.value = true;
+        if (this.startingRun.peek()) return;
+        try {
+            writeAccess.requirePassword();
+            if (this.computing.peek()) {
+                await writeAccess.invoke(hubConnection, 'abort');
+                return true;
             }
-            else
-                this.computing.value = false;
+            if (this.seedAgeError.peek()) return;
+            this.startingRun.value = true;
+            if (hubConnection.state !== SignalR.HubConnectionState.Connected) await start(false);
+            if (hubConnection.state !== SignalR.HubConnectionState.Connected) throw new Error('Not connected to the server.');
+            const prepared = await writeAccess.writeFetch(`${location.protocol}//${BackendURI}/simulation/upload`, {
+                body: JSON.stringify(this.requestBody()), method: 'POST',
+                headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+            });
+            const preparedID = await prepared.text();
+            if (!preparedID) throw new Error('The server did not accept the request.');
+            pendingRunStart = () => this.resetForAcceptedRun(snapHoursPerTick(this.hoursPerTick.peek()));
+            await writeAccess.invoke(hubConnection, 'start', preparedID);
+            if (pendingRunStart) throw new Error('The server did not start the run.');
+            if (this.computing.peek() && writeAccess.unlocked.peek()) this.previewRequest.value = true;
+            this.runsError.value = '';
+            return true;
+        } catch (failure) {
+            this.runsError.value = `Could not start or stop the run: ${(failure as Error).message}`;
+            return false;
+        } finally {
+            pendingRunStart = undefined;
+            this.startingRun.value = false;
         }
+    }
+
+    /** Called only after RunStarted: rejected requests retain the existing scene and history. */
+    private resetForAcceptedRun(hoursPerTick: number) {
+        this.simHoursPerTick = hoursPerTick;
+        this.history = [];
+        this.archiveMeasurement = undefined;
+        lastReceivedIndex = -1;
+        clearSceneCache();
+        resetCompression();
+        batch(() => {
+            this.computing.value = true;
+            this.preparation.value = undefined;
+            this.playing.value = PlayState.ForwardWaiting;
+            this.playPointer.value = 0;
+            this.renderer.value = '';
+            this.historySize.value = 0;
+            this.historyCount.value = 0;
+            this.historyLimitHit.value = false;
+            this.runId.value = '';
+            this.runStored.value = null;
+            this.runStopReason.value = '';
+            this.obstacleLight.value = undefined;
+            this.evictedFrames.value = 0;
+            this.scene.value = [];
+            this.plants.value = [];
+            this.simStep.value = 0;
+            this.simLength.value = 0;
+        });
+        try { sessionStorage.removeItem('agro.runId'); } catch { /* private mode */ }
+        refreshHistoryBudget();
     }
 
     play = async(state: PlayState) => {
@@ -2013,29 +2019,24 @@ class State {
     }
 
     uploadFieldModel = async (f: File) => {
-        //An explicit upload is the more recent intent, so it replaces whatever stored run was
-        //going to supply the terrain. Leaving it set would send the server looking for a model
-        //that the user has just decided against.
-        this.fieldModelRunId.value = '';
-        this.fieldModelData = await Parse(f);
-        // const bytes = new Uint8Array(await f.arrayBuffer());
-        // this.fieldModelData = bytes;
-        this.fieldModelPath.value = f.name;
-        if (hubConnection.state !== SignalR.HubConnectionState.Connected)
-            await start();
-
-        if (hubConnection.state == SignalR.HubConnectionState.Connected)
-        {
-            const bufferResponse = await fetch(`${location.protocol}//${BackendURI}/simulation/terrain`, {
-                body: this.fieldModelData,
-                method: 'post',
-                headers: {
-                    Accept: 'application/json',
-                    'Content-Type': 'text/plain'
-                }
+        try {
+            writeAccess.requirePassword();
+            const data = await Parse(f);
+            if (hubConnection.state !== SignalR.HubConnectionState.Connected) await start();
+            if (hubConnection.state !== SignalR.HubConnectionState.Connected) throw new Error('Not connected to the server.');
+            const bufferResponse = await writeAccess.writeFetch(`${location.protocol}//${BackendURI}/simulation/terrain`, {
+                body: data, method: 'POST',
+                headers: { Accept: 'application/json', 'Content-Type': 'text/plain' },
             });
             const terrainId = await bufferResponse.text();
-            hubConnection.invoke("terrain", terrainId, this.hoursPerTick.value, this.fieldItemRegex.value, this.fieldItemRegexMaterial.value, this.fieldResolution.value);
+            if (!terrainId) throw new Error('The server did not accept the terrain.');
+            await writeAccess.invoke(hubConnection, 'terrain', terrainId, this.hoursPerTick.value, this.fieldItemRegex.value, this.fieldItemRegexMaterial.value, this.fieldResolution.value);
+            this.fieldModelRunId.value = '';
+            this.fieldModelData = data;
+            this.fieldModelPath.value = f.name;
+            this.runsError.value = '';
+        } catch (failure) {
+            this.runsError.value = `Could not upload the terrain: ${(failure as Error).message}`;
         }
     }
 
@@ -2398,6 +2399,13 @@ class State {
         if (!res.ok) throw new Error(`the stored request is missing (HTTP ${res.status})`);
         const response = parseSeedJson(await res.text());
 
+        this.applyStoredScenario(response);
+        await this.restoreStoredSite(runId);
+        this.needsRender.value = true;
+    }
+
+    /** Apply a request already fetched and parsed, with no asynchronous scene replacement. */
+    private applyStoredScenario(response: any) {
         //Replaced wholesale rather than removed one at a time. `removeSeedAt` copies the whole
         //array and writes the signal for EACH removal, so clearing a 4,134-plant stand that way is
         //four thousand array copies and four thousand re-renders before the first new seed exists -
@@ -2479,15 +2487,6 @@ class State {
                         new Float32Array(0), [])),
             ];
         });
-
-        //The zone the server derived from these coordinates, and the weather the run ran under.
-        //Neither is in the request: the zone comes from a coordinate lookup the browser has no
-        //equivalent for, and the weather is planned from the seed. Without them a reopened run at
-        //a moved site keeps the DEFAULT zone - shifting every sun position and the whole sky by
-        //the offset, while still looking entirely plausible - and previews a clear sky over steps
-        //the simulation ran under cloud.
-        await this.restoreStoredSite(runId);
-        this.needsRender.value = true;
     }
 
     /**
@@ -2502,35 +2501,92 @@ class State {
             const res = await fetch(`${location.protocol}//${BackendURI}/simulation/run/${runId}/site`);
             if (!res.ok) return;
             const site = await res.json();
-            batch(() => {
-                this.latitude.value = site.latitude ?? this.latitude.peek();
-                this.longitude.value = site.longitude ?? this.longitude.peek();
-                this.altitude.value = site.altitude ?? this.altitude.peek();
-                this.azimuthBase.value = site.azimuthBase ?? this.azimuthBase.peek();
-                this.azimuthOffset.value = site.azimuthOffset ?? this.azimuthOffset.peek();
-                this.siteTimeZone.value = site.timeZone || undefined;
-                this.weather.value = decodeSkyCoverage(site.skyCoverage);
-            });
+            this.applyStoredSite(site);
         } catch (err) {
             console.warn(`Could not restore the site of run ${runId}:`, err);
         }
     };
 
+    private applyStoredSite(site: Partial<ISimRunSite>) {
+        batch(() => {
+            this.latitude.value = site.latitude ?? this.latitude.peek();
+            this.longitude.value = site.longitude ?? this.longitude.peek();
+            this.altitude.value = site.altitude ?? this.altitude.peek();
+            this.azimuthBase.value = site.azimuthBase ?? this.azimuthBase.peek();
+            this.azimuthOffset.value = site.azimuthOffset ?? this.azimuthOffset.peek();
+            this.siteTimeZone.value = site.timeZone || undefined;
+            this.weather.value = decodeSkyCoverage(site.skyCoverage);
+        });
+    }
+
+    /** Fetch a target without replacing the current view. Commit only after server acceptance. */
+    private async stageStoredRun(run: IStoredRun, resume: boolean) {
+        await speciesReady;
+        const base = `${location.protocol}//${BackendURI}/simulation/run/${run.id}`;
+        const [request, terrain, site, index] = await Promise.all([
+            fetch(`${base}/request`).then(async response => {
+                if (!response.ok) throw new Error(`The stored request is missing (HTTP ${response.status}).`);
+                return parseSeedJson(await response.text());
+            }),
+            run.hasTerrain ? fetch(`${base}/terrain`).then(async response => response.ok
+                ? new BinaryReader(new Uint8Array(await response.arrayBuffer())).readTerrain() : undefined)
+                .catch(() => undefined) : Promise.resolve(undefined),
+            fetch(`${base}/site`).then(async response => response.ok
+                ? await response.json() as Partial<ISimRunSite> : undefined).catch(() => undefined),
+            resume ? fetch(`${base}/index`).then(async response => {
+                if (!response.ok) throw new Error(`The stored frame index is missing (HTTP ${response.status}).`);
+                return {
+                    steps: decodeFrameIndex(new Uint8Array(await response.arrayBuffer())),
+                    revision: response.headers?.get('X-Agro-Frame-Revision') ?? '0',
+                };
+            }) : Promise.resolve(undefined),
+        ]);
+        const keepTerrain = !terrain && !!run.fieldModelName && run.fieldModelName === this.fieldModelPath.peek();
+        const terrains = terrain?.terrains ?? (keepTerrain ? this.terrainList : []);
+        const meshObstacles = terrain?.obstacles ?? (keepTerrain ? this.obstacles.peek().filter(o => o.type.peek() === 'mesh') : []);
+        return {
+            request,
+            apply: (totalHours: number) => {
+                this.resetForAcceptedRun(run.hoursPerTick);
+                batch(() => {
+                    this.terrainList = terrains;
+                    this.obstacles.value = meshObstacles;
+                    this.applyStoredScenario(request);
+                    this.applyStoredSite(site ?? {});
+                    this.totalHours.value = totalHours;
+                    this.lineageParentRunId.value = resume ? '' : run.id;
+                    this.fieldModelRunId.value = !resume && run.hasFieldModel ? run.id : '';
+                    this.activeTab.value = 'tab-home';
+                    if (index) {
+                        //Only step references are staged. No old or target frame payloads are copied.
+                        this.history = index.steps.map(t => ({ t, s: undefined, plain: true }));
+                        frameRevisions.set(run.id, index.revision);
+                        this.historyCount.value = index.steps.length;
+                        this.evictedFrames.value = index.steps.length;
+                        this.playPointer.value = Math.max(0, index.steps.length - 1);
+                        this.simStep.value = run.lastStep;
+                    }
+                    this.bumpTerrain();
+                    this.needsRender.value = true;
+                });
+            },
+        };
+    }
+
     /**
      * Deletes a stored run, after asking.
      *
-     * The only way a user gets bytes back on their own terms - eviction is oldest-first and knows
-     * nothing about which run mattered. Irreversible and often tens of gigabytes, hence the
-     * confirmation, and hence quoting the size in it.
+     * Manual deletion is permanent, including for protected runs, hence the confirmation.
      */
     deleteStoredRun = async (run: IStoredRun): Promise<boolean> => {
+        if (!writeAccess.unlocked.peek()) { writeAccess.error.value = 'Unlock writes with the shared password.'; return false; }
         if (this.runsBusy.peek()) {
             this.runsError.value = 'Another run is being opened; try again in a moment.';
             return false;
         }
         this.runsBusy.value = run.id;
         try {
-            const res = await fetch(`${location.protocol}//${BackendURI}/simulation/run/${run.id}`, { method: 'DELETE' });
+            const res = await writeAccess.writeFetch(`${location.protocol}//${BackendURI}/simulation/run/${run.id}`, { method: 'DELETE' });
             const body = await res.json().catch(() => ({ deleted: res.ok, reason: `HTTP ${res.status}` }));
             if (!body.deleted) {
                 this.runsError.value = body.reason || `Could not delete run ${run.id}.`;
@@ -2542,7 +2598,7 @@ class State {
             //Better an empty viewport than a timeline that lies about what it can show.
             if (this.runId.peek() === run.id) {
                 this.history.length = 0;
-            this.archiveMeasurement = undefined;
+                this.archiveMeasurement = undefined;
                 clearSceneCache();
                 resetCompression();
                 batch(() => {
@@ -2571,13 +2627,26 @@ class State {
         }
     }
 
-    /**
-     * Loads a stored run's scenario into the editor as the starting point for a new one.
-     *
-     * Stops there on purpose: a fork exists to be CHANGED, so it opens the run, records where the
-     * new run will come from, and leaves the user on the simulation tab with everything editable.
-     * Pressing Simulate is the fork.
-     */
+    /** Change automatic-removal protection without interrupting a running simulation. */
+    setRunProtection = async (run: IStoredRun, protect: boolean): Promise<boolean> => {
+        if (!writeAccess.unlocked.peek()) { writeAccess.error.value = 'Unlock writes with the shared password.'; return false; }
+        if (this.runsBusy.peek()) return false;
+        this.runsBusy.value = run.id;
+        try {
+            const response = await writeAccess.writeFetch(`${location.protocol}//${BackendURI}/simulation/run/${run.id}/protection`, {
+                method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ protected: protect }),
+            });
+            const updated = await response.json() as IStoredRun;
+            this.runs.value = this.runs.peek().map(current => current.id === updated.id ? updated : current);
+            this.runsError.value = '';
+            return true;
+        } catch (failure) {
+            this.runsError.value = `Could not change run protection: ${(failure as Error).message}`;
+            return false;
+        } finally { this.runsBusy.value = ''; }
+    }
+
+    /** Load a stored scenario into the local editor; Simulate creates the fork. */
     forkStoredRun = async (run: IStoredRun): Promise<boolean> => {
         //`allowEmpty`, because a fork wants the settings and a run that stored no frames still has
         //all of them.
@@ -2605,84 +2674,57 @@ class State {
      * cannot be handed different ones half way through and still be one experiment.
      */
     resumeStoredRun = async (run: IStoredRun, extraHours: number): Promise<boolean> => {
-        if (this.computing.peek()) {
-            this.runsError.value = 'A simulation is running in this tab. Stop it before resuming another.';
-            return false;
-        }
         if (!run.hasCheckpoint) {
             this.runsError.value = `Run ${run.id} has no checkpoint, so it cannot be resumed. Fork it to recompute it instead.`;
             return false;
         }
-        //Opened first, so the tab is showing the run it is about to extend - and so its timeline,
-        //trays and scenario are the ones the new frames will append to.
-        if (!await this.openStoredRun(run.id, true)) return false;
+        return this.startStoredRun(run, extraHours, true);
+    }
 
-        const total = Math.max(1, (run.totalHours || this.totalHours.peek()) + Math.max(0, extraHours));
-        batch(() => {
-            this.totalHours.value = total;
-            this.computing.value = true;
-            this.playing.value = PlayState.ForwardWaiting;
-            this.simLength.value = 0;
-            this.lineageParentRunId.value = '';
-            this.fieldModelRunId.value = '';
-        });
+    /** Continue computes a new run from the stored request; Resume extends its checkpoint. */
+    continueStoredRun = (run: IStoredRun, extraHours: number): Promise<boolean> =>
+        this.startStoredRun(run, extraHours, false);
 
-        if (hubConnection.state !== SignalR.HubConnectionState.Connected) await start();
-        if (hubConnection.state !== SignalR.HubConnectionState.Connected) {
-            this.computing.value = false;
-            this.runsError.value = 'Not connected to the server.';
+    private async startStoredRun(run: IStoredRun, extraHours: number, resume: boolean): Promise<boolean> {
+        if (!writeAccess.unlocked.peek()) { writeAccess.error.value = 'Unlock writes with the shared password.'; return false; }
+        if (this.computing.peek() || this.startingRun.peek() || this.runsBusy.peek()) {
+            this.runsError.value = 'A run is already running, starting or opening in this tab.';
             return false;
         }
-
-        //Through the same upload-then-start path a normal run takes; only ResumeRunId differs, and
-        //the server reads the scenario from the run rather than from this body.
-        const body = { ...this.requestBodyForResume(), TotalHours: Math.trunc(total), ResumeRunId: run.id };
+        this.startingRun.value = true;
+        this.runsBusy.value = run.id;
+        const total = Math.trunc(Math.max(1, (run.totalHours || this.totalHours.peek()) + Math.max(0, extraHours)));
         try {
-            const prepared = await fetch(`${location.protocol}//${BackendURI}/simulation/upload`, {
-                body: JSON.stringify(body), method: 'post',
+            const staged = await this.stageStoredRun(run, resume);
+            if (hubConnection.state !== SignalR.HubConnectionState.Connected) await start(false);
+            if (hubConnection.state !== SignalR.HubConnectionState.Connected) throw new Error('Not connected to the server.');
+            const body = resume
+                ? { HoursPerTick: run.hoursPerTick, TotalHours: total, RequestGeometry: true, ResumeRunId: run.id }
+                : { ...staged.request, TotalHours: total, RequestGeometry: true, ResumeRunId: null,
+                    ParentRunId: run.id, FieldModelRunId: run.hasFieldModel ? run.id : null, FieldModelKey: null };
+            const prepared = await writeAccess.writeFetch(`${location.protocol}//${BackendURI}/simulation/upload`, {
+                body: JSON.stringify(body), method: 'POST',
                 headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
             });
             const preparedID = await prepared.text();
-            if (!(preparedID?.length > 0)) throw new Error('the server did not accept the request');
-            await hubConnection.invoke('start', preparedID);
-            this.previewRequest.value = true;
+            if (!preparedID) throw new Error('The server did not accept the request.');
+            pendingRunStart = () => staged.apply(total);
+            await writeAccess.invoke(hubConnection, 'start', preparedID);
+            if (pendingRunStart) throw new Error('The server did not start the run.');
+            //Resume may replace a tail newer than its checkpoint. Refresh its revision before
+            //requesting previews; both the staged index and any accepted Result remain keyed by step.
+            if (resume) await syncTimelineToIndex(run.id, false);
+            if (this.computing.peek() && writeAccess.unlocked.peek()) this.previewRequest.value = true;
             this.runsError.value = '';
             return true;
-        } catch (err) {
-            batch(() => { this.computing.value = false; this.renderer.value = 'error'; });
-            //The server refuses a resume it cannot honour - no checkpoint, a checkpoint that does
-            //not fit, or a total the run has already passed - and says which.
-            this.runsError.value = `Could not resume run ${run.id}: ${(err as any)?.message ?? err}`;
+        } catch (failure) {
+            this.runsError.value = `Could not ${resume ? 'resume' : 'continue'} run ${run.id}: ${(failure as Error).message}`;
             return false;
+        } finally {
+            pendingRunStart = undefined;
+            this.startingRun.value = false;
+            this.runsBusy.value = '';
         }
-    }
-
-    /** The request body a resume sends. Only TotalHours and ResumeRunId are read by the server. */
-    private requestBodyForResume = () => ({
-        HoursPerTick: Math.trunc(this.hoursPerTick.peek()),
-        TotalHours: Math.trunc(this.totalHours.peek()),
-        RequestGeometry: true,
-    });
-
-    /**
-     * Starts a new run that carries a stored one further in simulated time.
-     *
-     * It is a RE-RUN, not a resume, and the panel says so: the world is rebuilt from the recorded
-     * request and computed from step zero to the new total. There is no checkpoint of live world
-     * state to start from - the store holds exported geometry, which is a picture of the plants
-     * and not the plants. For a deterministic parent the first stretch reproduces it exactly, so
-     * the extension is genuinely a continuation; otherwise it is a fresh sample of the scenario.
-     */
-    continueStoredRun = async (run: IStoredRun, extraHours: number): Promise<boolean> => {
-        if (!await this.openStoredRun(run.id, true)) return false;
-        batch(() => {
-            this.totalHours.value = Math.max(1, (run.totalHours || this.totalHours.peek()) + Math.max(0, extraHours));
-            this.lineageParentRunId.value = run.id;
-            this.fieldModelRunId.value = run.hasFieldModel ? run.id : '';
-            this.activeTab.value = 'tab-home';
-        });
-        await this.run();
-        return true;
     }
 
     private saveBinaryFile(data: Uint8Array, frame: string, ext: string) {
@@ -2694,6 +2736,42 @@ class State {
 }
 
 const st = new State();
+writeAccess.onLock(() => {
+    pendingRunStart = undefined;
+    batch(() => {
+        st.previewRequest.value = false;
+        st.previewRequestAfterSceneUpdate = false;
+        st.computing.value = false;
+        st.startingRun.value = false;
+        st.preparation.value = undefined;
+        if (st.playing.peek() === PlayState.ForwardWaiting) st.playing.value = PlayState.None;
+        st.playPointer.value = Math.max(0, Math.min(st.playPointer.peek(), st.history.length - 1));
+        hubConnected.value = false;
+    });
+    //Stopping a client connection detaches it; it must never send Abort to the simulation.
+    void hubConnection.stop?.()?.catch(console.warn);
+});
+
+//Unlocking can rejoin a run left computing while this tab was read-only. The REST timeline
+//remains useful without that connection; anonymous viewers never request a live subscription.
+effect(() => {
+    if (!writeAccess.unlocked.value) return;
+    const runId = st.runId.peek();
+    if (!runId) return;
+    void (async () => {
+        const meta = await fetchStoredRun(runId);
+        if (!meta || meta.status !== 'running' || !writeAccess.unlocked.peek() || st.runId.peek() !== runId) return;
+        if (hubConnection.state !== SignalR.HubConnectionState.Connected) await start();
+        else await resubscribe();
+        if (!writeAccess.unlocked.peek() || st.runId.peek() !== runId) return;
+        batch(() => {
+            st.computing.value = true;
+            st.simLength.value = meta.totalSteps;
+            st.simStep.value = meta.lastStep;
+            st.previewRequest.value = true;
+        });
+    })().catch(console.warn);
+});
 /**
  * The cloud cover to preview a timestep under.
  *
@@ -2733,12 +2811,12 @@ effect(() => {
     //effect re-runs when the socket comes up and flushes it. The short-circuit is safe here
     //only because the second read happens whenever the first is true, which is the only case
     //that does anything.
-    if (st.previewRequest.value && hubConnected.value) {
+    if (st.previewRequest.value && hubConnected.value && writeAccess.unlocked.value) {
         //The hub can drop between the state check and the call, and an unhandled rejection
         //would take out the effect. Re-arm only if the connection actually went away: that
         //case is picked up again when hubConnected flips back, whereas re-arming on a
         //server-side failure while still connected would spin the effect.
-        hubConnection.invoke("preview").catch(e => {
+        writeAccess.invoke(hubConnection, 'preview').catch(e => {
             console.warn("preview request failed", e);
             if (hubConnection.state !== SignalR.HubConnectionState.Connected)
                 st.previewRequest.value = true;

@@ -30,6 +30,8 @@ export interface IStoredRun {
     species: number;
     analytics: boolean;
     deterministic: boolean;
+    /** Missing on older servers: do not infer a protection policy from an absent field. */
+    protected?: boolean;
     /** Frame bytes. */
     bytesOnDisk: number;
     /** The request, the index, the terrain and the measurement. */

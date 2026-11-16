@@ -58,7 +58,11 @@ public sealed record RunResponse(
     //Why the run stopped before its horizon, as a clause that reads after "stopped: " - the volume
     //reached its reserve, a frame could not be written, nobody was watching. Null for a run that
     //finished, and for runs stored before the reason was recorded.
-    string? StopReason);
+    string? StopReason,
+    bool Protected);
+
+/// <summary>Null rejects an omitted flag instead of accidentally unprotecting a run.</summary>
+public sealed record RunProtectionRequest(bool? Protected);
 
 /// <summary>
 /// The run store as the Runs tab needs to see it: whether it works at all, where it writes, how much

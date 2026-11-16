@@ -7,6 +7,7 @@ import { Seeds } from "../src/components/hud/Seeds";
 import { Start } from "../src/components/hud/Start";
 import { ProgressBar } from "../src/components/hud/ProgressBar";
 import { saveRunArchive } from "../src/helpers/RunArchive";
+import { writeAccess } from '../src/helpers/WriteAccess';
 
 jest.mock("@microsoft/signalr", () => {
     const handlers: Record<string, (...args: any[]) => void> = {};
@@ -34,7 +35,7 @@ const ageInput = () => host.querySelector<HTMLInputElement>('[name="seedage-0"]'
 const unitInput = () => host.querySelector<HTMLSelectElement>('[aria-label="Age unit for plant 0"]')!;
 const simulate = () => host.querySelector<HTMLButtonElement>('[title="Simulate"], [title^="Enter a finite Age"]')!;
 
-beforeEach(() => {
+beforeEach(async () => {
     jest.clearAllMocks();
     appstate.terrainList = [];
     const species = new Species();
@@ -53,6 +54,8 @@ beforeEach(() => {
     appstate.simStep.value = 0;
     appstate.simLength.value = 0;
     appstate.runId.value = "";
+    (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: true, status: 204 });
+    await writeAccess.unlock('test-only-secret');
     host = document.createElement("div");
     document.body.appendChild(host);
 });

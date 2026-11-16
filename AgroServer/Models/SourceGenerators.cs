@@ -28,6 +28,7 @@ namespace AgroServer.Models;
 [JsonSerializable(typeof(RunResponse))]
 [JsonSerializable(typeof(RunResponse[]))]
 [JsonSerializable(typeof(RunDeleteResponse))]
+[JsonSerializable(typeof(RunProtectionRequest))]
 [JsonSerializable(typeof(StoredTerrainMeta))]
 [JsonSerializable(typeof(RunStoreStatusResponse))]
 [JsonSerializable(typeof(RunStoreEvent))]

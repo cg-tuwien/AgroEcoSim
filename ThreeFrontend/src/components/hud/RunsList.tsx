@@ -2,6 +2,7 @@ import { h } from "preact";
 import { effect, signal } from "@preact/signals";
 import appstate, { RUNS_PAGE_LIMIT } from "../../appstate";
 import { BackendURI } from "../../config";
+import { writeAccess } from '../../helpers/WriteAccess';
 import {
     IStoredRun, formatBytes, formatDate, formatDay, formatSimulatedSpan, formatWallTime,
     obstacleLabel, reachedHours, runBytes, trayLabel,
@@ -33,6 +34,9 @@ const pendingDelete = signal('');
 const extraHours = signal<Record<string, number>>({});
 /** The row whose Continue has been clicked once. A continue is a full re-run; it gets a second click. */
 const pendingContinue = signal('');
+effect(() => {
+    if (!writeAccess.unlocked.value) { pendingDelete.value = ''; pendingContinue.value = ''; }
+});
 /** Whether the store log is open, once the user has said; null leaves it to `autoOpenLog`. */
 const logOpen = signal<boolean | null>(null);
 /** Routine events too - runs started, models stored. Deletions and problems always show. */
@@ -96,7 +100,7 @@ export function RunsList() {
 
         {runs.length === 0 && !appstate.runsLoading.value
             ? <p><small>{disabled
-                ? 'The run store is disabled (see above), so no stored run can be listed and new runs are not kept.'
+                ? 'The run store is disabled (see above). New simulations are refused until durable storage is available.'
                 : 'No stored runs. A simulation started here is kept by the server and appears in this list.'}</small></p>
             : null}
 
@@ -122,7 +126,7 @@ function StoreBanner({ status }: { status: IStoreStatus | null }) {
     if (!status.enabled)
         return <div role="alert" style={{ color: ERROR_COLOUR, margin: '4px 0' }}>
             <b>The run store is disabled.</b> {status.disabledReason}
-            <div><small>Runs are still computed and streamed here, but the server keeps none of them. Fix the cause, then restart the server.</small></div>
+            <div><small>New simulations are refused until their results can be stored. Fix the cause, then restart the server.</small></div>
         </div>;
     return <div style={{ margin: '4px 0' }}>
         {status.warnings.map((warning, i) =>
@@ -190,6 +194,7 @@ function RunRow({ run }: { run: IStoredRun }) {
     const busy = appstate.runsBusy.value === run.id;
     const shown = appstate.viewingRunId.value === run.id;
     const running = run.status === 'running';
+    const locked = !writeAccess.unlocked.value;
     //A run can hold no frames at all - stopped before its first step - and there is nothing to
     //open. Saying so on the button beats an error message after the current scene has been cleared.
     const empty = run.storedFrames === 0;
@@ -206,6 +211,9 @@ function RunRow({ run }: { run: IStoredRun }) {
         <div>
             <b>{formatDate(run.createdUtc)}</b>
             &nbsp;<span class={`runStatus runStatus-${run.status}`}>{run.status}</span>
+            &nbsp;<span title="Protection prevents automatic removal. An unlocked user can still permanently delete this run.">
+                {run.protected === true ? 'Protected' : run.protected === false ? 'Unprotected' : 'Protection unknown'}
+            </span>
             {run.deterministic
                 ? <span title="Reproducible: re-running this request gives the same result, so a continuation genuinely continues it.">&nbsp;·&nbsp;det</span>
                 : null}
@@ -251,7 +259,7 @@ function RunRow({ run }: { run: IStoredRun }) {
                 recomputing would be the wrong word for an hour of compute. */}
             {run.hasCheckpoint
                 ? <button onClick={() => appstate.resumeStoredRun(run, resumeHoursFor(run))}
-                          disabled={busy || appstate.computing.value}
+                          disabled={locked || busy || appstate.computing.value || appstate.startingRun.value}
                           title={unfinished
                               ? `Carry this run on from step ${run.lastStep}, where it stopped, without recomputing any of it.`
                               : `This run finished. Resuming extends it past the ${run.totalHours} h it was given, starting from its final state.`}>
@@ -262,16 +270,21 @@ function RunRow({ run }: { run: IStoredRun }) {
                     title="Everything else about this run.">
                 {open ? '▴' : '▾'}
             </button>
+            <button disabled={locked || busy}
+                    onClick={() => { pendingDelete.value = ''; void appstate.setRunProtection(run, run.protected !== true); }}
+                    title={locked ? 'Unlock writes to change protection.' : 'Change whether automatic cleanup may remove this run.'}>
+                {run.protected === true ? 'Unprotect' : 'Protect'}
+            </button>
             <button onClick={() => {
                         if (pendingDelete.peek() !== run.id) { pendingDelete.value = run.id; return; }
                         pendingDelete.value = '';
                         void appstate.deleteStoredRun(run);
                     }}
-                    disabled={busy || running}
+                    disabled={locked || busy || running}
                     title={running
                         ? 'This run is still computing. Stop it before deleting it.'
-                        : `Delete this run and its ${formatBytes(runBytes(run))} for good.`}>
-                {pendingDelete.value === run.id ? `Delete ${formatBytes(runBytes(run))}?` : '🗑'}
+                        : `Permanently delete this ${run.protected === true ? 'protected ' : ''}run and its ${formatBytes(runBytes(run))}.`}>
+                {pendingDelete.value === run.id ? `Delete ${run.protected === true ? 'protected ' : ''}${formatBytes(runBytes(run))}?` : '🗑'}
             </button>
         </div>
 
@@ -297,7 +310,7 @@ function RunDetails({ run, busy }: { run: IStoredRun, busy: boolean }) {
     //then keeps going, so the cheapest useful answer is the right default - prefilling the run's
     //own 2160 h made a single unconfirmed click cost a 180-day simulation.
     const extra = extraHours.value[run.id] ?? 24;
-    const canContinue = !busy && !appstate.computing.value;
+    const canContinue = writeAccess.unlocked.value && !busy && !appstate.computing.value && !appstate.startingRun.value;
     const armed = pendingContinue.value === run.id;
 
     return <div class="runDetails">

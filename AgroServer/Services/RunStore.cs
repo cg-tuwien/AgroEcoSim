@@ -53,7 +53,10 @@ namespace AgroServer.Services;
 /// </summary>
 public interface IRunStore
 {
-    /// <summary>Registers a new run and returns its id. Never throws; storage is best-effort.</summary>
+    /// <summary>Refuses new work when durable storage is unavailable or below its reserve.</summary>
+    void EnsureWritable();
+
+    /// <summary>Registers a durable new run, or throws <see cref="StorageException"/>.</summary>
     string BeginRun(RunSpec spec);
 
     /// <summary>
@@ -89,7 +92,7 @@ public interface IRunStore
     /// stopped, as a clause that reads after "stopped: "; when the store itself asked for the stop
     /// (<see cref="TryGetStopReason"/>), its own reason stands in for a null one.
     /// </summary>
-    void CompleteRun(string runId, bool aborted, string? reason = null);
+    RunCompletion CompleteRun(string runId, bool aborted, string? reason = null);
 
     /// <summary>
     /// Why this run can no longer be stored, once that is so: its volume reached the free-space
@@ -169,10 +172,10 @@ public interface IRunStore
     bool TryReadObstacleLight(string runId, out byte[] gzipped);
 
     /// <summary>
-    /// Files an uploaded field model and returns its content hash, or null when it could not be
+    /// Files an uploaded field model and returns its content hash, or throws when it cannot be
     /// stored. Identical models are stored once however many runs use them.
     /// </summary>
-    string? StoreFieldModel(string objSource);
+    string StoreFieldModel(string objSource);
 
     /// <summary>The OBJ source behind a hash, for rebuilding a stored run's terrain.</summary>
     bool TryReadFieldModel(string hash, out string objSource);
@@ -190,6 +193,9 @@ public interface IRunStore
 
     RunRecord? GetRun(string runId);
     IReadOnlyList<RunRecord> ListRuns(int limit);
+
+    /// <summary>Changes automatic-eviction protection, including while a run is computing.</summary>
+    RunRecord SetProtection(string runId, bool protect);
 
     /// <summary>
     /// Stops scheduling maintenance, leaving the database open for requests still in flight.
@@ -265,6 +271,8 @@ public class RunRecord
     [BsonId] public string Id { get; set; } = "";
     public DateTime CreatedUtc { get; set; }
     public DateTime UpdatedUtc { get; set; }
+    /// <summary>Exempt from automatic eviction; explicit deletion remains possible.</summary>
+    public bool Protected { get; set; }
     /// <summary>running | complete | aborted</summary>
     public string Status { get; set; } = "running";
     public ushort HoursPerTick { get; set; }
@@ -435,6 +443,7 @@ public class RunStore : IRunStore, IDisposable
     volatile bool Stopping;
 
     /// <summary>The shape <see cref="Reconcile"/> brings older rows up to.</summary>
+    // Protection is overlaid independently: adding it must not rescan historical frame files.
     const int CurrentMetadataVersion = 4; // reconcile actual tick duration on historical rows
 
     /// <summary>
@@ -532,11 +541,8 @@ public class RunStore : IRunStore, IDisposable
     public TimeSpan ModelMinGrace { get; set; } = TimeSpan.FromMinutes(15);
 
     /// <summary>
-    /// Total bytes of stored frames to keep before evicting whole runs, oldest first.
-    ///
-    /// A budget is not optional here. One two-month run at production plant count is around
-    /// 17 GB compressed, so without eviction the disk fills and the failure lands on whatever
-    /// writes next rather than on the thing that caused it.
+    /// Total run footprint above which unprotected, inactive runs are evicted, oldest first.
+    /// Protected runs remain stored even above this budget; the free-space reserve stops new work.
     /// </summary>
     public long RetentionBytes { get; set; } = 64L * 1024 * 1024 * 1024;
 
@@ -554,13 +560,13 @@ public class RunStore : IRunStore, IDisposable
     public long MinFreeBytes { get; set; } = 2L * 1024 * 1024 * 1024;
 
     /// <summary>
-    /// True when the store could not be opened. Every operation then becomes a no-op.
+    /// True when the store could not be opened. Reads report it unavailable and new work is refused.
     ///
     /// The constructor used to let its exceptions escape, and it is called from a top-level
     /// statement before the host is built - so an unwritable root took the entire server down
     /// before Kestrel ever listened. That is the deployed case, not a hypothetical: the image
     /// copies a root-owned /app and then drops to an unprivileged user, which cannot create
-    /// /app/runstore. A best-effort store must never be able to do that.
+    /// /app/runstore. Reads and diagnosis must remain available even when new work is refused.
     /// </summary>
     public bool Disabled { get; }
 
@@ -615,8 +621,8 @@ public class RunStore : IRunStore, IDisposable
             Disabled = true;
             DisabledReason = $"Cannot use '{Path.GetFullPath(root)}': {Explain(e, openingDatabase)}";
             Log.Error("store-disabled", null,
-                $"The run store is disabled. {DisabledReason} Simulations still run and stream, but " +
-                $"nothing is kept, stored runs cannot be listed, and the server must be restarted once " +
+                $"The run store is disabled. {DisabledReason} New simulations and uploads are refused; " +
+                $"stored runs cannot be listed, and the server must be restarted once " +
                 $"this is fixed.");
             return;
         }
@@ -628,6 +634,14 @@ public class RunStore : IRunStore, IDisposable
         catch (Exception e) { Log.Warning("index-failed", null, $"Could not index the runs by date ({e.Message}). Listings still work, more slowly."); }
         SweepStaleRuns(atStartup: true);
         AdoptOrphanedRuns();
+        // Legacy descriptions are maintained by the server, never committed as a side effect of
+        // an anonymous GET. Current records need no frame-directory scan on upgrade.
+        try
+        {
+            foreach (var run in Runs.Query().Where(x => x.MetadataVersion < CurrentMetadataVersion).ToList())
+                Reconcile(run);
+        }
+        catch (Exception e) { Log.Error("reconcile-failed", null, $"Could not update legacy run descriptions at startup: {e.Message}"); }
     }
 
     /// <summary>
@@ -802,8 +816,19 @@ public class RunStore : IRunStore, IDisposable
     /// than once per listing. Trays are the exception and stay 0: they come out of the imported
     /// model, not the request, and a guess would be indistinguishable from a measurement.
     /// </summary>
-    void Reconcile(RunRecord run, bool insert = false)
+    RunRecord Reconcile(RunRecord run, bool insert = false)
     {
+        lock (MetadataLock)
+        {
+        //Listings can have fetched this row before a protection change or writer flush. Re-read
+        //under the same lock as those updates before replacing the complete document.
+        if (!insert)
+        {
+            var current = Runs.FindById(run.Id);
+            if (current == null) return run;
+            run = current;
+        }
+        run.Protected = ReadProtection(run.Id);
         try
         {
             var dir = RunDir(run.Id);
@@ -935,6 +960,8 @@ public class RunStore : IRunStore, IDisposable
             try { run.MetadataVersion = CurrentMetadataVersion; if (insert) Runs.Insert(run); else Runs.Update(run); }
             catch { /* best effort */ }
         }
+        return run;
+        }
     }
 
     string RunsDir => Path.Combine(Root, "runs");
@@ -950,21 +977,82 @@ public class RunStore : IRunStore, IDisposable
     string ObstacleLightPath(string runId) => Path.Combine(RunDir(runId), "obstaclelight.json.gz");
     string TerrainMetaPath(string runId) => Path.Combine(RunDir(runId), "terrain.json");
     string CheckpointPath(string runId) => Path.Combine(RunDir(runId), "checkpoint.bin.gz");
+    string ProtectionPath(string runId) => Path.Combine(RunDir(runId), "protection.json");
     string ModelPath(string hash) => Path.Combine(ModelsDir, $"{hash}.obj.gz");
 
-    /// <summary>Files how this run's terrain was built, beside the run. Best-effort.</summary>
+    /// <summary>The sidecar is authoritative even if the database is rebuilt or a cache update fails.</summary>
+    bool ReadProtection(string runId)
+    {
+        try
+        {
+            //Read directly: File.Exists also returns false on permission errors, which must never
+            //silently turn a protected run into an eviction candidate.
+            var value = File.ReadAllText(ProtectionPath(runId)).Trim();
+            var protect = value switch
+            {
+                "true" => true,
+                "false" => false,
+                _ => throw new InvalidDataException("Expected a JSON boolean in protection.json."),
+            };
+            Log.Condition("protection-" + runId, false, "protection-unreadable", () => "");
+            return protect;
+        }
+        catch (FileNotFoundException) { return false; } // runs created before this feature
+        catch (DirectoryNotFoundException) { return false; }
+        catch (Exception e)
+        {
+            Log.Condition("protection-" + runId, true, "protection-unreadable",
+                () => $"Run {runId}: its protection setting cannot be read ({e.Message}). Keeping it protected from automatic deletion.",
+                runId: runId);
+            return true;
+        }
+    }
+
+    long WriteProtection(string runId, bool protect) =>
+        WriteAtomically(ProtectionPath(runId), output => output.Write(protect ? "true\n"u8 : "false\n"u8));
+
+    public RunRecord SetProtection(string runId, bool protect)
+    {
+        if (Disabled) throw new StorageException($"The run store is disabled. {DisabledReason}");
+        if (Stopping) throw new StorageException("The run store is shutting down.");
+        if (!IsSafeId(runId)) throw new KeyNotFoundException("No such run.");
+        lock (MetadataLock)
+        {
+            var run = Runs.FindById(runId);
+            if (run == null || !Directory.Exists(RunDir(runId))) throw new KeyNotFoundException("No such run.");
+            try
+            {
+                var path = ProtectionPath(runId);
+                var previous = File.Exists(path) ? new FileInfo(path).Length : 0;
+                var written = WriteProtection(runId, protect);
+                run.Protected = protect;
+                run.AuxBytesOnDisk += written - previous;
+                // Keep simulation duration intact: changing retention is not another tick.
+            }
+            catch (Exception e)
+            {
+                throw StorageException.From($"Run {runId}: its protection could not be saved; the previous setting remains in effect. {e.Message}", e, runId);
+            }
+
+            //The sidecar has committed, so the requested state is durable and effective even when
+            //LiteDB is full. ReadProtection supplies it to every listing and eviction decision.
+            try { Runs.Update(run); }
+            catch (Exception e) { Log.Warning("protection-cache-failed", runId, $"Run {runId}: protection was saved, but its database cache could not be updated ({e.Message})."); }
+            Log.Info(protect ? "protected" : "unprotected", runId,
+                $"Run {runId} is now {(protect ? "protected from" : "eligible for")} automatic deletion.");
+            return Overlay(run);
+        }
+    }
+
+    /// <summary>Files how this run's terrain was built, beside the run.</summary>
     void WriteTerrainMeta(string runId, RunSpec spec)
     {
         if (string.IsNullOrEmpty(spec.FieldModelHash) && string.IsNullOrEmpty(spec.FieldModelName)) return;
-        try
-        {
-            var bytes = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(
-                new Models.StoredTerrainMeta(spec.FieldModelHash, spec.FieldModelName, spec.FieldItemRegex,
-                                             spec.FieldItemRegexMaterial, spec.FieldResolution),
-                Models.AppJsonSerializerContext.Default.StoredTerrainMeta);
-            WriteAtomically(TerrainMetaPath(runId), output => output.Write(bytes));
-        }
-        catch (Exception e) { Log.Error("terrain-failed", runId, $"Run {runId}: could not record how its terrain was built: {e.Message}"); }
+        var bytes = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(
+            new Models.StoredTerrainMeta(spec.FieldModelHash, spec.FieldModelName, spec.FieldItemRegex,
+                                         spec.FieldItemRegexMaterial, spec.FieldResolution),
+            Models.AppJsonSerializerContext.Default.StoredTerrainMeta);
+        WriteAtomically(TerrainMetaPath(runId), output => output.Write(bytes));
     }
 
     /// <summary>
@@ -984,7 +1072,7 @@ public class RunStore : IRunStore, IDisposable
             using (var output = new FileStream(temporary, FileMode.Create, FileAccess.Write, FileShare.None))
             {
                 write(output);
-                output.Flush();
+                output.Flush(flushToDisk: true);
                 length = output.Length;
             }
             File.Move(temporary, path, overwrite: true);
@@ -1016,19 +1104,37 @@ public class RunStore : IRunStore, IDisposable
     /// <summary>Everything a run occupies: frames, then the request, index, terrain and checkpoint.</summary>
     static long Footprint(RunRecord run) => run.BytesOnDisk + run.AuxBytesOnDisk;
 
+    public void EnsureWritable()
+    {
+        if (Disabled) throw new StorageException($"The run store is disabled. {DisabledReason}");
+        if (Stopping) throw new StorageException("The run store is shutting down.");
+        var free = StoreVolume.FreeSpace(Root);
+        if (MinFreeBytes > 0 && free >= 0 && free - Volatile.Read(ref PendingFrameBytes) < MinFreeBytes)
+            throw new StorageException($"Cannot accept new work: {LowSpaceReason(free)}.", insufficientSpace: true);
+        try
+        {
+            //Check actual permissions as well as free space. DeleteOnClose leaves no preflight
+            //files behind if the process terminates between the write and close.
+            using var probe = new FileStream(Path.Combine(Root, $".writable-{Guid.NewGuid():N}.tmp"),
+                FileMode.CreateNew, FileAccess.Write, FileShare.None, 1, FileOptions.DeleteOnClose);
+            probe.WriteByte(0);
+            probe.Flush(flushToDisk: true);
+            _ = Runs.Count();
+        }
+        catch (Exception e) { throw StorageException.From($"The run store cannot accept new work: {e.Message}", e); }
+    }
+
     public string BeginRun(RunSpec spec)
     {
+        EnsureWritable();
         var id = Guid.NewGuid().ToString("N");
-        if (Disabled)
-        {
-            //Said once per run, so that a run the user is watching compute can be matched to the
-            //reason it will not be in the list afterwards.
-            Log.Error("run-not-stored", id, $"Run {id} is computing but is not being stored: the run store is disabled. {DisabledReason}");
-            return id;
-        }
         var inserted = false;
         try
         {
+            lock (MetadataLock)
+            {
+            if (!string.IsNullOrEmpty(spec.FieldModelHash) && !HasFieldModel(spec.FieldModelHash))
+                throw new StorageException("The original field model is not stored; upload it again before starting this run.");
             Directory.CreateDirectory(FramesDir(id));
             //The request is what a resumed or branched run needs to rebuild its world, and the
             //upload and terrain caches that hold it today expire after five minutes.
@@ -1038,6 +1144,7 @@ public class RunStore : IRunStore, IDisposable
             //adopted without its model hash contributes nothing to the reference set that decides
             //which models to keep - so the next eviction would delete every model the store owns.
             WriteTerrainMeta(id, spec);
+            WriteProtection(id, protect: true);
 
             //The writer BEFORE the row: liveness is the writer (IsLive), so a row that says
             //"running" must never exist without one - Evict, just below, would take it for a run
@@ -1048,12 +1155,13 @@ public class RunStore : IRunStore, IDisposable
                 Id = id,
                 CreatedUtc = DateTime.UtcNow,
                 UpdatedUtc = DateTime.UtcNow,
+                Protected = true,
                 Status = "running",
                 HoursPerTick = spec.HoursPerTick,
                 TotalSteps = spec.TotalSteps,
                 Analytics = spec.Analytics,
                 Deterministic = spec.Deterministic,
-                AuxBytesOnDisk = Encoding.UTF8.GetByteCount(spec.RequestJson),
+                AuxBytesOnDisk = Directory.EnumerateFiles(RunDir(id)).Sum(path => new FileInfo(path).Length),
                 TotalHours = spec.TotalHours,
                 InitialDay = spec.InitialDay,
                 Seed = spec.Seed,
@@ -1074,16 +1182,14 @@ public class RunStore : IRunStore, IDisposable
             Log.Info("run-started", id,
                 $"Run {id} started: {spec.Plants} plant{(spec.Plants == 1 ? "" : "s")}, {spec.TotalSteps} steps of " +
                 $"{spec.HoursPerTick} h{(spec.ParentRunId != null ? $", derived from {spec.ParentRunId}" : "")}.");
+            }
             Evict();
         }
         catch (Exception e)
         {
-            //Persistence must never take the simulation down with it. A run with no store still
-            //streams to the client exactly as it did before - and the client finds out it is not
-            //stored by asking for it, so it keeps its frames rather than dropping them for a server
-            //that does not have them.
-            Log.Error("begin-failed", id, $"Run {id} is computing but is not being stored: it could not be registered ({e.Message}).");
+            Log.Error("begin-failed", id, $"Run {id} was not started: it could not be stored ({e.Message}).");
             AbandonBegin(id, inserted);
+            throw StorageException.From($"The run was not started because it could not be stored: {e.Message}", e, id);
         }
         return id;
     }
@@ -1219,7 +1325,11 @@ public class RunStore : IRunStore, IDisposable
 
     public void WriteTerrain(string runId, byte[] serializedTerrain)
     {
-        if (Disabled || !IsSafeId(runId) || serializedTerrain == null || serializedTerrain.Length == 0) return;
+        if (Disabled) throw new StorageException($"The run store is disabled. {DisabledReason}", runId: runId);
+        if (!IsSafeId(runId) || serializedTerrain == null || serializedTerrain.Length == 0)
+            throw new StorageException("No valid terrain was supplied to the run store.", runId: runId);
+        if (!BeginWrite(serializedTerrain.LongLength, out var free))
+            throw new StorageException($"The terrain could not be stored: {LowSpaceReason(free)}.", insufficientSpace: true, runId: runId);
         try
         {
             var stored = WriteAtomically(TerrainPath(runId), output =>
@@ -1229,7 +1339,12 @@ public class RunStore : IRunStore, IDisposable
             });
             AddAuxBytes(runId, stored);
         }
-        catch (Exception e) { Log.Error("terrain-failed", runId, $"Run {runId}: could not store its terrain ({e.Message}); it will replay without its trays."); }
+        catch (Exception e)
+        {
+            Log.Error("terrain-failed", runId, $"Run {runId}: could not store its terrain ({e.Message}).");
+            throw StorageException.From($"Run {runId}: its terrain could not be stored: {e.Message}", e, runId);
+        }
+        finally { EndWrite(serializedTerrain.LongLength); }
     }
 
     /// <summary>
@@ -1343,6 +1458,7 @@ public class RunStore : IRunStore, IDisposable
             try { committer.Wait(); }
             catch (Exception e)
             {
+                StopStoring(writer, $"its frame committer failed ({e.Message})", "writer-failed", writer.LastStep, "error");
                 Log.Error("writer-failed", writer.RunId, $"Run {writer.RunId}: its frame committer failed: {e.Message}");
                 Console.Error.WriteLine($"RunStore: committer for {writer.RunId} failed: {e}");
             }
@@ -1485,9 +1601,10 @@ public class RunStore : IRunStore, IDisposable
         catch { /* a size that is a little stale is not worth failing a write for */ }
     }
 
-    public void CompleteRun(string runId, bool aborted, string? reason = null)
+    public RunCompletion CompleteRun(string runId, bool aborted, string? reason = null)
     {
-        if (Disabled || !IsSafeId(runId)) return;
+        if (Disabled) throw new StorageException($"The run store is disabled. {DisabledReason}", runId: runId);
+        if (!IsSafeId(runId)) throw new StorageException("Not a run id.", runId: runId);
         RunWriter? writer = null;
         var removed = false;
         try
@@ -1501,7 +1618,13 @@ public class RunStore : IRunStore, IDisposable
                 // publish a resumable run before that snapshot has reached disk.
                 writer.Worker?.GetAwaiter().GetResult();
             }
-            if (aborted) reason ??= writer?.StopReason;
+            //A compressor can fail after the simulation has queued its final frame/checkpoint.
+            //Only the drained writer knows whether that apparently complete run was kept.
+            if (writer?.StopReason is { } storageReason)
+            {
+                aborted = true;
+                reason ??= storageReason;
+            }
 
             //Taken AFTER the writer has drained, never across the wait: the writer's own final
             //flush takes this same lock on its way out.
@@ -1517,7 +1640,7 @@ public class RunStore : IRunStore, IDisposable
                 if (removed) LogOutcome(writer!, aborted, reason);
 
                 var run = Runs.FindById(runId);
-                if (run == null) return;
+                if (run == null) throw new StorageException("The run's metadata is missing.", runId: runId);
                 //The FIRST outcome wins. This is called twice whenever delivering the result
                 //throws - the loop completes the run, `await to.Result(...)` fails at a client
                 //that has gone, and the catch completes it again as aborted. The run had finished
@@ -1533,22 +1656,31 @@ public class RunStore : IRunStore, IDisposable
                 //frame is the cross-process mutex this store already refuses to take per frame.
                 if (writer != null)
                 {
+                    run.StoredFrames = writer.StoredFrames;
+                    run.LastStep = writer.LastStep;
+                    run.BytesOnDisk = writer.BytesOnDisk;
                     run.AuxBytesOnDisk += (writer.StoredFrames - writer.AccountedIndexEntries) * 8L;
-                    writer.AccountedIndexEntries = writer.StoredFrames;
                 }
                 run.UpdatedUtc = DateTime.UtcNow;
                 Runs.Update(run);
+                if (writer != null) writer.AccountedIndexEntries = writer.StoredFrames;
                 UnrecordedOutcomes.TryRemove(runId, out _);
+                return new RunCompletion(run.Status == "aborted", run.StopReason, writer?.StopReason != null);
             }
         }
         catch (Exception e)
         {
             //Kept, so the listing reports the run as it ended and the next maintenance pass records
             //it - rather than both reading the stale "running" as an interruption.
-            if (removed) UnrecordedOutcomes[runId] = (aborted ? "aborted" : "complete", aborted ? reason : null);
+            lock (MetadataLock)
+            {
+                removed |= writer != null && Writers.TryRemove(runId, out _);
+                if (removed) UnrecordedOutcomes[runId] = (aborted ? "aborted" : "complete", aborted ? reason : null);
+            }
             Log.Error("complete-failed", runId,
                 $"Run {runId}: how it ended could not be recorded ({e.Message}). It is listed as " +
                 $"{(aborted ? "aborted" : "complete")} anyway, and recorded at the next maintenance pass.");
+            throw StorageException.From($"Run {runId}: its final outcome could not be saved: {e.Message}", e, runId);
         }
     }
 
@@ -1792,8 +1924,10 @@ public class RunStore : IRunStore, IDisposable
         reason = "";
         if (Disabled) { reason = $"The run store is disabled. {DisabledReason}"; return false; }
         if (!IsSafeId(runId)) { reason = "Not a run id."; return false; }
+        var startedWriter = false;
         try
         {
+            EnsureWritable();
             lock (MetadataLock)
             {
                 var run = Runs.FindById(runId);
@@ -1830,8 +1964,8 @@ public class RunStore : IRunStore, IDisposable
                 //Seeded from what the run already holds, so the resumed writer adds to the tally
                 //rather than replacing it. Started before the row says "running", as BeginRun does.
                 StartWriter(runId, run.StoredFrames, run.BytesOnDisk, run.LastStep);
-                try { Runs.Update(run); }
-                catch { AbandonWriter(runId); throw; }
+                startedWriter = true;
+                Runs.Update(run);
                 UnrecordedOutcomes.TryRemove(runId, out _);
             }
             Log.Info("resumed", runId, $"Run {runId} resumed from its checkpoint at step {checkpointStep}, now running to step {totalSteps}.");
@@ -1839,6 +1973,9 @@ public class RunStore : IRunStore, IDisposable
         }
         catch (Exception e)
         {
+            //The writer's final metadata flush takes MetadataLock too; never wait for it while
+            //holding that lock after a failed registration.
+            if (startedWriter) AbandonWriter(runId);
             reason = $"That run could not be reopened: {e.Message}";
             Log.Error("resume-failed", runId, $"Run {runId} could not be resumed: {e.Message}");
             return false;
@@ -1867,7 +2004,11 @@ public class RunStore : IRunStore, IDisposable
 
     public void WriteObstacleLight(string runId, byte[] utf8Json)
     {
-        if (Disabled || !IsSafeId(runId) || utf8Json == null || utf8Json.Length == 0) return;
+        if (Disabled) throw new StorageException($"The run store is disabled. {DisabledReason}", runId: runId);
+        if (!IsSafeId(runId) || utf8Json == null || utf8Json.Length == 0)
+            throw new StorageException("No valid measurement was supplied to the run store.", runId: runId);
+        if (!BeginWrite(utf8Json.LongLength, out var free))
+            throw new StorageException($"The measurement could not be stored: {LowSpaceReason(free)}.", insufficientSpace: true, runId: runId);
         try
         {
             //gzip rather than the frames' zlib: this one is served to a browser as a file to save,
@@ -1882,12 +2023,18 @@ public class RunStore : IRunStore, IDisposable
             Console.WriteLine($"RunStore: stored the leaf area index document of {runId} " +
                               $"({Size(utf8Json.Length)} of JSON, {Size(stored)} on disk).");
         }
-        catch (Exception e) { Log.Error("measurement-failed", runId, $"Run {runId}: could not store its leaf area index document: {e.Message}"); }
+        catch (Exception e)
+        {
+            Log.Error("measurement-failed", runId, $"Run {runId}: could not store its leaf area index document: {e.Message}");
+            throw StorageException.From($"Run {runId}: its measurement could not be stored: {e.Message}", e, runId);
+        }
+        finally { EndWrite(utf8Json.LongLength); }
     }
 
-    public string? StoreFieldModel(string objSource)
+    public string StoreFieldModel(string objSource)
     {
-        if (Disabled || string.IsNullOrEmpty(objSource)) return null;
+        EnsureWritable();
+        if (string.IsNullOrWhiteSpace(objSource)) throw new ArgumentException("The field model is empty.", nameof(objSource));
         try
         {
             var bytes = Encoding.UTF8.GetBytes(objSource);
@@ -1917,6 +2064,8 @@ public class RunStore : IRunStore, IDisposable
 
             //Written beside and moved into place, so a crash mid-write cannot leave a truncated
             //file under a name that claims to be the hash of its contents.
+            if (!BeginWrite(bytes.LongLength, out var free))
+                throw new StorageException($"The field model could not be stored: {LowSpaceReason(free)}.", insufficientSpace: true);
             var temp = $"{path}.{Guid.NewGuid():N}.tmp";
             try
             {
@@ -1931,6 +2080,7 @@ public class RunStore : IRunStore, IDisposable
                 try { File.Delete(temp); } catch { /* CollectTempModels removes it within the hour */ }
                 throw;
             }
+            finally { EndWrite(bytes.LongLength); }
 
             var stored = new FileInfo(path).Length;
             Log.Info("model-stored", null, $"Stored field model {hash[..12]} ({Size(bytes.Length)} of OBJ, {Size(stored)} on disk).", stored);
@@ -1939,9 +2089,8 @@ public class RunStore : IRunStore, IDisposable
         catch (Exception e)
         {
             Log.Error("model-store-failed", null,
-                $"Could not store an uploaded field model ({e.Message}). Runs on it will compute, but cannot be " +
-                $"continued, forked or drawn with their trays later.");
-            return null;
+                $"The field model upload was refused because its original source could not be stored ({e.Message}).");
+            throw StorageException.From($"The field model could not be stored: {e.Message}", e);
         }
     }
 
@@ -1969,23 +2118,27 @@ public class RunStore : IRunStore, IDisposable
     public RunRecord? GetRun(string runId)
     {
         if (Disabled || !IsSafeId(runId)) return null;
-        var run = Runs.FindById(runId);
-        if (run == null) return null;
-        if (run.MetadataVersion < CurrentMetadataVersion) Reconcile(run);
-        return Overlay(run);
+        lock (MetadataLock)
+        {
+            var run = Runs.FindById(runId);
+            if (run == null) return null;
+            return Overlay(run);
+        }
     }
 
     public IReadOnlyList<RunRecord> ListRuns(int limit)
     {
         if (Disabled) return [];
-        var runs = Runs.Query().OrderByDescending(x => x.CreatedUtc).Limit(limit).ToList();
-        //Once per run, not once per listing: Reconcile stamps the row it repairs.
-        foreach (var run in runs)
+        lock (MetadataLock)
         {
-            if (run.MetadataVersion < CurrentMetadataVersion) Reconcile(run);
-            Overlay(run);
+        var runs = Runs.Query().OrderByDescending(x => x.CreatedUtc).Limit(limit).ToList();
+        for (var i = 0; i < runs.Count; ++i)
+        {
+            var run = runs[i];
+            runs[i] = Overlay(run);
         }
         return runs;
+        }
     }
 
     /// <summary>
@@ -2000,6 +2153,7 @@ public class RunStore : IRunStore, IDisposable
     /// </summary>
     RunRecord Overlay(RunRecord run)
     {
+        run.Protected = ReadProtection(run.Id);
         if (Writers.TryGetValue(run.Id, out var writer))
         {
             run.StoredFrames = writer.StoredFrames;
@@ -2058,8 +2212,8 @@ public class RunStore : IRunStore, IDisposable
         var room = volume.FreeBytes >= 0 ? $", {Size(volume.FreeBytes)} free of {Size(volume.TotalBytes)}" : "";
         var maintenance = SweepInterval > TimeSpan.Zero ? $"maintenance every {SweepInterval.TotalMinutes:0} min" : "no periodic maintenance";
         Log.Info(Disabled ? "store-status" : "store-opened", null,
-            $"{(Disabled ? "The disabled run store" : "Run store")} at {volume.Root}{where}{room}. Keeping runs up to " +
-            $"{Size(RetentionBytes)} (holding {Size(stored)}), field models up to {Size(ModelRetentionBytes)}, " +
+            $"{(Disabled ? "The disabled run store" : "Run store")} at {volume.Root}{where}{room}. Automatic eviction of unprotected runs above " +
+            $"{Size(RetentionBytes)} (holding {Size(stored)}); new runs are protected. Field models up to {Size(ModelRetentionBytes)}, " +
             $"{Size(MinFreeBytes)} reserved free; {maintenance}.");
         foreach (var warning in Warnings(volume, stored))
             Log.Warning("config", null, warning);
@@ -2109,7 +2263,7 @@ public class RunStore : IRunStore, IDisposable
                              $"makes room. Set AGRO_RunStoreRetentionBytes below {Size(Math.Max(0, capacity))}.");
             if (MinFreeBytes > 0 && volume.FreeBytes < MinFreeBytes)
                 warnings.Add($"Only {Size(volume.FreeBytes)} is free on {(volume.MountPoint.Length > 0 ? volume.MountPoint : volume.Root)}, " +
-                             $"below the {Size(MinFreeBytes)} reserve: a run stops as soon as it starts storing. " +
+                             $"below the {Size(MinFreeBytes)} reserve: new work is refused and active writing stops. " +
                              $"Delete runs or free space on the volume.");
         }
         return warnings;
@@ -2265,6 +2419,9 @@ public class RunStore : IRunStore, IDisposable
             lock (MetadataLock)
             {
             var all = Runs.Query().OrderBy(x => x.CreatedUtc).ToList();
+            var parents = all.Where(x => x.ParentRunId != null).Select(x => x.ParentRunId!)
+                .ToHashSet(StringComparer.Ordinal);
+            foreach (var run in all) run.Protected = ReadProtection(run.Id);
             //Runs only. Field models have their own cap (ModelRetentionBytes) because evicting a
             //run does not release its model - it outlives the run and may be shared - so counting
             //them here would have this loop delete every completed run in the store chasing a
@@ -2275,11 +2432,11 @@ public class RunStore : IRunStore, IDisposable
             //and costs the user their whole history. Say so - once, when it starts - and stop.
             //Liveness is the writer, not the status: a row the server left saying "running" after
             //it stopped is over, and holding the budget for it is how that run's space was lost.
-            var pinned = all.Where(r => IsLive(r.Id) || all.Any(x => x.ParentRunId == r.Id)).Sum(Footprint);
+            var pinned = all.Where(r => r.Protected || IsLive(r.Id) || parents.Contains(r.Id)).Sum(Footprint);
             Log.Condition("eviction-refused", pinned > RetentionBytes, "eviction-refused",
-                () => $"{Size(pinned)} is held by running or branched-from runs, which is already over the " +
+                () => $"{Size(pinned)} is held by protected, running or branched-from runs, which is already over the " +
                       $"{Size(RetentionBytes)} budget. Not evicting - deleting completed runs would not help.",
-                cleared: () => "Running and branched-from runs fit inside the retention budget again; eviction resumes.");
+                cleared: () => "Protected, running and branched-from runs fit inside the retention budget again; eviction resumes.");
             if (pinned > RetentionBytes) return;
 
             foreach (var run in all)
@@ -2290,7 +2447,7 @@ public class RunStore : IRunStore, IDisposable
                 if (Stopping) break;
                 //Never evict a run something else was branched from - its request and its stored
                 //frames are the only thing making those children comparable to it.
-                if (IsLive(run.Id) || all.Any(x => x.ParentRunId == run.Id)) continue;
+                if (run.Protected || IsLive(run.Id) || parents.Contains(run.Id)) continue;
 
                 //Per run, because one undeletable directory used to abort the whole pass - which on
                 //a timer means aborting it again every interval, forever, with the store stuck over

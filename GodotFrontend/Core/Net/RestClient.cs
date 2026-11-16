@@ -24,11 +24,13 @@ public sealed class RestClient : IDisposable
 {
     private readonly HttpClient http;
     public ServerEndpoint Endpoint { get; }
+    public WriteAccess Access { get; }
 
-    public RestClient(ServerEndpoint endpoint)
+    public RestClient(ServerEndpoint endpoint, WriteAccess? access = null, HttpMessageHandler? handler = null)
     {
         Endpoint = endpoint;
-        http = new HttpClient(new HttpClientHandler { AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate })
+        Access = access ?? new WriteAccess();
+        http = new HttpClient(handler ?? new HttpClientHandler { AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate })
         {
             Timeout = Timeout.InfiniteTimeSpan,
         };
@@ -37,11 +39,39 @@ public sealed class RestClient : IDisposable
 
     private Uri U(string path) => Endpoint.Rest(path);
 
-    private static async Task Ensure(HttpResponseMessage res, CancellationToken ct)
+    private async Task Ensure(HttpResponseMessage res, CancellationToken ct)
     {
         if (res.IsSuccessStatusCode) return;
         var body = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+        if (res.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden) Access.Lock();
+        Access.HandleRejection(body);
         throw new ServerException(res.StatusCode, string.IsNullOrWhiteSpace(body) ? $"{(int)res.StatusCode} {res.ReasonPhrase}" : body.Trim());
+    }
+
+    public async Task UnlockWritesAsync(string password, CancellationToken ct = default)
+    {
+        Access.Lock();
+        var revision = Access.Revision;
+        if (string.IsNullOrEmpty(password)) throw new WriteAccessException("Enter the shared password.");
+        using var request = new HttpRequestMessage(HttpMethod.Post, U("write-access"));
+        request.Headers.Add("X-Agro-Write-Password", password);
+        using var response = await http.SendAsync(request, ct).ConfigureAwait(false);
+        await Ensure(response, ct).ConfigureAwait(false);
+        Access.UnlockVerified(password, revision);
+    }
+
+    private async Task<HttpResponseMessage> SendWriteAsync(HttpMethod method, string path, HttpContent? content, CancellationToken ct)
+    {
+        var password = Access.RequirePassword();
+        using var request = new HttpRequestMessage(method, U(path)) { Content = content };
+        request.Headers.Add("X-Agro-Write-Password", password);
+        var response = await http.SendAsync(request, ct).ConfigureAwait(false);
+        if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+        {
+            try { await Ensure(response, ct).ConfigureAwait(false); }
+            finally { response.Dispose(); }
+        }
+        return response;
     }
 
     public async Task<string> GetVersionAsync(CancellationToken ct = default)
@@ -71,7 +101,7 @@ public sealed class RestClient : IDisposable
     {
         var json = JsonSerializer.Serialize(request, Json.RequestOut);
         using var content = new StringContent(json, Encoding.UTF8, "application/json");
-        using var res = await http.PostAsync(U("upload"), content, ct).ConfigureAwait(false);
+        using var res = await SendWriteAsync(HttpMethod.Post, "upload", content, ct).ConfigureAwait(false);
         await Ensure(res, ct).ConfigureAwait(false);
         return (await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false)).Trim().Trim('"');
     }
@@ -80,7 +110,7 @@ public sealed class RestClient : IDisposable
     public async Task<string> PostTerrainAsync(string objText, CancellationToken ct = default)
     {
         using var content = new StringContent(objText, Encoding.UTF8, "text/plain");
-        using var res = await http.PostAsync(U("terrain"), content, ct).ConfigureAwait(false);
+        using var res = await SendWriteAsync(HttpMethod.Post, "terrain", content, ct).ConfigureAwait(false);
         await Ensure(res, ct).ConfigureAwait(false);
         return (await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false)).Trim().Trim('"');
     }
@@ -156,7 +186,9 @@ public sealed class RestClient : IDisposable
 
     public async Task<DeleteDto> DeleteRunAsync(string runId, CancellationToken ct = default)
     {
-        using var res = await http.DeleteAsync(U($"run/{runId}"), ct).ConfigureAwait(false);
+        using var res = await SendWriteAsync(HttpMethod.Delete, $"run/{runId}", null, ct).ConfigureAwait(false);
+        if (res.StatusCode != HttpStatusCode.NotFound && res.StatusCode != HttpStatusCode.Conflict)
+            await Ensure(res, ct).ConfigureAwait(false);
         var body = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
         try
         {
@@ -165,6 +197,15 @@ public sealed class RestClient : IDisposable
         }
         catch (JsonException) { }
         return new DeleteDto { Deleted = res.IsSuccessStatusCode, Reason = res.IsSuccessStatusCode ? "" : body };
+    }
+
+    public async Task<RunDto> SetProtectionAsync(string runId, bool protect, CancellationToken ct = default)
+    {
+        using var content = new StringContent(protect ? "{\"protected\":true}" : "{\"protected\":false}", Encoding.UTF8, "application/json");
+        using var res = await SendWriteAsync(HttpMethod.Put, $"run/{runId}/protection", content, ct).ConfigureAwait(false);
+        await Ensure(res, ct).ConfigureAwait(false);
+        return await res.Content.ReadFromJsonAsync<RunDto>(Json.WireIn, ct).ConfigureAwait(false)
+            ?? throw new InvalidDataException("The server did not return the run's protection setting.");
     }
 
     public async Task<byte[]?> GetLeafSlicesAsync(string species, CancellationToken ct = default)

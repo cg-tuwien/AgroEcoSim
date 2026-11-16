@@ -32,6 +32,9 @@ public interface ISimulationRunner
     /// </summary>
     string Create(SimulationRequest request, Hubs.ClientTerrain? terrain, string connectionId);
 
+    /// <summary>Runs the same durable pipeline without a browser attachment or preview pacing.</summary>
+    Task<SimulationResponse> RunToCompletionAsync(SimulationRequest request, ImportedObjDataV2? terrain, string? modelHash);
+
     /// <summary>
     /// Restarts a stored run from its checkpoint, appending to the SAME run.
     ///
@@ -101,7 +104,11 @@ class RunState
     public DateTime? UnwatchedSince;
     /// <summary>The site and weather, captured while the built world was in hand.</summary>
     public Models.RunSiteResponse? Site;
+    /// <summary>Only synchronous HTTP callers await completion. These runs have no browser owner.</summary>
+    public TaskCompletionSource<SimulationResponse>? Completion;
 }
+
+sealed record RunTerrainIdentity(string? ModelHash, string Pattern, bool PatternForMaterial, float Resolution);
 
 public class SimulationRunner : ISimulationRunner
 {
@@ -146,7 +153,8 @@ public class SimulationRunner : ISimulationRunner
     public TimeSpan UnwatchedGrace { get; set; } = TimeSpan.FromMinutes(5);
 
     bool Abandoned(RunState run) =>
-        UnwatchedGrace > TimeSpan.Zero && run.UnwatchedSince is DateTime since && DateTime.UtcNow - since > UnwatchedGrace;
+        run.Completion == null && UnwatchedGrace > TimeSpan.Zero
+        && run.UnwatchedSince is DateTime since && DateTime.UtcNow - since > UnwatchedGrace;
 
     public bool Attach(string runId, string connectionId)
     {
@@ -193,10 +201,39 @@ public class SimulationRunner : ISimulationRunner
 
     public string Create(SimulationRequest request, Hubs.ClientTerrain? terrain, string connectionId)
     {
-        var lazyPreviews = !(request.ExactPreview ?? false);
-        var exportFlags = (request.DownloadRoots ?? false ? ExportFlags.Roots : ExportFlags.None) | ExportFlags.Analytics;
-
+        Store.EnsureWritable();
+        RequireStoredModel(terrain?.ModelHash, terrain != null);
         var world = Initialize.World(request, terrain?.Terrain);
+        var identity = terrain == null ? null
+            : new RunTerrainIdentity(terrain.ModelHash, terrain.Pattern, terrain.PatternForMaterial, terrain.Resolution);
+        return Register(request, world, identity, connectionId);
+    }
+
+    public Task<SimulationResponse> RunToCompletionAsync(SimulationRequest request, ImportedObjDataV2? terrain, string? modelHash)
+    {
+        Store.EnsureWritable();
+        RequireStoredModel(modelHash, terrain != null);
+        // Preserve the legacy endpoint's imported-world construction path.
+        var world = terrain == null ? Initialize.World(request) : Initialize.World(request, terrain);
+        var identity = terrain == null ? null : new RunTerrainIdentity(modelHash,
+            request.FieldItemRegex ?? "", request.FieldItemRegexMaterial ?? false, world.FieldResolution);
+        var completion = new TaskCompletionSource<SimulationResponse>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var runId = Register(request, world, identity, null, completion);
+        Begin(runId);
+        return completion.Task;
+    }
+
+    void RequireStoredModel(string? hash, bool imported)
+    {
+        if (imported && (hash == null || !Store.HasFieldModel(hash)))
+            throw new StorageException("The imported field model has not been saved. Upload it again before starting.");
+    }
+
+    string Register(SimulationRequest request, AgroWorld world, RunTerrainIdentity? terrain, string? connectionId,
+        TaskCompletionSource<SimulationResponse>? completion = null)
+    {
+        var lazyPreviews = completion != null || !(request.ExactPreview ?? false);
+        var exportFlags = (request.DownloadRoots ?? false ? ExportFlags.Roots : ExportFlags.None) | ExportFlags.Analytics;
         world.Deterministic = request.Deterministic ?? false;
         // Persist the resolved numerical tolerance so a later replay does not inherit
         // a different default from the server version installed at that time.
@@ -219,6 +256,10 @@ public class SimulationRunner : ISimulationRunner
             if (speciesNames.Add(plant.Parameters.Name)) resolvedSpecies.Add(plant.Parameters);
         });
         request = request with { Species = resolvedSpecies.ToArray() };
+        // Materialize setup before registering a live writer: a failed allocation must not leave
+        // a run reporting itself as successfully started without its terrain.
+        var site = SiteOf(world);
+        var serializedTerrain = terrain == null ? null : world.SerializeTerrain();
 
         var runId = Store.BeginRun(new RunSpec
         {
@@ -262,27 +303,21 @@ public class SimulationRunner : ISimulationRunner
         //from the one it ran in. Nothing is lost by not storing it: it is not data, it is a shape
         //the client can already draw from numbers it has.
         //
-        //Wrapped, because SerializeTerrain is evaluated HERE and not inside WriteTerrain's own
-        //try: it materialises the whole merged obstacle mesh and then doubles it in ToArray(), so
-        //on a large facade in a memory-capped container it is a plausible place to throw. A throw
-        //escaping this point is the worst shape of failure available - BeginRun has already
-        //inserted a "running" row and started the frame writer, while Runs/Pending/ConnectionToRun
-        //are still empty, so nothing could abort it, delete it or evict it for the life of the
-        //process. Losing the ability to redraw this run later is a far smaller loss.
-        if (terrain != null)
+        if (serializedTerrain != null)
         {
-            try { Store.WriteTerrain(runId, world.SerializeTerrain()); }
+            try { Store.WriteTerrain(runId, serializedTerrain); }
             catch (Exception e)
             {
-                Store.Log.Error("terrain-failed", runId, $"Run {runId}: could not store its terrain ({e.Message}). " +
-                                                         $"The run proceeds; it will replay without its trays.");
+                try { Store.CompleteRun(runId, true, "its required terrain could not be saved"); }
+                catch (StorageException) { /* the original storage failure remains the useful cause */ }
+                throw StorageException.From($"Run {runId} could not start because its terrain could not be saved: {e.Message}", e, runId);
             }
         }
 
-        var run = new RunState { RunId = runId, ConnectionId = connectionId, Site = SiteOf(world) };
+        var run = new RunState { RunId = runId, ConnectionId = connectionId ?? "", Site = site, Completion = completion };
         Pending[runId] = () => Loop(run, world, lazyPreviews, exportFlags, request);
         Runs[runId] = run;
-        ConnectionToRun[connectionId] = runId;
+        if (connectionId != null) ConnectionToRun[connectionId] = runId;
         return runId;
     }
 
@@ -304,10 +339,17 @@ public class SimulationRunner : ISimulationRunner
     string? ResumeUnderLock(string runId, int totalHours, Hubs.ClientTerrain? terrain, string connectionId, out string reason)
     {
         reason = "";
+        Store.EnsureWritable();
         if (Runs.ContainsKey(runId)) { reason = "That run is already computing."; return null; }
 
         var stored = Store.GetRun(runId);
         if (stored == null) { reason = "No such run."; return null; }
+        RequireStoredModel(terrain?.ModelHash, terrain != null);
+        if (stored.FieldModelHash != null && terrain?.ModelHash != stored.FieldModelHash)
+        {
+            reason = "The saved field model is required to resume this run.";
+            return null;
+        }
         if (!Store.TryReadCheckpoint(runId, out var step, out var state))
         {
             reason = "That run has no checkpoint, so it cannot be resumed. Fork it to recompute it instead.";
@@ -422,33 +464,25 @@ public class SimulationRunner : ISimulationRunner
     /// Writes the complete leaf-area-index document to the run store: every weekly series of every
     /// obstacle and tray, whatever the socket copy had to drop.
     ///
-    /// Best-effort and deliberately last: it runs after the result has been assembled, so a failure
-    /// here costs the study its file and nothing else. Written whenever there is anything to write -
+    /// Written whenever there is anything to write -
     /// a measurement or a tray system - because the file is the deliverable and the socket copy is
     /// only what the HUD shows.
     /// </summary>
     void StoreFullObstacleLight(string runId, AgroWorld world)
     {
-        try
-        {
-            var document = ObstacleLightDocument.From(world, runId, weeklyRecordBudget: null);
-            if (document == null)
-                return;
-            Store.WriteObstacleLight(runId, System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(
-                document, ObstacleLightJsonContext.Default.ObstacleLightDocument));
-        }
-        catch (Exception e)
-        {
-            Store.Log.Error("measurement-failed", runId, $"Run {runId}: could not store the full leaf area index measurement: {e.Message}");
-        }
+        var document = ObstacleLightDocument.From(world, runId, weeklyRecordBudget: null);
+        if (document == null) return;
+        Store.WriteObstacleLight(runId, System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(
+            document, ObstacleLightJsonContext.Default.ObstacleLightDocument));
     }
 
     async Task Loop(RunState run, AgroWorld world, bool lazyPreviews, ExportFlags exportFlags, SimulationRequest request)
     {
-        var to = Hub.Clients.Group(run.RunId);
+        var to = run.Completion == null ? Hub.Clients.Group(run.RunId) : null;
         //Whether the store has recorded the outcome. Delivering the result can still throw after
         //that - the client has gone - and that is not a failure of the run.
         var completed = false;
+        SimulationResponse? result = null;
         try
         {
             world.Irradiance.SetAddress(Config["RendererIPMitsuba"], Config["RendererPortMitsuba"],
@@ -475,7 +509,7 @@ public class SimulationRunner : ISimulationRunner
 
             if (world.IsPreparing)
             {
-                await to.Preparation(world.PreparedSteps, world.PreparationSteps);
+                if (to != null) await to.Preparation(world.PreparedSteps, world.PreparationSteps);
                 var lastPreparationProgress = Stopwatch.GetTimestamp();
                 while (world.IsPreparing && !run.Abort)
                 {
@@ -488,7 +522,7 @@ public class SimulationRunner : ISimulationRunner
                     world.RunPreparationStep();
                     if (Stopwatch.GetElapsedTime(lastPreparationProgress).TotalMilliseconds >= 250 || !world.IsPreparing)
                     {
-                        await to.Preparation(world.PreparedSteps, world.PreparationSteps);
+                        if (to != null) await to.Preparation(world.PreparedSteps, world.PreparationSteps);
                         lastPreparationProgress = Stopwatch.GetTimestamp();
                     }
                     if (world.Timestep % checkpointStride == 0)
@@ -527,7 +561,7 @@ public class SimulationRunner : ISimulationRunner
                     var prevTime = Stopwatch.GetTimestamp();
                     world.Run(1U);
                     run.StepTimes.Add(Stopwatch.GetElapsedTime(prevTime).Ticks);
-                    _ = to.Progress(i, simulationLength);
+                    if (to != null) _ = to.Progress(i, simulationLength);
 
                     //The export is the one part of storing a frame that cannot leave this thread:
                     //it reads live world state, so it cannot overlap the next step. Measured at
@@ -547,7 +581,7 @@ public class SimulationRunner : ISimulationRunner
                         if (run.Preview)
                         {
                             run.Preview = false;
-                            _ = to.Preview(new() { Step = i, Renderer = world.RendererName, Scene = scene });
+                            if (to != null) _ = to.Preview(new() { Step = i, Renderer = world.RendererName, Scene = scene });
                         }
                     }
 
@@ -580,7 +614,7 @@ public class SimulationRunner : ISimulationRunner
 
             Debug.WriteLine($"Simulation time: {(DateTime.UtcNow.Ticks - start) / TimeSpan.TicksPerMillisecond} ms");
 
-            var result = new SimulationResponse() { Plants = new(world.Count), CompletedSteps = world.RecordedStep };
+            result = new SimulationResponse() { RunId = run.RunId, Plants = new(world.Count), CompletedSteps = world.RecordedStep };
             world.ForEach(formation =>
             {
                 if (formation is PlantFormation2 plant)
@@ -600,17 +634,34 @@ public class SimulationRunner : ISimulationRunner
             //the browser saves without parsing.
             result.ObstacleLight = ObstacleLightDocument.ToElement(
                 ObstacleLightDocument.From(world, run.RunId, ObstacleLightDocument.WireWeeklyRecordBudget));
-            StoreFullObstacleLight(run.RunId, world);
+            try { StoreFullObstacleLight(run.RunId, world); }
+            catch (Exception e)
+            {
+                run.Abort = true;
+                result.StorageFailed = true;
+                run.StopReason ??= $"its measurement could not be saved: {e.Message}";
+            }
 
             //Always, however the run ended. On an abort it is what makes the run resumable at all;
             //on a completed one it is what lets the horizon be extended later without recomputing
             //the months already paid for.
             try { Store.WriteCheckpoint(run.RunId, world.RecordedStep, world.SerializeState()); }
-            catch (Exception e) { Store.Log.Error("checkpoint-failed", run.RunId, $"Run {run.RunId}: could not take the final checkpoint: {e.Message}"); }
+            catch (Exception e)
+            {
+                Store.Log.Error("checkpoint-failed", run.RunId, $"Run {run.RunId}: could not take the final checkpoint: {e.Message}");
+                run.Abort = true;
+                result.StorageFailed = true;
+                run.StopReason ??= $"its final checkpoint could not be saved: {e.Message}";
+            }
 
-            Store.CompleteRun(run.RunId, run.Abort, run.Abort ? run.StopReason : null);
+            var outcome = Store.CompleteRun(run.RunId, run.Abort, run.Abort ? run.StopReason : null);
+            result.StopReason = outcome.Reason;
+            // Completion observes queued failures, including one that arrives while the final
+            // checkpoint is draining, after the loop's last TryGetStopReason.
+            result.StorageFailed |= outcome.StorageFailed;
             completed = true;
-            await to.Result(result);
+            run.Completion?.TrySetResult(result);
+            if (to != null) await to.Result(result);
         }
         catch (Exception e)
         {
@@ -620,7 +671,22 @@ public class SimulationRunner : ISimulationRunner
             if (!completed)
             {
                 Store.Log.Error("run-failed", run.RunId, $"Run {run.RunId} failed: {e.Message}");
-                Store.CompleteRun(run.RunId, true, $"the simulation failed: {e.Message}");
+                result ??= new SimulationResponse { RunId = run.RunId, Plants = new(), CompletedSteps = world.RecordedStep };
+                result.ExecutionFailed = true;
+                result.StorageFailed |= e is StorageException;
+                result.StopReason = $"the simulation failed: {e.Message}";
+                // A tick may have thrown partway through its state update. Keep the last accepted
+                // checkpoint rather than serializing a potentially inconsistent world here.
+                try { Store.CompleteRun(run.RunId, true, result.StopReason); }
+                catch (Exception storageError)
+                {
+                    result.StorageFailed = true;
+                    result.StopReason += $"; its outcome could not be saved: {storageError.Message}";
+                }
+                run.Completion?.TrySetResult(result);
+                if (to != null)
+                    try { await to.Result(result); }
+                    catch (Exception deliveryError) { Console.Error.WriteLine($"Run {run.RunId}: result delivery failed: {deliveryError.Message}"); }
             }
         }
         finally

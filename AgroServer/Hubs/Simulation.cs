@@ -85,23 +85,24 @@ public class SimulationHub : Hub
     }
 
     /// <summary>Rejoins a run after a reload or a dropped socket.</summary>
-    public async Task<bool> Subscribe(string runId)
+    public async Task<bool> Subscribe(string runId, string writePassword)
     {
         if (!Runner.Attach(runId, Context.ConnectionId)) return false;
         await Groups.AddToGroupAsync(Context.ConnectionId, runId);
         return true;
     }
 
-    public Task Abort()
+    public Task Abort(string writePassword)
     {
         Runner.Abort(Context.ConnectionId);
         return Task.CompletedTask;
     }
 
-    public Task<bool> Preview() => Task.FromResult(Runner.RequestPreview(Context.ConnectionId));
+    public Task<bool> Preview(string writePassword) => Task.FromResult(Runner.RequestPreview(Context.ConnectionId));
 
-    public async Task Terrain(string terrainId, ushort hoursPerTick, string pattern, bool patternForMaterial, float resolution)
+    public async Task Terrain(string terrainId, ushort hoursPerTick, string pattern, bool patternForMaterial, float resolution, string writePassword)
     {
+        RunStore.EnsureWritable();
         if (TerrainBuffer.TryGetV2(terrainId, out var objData, out var modelHash))
         {
             var terrain = new SoilFormationsList(null, objData, 1f, pattern, patternForMaterial, resolution, false);
@@ -161,8 +162,11 @@ public class SimulationHub : Hub
         }
     }
 
-    public async Task Run(SimulationRequest request)
+    public async Task Run(SimulationRequest request, string writePassword)
     {
+        if (Controllers.SimulationController.ValidateRequest(request) is string error)
+            throw new HubException(error);
+        RunStore.EnsureWritable();
         if (Runner.HasRun(Context.ConnectionId))
         {
             await Clients.Caller.Rejected();
@@ -233,9 +237,10 @@ public class SimulationHub : Hub
         Runner.Begin(runId);
     }
 
-    public async Task Start(string id)
+    public async Task Start(string id, string writePassword)
     {
+        RunStore.EnsureWritable();
         if (UploadService.TryFetch(id, out var request))
-            await Run(request);
+            await Run(request, writePassword);
     }
 }

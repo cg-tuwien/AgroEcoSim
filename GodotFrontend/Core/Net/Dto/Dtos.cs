@@ -36,6 +36,8 @@ public sealed class RunDto
     public string? ParentRunId { get; set; }
     public uint? BranchStep { get; set; }
     public string? StopReason { get; set; }
+    /// <summary>Null for a server that predates run protection.</summary>
+    public bool? Protected { get; set; }
 
     public long TotalBytes => BytesOnDisk + AuxBytesOnDisk;
     public bool IsRunning => Status == "running";

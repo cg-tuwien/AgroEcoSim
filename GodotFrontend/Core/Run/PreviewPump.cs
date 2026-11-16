@@ -28,6 +28,7 @@ public sealed class PreviewPump
 
     public void Arm()
     {
+        if (!hub.Access.IsUnlocked) return;
         armed = true;
         retriesLeft = 20;
         TryFlush();
@@ -37,7 +38,7 @@ public sealed class PreviewPump
 
     public void TryFlush()
     {
-        if (!armed || inFlight || !hub.IsConnected) return;
+        if (!armed || inFlight || !hub.IsConnected || !hub.Access.IsUnlocked) return;
         inFlight = true;
         armed = false;
         _ = FlushAsync();
@@ -52,6 +53,7 @@ public sealed class PreviewPump
         main.Post(() =>
         {
             inFlight = false;
+            if (!hub.Access.IsUnlocked) { armed = false; return; }
             if (ok) return;
             if (error != null)
             {
